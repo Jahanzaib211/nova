@@ -4,15 +4,21 @@ from typing import NotRequired, override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_config
 from langgraph.runtime import Runtime
 
+from deerflow.agents.manifest import build_agent_manifest
 from deerflow.agents.thread_state import ThreadDataState
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime.user_context import get_effective_user_id
 
 logger = logging.getLogger(__name__)
+
+# Tag used to identify the injected manifest in the message list. Used
+# to detect re-injection so the manifest fires once per thread, not once
+# per turn.
+_MANIFEST_TAG = "<agent_manifest>"
 
 
 class ThreadDataMiddlewareState(AgentState):
@@ -110,9 +116,47 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
                 additional_kwargs={**last_message.additional_kwargs, "run_id": runtime.context.get("run_id"), "timestamp": datetime.now(UTC).isoformat()},
             )
 
+        messages = self._maybe_inject_manifest(messages)
+
         return {
             "thread_data": {
                 **paths,
             },
             "messages": messages,
         }
+
+    @staticmethod
+    def _maybe_inject_manifest(messages: list) -> list:
+        """Prepend the agent self-knowledge manifest if not already present.
+
+        The manifest is a deterministic block that gives the model
+        canonical self-knowledge on turn 1 — sandbox, tools, gates, hard
+        rules, panel layout, search discipline. Without it, the agent has
+        to infer all of this from the prompt's tool menu, which is where
+        the v3 bootstrap gap surfaced (e.g. the cowork-fullstack
+        hallucination).
+
+        Behaviour:
+          - Fire-once-per-thread: if any existing SystemMessage already
+            contains the manifest tag, do nothing (no re-injection on
+            subsequent turns).
+          - Non-fatal: if build_agent_manifest() raises, log at debug
+            and return the messages unchanged. The run proceeds with the
+            original system prompt.
+          - Position: prepended so the manifest lands at the top of the
+            context window. Existing messages are preserved.
+        """
+        # Check for an existing manifest to avoid re-injection per turn
+        for msg in messages:
+            content = getattr(msg, "content", None)
+            if isinstance(content, str) and _MANIFEST_TAG in content:
+                return messages
+
+        try:
+            manifest_text = build_agent_manifest()
+        except Exception as exc:  # noqa: BLE001 — injection is non-fatal
+            logger.debug("manifest injection failed (%s); continuing without manifest", exc)
+            return messages
+
+        manifest_message = SystemMessage(content=manifest_text)
+        return [manifest_message, *messages]
