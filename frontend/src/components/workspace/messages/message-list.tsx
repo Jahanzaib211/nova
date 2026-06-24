@@ -7,10 +7,6 @@ import {
   Conversation,
   ConversationContent,
 } from "@/components/ai-elements/conversation";
-import {
-  Reasoning,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
 import {
@@ -514,10 +510,9 @@ export function MessageList({
           );
         })}
         {thread.isLoading && !hasActiveAssistantText && (
-          <div className="w-full">
-            <Reasoning isStreaming={true} startTimeProp={turnStartTime}>
-              <ReasoningTrigger hasContent={false} />
-            </Reasoning>
+          <div className="flex w-full items-center gap-2 px-4 py-3 text-muted-foreground/70" data-testid="streaming-indicator" aria-label="Agent is thinking">
+            <StreamingIndicator size="sm" />
+            <span className="font-mono text-xs">{t.agentComputer.thinking}</span>
           </div>
         )}
         <div style={{ height: `${paddingBottom}px` }} />
