@@ -29,9 +29,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePanels } from "@/components/workspace/panels/context";
 import { useI18n } from "@/core/i18n/hooks";
 import { useGlobalShortcuts } from "@/hooks/use-global-shortcuts";
-import { usePanels } from "@/components/workspace/panels/context";
 
 import { SettingsDialog } from "./settings";
 

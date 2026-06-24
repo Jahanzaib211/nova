@@ -19,7 +19,7 @@ export function PanelsProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-const _noop = () => {};
+const _noop = (): void => undefined;
 const _fallback: PanelsContextType = {
   agentComputerOpen: false,
   setAgentComputerOpen: _noop,
