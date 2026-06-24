@@ -1135,8 +1135,9 @@ function ReviewPanel({
   isFetching: boolean;
   onRegenerate: () => void;
 }) {
-  const high = review?.risks.filter((r) => r.level === "high").length ?? 0;
-  const med = review?.risks.filter((r) => r.level === "med").length ?? 0;
+  const risks = review?.risks ?? [];
+  const high = risks.filter((r) => r.level === "high").length;
+  const med = risks.filter((r) => r.level === "med").length;
   const verdict = !review
     ? { text: "Generating…", cls: "text-muted-foreground" }
     : high > 0
@@ -1184,11 +1185,11 @@ function ReviewPanel({
           </div>
 
           {/* Risks */}
-          {review && review.risks.length > 0 && (
+          {risks.length > 0 && (
             <div>
               <div className="mb-1 font-medium text-muted-foreground/70">Risk flags</div>
               <div className="flex flex-col gap-1">
-                {review.risks.map((r, i) => (
+                {risks.map((r, i) => (
                   <div key={i} className="rounded border border-border/20 bg-muted/10 px-2 py-1">
                     <span className={cn("font-mono text-[10px] uppercase", riskColor(r.level))}>{r.level}</span>{" "}
                     <span className="text-muted-foreground/90">{r.message}</span>
