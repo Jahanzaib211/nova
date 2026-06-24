@@ -16,6 +16,7 @@ import {
   FolderOpenIcon,
   GithubIcon,
   GlobeIcon,
+  AlertTriangleIcon,
   LoaderCircleIcon,
   MonitorIcon,
   MoreHorizontalIcon,
@@ -39,7 +40,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AgentComputerErrorBoundary } from "@/components/workspace/agent-computer/agent-computer-error-boundary";
-import type { TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
+import type { LlmError, TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
 import { useThread } from "@/components/workspace/messages/context";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { getBackendBaseURL } from "@/core/config";
@@ -981,6 +982,38 @@ function FilesPanel({
 // Compact pill that surfaces the most recent deterministic verify_result
 // at the top of the Activity tab. Sourced from the verify_result custom
 // event emitted by the backend's auto-verify-on-present_files gate.
+function LlmErrorBadge({ event }: { event: LlmError }) {
+  const reason = (event.reason || "unknown").toLowerCase();
+  const tone = reason === "quota"
+    ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+    : reason === "auth"
+      ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+      : "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  const label = reason === "quota"
+    ? "Last turn failed: out of quota"
+    : reason === "auth"
+      ? "Last turn failed: auth error"
+      : reason === "busy" || reason === "transient"
+        ? "Last turn failed: provider busy"
+        : "Last turn failed";
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "flex shrink-0 items-center gap-2 border-b border-border/30 px-3 py-2 font-mono text-xs",
+        tone,
+      )}
+      data-testid="llm-error-badge"
+      title={event.detail || event.error_type || ""}
+    >
+      <AlertTriangleIcon className="h-3.5 w-3.5" aria-hidden />
+      <span className="truncate">{label}</span>
+      <span className="ml-auto text-muted-foreground/70">{event.error_type}</span>
+    </div>
+  );
+}
+
 function VerifyResultPill({ event }: { event: VerifyResult }) {
   const ok = event.ok;
   const failedRoutes = (event.routes ?? []).filter((r) => !r.ok);
@@ -1364,8 +1397,11 @@ export function AgentComputerPanel({
   // we read it here so the Activity pill always has the latest value.
   // This panel is always rendered inside a ThreadContext.Provider
   // (chat-box.tsx), so useThread() is safe here.
-  const contextVerifyResult = useThread().verifyResult;
+  const threadContext = useThread();
+  const contextVerifyResult = threadContext.verifyResult;
+  const contextLlmError = threadContext.llmError;
   const effectiveVerifyResult = verifyResult ?? contextVerifyResult;
+  const effectiveLlmError = contextLlmError;
   const files = useSandboxFiles(threadId);
   const startPreview = useStartPreview(threadId);
   const hasRunnableProject = files.some((f) => f.name === "package.json");
@@ -1644,6 +1680,8 @@ export function AgentComputerPanel({
           Review
         </TabBtn>
       </div>
+
+      {effectiveLlmError ? <LlmErrorBadge event={effectiveLlmError} /> : null}
 
       {/* ── Tab content ── */}
       <div className="min-h-0 flex-1 overflow-hidden">

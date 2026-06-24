@@ -18,6 +18,7 @@ import {
 } from "@/components/workspace/messages";
 import {
   ThreadContext,
+  type LlmError,
   type TaskProgress,
   type VerifyResult,
 } from "@/components/workspace/messages/context";
@@ -64,6 +65,7 @@ export default function AgentChatPage() {
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
+  const [llmError, setLlmError] = useState<LlmError | null>(null);
   const [activityEvents, setActivityEvents] = useState<AgentActivityEvent[]>([]);
   const [activeWriteFilePath, setActiveWriteFilePath] = useState<string | null>(null);
   const [settings, setSettings] = useThreadSettings(threadId);
@@ -135,6 +137,9 @@ export default function AgentChatPage() {
     },
     onVerifyResult: (event) => {
       setVerifyResult(event);
+    },
+    onLlmError: (event) => {
+      setLlmError(event);
     },
     onToolActivity: (event) => {
       setActivityEvents((prev) => [...prev.slice(-199), event]);
@@ -235,7 +240,7 @@ export default function AgentChatPage() {
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
 
   return (
-    <ThreadContext.Provider value={{ thread, currentTool, taskProgress, verifyResult, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}>
+    <ThreadContext.Provider value={{ thread, currentTool, taskProgress, verifyResult, llmError, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}>
       <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">
           <header

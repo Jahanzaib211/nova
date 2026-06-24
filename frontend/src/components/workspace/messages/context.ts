@@ -26,12 +26,21 @@ export interface VerifyResult {
   screenshot: string | null;
 }
 
+export interface LlmError {
+  error_type: string;
+  reason: string;
+  detail: string;
+  http_status: number | null;
+  code: string | null;
+}
+
 export interface ThreadContextType {
   thread: BaseStream<AgentThreadState>;
   isMock?: boolean;
   currentTool: string | null;
   taskProgress: TaskProgress | null;
   verifyResult: VerifyResult | null;
+  llmError: LlmError | null;
   activityEvents: AgentActivityEvent[];
   activeWriteFilePath: string | null;
   onAgentMessage?: (text: string) => void;

@@ -66,6 +66,14 @@ export type VerifyResultEvent = {
   screenshot: string | null;
 };
 
+export type LlmErrorEvent = {
+  error_type: string;
+  reason: "quota" | "auth" | "busy" | "transient" | "circuit_open" | string;
+  detail: string;
+  http_status: number | null;
+  code: string | null;
+};
+
 export type AgentActivityEvent = {
   id: string;
   ts: string;
@@ -105,6 +113,7 @@ export type ThreadStreamOptions = {
   onToolActivityDone?: (info: { id: string; name: string; output: string; path: string | null; cmd: string | null }) => void;
   onTaskProgress?: (progress: TaskProgressEvent) => void;
   onVerifyResult?: (event: VerifyResultEvent) => void;
+  onLlmError?: (event: LlmErrorEvent) => void;
 };
 
 type SendMessageOptions = {
@@ -490,6 +499,7 @@ export function useThreadStream({
   onToolEnd,
   onTaskProgress,
   onVerifyResult,
+  onLlmError,
   onToolActivity,
   onToolActivityDone,
 }: ThreadStreamOptions) {
@@ -520,6 +530,7 @@ export function useThreadStream({
     onToolEnd,
     onTaskProgress,
     onVerifyResult,
+    onLlmError,
     onToolActivity,
     onToolActivityDone,
   });
@@ -534,8 +545,8 @@ export function useThreadStream({
 
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
-    listeners.current = { onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onToolActivity, onToolActivityDone };
-  }, [onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onToolActivity, onToolActivityDone]);
+    listeners.current = { onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onLlmError, onToolActivity, onToolActivityDone };
+  }, [onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onLlmError, onToolActivity, onToolActivityDone]);
 
   useEffect(() => {
     const normalizedThreadId = threadId ?? null;
@@ -822,6 +833,29 @@ export function useThreadStream({
           routes: e.routes ?? [],
           console_errors_count: e.console_errors_count ?? 0,
           screenshot: e.screenshot ?? null,
+        });
+      }
+
+      if (
+        typeof event === "object" &&
+        event !== null &&
+        "type" in event &&
+        event.type === "llm_error"
+      ) {
+        const e = event as {
+          type: "llm_error";
+          error_type: string;
+          reason: string;
+          detail: string;
+          http_status: number | null;
+          code: string | null;
+        };
+        listeners.current.onLlmError?.({
+          error_type: e.error_type ?? "Unknown",
+          reason: e.reason ?? "unknown",
+          detail: e.detail ?? "",
+          http_status: typeof e.http_status === "number" ? e.http_status : null,
+          code: typeof e.code === "string" ? e.code : null,
         });
       }
     },
