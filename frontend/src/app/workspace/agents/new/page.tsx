@@ -343,7 +343,7 @@ export default function NewAgentPage() {
   }
 
   return (
-    <ThreadContext.Provider value={{ thread, currentTool: null, taskProgress: null, activityEvents: [], activeWriteFilePath: null }}>
+    <ThreadContext.Provider value={{ thread, currentTool: null, taskProgress: null, verifyResult: null, activityEvents: [], activeWriteFilePath: null }}>
       <ArtifactsProvider>
         <div className="flex size-full flex-col">
           {header}

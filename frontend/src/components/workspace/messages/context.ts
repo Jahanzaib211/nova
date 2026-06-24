@@ -10,11 +10,28 @@ export interface TaskProgress {
   status: string;
 }
 
+export interface VerifyResultRoute {
+  route: string;
+  ok: boolean;
+  status: number | null;
+  notes: string;
+}
+
+export interface VerifyResult {
+  thread_id: string;
+  ok: boolean;
+  verdict: "passed" | "issues";
+  routes: VerifyResultRoute[];
+  console_errors_count: number;
+  screenshot: string | null;
+}
+
 export interface ThreadContextType {
   thread: BaseStream<AgentThreadState>;
   isMock?: boolean;
   currentTool: string | null;
   taskProgress: TaskProgress | null;
+  verifyResult: VerifyResult | null;
   activityEvents: AgentActivityEvent[];
   activeWriteFilePath: string | null;
   onAgentMessage?: (text: string) => void;

@@ -29,7 +29,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
   threadId,
 }) => {
-  const { thread, currentTool, taskProgress, activityEvents, activeWriteFilePath, onAgentMessage } = useThread();
+  const { thread, currentTool, taskProgress, verifyResult, activityEvents, activeWriteFilePath, onAgentMessage } = useThread();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
 
@@ -229,6 +229,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                 isLoading={thread.isLoading}
                 todos={thread.values.todos ?? []}
                 taskProgress={taskProgress}
+                verifyResult={verifyResult}
                 messages={thread.messages}
                 activityEvents={activityEvents}
                 activeWriteFilePath={activeWriteFilePath}

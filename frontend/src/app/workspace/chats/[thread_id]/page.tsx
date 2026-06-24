@@ -22,6 +22,7 @@ import {
 import {
   ThreadContext,
   type TaskProgress,
+  type VerifyResult,
 } from "@/components/workspace/messages/context";
 import { usePanels } from "@/components/workspace/panels/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
@@ -80,6 +81,7 @@ export default function ChatPage() {
   const { agentComputerOpen, setAgentComputerOpen } = usePanels();
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [activityEvents, setActivityEvents] = useState<AgentActivityEvent[]>([]);
   const [activeWriteFilePath, setActiveWriteFilePath] = useState<string | null>(null);
 
@@ -95,6 +97,7 @@ export default function ChatPage() {
   useEffect(() => {
     setCurrentTool(null);
     setTaskProgress(null);
+    setVerifyResult(null);
     setActivityEvents([]);
     setActiveWriteFilePath(null);
   }, [threadId]);
@@ -143,6 +146,9 @@ export default function ChatPage() {
     },
     onTaskProgress: (progress) => {
       setTaskProgress(progress);
+    },
+    onVerifyResult: (event) => {
+      setVerifyResult(event);
     },
     onToolActivity: (event) => {
       setActivityEvents((prev) => [...prev.slice(-199), event]);
@@ -244,7 +250,7 @@ export default function ChatPage() {
 
   return (
     <ThreadContext.Provider
-      value={{ thread, isMock, currentTool, taskProgress, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}
+      value={{ thread, isMock, currentTool, taskProgress, verifyResult, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}
     >
       <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">

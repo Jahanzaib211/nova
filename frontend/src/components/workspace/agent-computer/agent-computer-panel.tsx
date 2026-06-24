@@ -38,7 +38,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { TaskProgress } from "@/components/workspace/messages/context";
+import type { TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
+import { useThread } from "@/components/workspace/messages/context";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { getBackendBaseURL } from "@/core/config";
 import {
@@ -975,12 +976,46 @@ function FilesPanel({
 // Excludes raw bash/search/grep (the Terminal tab owns those) so there's no
 // Terminal/Activity duplication.
 // ──────────────────────────────────────────────────────────
+
+// Compact pill that surfaces the most recent deterministic verify_result
+// at the top of the Activity tab. Sourced from the verify_result custom
+// event emitted by the backend's auto-verify-on-present_files gate.
+function VerifyResultPill({ event }: { event: VerifyResult }) {
+  const ok = event.ok;
+  const failedRoutes = (event.routes ?? []).filter((r) => !r.ok);
+  const summary = ok
+    ? `Self-test passed${event.routes?.length ? ` · ${event.routes.length} route${event.routes.length === 1 ? "" : "s"}` : ""}`
+    : `Self-test found issues${failedRoutes.length ? ` · ${failedRoutes.length} route${failedRoutes.length === 1 ? "" : "s"} failed` : ""}`;
+  const tone = ok
+    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center gap-2 border-b border-border/30 px-3 py-2 font-mono text-xs",
+        tone,
+      )}
+      data-testid="verify-result-pill"
+    >
+      <span aria-hidden>{ok ? "✓" : "✗"}</span>
+      <span className="truncate">{summary}</span>
+      {event.console_errors_count > 0 ? (
+        <span className="ml-auto text-muted-foreground/70">
+          {event.console_errors_count} console error{event.console_errors_count === 1 ? "" : "s"}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function ActivityPanel({
   events,
   threadId,
+  verifyResult,
 }: {
   events: AgentActivityEvent[];
   threadId: string;
+  verifyResult?: VerifyResult | null;
 }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const timeline = useMemo(() => events.filter((e) => !TERMINAL_TOOLS.has(e.type)), [events]);
@@ -991,6 +1026,7 @@ function ActivityPanel({
 
   return (
     <div className="flex h-full flex-col">
+      {verifyResult ? <VerifyResultPill event={verifyResult} /> : null}
       <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-muted/20 px-2 py-1">
         <span className="font-mono text-xs text-muted-foreground/70">
           activity · {timeline.length} action{timeline.length === 1 ? "" : "s"}
@@ -1298,6 +1334,7 @@ export interface AgentComputerPanelProps {
   isLoading: boolean;
   todos: Todo[];
   taskProgress: TaskProgress | null;
+  verifyResult?: VerifyResult | null;
   messages: Message[];
   activityEvents: AgentActivityEvent[];
   activeWriteFilePath: string | null;
@@ -1312,6 +1349,7 @@ export function AgentComputerPanel({
   isLoading,
   todos,
   taskProgress,
+  verifyResult,
   messages,
   activityEvents,
   activeWriteFilePath,
@@ -1319,6 +1357,13 @@ export function AgentComputerPanel({
   onClose,
   onAgentMessage,
 }: AgentComputerPanelProps) {
+  // Context fallback for verifyResult when the caller doesn't pass it
+  // explicitly. The chat page sets the context state via onVerifyResult;
+  // we read it here so the Activity pill always has the latest value.
+  // This panel is always rendered inside a ThreadContext.Provider
+  // (chat-box.tsx), so useThread() is safe here.
+  const contextVerifyResult = useThread().verifyResult;
+  const effectiveVerifyResult = verifyResult ?? contextVerifyResult;
   const files = useSandboxFiles(threadId);
   const startPreview = useStartPreview(threadId);
   const hasRunnableProject = files.some((f) => f.name === "package.json");
@@ -1639,7 +1684,7 @@ export function AgentComputerPanel({
             onRegenerate={() => void reviewQuery.refetch()}
           />
         ) : (
-          <ActivityPanel events={mergedEvents} threadId={threadId} />
+          <ActivityPanel events={mergedEvents} threadId={threadId} verifyResult={effectiveVerifyResult} />
         )}
       </div>
 

@@ -50,6 +50,22 @@ export type TaskProgressEvent = {
   status: string;
 };
 
+export type VerifyResultRoute = {
+  route: string;
+  ok: boolean;
+  status: number | null;
+  notes: string;
+};
+
+export type VerifyResultEvent = {
+  thread_id: string;
+  ok: boolean;
+  verdict: "passed" | "issues";
+  routes: VerifyResultRoute[];
+  console_errors_count: number;
+  screenshot: string | null;
+};
+
 export type AgentActivityEvent = {
   id: string;
   ts: string;
@@ -88,6 +104,7 @@ export type ThreadStreamOptions = {
   onToolActivity?: (event: AgentActivityEvent) => void;
   onToolActivityDone?: (info: { id: string; name: string; output: string; path: string | null; cmd: string | null }) => void;
   onTaskProgress?: (progress: TaskProgressEvent) => void;
+  onVerifyResult?: (event: VerifyResultEvent) => void;
 };
 
 type SendMessageOptions = {
@@ -472,6 +489,7 @@ export function useThreadStream({
   onFinish,
   onToolEnd,
   onTaskProgress,
+  onVerifyResult,
   onToolActivity,
   onToolActivityDone,
 }: ThreadStreamOptions) {
@@ -501,6 +519,7 @@ export function useThreadStream({
     onFinish,
     onToolEnd,
     onTaskProgress,
+    onVerifyResult,
     onToolActivity,
     onToolActivityDone,
   });
@@ -515,8 +534,8 @@ export function useThreadStream({
 
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
-    listeners.current = { onSend, onStart, onFinish, onToolEnd, onTaskProgress, onToolActivity, onToolActivityDone };
-  }, [onSend, onStart, onFinish, onToolEnd, onTaskProgress, onToolActivity, onToolActivityDone]);
+    listeners.current = { onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onToolActivity, onToolActivityDone };
+  }, [onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onToolActivity, onToolActivityDone]);
 
   useEffect(() => {
     const normalizedThreadId = threadId ?? null;
@@ -779,6 +798,31 @@ export function useThreadStream({
       ) {
         const e = event as { type: "task_progress"; step: number; total: number; status: string };
         listeners.current.onTaskProgress?.({ step: e.step, total: e.total, status: e.status });
+      }
+
+      if (
+        typeof event === "object" &&
+        event !== null &&
+        "type" in event &&
+        event.type === "verify_result"
+      ) {
+        const e = event as {
+          type: "verify_result";
+          thread_id: string;
+          ok: boolean;
+          verdict: "passed" | "issues";
+          routes: Array<{ route: string; ok: boolean; status: number | null; notes: string }>;
+          console_errors_count: number;
+          screenshot: string | null;
+        };
+        listeners.current.onVerifyResult?.({
+          thread_id: e.thread_id,
+          ok: e.ok,
+          verdict: e.verdict,
+          routes: e.routes ?? [],
+          console_errors_count: e.console_errors_count ?? 0,
+          screenshot: e.screenshot ?? null,
+        });
       }
     },
     onError(error) {

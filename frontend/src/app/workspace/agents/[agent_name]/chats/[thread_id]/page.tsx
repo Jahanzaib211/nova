@@ -19,6 +19,7 @@ import {
 import {
   ThreadContext,
   type TaskProgress,
+  type VerifyResult,
 } from "@/components/workspace/messages/context";
 import { usePanels } from "@/components/workspace/panels/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
@@ -62,6 +63,7 @@ export default function AgentChatPage() {
   const { agentComputerOpen, setAgentComputerOpen } = usePanels();
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [activityEvents, setActivityEvents] = useState<AgentActivityEvent[]>([]);
   const [activeWriteFilePath, setActiveWriteFilePath] = useState<string | null>(null);
   const [settings, setSettings] = useThreadSettings(threadId);
@@ -130,6 +132,9 @@ export default function AgentChatPage() {
     },
     onTaskProgress: (progress) => {
       setTaskProgress(progress);
+    },
+    onVerifyResult: (event) => {
+      setVerifyResult(event);
     },
     onToolActivity: (event) => {
       setActivityEvents((prev) => [...prev.slice(-199), event]);
@@ -230,7 +235,7 @@ export default function AgentChatPage() {
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
 
   return (
-    <ThreadContext.Provider value={{ thread, currentTool, taskProgress, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}>
+    <ThreadContext.Provider value={{ thread, currentTool, taskProgress, verifyResult, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}>
       <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">
           <header
