@@ -107,17 +107,63 @@ def strip_data_url_image_blocks(messages: list[dict[str, Any]]) -> list[dict[str
     return result
 
 
+def strip_deerflow_error_fallback_messages(messages: list[Any]) -> list[Any]:
+    """Drop synthetic error-fallback messages from a message list.
+
+    ``LLMErrorHandlingMiddleware`` injects a synthetic AIMessage when the LLM
+    provider rejects the request (quota / auth / transient).  The message
+    carries ``additional_kwargs.deerflow_error_fallback == True``.  Without
+    this filter the message persists in thread state, gets fed back to the
+    LLM on the next resume (the model then echoes it as its own answer), and
+    also shows up in the user's chat history.
+
+    This filter is the canonical seam: any caller serializing messages for
+    the LLM context or for the UI history must run their list through it
+    first so the contamination never reaches either consumer.
+
+    Behaviour:
+        - Messages with ``additional_kwargs.deerflow_error_fallback == True``
+          are dropped, regardless of message type (HumanMessage / AIMessage /
+          ToolMessage / SystemMessage).
+        - All other messages pass through unchanged. Ordering preserved.
+        - Non-dict items (raw LangChain message objects) are inspected via
+          ``.additional_kwargs`` attribute, so the filter works on both
+          dict-serialized and in-process LangChain objects.
+        - Defensive: any structural oddity (missing kwargs, wrong type,
+          etc.) preserves the message rather than dropping it.
+
+    The UI-side signal that "something went wrong" is provided separately by
+    the ``llm_error`` stream event (see C2 of the v6 sprint), so dropping
+    the message from the chat history is safe.
+    """
+    result: list[Any] = []
+    for msg in messages:
+        additional_kwargs: Any = None
+        if isinstance(msg, dict):
+            additional_kwargs = msg.get("additional_kwargs")
+        else:
+            additional_kwargs = getattr(msg, "additional_kwargs", None)
+
+        if isinstance(additional_kwargs, dict) and additional_kwargs.get("deerflow_error_fallback") is True:
+            continue
+        result.append(msg)
+    return result
+
+
 def serialize_channel_values_for_api(channel_values: dict[str, Any]) -> dict[str, Any]:
-    """Serialize channel values and strip base64 image data from messages.
+    """Serialize channel values and strip base64 image data + error fallbacks.
 
     Convenience wrapper combining :func:`serialize_channel_values` with
-    :func:`strip_data_url_image_blocks`.  Use this in all REST endpoints
-    that return channel values to the frontend so that ``data:``-scheme
-    base64 image payloads are never sent over the wire.
+    :func:`strip_data_url_image_blocks` and
+    :func:`strip_deerflow_error_fallback_messages`.  Use this in all REST
+    endpoints that return channel values to the frontend so that
+    ``data:``-scheme base64 image payloads and synthetic LLM error
+    fallbacks are never sent over the wire.
     """
     result = serialize_channel_values(channel_values)
     if isinstance(result.get("messages"), list):
         result["messages"] = strip_data_url_image_blocks(result["messages"])
+        result["messages"] = strip_deerflow_error_fallback_messages(result["messages"])
     return result
 
 

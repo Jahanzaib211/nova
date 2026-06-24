@@ -32,6 +32,7 @@ from deerflow.agents.middlewares.clarification_middleware import ClarificationMi
 from deerflow.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
 from deerflow.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
 from deerflow.agents.middlewares.reflect_fix_middleware import ReflectFixBudgetMiddleware
+from deerflow.agents.middlewares.strip_error_fallback_middleware import StripErrorFallbackMiddleware
 from deerflow.agents.middlewares.memory_middleware import MemoryMiddleware
 from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
 from deerflow.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
@@ -370,6 +371,12 @@ def build_middlewares(
     # next wrap_model_call telling the agent to write its final answer.
     # Non-fatal by construction (every code path wrapped in try/except).
     middlewares.append(ReflectFixBudgetMiddleware())
+
+    # StripErrorFallbackMiddleware — drop synthetic LLM error-fallback
+    # messages from the model input on the next resume. Defence in depth
+    # alongside the runtime/serialization.py filter that handles the
+    # UI/REST path. Non-fatal by construction.
+    middlewares.append(StripErrorFallbackMiddleware())
 
     # Inject custom middlewares before ClarificationMiddleware
     if custom_middlewares:
