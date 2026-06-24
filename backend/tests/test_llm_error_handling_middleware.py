@@ -95,6 +95,7 @@ def test_async_model_call_returns_user_message_for_quota_errors() -> None:
     assert isinstance(result, AIMessage)
     assert "out of quota" in str(result.content)
     assert result.additional_kwargs["deerflow_error_fallback"] is True
+    assert result.additional_kwargs["hide_from_ui"] is True
     assert result.additional_kwargs["error_reason"] == "quota"
     assert result.additional_kwargs["error_type"] == "FakeError"
 

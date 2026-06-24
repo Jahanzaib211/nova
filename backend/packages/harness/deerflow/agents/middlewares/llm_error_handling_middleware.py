@@ -237,6 +237,7 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
             content=content,
             additional_kwargs={
                 "deerflow_error_fallback": True,
+                "hide_from_ui": True,
                 "error_type": error_type,
                 "error_reason": reason,
                 "error_detail": detail,
