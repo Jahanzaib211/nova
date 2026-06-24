@@ -30,13 +30,19 @@ def _is_local_sandbox_id(sandbox_id: str | None) -> bool:
     return bool(sandbox_id) and (sandbox_id == "local" or sandbox_id.startswith("local:"))
 
 
-async def _auto_verify_present_files(thread_id: str, sandbox_id: str) -> None:
+async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=None) -> None:
     """Deterministic self-test of a just-presented deliverable.
 
     Runs ``browser_check`` against the latest present_files HTML (auto-detected by
     run_browser_check when no dev server is up) so EVERY presented build is verified
     with zero model choice. Mirrors auto-verify-on-preview. Fully best-effort: any
     failure is swallowed and never affects the run.
+
+    When *writer* is provided, also emits a ``verify_result`` custom event so the
+    frontend Activity tab can render a compact pill. The event payload is shaped
+    for forward-compatibility (extensible fields, JSON-serialisable). Failures
+    to emit are swallowed — the verify_result event is a UX nicety, never a
+    correctness gate.
     """
     try:
         from deerflow.sandbox.browser_check import run_browser_check
@@ -57,6 +63,34 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str) -> None:
                 _append_devlog_to_sandbox_log(thread_id, f"[self-test] {r.route} [{r.status}] {r.notes[:160]}")
             for ce in r.console_errors[:3]:
                 _append_devlog_to_sandbox_log(thread_id, f"[self-test] console: {ce[:160]}")
+
+        # Surface a structured event for the frontend (Activity tab pill).
+        # Non-fatal: any failure here is logged and swallowed so it can
+        # never affect the run.
+        if callable(writer):
+            try:
+                # Build a compact, JSON-serialisable summary.
+                routes_summary = [
+                    {
+                        "route": r.route,
+                        "ok": bool(r.ok),
+                        "status": getattr(r, "status", None),
+                        "notes": (r.notes or "")[:200],
+                    }
+                    for r in check.routes
+                ]
+                console_errors_count = sum(len(r.console_errors or []) for r in check.routes)
+                writer({
+                    "type": "verify_result",
+                    "thread_id": thread_id,
+                    "ok": bool(check.ok),
+                    "verdict": "passed" if check.ok else "issues",
+                    "routes": routes_summary,
+                    "console_errors_count": console_errors_count,
+                    "screenshot": getattr(check, "screenshot_b64", None),  # may be None
+                })
+            except Exception:
+                logger.debug("verify_result event emit failed", exc_info=True)
     except Exception as e:  # pragma: no cover - best effort
         logger.debug("auto-verify present_files failed for %s: %s", thread_id, e)
 
@@ -191,9 +225,11 @@ class ObserveAdjustMiddleware(AgentMiddleware):
             _verified_present.add(key)
 
             # Results surface via the [self-test] lines appended to sandbox.log,
-            # which the Terminal tab already tails (a proven channel). No new custom
-            # event type is emitted, to avoid any frontend parse coupling.
-            asyncio.create_task(_auto_verify_present_files(thread_id, sandbox_id))
+            # which the Terminal tab already tails (a proven channel).
+            # Additionally, we now emit a structured verify_result custom event so
+            # the frontend Activity tab can render a compact pill. The event is
+            # additive: the Terminal-tab proven channel stays the source of truth.
+            asyncio.create_task(_auto_verify_present_files(thread_id, sandbox_id, writer=writer if callable(writer) else None))
         except Exception:
             logger.debug("ObserveAdjustMiddleware: present_files auto-verify skipped", exc_info=True)
 
