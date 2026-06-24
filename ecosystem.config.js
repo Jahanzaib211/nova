@@ -1,4 +1,4 @@
-// PM2 supervisor for the DeerFlow Docker dev stack.
+// PM2 supervisor for the nova (formerly DeerFlow) Docker dev stack.
 //
 // A single foreground `docker compose up` (no -d) so PM2 owns the lifecycle and
 // restarts the stack on crash/reboot. This MUST match the running `deerflow`
@@ -18,12 +18,12 @@ module.exports = {
       interpreter: "none",
       args:
         "compose " +
-        "-f /home/jahanzaib/Desktop/deer-flow/docker/docker-compose-dev.yaml " +
-        "-f /home/jahanzaib/Desktop/deer-flow/docker/docker-compose.dood.yaml " +
+        "-f /home/jahanzaib/Desktop/nova/docker/docker-compose-dev.yaml " +
+        "-f /home/jahanzaib/Desktop/nova/docker/docker-compose.dood.yaml " +
         "-p deer-flow-dev up --no-build --scale provisioner=0",
-      cwd: "/home/jahanzaib/Desktop/deer-flow",
+      cwd: "/home/jahanzaib/Desktop/nova",
       env: {
-        DEER_FLOW_ROOT: "/home/jahanzaib/Desktop/deer-flow",
+        DEER_FLOW_ROOT: "/home/jahanzaib/Desktop/nova",
       },
       autorestart: true,
     },
