@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { AgentComputerErrorBoundary } from "@/components/workspace/agent-computer/agent-computer-error-boundary";
 import type { TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
 import { useThread } from "@/components/workspace/messages/context";
 import { Tooltip } from "@/components/workspace/tooltip";
@@ -1646,47 +1647,69 @@ export function AgentComputerPanel({
 
       {/* ── Tab content ── */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {activeTab === "files" ? (
-          <ScrollArea className="h-full">
-            <FilesPanel
-              files={files}
-              artifacts={artifacts}
-              onSelectFile={handleSelectFile}
-              onSelectArtifact={handleSelectArtifact}
+        <AgentComputerErrorBoundary tabName="Files">
+          {activeTab === "files" ? (
+            <ScrollArea className="h-full">
+              <FilesPanel
+                files={files}
+                artifacts={artifacts}
+                onSelectFile={handleSelectFile}
+                onSelectArtifact={handleSelectArtifact}
+              />
+            </ScrollArea>
+          ) : null}
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Terminal">
+          {activeTab === "terminal" ? (
+            <Terminal events={mergedEvents} threadId={threadId} />
+          ) : null}
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Editor">
+          {activeTab === "editor" ? (
+            <Editor
+              threadId={threadId}
+              filePath={derivedFilePath}
+              isWriting={currentTool === "write_file" || currentTool === "str_replace"}
+              activeTab={activeTab === "editor"}
+              activeEdit={activeEdit}
             />
-          </ScrollArea>
-        ) : activeTab === "terminal" ? (
-          <Terminal events={mergedEvents} threadId={threadId} />
-        ) : activeTab === "editor" ? (
-          <Editor
-            threadId={threadId}
-            filePath={derivedFilePath}
-            isWriting={currentTool === "write_file" || currentTool === "str_replace"}
-            activeTab={activeTab === "editor"}
-            activeEdit={activeEdit}
-          />
-        ) : activeTab === "browser" ? (
-          <Browser
-            threadId={threadId}
-            filePath={browserFilePath}
-            devServer={devServer}
-            devServers={devServers}
-            selectedLabel={activeLabel}
-            onSelectLabel={setSelectedLabel}
-            onStartPreview={startPreview}
-            hasRunnableProject={hasRunnableProject}
-            onAgentMessage={onAgentMessage}
-          />
-        ) : activeTab === "review" ? (
-          <ReviewPanel
-            threadId={threadId}
-            review={reviewQuery.data}
-            isFetching={reviewQuery.isFetching}
-            onRegenerate={() => void reviewQuery.refetch()}
-          />
-        ) : (
-          <ActivityPanel events={mergedEvents} threadId={threadId} verifyResult={effectiveVerifyResult} />
-        )}
+          ) : null}
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Browser">
+          {activeTab === "browser" ? (
+            <Browser
+              threadId={threadId}
+              filePath={browserFilePath}
+              devServer={devServer}
+              devServers={devServers}
+              selectedLabel={activeLabel}
+              onSelectLabel={setSelectedLabel}
+              onStartPreview={startPreview}
+              hasRunnableProject={hasRunnableProject}
+              onAgentMessage={onAgentMessage}
+            />
+          ) : null}
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Review">
+          {activeTab === "review" ? (
+            <ReviewPanel
+              threadId={threadId}
+              review={reviewQuery.data}
+              isFetching={reviewQuery.isFetching}
+              onRegenerate={() => void reviewQuery.refetch()}
+            />
+          ) : null}
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Activity">
+          {activeTab === "activity" ? (
+            <ActivityPanel events={mergedEvents} threadId={threadId} verifyResult={effectiveVerifyResult} />
+          ) : null}
+        </AgentComputerErrorBoundary>
       </div>
 
       {/* ── Task checklist ── */}
