@@ -465,5 +465,10 @@ export interface Translations {
     taskProgress: string;
     noLogs: string;
     close: string;
+    verifyResult: {
+      passed: (count: number) => string;
+      failed: (count: number) => string;
+      consoleErrors: (count: number) => string;
+    };
   };
 }

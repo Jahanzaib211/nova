@@ -44,6 +44,7 @@ import type { LlmError, TaskProgress, VerifyResult } from "@/components/workspac
 import { useThread } from "@/components/workspace/messages/context";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { getBackendBaseURL } from "@/core/config";
+import { useI18n } from "@/core/i18n/hooks";
 import {
   sandboxAuditDownloadUrl,
   sandboxReviewDownloadUrl,
@@ -1015,11 +1016,12 @@ function LlmErrorBadge({ event }: { event: LlmError }) {
 }
 
 function VerifyResultPill({ event }: { event: VerifyResult }) {
+  const { t } = useI18n();
   const ok = event.ok;
   const failedRoutes = (event.routes ?? []).filter((r) => !r.ok);
   const summary = ok
-    ? `Self-test passed${event.routes?.length ? ` · ${event.routes.length} route${event.routes.length === 1 ? "" : "s"}` : ""}`
-    : `Self-test found issues${failedRoutes.length ? ` · ${failedRoutes.length} route${failedRoutes.length === 1 ? "" : "s"} failed` : ""}`;
+    ? t.agentComputer.verifyResult.passed(event.routes?.length ?? 0)
+    : t.agentComputer.verifyResult.failed(failedRoutes.length);
   const tone = ok
     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
@@ -1035,7 +1037,7 @@ function VerifyResultPill({ event }: { event: VerifyResult }) {
       <span className="truncate">{summary}</span>
       {event.console_errors_count > 0 ? (
         <span className="ml-auto text-muted-foreground/70">
-          {event.console_errors_count} console error{event.console_errors_count === 1 ? "" : "s"}
+          {t.agentComputer.verifyResult.consoleErrors(event.console_errors_count)}
         </span>
       ) : null}
     </div>
@@ -1265,7 +1267,7 @@ function ReviewPanel({
             </div>
           )}
 
-          {review && review.files.length === 0 && (
+          {review?.files.length === 0 && (
             <div className="text-muted-foreground/50">No changes to review yet.</div>
           )}
         </div>

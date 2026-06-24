@@ -560,5 +560,13 @@ export const enUS: Translations = {
     taskProgress: "Task progress",
     noLogs: "No output yet",
     close: "Close",
+    verifyResult: {
+      passed: (count: number) =>
+        `Self-test passed${count ? ` · ${count} route${count === 1 ? "" : "s"}` : ""}`,
+      failed: (count: number) =>
+        `Self-test found issues${count ? ` · ${count} route${count === 1 ? "" : "s"} failed` : ""}`,
+      consoleErrors: (count: number) =>
+        `${count} console error${count === 1 ? "" : "s"}`,
+    },
   },
 };

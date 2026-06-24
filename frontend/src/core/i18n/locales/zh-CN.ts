@@ -539,5 +539,13 @@ export const zhCN: Translations = {
     taskProgress: "任务进度",
     noLogs: "暂无输出",
     close: "关闭",
+    verifyResult: {
+      passed: (count: number) =>
+        `自检通过${count ? ` · ${count} 条路由` : ""}`,
+      failed: (count: number) =>
+        `自检发现问题${count ? ` · ${count} 条路由失败` : ""}`,
+      consoleErrors: (count: number) =>
+        `${count} 个控制台错误`,
+    },
   },
 };
