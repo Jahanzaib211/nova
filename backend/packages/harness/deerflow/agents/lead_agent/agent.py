@@ -31,6 +31,7 @@ from deerflow.agents.memory.summarization_hook import memory_flush_hook
 from deerflow.agents.middlewares.clarification_middleware import ClarificationMiddleware
 from deerflow.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
 from deerflow.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
+from deerflow.agents.middlewares.reflect_fix_middleware import ReflectFixBudgetMiddleware
 from deerflow.agents.middlewares.memory_middleware import MemoryMiddleware
 from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
 from deerflow.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
@@ -362,6 +363,13 @@ def build_middlewares(
 
     # ObserveAdjustMiddleware — emit task_progress events after each tool cycle
     middlewares.append(ObserveAdjustMiddleware())
+
+    # ReflectFixBudgetMiddleware — runtime-enforce the prompt's "iterate at
+    # most twice" rule from <self_verify>. Counts consecutive dev_verify
+    # ISSUES per run; after 2 ISSUES, injects a forced HumanMessage at the
+    # next wrap_model_call telling the agent to write its final answer.
+    # Non-fatal by construction (every code path wrapped in try/except).
+    middlewares.append(ReflectFixBudgetMiddleware())
 
     # Inject custom middlewares before ClarificationMiddleware
     if custom_middlewares:
