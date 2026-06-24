@@ -82,7 +82,7 @@ export function RecentChatList() {
     isFetchingNextPage,
   } = useInfiniteThreads();
   const threads = useMemo(
-    () => infiniteThreads?.pages.flat() ?? [],
+    () => infiniteThreads?.pages?.flat() ?? [],
     [infiniteThreads],
   );
 

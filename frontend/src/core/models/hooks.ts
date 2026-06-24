@@ -11,7 +11,7 @@ export function useModels({ enabled = true }: { enabled?: boolean } = {}) {
   });
   return {
     models: data?.models ?? [],
-    tokenUsageEnabled: data?.token_usage.enabled ?? false,
+    tokenUsageEnabled: data?.token_usage?.enabled ?? false,
     isLoading,
     error,
   };

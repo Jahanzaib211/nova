@@ -649,7 +649,7 @@ function Browser({
                 <XIcon className="h-3 w-3" />
               </button>
             </div>
-            {selfTest?.routes.map((r, i) => (
+            {(selfTest?.routes ?? []).map((r, i) => (
               <div key={i} className="mt-1 flex items-start gap-2">
                 {r.screenshot && (
                   <a href={r.screenshot} target="_blank" rel="noreferrer" className="shrink-0">
@@ -1265,7 +1265,7 @@ function ReviewPanel({
             </div>
           )}
 
-          {review?.files.length === 0 && (
+          {review && review.files.length === 0 && (
             <div className="text-muted-foreground/50">No changes to review yet.</div>
           )}
         </div>
