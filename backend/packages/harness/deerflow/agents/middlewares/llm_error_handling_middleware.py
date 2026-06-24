@@ -294,6 +294,39 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
         except Exception:
             logger.debug("Failed to emit llm_retry event", exc_info=True)
 
+    def _emit_error_event(
+        self,
+        *,
+        error_type: str,
+        reason: str,
+        detail: str,
+        http_status: int | None = None,
+        code: str | None = None,
+    ) -> None:
+        """Emit a structured ``llm_error`` stream event.
+
+        Mirrors ``_emit_retry_event``. Powers the UI badge (C3) that
+        lets the user know a previous turn failed even though the
+        error string is filtered out of the chat history. Failure
+        to emit is logged and swallowed — non-fatal contract.
+        """
+        try:
+            from langgraph.config import get_stream_writer
+
+            writer = get_stream_writer()
+            writer(
+                {
+                    "type": "llm_error",
+                    "error_type": error_type,
+                    "reason": reason,
+                    "detail": detail,
+                    "http_status": http_status,
+                    "code": code,
+                }
+            )
+        except Exception:
+            logger.debug("Failed to emit llm_error event", exc_info=True)
+
     @override
     def wrap_model_call(
         self,
@@ -344,7 +377,17 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
                 )
                 if retriable:
                     self._record_failure()
-                return self._build_user_fallback_message(exc, reason)
+                fallback = self._build_user_fallback_message(exc, reason)
+                http_status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+                code = getattr(exc, "code", None) if isinstance(getattr(exc, "code", None), str) else None
+                self._emit_error_event(
+                    error_type=type(exc).__name__,
+                    reason=reason,
+                    detail=_extract_error_detail(exc),
+                    http_status=http_status if isinstance(http_status, int) else None,
+                    code=code,
+                )
+                return fallback
 
     @override
     async def awrap_model_call(
@@ -396,7 +439,17 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
                 )
                 if retriable:
                     self._record_failure()
-                return self._build_user_fallback_message(exc, reason)
+                fallback = self._build_user_fallback_message(exc, reason)
+                http_status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+                code = getattr(exc, "code", None) if isinstance(getattr(exc, "code", None), str) else None
+                self._emit_error_event(
+                    error_type=type(exc).__name__,
+                    reason=reason,
+                    detail=_extract_error_detail(exc),
+                    http_status=http_status if isinstance(http_status, int) else None,
+                    code=code,
+                )
+                return fallback
 
 
 def _matches_any(detail: str, patterns: tuple[str, ...]) -> bool:
