@@ -43,6 +43,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import threading
 from collections import OrderedDict, defaultdict
 from collections.abc import Awaitable, Callable
@@ -170,6 +171,55 @@ _HARD_STOP_MSG = "[FORCED STOP] Repeated tool calls exceeded the safety limit. P
 
 _TOOL_FREQ_HARD_STOP_MSG = "[FORCED STOP] Tool {tool_name} called {count} times — exceeded the per-tool safety limit. Producing final answer with results collected so far."
 
+# Layer 3 — dead-end search divergence
+# Catches the failure mode where the model invents a project name (e.g.
+# "cowork-fullstack") and then exhaustively searches the filesystem for it
+# with N distinct commands that all return ENOENT. The hash-based detector
+# misses this (different commands produce different hashes); the
+# frequency-based detector misses this too (different commands are not the
+# same tool call). This layer inspects ToolMessage *content* for ENOENT
+# patterns and tracks distinct basenames per thread.
+_DEAD_END_WARN_THRESHOLD = 5  # 5 distinct ENOENT results for the same basename → warn
+_DEAD_END_HARD_LIMIT = 8  # 8 → force-stop and require clarification
+_DEAD_END_SCAN_WINDOW = 20  # max ToolMessages to scan per call (bounds per-call cost)
+
+# Substrings in tool output that indicate a dead-end search result.
+# Matched case-insensitively against the ToolMessage content.
+_DEAD_END_PATTERNS = (
+    "no such file or directory",
+    "no such file",
+    "cannot access",
+    "cannot stat",
+    "no matches found",
+    "no files found",
+    "not found",
+)
+
+_DEAD_END_WARN_MSG = (
+    "[DEAD-END SEARCH] {count} distinct tool calls have returned ENOENT for the same target "
+    "({basename}). The path or repo you are looking for does not exist on this system. "
+    "STOP searching and call `ask_clarification` to confirm the correct path with the user. "
+    "Do not run a {limit}th search without asking."
+)
+
+_DEAD_END_HARD_STOP_MSG = (
+    "[FORCED STOP] {count} distinct tool calls returned ENOENT for {basename}. "
+    "The target does not exist on this system. Producing final answer and "
+    "asking the user to confirm the correct path."
+)
+
+# Regex to extract the basename from a dead-end error message.
+# Matches: 'foo' in `ls: cannot access 'foo': No such file or directory`
+#          `foo` in `find: 'foo': No such file or directory`
+#          /foo/bar in `cannot stat /foo/bar: No such file or directory`
+_BASENAME_RE = re.compile(
+    r"""(?:
+        ['"`]([^'"`\s]+)['"`]            # quoted path
+        | (?:stat|access|find)\s+([^\s:]+)  # verb + space + path
+    )""",
+    re.VERBOSE,
+)
+
 
 class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
     """Detects and breaks repetitive tool call loops.
@@ -225,6 +275,13 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
         self._warned: dict[str, set[str]] = defaultdict(set)
         self._tool_freq: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self._tool_freq_warned: dict[str, set[str]] = defaultdict(set)
+        # Layer 3 — dead-end search divergence tracking.
+        # Maps thread_id -> dict of basename -> count of distinct ENOENT results.
+        # Reset per-run (parallel to _tool_freq) so a long-lived thread that
+        # legitimately failed to find something in a previous run doesn't
+        # accumulate false positives in the current run.
+        self._dead_end_basenames: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self._dead_end_warned: dict[str, set[str]] = defaultdict(set)
         # Per-thread/run queue of warnings to inject at the next model call.
         # Populated by ``after_model`` (detection) and drained by
         # ``wrap_model_call`` (injection); see module docstring.
@@ -435,7 +492,148 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
                         )
                         return _TOOL_FREQ_WARNING_MSG.format(tool_name=name, count=tc_count), False
 
+        # --- Layer 3: dead-end search divergence ---
+        # Inspect the most recent ToolMessage in the messages list. If its
+        # content indicates an ENOENT-style failure for a specific basename,
+        # track that basename per-thread. When the same basename accumulates
+        # >= _DEAD_END_WARN_THRESHOLD distinct ENOENT results, warn. At
+        # _DEAD_END_HARD_LIMIT, force-stop and require clarification.
+        dead_end_warning = self._check_dead_end_search(messages, thread_id)
+        if dead_end_warning is not None:
+            return dead_end_warning
+
         return None, False
+
+    def _check_dead_end_search(self, messages: list, thread_id: str) -> tuple[str, bool] | None:
+        """Layer 3 detector: dead-end search divergence.
+
+        Walks back through the most recent ToolMessages in *messages*
+        (up to ``_DEAD_END_SCAN_WINDOW``, no AI-message boundary so
+        multi-turn dead-end patterns aggregate), extracts ENOENT basenames,
+        and increments the per-thread counter once per call when any
+        ENOENT for the chosen basename appears.
+
+        One detector call = one agent step. An agent step typically has
+        exactly one ToolMessage; the per-call increment is what makes
+        "N distinct commands" = "N detector calls".
+
+        Args:
+            messages: The full message list from the agent state.
+            thread_id: Per-thread tracking key.
+
+        Returns:
+            ``(warning_message, should_hard_stop)`` if a dead-end signal
+            was detected, else ``None``. Warning is appended to the model's
+            next call via the existing pending-warnings queue.
+        """
+        # Collect ToolMessages from the recent history, bounded by
+        # _DEAD_END_SCAN_WINDOW to bound per-call cost.
+        tool_messages: list = []
+        for msg in reversed(messages):
+            if getattr(msg, "type", None) == "tool":
+                tool_messages.append(msg)
+                if len(tool_messages) >= _DEAD_END_SCAN_WINDOW:
+                    break
+
+        if not tool_messages:
+            return None
+
+        # Aggregate ENOENT results across the scanned ToolMessages.
+        enoent_basenames: dict[str, int] = {}
+        for tm in tool_messages:
+            content = tm.content
+            if not isinstance(content, str):
+                continue
+            content_lower = content.lower()
+            if not any(pattern in content_lower for pattern in _DEAD_END_PATTERNS):
+                continue
+            basename = self._extract_basename(content)
+            if basename:
+                enoent_basenames[basename] = enoent_basenames.get(basename, 0) + 1
+
+        if not enoent_basenames:
+            return None
+
+        # Pick the basename with the highest count (most-likely-candidate
+        # for the warning). Increment the per-thread counter once for this
+        # call — one call = one agent step.
+        candidate = max(enoent_basenames.items(), key=lambda kv: kv[1])
+
+        with self._lock:
+            counter = self._dead_end_basenames[thread_id]
+            counter[candidate[0]] += 1
+            count = counter[candidate[0]]
+
+            if count >= _DEAD_END_HARD_LIMIT:
+                logger.error(
+                    "Dead-end search hard limit reached — forcing stop",
+                    extra={
+                        "thread_id": thread_id,
+                        "basename": candidate[0],
+                        "count": count,
+                    },
+                )
+                return _DEAD_END_HARD_STOP_MSG.format(basename=candidate[0], count=count), True
+
+            warned = self._dead_end_warned[thread_id]
+            if count >= _DEAD_END_WARN_THRESHOLD and candidate[0] not in warned:
+                warned.add(candidate[0])
+                logger.warning(
+                    "Dead-end search divergence detected — forcing clarification",
+                    extra={
+                        "thread_id": thread_id,
+                        "basename": candidate[0],
+                        "count": count,
+                    },
+                )
+                return (
+                    _DEAD_END_WARN_MSG.format(
+                        basename=candidate[0],
+                        count=count,
+                        limit=_DEAD_END_HARD_LIMIT,
+                    ),
+                    False,
+                )
+
+        return None
+
+    @staticmethod
+    def _extract_basename(content: str) -> str | None:
+        """Extract a normalized basename from an ENOENT-style error message.
+
+        Tries (in order):
+          1. Quoted path: 'X' or "X" or `X` (group 1)
+          2. Verb + path: ``find X`` / ``stat X`` / ``access X`` (group 2)
+          3. First whitespace-delimited token that looks like a path
+
+        The result is stripped of surrounding punctuation and reduced to
+        the last path component so ``/a/b/cowork-fullstack`` and
+        ``cowork-fullstack`` map to the same tracking key.
+        """
+        match = _BASENAME_RE.search(content)
+        if match:
+            basename = match.group(1) or match.group(2)
+        else:
+            basename = None
+        if not basename:
+            # Last resort: take the first whitespace-delimited token that
+            # looks like a path (starts with / or contains a /)
+            for token in content.split():
+                if token.startswith("/") or "/" in token:
+                    basename = token
+                    break
+        if not basename:
+            return None
+
+        # Strip leading/trailing punctuation (the regex captures quotes
+        # around the path), then take the last path component to coalesce
+        # "/a/b/cowork-fullstack" and "cowork-fullstack" into the same key.
+        basename = basename.strip(":,;.\"'`')")
+        basename = basename.split("/")[-1] if "/" in basename else basename
+        basename = basename.strip(":,;.\"'`')")
+        if not basename or len(basename) > 256:
+            return None
+        return basename
 
     @staticmethod
     def _append_text(content: str | list | None, text: str) -> str | list:
@@ -548,6 +746,11 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
         with self._lock:
             self._tool_freq.pop(thread_id, None)
             self._tool_freq_warned.pop(thread_id, None)
+            # Layer 3 — dead-end search divergence also resets per-run so
+            # a long-lived thread that legitimately couldn't find something
+            # in a previous run doesn't accumulate false positives here.
+            self._dead_end_basenames.pop(thread_id, None)
+            self._dead_end_warned.pop(thread_id, None)
 
     @override
     def after_model(self, state: AgentState, runtime: Runtime) -> dict | None:
@@ -618,6 +821,8 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
                 self._warned.pop(thread_id, None)
                 self._tool_freq.pop(thread_id, None)
                 self._tool_freq_warned.pop(thread_id, None)
+                self._dead_end_basenames.pop(thread_id, None)
+                self._dead_end_warned.pop(thread_id, None)
                 for key in list(self._pending_warnings):
                     if key[0] == thread_id:
                         self._drop_pending_warning_key_locked(key)
@@ -626,5 +831,7 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
                 self._warned.clear()
                 self._tool_freq.clear()
                 self._tool_freq_warned.clear()
+                self._dead_end_basenames.clear()
+                self._dead_end_warned.clear()
                 self._pending_warnings.clear()
                 self._pending_warning_touch_order.clear()
