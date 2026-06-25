@@ -40,6 +40,7 @@ import time
 import weakref
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 from weakref import WeakValueDictionary
 
 from deerflow.sandbox.dev_server import get_dev_server
@@ -394,8 +395,37 @@ def _run_browser_check_unlocked(
     return result
 
 
+def _rewrite_cdp_netloc(cdp_url: str, new_host: str) -> str | None:
+    """Swap the netloc (host[:port]) of a CDP websocket URL with ``urlsplit``.
+
+    Replaces the previous brittle ``str.replace`` which corrupted path / query /
+    fragment and broke for IPv6 / custom schemes. Returns ``None`` if the input
+    is not a parseable URL — callers should treat that as "CDP unavailable"
+    and fall back to the SDK HTTP API.
+
+    The original port is preserved (CDP defaults to 8080/9222/3000 depending
+    on the chromium image). If the URL has no port, only the host is swapped.
+    """
+    try:
+        parts = urlsplit(cdp_url)
+    except ValueError:
+        return None
+    if not parts.scheme or not parts.netloc:
+        return None
+    # Preserve the original port. If absent, omit it from the new netloc.
+    new_port = parts.port
+    new_netloc = f"{new_host}:{new_port}" if new_port else new_host
+    return urlunsplit((parts.scheme, new_netloc, parts.path, parts.query, parts.fragment))
+
+
 def _cdp_url_for_gateway(client: Any) -> str | None:
-    """The AIO chromium's CDP websocket, rewritten to be reachable from the gateway."""
+    """The AIO chromium's CDP websocket, rewritten to be reachable from the gateway.
+
+    Only rewrites ``localhost`` and ``127.0.0.1`` host components (the
+    container-internal chromium); other hosts pass through untouched so this
+    helper also works when chromium is already on a routable address (e.g.
+    a remote AIO deployment).
+    """
     try:
         info = client.browser.get_info()
         cdp = getattr(getattr(info, "data", info), "cdp_url", None)
@@ -403,7 +433,14 @@ def _cdp_url_for_gateway(client: Any) -> str | None:
         return None
     if not cdp:
         return None
-    return cdp.replace("localhost:8080", "host.docker.internal:8080").replace("127.0.0.1:8080", "host.docker.internal:8080")
+    try:
+        parts = urlsplit(cdp)
+    except ValueError:
+        return None
+    host = (parts.hostname or "").lower()
+    if host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+        return cdp  # already routable; pass through
+    return _rewrite_cdp_netloc(cdp, new_host="host.docker.internal")
 
 
 def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with_screenshot: bool, render_budget_ms: int) -> list[RouteResult]:
