@@ -33,6 +33,7 @@ from deerflow.agents.middlewares.loop_detection_middleware import LoopDetectionM
 from deerflow.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
 from deerflow.agents.middlewares.reflect_fix_middleware import ReflectFixBudgetMiddleware
 from deerflow.agents.middlewares.strip_error_fallback_middleware import StripErrorFallbackMiddleware
+from deerflow.agents.middlewares.preflight_quota_middleware import PreflightQuotaMiddleware
 from deerflow.agents.middlewares.memory_middleware import MemoryMiddleware
 from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
 from deerflow.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
@@ -377,6 +378,12 @@ def build_middlewares(
     # alongside the runtime/serialization.py filter that handles the
     # UI/REST path. Non-fatal by construction.
     middlewares.append(StripErrorFallbackMiddleware())
+
+    # PreflightQuotaMiddleware — short-circuit the LLM call when the
+    # provider's quota is exhausted. Only probes OpenAI-compatible
+    # providers that expose /v1/dashboard/billing/credit. Fail-open
+    # on any error. Per-provider cache with 60s TTL.
+    middlewares.append(PreflightQuotaMiddleware())
 
     # Inject custom middlewares before ClarificationMiddleware
     if custom_middlewares:
