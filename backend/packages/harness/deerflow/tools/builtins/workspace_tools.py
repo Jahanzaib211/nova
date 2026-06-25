@@ -13,6 +13,7 @@ import fnmatch
 import os
 import re
 import shlex
+import threading
 from pathlib import Path
 
 from langchain.tools import tool
@@ -369,6 +370,62 @@ def _aio_client_and_thread(runtime: Runtime):
     return client, thread_id, None
 
 
+# Idempotency cache for browser_navigate. Maps (thread_id, navigate_id) →
+# cached result, with TTL eviction. Bounded by entry count to prevent
+# memory growth on long-running threads.
+_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES = int(
+    os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES", "256")
+)
+_NAVIGATE_IDEMPOTENCY_TTL_S = float(
+    os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_TTL_S", "60.0")
+)
+
+
+class _BrowserNavigateIdempotency:
+    """Thread-safe LRU+TTL cache for browser_navigate results.
+
+    Storage layout: dict[(thread_id, navigate_id), (timestamp, result)].
+    Eviction: opportunistic on put() — if size exceeds the cap, drop
+    the oldest entry by timestamp.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[tuple[str, str], tuple[float, str]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, thread_id: str, navigate_id: str) -> str | None:
+        import time as _time
+
+        now = _time.monotonic()
+        with self._lock:
+            entry = self._data.get((thread_id, navigate_id))
+            if entry is None:
+                return None
+            ts, result = entry
+            if (now - ts) > _NAVIGATE_IDEMPOTENCY_TTL_S:
+                del self._data[(thread_id, navigate_id)]
+                return None
+            return result
+
+    def put(self, thread_id: str, navigate_id: str, result: str) -> None:
+        import time as _time
+
+        now = _time.monotonic()
+        with self._lock:
+            self._data[(thread_id, navigate_id)] = (now, result)
+            # Opportunistic eviction if over the cap.
+            if len(self._data) > _NAVIGATE_IDEMPOTENCY_MAX_ENTRIES:
+                oldest_key = min(self._data, key=lambda k: self._data[k][0])
+                self._data.pop(oldest_key, None)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._data.clear()
+
+
+_browser_navigate_idempotency = _BrowserNavigateIdempotency()
+
+
 def _data_str(resp) -> str:
     """Best-effort stringify of a Fern response's .data."""
     data = getattr(resp, "data", resp)
@@ -492,22 +549,44 @@ def shell_kill_tool(runtime: Runtime, description: str, session_id: str = "main"
 
 
 @tool("browser_navigate", parse_docstring=True)
-def browser_navigate_tool(runtime: Runtime, description: str, url: str) -> str:
+def browser_navigate_tool(
+    runtime: Runtime,
+    description: str,
+    url: str,
+    navigate_id: str | None = None,
+) -> str:
     """Open a URL in the sandbox's real browser (watch it live in the Browser tab's VNC view).
 
     Args:
         description: Why you are navigating. ALWAYS PROVIDE THIS FIRST.
         url: The URL to open.
+        navigate_id: Optional idempotency key. If the same (thread_id, navigate_id)
+            pair was seen within ``DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_TTL_S``
+            (default 60s), the cached result is returned without a second
+            navigate call. Useful for retry-safety when the LLM re-issues the
+            same instruction after a transient error.
     """
     client, _tid, err = _aio_client_and_thread(runtime)
     if err:
         return err
+
+    # Idempotency short-circuit: same (thread, navigate_id) within TTL → cache hit.
+    if navigate_id:
+        cached = _browser_navigate_idempotency.get(_tid, navigate_id)
+        if cached is not None:
+            return cached
+
     try:
         client.browser_page.navigate(url=url, wait_until="load", timeout=20000)
         text = _data_str(client.browser_page.get_text())[:1500]
         _write_sandbox_observation(_get_sandbox_id(runtime), "browser", url, f"navigated to {url[:80]}")
-        return f"Opened {url}\n\n{text}"
+        result = f"Opened {url}\n\n{text}"
+        if navigate_id and _tid is not None:
+            _browser_navigate_idempotency.put(_tid, navigate_id, result)
+        return result
     except Exception as e:
+        # Don't cache errors — let the next call (if it succeeds) populate
+        # the cache, OR let the user retry with a different navigate_id.
         return f"Error: {e}"
 
 
