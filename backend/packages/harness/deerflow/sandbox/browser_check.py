@@ -9,17 +9,36 @@ console errors, HTTP/render failures, and a screenshot.
 This is the signal source the self-improving loop (verify gate) consumes, and the
 Browser tab surfaces the screenshot so the user can watch the agent test live.
 Zero install: it reuses the sandbox's bundled browser.
+
+Concurrency model (v7+)
+-----------------------
+Per-thread locks (``WeakValueDictionary[str, threading.Lock]``) serialize
+``run_browser_check`` for the same ``thread_id`` so concurrent self-tests on a
+single thread don't race on the Playwright session or the last-checks cache.
+A module-level lock guards writes to ``_last_checks`` to keep the public API
+race-free without breaking the hot path.
+
+Backwards compatibility
+-----------------------
+``run_browser_check`` and ``get_last_browser_check`` retain their original
+signatures and return types. Callers now receive a *deep copy* of the stored
+``BrowserCheck`` from ``get_last_browser_check`` and from ``run_browser_check``,
+so they can mutate the result without affecting the cache or other callers.
 """
 
 from __future__ import annotations
 
 import base64
 import contextlib
+import copy
 import logging
 import re
 import shlex
+import threading
+import weakref
 from dataclasses import dataclass, field
 from typing import Any
+from weakref import WeakValueDictionary
 
 from deerflow.sandbox.dev_server import get_dev_server
 
@@ -163,11 +182,53 @@ _BLANK_SCREENSHOT_MAX_BYTES = 2000
 
 # Latest check per thread so the panel can auto-show the most recent self-test
 # (e.g. the deterministic auto-check the preview pipeline runs) without re-running.
+# Guarded by ``_LAST_CHECKS_LOCK`` so concurrent writers can't corrupt the dict.
 _last_checks: dict[str, BrowserCheck] = {}
+_LAST_CHECKS_LOCK = threading.Lock()
+
+# Per-thread locks so concurrent ``run_browser_check`` calls on the SAME
+# ``thread_id`` don't race on the shared Playwright session or the cache.
+# WeakValueDictionary so dead threads don't accumulate locks forever.
+_thread_locks: "WeakValueDictionary[str, threading.Lock]" = WeakValueDictionary()
+_THREAD_LOCKS_META = threading.Lock()  # guards creation of entries in _thread_locks
+
+
+def _get_thread_lock(thread_id: str) -> threading.Lock:
+    """Get-or-create the per-thread ``threading.Lock`` for ``run_browser_check``.
+
+    Safe under concurrency: the meta-lock only guards creation; once a lock is
+    stored in the ``WeakValueDictionary`` it is itself the long-lived primitive
+    that serialises check execution for that thread.
+    """
+    lock = _thread_locks.get(thread_id)
+    if lock is not None:
+        return lock
+    with _THREAD_LOCKS_META:
+        lock = _thread_locks.get(thread_id)
+        if lock is None:
+            lock = threading.Lock()
+            _thread_locks[thread_id] = lock
+        return lock
+
+
+def _store_last_check(thread_id: str, check: BrowserCheck) -> None:
+    """Atomically store a deep copy of ``check`` for ``thread_id``."""
+    with _LAST_CHECKS_LOCK:
+        _last_checks[thread_id] = copy.deepcopy(check)
 
 
 def get_last_browser_check(thread_id: str) -> BrowserCheck | None:
-    return _last_checks.get(thread_id)
+    """Return a *deep copy* of the most recent ``BrowserCheck`` for ``thread_id``.
+
+    The copy lets callers mutate the result without affecting the cache or other
+    callers — this is a deliberate hardening step (v7+) to prevent the previous
+    behaviour where ``BrowserCheck.routes`` was a shared mutable list.
+    """
+    with _LAST_CHECKS_LOCK:
+        cached = _last_checks.get(thread_id)
+    if cached is None:
+        return None
+    return copy.deepcopy(cached)
 
 
 def run_browser_check(
@@ -180,7 +241,36 @@ def run_browser_check(
 ) -> BrowserCheck:
     """Drive the sandbox browser against the running dev server — or, when there
     is none, against the self-contained HTML deliverable shipped via present_files
-    (opened with file://), so static builds are still observable."""
+    (opened with file://), so static builds are still observable.
+
+    Concurrent calls for the same ``thread_id`` are serialised by a per-thread
+    lock so the shared Playwright session and ``_last_checks`` cache stay
+    race-free. Different threads run in parallel — the lock only scopes by
+    ``thread_id``.
+    """
+    lock = _get_thread_lock(thread_id)
+    with lock:
+        result = _run_browser_check_unlocked(
+            thread_id,
+            sandbox,
+            label=label,
+            routes=routes,
+            with_screenshot=with_screenshot,
+        )
+        _store_last_check(thread_id, result)
+    # Return a fresh copy so the caller can't mutate the cached instance.
+    return copy.deepcopy(result)
+
+
+def _run_browser_check_unlocked(
+    thread_id: str,
+    sandbox: Any,
+    *,
+    label: str,
+    routes: list[str] | None,
+    with_screenshot: bool,
+) -> BrowserCheck:
+    """Inner, lock-free implementation. Always called from ``run_browser_check``."""
     result = BrowserCheck()
     client = getattr(sandbox, "_client", None)
     if client is None:
@@ -241,8 +331,8 @@ def run_browser_check(
     result.routes = routes_result
     result.ok = bool(routes_result) and all(r.ok for r in routes_result)
     result.reason = "ok" if result.ok else "issues found — see routes"
-    _last_checks[thread_id] = result
     return result
+
 
 def _cdp_url_for_gateway(client: Any) -> str | None:
     """The AIO chromium's CDP websocket, rewritten to be reachable from the gateway."""
