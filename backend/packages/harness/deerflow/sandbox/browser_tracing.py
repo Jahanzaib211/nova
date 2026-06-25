@@ -37,7 +37,7 @@ import secrets
 import threading
 import time
 import uuid
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
@@ -145,17 +145,22 @@ def browser_span(
 ) -> Iterator[BrowserSpan]:
     """Context manager that creates a span and pushes it as the current parent.
 
-    On exit, the span is finalised (end_time + status set) and emitted
-    via ``browser_log`` at DEBUG level so it shows up in the same log
-    stream as everything else.
-
-    The span's parent is the most recent active span in the same async
-    context (or None for root spans). After exit, the previous parent
-    is restored.
+    Implementation note: we use a plain list variable inside the generator
+    rather than relying solely on ContextVar reset. Some pytest runners +
+    Python versions have shown the ContextVar to be inconsistent across
+    sibling test contexts; using a closure-local stack is robust against
+    that and the public surface (current_span() / browser_log()) still
+    reads through ContextVar for async callers.
     """
     trace_id = get_trace_id() or new_trace_id()
-    stack = _current_spans.get() or []
+
+    # Snapshot the current stack INSIDE our own context (copy of current
+    # ContextVar) so we don't read a stale value if the caller is in a
+    # different async context.
+    ctx = copy_context()
+    stack = list(ctx.get(_current_spans) or [])
     parent = stack[-1] if stack else None
+
     span = BrowserSpan(
         name=name,
         trace_id=trace_id,
@@ -164,20 +169,38 @@ def browser_span(
         start_time=time.time(),
         attributes=dict(attributes or {}),
     )
+
+    # Push the span onto the ContextVar.
     new_stack = stack + [span]
     token = _current_spans.set(new_stack)
+
+    # Propagate the trace_id into the ContextVar too, so child spans
+    # created INSIDE this one inherit the same trace_id rather than
+    # generating a new one. Restore on exit.
+    trace_token = _current_trace_id.set(trace_id)
+
+    status: str = "ok"
+    status_message: str | None = None
+    exc_to_raise: BaseException | None = None
     try:
         yield span
     except Exception as exc:
-        span.set_status("error", message=f"{type(exc).__name__}: {exc}")
+        status = "error"
+        status_message = f"{type(exc).__name__}: {exc}"
         span.add_event("exception", type=type(exc).__name__, message=str(exc))
-        raise
-    else:
-        span.set_status("ok")
+        exc_to_raise = exc
     finally:
+        # Finalise the span before touching the contextvar.
         span.end_time = time.time()
+        span.status = status
+        if status_message is not None:
+            span.attributes["status_message"] = status_message
+        # Reset contextvars BEFORE emitting, so emit log doesn't see this span.
         _current_spans.reset(token)
+        _current_trace_id.reset(trace_token)
         _emit_span(span)
+        if exc_to_raise is not None:
+            raise exc_to_raise
 
 
 def current_span() -> BrowserSpan | None:

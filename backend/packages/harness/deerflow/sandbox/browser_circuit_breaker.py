@@ -277,10 +277,30 @@ def guard_browser_call(
 
 # Admin / introspection helpers (used by /api/health and tests)
 def reset_all_circuits() -> None:
-    """Reset every per-thread breaker to CLOSED. For tests."""
+    """Reset every per-thread breaker to CLOSED + clear failure history.
+
+    Used by tests for isolation. Crucial: we MUST clear failures even
+    when state is already CLOSED, otherwise stale failures from a
+    previous test pollute the failure window for the next test and
+    cause spurious circuit-trips.
+
+    ``_transition`` is for state-CHANGE events and returns early when
+    the target state equals the current state — that's the wrong
+    primitive here. We explicitly set state + clear failures below.
+    """
     with _breakers_meta:
         for state in list(_breakers.values()):
-            _transition(state, CircuitState.CLOSED, reason="reset_all")
+            prev = state.state
+            state.state = CircuitState.CLOSED
+            state.failures.clear()
+            state.opened_at = 0.0
+            state.last_probe_at = 0.0
+            if prev != CircuitState.CLOSED:
+                logger.warning(
+                    "browser circuit force-reset: thread_id=%s %s -> closed",
+                    state.thread_id,
+                    prev.value,
+                )
 
 
 def snapshot() -> dict[str, str]:

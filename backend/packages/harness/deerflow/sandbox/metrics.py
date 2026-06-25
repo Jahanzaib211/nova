@@ -292,7 +292,9 @@ class _Registry:
                 for i, bound in enumerate(h.buckets):
                     cumulative = s.bucket_counts[i]
                     base = tuple(zip(h.labelnames, (v for _, v in s.labels)))
-                    le = "Inf" if bound == float("inf") else str(bound)
+                    # Prometheus convention: +Inf bucket is rendered with
+                    # le="+Inf", not the Python "Inf" repr.
+                    le = "+Inf" if bound == float("inf") else str(bound)
                     bucket_labels = base + (("le", le),)
                     labels_str = _format_labels(bucket_labels)
                     lines.append(f"{h.name}_bucket{labels_str} {cumulative}")
