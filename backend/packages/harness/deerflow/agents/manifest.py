@@ -70,6 +70,7 @@ _TOOL_PURPOSE_OVERRIDES: dict[str, str] = {
     "browser_click": "CDP: click a selector",
     "browser_input": "CDP: type into a focused selector",
     "browser_eval": "CDP: run JS in the browser, return the value",
+    "screenshot": "CDP: capture the current viewport as inline PNG (self-observation)",
     "deploy_expose": "publish a container port through the absproxy gateway",
     "agent_notify": "post a progress milestone to the Activity feed",
 }
@@ -188,6 +189,7 @@ Project root: {root}
 Sandbox: AIO (Docker per-thread). Each thread gets its own isolated container
 via Docker-out-of-Docker. PTY (shell_session/view/wait/write/kill).
 Browser-over-CDP (browser_navigate/click/input/eval) against the AIO chromium.
+Self-observation: screenshot captures the current viewport inline for visual verification.
 File ops: file.*, scaffold_project, search_files, grep_files.
 Network: deploy_expose (absproxy publish), agent_notify (activity feed).
 

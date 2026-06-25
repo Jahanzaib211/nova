@@ -7,6 +7,8 @@ inside the agent's sandbox workspace at /mnt/user-data/workspace/.
 
 from __future__ import annotations
 
+import base64
+import contextlib
 import fnmatch
 import os
 import re
@@ -563,6 +565,90 @@ def browser_eval_tool(runtime: Runtime, description: str, script: str) -> str:
     try:
         return _data_str(client.browser_page.evaluate(script=script))[:2000] or "(no result)"
     except Exception as e:
+        return f"Error: {e}"
+
+
+@tool("screenshot", parse_docstring=True)
+def screenshot_tool(
+    runtime: Runtime,
+    description: str,
+    full_page: bool = False,
+    max_bytes: int = 1_500_000,
+) -> str:
+    """Capture the current browser viewport as a PNG and return it inline.
+
+    Use this to self-observe mid-task: confirm a click landed, inspect
+    error overlays, or grab a visual before/after for the activity feed.
+
+    The returned ``data:image/png;base64,...`` payload is rendered by the
+    frontend's MessageList just like ``browser_check`` screenshots — no
+    extra UI plumbing required.
+
+    Args:
+        description: Why you are taking this screenshot. ALWAYS PROVIDE THIS FIRST.
+        full_page: If True, capture the entire scrollable page; else viewport only.
+        max_bytes: Reject the screenshot if the encoded PNG exceeds this size
+            (default 1.5MB) so a runaway full-page capture can't blow the
+            agent context window. Returns an error string in that case.
+    """
+    # Metric: count the attempt before we do anything.
+    from deerflow.sandbox.metrics import screenshot_total
+
+    client, _tid, err = _aio_client_and_thread(runtime)
+    if err:
+        screenshot_total.inc("unavailable")
+        return err
+    try:
+        # Reuse the same CDP path as browser_check when available; fall back
+        # to the SDK HTTP API. We don't go through the circuit breaker here —
+        # a screenshot is observational, not a tool the agent relies on for
+        # control flow, so transient failures are best surfaced as errors.
+        from deerflow.sandbox.browser_check import (
+            _cdp_url_for_gateway,
+        )
+
+        cdp = _cdp_url_for_gateway(client)
+        png: bytes | None = None
+        if cdp:
+            try:
+                from playwright.sync_api import sync_playwright
+
+                with sync_playwright() as pw:
+                    browser = pw.chromium.connect_over_cdp(cdp, timeout=10000)
+                    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+                    page = ctx.new_page()
+                    try:
+                        png = page.screenshot(full_page=full_page)
+                    finally:
+                        with contextlib.suppress(Exception):
+                            page.close()
+            except Exception:
+                png = None
+
+        if png is None:
+            # Fallback: SDK HTTP API. Returns an iterator of chunks.
+            page_obj = getattr(client, "browser_page", None)
+            if page_obj is not None and hasattr(page_obj, "screenshot"):
+                chunks = b"".join(page_obj.screenshot(full_page=full_page))
+                if chunks:
+                    png = chunks
+
+        if png is None:
+            screenshot_total.inc("error")
+            return "Error: screenshot unavailable (no CDP connection and no SDK browser_page.screenshot)"
+
+        if len(png) > max_bytes:
+            screenshot_total.inc("too_large")
+            return (
+                f"Error: screenshot too large ({len(png):,} bytes > {max_bytes:,}); "
+                "retry with full_page=false or a smaller viewport"
+            )
+
+        b64 = base64.b64encode(png).decode("ascii")
+        screenshot_total.inc("ok")
+        return f"data:image/png;base64,{b64}"
+    except Exception as e:
+        screenshot_total.inc("error")
         return f"Error: {e}"
 
 

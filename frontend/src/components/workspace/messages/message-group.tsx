@@ -1,6 +1,7 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import {
   BookOpenTextIcon,
+  CameraIcon,
   ChevronUp,
   CoinsIcon,
   FolderOpenIcon,
@@ -660,6 +661,40 @@ function ToolCall({
         label={resolveLabel(t.toolCalls.writeTodos)}
         icon={ListTodoIcon}
       ></ChainOfThoughtStep>
+    );
+  } else if (name === "screenshot") {
+    // Inline self-observation: backend returns `data:image/png;base64,...`.
+    // Renders directly without re-uploading; bounded by tool's max_bytes.
+    let description: string | undefined = (args as { description: string })
+      ?.description;
+    if (!description) {
+      description = t.toolCalls.useTool("screenshot");
+    }
+    const src =
+      typeof result === "string" && result.startsWith("data:image/")
+        ? result
+        : undefined;
+    return (
+      <ChainOfThoughtStep
+        key={id}
+        label={resolveLabel(description)}
+        icon={CameraIcon}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt="agent screenshot"
+            className="mt-2 max-w-full rounded-md border border-border/40"
+            data-testid="screenshot-output"
+          />
+        ) : (
+          <ChainOfThoughtSearchResult>
+            {typeof result === "string"
+              ? result
+              : t.toolCalls.useTool("screenshot")}
+          </ChainOfThoughtSearchResult>
+        )}
+      </ChainOfThoughtStep>
     );
   } else {
     const description: string | undefined = (args as { description: string })
