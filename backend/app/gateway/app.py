@@ -17,6 +17,7 @@ from app.gateway.routers import (
     artifacts,
     assistants_compat,
     auth,
+    browser_health,
     channel_connections,
     channels,
     feedback,
@@ -414,6 +415,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Sandbox observation API (logs, todo, status for Agent's Computer panel)
     app.include_router(sandbox_router.router)
+
+    # Browser subsystem health + Prometheus metrics (v7 C4)
+    app.include_router(browser_health.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:

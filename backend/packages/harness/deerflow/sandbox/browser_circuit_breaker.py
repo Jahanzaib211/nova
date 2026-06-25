@@ -284,23 +284,16 @@ def reset_all_circuits() -> None:
     previous test pollute the failure window for the next test and
     cause spurious circuit-trips.
 
-    ``_transition`` is for state-CHANGE events and returns early when
-    the target state equals the current state — that's the wrong
-    primitive here. We explicitly set state + clear failures below.
+    Crucial v2: we also ``_breakers.clear()`` the registry so the next
+    test starts from a KNOWN EMPTY registry. Leaving entries around
+    even when CLOSED lets previous-test thread_ids bleed into the
+    snapshot / open_circuits count of the next test. In production
+    code, breakers are never explicitly reset, so this only affects
+    tests — and tests want a clean slate.
     """
     with _breakers_meta:
-        for state in list(_breakers.values()):
-            prev = state.state
-            state.state = CircuitState.CLOSED
-            state.failures.clear()
-            state.opened_at = 0.0
-            state.last_probe_at = 0.0
-            if prev != CircuitState.CLOSED:
-                logger.warning(
-                    "browser circuit force-reset: thread_id=%s %s -> closed",
-                    state.thread_id,
-                    prev.value,
-                )
+        # Drop every entry — each access recreates lazily via _get_breaker.
+        _breakers.clear()
 
 
 def snapshot() -> dict[str, str]:
