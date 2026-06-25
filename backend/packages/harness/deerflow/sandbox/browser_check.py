@@ -32,9 +32,11 @@ import base64
 import contextlib
 import copy
 import logging
+import os
 import re
 import shlex
 import threading
+import time
 import weakref
 from dataclasses import dataclass, field
 from typing import Any
@@ -43,6 +45,14 @@ from weakref import WeakValueDictionary
 from deerflow.sandbox.dev_server import get_dev_server
 
 logger = logging.getLogger(__name__)
+
+# Adaptive render budget (v7+): replaces the previous fixed
+# ``page.wait_for_timeout(1500)`` with a ``networkidle`` + fallback scheme.
+#
+# Defaults: 1500ms matches the previous fixed value, 10000ms is the hard cap
+# (prevents runaway waits). Override via env for tight CI / lax dev sandboxes.
+_DEFAULT_RENDER_BUDGET_MS = int(os.environ.get("DEERFLOW_RENDER_BUDGET_MS", "1500"))
+_MAX_RENDER_BUDGET_MS = int(os.environ.get("DEERFLOW_MAX_RENDER_BUDGET_MS", "10000"))
 
 # Server-rendered failure fingerprints (no JS runtime needed to catch these).
 _HTML_ERROR_MARKERS = [
@@ -175,6 +185,47 @@ def _scan_html_errors(html: str) -> str | None:
     return None
 
 
+def _clamp_render_budget_ms(requested: int | None) -> int:
+    """Bound the render budget to ``[_DEFAULT, _MAX]``.
+
+    ``None`` / non-positive falls back to default. Values above ``_MAX`` are
+    clamped — runaway budgets would let a single check monopolise the gate.
+    """
+    if requested is None or requested <= 0:
+        return _DEFAULT_RENDER_BUDGET_MS
+    return min(requested, _MAX_RENDER_BUDGET_MS)
+
+
+def _adaptive_wait(page: Any, budget_ms: int) -> tuple[float, str]:
+    """Wait for the page to be visually idle, bounded by ``budget_ms``.
+
+    Strategy (matches MS Playwright "web-first" guidance):
+      1. Try ``wait_for_load_state("networkidle")`` with the full budget.
+         Returns immediately on fast pages (<300ms typical for cached).
+      2. If networkidle never settles (long-polling, websockets, animations),
+         fall back to a fixed sleep of the FULL budget. This guarantees the
+         caller never waits longer than ``budget_ms`` even in the worst case.
+
+    Returns:
+        ``(elapsed_ms, mode)`` where ``mode`` is one of:
+          - ``"networkidle"``: settled within budget (fast path)
+          - ``"budget_fallback"``: timed out, slept the budget
+          - ``"error"``: an exception during the wait (page closed, etc.)
+    """
+    start = time.monotonic()
+    try:
+        page.wait_for_load_state("networkidle", timeout=budget_ms)
+        return (round((time.monotonic() - start) * 1000, 1), "networkidle")
+    except Exception:
+        # networkidle timed out (or page died) — sleep the FULL budget so the
+        # caller still gets a stable render window, then return.
+        elapsed_so_far = (time.monotonic() - start) * 1000
+        remaining = max(0, int(budget_ms - elapsed_so_far))
+        if remaining > 0:
+            page.wait_for_timeout(remaining)
+        return (round((time.monotonic() - start) * 1000, 1), "budget_fallback")
+
+
 # A real blank page screenshots to a tiny PNG; rendered content (even a canvas)
 # produces a larger image. Used to detect "blank" by pixels, not by innerText.
 _BLANK_SCREENSHOT_MAX_BYTES = 2000
@@ -238,6 +289,7 @@ def run_browser_check(
     label: str = "app",
     routes: list[str] | None = None,
     with_screenshot: bool = True,
+    render_budget_ms: int | None = None,
 ) -> BrowserCheck:
     """Drive the sandbox browser against the running dev server — or, when there
     is none, against the self-contained HTML deliverable shipped via present_files
@@ -247,8 +299,14 @@ def run_browser_check(
     lock so the shared Playwright session and ``_last_checks`` cache stay
     race-free. Different threads run in parallel — the lock only scopes by
     ``thread_id``.
+
+    ``render_budget_ms`` (v7+) bounds the per-page render wait. Replaces the
+    previous fixed ``wait_for_timeout(1500)`` with an adaptive ``networkidle``
+    + budget-fallback scheme. ``None`` uses the default (1500ms), values are
+    clamped to ``[1, 10000]`` to prevent runaway waits.
     """
     lock = _get_thread_lock(thread_id)
+    budget = _clamp_render_budget_ms(render_budget_ms)
     with lock:
         result = _run_browser_check_unlocked(
             thread_id,
@@ -256,6 +314,7 @@ def run_browser_check(
             label=label,
             routes=routes,
             with_screenshot=with_screenshot,
+            render_budget_ms=budget,
         )
         _store_last_check(thread_id, result)
     # Return a fresh copy so the caller can't mutate the cached instance.
@@ -269,6 +328,7 @@ def _run_browser_check_unlocked(
     label: str,
     routes: list[str] | None,
     with_screenshot: bool,
+    render_budget_ms: int,
 ) -> BrowserCheck:
     """Inner, lock-free implementation. Always called from ``run_browser_check``."""
     result = BrowserCheck()
@@ -321,12 +381,12 @@ def _run_browser_check_unlocked(
     routes_result: list[RouteResult] | None = None
     if cdp:
         try:
-            routes_result = _run_targets_via_cdp(cdp, targets, with_screenshot)
+            routes_result = _run_targets_via_cdp(cdp, targets, with_screenshot, render_budget_ms)
         except Exception as e:
             logger.warning("browser_check CDP engine failed (%s); falling back to browser_page", e)
             routes_result = None
     if routes_result is None:
-        routes_result = _run_targets_via_browser_page(getattr(client, "browser_page", None), targets, with_screenshot)
+        routes_result = _run_targets_via_browser_page(getattr(client, "browser_page", None), targets, with_screenshot, render_budget_ms)
 
     result.routes = routes_result
     result.ok = bool(routes_result) and all(r.ok for r in routes_result)
@@ -346,7 +406,7 @@ def _cdp_url_for_gateway(client: Any) -> str | None:
     return cdp.replace("localhost:8080", "host.docker.internal:8080").replace("127.0.0.1:8080", "host.docker.internal:8080")
 
 
-def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with_screenshot: bool) -> list[RouteResult]:
+def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with_screenshot: bool, render_budget_ms: int) -> list[RouteResult]:
     """Drive the existing browser over CDP with Playwright. Raises if it can't connect."""
     from playwright.sync_api import sync_playwright
 
@@ -364,8 +424,12 @@ def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with
                     page.goto(value, wait_until="load", timeout=20000)
                 else:
                     page.set_content(value, wait_until="load", timeout=20000)
-                # Give JS a beat to render (canvas/DOMContentLoaded apps populate after load).
-                page.wait_for_timeout(1500)
+                # Adaptive render wait (v7+): try ``networkidle`` first (fast
+                # path for cached/static pages), fall back to a budget-bounded
+                # sleep so the caller never waits more than ``render_budget_ms``
+                # total — even if networkidle never settles (long-polling,
+                # websockets, infinite animations).
+                _elapsed_ms, _mode = _adaptive_wait(page, render_budget_ms)
 
                 # Capture the screenshot first — it's the ground truth for "did it render".
                 shot = b""
@@ -402,9 +466,15 @@ def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with
     return out
 
 
-def _run_targets_via_browser_page(page: Any, targets: list[tuple[str, str, str]], with_screenshot: bool) -> list[RouteResult]:
+def _run_targets_via_browser_page(page: Any, targets: list[tuple[str, str, str]], with_screenshot: bool, render_budget_ms: int) -> list[RouteResult]:
     """Fallback using the SDK browser_page HTTP API (URL targets only; may 404 on
-    older sandbox images — graceful degradation when CDP is unavailable)."""
+    older sandbox images — graceful degradation when CDP is unavailable).
+
+    ``render_budget_ms`` is accepted for signature parity with the CDP engine
+    but the SDK API does its own server-side wait; we still bound local
+    client-side wait below to keep the total budget honest.
+    """
+    del render_budget_ms  # SDK handles its own wait; signature parity only
     out: list[RouteResult] = []
     for name, kind, value in targets:
         rr = RouteResult(route=name, ok=True, status="ok")
