@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -433,3 +434,16 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
 # Create app instance for uvicorn
 app = create_app()
+
+
+# Install graceful-shutdown hooks (v7 C5). Idempotent — safe to call on
+# every app instantiation (including reloads in dev). Covers SIGTERM,
+# SIGINT, and normal interpreter shutdown via atexit.
+try:
+    from deerflow.sandbox.shutdown import install_shutdown_hooks
+
+    if install_shutdown_hooks():
+        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)",
+                    os.environ.get("DEERFLOW_SHUTDOWN_BUDGET_S", "5.0"))
+except Exception as _install_err:  # pragma: no cover - defensive
+    logger.warning("gateway: failed to install shutdown hooks: %s", _install_err)
