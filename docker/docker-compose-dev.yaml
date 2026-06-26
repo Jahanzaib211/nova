@@ -180,6 +180,45 @@ services:
       - deer-flow-dev
     restart: unless-stopped
 
+  # ── SearXNG (Privacy Search Engine) ──────────────────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    container_name: deer-flow-searxng
+    ports:
+      - "8088:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:-changeme}
+      - SEARXNG_BASE_URL=http://searxng:8080
+    networks:
+      - deer-flow-dev
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 256m
+    mem_reservation: 128m
+    restart: unless-stopped
+
+  # ── TOR Proxy (Optional) ────────────────────────────────────────────
+  tor:
+    image: dperson/torproxy:latest
+    container_name: deer-flow-tor
+    ports:
+      - "9050:9050"
+    networks:
+      - deer-flow-dev
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9050"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 128m
+    mem_reservation: 64m
+    restart: unless-stopped
+
 volumes:
   # Persist .venv across container restarts so dependencies installed during
   # image build are not shadowed by the host backend/ directory mount.

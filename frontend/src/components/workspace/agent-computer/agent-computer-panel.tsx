@@ -24,6 +24,7 @@ import {
   PencilIcon,
   SparklesIcon,
   SquareTerminalIcon,
+  ShieldIcon,
   TerminalIcon,
   XIcon,
 } from "lucide-react";
@@ -64,6 +65,7 @@ import {
   type SandboxReview,
 } from "@/core/sandbox/hooks";
 import { useSkills } from "@/core/skills/hooks";
+import { useIGINOStatus, useToggleIGINO } from "@/core/igino/hooks";
 import type { Skill } from "@/core/skills/type";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { Todo } from "@/core/todos";
@@ -1341,7 +1343,7 @@ function SkillLauncher({
   );
 }
 
-type PanelTab = "files" | "terminal" | "editor" | "browser" | "activity" | "review";
+type PanelTab = "files" | "terminal" | "editor" | "browser" | "activity" | "review" | "privacy";
 
 function TabBtn({ active, onClick, children, badge }: {
   active: boolean; onClick: () => void; children: React.ReactNode; badge?: number;
@@ -1359,6 +1361,120 @@ function TabBtn({ active, onClick, children, badge }: {
         <span className="rounded-full bg-muted px-1 text-[9px] leading-none text-muted-foreground">{badge}</span>
       )}
     </button>
+  );
+}
+
+// ──────────────────────────────────────────────────────────
+// Privacy Panel (iGIN0)
+// ──────────────────────────────────────────────────────────
+
+function PrivacyPanel() {
+  const { t } = useI18n();
+  const { data: status, isLoading } = useIGINOStatus();
+  const toggleMutation = useToggleIGINO();
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-4">
+        <LoaderCircleIcon className="h-4 w-4 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!status) {
+    return (
+      <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
+        {t.common.loading}
+      </div>
+    );
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="space-y-4 p-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldIcon className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">iGIN0 Privacy Search</span>
+          </div>
+          <button
+            onClick={() => toggleMutation.mutate(!status.enabled)}
+            disabled={toggleMutation.isPending}
+            className={cn(
+              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+              status.enabled ? "bg-primary" : "bg-muted",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
+                status.enabled ? "translate-x-4.5" : "translate-x-0.5",
+              )}
+            />
+          </button>
+        </div>
+
+        {/* Source Health */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Source Health</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <StatusCard label="SearXNG" status={status.searxng_healthy ? "healthy" : "unhealthy"} />
+            <StatusCard label="TOR" status={status.tor_available ? "available" : "unavailable"} />
+          </div>
+        </div>
+
+        {/* Cache Stats */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cache</h3>
+          <div className="grid grid-cols-3 gap-2">
+            <MetricCard label="Size" value={`${status.cache.size}/${status.cache.max_size}`} />
+            <MetricCard label="Hit Rate" value={`${(status.cache.hit_rate * 100).toFixed(1)}%`} />
+            <MetricCard label="TTL" value={`${status.cache.ttl_s}s`} />
+          </div>
+        </div>
+
+        {/* Audit Stats */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Audit</h3>
+          <div className="grid grid-cols-3 gap-2">
+            <MetricCard label="Total" value={status.audit.total_records} />
+            <MetricCard label="Errors" value={status.audit.errors} />
+            <MetricCard label="TOR" value={status.audit.tor_usage} />
+          </div>
+        </div>
+
+        {/* Error */}
+        {status.error && (
+          <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+            {status.error}
+          </div>
+        )}
+      </div>
+    </ScrollArea>
+  );
+}
+
+function StatusCard({ label, status }: { label: string; status: string }) {
+  return (
+    <div className="rounded-md border border-border/50 p-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={cn(
+        "mt-1 text-sm font-medium",
+        status === "healthy" || status === "available" ? "text-emerald-400" : "text-amber-400",
+      )}>
+        {status}
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-border/50 p-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-medium">{value}</div>
+    </div>
   );
 }
 
@@ -1681,6 +1797,10 @@ export function AgentComputerPanel({
           <CheckCircle2Icon className="h-3 w-3" />
           Review
         </TabBtn>
+        <TabBtn active={activeTab === "privacy"} onClick={() => setActiveTab("privacy")}>
+          <ShieldIcon className="h-3 w-3" />
+          Privacy
+        </TabBtn>
       </div>
 
       {effectiveLlmError ? <LlmErrorBadge event={effectiveLlmError} /> : null}
@@ -1748,6 +1868,12 @@ export function AgentComputerPanel({
         <AgentComputerErrorBoundary tabName="Activity">
           {activeTab === "activity" ? (
             <ActivityPanel events={mergedEvents} threadId={threadId} verifyResult={effectiveVerifyResult} />
+          ) : null}
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Privacy">
+          {activeTab === "privacy" ? (
+            <PrivacyPanel />
           ) : null}
         </AgentComputerErrorBoundary>
       </div>

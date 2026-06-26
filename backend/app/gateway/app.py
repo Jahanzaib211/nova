@@ -23,6 +23,7 @@ from app.gateway.routers import (
     channel_connections,
     channels,
     feedback,
+    igino,
     mcp,
     memory,
     models,
@@ -423,6 +424,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Runtime capabilities: skills, tools, hooks, subagents, circuit states (v7.1)
     app.include_router(capabilities.router)
+
+    # iGIN0: privacy search endpoints
+    app.include_router(igino.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:

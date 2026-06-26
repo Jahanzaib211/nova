@@ -616,10 +616,11 @@ combined with a FastAPI gateway for REST API access [citation:FastAPI](https://f
 - ✅ RIGHT in Sources: `[GitHub Repository](https://github.com/bytedance/deer-flow) - 官方源代码和文档`
 
 **WORKFLOW for Research Tasks:**
-1. Use web_search to find sources → Extract {{title, url, snippet}} from results
+1. Use web_search or igino_research to find sources → Extract {{title, url, snippet}} from results
 2. Write content with inline citations: `claim [citation:Title](url)`
 3. Collect all citations in a "Sources" section at the end
 4. NEVER write claims without citations when sources are available
+5. For privacy-sensitive research, use igino_research instead of web_search
 
 **CRITICAL RULES:**
 - ❌ DO NOT write research content without citations

@@ -383,6 +383,80 @@ screenshot_total = get_registry().register_counter(
 )
 
 
+# ---------- iGIN0 search metrics ----------
+
+igino_search_total = get_registry().register_counter(
+    Counter(
+        "igino_search_total",
+        "Total iGIN0 search invocations, partitioned by outcome.",
+        labelnames=("outcome",),
+    )
+)
+
+igino_search_duration_ms = get_registry().register_histogram(
+    Histogram(
+        "igino_search_duration_ms",
+        "iGIN0 search wall-clock duration in milliseconds.",
+        labelnames=("source",),
+    )
+)
+
+igino_fetch_total = get_registry().register_counter(
+    Counter(
+        "igino_fetch_total",
+        "Total iGIN0 fetch invocations, partitioned by outcome.",
+        labelnames=("outcome",),
+    )
+)
+
+igino_fetch_duration_ms = get_registry().register_histogram(
+    Histogram(
+        "igino_fetch_duration_ms",
+        "iGIN0 fetch wall-clock duration in milliseconds.",
+        labelnames=("source",),
+    )
+)
+
+igino_cache_hits_total = get_registry().register_counter(
+    Counter(
+        "igino_cache_hits_total",
+        "Total iGIN0 cache hits, partitioned by source.",
+        labelnames=("source",),
+    )
+)
+
+igino_cache_misses_total = get_registry().register_counter(
+    Counter(
+        "igino_cache_misses_total",
+        "Total iGIN0 cache misses, partitioned by source.",
+        labelnames=("source",),
+    )
+)
+
+igino_tor_available = get_registry().register_gauge(
+    Gauge(
+        "igino_tor_available",
+        "Whether TOR proxy is available (1) or not (0).",
+    )
+)
+
+igino_research_total = get_registry().register_counter(
+    Counter(
+        "igino_research_total",
+        "Total iGIN0 research invocations, partitioned by outcome.",
+        labelnames=("outcome",),
+    )
+)
+
+igino_research_duration_ms = get_registry().register_histogram(
+    Histogram(
+        "igino_research_duration_ms",
+        "iGIN0 research wall-clock duration in milliseconds.",
+        labelnames=(),
+    )
+)
+
+
 def render_metrics() -> str:
     """Render the full registry as Prometheus text format."""
     return get_registry().render_prometheus()

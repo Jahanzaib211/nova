@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/unit/**/*.test.ts"],
+    // Accept both .ts (pure-logic) and .tsx (component) tests.
+    include: ["tests/unit/**/*.test.ts", "tests/unit/**/*.test.tsx"],
   },
 });

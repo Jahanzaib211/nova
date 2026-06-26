@@ -1,17 +1,36 @@
+"""Enterprise-grade SearXNG search tool with TOR, fallback, and structured output.
+
+Replaces the basic tool with a hardened version that:
+  - Routes through TOR (optional, configurable per-call)
+  - Falls back to DuckDuckGo if SearXNG is unavailable
+  - Returns structured JSON with metadata
+  - Records audit trail for compliance
+  - Never crashes the agent — returns empty results on failure
+
+Configuration (in config.yaml):
+  - name: web_search
+    group: web
+    use: deerflow.community.searxng.tools:web_search_tool
+    base_url: http://searxng:8080
+    max_results: 5
+    tor_enabled: false
+"""
+
+from __future__ import annotations
+
 import json
 import logging
+import time
+from typing import Any
 
 from langchain.tools import tool
 
 from deerflow.config import get_app_config
 
-from .searxng_client import SearxngClient
-
 logger = logging.getLogger(__name__)
 
 
-def _get_tool_config(tool_name: str) -> dict | None:
-    """Get tool config extras safely, returning None if not configured."""
+def _get_tool_config(tool_name: str) -> dict[str, Any] | None:
     config = get_app_config().get_tool_config(tool_name)
     if config is None:
         return None
@@ -19,30 +38,28 @@ def _get_tool_config(tool_name: str) -> dict | None:
     return extras if extras is not None else {}
 
 
-def _get_searxng_client() -> SearxngClient:
-    cfg = _get_tool_config("web_search")
-    base_url = "http://localhost:8088"
-    if cfg is not None:
-        base_url = cfg.get("base_url", base_url)
-    return SearxngClient(base_url=base_url)
-
-
 @tool("web_search", parse_docstring=True)
-async def web_search_tool(query: str) -> str:
-    """Search the web using SearXNG.
+async def web_search_tool(query: str, tor: bool = False) -> str:
+    """Search the web using SearXNG meta-search engine (privacy-first).
 
     Args:
-        query: The query to search for.
+        query: The search query.
+        tor: Route through TOR for anonymity (optional).
     """
-    try:
-        cfg = _get_tool_config("web_search")
-        max_results = 5
-        if cfg is not None:
-            raw = cfg.get("max_results", max_results)
-            max_results = int(raw) if not isinstance(raw, int) else raw
+    start = time.monotonic()
+    cfg = _get_tool_config("web_search") or {}
+    base_url = cfg.get("base_url", "http://searxng:8080")
+    max_results = int(cfg.get("max_results", 5))
+    tor_default = cfg.get("tor_enabled", False)
+    use_tor = tor or tor_default
 
-        client = _get_searxng_client()
+    try:
+        from deerflow.community.searxng.searxng_client import SearxngClient
+        from deerflow.community.searxng.audit import get_audit_trail
+
+        client = SearxngClient(base_url=base_url, tor_enabled=use_tor)
         results = await client.search(query, max_results=max_results)
+        elapsed_ms = (time.monotonic() - start) * 1000
 
         normalized = [
             {
@@ -52,7 +69,71 @@ async def web_search_tool(query: str) -> str:
             }
             for r in results
         ]
-        return json.dumps(normalized, indent=2, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"Error in web_search_tool: {e}")
-        return json.dumps({"error": str(e), "query": query}, ensure_ascii=False)
+
+        get_audit_trail().search(
+            query=query,
+            privacy_mode=True,
+            tor_used=use_tor,
+            sources_searched=["searxng"],
+            results_returned=len(normalized),
+            duration_ms=elapsed_ms,
+        )
+
+        return json.dumps(
+            {"query": query, "results": normalized, "count": len(normalized), "source": "searxng"},
+            indent=2,
+            ensure_ascii=False,
+        )
+    except Exception as exc:
+        elapsed_ms = (time.monotonic() - start) * 1000
+        logger.warning("SearXNG search failed, attempting DDG fallback: %s", exc)
+        try:
+            return await _ddg_fallback(query, max_results, start)
+        except Exception as fallback_exc:
+            logger.error("DDG fallback also failed: %s", fallback_exc)
+            from deerflow.community.searxng.audit import get_audit_trail
+
+            get_audit_trail().search(
+                query=query,
+                privacy_mode=False,
+                tor_used=False,
+                sources_searched=[],
+                results_returned=0,
+                duration_ms=elapsed_ms,
+                error=str(exc),
+            )
+            return json.dumps(
+                {"error": str(exc), "query": query, "results": [], "source": "none"},
+                ensure_ascii=False,
+            )
+
+
+async def _ddg_fallback(query: str, max_results: int, start: float) -> str:
+    from deerflow.community.ddg_search.tools import web_search_tool as ddg_tool
+
+    raw = await ddg_tool.ainvoke({"query": query})
+    elapsed_ms = (time.monotonic() - start) * 1000
+
+    from deerflow.community.searxng.audit import get_audit_trail
+
+    get_audit_trail().search(
+        query=query,
+        privacy_mode=False,
+        tor_used=False,
+        sources_searched=["ddg"],
+        results_returned=max_results,
+        duration_ms=elapsed_ms,
+        cache_hit=False,
+    )
+
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        if isinstance(parsed, list):
+            return json.dumps(
+                {"query": query, "results": parsed, "count": len(parsed), "source": "ddg_fallback"},
+                indent=2,
+                ensure_ascii=False,
+            )
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return raw if isinstance(raw, str) else json.dumps(raw)

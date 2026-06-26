@@ -73,6 +73,7 @@ _TOOL_PURPOSE_OVERRIDES: dict[str, str] = {
     "screenshot": "CDP: capture the current viewport as inline PNG (self-observation)",
     "deploy_expose": "publish a container port through the absproxy gateway",
     "agent_notify": "post a progress milestone to the Activity feed",
+    "igino_research": "privacy-focused multi-source web research via SearXNG + TOR with deterministic pipeline",
 }
 
 

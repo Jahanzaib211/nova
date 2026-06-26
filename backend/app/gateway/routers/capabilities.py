@@ -66,12 +66,23 @@ class CircuitEntry(BaseModel):
     state: str  # "closed" | "open" | "half_open"
 
 
+class IGINOSummary(BaseModel):
+    enabled: bool = False
+    tor_enabled: bool = False
+    tor_available: bool = False
+    searxng_healthy: bool = False
+    circuit_states: dict[str, str] = Field(default_factory=dict)
+    cache_stats: dict[str, Any] = Field(default_factory=dict)
+    audit_stats: dict[str, Any] = Field(default_factory=dict)
+
+
 class CapabilitiesResponse(BaseModel):
     skills: list[SkillSummary] = Field(default_factory=list)
     tools: list[ToolSummary] = Field(default_factory=list)
     hooks: list[HookSummary] = Field(default_factory=list)
     subagents: list[SubagentSummary] = Field(default_factory=list)
     circuits: list[CircuitEntry] = Field(default_factory=list)
+    igino: IGINOSummary = Field(default_factory=IGINOSummary)
     server: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -215,6 +226,56 @@ def _safe_server_info() -> dict[str, Any]:
     return info
 
 
+def _safe_igino() -> IGINOSummary:
+    """Read-only iGIN0 status snapshot."""
+    try:
+        enabled = os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
+        tor_enabled = os.environ.get("DEERFLOW_IGINO_TOR_ENABLED", "false").lower() in ("true", "1", "yes")
+
+        tor_available = False
+        if tor_enabled:
+            try:
+                from deerflow.community.searxng.tor import get_tor_proxy
+                tor_available = get_tor_proxy().is_available()
+            except Exception:
+                pass
+
+        searxng_healthy = False
+        try:
+            from deerflow.community.searxng.searxng_client import SearxngClient
+            client = SearxngClient()
+            health = client.health_check()
+            searxng_healthy = True
+        except Exception:
+            health = {}
+
+        circuit_states: dict[str, str] = {}
+        try:
+            from deerflow.community.searxng.search_cache import get_search_cache
+            cache_stats = get_search_cache().stats
+        except Exception:
+            cache_stats = {}
+
+        try:
+            from deerflow.community.searxng.audit import get_audit_trail
+            audit_stats = get_audit_trail().get_stats()
+        except Exception:
+            audit_stats = {}
+
+        return IGINOSummary(
+            enabled=enabled,
+            tor_enabled=tor_enabled,
+            tor_available=tor_available,
+            searxng_healthy=searxng_healthy,
+            circuit_states=circuit_states,
+            cache_stats=cache_stats,
+            audit_stats=audit_stats,
+        )
+    except Exception as e:
+        logger.debug("capabilities: igino snapshot failed: %s", e)
+        return IGINOSummary()
+
+
 # ---------- endpoint ----------
 
 
@@ -235,5 +296,6 @@ async def get_runtime_capabilities(
         hooks=_safe_hooks(config),
         subagents=_safe_subagents(config),
         circuits=_safe_circuits(config),
+        igino=_safe_igino(),
         server=_safe_server_info(),
     )

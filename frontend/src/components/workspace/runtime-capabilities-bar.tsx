@@ -30,6 +30,7 @@ import {
   LayersIcon,
   Loader2Icon,
   PlugZapIcon,
+  ShieldIcon,
   SparklesIcon,
   TriangleAlertIcon,
   WrenchIcon,
@@ -47,6 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { useCapabilities, useOpenCircuitCount } from "@/core/runtime/hooks";
+import { useIGINOStatus } from "@/core/igino/hooks";
 import type { CapabilitiesResponse } from "@/core/runtime/types";
 
 // Visual constants — fixed so the bar reads as one rhythm regardless
@@ -294,6 +296,40 @@ function MetricCounter({
   );
 }
 
+function IGINOPill() {
+  const { data: status } = useIGINOStatus();
+  if (!status?.enabled) return null;
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={cn(
+              "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border/40 bg-background/50 px-1.5 font-mono text-[11px] transition-colors hover:bg-muted/60",
+            )}
+            data-testid="runtime-igino-pill"
+          >
+            <ShieldIcon className="size-3 text-primary" aria-hidden />
+            <span className="text-foreground/80">iGIN0</span>
+            {status.tor_enabled && (
+              <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">TOR</span>
+            )}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs">
+          <p className="font-medium">iGIN0 Privacy Search</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            SearXNG: {status.searxng_healthy ? "healthy" : "unhealthy"} ·
+            TOR: {status.tor_available ? "available" : "unavailable"} ·
+            Cache: {status.cache.size}/{status.cache.max_size}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
   const { capabilities, isFetching, error } = useCapabilities();
   const openCircuits = useOpenCircuitCount();
@@ -387,6 +423,10 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
           testId="runtime-hooks-pill"
           detail="Active middlewares on the LangChain agent chain."
         />
+
+        <SectionDivider />
+
+        <IGINOPill />
 
         {openCircuits > 0 && (
           <Tooltip>
