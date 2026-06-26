@@ -1,3 +1,5 @@
+"use client";
+
 import { FilesIcon, XIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";

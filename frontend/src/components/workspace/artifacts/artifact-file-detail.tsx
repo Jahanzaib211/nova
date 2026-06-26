@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Code2Icon,
   CopyIcon,

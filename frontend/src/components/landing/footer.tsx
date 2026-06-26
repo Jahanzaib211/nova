@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";

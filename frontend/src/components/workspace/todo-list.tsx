@@ -1,3 +1,5 @@
+"use client";
+
 import { ChevronUpIcon, ListTodoIcon } from "lucide-react";
 import { useState } from "react";
 
