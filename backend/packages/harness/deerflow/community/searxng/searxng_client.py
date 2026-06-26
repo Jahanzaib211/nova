@@ -240,6 +240,33 @@ class SearxngClient:
             return False
         return self._tor.is_available()
 
+    async def probe_health(self) -> bool:
+        """Probe SearXNG with a short-timeout GET to ``/healthz``.
+
+        Returns True only on HTTP 200 within the configured timeout. Used
+        by the capabilities probe so the UI reflects real backend
+        reachability instead of always reporting healthy.
+
+        Failure modes (timeout, connection refused, non-2xx) all return
+        False — the caller is expected to treat health as best-effort.
+        """
+        import httpx
+
+        probe_timeout = min(self._timeout, 3.0)
+        proxy_url = None
+        client_kwargs: dict[str, Any] = {"timeout": probe_timeout, "trust_env": True}
+        if self._tor_enabled and self._tor is not None and self._tor.is_available():
+            proxy_url = self._tor.http_proxy()
+            if proxy_url:
+                client_kwargs["proxy"] = proxy_url
+        try:
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                resp = await client.get(f"{self._base_url}/healthz")
+            return 200 <= resp.status_code < 300
+        except Exception as exc:  # noqa: BLE001 - health probe: report unhealthy
+            logger.debug("SearXNG health probe failed: %s", exc)
+            return False
+
     def health_check(self) -> dict[str, Any]:
         return {
             "base_url": self._base_url,

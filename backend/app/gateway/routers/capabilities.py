@@ -226,7 +226,7 @@ def _safe_server_info() -> dict[str, Any]:
     return info
 
 
-def _safe_igino() -> IGINOSummary:
+async def _safe_igino() -> IGINOSummary:
     """Read-only iGIN0 status snapshot."""
     try:
         enabled = os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
@@ -243,11 +243,17 @@ def _safe_igino() -> IGINOSummary:
         searxng_healthy = False
         try:
             from deerflow.community.searxng.searxng_client import SearxngClient
+
             client = SearxngClient()
-            health = client.health_check()
-            searxng_healthy = True
+            # Actually probe SearXNG with a short GET to /healthz instead
+            # of always reporting True (Batch 2C audit fix). The probe is
+            # best-effort: timeout, connection refused, and non-2xx all
+            # surface as searxng_healthy=False so the UI reflects reality.
+            searxng_healthy = await client.probe_health()
         except Exception:
-            health = {}
+            # If even constructing the client fails (missing config etc.)
+            # fall back to False; don't pretend it's healthy.
+            searxng_healthy = False
 
         circuit_states: dict[str, str] = {}
         try:
@@ -296,6 +302,6 @@ async def get_runtime_capabilities(
         hooks=_safe_hooks(config),
         subagents=_safe_subagents(config),
         circuits=_safe_circuits(config),
-        igino=_safe_igino(),
+        igino=await _safe_igino(),
         server=_safe_server_info(),
     )

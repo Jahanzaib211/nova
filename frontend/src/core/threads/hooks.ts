@@ -437,6 +437,41 @@ export function upsertThreadInInfiniteCache(
   );
 }
 
+function isReconnectNoise(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  // The SDK wraps the browser fetch failure into a ConnectionError (see
+  // langgraph-sdk/src/utils/async_caller.ts onFailedAttempt). The same
+  // shape leaks through to the UI as either a TypeError: Failed to fetch
+  // (Chromium) or a NetworkError when attempting to fetch resource
+  // (Firefox). Both indicate the server stream was already torn down
+  // before we tried to reconnect — not a real error.
+  const name = Reflect.get(error, "name");
+  if (name === "ConnectionError") {
+    return true;
+  }
+  const message = Reflect.get(error, "message");
+  if (typeof message === "string") {
+    return (
+      message.includes("Failed to fetch") ||
+      message.includes("NetworkError") ||
+      message.includes("ECONNREFUSED") ||
+      message.includes("Unable to connect to LangGraph server")
+    );
+  }
+  const nestedMessage =
+    Reflect.get(error, "error") && Reflect.get(Reflect.get(error, "error"), "message");
+  if (typeof nestedMessage === "string") {
+    return (
+      nestedMessage.includes("Failed to fetch") ||
+      nestedMessage.includes("NetworkError") ||
+      nestedMessage.includes("ECONNREFUSED")
+    );
+  }
+  return false;
+}
+
 function getStreamErrorMessage(error: unknown): string {
   if (typeof error === "string" && error.trim()) {
     return error;
@@ -598,7 +633,11 @@ export function useThreadStream({
     client: getAPIClient(isMock),
     assistantId: "lead_agent",
     threadId: onStreamThreadId,
-    reconnectOnMount: true,
+    // Batch 2C.3: reconnectOnMount caused repeated ConnectionError storms on
+    // page refresh (the backend's per-request SSE stream is already torn
+    // down by the time the SDK tries to rejoin). Re-enable only when an
+    // explicit reconnect lifecycle is added. v7.2 audit Fix 17.
+    reconnectOnMount: false,
     fetchStateHistory: { limit: 1 },
     onCreated(meta) {
       handleStreamStart(meta.thread_id, meta.run_id);
@@ -863,7 +902,18 @@ export function useThreadStream({
       setOptimisticMessages([]);
       setOptimisticThreadId(null);
       setLiveMessagesThreadId(null);
-      toast.error(getStreamErrorMessage(error));
+      // Batch 2C.3: ConnectionError (TypeError: Failed to fetch / NetworkError
+      // when attempting to fetch resource) means the SSE stream was already
+      // torn down by the backend before the SDK could rejoin it. This is
+      // expected when the user navigates away mid-stream and comes back; the
+      // underlying run state is intact and the next user action will start a
+      // fresh stream. Surface a debug log instead of a toast so the console
+      // stays clean without losing observability.
+      if (isReconnectNoise(error)) {
+        console.debug("[useStream] reconnect noise (expected):", error);
+      } else {
+        toast.error(getStreamErrorMessage(error));
+      }
       pendingUsageBaselineMessageIdsRef.current = new Set(
         messagesRef.current
           .map(messageIdentity)
