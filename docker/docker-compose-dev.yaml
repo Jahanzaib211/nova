@@ -181,11 +181,15 @@ services:
     restart: unless-stopped
 
   # ── SearXNG (Privacy Search Engine) ──────────────────────────────────
+  # v7.2 Batch 2A: bound to loopback so LAN/internet cannot reach SearXNG
+  # directly; only the gateway container (on the same docker network) can
+  # reach it via the service name. Operators on the host use SSH tunnel
+  # (`ssh -L 8088:localhost:8088 host`) if they need direct access.
   searxng:
     image: searxng/searxng:latest
     container_name: deer-flow-searxng
     ports:
-      - "8088:8080"
+      - "127.0.0.1:8088:8080"
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     environment:
@@ -200,14 +204,22 @@ services:
       retries: 3
     mem_limit: 256m
     mem_reservation: 128m
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
     restart: unless-stopped
 
   # ── TOR Proxy (Optional) ────────────────────────────────────────────
+  # v7.2 Batch 2A: bound to loopback so LAN/internet cannot use the gateway's
+  # Tor exit. Gateway reaches Tor via the docker service name. Operators on
+  # the host use SSH tunnel (`ssh -L 9050:localhost:9050 host`) if they need
+  # direct access.
   tor:
     image: dperson/torproxy:latest
     container_name: deer-flow-tor
     ports:
-      - "9050:9050"
+      - "127.0.0.1:9050:9050"
     networks:
       - deer-flow-dev
     healthcheck:
@@ -217,6 +229,10 @@ services:
       retries: 3
     mem_limit: 128m
     mem_reservation: 64m
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
     restart: unless-stopped
 
 volumes:

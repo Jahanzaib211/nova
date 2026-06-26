@@ -45,6 +45,11 @@ RUN if [ -n "${NPM_REGISTRY}" ]; then \
 RUN pnpm config set store-dir ${PNPM_STORE_PATH}
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 WORKDIR /app
-COPY --from=builder /app/frontend ./frontend
+
+# v7.2 Batch 2A: non-root user.
+# node:22-alpine ships a `node` user (uid 1000); we use it instead of
+# creating a new one to keep the image minimal.
+COPY --from=builder --chown=node:node /app/frontend ./frontend
+USER node
 EXPOSE 3000
 CMD ["sh", "-c", "cd /app/frontend && pnpm start"]

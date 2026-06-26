@@ -30,10 +30,21 @@ services:
     container_name: deer-flow-nginx
     ports:
       - "${PORT:-2026}:2026"
+      # TLS termination (Batch 2A) — port 443 is mapped only when TLS_ENABLED=1
+      # and cert files are mounted at /etc/nginx/certs/. Operators provision
+      # ./certs/tls.crt + tls.key themselves; nginx.tls.conf handles the routing.
+      - "${TLS_PORT:-443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+      - ./nginx/nginx.tls.conf:/etc/nginx/nginx.tls.conf.template:ro
+      # Optional cert mount; the entrypoint only appends the TLS block when
+      # both files are present.
+      - ${TLS_CERT_DIR:-./certs}:/etc/nginx/certs:ro
     command: >
       sh -c "cp /etc/nginx/nginx.conf.template /etc/nginx/nginx.conf
+      && if [ \"$${TLS_ENABLED:-0}\" = '1' ] && [ -f /etc/nginx/certs/tls.crt ] && [ -f /etc/nginx/certs/tls.key ]; then
+           echo '    include /etc/nginx/nginx.tls.conf;' >> /etc/nginx/nginx.conf
+         fi
       && nginx -g 'daemon off;'"
     depends_on:
       - frontend
@@ -41,6 +52,19 @@ services:
     networks:
       - deer-flow
     restart: unless-stopped
+    # v7.2 Batch 2A: drop all capabilities, add only NET_BIND_SERVICE for
+    # listening on 80/443, prevent privilege escalation, cap PID count.
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    pids_limit: 256
 
   # ── Frontend: Next.js Production ───────────────────────────────────────────
   frontend:
@@ -60,6 +84,15 @@ services:
     networks:
       - deer-flow
     restart: unless-stopped
+    # v7.2 Batch 2A: USER nextjs added in Dockerfile; harden the runtime.
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    # /tmp and .next cache need to be writable; provide them via tmpfs.
+    tmpfs:
+      - /tmp:size=64m
+    pids_limit: 512
 
   # ── Gateway API ────────────────────────────────────────────────────────────
   gateway:
@@ -88,7 +121,7 @@ services:
       # for aio (pure-DooD) sandbox mode via the opt-in docker-compose.dood.yaml
       # overlay (appended by scripts/deploy.sh). See backend/docs/CONFIGURATION.md
       # Security Note section for details.
-       
+
       # CLI auth dirs (Claude Code / Codex) are NOT mounted by default: they
       # expose the entire ~/.claude and ~/.codex (history, projects, global
       # config, credentials) into the container. Mount them only when you use
@@ -120,6 +153,17 @@ services:
     networks:
       - deer-flow
     restart: unless-stopped
+    # v7.2 Batch 2A: USER app added in Dockerfile; harden the runtime.
+    # Note: read_only is NOT set because the gateway writes runtime state to
+    # ${DEER_FLOW_HOME}:/app/backend/.deer-flow (sessions, run events, audit).
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    # /tmp must be writable for Python / uv scratch.
+    tmpfs:
+      - /tmp:size=128m
+    pids_limit: 512
 
   # ── Sandbox Provisioner (optional, Kubernetes mode) ────────────────────────
   provisioner:
@@ -131,7 +175,7 @@ services:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: deer-flow-provisioner
     volumes:
-      - ~/.kube/config:/root/.kube/config:ro
+      - ${KUBECONFIG_PATH:-~/.kube/config}:/root/.kube/config:ro
     environment:
       - K8S_NAMESPACE=deer-flow
       - SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
@@ -152,6 +196,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    pids_limit: 256
 networks:
   deer-flow:
     driver: bridge

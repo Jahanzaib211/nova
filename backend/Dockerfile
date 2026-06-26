@@ -91,11 +91,23 @@ COPY --from=uv-source /uv /uvx /usr/local/bin/
 # Set working directory
 WORKDIR /app
 
-# Copy backend with pre-built virtualenv from builder
-COPY --from=builder /app/backend ./backend
+# v7.2 Batch 2A: create a non-root user and chown the app directory so the
+# gateway runs as unprivileged. The runtime state volume (DEER_FLOW_HOME)
+# remains read-write so the gateway can persist sessions/run events.
+RUN groupadd --system --gid 10001 app \
+    && useradd  --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app /app/backend \
+    && chown -R app:app /app
+
+# Copy backend with pre-built virtualenv from builder (Batch 2A: chown to app user)
+COPY --from=builder --chown=app:app /app/backend ./backend
 
 # Expose Gateway API port.
 EXPOSE 8001
+
+# Batch 2A: drop to non-root user (security_opt no-new-privileges + cap_drop
+# ALL in docker-compose.yaml keep the process constrained at the kernel layer).
+USER app
 
 # Default command (can be overridden in docker-compose)
 CMD ["sh", "-c", "cd backend && PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001"]
