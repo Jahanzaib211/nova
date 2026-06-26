@@ -286,7 +286,7 @@ export default function ChatPage() {
               />
               <ExportTrigger threadId={threadId} />
               <ArtifactTrigger />
-              <Tooltip content="Agent's computer">
+              <Tooltip content={t.agentComputer.header}>
                 <Button
                   size="icon-sm"
                   variant="ghost"

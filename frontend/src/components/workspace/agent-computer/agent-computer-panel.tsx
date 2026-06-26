@@ -31,6 +31,7 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { AuroraText } from "@/components/ui/aurora-text";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -40,6 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { ShineBorder } from "@/components/ui/shine-border";
 import { Switch } from "@/components/ui/switch";
 import { AgentComputerErrorBoundary } from "@/components/workspace/agent-computer/agent-computer-error-boundary";
 import type { LlmError, TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
@@ -162,7 +164,18 @@ function StatusLine({ tool, isLoading, filePath, lineCount }: {
   const pulse = isLoading || Boolean(tool);
   return (
     <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5">
-      <span className={cn("h-2 w-2 shrink-0 rounded-full transition-colors duration-300", dotClass, pulse && "animate-pulse")} />
+      <span className="relative inline-flex h-2 w-2 shrink-0">
+        {pulse && (
+          <span
+            className={cn(
+              "absolute inset-0 -m-1 rounded-full opacity-40 motion-safe:animate-ping",
+              dotClass,
+            )}
+            aria-hidden="true"
+          />
+        )}
+        <span className={cn("relative inline-block h-2 w-2 shrink-0 rounded-full transition-colors duration-300", dotClass, pulse && "animate-pulse")} />
+      </span>
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.span
@@ -811,16 +824,21 @@ function getToolMeta(type: string): { icon: React.ReactNode; color: string } {
   }
 }
 
-function ActivityEventCard({ event }: { event: AgentActivityEvent }) {
+function ActivityEventCard({ event, index }: { event: AgentActivityEvent; index?: number }) {
   const meta = getToolMeta(event.type);
   const filename = event.path?.split("/").at(-1);
   const isRunning = event.status === "running";
   const isError = event.status === "error";
   return (
-    <div className={cn(
-      "rounded border px-2 py-1.5 text-xs",
-      isError ? "border-red-500/20 bg-red-500/5" : "border-border/20 bg-muted/10",
-    )}>
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut", delay: typeof index === "number" ? Math.min(index, 8) * 0.04 : 0 }}
+      className={cn(
+        "rounded border px-2 py-1.5 text-xs",
+        isError ? "border-red-500/20 bg-red-500/5" : "border-border/20 bg-muted/10",
+      )}
+    >
       <div className="flex items-center gap-1.5">
         <span className={cn("shrink-0", meta.color)}>{meta.icon}</span>
         <span className={cn("font-mono font-medium text-[11px]", meta.color)}>{event.type}</span>
@@ -831,7 +849,7 @@ function ActivityEventCard({ event }: { event: AgentActivityEvent }) {
       {event.summary && (
         <div className="mt-0.5 text-muted-foreground/50 text-[10px] pl-5 truncate">{event.summary}</div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -1092,7 +1110,7 @@ function ActivityPanel({
               <span className="text-xs text-muted-foreground/50">{t.agentComputer.activity.empty}</span>
             </div>
           ) : (
-            timeline.map((event, i) => <ActivityEventCard key={i} event={event} />)
+            timeline.map((event, i) => <ActivityEventCard key={i} index={i} event={event} />)
           )}
           <div ref={bottomRef} />
         </div>
@@ -1360,13 +1378,28 @@ function TabBtn({ active, onClick, children, badge }: {
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors relative shrink-0",
-        active ? "text-foreground border-b-2 border-primary" : "text-muted-foreground/60 hover:text-muted-foreground",
+        "relative flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors shrink-0",
+        active ? "text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground",
       )}
     >
       {children}
       {badge !== undefined && badge > 0 && (
-        <span className="rounded-full bg-muted px-1 text-[9px] leading-none text-muted-foreground">{badge}</span>
+        <motion.span
+          key={badge}
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 500, damping: 22 }}
+          className="rounded-full bg-muted px-1 text-[9px] leading-none text-muted-foreground"
+        >
+          {badge}
+        </motion.span>
+      )}
+      {active && (
+        <motion.div
+          layoutId="agent-computer-tab-underline"
+          className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-primary via-emerald-400 to-cyan-400"
+          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+        />
       )}
     </button>
   );
@@ -1704,18 +1737,33 @@ export function AgentComputerPanel({
       className="flex h-full w-full flex-col overflow-hidden border-l border-border/50 bg-card/50 backdrop-blur-sm"
     >
       {/* ── Header ── */}
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/50 bg-card/50 px-3 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <TerminalIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">{t.agentComputer.header}</span>
+      <div className="relative flex h-10 shrink-0 items-center justify-between border-b border-border/50 bg-card/50 px-3 backdrop-blur-sm overflow-hidden">
+        {(isLoading || currentTool) && (
+          <ShineBorder
+            borderWidth={1}
+            duration={8}
+            shineColor={["#10b981", "#06b6d4", "#34d399", "#10b981"]}
+          />
+        )}
+        {/* Left: live status pill (replaces the redundant title — page-header toggle owns the name) */}
+        <div className="relative z-10 flex min-w-0 items-center">
           {isLoading && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-              {t.agentComputer.live}
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium">
+              <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-50" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+              </span>
+              <AuroraText
+                colors={["#10b981", "#34d399", "#06b6d4", "#10b981"]}
+                speed={1.5}
+                className="text-[10px] font-medium"
+              >
+                {t.agentComputer.live}
+              </AuroraText>
             </span>
           )}
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="relative z-10 flex items-center gap-0.5">
           {/* Primary: run a skill */}
           {onAgentMessage && (
             <SkillLauncher

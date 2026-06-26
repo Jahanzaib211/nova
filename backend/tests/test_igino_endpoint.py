@@ -1,7 +1,7 @@
 """Tests for iGIN0 REST endpoints."""
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestIGINOEndpoints(unittest.TestCase):
@@ -57,11 +57,42 @@ class TestCapabilitiesIginoField(unittest.TestCase):
 
 
 class TestAuthMiddleware(unittest.TestCase):
-    """Test /api/igino is in public paths."""
+    """Verify iGIN0 endpoints enforce the new auth posture:
 
-    def test_igino_public_path(self):
+    - ``/api/igino/status`` and ``/api/igino/cache`` are readable without
+      auth (they return ``{enabled: false}`` when the feature is off).
+    - ``/api/igino/toggle``, ``/api/igino/research``, and
+      ``/api/igino/audit`` require a session (otherwise the gateway would
+      expose an LLM/SearXNG research pipeline and audit trail to the
+      open internet).
+    """
+
+    def test_igino_status_path_is_not_in_public_prefixes(self):
+        """Status is reachable for any caller but the path itself is no
+        longer in the public-prefix allowlist (auth gates the privileged
+        endpoints via per-route Depends)."""
         from app.gateway.auth_middleware import _PUBLIC_PATH_PREFIXES
-        self.assertIn("/api/igino", _PUBLIC_PATH_PREFIXES)
+        self.assertNotIn("/api/igino", _PUBLIC_PATH_PREFIXES)
+
+    def test_igino_status_returns_enabled_false_when_disabled(self):
+        import asyncio
+
+        from app.gateway.routers.igino import get_status
+
+        # ``DEERFLOW_IGINO_ENABLED`` is unset in the test env, so the
+        # status endpoint must report ``enabled: false`` with HTTP 200.
+        result = asyncio.run(get_status())
+        self.assertFalse(result["enabled"])
+
+    def test_igino_research_requires_user(self):
+        """The research endpoint must call ``get_optional_user_from_request``
+        so the per-route auth gate fires for unauthenticated callers."""
+        import inspect
+
+        from app.gateway.routers.igino import run_research
+
+        sig = inspect.signature(run_research)
+        self.assertIn("user", sig.parameters)
 
 
 if __name__ == "__main__":

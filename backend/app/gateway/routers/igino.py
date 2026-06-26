@@ -1,32 +1,43 @@
 """iGIN0 REST API endpoints — status, toggle, research, cache, audit.
 
 Provides:
-  - GET  /api/igino/status    — full iGIN0 status (enabled, tor, searxng, metrics)
+  - GET  /api/igino/status    — always 200; reports `enabled: false` when feature is off
   - POST /api/igino/toggle    — toggle privacy mode (per-thread)
-  - POST /api/igino/research  — run research pipeline via REST
+  - POST /api/igino/research  — run research pipeline via REST (auth required)
   - GET  /api/igino/cache     — cache stats
-  - GET  /api/igino/audit     — audit trail records
+  - GET  /api/igino/audit     — audit trail records (auth required, owner-scoped)
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from app.gateway.auth_disabled import is_auth_disabled
+from app.gateway.deps import get_optional_user_from_request
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/igino", tags=["igino"])
 
-_enabled = os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
+
+def _is_enabled() -> bool:
+    # Resolved per-request so the flag flips after a process restart without
+    # needing to reload any Python module.
+    return os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
-def _check_enabled() -> None:
-    if not _enabled:
+def _require_enabled_and_user(user: Any | None) -> None:
+    """Raise 404 if iGIN0 is disabled, 401 if no session user."""
+    if not _is_enabled():
         raise HTTPException(status_code=404, detail="iGIN0 is not enabled")
+    if user is None and not is_auth_disabled():
+        raise HTTPException(status_code=401, detail="Authentication required")
 
 
 class ToggleRequest(BaseModel):
@@ -43,12 +54,16 @@ class ResearchRequest(BaseModel):
 
 @router.get("/status")
 async def get_status() -> dict[str, Any]:
-    _check_enabled()
+    """Always returns 200. When iGIN0 is disabled, reports ``enabled: false``
+    so the frontend PrivacyPanel can render a "feature off" state instead of
+    flooding the console with 404s every 15 s."""
+    if not _is_enabled():
+        return {"enabled": False}
     try:
+        from deerflow.community.searxng.audit import get_audit_trail
+        from deerflow.community.searxng.search_cache import get_search_cache
         from deerflow.community.searxng.searxng_client import SearxngClient
         from deerflow.community.searxng.tor import get_tor_proxy
-        from deerflow.community.searxng.search_cache import get_search_cache
-        from deerflow.community.searxng.audit import get_audit_trail
 
         tor_enabled = os.environ.get("DEERFLOW_IGINO_TOR_ENABLED", "false").lower() in ("true", "1", "yes")
         tor = get_tor_proxy()
@@ -71,14 +86,14 @@ async def get_status() -> dict[str, Any]:
 
 
 @router.post("/toggle")
-async def toggle_privacy(req: ToggleRequest) -> dict[str, Any]:
-    _check_enabled()
+async def toggle_privacy(req: ToggleRequest, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
+    _require_enabled_and_user(user)
     return {"enabled": req.enabled, "message": f"Privacy mode {'enabled' if req.enabled else 'disabled'}"}
 
 
 @router.post("/research")
-async def run_research(req: ResearchRequest) -> dict[str, Any]:
-    _check_enabled()
+async def run_research(req: ResearchRequest, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
+    _require_enabled_and_user(user)
     try:
         from deerflow.tools.builtins.igino_research_tool import igino_research_tool
 
@@ -91,7 +106,6 @@ async def run_research(req: ResearchRequest) -> dict[str, Any]:
                 "timeout_s": req.timeout_s,
             }
         )
-        import json
 
         if isinstance(result, str):
             return json.loads(result)
@@ -103,7 +117,8 @@ async def run_research(req: ResearchRequest) -> dict[str, Any]:
 
 @router.get("/cache")
 async def get_cache_stats() -> dict[str, Any]:
-    _check_enabled()
+    if not _is_enabled():
+        return {"enabled": False}
     try:
         from deerflow.community.searxng.search_cache import get_search_cache
         return get_search_cache().stats
@@ -112,8 +127,8 @@ async def get_cache_stats() -> dict[str, Any]:
 
 
 @router.get("/audit")
-async def get_audit_records(limit: int = 100) -> dict[str, Any]:
-    _check_enabled()
+async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
+    _require_enabled_and_user(user)
     try:
         from deerflow.community.searxng.audit import get_audit_trail
         trail = get_audit_trail()

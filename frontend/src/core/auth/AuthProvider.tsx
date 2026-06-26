@@ -10,6 +10,8 @@ import React, {
   type ReactNode,
 } from "react";
 
+import { fetch } from "@/core/api/fetcher";
+
 import { isStaticWebsiteOnly } from "../static-mode";
 
 import { type User, buildLoginUrl } from "./types";
@@ -48,7 +50,6 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(initialUser);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const pathname = usePathname();
   const staticMode = isStaticWebsiteOnly();
 
   const isAuthenticated = user !== null;
@@ -71,28 +72,20 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
 
     try {
       setIsLoading(true);
-      const res = await fetch("/api/v1/auth/me", {
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data);
-      } else if (res.status === 401) {
-        // Session expired or invalid
-        setUser(null);
-        // Redirect to login if on a protected route
-        if (pathname?.startsWith("/workspace")) {
-          router.push(buildLoginUrl(pathname));
-        }
-      }
+      // The wrapped fetcher auto-redirects to /login on 401 and throws
+      // "Unauthorized", so the catch below clears local state in that case
+      // without us needing to re-handle the redirect here.
+      const res = await fetch("/api/v1/auth/me");
+      const data = await res.json();
+      setUser(data);
     } catch (err) {
-      console.error("Failed to refresh user:", err);
+      // 401 → wrapped fetcher already navigated to /login. Clear local state.
       setUser(null);
+      console.debug("Failed to refresh user (likely unauthenticated):", err);
     } finally {
       setIsLoading(false);
     }
-  }, [staticMode, pathname, router]);
+  }, [staticMode]);
 
   /**
    * Logout - call FastAPI logout endpoint and clear local state
@@ -116,10 +109,10 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
 
     let logoutFailed = false;
     try {
-      const res = await fetch("/api/v1/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      // Wrapped fetcher auto-attaches X-CSRF-Token on POST and
+      // credentials: "include" — the raw fetch above silently bypassed
+      // both, which made logout 403 once CSRF was enabled.
+      const res = await fetch("/api/v1/auth/logout", { method: "POST" });
       if (!res.ok) logoutFailed = true;
     } catch (err) {
       console.error("Logout request failed:", err);
