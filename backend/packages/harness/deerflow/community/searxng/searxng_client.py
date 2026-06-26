@@ -112,7 +112,7 @@ class SearxngClient:
         last_exc: BaseException | None = None
         for attempt in range(1, _RETRY_MAX + 1):
             try:
-                with browser_span("searxng_search", {"query": query, "attempt": attempt, "trace_id": tid}):
+                with browser_span("searxng_search", attributes={"query": query, "attempt": attempt, "trace_id": tid}):
                     results = await self._do_search(query, max_results, categories, language, pageno)
                     self._cache.put(cache_key, results)
                     if _HAS_METRICS:

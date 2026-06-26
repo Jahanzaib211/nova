@@ -686,14 +686,24 @@ async def terminal_url(thread_id: str):
         return {"terminal": None, "vnc": None, "reason": str(e)}
 
 
-@router.api_route(
-    "/absproxy/{thread_id}/{port}/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-)
-async def absproxy(thread_id: str, port: int, path: str, request: Request):
-    """Proxy to ANY in-container port via the AIO sandbox's own /absproxy/{port}/
-    gateway — so a server on any port (5173, 3000, …) is reachable regardless of
-    how the agent started it. This is what `deploy_expose` returns."""
+# Batch 3.1: the absproxy implementation is registered as 7 separate
+# routes (one per HTTP method) further down so each OpenAPI operationId
+# is unique. The original single multi-method route is removed to avoid
+# the Duplicate Operation ID warning. See _PROXY_METHODS below.
+
+
+# Batch 3.1: OpenAPI fix — register each HTTP method as its own route so
+# FastAPI generates a unique operationId per (path, method). The previous
+# @router.api_route(methods=[GET, POST, ...]) form produced ONE operationId
+# reused across all 7 methods, which triggered Duplicate Operation ID
+# warnings during openapi spec generation (see test_openapi_operation_ids.py).
+# We extract the implementation into ``_absproxy_impl`` and register each
+# verb through a one-line thin wrapper.
+_PROXY_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
+
+
+async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request) -> Response:
+    """Shared implementation for the absproxy route — called once per HTTP method."""
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -724,8 +734,8 @@ async def absproxy(thread_id: str, port: int, path: str, request: Request):
             upstream = await client.request(request.method, target, headers=fwd_headers, content=body)
     except httpx.ConnectError:
         return Response(content="<html><body style='font-family:system-ui;padding:2rem;color:#888'>"
-                        "<h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>",
-                        media_type="text/html", status_code=503)
+                            "<h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>",
+                            media_type="text/html", status_code=503)
     except Exception as e:
         return Response(content=f"Proxy error: {e}", status_code=502)
 
@@ -737,6 +747,37 @@ async def absproxy(thread_id: str, port: int, path: str, request: Request):
     resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
     return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers,
                     media_type=upstream.headers.get("content-type") or None)
+
+
+def _make_absproxy_wrapper(method: str):
+    """Build a FastAPI route handler for one HTTP method on /absproxy.
+
+    FastAPI's default operation_id generator derives the id from
+    ``route.name`` (the function name). By giving each per-method wrapper
+    a unique name (``absproxy_get``, ``absproxy_post``, ...) we get
+    unique operationIds per (path, method), avoiding the duplicate-id
+    warning emitted by the openapi generator for multi-method routes.
+    """
+
+    def handler(thread_id: str, port: int, path: str, request: Request) -> Response:
+        return _absproxy_impl(thread_id, port, path, request)
+
+    handler.__name__ = f"absproxy_{method.lower()}"
+    handler.__qualname__ = handler.__name__
+    handler.__doc__ = (
+        "Proxy to ANY in-container port via the AIO sandbox's own "
+        "/absproxy/{port}/ gateway. One route per HTTP method so each "
+        "OpenAPI operationId is unique (see absproxy_<verb>)."
+    )
+    return handler
+
+
+for _method in _PROXY_METHODS:
+    router.add_api_route(
+        "/absproxy/{thread_id}/{port}/{path:path}",
+        _make_absproxy_wrapper(_method),
+        methods=[_method],
+    )
 
 
 @router.get("/dev-logs")
@@ -779,22 +820,47 @@ _HOP_BY_HOP = {
 }
 
 
-@router.api_route(
-    "/preview/{thread_id}/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-)
-async def proxy_dev_server(thread_id: str, path: str, request: Request):
-    """HTTP-proxy requests to the thread's default (``app``) dev server."""
-    return await _proxy_dev_server(thread_id, DEFAULT_LABEL, path, request)
+def _make_preview_default_wrapper(method: str):
+    """Per-method wrapper around _proxy_dev_server for /preview/<id>/<path>.
+
+    Same unique-id rationale as _make_absproxy_wrapper above.
+    """
+
+    def handler(thread_id: str, path: str, request: Request) -> Response:
+        return _proxy_dev_server(thread_id, DEFAULT_LABEL, path, request)
+
+    handler.__name__ = f"preview_default_label_{method.lower()}"
+    handler.__qualname__ = handler.__name__
+    handler.__doc__ = "HTTP-proxy requests to the thread's default (``app``) dev server."
+    return handler
 
 
-@router.api_route(
-    "/lpreview/{thread_id}/{label}/{path:path}",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
-)
-async def proxy_dev_server_labeled(thread_id: str, label: str, path: str, request: Request):
-    """HTTP-proxy requests to a labeled (multi-port) dev server."""
-    return await _proxy_dev_server(thread_id, label, path, request)
+for _method in _PROXY_METHODS:
+    router.add_api_route(
+        "/preview/{thread_id}/{path:path}",
+        _make_preview_default_wrapper(_method),
+        methods=[_method],
+    )
+
+
+def _make_preview_labeled_wrapper(method: str):
+    """Per-method wrapper around _proxy_dev_server for /lpreview/<id>/<label>/<path>."""
+
+    def handler(thread_id: str, label: str, path: str, request: Request) -> Response:
+        return _proxy_dev_server(thread_id, label, path, request)
+
+    handler.__name__ = f"preview_labeled_{method.lower()}"
+    handler.__qualname__ = handler.__name__
+    handler.__doc__ = "HTTP-proxy requests to a thread's dev server with a non-default ``label``."
+    return handler
+
+
+for _method in _PROXY_METHODS:
+    router.add_api_route(
+        "/lpreview/{thread_id}/{label}/{path:path}",
+        _make_preview_labeled_wrapper(_method),
+        methods=[_method],
+    )
 
 
 async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Request):

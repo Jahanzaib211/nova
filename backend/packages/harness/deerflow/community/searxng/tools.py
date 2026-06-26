@@ -38,6 +38,17 @@ def _get_tool_config(tool_name: str) -> dict[str, Any] | None:
     return extras if extras is not None else {}
 
 
+def _get_searxng_client(base_url: str, use_tor: bool) -> Any:
+    """Construct a SearxngClient.
+
+    Exposed at module scope so tests can patch it (see tests/test_searxng_client.py
+    TestSearxngTools). Production callers do not override this.
+    """
+    from deerflow.community.searxng.searxng_client import SearxngClient
+
+    return SearxngClient(base_url=base_url, tor_enabled=use_tor)
+
+
 @tool("web_search", parse_docstring=True)
 async def web_search_tool(query: str, tor: bool = False) -> str:
     """Search the web using SearXNG meta-search engine (privacy-first).
@@ -54,10 +65,9 @@ async def web_search_tool(query: str, tor: bool = False) -> str:
     use_tor = tor or tor_default
 
     try:
-        from deerflow.community.searxng.searxng_client import SearxngClient
         from deerflow.community.searxng.audit import get_audit_trail
 
-        client = SearxngClient(base_url=base_url, tor_enabled=use_tor)
+        client = _get_searxng_client(base_url, use_tor)
         results = await client.search(query, max_results=max_results)
         elapsed_ms = (time.monotonic() - start) * 1000
 

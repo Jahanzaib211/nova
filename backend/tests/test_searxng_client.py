@@ -1,19 +1,44 @@
-"""Tests for SearXNG community tools."""
+"""Tests for SearXNG community tools.
+
+Covers:
+- SearxngClient.search: success / empty / HTTP error / connection error / category
+  passthrough. Uses httpx.AsyncClient mocked via unittest.mock.AsyncMock.
+- web_search_tool: success / error / max_results passthrough. Mocks the
+  _get_searxng_client helper so the tool doesn't reach for a real network.
+"""
+
+from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from deerflow.community.searxng import tools
 from deerflow.community.searxng.searxng_client import SearxngClient
 
 
-class AsyncMock(MagicMock):
-    """Mock that supports async call."""
+def _make_httpx_mock(
+    *,
+    status_code: int = 200,
+    body: dict | None = None,
+    raise_for_status_exc: Exception | None = None,
+) -> MagicMock:
+    """Build a mock that satisfies the `async with httpx.AsyncClient() as client` pattern."""
+    mock_response = MagicMock()
+    mock_response.status_code = status_code
+    mock_response.json = MagicMock(return_value=body or {})
+    if raise_for_status_exc is None:
+        mock_response.raise_for_status = MagicMock(return_value=None)
+    else:
+        mock_response.raise_for_status = MagicMock(side_effect=raise_for_status_exc)
 
-    async def __call__(self, *args, **kwargs):
-        return super().__call__(*args, **kwargs)
+    mock_client = MagicMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    return mock_client
 
 
 @pytest.mark.asyncio
@@ -29,16 +54,8 @@ class TestSearxngClient:
             ]
         }
 
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient") as mock_cls:
-            mock_ctx = MagicMock()
-            mock_cls.return_value.__aenter__.return_value = mock_ctx
-
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = results_data
-            mock_resp.raise_for_status.return_value = None
-            mock_ctx.get = AsyncMock(return_value=mock_resp)
-
+        mock_client = _make_httpx_mock(status_code=200, body=results_data)
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             result = await client.search("test query", max_results=5)
 
@@ -48,66 +65,46 @@ class TestSearxngClient:
 
     async def test_search_empty_results(self):
         """Search returns empty list when no results."""
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient") as mock_cls:
-            mock_ctx = MagicMock()
-            mock_cls.return_value.__aenter__.return_value = mock_ctx
-
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = {"results": []}
-            mock_resp.raise_for_status.return_value = None
-            mock_ctx.get = AsyncMock(return_value=mock_resp)
-
+        mock_client = _make_httpx_mock(status_code=200, body={"results": []})
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             result = await client.search("empty query")
             assert result == []
 
     async def test_search_http_error(self):
-        """Search raises on HTTP error."""
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient") as mock_cls:
-            mock_ctx = MagicMock()
-            mock_cls.return_value.__aenter__.return_value = mock_ctx
+        """Search raises SearchPermanentError on 4xx (not retried)."""
+        # The client converts 4xx into SearchPermanentError before
+        # raise_for_status() is reached (see searxng_client.py status
+        # handling); we assert that wrapper instead of raw HTTPStatusError.
+        from deerflow.community.searxng.search_errors import SearchPermanentError
 
-            import httpx
-
-            mock_resp = MagicMock()
-            mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError("403 Forbidden", request=MagicMock(), response=MagicMock())
-            mock_ctx.get = AsyncMock(return_value=mock_resp)
-
+        mock_client = _make_httpx_mock(status_code=403)
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
-            with pytest.raises(httpx.HTTPStatusError):
+            with pytest.raises(SearchPermanentError):
                 await client.search("blocked query")
 
     async def test_search_request_error(self):
-        """Search raises on request error."""
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient") as mock_cls:
-            mock_ctx = MagicMock()
-            mock_cls.return_value.__aenter__.return_value = mock_ctx
-
-            import httpx
-
-            mock_ctx.get = AsyncMock(side_effect=httpx.RequestError("Connection refused"))
-
+        """Search raises on connection-level error."""
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
-            with pytest.raises(httpx.RequestError):
+            # ConnectError is retried 3x then surfaces as SearchConnectionError.
+            from deerflow.community.searxng.search_errors import SearchConnectionError
+            with pytest.raises(SearchConnectionError):
                 await client.search("unreachable query")
 
     async def test_search_with_categories(self):
-        """Search passes categories parameter."""
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient") as mock_cls:
-            mock_ctx = MagicMock()
-            mock_cls.return_value.__aenter__.return_value = mock_ctx
-
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = {"results": []}
-            mock_resp.raise_for_status.return_value = None
-            mock_ctx.get = AsyncMock(return_value=mock_resp)
-
+        """Search passes categories parameter to SearXNG."""
+        mock_client = _make_httpx_mock(status_code=200, body={"results": []})
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             await client.search("test", categories=["news", "science"])
 
-            call_kwargs = mock_ctx.get.call_args.kwargs
+            call_kwargs = mock_client.get.call_args.kwargs
             assert call_kwargs["params"]["categories"] == "news,science"
 
 
@@ -115,49 +112,59 @@ class TestSearxngClient:
 class TestSearxngTools:
     """Tests for the SearXNG tool functions."""
 
-    @patch("deerflow.community.searxng.tools._get_searxng_client")
-    async def test_web_search_tool_success(self, mock_get_client):
-        """web_search_tool returns JSON results."""
+    async def test_web_search_tool_success(self):
+        """web_search_tool returns JSON results from the SearXNG client."""
         mock_client = MagicMock()
         mock_client.search = AsyncMock(
             return_value=[
                 {"title": "Result 1", "url": "https://example.com/1", "content": "Desc 1"},
             ]
         )
-        mock_get_client.return_value = mock_client
 
-        with patch("deerflow.community.searxng.tools._get_tool_config", return_value=None):
-            result = await tools.web_search_tool.ainvoke("test query")
-
-        data = json.loads(result)
-        assert len(data) == 1
-        assert data[0]["title"] == "Result 1"
-
-    @patch("deerflow.community.searxng.tools._get_searxng_client")
-    async def test_web_search_tool_error(self, mock_get_client):
-        """web_search_tool handles errors gracefully."""
-        mock_client = MagicMock()
-        mock_client.search = AsyncMock(side_effect=Exception("API error"))
-        mock_get_client.return_value = mock_client
-
-        with patch("deerflow.community.searxng.tools._get_tool_config", return_value=None):
-            result = await tools.web_search_tool.ainvoke("test query")
+        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), \
+             patch("deerflow.community.searxng.tools._get_tool_config", return_value=None):
+            result = await tools.web_search_tool.ainvoke({"query": "test query"})
 
         data = json.loads(result)
+        assert data["count"] == 1
+        assert data["results"][0]["title"] == "Result 1"
+        assert data["source"] == "searxng"
+
+    async def test_web_search_tool_error(self):
+        """web_search_tool returns error JSON when both SearXNG and DDG fail."""
+        # Mock both the SearXNG client and the DDG fallback module so the
+        # tool's except-branch runs to completion.
+        mock_searxng = MagicMock()
+        mock_searxng.search = AsyncMock(side_effect=Exception("API error"))
+
+        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_searxng), \
+             patch("deerflow.community.searxng.tools._get_tool_config", return_value=None), \
+             patch("deerflow.community.ddg_search.tools.web_search_tool") as mock_ddg:
+            # Make the DDG tool's ainvoke raise too.
+            mock_ddg.ainvoke = AsyncMock(side_effect=Exception("DDG also failed"))
+            result = await tools.web_search_tool.ainvoke({"query": "test query"})
+
+        data = json.loads(result)
+        assert data["query"] == "test query"
+        assert data["results"] == []
+        # source is 'none' when both backends failed; error key present.
+        assert data["source"] == "none"
         assert "error" in data
 
-    @patch("deerflow.community.searxng.tools._get_searxng_client")
-    async def test_web_search_tool_with_max_results(self, mock_get_client):
-        """web_search_tool respects max_results config."""
+    async def test_web_search_tool_with_max_results(self):
+        """web_search_tool coerces max_results from string config."""
         mock_client = MagicMock()
-        # Return 10 results; the tool should slice to max_results=3
-        mock_client.search = AsyncMock(return_value=[{"title": f"Result {i}", "url": f"https://example.com/{i}", "content": f"Desc {i}"} for i in range(10)])
-        mock_get_client.return_value = mock_client
+        mock_client.search = AsyncMock(
+            return_value=[
+                {"title": f"R{i}", "url": f"https://example.com/{i}", "content": f"D{i}"}
+                for i in range(10)
+            ]
+        )
 
-        with patch("deerflow.community.searxng.tools._get_tool_config", return_value={"max_results": "3"}):
-            await tools.web_search_tool.ainvoke("test query")
+        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), \
+             patch("deerflow.community.searxng.tools._get_tool_config", return_value={"max_results": "3"}):
+            await tools.web_search_tool.ainvoke({"query": "test query"})
 
-        # Verify that search was called with max_results=3 (coerced from string)
         mock_client.search.assert_called_once()
         call_kwargs = mock_client.search.call_args.kwargs
         assert call_kwargs["max_results"] == 3
