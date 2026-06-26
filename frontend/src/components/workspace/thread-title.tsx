@@ -1,3 +1,5 @@
+"use client";
+
 import type { BaseStream } from "@langchain/langgraph-sdk";
 import { useEffect } from "react";
 

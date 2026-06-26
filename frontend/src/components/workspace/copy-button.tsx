@@ -1,3 +1,5 @@
+"use client";
+
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useCallback, useState, type ComponentProps } from "react";
 import { toast } from "sonner";

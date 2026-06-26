@@ -1,3 +1,5 @@
+"use client";
+
 import { DownloadIcon, LoaderIcon, PackageIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";

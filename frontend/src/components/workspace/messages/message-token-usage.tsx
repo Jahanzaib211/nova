@@ -1,3 +1,5 @@
+"use client";
+
 import type { Message } from "@langchain/langgraph-sdk";
 import { CoinsIcon } from "lucide-react";
 
