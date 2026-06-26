@@ -80,3 +80,4 @@ build/
 temp/
 pr-build/
 /tmp/
+.kilo/

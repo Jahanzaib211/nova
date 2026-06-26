@@ -2,7 +2,8 @@
  * API functions for file uploads
  */
 
-import { fetch } from "../api/fetcher";
+import { fetch } from "@/core/api/fetcher";
+
 import { getBackendBaseURL } from "../config";
 
 export interface UploadedFileInfo {

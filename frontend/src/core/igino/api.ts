@@ -1,3 +1,5 @@
+import { fetch } from "@/core/api/fetcher";
+
 import type {
   IGINOStatus,
   IGINOToggleResponse,

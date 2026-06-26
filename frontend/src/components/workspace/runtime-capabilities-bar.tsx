@@ -22,7 +22,6 @@
  */
 
 import {
-  BoxesIcon,
   CheckCircle2Icon,
   CircuitBoardIcon,
   CogIcon,
@@ -35,6 +34,7 @@ import {
   TriangleAlertIcon,
   WrenchIcon,
   XCircleIcon,
+  type BoxesIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -45,19 +45,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-
-import { useCapabilities, useOpenCircuitCount } from "@/core/runtime/hooks";
+import { useI18n } from "@/core/i18n/hooks";
 import { useIGINOStatus } from "@/core/igino/hooks";
+import { useCapabilities, useOpenCircuitCount } from "@/core/runtime/hooks";
 import type { CapabilitiesResponse } from "@/core/runtime/types";
+import { cn } from "@/lib/utils";
 
 // Visual constants — fixed so the bar reads as one rhythm regardless
 // of how many items are loaded.
 const MAX_VISIBLE_SKILLS = 8;
 const ROW_HEIGHT = "h-9";
 
-function StatusDot({ openCircuits }: { openCircuits: number }) {
-  const { tone, label, Icon } = deriveStatusVisuals(openCircuits);
+function StatusDot({ openCircuits, t }: { openCircuits: number; t: ReturnType<typeof useI18n>["t"] }) {
+  const { tone, label, Icon } = deriveStatusVisuals(openCircuits, t);
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
@@ -104,7 +104,7 @@ function StatusDot({ openCircuits }: { openCircuits: number }) {
   );
 }
 
-function deriveStatusVisuals(openCircuits: number): {
+function deriveStatusVisuals(openCircuits: number, t: ReturnType<typeof useI18n>["t"]): {
   tone: { bg: string; dot: string; icon: string };
   label: { text: string; state: "healthy" | "degraded" | "critical"; tooltipTitle: string; tooltipBody: string };
   Icon: typeof CheckCircle2Icon;
@@ -117,10 +117,10 @@ function deriveStatusVisuals(openCircuits: number): {
         icon: "text-emerald-600 dark:text-emerald-400",
       },
       label: {
-        text: "Healthy",
+        text: t.runtimeBar.status.healthy,
         state: "healthy",
-        tooltipTitle: "Browser subsystem healthy",
-        tooltipBody: "All circuit breakers are CLOSED. No active degradation.",
+        tooltipTitle: t.runtimeBar.status.healthyTitle,
+        tooltipBody: t.runtimeBar.status.healthyBody,
       },
       Icon: CheckCircle2Icon,
     };
@@ -133,11 +133,10 @@ function deriveStatusVisuals(openCircuits: number): {
         icon: "text-amber-600 dark:text-amber-400",
       },
       label: {
-        text: `Degraded · ${openCircuits}`,
+        text: t.runtimeBar.status.degraded(openCircuits),
         state: "degraded",
-        tooltipTitle: `${openCircuits} circuit${openCircuits === 1 ? "" : "s"} open`,
-        tooltipBody:
-          "Some threads have hit the failure threshold. They will auto-recover after cooldown.",
+        tooltipTitle: t.runtimeBar.status.degradedTitle(openCircuits),
+        tooltipBody: t.runtimeBar.status.degradedBody,
       },
       Icon: TriangleAlertIcon,
     };
@@ -149,11 +148,10 @@ function deriveStatusVisuals(openCircuits: number): {
       icon: "text-red-600 dark:text-red-400",
     },
     label: {
-      text: `Critical · ${openCircuits}`,
+      text: t.runtimeBar.status.critical(openCircuits),
       state: "critical",
-      tooltipTitle: `${openCircuits} circuits open — fleet degraded`,
-      tooltipBody:
-        "Multiple threads tripped. Check /api/health/browser for the full state.",
+      tooltipTitle: t.runtimeBar.status.criticalTitle(openCircuits),
+      tooltipBody: t.runtimeBar.status.criticalBody,
     },
     Icon: XCircleIcon,
   };
@@ -200,7 +198,7 @@ function SkillPill({ skill }: { skill: CapabilitiesResponse["skills"][number] })
   );
 }
 
-function SkillRail({ skills }: { skills: CapabilitiesResponse["skills"] }) {
+function SkillRail({ skills, t }: { skills: CapabilitiesResponse["skills"]; t: ReturnType<typeof useI18n>["t"] }) {
   const enabled = skills.filter((s) => s.enabled);
   const total = skills.length;
   const overflow = total - MAX_VISIBLE_SKILLS;
@@ -218,7 +216,7 @@ function SkillRail({ skills }: { skills: CapabilitiesResponse["skills"] }) {
         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
           {enabled.length === 0 ? (
             <span className="text-muted-foreground/70 text-[11px]">
-              no skills loaded
+              {t.runtimeBar.skills.none}
             </span>
           ) : (
             <>
@@ -229,15 +227,12 @@ function SkillRail({ skills }: { skills: CapabilitiesResponse["skills"] }) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="text-muted-foreground/80 cursor-default px-1 font-mono text-[11px]">
-                      +{overflow}
+                      {t.runtimeBar.skills.overflow(overflow)}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-sm">
                     <p className="font-medium">
-                      {overflow} more skill{overflow === 1 ? "" : "s"} loaded
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      See Settings → Skills to manage.
+                      {t.runtimeBar.skills.overflowHint}
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -296,7 +291,7 @@ function MetricCounter({
   );
 }
 
-function IGINOPill() {
+function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
   const { data: status } = useIGINOStatus();
   if (!status?.enabled) return null;
 
@@ -311,18 +306,20 @@ function IGINOPill() {
             data-testid="runtime-igino-pill"
           >
             <ShieldIcon className="size-3 text-primary" aria-hidden />
-            <span className="text-foreground/80">iGIN0</span>
+            <span className="text-foreground/80">{t.runtimeBar.igino.label}</span>
             {status.tor_enabled && (
               <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">TOR</span>
             )}
           </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
-          <p className="font-medium">iGIN0 Privacy Search</p>
+          <p className="font-medium">{t.runtimeBar.igino.title}</p>
           <p className="text-muted-foreground mt-1 text-xs">
-            SearXNG: {status.searxng_healthy ? "healthy" : "unhealthy"} ·
-            TOR: {status.tor_available ? "available" : "unavailable"} ·
-            Cache: {status.cache.size}/{status.cache.max_size}
+            {t.runtimeBar.igino.tooltip(
+              status.searxng_healthy ? t.agentComputer.privacy.healthy : t.agentComputer.privacy.unhealthy,
+              status.tor_available ? t.agentComputer.privacy.available : t.agentComputer.privacy.unavailable,
+              `${status.cache.size}/${status.cache.max_size}`,
+            )}
           </p>
         </TooltipContent>
       </Tooltip>
@@ -331,6 +328,7 @@ function IGINOPill() {
 }
 
 export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
+  const { t } = useI18n();
   const { capabilities, isFetching, error } = useCapabilities();
   const openCircuits = useOpenCircuitCount();
 
@@ -350,9 +348,9 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
         role="status"
       >
         <CircuitBoardIcon className="size-3.5" aria-hidden />
-        <span className="font-medium">Runtime status offline</span>
+        <span className="font-medium">{t.runtimeBar.offline}</span>
         <span className="text-muted-foreground/70">
-          · will retry automatically
+          · {t.runtimeBar.offlineHint}
         </span>
         {isFetching && (
           <Loader2Icon className="ml-auto size-3.5 animate-spin" aria-hidden />
@@ -394,39 +392,39 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
         role="status"
         aria-label="Agent runtime capabilities"
       >
-        <StatusDot openCircuits={openCircuits} />
+        <StatusDot openCircuits={openCircuits} t={t} />
 
         <SectionDivider />
 
-        <SkillRail skills={skills} />
+        <SkillRail skills={skills} t={t} />
 
         <SectionDivider />
 
         <MetricCounter
           icon={WrenchIcon}
-          label="tools"
+          label={t.runtimeBar.metrics.tools}
           count={tools.length}
           testId="runtime-tools-pill"
-          detail="Builtin tools available to the lead agent."
+          detail={t.runtimeBar.metrics.toolsDetail}
         />
         <MetricCounter
           icon={CpuIcon}
-          label="subagents"
+          label={t.runtimeBar.metrics.subagents}
           count={subagents.length}
           testId="runtime-subagents-pill"
-          detail="Delegated worker agents the lead can spawn."
+          detail={t.runtimeBar.metrics.subagentsDetail}
         />
         <MetricCounter
           icon={CogIcon}
-          label="hooks"
+          label={t.runtimeBar.metrics.hooks}
           count={hooks.length}
           testId="runtime-hooks-pill"
-          detail="Active middlewares on the LangChain agent chain."
+          detail={t.runtimeBar.metrics.hooksDetail}
         />
 
         <SectionDivider />
 
-        <IGINOPill />
+        <IGINOPill t={t} />
 
         {openCircuits > 0 && (
           <Tooltip>
@@ -442,7 +440,7 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-sm">
               <p className="font-medium">
-                {openCircuits} circuit{openCircuits === 1 ? "" : "s"} open
+                {t.runtimeBar.circuits.open(openCircuits)}
               </p>
               <ul className="text-muted-foreground mt-1 space-y-0.5 text-xs">
                 {circuits
@@ -458,7 +456,7 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
                 )}
               </ul>
               <p className="text-muted-foreground/70 mt-1.5 text-[10px]">
-                Auto-recovers after cooldown.
+                {t.runtimeBar.circuits.autoRecovers}
               </p>
             </TooltipContent>
           </Tooltip>

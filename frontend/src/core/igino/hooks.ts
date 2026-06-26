@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 import {
   fetchIGINOStatus,
   toggleIGINO,
   runIGINOResearch,
   fetchIGINOCacheStats,
 } from "./api";
-import type { IGINOResearchResult } from "./types";
 
 export function useIGINOStatus() {
   return useQuery({
@@ -22,8 +22,8 @@ export function useToggleIGINO() {
   return useMutation({
     mutationFn: (enabled: boolean) => toggleIGINO(enabled),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["igino", "status"] });
-      qc.invalidateQueries({ queryKey: ["runtime", "capabilities"] });
+      void qc.invalidateQueries({ queryKey: ["igino", "status"] });
+      void qc.invalidateQueries({ queryKey: ["runtime", "capabilities"] });
     },
   });
 }

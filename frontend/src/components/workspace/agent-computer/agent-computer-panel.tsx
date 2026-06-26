@@ -40,12 +40,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { AgentComputerErrorBoundary } from "@/components/workspace/agent-computer/agent-computer-error-boundary";
 import type { LlmError, TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
 import { useThread } from "@/components/workspace/messages/context";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
+import { useIGINOStatus, useToggleIGINO } from "@/core/igino/hooks";
 import {
   sandboxAuditDownloadUrl,
   sandboxReviewDownloadUrl,
@@ -65,7 +67,6 @@ import {
   type SandboxReview,
 } from "@/core/sandbox/hooks";
 import { useSkills } from "@/core/skills/hooks";
-import { useIGINOStatus, useToggleIGINO } from "@/core/igino/hooks";
 import type { Skill } from "@/core/skills/type";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { Todo } from "@/core/todos";
@@ -121,22 +122,21 @@ function getActiveEdit(messages: Message[]): ActiveEdit | null {
   return null;
 }
 
-function getStatusLabel(tool: string | null, isLoading: boolean, filePath: string | null, lineCount?: number): string {
+function getStatusLabel(tool: string | null, isLoading: boolean, filePath: string | null, lineCount: number | undefined, t: ReturnType<typeof useI18n>["t"]): string {
   const filename = filePath?.split("/").at(-1);
   if (tool === "write_file") {
-    const lines = lineCount && lineCount > 1 ? ` · ${lineCount} lines` : "";
-    return filename ? `is writing ${filename}${lines}` : "is using Editor";
+    return filename ? t.agentComputer.status.writing(filename, lineCount && lineCount > 1 ? `${lineCount} lines` : undefined) : t.agentComputer.status.usingEditor;
   }
-  if (tool === "str_replace") return filename ? `is editing ${filename}` : "is using Editor";
-  if (tool === "read_file") return filename ? `is reading ${filename}` : "is using Editor";
-  if (tool === "bash" || tool === "execute_command") return "is using Terminal";
-  if (tool === "search_files") return "is searching files";
-  if (tool === "grep_files") return "is searching content";
-  if (tool === "task") return "is delegating to subagent";
-  if (tool === "scaffold_project") return "is scaffolding project";
-  if (tool === "browser" || tool === "web_search" || tool === "tavily_search") return "is using Browser";
-  if (isLoading) return "is thinking";
-  return "is idle";
+  if (tool === "str_replace") return filename ? t.agentComputer.status.editing(filename) : t.agentComputer.status.usingEditor;
+  if (tool === "read_file") return filename ? t.agentComputer.status.reading(filename) : t.agentComputer.status.usingEditor;
+  if (tool === "bash" || tool === "execute_command") return t.agentComputer.status.usingTerminal;
+  if (tool === "search_files") return t.agentComputer.status.searchingFiles;
+  if (tool === "grep_files") return t.agentComputer.status.searchingContent;
+  if (tool === "task") return t.agentComputer.status.delegatingToSubagent;
+  if (tool === "scaffold_project") return t.agentComputer.status.scaffoldingProject;
+  if (tool === "browser" || tool === "web_search" || tool === "tavily_search") return t.agentComputer.status.usingBrowser;
+  if (isLoading) return t.agentComputer.status.isThinking;
+  return t.agentComputer.status.isIdle;
 }
 
 function getDotClass(tool: string | null, isLoading: boolean): string {
@@ -156,7 +156,8 @@ function getDotClass(tool: string | null, isLoading: boolean): string {
 function StatusLine({ tool, isLoading, filePath, lineCount }: {
   tool: string | null; isLoading: boolean; filePath: string | null; lineCount?: number;
 }) {
-  const label = getStatusLabel(tool, isLoading, filePath, lineCount);
+  const { t } = useI18n();
+  const label = getStatusLabel(tool, isLoading, filePath, lineCount, t);
   const dotClass = getDotClass(tool, isLoading);
   const pulse = isLoading || Boolean(tool);
   return (
@@ -187,6 +188,7 @@ function StatusLine({ tool, isLoading, filePath, lineCount }: {
 const TERMINAL_TOOLS = new Set(["bash", "execute_command", "search_files", "grep_files"]);
 
 function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId: string }) {
+  const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
   const terminalEvents = events.filter((e) => TERMINAL_TOOLS.has(e.type));
   // "shell" = the sandbox's real interactive ttyd terminal (type into it live);
@@ -200,10 +202,10 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
 
   const ModeToggle = (
     <div className="flex shrink-0 items-center gap-1 border-b border-border/30 bg-black/40 px-2 py-1">
-      <span className="mr-auto font-mono text-[10px] text-muted-foreground/50">terminal</span>
+      <span className="mr-auto font-mono text-[10px] text-muted-foreground/50">{t.agentComputer.terminal.tab}</span>
       <div className="flex items-center rounded border border-border/40 text-[10px]">
-        <button onClick={() => setMode("stream")} className={cn("px-1.5 py-0.5", mode === "stream" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}>Stream</button>
-        <button onClick={() => setMode("shell")} className={cn("px-1.5 py-0.5", mode === "shell" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}>Shell</button>
+        <button onClick={() => setMode("stream")} className={cn("px-1.5 py-0.5", mode === "stream" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}>{t.agentComputer.terminal.stream}</button>
+        <button onClick={() => setMode("shell")} className={cn("px-1.5 py-0.5", mode === "shell" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}>{t.agentComputer.terminal.shell}</button>
       </div>
     </div>
   );
@@ -214,7 +216,7 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
         {ModeToggle}
         <div className="min-h-0 flex-1 bg-black">
           {terminalUrl ? (
-            <iframe key={terminalUrl} src={terminalUrl} title="Interactive terminal" className="h-full w-full border-0" />
+            <iframe key={terminalUrl} src={terminalUrl} title={t.agentComputer.terminal.interactiveTitle} className="h-full w-full border-0" />
           ) : (
             <div className="flex h-full items-center justify-center">
               <LoaderCircleIcon className="h-5 w-5 animate-spin text-muted-foreground/30" />
@@ -232,9 +234,9 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center bg-black/50">
           <div className="font-mono text-emerald-400/30 text-xl animate-pulse">▮</div>
           <div>
-            <p className="text-xs font-medium text-muted-foreground/60">No terminal output yet</p>
+            <p className="text-xs font-medium text-muted-foreground/60">{t.agentComputer.terminal.noOutput}</p>
             <p className="text-[10px] text-muted-foreground/40 mt-1">
-              Agent commands appear here — switch to <span className="text-emerald-400/70">Shell</span> for a live interactive terminal
+              {t.agentComputer.terminal.noOutputHint} <span className="text-emerald-400/70">{t.agentComputer.terminal.shell}</span>
             </p>
           </div>
         </div>
@@ -274,7 +276,7 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
               </pre>
             ) : event.status === "running" ? (
               <div className="pl-4 text-emerald-400/40">
-                <span className="animate-pulse">running...</span>
+                <span className="animate-pulse">{t.agentComputer.terminal.running}</span>
               </div>
             ) : null}
           </div>
@@ -338,6 +340,7 @@ function Editor({
   activeTab: boolean;
   activeEdit: ActiveEdit | null;
 }) {
+  const { t } = useI18n();
   const { content, exists, lineCount } = useLiveFileContent(threadId, filePath, activeTab && Boolean(filePath));
   const bottomRef = useRef<HTMLDivElement>(null);
   const filename = filePath?.split("/").at(-1) ?? "";
@@ -369,7 +372,7 @@ function Editor({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
         <PencilIcon className="h-6 w-6 text-muted-foreground/30" />
-        <span className="text-xs text-muted-foreground/50">Start writing a file to see code live</span>
+        <span className="text-xs text-muted-foreground/50">{t.agentComputer.editor.startWriting}</span>
       </div>
     );
   }
@@ -392,20 +395,20 @@ function Editor({
               <button
                 onClick={() => setMode("diff")}
                 className={cn("px-1.5 py-0.5 transition-colors", mode === "diff" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}
-              >Diff</button>
+              >{t.agentComputer.editor.diff}</button>
               <button
                 onClick={() => setMode("file")}
                 className={cn("px-1.5 py-0.5 transition-colors", mode === "file" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}
-              >File</button>
+              >{t.agentComputer.editor.file}</button>
             </div>
           )}
           {!showDiff && lineCount > 1 && (
-            <span className="text-[10px] text-muted-foreground/50">{lineCount} lines</span>
+            <span className="text-[10px] text-muted-foreground/50">{t.agentComputer.editor.lines(lineCount)}</span>
           )}
           {isWriting && (
             <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-              Writing
+              {t.agentComputer.editor.writing}
             </span>
           )}
         </div>
@@ -454,6 +457,7 @@ function Browser({
   hasRunnableProject?: boolean;
   onAgentMessage?: (text: string) => void;
 }) {
+  const { t } = useI18n();
   const { content, exists } = useSandboxFile(threadId, filePath);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
   const [reloadKey, setReloadKey] = useState(0);
@@ -556,12 +560,12 @@ function Browser({
     return (
       <div className="flex h-full flex-col">
         <div className="flex shrink-0 items-center gap-1.5 border-b border-border/30 bg-muted/20 px-2 py-1">
-          <button onClick={() => setShowVnc(false)} className="rounded px-1 text-sm text-muted-foreground hover:text-foreground" title="Back">‹</button>
-          <span className="font-mono text-xs text-muted-foreground/70">live browser · VNC</span>
+          <button onClick={() => setShowVnc(false)} className="rounded px-1 text-sm text-muted-foreground hover:text-foreground" title={t.agentComputer.browser.back}>‹</button>
+          <span className="font-mono text-xs text-muted-foreground/70">{t.agentComputer.browser.watchLiveBrowser} · VNC</span>
         </div>
         <div className="min-h-0 flex-1 bg-black">
           {vncUrl ? (
-            <iframe key={vncUrl} src={vncUrl} title="Live browser (VNC)" className="h-full w-full border-0" />
+            <iframe key={vncUrl} src={vncUrl} title={t.agentComputer.browser.watchAgentBrowser} className="h-full w-full border-0" />
           ) : (
             <div className="flex h-full items-center justify-center">
               <LoaderCircleIcon className="h-5 w-5 animate-spin text-muted-foreground/30" />
@@ -578,10 +582,10 @@ function Browser({
       <div className="flex h-full flex-col">
         {/* Browser chrome: nav + address bar */}
         <div className="flex shrink-0 items-center gap-1 border-b border-border/30 bg-muted/20 px-1.5 py-1">
-          <button onClick={() => canBack && setNavIdx((i) => i - 1)} disabled={!canBack} className={cn("rounded px-1 text-sm transition-colors", canBack ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/25")} title="Back">‹</button>
-          <button onClick={() => canFwd && setNavIdx((i) => i + 1)} disabled={!canFwd} className={cn("rounded px-1 text-sm transition-colors", canFwd ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/25")} title="Forward">›</button>
-          <button onClick={() => setReloadKey((k) => k + 1)} className="rounded px-1 text-muted-foreground/60 hover:text-foreground transition-colors" title="Reload">⟳</button>
-          <span className={cn("ml-0.5 h-2 w-2 shrink-0 rounded-full", devServer.status === "ready" ? "bg-emerald-400" : "bg-yellow-400 animate-pulse")} title={devServer.status === "ready" ? "live" : "compiling…"} />
+          <button onClick={() => canBack && setNavIdx((i) => i - 1)} disabled={!canBack} className={cn("rounded px-1 text-sm transition-colors", canBack ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/25")} title={t.agentComputer.browser.back}>‹</button>
+          <button onClick={() => canFwd && setNavIdx((i) => i + 1)} disabled={!canFwd} className={cn("rounded px-1 text-sm transition-colors", canFwd ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/25")} title={t.agentComputer.browser.forward}>›</button>
+          <button onClick={() => setReloadKey((k) => k + 1)} className="rounded px-1 text-muted-foreground/60 hover:text-foreground transition-colors" title={t.agentComputer.browser.reload}>⟳</button>
+          <span className={cn("ml-0.5 h-2 w-2 shrink-0 rounded-full", devServer.status === "ready" ? "bg-emerald-400" : "bg-yellow-400 animate-pulse")} title={devServer.status === "ready" ? t.agentComputer.browser.live : t.agentComputer.browser.compiling} />
           <form
             onSubmit={(e) => { e.preventDefault(); goRoute(routeInput); }}
             className="flex min-w-0 flex-1 items-center rounded-md border border-border/40 bg-background/40 px-2"
@@ -600,7 +604,7 @@ function Browser({
               value={selectedLabel}
               onChange={(e) => onSelectLabel?.(e.target.value)}
               className="shrink-0 rounded border border-border/40 bg-muted/30 px-1 py-0.5 font-mono text-[10px] text-muted-foreground focus:outline-none"
-              title="Switch preview (multi-port)"
+              title={t.agentComputer.browser.switchPreview}
             >
               {devServers.map((s) => (
                 <option key={s.label} value={s.label}>{s.label}</option>
@@ -617,20 +621,20 @@ function Browser({
                   : selfTest && selfTest.routes.length > 0 ? (selfTest.ok ? "text-emerald-400" : "text-red-400")
                   : "text-muted-foreground/50 hover:text-muted-foreground",
               )}
-              title="Self-test in browser (console + screenshot)"
+              title={t.agentComputer.browser.selfTest}
             >
               {selfTesting ? <LoaderCircleIcon className="h-3 w-3 animate-spin" /> : <EyeIcon className="h-3 w-3" />}
             </button>
-            <button onClick={() => setShowVnc(true)} className="rounded px-1 py-0.5 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Watch the agent's live browser (VNC)">
+            <button onClick={() => setShowVnc(true)} className="rounded px-1 py-0.5 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t.agentComputer.browser.watchAgentBrowser}>
               VNC
             </button>
-            <button onClick={() => setViewMode("desktop")} className={cn("rounded p-1 transition-colors", viewMode === "desktop" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")} title="Desktop">
+            <button onClick={() => setViewMode("desktop")} className={cn("rounded p-1 transition-colors", viewMode === "desktop" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")} title={t.agentComputer.browser.desktop}>
               <MonitorIcon className="h-3 w-3" />
             </button>
-            <button onClick={() => setViewMode("mobile")} className={cn("rounded p-1 transition-colors", viewMode === "mobile" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")} title="Mobile">
+            <button onClick={() => setViewMode("mobile")} className={cn("rounded p-1 transition-colors", viewMode === "mobile" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")} title={t.agentComputer.browser.mobile}>
               <span className="text-[10px] font-mono">📱</span>
             </button>
-            <button onClick={openLiveInNewTab} className="rounded p-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Open in new tab">
+            <button onClick={openLiveInNewTab} className="rounded p-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t.agentComputer.browser.openNewTab}>
               <ExternalLinkIcon className="h-3 w-3" />
             </button>
           </div>
@@ -640,10 +644,10 @@ function Browser({
           <div className="shrink-0 border-b border-border/30 bg-muted/10 px-2 py-1.5 text-[11px]">
             <div className="flex items-center gap-2">
               <span className={cn("font-medium", selfTesting ? "text-primary" : selfTest?.ok ? "text-emerald-400" : "text-red-400")}>
-                {selfTesting ? "Testing in browser…" : selfTest?.ok ? "✓ Self-test passed" : "✗ Self-test found issues"}
+                {selfTesting ? t.agentComputer.browser.testingInBrowser : selfTest?.ok ? t.agentComputer.browser.selfTestPassed : t.agentComputer.browser.selfTestIssues}
               </span>
               {selfTest?.port != null && (
-                <span className="font-mono text-[10px] text-muted-foreground/50">tested :{selfTest.port}</span>
+                <span className="font-mono text-[10px] text-muted-foreground/50">{t.agentComputer.browser.testedPort(String(selfTest.port))}</span>
               )}
               {selfTest && !selfTest.ok && selfTest.reason && selfTest.routes.length === 0 && (
                 <span className="text-muted-foreground/60">{selfTest.reason}</span>
@@ -676,7 +680,7 @@ function Browser({
             <iframe
               key={`${reloadKey}-${navIdx}`}
               src={liveSrc}
-              title="Live preview"
+              title={t.agentComputer.browser.livePreview}
               // No allow-same-origin: the preview is served on the app origin, so an
               // opaque-origin sandbox prevents the agent-built app from reaching the
               // parent app's cookies / localStorage / auth.
@@ -686,7 +690,7 @@ function Browser({
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3">
               <LoaderCircleIcon className="h-6 w-6 animate-spin text-muted-foreground/40" />
-              <p className="text-xs text-muted-foreground/50">Dev server compiling… preview loads automatically</p>
+              <p className="text-xs text-muted-foreground/50">{t.agentComputer.browser.devServerCompiling}</p>
             </div>
           )}
         </div>
@@ -698,9 +702,9 @@ function Browser({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-4">
         <GlobeIcon className="h-8 w-8 text-muted-foreground/20" />
-        <p className="text-xs text-muted-foreground/50">Browser preview will appear here<br/>once the agent writes an HTML file</p>
+        <p className="text-xs text-muted-foreground/50">{t.agentComputer.browser.previewWillAppear}<br/>{t.agentComputer.browser.previewWillAppearLine2}</p>
         <button onClick={() => setShowVnc(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-[--primary]/40 transition-colors">
-          <EyeIcon className="h-3 w-3" /> Watch the agent&apos;s live browser
+          <EyeIcon className="h-3 w-3" /> {t.agentComputer.browser.watchLiveBrowser}
         </button>
       </div>
     );
@@ -709,18 +713,18 @@ function Browser({
   if (!isHtml) {
     // Non-HTML project (Next.js, React, etc.) — show project info instead
     const ext = filename.split(".").at(-1)?.toLowerCase() ?? "";
-    const projectType = ["tsx", "ts", "jsx", "js"].includes(ext) ? "React / Next.js"
-      : ext === "py" ? "Python"
-      : ext === "md" ? "Markdown"
-      : "Code";
+    const projectType = ["tsx", "ts", "jsx", "js"].includes(ext) ? t.agentComputer.browser.projectType.react
+      : ext === "py" ? t.agentComputer.browser.projectType.python
+      : ext === "md" ? t.agentComputer.browser.projectType.markdown
+      : t.agentComputer.browser.projectType.code;
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-4">
         <CodeIcon className="h-8 w-8 text-blue-400/30" />
         <div>
-          <p className="text-xs font-medium text-muted-foreground">{projectType} project</p>
+          <p className="text-xs font-medium text-muted-foreground">{t.agentComputer.browser.projectLabel(projectType)}</p>
           <p className="mt-1 text-[11px] text-muted-foreground/60 font-mono">{filename}</p>
           <p className="mt-2 text-[11px] text-muted-foreground/50 leading-relaxed">
-            Switch to <span className="text-blue-400">Editor</span> to see live code.
+            {t.agentComputer.browser.switchToEditorPrefix} <span className="text-blue-400">{t.agentComputer.tabs.editor}</span> {t.agentComputer.browser.switchToEditorSuffix}
           </p>
           {(onStartPreview ?? onAgentMessage) && (
             <button
@@ -728,12 +732,12 @@ function Browser({
                 // Deterministic path: backend runs find-project → install → start.
                 // Fall back to nudging the agent only if the runner isn't wired.
                 if (onStartPreview) void onStartPreview(selectedLabel);
-                else onAgentMessage?.("Start the dev server (npm install if needed, then start_dev_server) so I can preview the running app in the Browser tab.");
+                else onAgentMessage?.(`Start the dev server (npm install if needed, then start_dev_server) so I can preview the running app in the ${t.agentComputer.tabs.browser} tab.`);
               }}
               className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 transition-opacity"
             >
               <GlobeIcon className="h-3 w-3" />
-              Start Live Preview
+              {t.agentComputer.browser.startLivePreview}
             </button>
           )}
         </div>
@@ -763,7 +767,7 @@ function Browser({
           <button
             onClick={openInNewTab}
             className="rounded p-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-            title="Download HTML file"
+            title={t.agentComputer.browser.openNewTab}
           >
             <DownloadIcon className="h-3 w-3" />
           </button>
@@ -926,12 +930,13 @@ function FilesPanel({
   onSelectFile: (f: SandboxFile) => void;
   onSelectArtifact: (path: string) => void;
 }) {
+  const { t } = useI18n();
   const tree = useMemo(() => buildFileTree(files), [files]);
   if (files.length === 0 && artifacts.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
         <FolderIcon className="h-6 w-6 text-muted-foreground/30" />
-        <span className="text-xs text-muted-foreground/50">Files the agent creates will appear here</span>
+        <span className="text-xs text-muted-foreground/50">{t.agentComputer.files.empty}</span>
       </div>
     );
   }
@@ -1055,6 +1060,7 @@ function ActivityPanel({
   threadId: string;
   verifyResult?: VerifyResult | null;
 }) {
+  const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
   const timeline = useMemo(() => events.filter((e) => !TERMINAL_TOOLS.has(e.type)), [events]);
 
@@ -1067,13 +1073,13 @@ function ActivityPanel({
       {verifyResult ? <VerifyResultPill event={verifyResult} /> : null}
       <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-muted/20 px-2 py-1">
         <span className="font-mono text-xs text-muted-foreground/70">
-          activity · {timeline.length} action{timeline.length === 1 ? "" : "s"}
+          {t.agentComputer.activity.title(timeline.length)}
         </span>
         <a
           href={sandboxAuditDownloadUrl(threadId)}
           download
           className="rounded p-1 text-muted-foreground/60 hover:text-foreground transition-colors"
-          title="Export full audit log (JSONL)"
+          title={t.agentComputer.activity.exportAuditLog}
         >
           <DownloadIcon className="h-3 w-3" />
         </a>
@@ -1083,7 +1089,7 @@ function ActivityPanel({
           {timeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
               <FileTextIcon className="h-5 w-5 text-muted-foreground/30" />
-              <span className="text-xs text-muted-foreground/50">Agent actions will appear here</span>
+              <span className="text-xs text-muted-foreground/50">{t.agentComputer.activity.empty}</span>
             </div>
           ) : (
             timeline.map((event, i) => <ActivityEventCard key={i} event={event} />)
@@ -1101,6 +1107,7 @@ function ActivityPanel({
 function TaskChecklist({ todos, taskProgress, activityEvents }: {
   todos: Todo[]; taskProgress: TaskProgress | null; activityEvents: AgentActivityEvent[];
 }) {
+  const { t } = useI18n();
   if (todos.length === 0) return null;
 
   // Enrich todo status from activity events (subagent task completions)
@@ -1118,7 +1125,7 @@ function TaskChecklist({ todos, taskProgress, activityEvents }: {
   return (
     <div className="flex flex-col gap-1 px-3 py-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground/70">Task progress</span>
+        <span className="text-xs font-medium text-muted-foreground/70">{t.agentComputer.taskProgress}</span>
         <span className="text-xs text-muted-foreground/50">{step} / {totalSteps}</span>
       </div>
       <Progress value={pct} className="h-1" />
@@ -1173,27 +1180,28 @@ function ReviewPanel({
   isFetching: boolean;
   onRegenerate: () => void;
 }) {
+  const { t } = useI18n();
   const risks = review?.risks ?? [];
   const high = risks.filter((r) => r.level === "high").length;
   const med = risks.filter((r) => r.level === "med").length;
   const verdict = !review
-    ? { text: "Generating…", cls: "text-muted-foreground" }
+    ? { text: t.agentComputer.review.generating, cls: "text-muted-foreground" }
     : high > 0
-      ? { text: "Needs a look before shipping", cls: "text-red-400" }
+      ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
       : med > 0
-        ? { text: "Mostly fine — a couple of checks", cls: "text-orange-400" }
-        : { text: "Looks clean", cls: "text-emerald-400" };
+        ? { text: t.agentComputer.review.mostlyFine, cls: "text-orange-400" }
+        : { text: t.agentComputer.review.looksClean, cls: "text-emerald-400" };
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-muted/20 px-2 py-1">
-        <span className="font-mono text-xs text-muted-foreground/70">code review</span>
+        <span className="font-mono text-xs text-muted-foreground/70">{t.agentComputer.review.codeReview}</span>
         <div className="flex items-center gap-1">
           <button
             onClick={onRegenerate}
             disabled={isFetching}
             className="rounded p-1 text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40"
-            title="Regenerate review"
+            title={t.agentComputer.review.regenerate}
           >
             {isFetching ? <LoaderCircleIcon className="h-3 w-3 animate-spin" /> : <span className="text-[11px]">⟳</span>}
           </button>
@@ -1201,7 +1209,7 @@ function ReviewPanel({
             href={sandboxReviewDownloadUrl(threadId)}
             download
             className="rounded p-1 text-muted-foreground/60 hover:text-foreground transition-colors"
-            title="Download REVIEW.md"
+            title={t.agentComputer.review.download}
           >
             <DownloadIcon className="h-3 w-3" />
           </a>
@@ -1217,7 +1225,7 @@ function ReviewPanel({
                 {review.files.length} file{review.files.length === 1 ? "" : "s"} changed ·{" "}
                 <span className="text-emerald-400">+{review.added_total}</span>{" "}
                 <span className="text-red-400">−{review.removed_total}</span>
-                {high + med === 0 && " · no risky actions detected"}
+                {high + med === 0 && ` · ${t.agentComputer.review.noRiskyActions}`}
               </div>
             )}
           </div>
@@ -1225,7 +1233,7 @@ function ReviewPanel({
           {/* Risks */}
           {risks.length > 0 && (
             <div>
-              <div className="mb-1 font-medium text-muted-foreground/70">Risk flags</div>
+              <div className="mb-1 font-medium text-muted-foreground/70">{t.agentComputer.review.riskFlags}</div>
               <div className="flex flex-col gap-1">
                 {risks.map((r, i) => (
                   <div key={i} className="rounded border border-border/20 bg-muted/10 px-2 py-1">
@@ -1241,7 +1249,7 @@ function ReviewPanel({
           {/* Changed files */}
           {review && review.files.length > 0 && (
             <div>
-              <div className="mb-1 font-medium text-muted-foreground/70">Changed files</div>
+              <div className="mb-1 font-medium text-muted-foreground/70">{t.agentComputer.review.changedFiles}</div>
               <div className="flex flex-col gap-px font-mono text-[11px]">
                 {review.files.slice(0, 200).map((f, i) => (
                   <div key={i} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/30">
@@ -1258,7 +1266,7 @@ function ReviewPanel({
           {/* Checks */}
           {review && Object.keys(review.checks).length > 0 && (
             <div>
-              <div className="mb-1 font-medium text-muted-foreground/70">Detected checks</div>
+              <div className="mb-1 font-medium text-muted-foreground/70">{t.agentComputer.review.detectedChecks}</div>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(review.checks).map(([name, state]) => (
                   <span key={name} className="rounded border border-border/20 bg-muted/10 px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
@@ -1270,7 +1278,7 @@ function ReviewPanel({
           )}
 
           {review?.files.length === 0 && (
-            <div className="text-muted-foreground/50">No changes to review yet.</div>
+            <div className="text-muted-foreground/50">{t.agentComputer.review.noChanges}</div>
           )}
         </div>
       </ScrollArea>
@@ -1396,51 +1404,43 @@ function PrivacyPanel() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldIcon className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium">iGIN0 Privacy Search</span>
+            <span className="text-sm font-medium">{t.agentComputer.privacy.title}</span>
           </div>
-          <button
-            onClick={() => toggleMutation.mutate(!status.enabled)}
+          <Switch
+            checked={status.enabled}
+            onCheckedChange={(checked) => toggleMutation.mutate(checked)}
             disabled={toggleMutation.isPending}
-            className={cn(
-              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-              status.enabled ? "bg-primary" : "bg-muted",
-            )}
-          >
-            <span
-              className={cn(
-                "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
-                status.enabled ? "translate-x-4.5" : "translate-x-0.5",
-              )}
-            />
-          </button>
+            aria-label={t.agentComputer.privacy.toggleLabel}
+            data-testid="igino-toggle"
+          />
         </div>
 
         {/* Source Health */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Source Health</h3>
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.sourceHealth}</h3>
           <div className="grid grid-cols-2 gap-2">
-            <StatusCard label="SearXNG" status={status.searxng_healthy ? "healthy" : "unhealthy"} />
-            <StatusCard label="TOR" status={status.tor_available ? "available" : "unavailable"} />
+            <StatusCard label={t.agentComputer.privacy.searxng} status={status.searxng_healthy ? t.agentComputer.privacy.healthy : t.agentComputer.privacy.unhealthy} healthy={status.searxng_healthy} />
+            <StatusCard label={t.agentComputer.privacy.tor} status={status.tor_available ? t.agentComputer.privacy.available : t.agentComputer.privacy.unavailable} healthy={status.tor_available} />
           </div>
         </div>
 
         {/* Cache Stats */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Cache</h3>
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.cache}</h3>
           <div className="grid grid-cols-3 gap-2">
-            <MetricCard label="Size" value={`${status.cache.size}/${status.cache.max_size}`} />
-            <MetricCard label="Hit Rate" value={`${(status.cache.hit_rate * 100).toFixed(1)}%`} />
-            <MetricCard label="TTL" value={`${status.cache.ttl_s}s`} />
+            <MetricCard label={t.agentComputer.privacy.size} value={`${status.cache.size}/${status.cache.max_size}`} />
+            <MetricCard label={t.agentComputer.privacy.hitRate} value={`${(status.cache.hit_rate * 100).toFixed(1)}%`} />
+            <MetricCard label={t.agentComputer.privacy.ttl} value={`${status.cache.ttl_s}s`} />
           </div>
         </div>
 
         {/* Audit Stats */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Audit</h3>
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.audit}</h3>
           <div className="grid grid-cols-3 gap-2">
-            <MetricCard label="Total" value={status.audit.total_records} />
-            <MetricCard label="Errors" value={status.audit.errors} />
-            <MetricCard label="TOR" value={status.audit.tor_usage} />
+            <MetricCard label={t.agentComputer.privacy.total} value={status.audit.total_records} />
+            <MetricCard label={t.agentComputer.privacy.errors} value={status.audit.errors} />
+            <MetricCard label={t.agentComputer.privacy.torUsage} value={status.audit.tor_usage} />
           </div>
         </div>
 
@@ -1455,13 +1455,13 @@ function PrivacyPanel() {
   );
 }
 
-function StatusCard({ label, status }: { label: string; status: string }) {
+function StatusCard({ label, status, healthy }: { label: string; status: string; healthy: boolean }) {
   return (
     <div className="rounded-md border border-border/50 p-2">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={cn(
         "mt-1 text-sm font-medium",
-        status === "healthy" || status === "available" ? "text-emerald-400" : "text-amber-400",
+        healthy ? "text-emerald-400" : "text-amber-400",
       )}>
         {status}
       </div>
@@ -1510,6 +1510,7 @@ export function AgentComputerPanel({
   onClose,
   onAgentMessage,
 }: AgentComputerPanelProps) {
+  const { t } = useI18n();
   // Context fallback for verifyResult when the caller doesn't pass it
   // explicitly. The chat page sets the context state via onVerifyResult;
   // we read it here so the Activity pill always has the latest value.
@@ -1706,11 +1707,11 @@ export function AgentComputerPanel({
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/50 bg-card/50 px-3 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Agent&apos;s computer</span>
+          <span className="text-sm font-medium text-foreground">{t.agentComputer.header}</span>
           {isLoading && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-              LIVE
+              {t.agentComputer.live}
             </span>
           )}
         </div>
@@ -1737,16 +1738,16 @@ export function AgentComputerPanel({
               <DropdownMenuContent align="end" className="w-48">
                 {onAgentMessage && (
                   <DropdownMenuItem onClick={handleGitHubPush}>
-                    <GithubIcon className="mr-2 h-3.5 w-3.5" /> Push to GitHub
+                    <GithubIcon className="mr-2 h-3.5 w-3.5" /> {t.agentComputer.pushToGithub}
                   </DropdownMenuItem>
                 )}
                 {files.length > 0 && (
                   <>
                     <DropdownMenuItem onClick={handleDownloadZip}>
-                      <FolderOpenIcon className="mr-2 h-3.5 w-3.5" /> Download all (zip)
+                      <FolderOpenIcon className="mr-2 h-3.5 w-3.5" /> {t.agentComputer.downloadAllZip}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownload}>
-                      <DownloadIcon className="mr-2 h-3.5 w-3.5" /> Download active file
+                      <DownloadIcon className="mr-2 h-3.5 w-3.5" /> {t.agentComputer.downloadActiveFile}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -1773,33 +1774,33 @@ export function AgentComputerPanel({
       <div className="flex shrink-0 overflow-x-auto border-b border-border/50 scrollbar-none">
         <TabBtn active={activeTab === "files"} onClick={() => setActiveTab("files")}>
           <FolderIcon className="h-3 w-3" />
-          Files
+          {t.agentComputer.tabs.files}
           {files.length > 0 && <span className="rounded-full bg-muted px-1 text-[9px] text-muted-foreground">{files.length}</span>}
         </TabBtn>
         <TabBtn active={activeTab === "terminal"} onClick={() => setActiveTab("terminal")}>
           <SquareTerminalIcon className="h-3 w-3" />
-          Terminal
+          {t.agentComputer.tabs.terminal}
           {terminalCount > 0 && <span className="rounded-full bg-emerald-500/20 px-1 text-[9px] text-emerald-400">{terminalCount}</span>}
         </TabBtn>
         <TabBtn active={activeTab === "editor"} onClick={() => setActiveTab("editor")}>
           <PencilIcon className="h-3 w-3" />
-          Editor
+          {t.agentComputer.tabs.editor}
         </TabBtn>
         <TabBtn active={activeTab === "browser"} onClick={() => setActiveTab("browser")}>
           <GlobeIcon className="h-3 w-3" />
-          Browser
+          {t.agentComputer.tabs.browser}
         </TabBtn>
         <TabBtn active={activeTab === "activity"} onClick={() => setActiveTab("activity")}>
           <FileTextIcon className="h-3 w-3" />
-          Activity
+          {t.agentComputer.tabs.activity}
         </TabBtn>
         <TabBtn active={activeTab === "review"} onClick={() => setActiveTab("review")}>
           <CheckCircle2Icon className="h-3 w-3" />
-          Review
+          {t.agentComputer.tabs.review}
         </TabBtn>
         <TabBtn active={activeTab === "privacy"} onClick={() => setActiveTab("privacy")}>
           <ShieldIcon className="h-3 w-3" />
-          Privacy
+          {t.agentComputer.tabs.privacy}
         </TabBtn>
       </div>
 

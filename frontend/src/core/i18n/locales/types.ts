@@ -465,10 +465,170 @@ export interface Translations {
     taskProgress: string;
     noLogs: string;
     close: string;
+    live: string;
+    moreActions: string;
+    pushToGithub: string;
+    downloadAllZip: string;
+    downloadActiveFile: string;
     verifyResult: {
       passed: (count: number) => string;
       failed: (count: number) => string;
       consoleErrors: (count: number) => string;
     };
+    tabs: {
+      files: string;
+      terminal: string;
+      editor: string;
+      browser: string;
+      activity: string;
+      review: string;
+      privacy: string;
+    };
+    files: {
+      empty: string;
+    };
+    status: {
+      writing: (filename: string, lines?: string) => string;
+      usingEditor: string;
+      editing: (filename: string) => string;
+      reading: (filename: string) => string;
+      usingTerminal: string;
+      searchingFiles: string;
+      searchingContent: string;
+      delegatingToSubagent: string;
+      scaffoldingProject: string;
+      usingBrowser: string;
+      isThinking: string;
+      isIdle: string;
+    };
+    terminal: {
+      tab: string;
+      stream: string;
+      shell: string;
+      interactiveTitle: string;
+      noOutput: string;
+      noOutputHint: string;
+      running: string;
+    };
+    editor: {
+      startWriting: string;
+      diff: string;
+      file: string;
+      lines: (count: number) => string;
+      writing: string;
+    };
+    browser: {
+      back: string;
+      forward: string;
+      reload: string;
+      live: string;
+      compiling: string;
+      switchPreview: string;
+      selfTest: string;
+      watchAgentBrowser: string;
+      vnc: string;
+      desktop: string;
+      mobile: string;
+      openNewTab: string;
+      testingInBrowser: string;
+      selfTestPassed: string;
+      selfTestIssues: string;
+      testedPort: (port: string) => string;
+      livePreview: string;
+      devServerCompiling: string;
+      previewWillAppear: string;
+      previewWillAppearLine2: string;
+      watchLiveBrowser: string;
+      projectType: {
+        react: string;
+        python: string;
+        markdown: string;
+        code: string;
+      };
+      projectLabel: (type: string) => string;
+      switchToEditor: string;
+      switchToEditorPrefix: string;
+      switchToEditorSuffix: string;
+      startLivePreview: string;
+    };
+    activity: {
+      title: (count: number) => string;
+      exportAuditLog: string;
+      empty: string;
+    };
+    review: {
+      generating: string;
+      needsLook: string;
+      mostlyFine: string;
+      looksClean: string;
+      codeReview: string;
+      regenerate: string;
+      download: string;
+      noRiskyActions: string;
+      riskFlags: string;
+      changedFiles: string;
+      detectedChecks: string;
+      noChanges: string;
+    };
+    privacy: {
+      title: string;
+      sourceHealth: string;
+      searxng: string;
+      tor: string;
+      healthy: string;
+      unhealthy: string;
+      available: string;
+      unavailable: string;
+      cache: string;
+      size: string;
+      hitRate: string;
+      ttl: string;
+      audit: string;
+      total: string;
+      errors: string;
+      torUsage: string;
+      toggleLabel: string;
+    };
+    skillLauncher: {
+      runSkill: string;
+    };
+  };
+
+  runtimeBar: {
+    status: {
+      healthy: string;
+      healthyTitle: string;
+      healthyBody: string;
+      degraded: (count: number) => string;
+      degradedTitle: (count: number) => string;
+      degradedBody: string;
+      critical: (count: number) => string;
+      criticalTitle: (count: number) => string;
+      criticalBody: string;
+    };
+    skills: {
+      none: string;
+      overflow: (count: number) => string;
+      overflowHint: string;
+    };
+    metrics: {
+      tools: string;
+      toolsDetail: string;
+      subagents: string;
+      subagentsDetail: string;
+      hooks: string;
+      hooksDetail: string;
+    };
+    igino: {
+      label: string;
+      title: string;
+      tooltip: (searxng: string, tor: string, cache: string) => string;
+    };
+    circuits: {
+      open: (count: number) => string;
+      autoRecovers: string;
+    };
+    offline: string;
+    offlineHint: string;
   };
 }
