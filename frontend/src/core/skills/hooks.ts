@@ -9,6 +9,9 @@ export function useSkills() {
     queryKey: ["skills"],
     queryFn: () => loadSkills(),
   });
+  // `data` is now always an array (loadSkills returns [] on non-OK), but
+  // we keep the defensive fallback for the brief window before the query
+  // settles on its first successful response.
   return { skills: data ?? [], isLoading, error };
 }
 

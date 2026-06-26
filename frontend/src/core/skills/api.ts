@@ -3,10 +3,17 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type { Skill } from "./type";
 
-export async function loadSkills() {
+export async function loadSkills(): Promise<Skill[]> {
   const skills = await fetch(`${getBackendBaseURL()}/api/skills`);
-  const json = await skills.json();
-  return json.skills as Skill[];
+  // TanStack Query requires queryFn to return a defined value. Surface
+  // a graceful empty list on non-OK (401 during re-auth, 5xx during
+  // gateway outage) so the hook's `data ?? []` is no longer needed and
+  // the console stays clean.
+  if (!skills.ok) {
+    return [];
+  }
+  const json = (await skills.json()) as { skills?: Skill[] };
+  return Array.isArray(json.skills) ? json.skills : [];
 }
 
 export async function enableSkill(skillName: string, enabled: boolean) {
