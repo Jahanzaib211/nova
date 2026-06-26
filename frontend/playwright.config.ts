@@ -17,7 +17,17 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Use the full chromium binary on the test host (the headless-shell
+        // variant is not present on this dev box). Operators on a fresh
+        // Playwright install can drop the override after `npx playwright
+        // install chromium` populates the headless-shell at the default path.
+        launchOptions: {
+          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+            ?? "/home/jahanzaib/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
+        },
+      },
     },
   ],
 

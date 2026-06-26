@@ -106,7 +106,14 @@ services:
       - NODE_ENV=development
       - WATCHPACK_POLLING=true
       - CI=true
-      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
+      # Use the gateway's direct bridge IP rather than the docker DNS
+      # service name. SSR fetches from inside this container can fail to
+      # resolve 'gateway' after a container recreation (Docker's internal
+      # DNS at 127.0.0.11 returns SERVFAIL until the network is fully
+      # rebuilt). The bridge IP is stable for the lifetime of the network
+      # and matches the value pinned in nginx.conf (Batch 2A). For
+      # production deployments behind a real LB, override via .env.
+      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
     env_file:
       - ../frontend/.env
     networks:
