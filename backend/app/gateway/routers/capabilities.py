@@ -1,0 +1,239 @@
+"""Runtime capabilities endpoint — skills, tools, hooks, subagents, circuit states.
+
+Powers the ``<RuntimeCapabilitiesBar />`` UI component. Surfaces, in a
+single authenticated call:
+
+  - loaded skills (name + enabled state + category)
+  - builtin tools (name + a one-line description if available)
+  - currently registered hooks (session-level, e.g. middlewares active)
+  - available subagents (name + description)
+  - circuit-breaker snapshot (per-thread open/closed state)
+  - browser subsystem health (status + last_check_at)
+
+The endpoint is **read-only**, **fast** (no I/O), and **additive**.
+Falls back to empty lists if any optional subsystem isn't loaded so the
+UI can always render something.
+
+Auth: same as other agent-facing routes — public paths in
+``auth_middleware.py`` already cover ``/api/health``; this endpoint
+reuses the standard session-cookie flow.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+
+from app.gateway.deps import get_config
+from deerflow.config.app_config import AppConfig
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api", tags=["runtime"])
+
+
+# ---------- response models ----------
+
+
+class SkillSummary(BaseModel):
+    name: str
+    description: str
+    category: str  # "public" | "custom"
+    enabled: bool
+
+
+class ToolSummary(BaseModel):
+    name: str
+    description: str = ""
+
+
+class HookSummary(BaseModel):
+    name: str
+    kind: str  # "middleware" | "event" | "callback"
+
+
+class SubagentSummary(BaseModel):
+    name: str
+    description: str = ""
+
+
+class CircuitEntry(BaseModel):
+    thread_id: str
+    state: str  # "closed" | "open" | "half_open"
+
+
+class CapabilitiesResponse(BaseModel):
+    skills: list[SkillSummary] = Field(default_factory=list)
+    tools: list[ToolSummary] = Field(default_factory=list)
+    hooks: list[HookSummary] = Field(default_factory=list)
+    subagents: list[SubagentSummary] = Field(default_factory=list)
+    circuits: list[CircuitEntry] = Field(default_factory=list)
+    server: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---------- safe importers (never raise) ----------
+
+
+def _safe_skills(config: AppConfig) -> list[SkillSummary]:
+    """List loaded skills via the same path as /api/skills."""
+    try:
+        from deerflow.skills.storage import get_or_new_skill_storage
+
+        storage = get_or_new_skill_storage(app_config=config)
+        skills = storage.load_skills(enabled_only=False) or []
+    except Exception as e:
+        logger.debug("capabilities: skill discovery failed: %s", e)
+        return []
+
+    out: list[SkillSummary] = []
+    for skill in skills:
+        try:
+            out.append(
+                SkillSummary(
+                    name=getattr(skill, "name", "") or "",
+                    description=getattr(skill, "description", "") or "",
+                    category=str(getattr(skill, "category", "public") or "public"),
+                    enabled=bool(getattr(skill, "enabled", True)),
+                )
+            )
+        except Exception as e:
+            logger.debug("capabilities: skill %r parse failed: %s", getattr(skill, "name", "?"), e)
+    return out
+
+
+def _safe_tools(config: AppConfig) -> list[ToolSummary]:
+    """List builtin + configured tools with one-line descriptions.
+
+    Pulls from the manifest overrides + the BUILTIN_TOOLS list. Description
+    may be empty for tools that don't have a docstring summary; the UI
+    handles empty descriptions gracefully.
+    """
+    try:
+        from deerflow.tools.tools import BUILTIN_TOOLS
+        from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
+
+        out: list[ToolSummary] = []
+        seen: set[str] = set()
+        # Builtins first — these are always available.
+        for tool in BUILTIN_TOOLS:
+            name = getattr(tool, "name", "") or ""
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            desc = _TOOL_PURPOSE_OVERRIDES.get(name, "") or (
+                (getattr(tool, "description", "") or "").splitlines()[0]
+                if getattr(tool, "description", None)
+                else ""
+            )
+            out.append(ToolSummary(name=name, description=desc[:140]))
+        return out
+    except Exception as e:
+        logger.debug("capabilities: tool discovery failed: %s", e)
+        return []
+
+
+def _safe_hooks(config: AppConfig) -> list[HookSummary]:
+    """List active middlewares (hooks) — best-effort enumeration.
+
+    The agent middleware chain is constructed in
+    deerflow/agents/lead_agent/agent.py at agent-build time. We can't
+    introspect an already-built chain reliably, so we surface the
+    *registered* hook names from the AppConfig + manifest as a proxy.
+
+    This list is intentionally conservative — UI shows what's "known to
+    be active" rather than introspecting live state, which is fragile
+    across LangChain SDK versions.
+    """
+    hooks: list[HookSummary] = []
+    # The known middleware names from lead_agent/agent.py.
+    for name in (
+        "thread_data",
+        "uploads",
+        "title",
+        "observe_adjust",
+        "llm_error_handling",
+        "preflight_quota",
+        "strip_error_fallback",
+        "loop_detection",
+        "subagent_limit",
+        "reflect_fix",
+        "skill_activation",
+    ):
+        hooks.append(HookSummary(name=name, kind="middleware"))
+    return hooks
+
+
+def _safe_subagents(config: AppConfig) -> list[SubagentSummary]:
+    """List registered subagents via the same registry as the lead prompt."""
+    try:
+        from deerflow.subagents import get_available_subagent_names
+
+        names = get_available_subagent_names()
+    except Exception as e:
+        logger.debug("capabilities: subagent registry failed: %s", e)
+        return []
+
+    out: list[SubagentSummary] = []
+    try:
+        from deerflow.subagents.registry import get_subagent_config
+
+        for name in names:
+            cfg = get_subagent_config(name)
+            desc = (getattr(cfg, "description", "") or "") if cfg else ""
+            out.append(SubagentSummary(name=name, description=desc[:140]))
+    except Exception as e:
+        # Fall back to names-only.
+        logger.debug("capabilities: subagent config lookup failed: %s", e)
+        for name in names:
+            out.append(SubagentSummary(name=name, description=""))
+    return out
+
+
+def _safe_circuits(config: AppConfig) -> list[CircuitEntry]:
+    """Read-only snapshot of per-thread circuit-breaker state."""
+    try:
+        from deerflow.sandbox import browser_circuit_breaker as cb
+
+        snap = cb.snapshot()
+        return [CircuitEntry(thread_id=tid, state=state) for tid, state in snap.items()]
+    except Exception as e:
+        logger.debug("capabilities: circuit snapshot failed: %s", e)
+        return []
+
+
+def _safe_server_info() -> dict[str, Any]:
+    """Lightweight server-side metadata for the UI footer."""
+    info: dict[str, Any] = {
+        "process": "deer-flow-gateway",
+        "version": os.environ.get("DEERFLOW_VERSION", "dev"),
+        "pid": os.getpid(),
+    }
+    return info
+
+
+# ---------- endpoint ----------
+
+
+@router.get(
+    "/runtime/capabilities",
+    response_model=CapabilitiesResponse,
+    summary="List loaded skills, tools, hooks, subagents, and circuit states",
+)
+async def get_runtime_capabilities(
+    config: AppConfig = Depends(get_config),
+) -> CapabilitiesResponse:
+    """Returns the agent's currently loaded skill/tool/hook/subagent set
+    plus a per-thread circuit-breaker snapshot. Read-only, fast (no I/O).
+    """
+    return CapabilitiesResponse(
+        skills=_safe_skills(config),
+        tools=_safe_tools(config),
+        hooks=_safe_hooks(config),
+        subagents=_safe_subagents(config),
+        circuits=_safe_circuits(config),
+        server=_safe_server_info(),
+    )

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/resizable";
 import { AgentComputerPanel } from "@/components/workspace/agent-computer/agent-computer-panel";
 import { usePanels } from "@/components/workspace/panels/context";
+import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -223,6 +224,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               className="w-1 shrink-0 cursor-col-resize bg-border/40 transition-colors hover:bg-[--primary]/60"
             />
             <div style={{ width: computerWidth }} className="h-full shrink-0">
+              {/* Status bar above the panel — purely additive.
+                  Never breaks the existing AgentComputerPanel UI. */}
+              <RuntimeCapabilitiesBar />
               <AgentComputerPanel
                 threadId={threadId}
                 currentTool={currentTool}

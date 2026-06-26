@@ -19,6 +19,7 @@ from app.gateway.routers import (
     assistants_compat,
     auth,
     browser_health,
+    capabilities,
     channel_connections,
     channels,
     feedback,
@@ -419,6 +420,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Browser subsystem health + Prometheus metrics (v7 C4)
     app.include_router(browser_health.router)
+
+    # Runtime capabilities: skills, tools, hooks, subagents, circuit states (v7.1)
+    app.include_router(capabilities.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:
