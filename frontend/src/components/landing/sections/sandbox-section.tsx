@@ -5,14 +5,16 @@ import {
   Terminal,
   TypingAnimation,
 } from "@/components/ui/terminal";
+import { useI18n } from "@/core/i18n/hooks";
 
 import { Section } from "../section";
 
 export function SandboxSection({ className }: { className?: string }) {
+  const { t } = useI18n();
   return (
     <Section
       className={className}
-      title="Agent Runtime Environment"
+      title={t.landing.sandbox.title}
       subtitle={
         <p>
           We give DeerFlow a &quot;computer&quot;, which can execute commands,

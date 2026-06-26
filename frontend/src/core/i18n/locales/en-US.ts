@@ -224,6 +224,7 @@ export const enUS: Translations = {
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",
+    skillsDialogDescription: "Toggle which skills this agent loads. Off skills are never activated for this agent (deterministic). All-on = inherit every enabled skill.",
   },
 
   // Breadcrumb
@@ -730,5 +731,90 @@ export const enUS: Translations = {
     },
     offline: "Runtime status offline",
     offlineHint: "will retry automatically",
+  },
+
+  aiElements: {
+    context: {
+      title: "Model context usage",
+      ariaLabel: "Model context usage",
+      totalCost: "Total cost",
+      input: "Input",
+      output: "Output",
+      reasoning: "Reasoning",
+      cache: "Cache",
+    },
+    reasoning: {
+      thinking: "Thinking...",
+      thoughtFew: "Thought for a few seconds",
+      thought: (seconds: number) => `Thought for ${seconds} seconds`,
+    },
+    webPreview: {
+      enterUrl: "Enter URL...",
+      previewTitle: "Preview",
+    },
+  },
+
+  landing: {
+    footer: {
+      license: "Licensed under MIT License",
+    },
+    hero: {
+      getStarted: "Get Started with 2.0",
+    },
+    caseStudy: {
+      title: "Case Studies",
+      subtitle: "See how DeerFlow is used in the wild",
+    },
+    community: {
+      subtitle: "Contribute brilliant ideas to shape the future of DeerFlow. Collaborate, innovate, and make impacts.",
+    },
+    sandbox: {
+      title: "Agent Runtime Environment",
+    },
+    skills: {
+      title: "Agent Skills",
+    },
+    whatsNew: {
+      title: "What's New in DeerFlow 2.0",
+      subtitle: "DeerFlow is now evolving from a Deep Research agent into a full-stack Super Agent",
+    },
+    skillsAnimation: {
+      agentLabel: "DeerFlow Agent",
+      loadingSkill: (skillName: string) => `Loading ${skillName}/SKILL.md...`,
+      generating: (file: string) => `Generating ${file}...`,
+      executing: (script: string) => `Executing ${script}`,
+    },
+  },
+
+  a11y: {
+    runtimeCapabilities: "Agent runtime capabilities",
+    artifactPreview: "Artifact preview",
+    noArtifact: "No artifact selected",
+    dragResize: "Drag or scroll to resize",
+    editSkills: "Edit skills",
+    skillsFor: (agentName: string) => `Skills for ${agentName}`,
+    artifacts: "Artifacts",
+    todos: "To-dos",
+    tor: "TOR",
+    open: "OPEN",
+    thinking: "Thinking...",
+  },
+
+  auth: {
+    setup: {
+      loading: "Loading…",
+      createAdmin: "Create admin account",
+      passwordMin: "Password (min. 8 characters)",
+      confirmPassword: "Confirm password",
+      yourEmail: "Your email",
+      currentPassword: "Current password",
+      newPassword: "New password",
+      confirmNewPassword: "Confirm new password",
+    },
+    login: {
+      passwordPlaceholder: "Password",
+      submitLabel: "Sign in",
+      setupPrompt: "First-time setup required",
+    },
   },
 };

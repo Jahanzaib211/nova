@@ -12,14 +12,21 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
+import { I18nProvider } from "@/core/i18n/context";
 
 test("ReasoningTrigger default message uses phrasing content", () => {
   const html = renderToStaticMarkup(
     createElement(
-      Reasoning,
-      { isStreaming: false, defaultOpen: false },
-      createElement(ReasoningTrigger, null),
-      createElement(ReasoningContent, null, "test"),
+      I18nProvider,
+      {
+        initialLocale: "en-US",
+        children: createElement(
+          Reasoning,
+          { isStreaming: false, defaultOpen: false },
+          createElement(ReasoningTrigger, null),
+          createElement(ReasoningContent, null, "test"),
+        ),
+      },
     ),
   );
 

@@ -1,6 +1,7 @@
 "use client";
 
 import MagicBento, { type BentoCardProps } from "@/components/ui/magic-bento";
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 import { Section } from "../section";
@@ -49,11 +50,12 @@ const features: BentoCardProps[] = [
 ];
 
 export function WhatsNewSection({ className }: { className?: string }) {
+  const { t } = useI18n();
   return (
     <Section
       className={cn("", className)}
-      title="Whats New in DeerFlow 2.0"
-      subtitle="DeerFlow is now evolving from a Deep Research agent into a full-stack Super Agent"
+      title={t.landing.whatsNew.title}
+      subtitle={t.landing.whatsNew.subtitle}
     >
       <div className="flex w-full items-center justify-center">
         <MagicBento data={features} />

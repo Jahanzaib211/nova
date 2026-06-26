@@ -212,6 +212,7 @@ export const zhCN: Translations = {
     agentCreated: "智能体已创建！",
     startChatting: "开始对话",
     backToGallery: "返回 Gallery",
+    skillsDialogDescription: "切换此智能体加载的技能。关闭的技能永远不会为此智能体激活（确定性）。全部开启 = 继承每个已启用的技能。",
   },
 
   // Breadcrumb
@@ -709,5 +710,90 @@ export const zhCN: Translations = {
     },
     offline: "运行时状态离线",
     offlineHint: "将自动重试",
+  },
+
+  aiElements: {
+    context: {
+      title: "模型上下文用量",
+      ariaLabel: "模型上下文用量",
+      totalCost: "总费用",
+      input: "输入",
+      output: "输出",
+      reasoning: "推理",
+      cache: "缓存",
+    },
+    reasoning: {
+      thinking: "思考中...",
+      thoughtFew: "思考了几秒",
+      thought: (seconds: number) => `思考了 ${seconds} 秒`,
+    },
+    webPreview: {
+      enterUrl: "输入 URL...",
+      previewTitle: "预览",
+    },
+  },
+
+  landing: {
+    footer: {
+      license: "基于 MIT 协议授权",
+    },
+    hero: {
+      getStarted: "立即开始 2.0",
+    },
+    caseStudy: {
+      title: "案例研究",
+      subtitle: "看看 DeerFlow 在实际场景中如何被使用",
+    },
+    community: {
+      subtitle: "贡献您的创意，共同塑造 DeerFlow 的未来。协作、创新、创造影响。",
+    },
+    sandbox: {
+      title: "智能体运行时环境",
+    },
+    skills: {
+      title: "智能体技能",
+    },
+    whatsNew: {
+      title: "DeerFlow 2.0 新特性",
+      subtitle: "DeerFlow 正从深度研究智能体演进为全栈超级智能体",
+    },
+    skillsAnimation: {
+      agentLabel: "DeerFlow 智能体",
+      loadingSkill: (skillName: string) => `正在加载 ${skillName}/SKILL.md...`,
+      generating: (file: string) => `正在生成 ${file}...`,
+      executing: (script: string) => `正在执行 ${script}`,
+    },
+  },
+
+  a11y: {
+    runtimeCapabilities: "智能体运行时能力",
+    artifactPreview: "产物预览",
+    noArtifact: "未选择产物",
+    dragResize: "拖动或滚动以调整大小",
+    editSkills: "编辑技能",
+    skillsFor: (agentName: string) => `${agentName} 的技能`,
+    artifacts: "产物",
+    todos: "待办事项",
+    tor: "TOR",
+    open: "已开启",
+    thinking: "思考中...",
+  },
+
+  auth: {
+    setup: {
+      loading: "加载中…",
+      createAdmin: "创建管理员账户",
+      passwordMin: "密码（至少 8 个字符）",
+      confirmPassword: "确认密码",
+      yourEmail: "您的邮箱",
+      currentPassword: "当前密码",
+      newPassword: "新密码",
+      confirmNewPassword: "确认新密码",
+    },
+    login: {
+      passwordPlaceholder: "密码",
+      submitLabel: "登录",
+      setupPrompt: "首次使用需要初始化",
+    },
   },
 };

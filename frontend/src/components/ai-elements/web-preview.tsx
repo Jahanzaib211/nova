@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 import { ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
@@ -132,6 +133,7 @@ export const WebPreviewUrl = ({
   onKeyDown,
   ...props
 }: WebPreviewUrlProps) => {
+  const { t } = useI18n();
   const { url, setUrl } = useWebPreview();
   const [inputValue, setInputValue] = useState(url);
 
@@ -158,7 +160,7 @@ export const WebPreviewUrl = ({
       className="h-8 flex-1 text-sm"
       onChange={onChange ?? handleChange}
       onKeyDown={handleKeyDown}
-      placeholder="Enter URL..."
+      placeholder={t.aiElements.webPreview.enterUrl}
       value={value ?? inputValue}
       {...props}
     />
@@ -175,6 +177,7 @@ export const WebPreviewBody = ({
   src,
   ...props
 }: WebPreviewBodyProps) => {
+  const { t } = useI18n();
   const { url } = useWebPreview();
 
   return (
@@ -183,7 +186,7 @@ export const WebPreviewBody = ({
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
         src={(src ?? url) || undefined}
-        title="Preview"
+        title={t.aiElements.webPreview.previewTitle}
         {...props}
       />
       {loading}

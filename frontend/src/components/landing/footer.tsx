@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 export type FooterProps = {
@@ -7,6 +8,7 @@ export type FooterProps = {
 };
 
 export function Footer({ className }: FooterProps) {
+  const { t } = useI18n();
   const year = useMemo(() => new Date().getFullYear(), []);
   return (
     <footer
@@ -22,7 +24,7 @@ export function Footer({ className }: FooterProps) {
         </p>
       </div>
       <div className="text-muted-foreground container mb-8 flex flex-col items-center justify-center text-xs">
-        <p>Licensed under MIT License</p>
+        <p>{t.landing.footer.license}</p>
         <p>&copy; {year} DeerFlow</p>
       </div>
     </footer>

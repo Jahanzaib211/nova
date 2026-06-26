@@ -85,7 +85,12 @@ function createCompatibleClient(isMock?: boolean): LangGraphClient {
   }
 
   const apiUrl = getLangGraphBaseURL(isMock);
-  console.log(`Creating API client with base URL: ${apiUrl}`);
+  if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+    // Dev-only diagnostic. The previous unconditional console.log fired on every
+    // client creation in production too; production stacks should not log
+    // resolved base URLs (an info-disclosure footgun in error overlays).
+    console.debug(`[langgraph-sdk] base URL: ${apiUrl}`);
+  }
   const client = new LangGraphClient({
     apiUrl,
     onRequest: injectCsrfHeader,
@@ -158,12 +163,23 @@ function createStaticClient(): LangGraphClient {
 }
 
 const _clients = new Map<string, LangGraphClient>();
+
+/**
+ * Marker attached to the SDK client so tests and devtools can identify
+ * it without monkey-patching globals. Set on the same call site as the
+ * construction so the value can never drift from reality.
+ */
+export const LANGGRAPH_SDK_CLIENT_TAG = "langgraph-sdk-client" as const;
+
 export function getAPIClient(isMock?: boolean): LangGraphClient {
   const cacheKey = isMock ? "mock" : "default";
   let client = _clients.get(cacheKey);
 
   if (!client) {
     client = createCompatibleClient(isMock);
+    // Tag the instance so Playwright/E2E can match on it without
+    // touching internals.
+    (client as unknown as Record<symbol, unknown>)[Symbol.for(LANGGRAPH_SDK_CLIENT_TAG)] = true;
     _clients.set(cacheKey, client);
   }
 

@@ -13,6 +13,7 @@ import {
 import { AgentComputerPanel } from "@/components/workspace/agent-computer/agent-computer-panel";
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
+import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
   threadId,
 }) => {
+  const { t } = useI18n();
   const { thread, currentTool, taskProgress, verifyResult, activityEvents, activeWriteFilePath, onAgentMessage } = useThread();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
@@ -188,13 +190,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   {thread.values.artifacts?.length === 0 ? (
                     <ConversationEmptyState
                       icon={<FilesIcon />}
-                      title="No artifact selected"
-                      description="Select an artifact to view its details"
+                      title={t.a11y.noArtifact}
+                      description={t.a11y.artifacts}
                     />
                   ) : (
                     <div className="flex size-full max-w-(--container-width-sm) flex-col justify-center p-4 pt-8">
                       <header className="shrink-0">
-                        <h2 className="text-lg font-medium">Artifacts</h2>
+                        <h2 className="text-lg font-medium">{t.a11y.artifacts}</h2>
                       </header>
                       <main className="min-h-0 grow">
                         <ArtifactFileList
@@ -220,7 +222,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
             <div
               onMouseDown={startComputerResize}
               onWheel={wheelComputerResize}
-              title="Drag or scroll to resize"
+              title={t.a11y.dragResize}
+              aria-label={t.a11y.dragResize}
+              role="separator"
               className="w-1 shrink-0 cursor-col-resize bg-border/40 transition-colors hover:bg-[--primary]/60"
             />
             <div style={{ width: computerWidth }} className="h-full shrink-0">

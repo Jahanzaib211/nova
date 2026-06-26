@@ -174,7 +174,7 @@ export function ArtifactFileDetail({
             ) : (
               <Select value={filepath} onValueChange={select}>
                 <SelectTrigger className="border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0">
-                  <SelectValue placeholder="Select a file" />
+                  <SelectValue placeholder={t.a11y.noArtifact} />
                 </SelectTrigger>
                 <SelectContent className="select-none">
                   <SelectGroup>
@@ -387,6 +387,7 @@ export function ArtifactFilePreview({
   scrollKey: string;
   url?: string;
 }) {
+  const { t } = useI18n();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const scrollPositionRef = useRef({ x: 0, y: 0 });
   const scrollMessageKey = useMemo(
@@ -477,7 +478,7 @@ export function ArtifactFilePreview({
       <iframe
         ref={iframeRef}
         className="size-full"
-        title="Artifact preview"
+        title={t.a11y.artifactPreview}
         sandbox="allow-scripts allow-forms"
         src={htmlPreviewUrl}
       />

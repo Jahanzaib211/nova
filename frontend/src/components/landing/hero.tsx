@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import Galaxy from "@/components/ui/galaxy";
 import { WordRotate } from "@/components/ui/word-rotate";
+import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export function Hero({ className }: { className?: string }) {
+  const { t } = useI18n();
   return (
     <div
       className={cn(
@@ -80,7 +82,7 @@ export function Hero({ className }: { className?: string }) {
         </p>
         <Link href="/workspace">
           <Button className="size-lg mt-8 scale-108" size="lg">
-            <span className="text-md">Get Started with 2.0</span>
+            <span className="text-md">{t.landing.hero.getStarted}</span>
             <ChevronRightIcon className="size-4" />
           </Button>
         </Link>

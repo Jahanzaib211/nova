@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { getCsrfHeaders } from "@/core/api/fetcher";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { parseAuthError } from "@/core/auth/types";
+import { useI18n } from "@/core/i18n/hooks";
 
 type SetupMode = "loading" | "init_admin" | "change_password";
 
@@ -17,6 +18,7 @@ export default function SetupPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const { theme, resolvedTheme } = useTheme();
+  const { t } = useI18n();
   const [mode, setMode] = useState<SetupMode>("loading");
 
   // --- Shared state ---
@@ -147,7 +149,7 @@ export default function SetupPage() {
   if (mode === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <p className="text-muted-foreground text-sm">{t.auth.setup.loading}</p>
       </div>
     );
   }
@@ -167,7 +169,7 @@ export default function SetupPage() {
         <div className="border-border/20 bg-background/5 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
           <div className="text-center">
             <h1 className="font-serif text-3xl">DeerFlow</h1>
-            <p className="text-muted-foreground mt-2">Create admin account</p>
+            <p className="text-muted-foreground mt-2">{t.auth.setup.createAdmin}</p>
             <p className="text-muted-foreground mt-1 text-xs">
               Set up the administrator account to get started.
             </p>
@@ -193,7 +195,7 @@ export default function SetupPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Password (min. 8 characters)"
+                placeholder={t.auth.setup.passwordMin}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -207,7 +209,7 @@ export default function SetupPage() {
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Confirm password"
+                placeholder={t.auth.setup.confirmPassword}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -248,21 +250,21 @@ export default function SetupPage() {
         <form onSubmit={handleChangePassword} className="space-y-4">
           <Input
             type="email"
-            placeholder="Your email"
+            placeholder={t.auth.setup.yourEmail}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
           <Input
             type="password"
-            placeholder="Current password"
+            placeholder={t.auth.setup.currentPassword}
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
           />
           <Input
             type="password"
-            placeholder="New password"
+            placeholder={t.auth.setup.newPassword}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
@@ -270,7 +272,7 @@ export default function SetupPage() {
           />
           <Input
             type="password"
-            placeholder="Confirm new password"
+            placeholder={t.auth.setup.confirmNewPassword}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required

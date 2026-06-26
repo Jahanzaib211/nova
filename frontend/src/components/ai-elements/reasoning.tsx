@@ -6,6 +6,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
@@ -132,6 +133,7 @@ export type ReasoningTriggerProps = ComponentProps<
 };
 
 const LiveTimer = ({ startTime }: { startTime: number }) => {
+  const { t } = useI18n();
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -147,7 +149,7 @@ const LiveTimer = ({ startTime }: { startTime: number }) => {
 
   return (
     <span className="flex items-center gap-2">
-      <Shimmer duration={1}>Thinking...</Shimmer>
+      <Shimmer duration={1}>{t.aiElements.reasoning.thinking}</Shimmer>
       <span className="text-muted-foreground/80">({elapsed}s)</span>
     </span>
   );
@@ -158,16 +160,17 @@ const defaultGetThinkingMessage = (
   duration?: number,
   startTime?: number | null,
 ) => {
+  const { t } = useI18n();
   if (isStreaming && startTime != null && startTime !== undefined) {
     return <LiveTimer startTime={startTime} />;
   }
   if (isStreaming || duration === 0) {
-    return <Shimmer duration={1}>Thinking...</Shimmer>;
+    return <Shimmer duration={1}>{t.aiElements.reasoning.thinking}</Shimmer>;
   }
   if (duration === undefined) {
-    return <span>Thought for a few seconds</span>;
+    return <span>{t.aiElements.reasoning.thoughtFew}</span>;
   }
-  return <span>Thought for {duration} seconds</span>;
+  return <span>{t.aiElements.reasoning.thought(duration)}</span>;
 };
 
 export const ReasoningTrigger = memo(

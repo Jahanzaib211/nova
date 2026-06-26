@@ -225,7 +225,8 @@ export function AgentCard({ agent }: AgentCardProps) {
               variant="ghost"
               className="h-8 w-8 shrink-0"
               onClick={() => setSkillsOpen(true)}
-              title="Edit skills"
+              title={t.a11y.editSkills}
+              aria-label={t.a11y.editSkills}
             >
               <SparklesIcon className="h-3.5 w-3.5" />
             </Button>
@@ -246,10 +247,9 @@ export function AgentCard({ agent }: AgentCardProps) {
       <Dialog open={skillsOpen} onOpenChange={(o) => { setSkillsOpen(o); if (!o) setSelected(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Skills for {agent.name}</DialogTitle>
+            <DialogTitle>{t.a11y.skillsFor(agent.name)}</DialogTitle>
             <DialogDescription>
-              Toggle which skills this agent loads. Off skills are never activated for this agent
-              (deterministic). All-on = inherit every enabled skill.
+              {t.agents.skillsDialogDescription}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-80">

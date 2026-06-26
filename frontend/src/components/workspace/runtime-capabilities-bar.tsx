@@ -308,7 +308,7 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
             <ShieldIcon className="size-3 text-primary" aria-hidden />
             <span className="text-foreground/80">{t.runtimeBar.igino.label}</span>
             {status.tor_enabled && (
-              <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">TOR</span>
+              <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">{t.a11y.tor}</span>
             )}
           </span>
         </TooltipTrigger>
@@ -390,7 +390,7 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
         )}
         data-testid="runtime-capabilities-bar"
         role="status"
-        aria-label="Agent runtime capabilities"
+        aria-label={t.a11y.runtimeCapabilities}
       >
         <StatusDot openCircuits={openCircuits} t={t} />
 
@@ -435,7 +435,7 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
               >
                 <PlugZapIcon className="size-3" aria-hidden />
                 <span className="tabular-nums">{openCircuits}</span>
-                <span>OPEN</span>
+                <span>{t.a11y.open}</span>
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-sm">

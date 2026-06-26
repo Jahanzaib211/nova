@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useState, useEffect, useRef } from "react";
 
 import { Tooltip } from "@/components/workspace/tooltip";
+import { useI18n } from "@/core/i18n/hooks";
 
 type AnimationPhase =
   | "idle"
@@ -62,6 +63,7 @@ const ANIMATION_DELAYS = {
 } as const;
 
 export default function ProgressiveSkillsAnimation() {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<AnimationPhase>("idle");
   const [searchIndex, setSearchIndex] = useState(0);
   const [buildIndex, setBuildIndex] = useState(0);
@@ -461,7 +463,7 @@ export default function ProgressiveSkillsAnimation() {
           <div className="border-b border-zinc-800 p-4">
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-green-500" />
-              <span className="text-sm text-zinc-400">DeerFlow Agent</span>
+              <span className="text-sm text-zinc-400">{t.landing.skillsAnimation.agentLabel}</span>
             </div>
           </div>
 
@@ -543,7 +545,7 @@ export default function ProgressiveSkillsAnimation() {
                         ].includes(phase) && (
                           <div className="flex items-center gap-2 pl-4 text-zinc-400">
                             <FileText size={16} />
-                            <span>Loading deep-search/SKILL.md...</span>
+                            <span>{t.landing.skillsAnimation.loadingSkill("deep-search")}</span>
                           </div>
                         )}
                         {/* Loading biotech.md */}
@@ -626,7 +628,7 @@ export default function ProgressiveSkillsAnimation() {
                       <div className="mb-3 text-zinc-300">🔨 Building...</div>
                       <div className="mb-3 flex items-center gap-2 pl-4 text-zinc-400">
                         <FileText size={16} />
-                        <span>Loading frontend-design/SKILL.md...</span>
+                        <span>{t.landing.skillsAnimation.loadingSkill("frontend-design")}</span>
                       </div>
                       <div className="space-y-2 pl-4">
                         {workspaceFiles.slice(0, buildIndex).map((file) => (
@@ -637,7 +639,7 @@ export default function ProgressiveSkillsAnimation() {
                             className="flex items-center gap-2 text-sm text-green-500"
                           >
                             <FileText size={14} />
-                            <span>Generating {file}...</span>
+                            <span>{t.landing.skillsAnimation.generating(file)}</span>
                             <Check size={14} />
                           </motion.div>
                         ))}
@@ -657,7 +659,7 @@ export default function ProgressiveSkillsAnimation() {
                       <div className="mb-3 space-y-2">
                         <div className="flex items-center gap-2 pl-4 text-zinc-400">
                           <FileText size={16} />
-                          <span>Loading deploy/SKILL.md...</span>
+                          <span>{t.landing.skillsAnimation.loadingSkill("deploy")}</span>
                         </div>
                         {["deploying", "done"].includes(phase) && (
                           <motion.div
@@ -666,7 +668,7 @@ export default function ProgressiveSkillsAnimation() {
                             className="flex items-center gap-2 pl-4 text-zinc-400"
                           >
                             <Terminal size={16} />
-                            <span>Executing scripts/deploy.sh</span>
+                            <span>{t.landing.skillsAnimation.executing("scripts/deploy.sh")}</span>
                           </motion.div>
                         )}
                       </div>

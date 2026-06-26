@@ -155,6 +155,7 @@ export interface Translations {
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
+    skillsDialogDescription: string;
   };
 
   // Breadcrumb
@@ -630,5 +631,94 @@ export interface Translations {
     };
     offline: string;
     offlineHint: string;
+  };
+
+  // ai-elements (message rendering primitives)
+  aiElements: {
+    context: {
+      title: string;
+      ariaLabel: string;
+      totalCost: string;
+      input: string;
+      output: string;
+      reasoning: string;
+      cache: string;
+    };
+    reasoning: {
+      thinking: string;
+      thoughtFew: string;
+      thought: (seconds: number) => string;
+    };
+    webPreview: {
+      enterUrl: string;
+      previewTitle: string;
+    };
+  };
+
+  // Landing page sections
+  landing: {
+    footer: {
+      license: string;
+    };
+    hero: {
+      getStarted: string;
+    };
+    caseStudy: {
+      title: string;
+      subtitle: string;
+    };
+    community: {
+      subtitle: string;
+    };
+    sandbox: {
+      title: string;
+    };
+    skills: {
+      title: string;
+    };
+    whatsNew: {
+      title: string;
+      subtitle: string;
+    };
+    skillsAnimation: {
+      agentLabel: string;
+      loadingSkill: (skillName: string) => string;
+      generating: (file: string) => string;
+      executing: (script: string) => string;
+    };
+  };
+
+  // Accessibility labels for icon-only buttons / decorative elements
+  a11y: {
+    runtimeCapabilities: string;
+    artifactPreview: string;
+    noArtifact: string;
+    dragResize: string;
+    editSkills: string;
+    skillsFor: (agentName: string) => string;
+    artifacts: string;
+    todos: string;
+    tor: string;
+    open: string;
+    thinking: string;
+  };
+
+  // Setup & login pages
+  auth: {
+    setup: {
+      loading: string;
+      createAdmin: string;
+      passwordMin: string;
+      confirmPassword: string;
+      yourEmail: string;
+      currentPassword: string;
+      newPassword: string;
+      confirmNewPassword: string;
+    };
+    login: {
+      passwordPlaceholder: string;
+      submitLabel: string;
+      setupPrompt: string;
+    };
   };
 }
