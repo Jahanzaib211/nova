@@ -31,7 +31,8 @@ _verified_present: set[tuple[str, tuple[str, ...]]] = set()
 # ── Generic build journal (project-agnostic) ──────────────────────────────────
 # A deterministic, per-thread record of what THIS build did — derived purely from
 # the agent's own tool activity (tool name + args), with zero project/framework
-# assumptions. Written to ``workspace/CHANGELOG.md`` (visible in the Files tab)
+# assumptions. Written to ``workspace/BUILD_JOURNAL.md`` (named distinctly so it
+# never collides with a project's own CHANGELOG.md; visible in the Files tab)
 # and injected back as a ``<build_journal>`` reminder each turn so the agent never
 # loses track of what it is building. In-memory tail keeps the injection off the
 # event-loop hot path.
@@ -147,7 +148,12 @@ def _journal_header() -> str:
 
 
 def _write_journal_file(thread_id: str, lines: list[str]) -> None:
-    """Persist the journal to ``workspace/CHANGELOG.md`` (best-effort, generic)."""
+    """Persist the journal to ``workspace/BUILD_JOURNAL.md`` (best-effort, generic).
+
+    Named ``BUILD_JOURNAL.md`` (not ``CHANGELOG.md``) so it never collides with a
+    project's own ``CHANGELOG.md``. Matches the agent-internal ``REVIEW.md`` /
+    ``todo.md`` convention.
+    """
     try:
         from deerflow.config.paths import get_paths
         from deerflow.runtime.user_context import get_effective_user_id
@@ -159,7 +165,7 @@ def _write_journal_file(thread_id: str, lines: list[str]) -> None:
 
         work_dir = get_paths().sandbox_work_dir(thread_id, user_id=user_id)
         work_dir.mkdir(parents=True, exist_ok=True)
-        (work_dir / "CHANGELOG.md").write_text(
+        (work_dir / "BUILD_JOURNAL.md").write_text(
             _journal_header() + "\n".join(lines) + "\n", encoding="utf-8"
         )
     except Exception:
@@ -167,7 +173,7 @@ def _write_journal_file(thread_id: str, lines: list[str]) -> None:
 
 
 def _record_journal_event(thread_id: str | None, messages: list) -> None:
-    """Append a generic event line to the in-memory journal + CHANGELOG.md file."""
+    """Append a generic event line to the in-memory journal + BUILD_JOURNAL.md file."""
     if not thread_id:
         return
     line = _derive_journal_line(messages)
@@ -437,7 +443,7 @@ class ObserveAdjustMiddleware(AgentMiddleware):
             reminder = (
                 "<system-reminder>\n<build_journal>\n"
                 "Auto-maintained record of what you have built so far in this thread "
-                "(source of truth — mirrored in workspace/CHANGELOG.md). Use it to stay "
+                "(source of truth — mirrored in workspace/BUILD_JOURNAL.md). Use it to stay "
                 "consistent with prior steps; do not repeat completed work.\n"
                 + "\n".join(tail)
                 + "\n</build_journal>\n</system-reminder>"
