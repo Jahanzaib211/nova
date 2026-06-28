@@ -67,6 +67,7 @@ def _sandbox_status_path(thread_id: str, user_id: str | None = None) -> Path:
 # GET /api/sandbox/logs
 # ──────────────────────────────────────────────────────────
 
+
 @router.get("/logs")
 async def stream_sandbox_logs(
     thread_id: str,
@@ -124,6 +125,7 @@ async def stream_sandbox_logs(
 # ──────────────────────────────────────────────────────────
 # GET /api/sandbox/todo
 # ──────────────────────────────────────────────────────────
+
 
 @router.get("/todo")
 async def get_sandbox_todo(
@@ -265,6 +267,7 @@ async def get_sandbox_status(
 # GET /api/sandbox/file
 # ──────────────────────────────────────────────────────────
 
+
 @router.get("/file")
 async def get_sandbox_file(
     thread_id: str,
@@ -302,6 +305,7 @@ async def get_sandbox_file(
 # GET /api/sandbox/files
 # ──────────────────────────────────────────────────────────
 
+
 @router.get("/files")
 async def list_sandbox_files(
     thread_id: str,
@@ -336,13 +340,15 @@ async def list_sandbox_files(
                 stat = host_path.stat()
                 rel = host_path.relative_to(work_dir)
                 virtual_path = f"/mnt/user-data/workspace/{rel.as_posix()}"
-                files.append({
-                    "path": str(host_path),
-                    "virtual_path": virtual_path,
-                    "name": host_path.name,
-                    "size": stat.st_size,
-                    "modified": _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%H:%M:%S"),
-                })
+                files.append(
+                    {
+                        "path": str(host_path),
+                        "virtual_path": virtual_path,
+                        "name": host_path.name,
+                        "size": stat.st_size,
+                        "modified": _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%H:%M:%S"),
+                    }
+                )
             except OSError:
                 continue
     except Exception:
@@ -355,6 +361,7 @@ async def list_sandbox_files(
 # ──────────────────────────────────────────────────────────
 # GET /api/sandbox/download-zip
 # ──────────────────────────────────────────────────────────
+
 
 @router.get("/download-zip")
 async def download_sandbox_zip(
@@ -408,6 +415,7 @@ async def download_sandbox_zip(
 # ──────────────────────────────────────────────────────────
 # Live dev server: status, logs, and HTTP proxy
 # ──────────────────────────────────────────────────────────
+
 
 def _preview_prefix(thread_id: str, label: str) -> str:
     """Proxy URL prefix for a (thread, label). The default ``app`` label keeps the
@@ -596,9 +604,7 @@ async def browser_check(thread_id: str, label: str = DEFAULT_LABEL, routes: str 
         if sandbox is None:
             return {"ok": False, "reason": "sandbox unavailable", "routes": []}
         route_list = [r.strip() for r in routes.split(",") if r.strip()] or ["/"]
-        check = await asyncio.to_thread(
-            run_browser_check, thread_id, sandbox, label=label, routes=route_list, with_screenshot=True
-        )
+        check = await asyncio.to_thread(run_browser_check, thread_id, sandbox, label=label, routes=route_list, with_screenshot=True)
         return check.to_dict(include_screenshot=True)
     except Exception as e:
         logger.warning("browser-check failed for thread %s: %s", thread_id, e)
@@ -733,9 +739,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             upstream = await client.request(request.method, target, headers=fwd_headers, content=body)
     except httpx.ConnectError:
-        return Response(content="<html><body style='font-family:system-ui;padding:2rem;color:#888'>"
-                            "<h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>",
-                            media_type="text/html", status_code=503)
+        return Response(content="<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>", media_type="text/html", status_code=503)
     except Exception as e:
         return Response(content=f"Proxy error: {e}", status_code=502)
 
@@ -745,8 +749,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
         resp_headers["location"] = f"{prefix}{location}"
     resp_headers.pop("set-cookie", None)
     resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
-    return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers,
-                    media_type=upstream.headers.get("content-type") or None)
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers, media_type=upstream.headers.get("content-type") or None)
 
 
 def _make_absproxy_wrapper(method: str):
@@ -764,11 +767,7 @@ def _make_absproxy_wrapper(method: str):
 
     handler.__name__ = f"absproxy_{method.lower()}"
     handler.__qualname__ = handler.__name__
-    handler.__doc__ = (
-        "Proxy to ANY in-container port via the AIO sandbox's own "
-        "/absproxy/{port}/ gateway. One route per HTTP method so each "
-        "OpenAPI operationId is unique (see absproxy_<verb>)."
-    )
+    handler.__doc__ = "Proxy to ANY in-container port via the AIO sandbox's own /absproxy/{port}/ gateway. One route per HTTP method so each OpenAPI operationId is unique (see absproxy_<verb>)."
     return handler
 
 
@@ -814,8 +813,15 @@ async def dev_logs(thread_id: str, request: Request, label: str = DEFAULT_LABEL)
 
 
 _HOP_BY_HOP = {
-    "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
-    "te", "trailers", "transfer-encoding", "upgrade", "content-encoding",
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+    "content-encoding",
     "content-length",
 }
 
@@ -869,9 +875,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
     handle = get_dev_server(thread_id, label)
     if handle is None or handle.status not in ("starting", "ready"):
         return Response(
-            content="<html><body style='font-family:system-ui;padding:2rem;color:#888'>"
-            "<h3>No dev server running</h3><p>Ask the agent to start the dev server.</p>"
-            "</body></html>",
+            content="<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>No dev server running</h3><p>Ask the agent to start the dev server.</p></body></html>",
             media_type="text/html",
             status_code=503,
         )
@@ -890,30 +894,27 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
 
     # Never forward the parent app's auth/session to the untrusted dev server.
     _STRIP = _HOP_BY_HOP | {"host", "cookie", "authorization", "proxy-authorization", "x-api-key", "x-csrf-token"}
-    fwd_headers = {
-        k: v for k, v in request.headers.items() if k.lower() not in _STRIP
-    }
+    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in _STRIP}
     body = await request.body()
 
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             upstream = await client.request(
-                request.method, target, headers=fwd_headers, content=body,
+                request.method,
+                target,
+                headers=fwd_headers,
+                content=body,
             )
     except httpx.ConnectError:
         return Response(
-            content="<html><body style='font-family:system-ui;padding:2rem;color:#888'>"
-            "<h3>Dev server starting…</h3><p>Compiling — refresh in a few seconds.</p>"
-            "<script>setTimeout(()=>location.reload(),3000)</script></body></html>",
+            content="<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>Dev server starting…</h3><p>Compiling — refresh in a few seconds.</p><script>setTimeout(()=>location.reload(),3000)</script></body></html>",
             media_type="text/html",
             status_code=503,
         )
     except Exception as e:
         return Response(content=f"Proxy error: {e}", status_code=502)
 
-    resp_headers = {
-        k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP
-    }
+    resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
 
     # Rewrite redirect Location to stay within the proxy prefix (prevents loops).
     location = resp_headers.get("location") or resp_headers.get("Location")
@@ -959,6 +960,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
 # WebSocket proxy for HMR / hot reload (Next.js webpack-hmr, Vite @vite/client)
 # ──────────────────────────────────────────────────────────
 
+
 @router.websocket("/preview-ws/{thread_id}/{path:path}")
 async def proxy_dev_server_ws(websocket: WebSocket, thread_id: str, path: str):
     """Bridge the browser's HMR WebSocket for the default (``app``) dev server."""
@@ -988,6 +990,7 @@ async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str,
     host = websocket.headers.get("host")
     if origin and host:
         from urllib.parse import urlparse
+
         if urlparse(origin).netloc != host:
             await websocket.close(code=1008)
             return
@@ -1003,6 +1006,7 @@ async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str,
 
     try:
         async with _ws.connect(upstream_url, open_timeout=10) as upstream:
+
             async def client_to_upstream():
                 try:
                     while True:

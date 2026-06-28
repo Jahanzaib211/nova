@@ -202,11 +202,7 @@ _DEAD_END_WARN_MSG = (
     "Do not run a {limit}th search without asking."
 )
 
-_DEAD_END_HARD_STOP_MSG = (
-    "[FORCED STOP] {count} distinct tool calls returned ENOENT for {basename}. "
-    "The target does not exist on this system. Producing final answer and "
-    "asking the user to confirm the correct path."
-)
+_DEAD_END_HARD_STOP_MSG = "[FORCED STOP] {count} distinct tool calls returned ENOENT for {basename}. The target does not exist on this system. Producing final answer and asking the user to confirm the correct path."
 
 # Regex to extract the basename from a dead-end error message.
 # Matches: 'foo' in `ls: cannot access 'foo': No such file or directory`

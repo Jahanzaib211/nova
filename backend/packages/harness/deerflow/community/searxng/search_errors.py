@@ -55,9 +55,7 @@ class SearchUnavailableError(SearchError):
 class SearchCircuitOpenError(SearchError):
     """Circuit breaker is OPEN — calls short-circuited."""
 
-    def __init__(
-        self, message: str = "", *, cooldown_remaining_s: float = 0.0, context: dict | None = None
-    ) -> None:
+    def __init__(self, message: str = "", *, cooldown_remaining_s: float = 0.0, context: dict | None = None) -> None:
         super().__init__(message, context=context)
         self.cooldown_remaining_s = float(cooldown_remaining_s)
 

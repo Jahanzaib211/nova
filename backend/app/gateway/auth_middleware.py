@@ -34,7 +34,7 @@ _PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     "/docs",
     "/redoc",
     "/openapi.json",
-    "/api/health",   # v7 C4: browser subsystem health (CDP probe + circuit snapshot)
+    "/api/health",  # v7 C4: browser subsystem health (CDP probe + circuit snapshot)
     "/api/metrics",  # v7 C4: Prometheus-format metrics scrape
 )
 

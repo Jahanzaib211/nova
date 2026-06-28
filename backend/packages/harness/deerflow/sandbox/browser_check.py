@@ -87,7 +87,7 @@ class RouteResult:
             "notes": self.notes,
         }
         if include_screenshot:
-            d["screenshot"] = (f"data:image/png;base64,{self.screenshot_b64}" if self.screenshot_b64 else None)
+            d["screenshot"] = f"data:image/png;base64,{self.screenshot_b64}" if self.screenshot_b64 else None
         return d
 
 
@@ -150,9 +150,7 @@ def _detect_app_port(sandbox: Any, *, prefer: int) -> int:
     excluding the sandbox's own service ports. Falls back to ``prefer``.
     """
     try:
-        out = sandbox.execute_command(
-            "ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null"
-        ) or ""
+        out = sandbox.execute_command("ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null") or ""
     except Exception:
         return prefer
 
@@ -348,7 +346,7 @@ def _run_browser_check_unlocked(
         port = _detect_app_port(sandbox, prefer=assigned)
         result.port = port
         base = f"http://localhost:{port}"
-        for r in (routes or ["/"]):
+        for r in routes or ["/"]:
             r = r if r.startswith("/") else "/" + r
             targets.append((r, "url", f"{base}{r}"))
     else:

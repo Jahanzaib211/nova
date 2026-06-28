@@ -1080,9 +1080,7 @@ def test_tool_freq_resets_per_run():
     """before_agent clears the per-tool frequency budget so the cap is per-RUN,
     not per-thread-lifetime — otherwise a thread bricks (FORCED STOP every turn)
     after enough cumulative bash/write calls across many turns."""
-    mw = LoopDetectionMiddleware(
-        warn_threshold=99, hard_limit=99, tool_freq_warn=99, tool_freq_hard_limit=99
-    )
+    mw = LoopDetectionMiddleware(warn_threshold=99, hard_limit=99, tool_freq_warn=99, tool_freq_hard_limit=99)
     runtime = _make_runtime()
     # Distinct commands bump the per-tool-TYPE counter without tripping the
     # identical-call hash logic.

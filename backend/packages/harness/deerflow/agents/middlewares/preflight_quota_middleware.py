@@ -152,11 +152,7 @@ class PreflightQuotaMiddleware(AgentMiddleware[AgentState]):
         result = await self._probe(info)
         if result.status == "exhausted":
             balance_str = f"${result.balance:.2f}" if result.balance is not None else "0"
-            return True, (
-                f"Preflight quota check: provider account has insufficient "
-                f"balance ({balance_str}). The LLM call has been skipped to "
-                f"avoid burning retries. Top up the provider account and try again."
-            )
+            return True, (f"Preflight quota check: provider account has insufficient balance ({balance_str}). The LLM call has been skipped to avoid burning retries. Top up the provider account and try again.")
         return False, None
 
     @override

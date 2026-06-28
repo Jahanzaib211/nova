@@ -152,9 +152,7 @@ class TestRegistry:
         assert 'rt_total{k="v1"} 3.0' in text
 
     def test_render_histogram_format(self) -> None:
-        h = get_registry().register_histogram(
-            Histogram("rt_ms", "h", labelnames=("e",), buckets_ms=(10.0, 100.0, float("inf")))
-        )
+        h = get_registry().register_histogram(Histogram("rt_ms", "h", labelnames=("e",), buckets_ms=(10.0, 100.0, float("inf"))))
         h.observe(5.0, "cdp")
         h.observe(50.0, "cdp")
         text = render_metrics()

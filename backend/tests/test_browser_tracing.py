@@ -119,9 +119,7 @@ class TestSpanParentLinking:
         with browser_span("parent") as p:
             p_id = p.span_id
             with browser_span("child") as c:
-                assert c.parent_span_id == p_id, (
-                    f"c.parent_span_id={c.parent_span_id}, p.span_id={p_id}"
-                )
+                assert c.parent_span_id == p_id, f"c.parent_span_id={c.parent_span_id}, p.span_id={p_id}"
                 assert c.trace_id == p.trace_id
                 assert current_span() is c
             assert current_span() is p

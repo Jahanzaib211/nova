@@ -43,10 +43,12 @@ class TorProxy:
     def _check_socks_support() -> bool:
         try:
             import socks  # noqa: F401
+
             return True
         except ImportError:
             try:
                 from httpx_socks import AsyncProxyTransport  # noqa: F401
+
                 return True
             except ImportError:
                 return False

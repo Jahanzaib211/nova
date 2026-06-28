@@ -25,14 +25,10 @@ from deerflow.sandbox import browser_circuit_breaker as cb
 @pytest.fixture(autouse=True)
 def _reset():
     cb.reset_all_circuits()
-    bh._last_probe.update(
-        {"cdp_reachable": None, "latency_ms": None, "last_check_at": 0.0, "cdp_url": None}
-    )
+    bh._last_probe.update({"cdp_reachable": None, "latency_ms": None, "last_check_at": 0.0, "cdp_url": None})
     yield
     cb.reset_all_circuits()
-    bh._last_probe.update(
-        {"cdp_reachable": None, "latency_ms": None, "last_check_at": 0.0, "cdp_url": None}
-    )
+    bh._last_probe.update({"cdp_reachable": None, "latency_ms": None, "last_check_at": 0.0, "cdp_url": None})
 
 
 def _make_test_client():
@@ -195,9 +191,7 @@ class TestProbeCdpOnce:
     def test_probe_handles_sandbox_without_cdp_url(self) -> None:
         sandbox = type("S", (), {"_client": None})()
         provider = type("P", (), {"_sandboxes": {"t1": sandbox}})()
-        with patch(
-            "deerflow.sandbox.sandbox_provider.get_sandbox_provider", return_value=provider
-        ):
+        with patch("deerflow.sandbox.sandbox_provider.get_sandbox_provider", return_value=provider):
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
         assert reachable is False
         assert cdp_url is None

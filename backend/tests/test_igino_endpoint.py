@@ -32,6 +32,7 @@ class TestIGINOEndpoints(unittest.TestCase):
 
     def test_router_import(self):
         from app.gateway.routers.igino import router
+
         self.assertIsNotNone(router)
         self.assertTrue(len(router.routes) > 0)
 
@@ -73,6 +74,7 @@ class TestCapabilitiesIginoField(unittest.TestCase):
 
     def test_igino_in_capabilities(self):
         from app.gateway.routers.capabilities import IGINOSummary
+
         igino = IGINOSummary(
             enabled=False,
             tor_enabled=False,
@@ -102,6 +104,7 @@ class TestAuthMiddleware(unittest.TestCase):
         longer in the public-prefix allowlist (auth gates the privileged
         endpoints via per-route Depends)."""
         from app.gateway.auth_middleware import _PUBLIC_PATH_PREFIXES
+
         self.assertNotIn("/api/igino", _PUBLIC_PATH_PREFIXES)
 
     def test_igino_status_returns_enabled_false_when_disabled(self):

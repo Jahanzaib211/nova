@@ -101,19 +101,21 @@ def test_batch_inspect_extracts_preview_ports(monkeypatch):
         environment={},
         preview_container_ports=[4100, 4101],
     )
-    inspect_payload = json.dumps([
-        {
-            "Name": "/deer-flow-sandbox-abc",
-            "Created": "2026-06-22T01:00:00.000000000Z",
-            "NetworkSettings": {
-                "Ports": {
-                    "8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "18080"}],
-                    "4100/tcp": [{"HostIp": "0.0.0.0", "HostPort": "51000"}],
-                    "4101/tcp": [{"HostIp": "0.0.0.0", "HostPort": "51001"}],
-                }
-            },
-        }
-    ])
+    inspect_payload = json.dumps(
+        [
+            {
+                "Name": "/deer-flow-sandbox-abc",
+                "Created": "2026-06-22T01:00:00.000000000Z",
+                "NetworkSettings": {
+                    "Ports": {
+                        "8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "18080"}],
+                        "4100/tcp": [{"HostIp": "0.0.0.0", "HostPort": "51000"}],
+                        "4101/tcp": [{"HostIp": "0.0.0.0", "HostPort": "51001"}],
+                    }
+                },
+            }
+        ]
+    )
 
     def fake_run(cmd, **kwargs):
         return SimpleNamespace(stdout=inspect_payload, stderr="", returncode=0)
@@ -203,9 +205,7 @@ def test_dev_server_aio_branch_runs_in_container(monkeypatch):
     dev_server = importlib.import_module("deerflow.sandbox.dev_server")
     dev_server._servers.clear()
 
-    fake_provider = SimpleNamespace(
-        get_preview_endpoint=lambda thread_id, container_port=4100: ("host.docker.internal", 51000)
-    )
+    fake_provider = SimpleNamespace(get_preview_endpoint=lambda thread_id, container_port=4100: ("host.docker.internal", 51000))
     monkeypatch.setattr("deerflow.sandbox.get_sandbox_provider", lambda: fake_provider)
     # Avoid touching the real filesystem when mirroring to sandbox.log.
     monkeypatch.setattr(dev_server, "_append_devlog_to_sandbox_log", lambda *a, **k: None)
@@ -213,9 +213,7 @@ def test_dev_server_aio_branch_runs_in_container(monkeypatch):
     sandbox = _FakeSandbox()
 
     async def _run():
-        handle = await dev_server.start_dev_server(
-            "thread-1", "/mnt/user-data/workspace/app", "npm run dev", sandbox=sandbox
-        )
+        handle = await dev_server.start_dev_server("thread-1", "/mnt/user-data/workspace/app", "npm run dev", sandbox=sandbox)
         await dev_server.stop_dev_server("thread-1")
         return handle
 
@@ -355,13 +353,9 @@ def test_allocate_container_port_assigns_distinct_ports(monkeypatch):
     assert dev_server.allocate_container_port("t", "app") == 4100
 
     # Register an app server on 4100, then a new label takes the next free port.
-    dev_server._servers[dev_server._server_key("t", "app")] = dev_server.DevServerHandle(
-        thread_id="t", port=0, cwd="/x", command="npm run dev", label="app", container_port=4100
-    )
+    dev_server._servers[dev_server._server_key("t", "app")] = dev_server.DevServerHandle(thread_id="t", port=0, cwd="/x", command="npm run dev", label="app", container_port=4100)
     assert dev_server.allocate_container_port("t", "api") == 4101
-    dev_server._servers[dev_server._server_key("t", "api")] = dev_server.DevServerHandle(
-        thread_id="t", port=0, cwd="/x", command="npm run dev", label="api", container_port=4101
-    )
+    dev_server._servers[dev_server._server_key("t", "api")] = dev_server.DevServerHandle(thread_id="t", port=0, cwd="/x", command="npm run dev", label="api", container_port=4101)
     assert dev_server.allocate_container_port("t", "worker") == 4102
     dev_server._servers.clear()
 
@@ -371,9 +365,7 @@ def test_dev_server_label_keying(monkeypatch):
     dev_server._servers.clear()
     monkeypatch.setattr(dev_server, "_append_devlog_to_sandbox_log", lambda *a, **k: None)
 
-    fake_provider = SimpleNamespace(
-        get_preview_endpoint=lambda thread_id, container_port=4100: ("h", 50000 + container_port)
-    )
+    fake_provider = SimpleNamespace(get_preview_endpoint=lambda thread_id, container_port=4100: ("h", 50000 + container_port))
     monkeypatch.setattr("deerflow.sandbox.get_sandbox_provider", lambda: fake_provider)
     sandbox = _FakeSandbox()
 

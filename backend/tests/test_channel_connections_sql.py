@@ -26,8 +26,10 @@ async def repo():
         await conn.run_sync(Base.metadata.create_all)
     sf = async_sessionmaker(engine, expire_on_commit=False)
     from cryptography.fernet import Fernet
+
     cipher_key = Fernet.generate_key()
     from deerflow.persistence.channel_connections.sql import ChannelCredentialCipher
+
     cipher = ChannelCredentialCipher(Fernet(cipher_key))
     yield ChannelConnectionRepository(sf, cipher=cipher)
     await engine.dispose()
@@ -138,25 +140,17 @@ class TestChannelConnectionListing:
 class TestChannelConnectionDisconnect:
     @pytest.mark.anyio
     async def test_disconnect_marks_revoked(self, repo):
-        row = await repo.upsert_connection(
-            owner_user_id="alice", provider="telegram", external_account_id="@a"
-        )
-        result = await repo.disconnect_connection(
-            connection_id=row["id"], owner_user_id="alice"
-        )
+        row = await repo.upsert_connection(owner_user_id="alice", provider="telegram", external_account_id="@a")
+        result = await repo.disconnect_connection(connection_id=row["id"], owner_user_id="alice")
         assert result is True
         remaining = await repo.list_connections("alice")
         assert remaining[0]["status"] == "revoked"
 
     @pytest.mark.anyio
     async def test_disconnect_owner_mismatch_returns_false(self, repo):
-        row = await repo.upsert_connection(
-            owner_user_id="alice", provider="telegram", external_account_id="@a"
-        )
+        row = await repo.upsert_connection(owner_user_id="alice", provider="telegram", external_account_id="@a")
         # Bob can't disconnect Alice's connection.
-        result = await repo.disconnect_connection(
-            connection_id=row["id"], owner_user_id="bob"
-        )
+        result = await repo.disconnect_connection(connection_id=row["id"], owner_user_id="bob")
         assert result is False
         # Row is still connected for Alice.
         remaining = await repo.list_connections("alice")
@@ -164,18 +158,14 @@ class TestChannelConnectionDisconnect:
 
     @pytest.mark.anyio
     async def test_disconnect_missing_returns_false(self, repo):
-        result = await repo.disconnect_connection(
-            connection_id="nonexistent", owner_user_id="alice"
-        )
+        result = await repo.disconnect_connection(connection_id="nonexistent", owner_user_id="alice")
         assert result is False
 
 
 class TestChannelConnectionCredentials:
     @pytest.mark.anyio
     async def test_store_then_get_credential_round_trips(self, repo):
-        row = await repo.upsert_connection(
-            owner_user_id="alice", provider="telegram", external_account_id="@a"
-        )
+        row = await repo.upsert_connection(owner_user_id="alice", provider="telegram", external_account_id="@a")
         # store_credentials takes access_token/refresh_token (not bot_token/webhook_url).
         await repo.store_credentials(
             row["id"],
@@ -192,9 +182,7 @@ class TestChannelConnectionCredentials:
         """The on-disk value is encrypted (the cipher's get_credentials
         returns the decrypted plaintext to callers; we verify the cipher
         behavior is correct via round-trip)."""
-        row = await repo.upsert_connection(
-            owner_user_id="alice", provider="telegram", external_account_id="@a"
-        )
+        row = await repo.upsert_connection(owner_user_id="alice", provider="telegram", external_account_id="@a")
         await repo.store_credentials(row["id"], access_token="plaintext-secret", refresh_token=None)
         # The API returns the decrypted value to callers.
         creds = await repo.get_credentials(row["id"])
@@ -202,9 +190,7 @@ class TestChannelConnectionCredentials:
 
     @pytest.mark.anyio
     async def test_get_credentials_missing_returns_none(self, repo):
-        row = await repo.upsert_connection(
-            owner_user_id="alice", provider="telegram", external_account_id="@a"
-        )
+        row = await repo.upsert_connection(owner_user_id="alice", provider="telegram", external_account_id="@a")
         assert await repo.get_credentials(row["id"]) is None
 
 

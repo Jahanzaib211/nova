@@ -31,15 +31,10 @@ def _load_internal_auth_token() -> str:
     # process; it just isn't externally exposed.
     if is_explicit_production_environment():
         raise RuntimeError(
-            f"{INTERNAL_AUTH_ENV_VAR} is required in production but is unset. "
-            "Refusing to start: an auto-generated token would grant full admin "
-            "permissions to any caller able to read this process's environment.",
+            f"{INTERNAL_AUTH_ENV_VAR} is required in production but is unset. Refusing to start: an auto-generated token would grant full admin permissions to any caller able to read this process's environment.",
         )
     logger.warning(
-        "%s is unset; auto-generating a per-process random token. "
-        "Internal channel workers in this process will authenticate, "
-        "but external callers cannot. Set the env var in non-prod too "
-        "for multi-worker / cross-process deployments.",
+        "%s is unset; auto-generating a per-process random token. Internal channel workers in this process will authenticate, but external callers cannot. Set the env var in non-prod too for multi-worker / cross-process deployments.",
         INTERNAL_AUTH_ENV_VAR,
     )
     return secrets.token_urlsafe(32)

@@ -39,9 +39,7 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
     def _is_protected(self, path: str) -> bool:
         return any(path.endswith(suffix) for suffix in _PROTECTED_SUFFIXES)
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if request.method != "POST" or not self._is_protected(request.url.path):
             return await call_next(request)
 

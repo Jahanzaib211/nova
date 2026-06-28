@@ -166,12 +166,9 @@ class TestRunRepositoryListing:
     async def test_list_pending_fifo_order_by_created_at(self, repo):
         """list_pending returns oldest pending first for crash-recovery queueing."""
         now = datetime.now(UTC)
-        await repo.put("r_oldest", thread_id="t1", status="pending",
-                       created_at=(now - timedelta(hours=2)).isoformat())
-        await repo.put("r_middle", thread_id="t1", status="pending",
-                       created_at=(now - timedelta(hours=1)).isoformat())
-        await repo.put("r_newest", thread_id="t1", status="pending",
-                       created_at=now.isoformat())
+        await repo.put("r_oldest", thread_id="t1", status="pending", created_at=(now - timedelta(hours=2)).isoformat())
+        await repo.put("r_middle", thread_id="t1", status="pending", created_at=(now - timedelta(hours=1)).isoformat())
+        await repo.put("r_newest", thread_id="t1", status="pending", created_at=now.isoformat())
         rows = await repo.list_pending()
         assert [r["run_id"] for r in rows] == ["r_oldest", "r_middle", "r_newest"]
 
@@ -263,7 +260,8 @@ class TestRunRepositoryAggregation:
     async def test_aggregate_by_model_uses_json_column(self, repo):
         await repo.put("r1", thread_id="t1")
         await repo.update_run_completion(
-            "r1", status="success",
+            "r1",
+            status="success",
             total_tokens=1000,
             token_usage_by_model={"minimax-m3": {"total_tokens": 700}, "claude-opus": {"total_tokens": 300}},
         )
@@ -296,8 +294,11 @@ class TestRunRepositoryAggregation:
     async def test_aggregate_by_caller_bucket(self, repo):
         await repo.put("r1", thread_id="t1")
         await repo.update_run_completion(
-            "r1", status="success",
-            lead_agent_tokens=100, subagent_tokens=30, middleware_tokens=20,
+            "r1",
+            status="success",
+            lead_agent_tokens=100,
+            subagent_tokens=30,
+            middleware_tokens=20,
         )
         agg = await repo.aggregate_tokens_by_thread("t1")
         assert agg["by_caller"] == {

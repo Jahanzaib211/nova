@@ -171,8 +171,11 @@ class TestOnRetryCallback:
 
         with pytest.raises(BrowserTransientError):
             retry_browser_call(
-                "t", fail, operation="cb",
-                max_attempts=3, base_backoff_ms=10,
+                "t",
+                fail,
+                operation="cb",
+                max_attempts=3,
+                base_backoff_ms=10,
                 on_retry=on_retry,
             )
         # 3 attempts = 2 retries = 2 callbacks (before attempts 2 and 3).
@@ -190,8 +193,11 @@ class TestOnRetryCallback:
         # Callback exception is swallowed; retry continues.
         with pytest.raises(BrowserTransientError):
             retry_browser_call(
-                "t", flaky, operation="cb",
-                max_attempts=2, base_backoff_ms=10,
+                "t",
+                flaky,
+                operation="cb",
+                max_attempts=2,
+                base_backoff_ms=10,
                 on_retry=bad_callback,
             )
 
@@ -241,7 +247,11 @@ class TestAsyncRetry:
             return "async-recovered"
 
         result = await retry_browser_call_async(
-            "t", flaky, operation="flaky", max_attempts=3, base_backoff_ms=10,
+            "t",
+            flaky,
+            operation="flaky",
+            max_attempts=3,
+            base_backoff_ms=10,
         )
         assert result == "async-recovered"
         assert len(attempts) == 2

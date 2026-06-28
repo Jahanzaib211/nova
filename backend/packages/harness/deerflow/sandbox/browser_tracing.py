@@ -212,6 +212,7 @@ def current_span() -> BrowserSpan | None:
 
 # ---------- structured logging ----------
 
+
 def browser_log(
     event: str,
     *,

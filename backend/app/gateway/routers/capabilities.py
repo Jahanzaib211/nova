@@ -135,11 +135,7 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
             if not name or name in seen:
                 continue
             seen.add(name)
-            desc = _TOOL_PURPOSE_OVERRIDES.get(name, "") or (
-                (getattr(tool, "description", "") or "").splitlines()[0]
-                if getattr(tool, "description", None)
-                else ""
-            )
+            desc = _TOOL_PURPOSE_OVERRIDES.get(name, "") or ((getattr(tool, "description", "") or "").splitlines()[0] if getattr(tool, "description", None) else "")
             out.append(ToolSummary(name=name, description=desc[:140]))
         return out
     except Exception as e:
@@ -236,6 +232,7 @@ async def _safe_igino() -> IGINOSummary:
         if tor_enabled:
             try:
                 from deerflow.community.searxng.tor import get_tor_proxy
+
                 tor_available = get_tor_proxy().is_available()
             except Exception:
                 pass
@@ -258,12 +255,14 @@ async def _safe_igino() -> IGINOSummary:
         circuit_states: dict[str, str] = {}
         try:
             from deerflow.community.searxng.search_cache import get_search_cache
+
             cache_stats = get_search_cache().stats
         except Exception:
             cache_stats = {}
 
         try:
             from deerflow.community.searxng.audit import get_audit_trail
+
             audit_stats = get_audit_trail().get_stats()
         except Exception:
             audit_stats = {}

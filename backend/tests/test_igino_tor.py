@@ -4,9 +4,9 @@ import unittest
 
 
 class TestTorProxy(unittest.TestCase):
-
     def _make_proxy(self, **kwargs):
         from deerflow.community.searxng.tor import TorProxy
+
         return TorProxy(**kwargs)
 
     def test_default_config(self):
@@ -29,6 +29,7 @@ class TestTorProxy(unittest.TestCase):
 
     def test_singleton(self):
         from deerflow.community.searxng.tor import get_tor_proxy
+
         p1 = get_tor_proxy()
         p2 = get_tor_proxy()
         self.assertIs(p1, p2)

@@ -88,9 +88,7 @@ class TestEvictionCap:
         for i in range(n_writes):
             cache.put(f"t-{i}", "n", f"v-{i}")
         # Cap is the upper bound; we may be at-or-below it after eviction.
-        assert len(cache._data) <= _NAVIGATE_IDEMPOTENCY_MAX_ENTRIES, (
-            f"cache exceeded cap: {len(cache._data)} > {_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES}"
-        )
+        assert len(cache._data) <= _NAVIGATE_IDEMPOTENCY_MAX_ENTRIES, f"cache exceeded cap: {len(cache._data)} > {_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES}"
 
     def test_eviction_keeps_recent(self) -> None:
         """The most recently inserted entry should survive eviction."""
@@ -165,6 +163,7 @@ class TestContractForBrowserNavigateTool:
         from deerflow.tools.builtins.workspace_tools import (
             _browser_navigate_idempotency as cache2,
         )
+
         assert cache1 is cache2
 
     def test_cache_clear_is_idempotent(self) -> None:

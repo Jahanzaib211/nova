@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 
 # ---------- counter ----------
 
+
 @dataclass
 class _CounterSeries:
     """One labelled series of a counter.
@@ -43,6 +44,7 @@ class _CounterSeries:
     The counter value is stored as a float so we can use it for both
     monotonic counts and "elapsed since reset" gauges if needed later.
     """
+
     labels: tuple[tuple[str, str], ...]
     value: float = 0.0
     # Last touch timestamp (time.time()) — useful for /api/health freshness.
@@ -72,15 +74,13 @@ class Counter:
 
     def _key(self, labelvalues: tuple[str, ...]) -> tuple[str, ...]:
         if len(labelvalues) != len(self.labelnames):
-            raise ValueError(
-                f"counter {self.name!r} expects {len(self.labelnames)} label values, "
-                f"got {len(labelvalues)}: {labelvalues!r}"
-            )
+            raise ValueError(f"counter {self.name!r} expects {len(self.labelnames)} label values, got {len(labelvalues)}: {labelvalues!r}")
         return labelvalues
 
     def inc(self, *labelvalues: str, n: float = 1.0) -> None:
         """Increment by ``n`` (default 1)."""
         import time as _time
+
         key = self._key(labelvalues)
         with self._lock:
             s = self._series.get(key)
@@ -109,8 +109,17 @@ class Counter:
 #   - p95: 5-10s (cold chromium)
 #   - p99: 15-30s (timeout path)
 _HISTOGRAM_DEFAULT_BUCKETS_MS: tuple[float, ...] = (
-    10.0, 25.0, 50.0, 100.0, 250.0, 500.0,
-    1000.0, 2500.0, 5000.0, 10000.0, 30000.0,
+    10.0,
+    25.0,
+    50.0,
+    100.0,
+    250.0,
+    500.0,
+    1000.0,
+    2500.0,
+    5000.0,
+    10000.0,
+    30000.0,
     float("+inf"),  # prometheus convention: +Inf bucket catches everything
 )
 
@@ -154,10 +163,7 @@ class Histogram:
 
     def _key(self, labelvalues: tuple[str, ...]) -> tuple[str, ...]:
         if len(labelvalues) != len(self.labelnames):
-            raise ValueError(
-                f"histogram {self.name!r} expects {len(self.labelnames)} label values, "
-                f"got {len(labelvalues)}: {labelvalues!r}"
-            )
+            raise ValueError(f"histogram {self.name!r} expects {len(self.labelnames)} label values, got {len(labelvalues)}: {labelvalues!r}")
         return labelvalues
 
     def observe(self, value_ms: float, *labelvalues: str) -> None:
@@ -185,6 +191,7 @@ class Histogram:
 
 # ---------- gauge ----------
 
+
 class Gauge:
     """Point-in-time gauge (can go up or down).
 
@@ -206,10 +213,7 @@ class Gauge:
 
     def set(self, value: float, *labelvalues: str) -> None:
         if len(labelvalues) != len(self.labelnames):
-            raise ValueError(
-                f"gauge {self.name!r} expects {len(self.labelnames)} label values, "
-                f"got {len(labelvalues)}: {labelvalues!r}"
-            )
+            raise ValueError(f"gauge {self.name!r} expects {len(self.labelnames)} label values, got {len(labelvalues)}: {labelvalues!r}")
         with self._lock:
             self._series[labelvalues] = float(value)
 
@@ -227,6 +231,7 @@ class Gauge:
 
 
 # ---------- registry + renderer ----------
+
 
 class _Registry:
     """Process-wide metrics registry.

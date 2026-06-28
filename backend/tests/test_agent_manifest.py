@@ -233,13 +233,8 @@ def test_manifest_mentions_reflect_fix_middleware():
     from deerflow.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
-    assert "ReflectFixBudgetMiddleware" in manifest, (
-        "manifest must surface ReflectFixBudgetMiddleware so the agent "
-        "knows the 'iterate at most twice' rule is runtime-enforced"
-    )
-    assert "iterate at most twice" in manifest, (
-        "manifest must anchor the <self_verify> iteration rule"
-    )
+    assert "ReflectFixBudgetMiddleware" in manifest, "manifest must surface ReflectFixBudgetMiddleware so the agent knows the 'iterate at most twice' rule is runtime-enforced"
+    assert "iterate at most twice" in manifest, "manifest must anchor the <self_verify> iteration rule"
 
 
 def test_manifest_is_pure_string_no_side_effects():
@@ -306,10 +301,7 @@ def test_collect_tools_returns_builtin_tools():
     # Every name must appear in one of the agent's tool sources
     from deerflow.tools.tools import BUILTIN_TOOLS, SUBAGENT_TOOLS, view_image_tool
 
-    all_names = {
-        getattr(t, "name", None)
-        for t in (*BUILTIN_TOOLS, *SUBAGENT_TOOLS, view_image_tool)
-    }
+    all_names = {getattr(t, "name", None) for t in (*BUILTIN_TOOLS, *SUBAGENT_TOOLS, view_image_tool)}
     all_names.discard(None)
     for name in names:
         assert name in all_names, f"tool {name!r} not in any agent-visible tool source"

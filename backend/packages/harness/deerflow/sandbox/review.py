@@ -93,7 +93,9 @@ def _git(work_dir: Path, *args: str, timeout: float = 8.0) -> tuple[int, str]:
     try:
         proc = subprocess.run(
             ["git", "-C", str(work_dir), *args],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
     except Exception as e:
@@ -270,10 +272,7 @@ def _render_markdown(rv: Review) -> str:
     lines.append("")
     lines.append(verdict)
     lines.append("")
-    lines.append(
-        f"- **{n_files}** file{'s' if n_files != 1 else ''} changed "
-        f"(**+{rv.added_total}** lines added, **−{rv.removed_total}** removed)."
-    )
+    lines.append(f"- **{n_files}** file{'s' if n_files != 1 else ''} changed (**+{rv.added_total}** lines added, **−{rv.removed_total}** removed).")
     if high or med:
         lines.append(f"- **{len(high)}** high-risk and **{len(med)}** medium-risk item(s) to review (see below).")
     else:

@@ -132,8 +132,14 @@ class ReflectFixBudgetMiddleware(AgentMiddleware[AgentState]):
         if not isinstance(content, str):
             return ""
         markers = (
-            "✗", "🔴", "error", "fail", "[render_error]", "[console_errors]",
-            "[unreachable]", "[blank]",
+            "✗",
+            "🔴",
+            "error",
+            "fail",
+            "[render_error]",
+            "[console_errors]",
+            "[unreachable]",
+            "[blank]",
         )
         out: list[str] = []
         for raw in content.splitlines():

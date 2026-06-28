@@ -71,9 +71,10 @@ def _drain_browser_check_semaphore(budget_s: float) -> None:
             return
         time.sleep(0.05)
     logger.warning(
-        "shutdown: browser_check semaphore did not drain within %.1fs "
-        "(capacity=%d, in_use=%d)",
-        budget_s, cap, cap - sem._value,  # type: ignore[attr-defined]
+        "shutdown: browser_check semaphore did not drain within %.1fs (capacity=%d, in_use=%d)",
+        budget_s,
+        cap,
+        cap - sem._value,  # type: ignore[attr-defined]
     )
 
 
@@ -105,6 +106,7 @@ def _reset_browser_state() -> None:
         from deerflow.tools.builtins.workspace_tools import (
             _browser_navigate_idempotency,
         )
+
         _browser_navigate_idempotency.clear()
         logger.info("shutdown: cleared browser_navigate idempotency cache")
     except ImportError:
@@ -112,6 +114,7 @@ def _reset_browser_state() -> None:
 
     try:
         from deerflow.sandbox import browser_circuit_breaker as cb
+
         cb.reset_all_circuits()
         logger.info("shutdown: reset all circuit breakers")
     except ImportError:
@@ -119,6 +122,7 @@ def _reset_browser_state() -> None:
 
     try:
         from deerflow.sandbox import browser_check as bc
+
         with bc._LAST_CHECKS_LOCK:
             bc._last_checks.clear()
         logger.info("shutdown: cleared last browser_check results")
@@ -190,12 +194,14 @@ def run_shutdown(budget_s: float | None = None) -> dict[str, Any]:
         _shutdown_completed = True
         logger.info(
             "shutdown: completed in %.1fms (budget %.1fs)",
-            log["total_elapsed_ms"], budget,
+            log["total_elapsed_ms"],
+            budget,
         )
         return log
 
 
 # ---------- safe wrappers (any individual failure must not block others) ----------
+
 
 def _drain_browser_semaphore_safe(budget_s: float) -> None:
     _drain_browser_check_semaphore(budget_s)

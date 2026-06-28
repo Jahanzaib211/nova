@@ -66,10 +66,7 @@ class BrowserCheckSaturatedError(Exception):
     """
 
     def __init__(self, waited_s: float, capacity: int) -> None:
-        super().__init__(
-            f"browser_check saturated after waiting {waited_s:.1f}s (capacity={capacity}); "
-            "consider raising DEERFLOW_MAX_CONCURRENT_BROWSER_CHECKS"
-        )
+        super().__init__(f"browser_check saturated after waiting {waited_s:.1f}s (capacity={capacity}); consider raising DEERFLOW_MAX_CONCURRENT_BROWSER_CHECKS")
         self.waited_s = waited_s
         self.capacity = capacity
 
@@ -85,9 +82,7 @@ class BrowserCheckTimeoutError(Exception):
     """
 
     def __init__(self, total_budget_s: float) -> None:
-        super().__init__(
-            f"browser_check exceeded total wall-clock budget of {total_budget_s:.1f}s"
-        )
+        super().__init__(f"browser_check exceeded total wall-clock budget of {total_budget_s:.1f}s")
         self.total_budget_s = total_budget_s
 
 

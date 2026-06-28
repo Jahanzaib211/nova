@@ -48,6 +48,7 @@ from deerflow.sandbox.browser_check import (
 # _scan_html_errors
 # ============================================================
 
+
 class TestScanHtmlErrors:
     """All explicit markers must be caught; non-markers must NOT raise."""
 
@@ -85,6 +86,7 @@ class TestScanHtmlErrors:
 # ============================================================
 # _detect_app_port
 # ============================================================
+
 
 class TestDetectAppPort:
     """Port discovery from ss/netstat output."""
@@ -124,10 +126,7 @@ class TestDetectAppPort:
 
     def test_multiple_candidates_pick_smallest(self) -> None:
         sandbox = MagicMock()
-        sandbox.execute_command.return_value = (
-            "LISTEN 0 128 *:8765 *:*\n"
-            "LISTEN 0 128 *:4321 *:*\n"
-        )
+        sandbox.execute_command.return_value = "LISTEN 0 128 *:8765 *:*\nLISTEN 0 128 *:4321 *:*\n"
         # Neither in _COMMON_DEV_PORTS; prefer is not listening; pick smallest.
         assert _detect_app_port(sandbox, prefer=9999) == 4321
 
@@ -140,6 +139,7 @@ class TestDetectAppPort:
 # ============================================================
 # _rewrite_cdp_netloc
 # ============================================================
+
 
 class TestRewriteCdpNetloc:
     """urllib.parse-based host swap with port/path/query/fragment preservation."""
@@ -184,6 +184,7 @@ class TestRewriteCdpNetloc:
 # _cdp_url_for_gateway
 # ============================================================
 
+
 class TestCdpUrlForGateway:
     """Top-level helper that gates on the URL being localhost-ish."""
 
@@ -207,9 +208,7 @@ class TestCdpUrlForGateway:
     def test_routable_host_passes_through(self) -> None:
         """A non-loopback chromium host should NOT be rewritten — works for remote AIO."""
         client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(
-            data=MagicMock(cdp_url="ws://chromium.prod.example.com:9222/x")
-        )
+        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url="ws://chromium.prod.example.com:9222/x"))
         assert _cdp_url_for_gateway(client) == "ws://chromium.prod.example.com:9222/x"
 
     def test_no_cdp_url_returns_none(self) -> None:
@@ -231,6 +230,7 @@ class TestCdpUrlForGateway:
 # ============================================================
 # _clamp_render_budget_ms
 # ============================================================
+
 
 class TestClampRenderBudgetMs:
     """Bounds the render budget to [_DEFAULT, _MAX]."""
@@ -257,6 +257,7 @@ class TestClampRenderBudgetMs:
 # ============================================================
 # _adaptive_wait
 # ============================================================
+
 
 class TestAdaptiveWait:
     """networkidle fast path + budget-fallback slow path."""
@@ -290,6 +291,7 @@ class TestAdaptiveWait:
 # ============================================================
 # _console_entries_to_errors
 # ============================================================
+
 
 class TestConsoleEntriesToErrors:
     """Extract error/warning lines from get_console() payloads."""
@@ -336,6 +338,7 @@ class TestConsoleEntriesToErrors:
 # ============================================================
 # RouteResult.to_dict / BrowserCheck.summary
 # ============================================================
+
 
 class TestDataclasses:
     def test_route_result_to_dict_no_screenshot(self) -> None:
@@ -398,6 +401,7 @@ class TestDataclasses:
 # Locks + deep-copy return semantics (A1)
 # ============================================================
 
+
 class TestPerThreadLock:
     def test_same_thread_id_returns_same_lock(self) -> None:
         assert _get_thread_lock("t1") is _get_thread_lock("t1")
@@ -430,10 +434,7 @@ class TestPerThreadLock:
         sandbox._client = None  # triggers early-return path; we patch unlock below
 
         with patch.object(bc, "_run_browser_check_unlocked", side_effect=fake_unlocked):
-            threads = [
-                threading.Thread(target=run_browser_check, args=("t-conc", sandbox))
-                for _ in range(4)
-            ]
+            threads = [threading.Thread(target=run_browser_check, args=("t-conc", sandbox)) for _ in range(4)]
             for t in threads:
                 t.start()
             for t in threads:
@@ -454,10 +455,7 @@ class TestPerThreadLock:
         for i in range(len(starts) - 1):
             start_idx = call_order.index(starts[i + 1])
             end_idx = call_order.index(ends[i])
-            assert end_idx < start_idx, (
-                f"start[{i + 1}] at {start_idx} appeared before end[{i}] at {end_idx}; "
-                f"sequence: {call_order}"
-            )
+            assert end_idx < start_idx, f"start[{i + 1}] at {start_idx} appeared before end[{i}] at {end_idx}; sequence: {call_order}"
 
 
 class TestDeepCopyReturn:
@@ -512,12 +510,17 @@ class TestDeepCopyReturn:
 # Unlocked inner: no client → "no browser" reason
 # ============================================================
 
+
 class TestUnlockedNoClient:
     def test_no_client_returns_reason(self) -> None:
         sandbox = MagicMock(spec=[])  # no _client attribute
         result = _run_browser_check_unlocked(
-            "t-noclient", sandbox,
-            label="app", routes=None, with_screenshot=True, render_budget_ms=1500,
+            "t-noclient",
+            sandbox,
+            label="app",
+            routes=None,
+            with_screenshot=True,
+            render_budget_ms=1500,
         )
         assert result.ok is False
         assert "no browser" in result.reason.lower()
@@ -535,8 +538,12 @@ class TestUnlockedNoClient:
             # execute_command returns empty (no static html deliverable)
             sandbox.execute_command.return_value = ""
             result = _run_browser_check_unlocked(
-                "t-noserv", sandbox,
-                label="app", routes=None, with_screenshot=False, render_budget_ms=1500,
+                "t-noserv",
+                sandbox,
+                label="app",
+                routes=None,
+                with_screenshot=False,
+                render_budget_ms=1500,
             )
         assert result.ok is False
         assert "no html deliverable" in result.reason or "no dev server" in result.reason

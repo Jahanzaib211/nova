@@ -121,6 +121,7 @@ async def get_cache_stats() -> dict[str, Any]:
         return {"enabled": False}
     try:
         from deerflow.community.searxng.search_cache import get_search_cache
+
         return get_search_cache().stats
     except Exception as exc:
         return {"error": str(exc)}
@@ -131,6 +132,7 @@ async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_opt
     _require_enabled_and_user(user)
     try:
         from deerflow.community.searxng.audit import get_audit_trail
+
         trail = get_audit_trail()
         return {"records": trail.get_records(limit=limit), "stats": trail.get_stats()}
     except Exception as exc:

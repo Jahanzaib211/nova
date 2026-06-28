@@ -154,9 +154,7 @@ def test_verify_result_notes_truncated_to_200_chars():
         "thread_id": "t1",
         "ok": False,
         "verdict": "issues",
-        "routes": [
-            {"route": "/", "ok": False, "status": 500, "notes": truncated}
-        ],
+        "routes": [{"route": "/", "ok": False, "status": 500, "notes": truncated}],
         "console_errors_count": 0,
         "screenshot": None,
     }
@@ -188,6 +186,7 @@ def test_verify_result_emission_is_non_fatal_on_writer_failure(monkeypatch):
     wrapper in _auto_verify_present_files catches arbitrary writer
     failures.
     """
+
     # Simulate a writer that raises
     def failing_writer(event):
         raise RuntimeError("simulated writer failure")

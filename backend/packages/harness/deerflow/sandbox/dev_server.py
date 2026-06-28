@@ -189,9 +189,7 @@ async def _auto_verify_preview(thread_id: str, sandbox: object, label: str) -> N
                 break
         from deerflow.sandbox.browser_check import run_browser_check
 
-        check = await asyncio.to_thread(
-            run_browser_check, thread_id, sandbox, label=label, routes=["/"], with_screenshot=True
-        )
+        check = await asyncio.to_thread(run_browser_check, thread_id, sandbox, label=label, routes=["/"], with_screenshot=True)
         verdict = "✓ passed" if check.ok else "✗ found issues"
         _append_devlog_to_sandbox_log(thread_id, f"[self-test] browser check {verdict}")
         for r in check.routes:
@@ -225,13 +223,15 @@ def _append_devlog_to_sandbox_log(thread_id: str, text: str) -> None:
             user_id = None
         thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)
         thread_dir.mkdir(parents=True, exist_ok=True)
-        entry = _json.dumps({
-            "ts": _dt.datetime.now().strftime("%H:%M:%S"),
-            "type": "bash",
-            "path": None,
-            "summary": "[dev] " + text[:200],
-            "output": "",
-        })
+        entry = _json.dumps(
+            {
+                "ts": _dt.datetime.now().strftime("%H:%M:%S"),
+                "type": "bash",
+                "path": None,
+                "summary": "[dev] " + text[:200],
+                "output": "",
+            }
+        )
         with open(thread_dir / "sandbox.log", "a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
     except Exception:
@@ -398,7 +398,7 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
         "HOSTNAME": "127.0.0.1",
         "NODE_ENV": "development",
         "BROWSER": "none",  # don't try to open a browser
-        "CI": "1",          # disable interactive prompts
+        "CI": "1",  # disable interactive prompts
     }
 
     handle.log_buffer.append(f"$ PORT={port} {command}")
@@ -459,9 +459,7 @@ async def _start_dev_server_aio(
 
     if endpoint is None:
         handle.status = "error"
-        handle.log_buffer.append(
-            f"[deerflow] no published preview port {container_port} for this thread's sandbox"
-        )
+        handle.log_buffer.append(f"[deerflow] no published preview port {container_port} for this thread's sandbox")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 

@@ -201,10 +201,7 @@ class TestResetAll:
         record_failure("t")
         assert len(cb._get_breaker("t").failures) == 1
         reset_all_circuits()
-        assert cb._get_breaker("t").failures == [], (
-            "reset_all_circuits did not clear failures; "
-            "stale state will pollute subsequent tests"
-        )
+        assert cb._get_breaker("t").failures == [], "reset_all_circuits did not clear failures; stale state will pollute subsequent tests"
 
     def test_repeated_resets_are_idempotent(self) -> None:
         """reset_all can be called many times safely."""

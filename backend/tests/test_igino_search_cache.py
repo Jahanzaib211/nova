@@ -6,9 +6,9 @@ import unittest
 
 
 class TestSearchCache(unittest.TestCase):
-
     def _make_cache(self, max_size: int = 3, ttl_s: float = 60.0):
         from deerflow.community.searxng.search_cache import CacheKey, SearchCache
+
         self._CacheKey = CacheKey
         return SearchCache(ttl_s=ttl_s, max_size=max_size)
 
@@ -100,21 +100,23 @@ class TestSearchCache(unittest.TestCase):
 
 
 class TestCacheKey(unittest.TestCase):
-
     def test_deterministic(self):
         from deerflow.community.searxng.search_cache import CacheKey
+
         k1 = CacheKey(query="python", categories="general", language="en", pageno=1)
         k2 = CacheKey(query="python", categories="general", language="en", pageno=1)
         self.assertEqual(k1.to_hash(), k2.to_hash())
 
     def test_different_queries(self):
         from deerflow.community.searxng.search_cache import CacheKey
+
         k1 = CacheKey(query="python", categories="general", language="en", pageno=1)
         k2 = CacheKey(query="java", categories="general", language="en", pageno=1)
         self.assertNotEqual(k1.to_hash(), k2.to_hash())
 
     def test_hash_length(self):
         from deerflow.community.searxng.search_cache import CacheKey
+
         k = CacheKey(query="test", categories="", language="", pageno=1)
         self.assertEqual(len(k.to_hash()), 32)
 

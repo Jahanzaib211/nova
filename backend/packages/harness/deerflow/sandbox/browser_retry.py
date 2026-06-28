@@ -140,8 +140,7 @@ def retry_browser_call(
         # circuit lookup, and gives a cleaner log path.
         if get_circuit_state(thread_id).value == "open":
             raise BrowserCircuitOpenError(
-                f"retry_browser_call short-circuited for thread_id={thread_id} "
-                f"during operation={op_label}",
+                f"retry_browser_call short-circuited for thread_id={thread_id} during operation={op_label}",
                 cooldown_remaining_s=0.0,  # actual cooldown computed inside guard
             )
 
@@ -154,7 +153,8 @@ def retry_browser_call(
             if isinstance(exc, BrowserCircuitOpenError):
                 logger.warning(
                     "retry_browser_call: circuit OPEN during %s (thread_id=%s); no retry",
-                    op_label, thread_id,
+                    op_label,
+                    thread_id,
                 )
                 raise
 
@@ -162,7 +162,9 @@ def retry_browser_call(
             if is_permanent(exc):
                 logger.info(
                     "retry_browser_call: permanent error during %s (thread_id=%s): %s; no retry",
-                    op_label, thread_id, exc,
+                    op_label,
+                    thread_id,
+                    exc,
                 )
                 raise
 
@@ -170,7 +172,9 @@ def retry_browser_call(
             if not isinstance(exc, BrowserError):
                 logger.warning(
                     "retry_browser_call: non-browser exception during %s (thread_id=%s): %s; no retry",
-                    op_label, thread_id, exc,
+                    op_label,
+                    thread_id,
+                    exc,
                 )
                 raise
 
@@ -183,9 +187,13 @@ def retry_browser_call(
                 )
                 sleep_ms = min(sleep_ms, max_backoff_ms)
                 logger.info(
-                    "retry_browser_call: transient error during %s (thread_id=%s, attempt %d/%d): %s; "
-                    "sleeping %.1fms then retrying",
-                    op_label, thread_id, attempt, max_attempts, exc, sleep_ms,
+                    "retry_browser_call: transient error during %s (thread_id=%s, attempt %d/%d): %s; sleeping %.1fms then retrying",
+                    op_label,
+                    thread_id,
+                    attempt,
+                    max_attempts,
+                    exc,
+                    sleep_ms,
                 )
                 if on_retry is not None:
                     try:
@@ -201,7 +209,10 @@ def retry_browser_call(
             # 5. Transient + attempts exhausted → fail with last exception.
             logger.warning(
                 "retry_browser_call: exhausted %d attempts for %s (thread_id=%s); last error: %s",
-                max_attempts, op_label, thread_id, exc,
+                max_attempts,
+                op_label,
+                thread_id,
+                exc,
             )
             raise
 
@@ -236,8 +247,7 @@ async def retry_browser_call_async(
     for attempt in range(1, max_attempts + 1):
         if get_circuit_state(thread_id).value == "open":
             raise BrowserCircuitOpenError(
-                f"retry_browser_call_async short-circuited for thread_id={thread_id} "
-                f"during operation={op_label}",
+                f"retry_browser_call_async short-circuited for thread_id={thread_id} during operation={op_label}",
                 cooldown_remaining_s=0.0,
             )
         try:
@@ -257,9 +267,13 @@ async def retry_browser_call_async(
                     max_backoff_ms,
                 )
                 logger.info(
-                    "retry_browser_call_async: transient during %s (thread_id=%s, attempt %d/%d): %s; "
-                    "sleeping %.1fms",
-                    op_label, thread_id, attempt, max_attempts, exc, sleep_ms,
+                    "retry_browser_call_async: transient during %s (thread_id=%s, attempt %d/%d): %s; sleeping %.1fms",
+                    op_label,
+                    thread_id,
+                    attempt,
+                    max_attempts,
+                    exc,
+                    sleep_ms,
                 )
                 await asyncio.sleep(sleep_ms / 1000.0)
                 continue

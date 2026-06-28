@@ -56,24 +56,12 @@ def _make_state_with_messages(*messages) -> dict:
 
 def _issue_content(extra: str = "") -> str:
     """A dev_verify result that says ISSUES."""
-    return (
-        "# dev_verify — senior verification battery\n"
-        "\n"
-        "**Verdict: ⚠️ ISSUES — fix before shipping**\n"
-        "\n"
-        f"## Tests: ✗ fail\n```\nEXIT:1\n```\n{extra}"
-    )
+    return f"# dev_verify — senior verification battery\n\n**Verdict: ⚠️ ISSUES — fix before shipping**\n\n## Tests: ✗ fail\n```\nEXIT:1\n```\n{extra}"
 
 
 def _pass_content(extra: str = "") -> str:
     """A dev_verify result that says PASS."""
-    return (
-        "# dev_verify — senior verification battery\n"
-        "\n"
-        "**Verdict: ✅ PASS**\n"
-        "\n"
-        f"## Tests: ✓ pass\n```\nEXIT:0\n```\n{extra}"
-    )
+    return f"# dev_verify — senior verification battery\n\n**Verdict: ✅ PASS**\n\n## Tests: ✓ pass\n```\nEXIT:0\n```\n{extra}"
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -376,12 +364,7 @@ def test_drive_directive_quotes_failing_items():
     """The under-budget DRIVE directive quotes the concrete failing lines."""
     mw = ReflectFixBudgetMiddleware()
     mw.before_agent({}, _runtime())
-    content = (
-        "# dev_verify\n**Verdict: ⚠️ ISSUES**\n"
-        "## Tests: ✗ fail\n"
-        "## Browser: ✗ render_error\n- / [render_error] — boom\n"
-        "## Review: 1 HIGH\n- 🔴 risky thing\n"
-    )
+    content = "# dev_verify\n**Verdict: ⚠️ ISSUES**\n## Tests: ✗ fail\n## Browser: ✗ render_error\n- / [render_error] — boom\n## Review: 1 HIGH\n- 🔴 risky thing\n"
     state = _make_state_with_messages(_make_dev_verify_tool_message(content))
     mw.after_model(state, _runtime())
     directive = mw._pending_warnings[("t1", "r1")][0]

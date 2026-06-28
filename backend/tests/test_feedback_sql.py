@@ -31,9 +31,7 @@ async def repo():
 class TestFeedbackRepositoryCRUD:
     @pytest.mark.anyio
     async def test_create_then_get_round_trips(self, repo):
-        result = await repo.create(
-            run_id="r_roundtrip", thread_id="t1", rating=1, comment="great", user_id="alice"
-        )
+        result = await repo.create(run_id="r_roundtrip", thread_id="t1", rating=1, comment="great", user_id="alice")
         # Pass user_id explicitly so the autouse test-user-id doesn't
         # trigger the owner-isolation filter and return None.
         fetched = await repo.get(result["feedback_id"], user_id="alice")
@@ -98,9 +96,7 @@ class TestFeedbackRepositoryListing:
 class TestFeedbackRepositoryUpsert:
     @pytest.mark.anyio
     async def test_upsert_creates_when_missing(self, repo):
-        result = await repo.upsert(
-            run_id="r_upsert_new", thread_id="t1", rating=1, comment="first", user_id="alice"
-        )
+        result = await repo.upsert(run_id="r_upsert_new", thread_id="t1", rating=1, comment="first", user_id="alice")
         # Upsert returns the row dict. Re-fetch with explicit user to
         # bypass the autouse test-user isolation.
         fetched = await repo.get(result["feedback_id"], user_id="alice")

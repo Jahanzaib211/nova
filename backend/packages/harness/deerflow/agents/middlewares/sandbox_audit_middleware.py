@@ -77,11 +77,39 @@ _SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 # A small set of frequently-typosquatted popular npm packages.
 _POPULAR_NPM = {
-    "react", "react-dom", "next", "vue", "express", "lodash", "axios", "chalk",
-    "commander", "typescript", "tailwindcss", "vite", "webpack", "eslint",
-    "prettier", "zod", "prisma", "dotenv", "cors", "jsonwebtoken", "bcrypt",
-    "nodemon", "ts-node", "uuid", "moment", "dayjs", "classnames", "clsx",
-    "framer-motion", "zustand", "redux", "@types/node", "@types/react",
+    "react",
+    "react-dom",
+    "next",
+    "vue",
+    "express",
+    "lodash",
+    "axios",
+    "chalk",
+    "commander",
+    "typescript",
+    "tailwindcss",
+    "vite",
+    "webpack",
+    "eslint",
+    "prettier",
+    "zod",
+    "prisma",
+    "dotenv",
+    "cors",
+    "jsonwebtoken",
+    "bcrypt",
+    "nodemon",
+    "ts-node",
+    "uuid",
+    "moment",
+    "dayjs",
+    "classnames",
+    "clsx",
+    "framer-motion",
+    "zustand",
+    "redux",
+    "@types/node",
+    "@types/react",
 }
 
 _INSTALL_RE = re.compile(r"\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:add|install|i)\b([^&|;]*)")
@@ -358,11 +386,7 @@ class SandboxAuditMiddleware(AgentMiddleware[ThreadState]):
             if isinstance(content, str) and content:
                 leaks = _scan_secrets(content)
                 if leaks:
-                    notes.append(
-                        "🔐 Secret-scan: this file appears to contain "
-                        + ", ".join(leaks)
-                        + ". Use environment variables / .env (gitignored) instead of hard-coding secrets."
-                    )
+                    notes.append("🔐 Secret-scan: this file appears to contain " + ", ".join(leaks) + ". Use environment variables / .env (gitignored) instead of hard-coding secrets.")
         elif name == "bash":
             cmd = args.get("command")
             if isinstance(cmd, str) and cmd:

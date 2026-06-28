@@ -111,7 +111,7 @@ def _thread_id_for_observation(sandbox_id: str) -> str | None:
     sandbox (no thread) and unknown ids return None (observation skipped).
     """
     if sandbox_id.startswith("local:"):
-        return sandbox_id[len("local:"):] or None
+        return sandbox_id[len("local:") :] or None
     if not sandbox_id or sandbox_id == "local":
         return None
     try:
@@ -166,13 +166,15 @@ def _write_sandbox_observation(
         thread_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.datetime.now().strftime("%H:%M:%S")
-        entry = json.dumps({
-            "ts": ts,
-            "type": tool,
-            "path": path,
-            "summary": summary,
-            "output": output[:2000] if output else "",
-        })
+        entry = json.dumps(
+            {
+                "ts": ts,
+                "type": tool,
+                "path": path,
+                "summary": summary,
+                "output": output[:2000] if output else "",
+            }
+        )
 
         log_path = thread_dir / "sandbox.log"
         with open(log_path, "a", encoding="utf-8") as fh:
@@ -1567,7 +1569,7 @@ def _extract_dev_command_and_cwd(command: str, workspace_root: str) -> tuple[str
         target = cd_matches[-1].strip().strip("'\"")
         # Translate virtual paths and resolve relative-to-workspace dirs.
         if target.startswith("/mnt/user-data/workspace"):
-            rel = target[len("/mnt/user-data/workspace"):].lstrip("/")
+            rel = target[len("/mnt/user-data/workspace") :].lstrip("/")
             cwd = os.path.join(workspace_root, rel) if rel else workspace_root
         elif target.startswith("/"):
             cwd = target  # already a host absolute path
@@ -1600,7 +1602,7 @@ async def _bash_tool_async(runtime: Runtime, description: str, command: str) -> 
         if _looks_like_dev_server(command):
             sandbox_id = (runtime.state.get("sandbox") or {}).get("sandbox_id", "") if hasattr(runtime, "state") else ""
             if is_local_sandbox(runtime):
-                thread_id = sandbox_id[len("local:"):] if sandbox_id.startswith("local:") else None
+                thread_id = sandbox_id[len("local:") :] if sandbox_id.startswith("local:") else None
                 if thread_id:
                     ensure_thread_directories_exist(runtime)
                     thread_data = get_thread_data(runtime)
@@ -1611,7 +1613,9 @@ async def _bash_tool_async(runtime: Runtime, description: str, command: str) -> 
                         bare_cmd, cwd = _extract_dev_command_and_cwd(command, workspace_root)
                         handle = await _start(thread_id, cwd, bare_cmd)
                         _write_sandbox_observation(
-                            sandbox_id, "start_dev_server", None,
+                            sandbox_id,
+                            "start_dev_server",
+                            None,
                             f"Dev server on port {handle.port} ({handle.status})",
                         )
                         return (
@@ -1634,7 +1638,9 @@ async def _bash_tool_async(runtime: Runtime, description: str, command: str) -> 
                         bare_cmd, cwd = _extract_dev_command_and_cwd(command, f"{VIRTUAL_PATH_PREFIX}/workspace")
                         handle = await _start(thread_id, cwd, bare_cmd, sandbox=sandbox)
                         _write_sandbox_observation(
-                            sandbox_id, "start_dev_server", None,
+                            sandbox_id,
+                            "start_dev_server",
+                            None,
                             f"Dev server preview {handle.host}:{handle.port} ({handle.status})",
                         )
                         return (

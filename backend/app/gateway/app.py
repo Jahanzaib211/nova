@@ -453,7 +453,6 @@ try:
     from deerflow.sandbox.shutdown import install_shutdown_hooks
 
     if install_shutdown_hooks():
-        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)",
-                    os.environ.get("DEERFLOW_SHUTDOWN_BUDGET_S", "5.0"))
+        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)", os.environ.get("DEERFLOW_SHUTDOWN_BUDGET_S", "5.0"))
 except Exception as _install_err:  # pragma: no cover - defensive
     logger.warning("gateway: failed to install shutdown hooks: %s", _install_err)

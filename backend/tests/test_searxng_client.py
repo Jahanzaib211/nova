@@ -94,6 +94,7 @@ class TestSearxngClient:
             client = SearxngClient(base_url="http://searxng:8080")
             # ConnectError is retried 3x then surfaces as SearchConnectionError.
             from deerflow.community.searxng.search_errors import SearchConnectionError
+
             with pytest.raises(SearchConnectionError):
                 await client.search("unreachable query")
 
@@ -121,8 +122,7 @@ class TestSearxngTools:
             ]
         )
 
-        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), \
-             patch("deerflow.community.searxng.tools._get_tool_config", return_value=None):
+        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), patch("deerflow.community.searxng.tools._get_tool_config", return_value=None):
             result = await tools.web_search_tool.ainvoke({"query": "test query"})
 
         data = json.loads(result)
@@ -137,9 +137,11 @@ class TestSearxngTools:
         mock_searxng = MagicMock()
         mock_searxng.search = AsyncMock(side_effect=Exception("API error"))
 
-        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_searxng), \
-             patch("deerflow.community.searxng.tools._get_tool_config", return_value=None), \
-             patch("deerflow.community.ddg_search.tools.web_search_tool") as mock_ddg:
+        with (
+            patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_searxng),
+            patch("deerflow.community.searxng.tools._get_tool_config", return_value=None),
+            patch("deerflow.community.ddg_search.tools.web_search_tool") as mock_ddg,
+        ):
             # Make the DDG tool's ainvoke raise too.
             mock_ddg.ainvoke = AsyncMock(side_effect=Exception("DDG also failed"))
             result = await tools.web_search_tool.ainvoke({"query": "test query"})
@@ -154,15 +156,9 @@ class TestSearxngTools:
     async def test_web_search_tool_with_max_results(self):
         """web_search_tool coerces max_results from string config."""
         mock_client = MagicMock()
-        mock_client.search = AsyncMock(
-            return_value=[
-                {"title": f"R{i}", "url": f"https://example.com/{i}", "content": f"D{i}"}
-                for i in range(10)
-            ]
-        )
+        mock_client.search = AsyncMock(return_value=[{"title": f"R{i}", "url": f"https://example.com/{i}", "content": f"D{i}"} for i in range(10)])
 
-        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), \
-             patch("deerflow.community.searxng.tools._get_tool_config", return_value={"max_results": "3"}):
+        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), patch("deerflow.community.searxng.tools._get_tool_config", return_value={"max_results": "3"}):
             await tools.web_search_tool.ainvoke({"query": "test query"})
 
         mock_client.search.assert_called_once()

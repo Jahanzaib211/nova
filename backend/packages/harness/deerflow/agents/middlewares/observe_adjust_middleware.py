@@ -127,9 +127,7 @@ def _derive_journal_line(messages: list) -> str | None:
         elif name == "present_files":
             event = "presented files to the user"
         elif name in ("dev_verify", "browser_check", "code_review"):
-            verdict = "PASS" if "✅ PASS" in text else "ISSUES" if "⚠️ ISSUES" in text else (
-                "ok" if '"ok": true' in text.lower() or "✓" in text else "checked"
-            )
+            verdict = "PASS" if "✅ PASS" in text else "ISSUES" if "⚠️ ISSUES" in text else ("ok" if '"ok": true' in text.lower() or "✓" in text else "checked")
             event = f"{name} → {verdict}"
         else:  # pragma: no cover — guarded by _JOURNAL_MUTATION_TOOLS
             event = name
@@ -168,9 +166,7 @@ def _write_journal_file(thread_id: str, lines: list[str]) -> None:
 
         work_dir = get_paths().sandbox_work_dir(thread_id, user_id=user_id)
         work_dir.mkdir(parents=True, exist_ok=True)
-        (work_dir / "BUILD_JOURNAL.md").write_text(
-            _journal_header() + "\n".join(lines) + "\n", encoding="utf-8"
-        )
+        (work_dir / "BUILD_JOURNAL.md").write_text(_journal_header() + "\n".join(lines) + "\n", encoding="utf-8")
     except Exception:
         logger.debug("build journal: file write skipped", exc_info=True)
 
@@ -216,9 +212,7 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
         if sandbox is None or getattr(sandbox, "_client", None) is None:
             return  # no browser-capable (AIO) sandbox → nothing to verify
 
-        check = await asyncio.to_thread(
-            run_browser_check, thread_id, sandbox, routes=["/"], with_screenshot=True
-        )
+        check = await asyncio.to_thread(run_browser_check, thread_id, sandbox, routes=["/"], with_screenshot=True)
         verdict = "✓ passed" if check.ok else "✗ found issues"
         _append_devlog_to_sandbox_log(thread_id, f"[self-test] present_files browser check {verdict}")
         for r in check.routes:
@@ -230,6 +224,7 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
         # Hand the rendered screenshot to a vision-capable model (ViewImageMiddleware
         # injects it next turn) so the agent can SEE the delivered build.
         from deerflow.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
+
         shot_b64 = _first_route_screenshot(check)
         stash_verify_screenshot(thread_id, shot_b64)
 
@@ -249,15 +244,17 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
                     for r in check.routes
                 ]
                 console_errors_count = sum(len(r.console_errors or []) for r in check.routes)
-                writer({
-                    "type": "verify_result",
-                    "thread_id": thread_id,
-                    "ok": bool(check.ok),
-                    "verdict": "passed" if check.ok else "issues",
-                    "routes": routes_summary,
-                    "console_errors_count": console_errors_count,
-                    "screenshot": (f"data:image/png;base64,{shot_b64}" if shot_b64 else None),
-                })
+                writer(
+                    {
+                        "type": "verify_result",
+                        "thread_id": thread_id,
+                        "ok": bool(check.ok),
+                        "verdict": "passed" if check.ok else "issues",
+                        "routes": routes_summary,
+                        "console_errors_count": console_errors_count,
+                        "screenshot": (f"data:image/png;base64,{shot_b64}" if shot_b64 else None),
+                    }
+                )
             except Exception:
                 logger.debug("verify_result event emit failed", exc_info=True)
     except Exception as e:  # pragma: no cover - best effort
@@ -276,7 +273,7 @@ def _write_todo_md_file(todos: list, state: Any) -> None:
         if not sandbox_id or not sandbox_id.startswith("local:"):
             return
 
-        thread_id = sandbox_id[len("local:"):]
+        thread_id = sandbox_id[len("local:") :]
         if not thread_id:
             return
 
@@ -295,8 +292,7 @@ def _write_todo_md_file(todos: list, state: Any) -> None:
         lines = ["# Task Progress\n"]
         for t in todos:
             status = t.get("status") if isinstance(t, dict) else getattr(t, "status", "pending")
-            content = (t.get("content") or t.get("description") if isinstance(t, dict)
-                       else getattr(t, "content", None) or getattr(t, "description", None) or str(t))
+            content = t.get("content") or t.get("description") if isinstance(t, dict) else getattr(t, "content", None) or getattr(t, "description", None) or str(t)
             if status == "completed":
                 cb = "[x]"
             elif status == "in_progress":
@@ -323,10 +319,7 @@ class ObserveAdjustMiddleware(AgentMiddleware):
                 done = 0
                 total = len(todos)
                 for t in todos:
-                    status = (
-                        t.get("status") if isinstance(t, dict)
-                        else getattr(t, "status", None)
-                    )
+                    status = t.get("status") if isinstance(t, dict) else getattr(t, "status", None)
                     if status in ("completed", "done"):
                         done += 1
 
@@ -334,12 +327,14 @@ class ObserveAdjustMiddleware(AgentMiddleware):
 
                 # Emit task_progress custom event for the frontend
                 if callable(writer):
-                    writer({
-                        "type": "task_progress",
-                        "step": done,
-                        "total": total,
-                        "status": task_status,
-                    })
+                    writer(
+                        {
+                            "type": "task_progress",
+                            "step": done,
+                            "total": total,
+                            "status": task_status,
+                        }
+                    )
 
                 # Write todo.md to the sandbox workspace (best-effort)
                 _write_todo_md_file(todos, state)
@@ -354,11 +349,13 @@ class ObserveAdjustMiddleware(AgentMiddleware):
                     if isinstance(msg, ToolMessage):
                         tool_name = getattr(msg, "name", None) or ""
                         if tool_name == "task":
-                            writer({
-                                "type": "task_activity",
-                                "tool_call_id": getattr(msg, "tool_call_id", ""),
-                                "status": "done",
-                            })
+                            writer(
+                                {
+                                    "type": "task_activity",
+                                    "tool_call_id": getattr(msg, "tool_call_id", ""),
+                                    "status": "done",
+                                }
+                            )
                         break  # only emit for the very latest tool message
 
             # Deterministic auto-verify on present_files: when the latest tool result
@@ -457,9 +454,7 @@ class ObserveAdjustMiddleware(AgentMiddleware):
                 "<system-reminder>\n<build_journal>\n"
                 "Auto-maintained record of what you have built so far in this thread "
                 "(source of truth — mirrored in workspace/BUILD_JOURNAL.md). Use it to stay "
-                "consistent with prior steps; do not repeat completed work.\n"
-                + "\n".join(tail)
-                + "\n</build_journal>\n</system-reminder>"
+                "consistent with prior steps; do not repeat completed work.\n" + "\n".join(tail) + "\n</build_journal>\n</system-reminder>"
             )
             new_messages = [*request.messages, HumanMessage(content=reminder, name="build_journal")]
             return request.override(messages=new_messages)

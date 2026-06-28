@@ -50,15 +50,9 @@ _RETRY_JITTER = 0.30
 try:
     from deerflow.sandbox.metrics import Counter, Histogram, get_registry
 
-    _igino_search_total = get_registry().register_counter(
-        Counter("igino_search_total", "Total iGIN0 searches, partitioned by outcome.", labelnames=("outcome",))
-    )
-    _igino_search_duration = get_registry().register_histogram(
-        Histogram("igino_search_duration_ms", "iGIN0 search latency in milliseconds.", labelnames=("source",))
-    )
-    _igino_fetch_total = get_registry().register_counter(
-        Counter("igino_fetch_total", "Total iGIN0 fetches, partitioned by outcome.", labelnames=("outcome",))
-    )
+    _igino_search_total = get_registry().register_counter(Counter("igino_search_total", "Total iGIN0 searches, partitioned by outcome.", labelnames=("outcome",)))
+    _igino_search_duration = get_registry().register_histogram(Histogram("igino_search_duration_ms", "iGIN0 search latency in milliseconds.", labelnames=("source",)))
+    _igino_fetch_total = get_registry().register_counter(Counter("igino_fetch_total", "Total iGIN0 fetches, partitioned by outcome.", labelnames=("outcome",)))
     _HAS_METRICS = True
 except Exception:
     _HAS_METRICS = False
@@ -128,7 +122,10 @@ class SearxngClient:
                     sleep_s = _backoff_ms(attempt) / 1000.0
                     logger.info(
                         "SearXNG search attempt %d/%d failed: %s; retrying in %.1fms",
-                        attempt, _RETRY_MAX, exc, sleep_s * 1000,
+                        attempt,
+                        _RETRY_MAX,
+                        exc,
+                        sleep_s * 1000,
                     )
                     time.sleep(sleep_s)
                     continue

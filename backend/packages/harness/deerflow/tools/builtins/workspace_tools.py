@@ -92,21 +92,21 @@ def search_files_tool(
 
             result = "\n".join(matches) if matches else f"No files matching '{pattern}' found."
             _write_sandbox_observation(
-                sandbox_id, "search_files", directory,
+                sandbox_id,
+                "search_files",
+                directory,
                 f"Pattern '{pattern}' → {len(matches)} match(es)",
                 result,
             )
             return result
         else:
             # AIO / remote sandbox — use bash; quote all shell-interpolated values
-            cmd = (
-                f"find {shlex.quote(directory)} -name {shlex.quote(pattern)}"
-                f" -not -path '*/node_modules/*' -not -path '*/.git/*'"
-                f" 2>/dev/null | head -{_MAX_SEARCH_RESULTS}"
-            )
+            cmd = f"find {shlex.quote(directory)} -name {shlex.quote(pattern)} -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -{_MAX_SEARCH_RESULTS}"
             result = sandbox.execute_command(cmd)
             _write_sandbox_observation(
-                sandbox_id, "search_files", directory,
+                sandbox_id,
+                "search_files",
+                directory,
                 f"Pattern '{pattern}'",
                 result,
             )
@@ -170,22 +170,21 @@ def grep_files_tool(
 
             result = "\n".join(matches) if matches else f"No matches for '{pattern}'."
             _write_sandbox_observation(
-                sandbox_id, "grep_files", directory,
+                sandbox_id,
+                "grep_files",
+                directory,
                 f"'{pattern}' in {file_pattern} → {len(matches)} match(es)",
                 result[:1000],
             )
             return result
         else:
             # AIO / remote sandbox — use bash grep; quote all shell-interpolated values
-            cmd = (
-                f"grep -rn {shlex.quote(pattern)} {shlex.quote(directory)}"
-                f" --include={shlex.quote(file_pattern)}"
-                f" --exclude-dir=node_modules --exclude-dir=.git"
-                f" 2>/dev/null | head -{_MAX_GREP_RESULTS}"
-            )
+            cmd = f"grep -rn {shlex.quote(pattern)} {shlex.quote(directory)} --include={shlex.quote(file_pattern)} --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null | head -{_MAX_GREP_RESULTS}"
             result = sandbox.execute_command(cmd)
             _write_sandbox_observation(
-                sandbox_id, "grep_files", directory,
+                sandbox_id,
+                "grep_files",
+                directory,
                 f"'{pattern}'",
                 result,
             )
@@ -205,14 +204,14 @@ _TEMPLATES: dict[str, dict[str, str]] = {
         "next.config.ts": "import type { NextConfig } from 'next'\nconst nextConfig: NextConfig = {}\nexport default nextConfig",
         "src/app/globals.css": "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
         "src/app/layout.tsx": "import type { Metadata } from 'next'\nimport './globals.css'\nexport const metadata: Metadata = { title: 'My App', description: 'Built by DeerFlow' }\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return (<html lang=\"en\"><body>{children}</body></html>)\n}",
-        "src/app/page.tsx": "export default function Home() {\n  return (<main className=\"min-h-screen p-8\"><h1 className=\"text-4xl font-bold\">My App</h1></main>)\n}",
+        "src/app/page.tsx": 'export default function Home() {\n  return (<main className="min-h-screen p-8"><h1 className="text-4xl font-bold">My App</h1></main>)\n}',
     },
     "react-vite": {
         "package.json": '{"name":"my-app","private":true,"version":"0.0.0","type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"tsc && vite build"},"dependencies":{"react":"^18.3.1","react-dom":"^18.3.1"},"devDependencies":{"@vitejs/plugin-react":"^4.3.1","typescript":"^5.5.3","vite":"^5.4.0","tailwindcss":"^3.4.0"}}',
         "vite.config.ts": "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\nexport default defineConfig({ plugins: [react()], server: { host: true } })",
         "index.html": '<!doctype html>\n<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>My App</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>',
         "src/main.tsx": "import { StrictMode } from 'react'\nimport { createRoot } from 'react-dom/client'\nimport './index.css'\nimport App from './App.tsx'\ncreateRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)",
-        "src/App.tsx": "import './App.css'\nexport default function App() {\n  return <div className=\"min-h-screen p-8\"><h1 className=\"text-4xl font-bold\">My App</h1></div>\n}",
+        "src/App.tsx": 'import \'./App.css\'\nexport default function App() {\n  return <div className="min-h-screen p-8"><h1 className="text-4xl font-bold">My App</h1></div>\n}',
         "src/index.css": "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
     },
     "html-only": {
@@ -255,6 +254,7 @@ def scaffold_project_tool(
         else:
             sandbox = ensure_sandbox_initialized(runtime)
             import base64
+
             for rel_path, content in files.items():
                 vpath = f"/mnt/user-data/workspace/{rel_path}"
                 parent = "/".join(vpath.split("/")[:-1])
@@ -275,7 +275,7 @@ def scaffold_project_tool(
 
 def _thread_id_from_sandbox_id(sandbox_id: str) -> str | None:
     if sandbox_id and sandbox_id.startswith("local:"):
-        tid = sandbox_id[len("local:"):]
+        tid = sandbox_id[len("local:") :]
         return tid or None
     return None
 
@@ -330,18 +330,15 @@ async def start_dev_server_tool(
             handle = await _start(thread_id, cwd, command, sandbox=sandbox, label=label, container_port=container_port)
 
         _write_sandbox_observation(
-            sandbox_id, "start_dev_server", None,
+            sandbox_id,
+            "start_dev_server",
+            None,
             f"Dev server preview {handle.host}:{handle.port} ({handle.status})",
         )
         if handle.status == "error":
             recent = "\n".join(list(handle.log_buffer)[-10:])
             return f"Error starting dev server:\n{recent}"
-        return (
-            f"✓ Dev server starting. "
-            f"The Browser tab in Agent's Computer will show the live app once it's ready "
-            f"(preview URL: /api/sandbox/preview/{thread_id}/). "
-            f"It may take 10-30s to compile."
-        )
+        return f"✓ Dev server starting. The Browser tab in Agent's Computer will show the live app once it's ready (preview URL: /api/sandbox/preview/{thread_id}/). It may take 10-30s to compile."
     except Exception as e:
         return f"Error: {e}"
 
@@ -349,6 +346,7 @@ async def start_dev_server_tool(
 # ── Enterprise nodes: interactive PTY · browser automation · deploy · notify ──
 # All wrap the AIO sandbox's native SDK (client.shell / client.browser_page /
 # client.proxy) that DeerFlow otherwise under-uses. Container (AIO) sandbox only.
+
 
 def _aio_client_and_thread(runtime: Runtime):
     """Resolve (client, thread_id, error). client is the agent_sandbox SDK client."""
@@ -373,12 +371,8 @@ def _aio_client_and_thread(runtime: Runtime):
 # Idempotency cache for browser_navigate. Maps (thread_id, navigate_id) →
 # cached result, with TTL eviction. Bounded by entry count to prevent
 # memory growth on long-running threads.
-_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES = int(
-    os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES", "256")
-)
-_NAVIGATE_IDEMPOTENCY_TTL_S = float(
-    os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_TTL_S", "60.0")
-)
+_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES = int(os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES", "256"))
+_NAVIGATE_IDEMPOTENCY_TTL_S = float(os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_TTL_S", "60.0"))
 
 
 class _BrowserNavigateIdempotency:
@@ -718,10 +712,7 @@ def screenshot_tool(
 
         if len(png) > max_bytes:
             screenshot_total.inc("too_large")
-            return (
-                f"Error: screenshot too large ({len(png):,} bytes > {max_bytes:,}); "
-                "retry with full_page=false or a smaller viewport"
-            )
+            return f"Error: screenshot too large ({len(png):,} bytes > {max_bytes:,}); retry with full_page=false or a smaller viewport"
 
         b64 = base64.b64encode(png).decode("ascii")
         screenshot_total.inc("ok")
@@ -792,7 +783,7 @@ def system_probe_tool(runtime: Runtime, description: str) -> str:
             "free -h 2>/dev/null | awk 'NR<=2{print}'; df -h / 2>/dev/null | tail -1; "
             "echo; echo '== RUNTIMES =='; "
             "for b in node npm pnpm python3 pip uv git go rustc docker; do "
-            "printf '%-8s ' \"$b\"; (command -v \"$b\" >/dev/null 2>&1 && \"$b\" --version 2>&1 | head -1) || echo 'absent'; done; "
+            'printf \'%-8s \' "$b"; (command -v "$b" >/dev/null 2>&1 && "$b" --version 2>&1 | head -1) || echo \'absent\'; done; '
             "echo; echo '== LISTENING PORTS =='; (ss -ltnp 2>/dev/null || netstat -ltn 2>/dev/null) | grep -i listen | head -20; "
             "echo; echo '== CWD / WORKSPACE =='; pwd; ls -la /mnt/user-data/workspace 2>/dev/null | head -25"
         )
@@ -818,10 +809,7 @@ def free_port_tool(runtime: Runtime, description: str, port: int) -> str:
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         p = int(port)
-        cmd = (
-            f"fuser -k {p}/tcp 2>/dev/null; kill $(lsof -ti tcp:{p} 2>/dev/null) 2>/dev/null; sleep 0.4; "
-            f"if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ':{p} '; then echo 'STILL IN USE: {p}'; else echo 'FREE: {p}'; fi"
-        )
+        cmd = f"fuser -k {p}/tcp 2>/dev/null; kill $(lsof -ti tcp:{p} 2>/dev/null) 2>/dev/null; sleep 0.4; if (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -q ':{p} '; then echo 'STILL IN USE: {p}'; else echo 'FREE: {p}'; fi"
         out = sandbox.execute_command(cmd)
         _write_sandbox_observation(_get_sandbox_id(runtime), "bash", None, f"free_port {p}")
         return out or f"FREE: {p}"
@@ -863,19 +851,13 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
 
         # 1) Tests (deterministic detect → run, bounded).
         if run_tests:
-            pkg = (sandbox.execute_command(
-                "find /mnt/user-data/workspace -maxdepth 2 -name package.json -not -path '*/node_modules/*' 2>/dev/null | head -1"
-            ) or "").strip().splitlines()
+            pkg = (sandbox.execute_command("find /mnt/user-data/workspace -maxdepth 2 -name package.json -not -path '*/node_modules/*' 2>/dev/null | head -1") or "").strip().splitlines()
             pkg_path = next((p.strip() for p in pkg if p.strip().endswith("package.json")), "")
             if pkg_path:
                 projdir = pkg_path.rsplit("/", 1)[0]
-                has_test = (sandbox.execute_command(
-                    f"grep -q '\"test\"[[:space:]]*:' {shlex.quote(pkg_path)} && echo yes || echo no"
-                ) or "").strip()
+                has_test = (sandbox.execute_command(f"grep -q '\"test\"[[:space:]]*:' {shlex.quote(pkg_path)} && echo yes || echo no") or "").strip()
                 if "yes" in has_test:
-                    out = sandbox.execute_command(
-                        f"cd {shlex.quote(projdir)} && timeout 180 npm test 2>&1 | tail -25; echo EXIT:${{PIPESTATUS[0]}}"
-                    ) or ""
+                    out = sandbox.execute_command(f"cd {shlex.quote(projdir)} && timeout 180 npm test 2>&1 | tail -25; echo EXIT:${{PIPESTATUS[0]}}") or ""
                     passed = "EXIT:0" in out
                     ok = ok and passed
                     lines.append(f"## Tests: {'✓ pass' if passed else '✗ fail'}")
@@ -901,6 +883,7 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
                 lines.append("")
                 try:
                     from deerflow.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
+
                     stash_verify_screenshot(thread_id, _first_route_screenshot(chk))
                 except Exception:
                     pass
@@ -911,8 +894,7 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
         review = build_review(thread_id, user_id)
         high = [r for r in review.risks if r.level == "high"]
         ok = ok and not high
-        lines.append(f"## Review: {len(review.files)} file(s), {len(review.risks)} risk(s)"
-                     + (f" — {len(high)} HIGH" if high else ""))
+        lines.append(f"## Review: {len(review.files)} file(s), {len(review.risks)} risk(s)" + (f" — {len(high)} HIGH" if high else ""))
         for r in high:
             lines.append(f"- 🔴 {r.message}")
 
@@ -954,7 +936,9 @@ def code_review_tool(
             user_id = None
         review = build_review(thread_id, user_id)
         _write_sandbox_observation(
-            sandbox_id, "code_review", None,
+            sandbox_id,
+            "code_review",
+            None,
             f"Review: {len(review.files)} file(s), {len(review.risks)} risk(s)",
         )
         return review.markdown
@@ -996,6 +980,7 @@ async def save_skill_tool(
             host_root = _resolve_workspace_host_path(runtime)
         else:
             from deerflow.config.paths import get_paths
+
             try:
                 user_id = get_effective_user_id()
             except Exception:
@@ -1007,15 +992,14 @@ async def save_skill_tool(
 
         result = await promote_skill_to_global(name, source_dir, thread_id=thread_id)
         _write_sandbox_observation(
-            sandbox_id, "save_skill", str(source_dir),
+            sandbox_id,
+            "save_skill",
+            str(source_dir),
             f"Save skill '{name}': {'ok' if result.get('saved') else result.get('reason')}",
         )
         if not result.get("saved"):
             return f"Could not save skill '{name}': {result.get('reason')}"
-        return (
-            f"✓ Saved skill '{name}' to the global registry ({len(result.get('files', []))} file(s)). "
-            f"It's now available as /{name} in all future chats."
-        )
+        return f"✓ Saved skill '{name}' to the global registry ({len(result.get('files', []))} file(s)). It's now available as /{name} in all future chats."
     except Exception as e:
         return f"Error: {e}"
 
@@ -1052,7 +1036,9 @@ def browser_check_tool(
         route_list = [r.strip() for r in routes.split(",") if r.strip()] or ["/"]
         check = run_browser_check(thread_id, sandbox, routes=route_list, with_screenshot=False)
         _write_sandbox_observation(
-            sandbox_id, "browser_check", None,
+            sandbox_id,
+            "browser_check",
+            None,
             f"Browser self-test: {'pass' if check.ok else 'issues'} ({len(check.routes)} route(s))",
         )
         return check.summary()

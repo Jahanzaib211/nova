@@ -171,11 +171,7 @@ async def igino_research_tool(
                 async with sem:
                     return await _fetch_one(url, source, trace_id)
 
-            tasks = [
-                _limited_fetch(r.get("url", ""), "jina")
-                for r in fetch_list
-                if r.get("url")
-            ]
+            tasks = [_limited_fetch(r.get("url", ""), "jina") for r in fetch_list if r.get("url")]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for r in results:
                 if isinstance(r, dict) and r is not None:

@@ -198,9 +198,7 @@ class TestStepFailureIsolation:
 
         # Force the drain step to raise.
         original = shutdown._drain_browser_check_semaphore
-        shutdown._drain_browser_check_semaphore = lambda *_a, **_kw: (_ for _ in ()).throw(
-            RuntimeError("forced drain failure")
-        )
+        shutdown._drain_browser_check_semaphore = lambda *_a, **_kw: (_ for _ in ()).throw(RuntimeError("forced drain failure"))
         try:
             result = run_shutdown(budget_s=2.0)
             # Even though drain failed, reset_state ran.
@@ -215,9 +213,7 @@ class TestStepFailureIsolation:
     def test_reset_step_failure_is_logged(self) -> None:
         """If reset_state raises, the other steps' results are preserved."""
         original = shutdown._reset_browser_state
-        shutdown._reset_browser_state = lambda: (_ for _ in ()).throw(
-            RuntimeError("forced reset failure")
-        )
+        shutdown._reset_browser_state = lambda: (_ for _ in ()).throw(RuntimeError("forced reset failure"))
         try:
             result = run_shutdown(budget_s=2.0)
             assert result["steps"]["reset_state"]["ok"] is False
