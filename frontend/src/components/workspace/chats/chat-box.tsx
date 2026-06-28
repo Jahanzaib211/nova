@@ -229,24 +229,30 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               role="separator"
               className="w-1 shrink-0 cursor-col-resize bg-border/40 transition-colors hover:bg-[--primary]/60"
             />
-            <div style={{ width: computerWidth }} className="h-full shrink-0">
+            <div
+              style={{ width: computerWidth }}
+              className="flex h-full shrink-0 flex-col overflow-hidden"
+            >
               {/* Status bar above the panel — purely additive.
-                  Never breaks the existing AgentComputerPanel UI. */}
-              <RuntimeCapabilitiesBar />
-              <AgentComputerPanel
-                threadId={threadId}
-                currentTool={currentTool}
-                isLoading={thread.isLoading}
-                todos={thread.values.todos ?? []}
-                taskProgress={taskProgress}
-                verifyResult={verifyResult}
-                messages={thread.messages}
-                activityEvents={activityEvents}
-                activeWriteFilePath={activeWriteFilePath}
-                artifacts={thread.values.artifacts ?? []}
-                onClose={() => setAgentComputerOpen(false)}
-                onAgentMessage={onAgentMessage}
-              />
+                  Fixed-height row; the panel fills the remaining height below
+                  so its internal scroll areas and footer are not clipped. */}
+              <RuntimeCapabilitiesBar className="shrink-0" />
+              <div className="min-h-0 flex-1">
+                <AgentComputerPanel
+                  threadId={threadId}
+                  currentTool={currentTool}
+                  isLoading={thread.isLoading}
+                  todos={thread.values.todos ?? []}
+                  taskProgress={taskProgress}
+                  verifyResult={verifyResult}
+                  messages={thread.messages}
+                  activityEvents={activityEvents}
+                  activeWriteFilePath={activeWriteFilePath}
+                  artifacts={thread.values.artifacts ?? []}
+                  onClose={() => setAgentComputerOpen(false)}
+                  onAgentMessage={onAgentMessage}
+                />
+              </div>
             </div>
           </div>
         )}

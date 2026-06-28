@@ -1461,9 +1461,9 @@ function PrivacyPanel() {
         <div className="space-y-2">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.cache}</h3>
           <div className="grid grid-cols-3 gap-2">
-            <MetricCard label={t.agentComputer.privacy.size} value={`${status.cache.size}/${status.cache.max_size}`} />
-            <MetricCard label={t.agentComputer.privacy.hitRate} value={`${(status.cache.hit_rate * 100).toFixed(1)}%`} />
-            <MetricCard label={t.agentComputer.privacy.ttl} value={`${status.cache.ttl_s}s`} />
+            <MetricCard label={t.agentComputer.privacy.size} value={`${status.cache?.size ?? 0}/${status.cache?.max_size ?? 0}`} />
+            <MetricCard label={t.agentComputer.privacy.hitRate} value={`${((status.cache?.hit_rate ?? 0) * 100).toFixed(1)}%`} />
+            <MetricCard label={t.agentComputer.privacy.ttl} value={`${status.cache?.ttl_s ?? 0}s`} />
           </div>
         </div>
 
@@ -1471,9 +1471,9 @@ function PrivacyPanel() {
         <div className="space-y-2">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.audit}</h3>
           <div className="grid grid-cols-3 gap-2">
-            <MetricCard label={t.agentComputer.privacy.total} value={status.audit.total_records} />
-            <MetricCard label={t.agentComputer.privacy.errors} value={status.audit.errors} />
-            <MetricCard label={t.agentComputer.privacy.torUsage} value={status.audit.tor_usage} />
+            <MetricCard label={t.agentComputer.privacy.total} value={status.audit?.total_records ?? 0} />
+            <MetricCard label={t.agentComputer.privacy.errors} value={status.audit?.errors ?? 0} />
+            <MetricCard label={t.agentComputer.privacy.torUsage} value={status.audit?.tor_usage ?? 0} />
           </div>
         </div>
 

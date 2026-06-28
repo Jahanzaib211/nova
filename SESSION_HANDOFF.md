@@ -4,6 +4,52 @@
 > This is the single source of truth for resuming. If anything below disagrees with the
 > code, **the code wins** — re-audit before acting.
 
+---
+
+## CURRENT STATE — updated 2026-06-28 (read this section first)
+
+> Everything below the next `---` is the **v3** handoff (2026-06-24) and is now historical
+> context. The fork has since advanced through v6 → v7 → v7.1 → iGIN0 v7.2. This section
+> supersedes it for "what is the state today."
+
+**Branch:** `fork-v7-browser-determinism` — 29 commits ahead of `origin/main`, tree clean.
+
+**Build health (verified this session, all green):**
+- `pnpm lint` → 0 errors (2 pre-existing exhaustive-deps **warnings** only:
+  agent-computer-panel.tsx:214, input-box.tsx:589 — non-blocking).
+- `pnpm typecheck` (`tsc --noEmit`) → clean.
+- `pnpm build` (`next build`) → succeeds (79 routes).
+- Frontend unit tests pass.
+
+**Fixes landed 2026-06-28 (this session):**
+1. **Agent's Computer panel "stuck at top" layout bug** — in
+   `frontend/src/components/workspace/chats/chat-box.tsx` the right column stacked the
+   additive `RuntimeCapabilitiesBar` (h-9) above `AgentComputerPanel` (h-full) inside a
+   non-flex `h-full` wrapper, overflowing by the bar's height and clipping the panel
+   footer. Wrapper is now `flex h-full flex-col overflow-hidden`; bar is `shrink-0`; panel
+   sits in a `min-h-0 flex-1` child. Purely additive, reversible.
+2. **Build-breaking lint error** — `tests/unit/core/reasoning-trigger.test.ts` passed
+   `children` as a prop key (`react/no-children-prop`). Converted to JSX (`.test.tsx`),
+   which satisfies both eslint and the typed-required `children` prop on `I18nProvider`.
+
+**Production-grade audit of the 75-file diff vs main (+3572/−447):** clean. No real
+TODO/FIXME/stub/placeholder, no leaked secrets in committed files (real keys live only in
+gitignored `.env`/`config.yaml`), no stray `console.log` in `frontend/src`, no
+`@ts-ignore`/`as any`/`eslint-disable` in changed frontend files. Backend broad
+`except Exception:` blocks (capabilities.py, sandbox.py) are intentional best-effort
+capability/health probes that degrade to a safe `unavailable`/`False`/`{}` status,
+consistent with HARD RULE 5 (non-fatal run path).
+
+**Open runtime item (not a code defect):** `config.yaml` is gitignored; its primary-model
+choice (MiniMax `minimax-m3` vs `claude-sonnet` via the OAuth credential loader) is a
+deploy-time decision, end-to-end LLM round-trip not re-verified this session.
+
+**Out of scope / next:** Batch 4 refactors (split agent-computer-panel.tsx 1938 lines into
+tab files, wrap blocking-IO sites, lazy-load landing). See plan
+`~/.claude/plans/at-i-did-replaced-gleaming-octopus.md`.
+
+---
+
 ## Originating directive (owner, 2026-06-24, verbatim)
 > "now its time to built the deterministic — all the things that we can do to make the harness and
 > computer use 100× better. I want you to audit the code as your source of truth, update at the end
