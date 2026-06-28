@@ -10,7 +10,8 @@ import { detectLocaleServer } from "@/core/i18n/server";
 
 export const metadata: Metadata = {
   title: "Nova — The Agent's Computer",
-  description: "Nova is an enterprise-grade agent platform that spins up fast, does the work, ships the build, and fades. Built on LangGraph + LangChain.",
+  description:
+    "Nova is an enterprise-grade agent platform that spins up fast, does the work, ships the build, and fades. Built on LangGraph + LangChain.",
 };
 
 export default async function RootLayout({

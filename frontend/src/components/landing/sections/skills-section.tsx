@@ -17,8 +17,7 @@ export function SkillsSection({ className }: { className?: string }) {
           Agent Skills are loaded progressively — only what&apos;s needed, when
           it&apos;s needed.
           <br />
-          Extend Nova with your own skill files, or use our built-in
-          library.
+          Extend Nova with your own skill files, or use our built-in library.
         </div>
       }
     >
