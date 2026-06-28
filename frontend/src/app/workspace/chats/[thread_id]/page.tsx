@@ -1,6 +1,6 @@
 "use client";
 
-import { TerminalIcon } from "lucide-react";
+import { PlayIcon, TerminalIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -115,6 +115,9 @@ export default function ChatPage() {
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    isPaused,
+    pauseRun,
+    resumeRun,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     displayThreadId: threadId,
@@ -238,9 +241,14 @@ export default function ChatPage() {
     },
     [sendMessage, threadId],
   );
-  const handleStop = useCallback(async () => {
-    await thread.stop();
-  }, [thread]);
+  // Stop = pause (interrupt + keep checkpoint), not a hard kill.
+  const handleStop = useCallback(() => {
+    pauseRun();
+  }, [pauseRun]);
+  // Resume continues the agent from the preserved checkpoint.
+  const handleResume = useCallback(() => {
+    void resumeRun();
+  }, [resumeRun]);
 
   const handleAgentMessage = useCallback(
     (text: string) => {
@@ -348,6 +356,19 @@ export default function ChatPage() {
                         hidden={false}
                       />
                     </div>
+                  </div>
+                )}
+                {isPaused && !thread.isLoading && (
+                  <div className="mb-2 flex justify-center">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleResume}
+                      className="gap-1.5 shadow-sm"
+                    >
+                      <PlayIcon className="h-3.5 w-3.5" />
+                      {t.common.resume}
+                    </Button>
                   </div>
                 )}
                 {mountedRef.current ? (

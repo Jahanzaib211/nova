@@ -36,6 +36,8 @@ export const zhCN: Translations = {
     public: "公共",
     custom: "自定义",
     notAvailableInDemoMode: "在演示模式下不可用",
+    resume: "继续",
+    paused: "已暂停",
     loading: "加载中...",
     version: "版本",
     lastUpdated: "最后更新",

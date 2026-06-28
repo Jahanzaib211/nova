@@ -36,6 +36,8 @@ export const enUS: Translations = {
     public: "Public",
     custom: "Custom",
     notAvailableInDemoMode: "Not available in demo mode",
+    resume: "Resume",
+    paused: "Paused",
     loading: "Loading...",
     version: "Version",
     lastUpdated: "Last updated",

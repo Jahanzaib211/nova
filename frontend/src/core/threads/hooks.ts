@@ -1272,6 +1272,52 @@ export function useThreadStream({
     messages: mergedMessages,
   } as typeof thread;
 
+  // ── Pause / Resume (OpenHands-style) ──────────────────────────────────────
+  // The Stop button interrupts the in-flight run, but the backend keeps the
+  // LangGraph checkpoint (cancel action="interrupt"), so the agent resumes from
+  // exactly where it paused instead of being hard-killed.
+  const [isPaused, setIsPaused] = useState(false);
+
+  // Any new run (fresh send OR resume) drives isLoading true → clear paused.
+  // Keying off the loading transition keeps the streaming path untouched.
+  useEffect(() => {
+    if (thread.isLoading) setIsPaused(false);
+  }, [thread.isLoading]);
+
+  const pauseRun = useCallback(() => {
+    setIsPaused(true);
+    void thread.stop();
+  }, [thread]);
+
+  const resumeRun = useCallback(async () => {
+    if (!threadId) return;
+    setIsPaused(false);
+    // LangGraph treats an undefined/null input as "resume after interrupt"
+    // (invoke(None, config)) — it continues from the preserved checkpoint.
+    await thread.submit(undefined, {
+      threadId,
+      streamSubgraphs: true,
+      streamResumable: true,
+      config: { recursion_limit: 1000 },
+      context: {
+        ...context,
+        thinking_enabled: context.mode !== "flash",
+        is_plan_mode: context.mode === "pro" || context.mode === "ultra",
+        subagent_enabled: context.mode === "pro" || context.mode === "ultra",
+        reasoning_effort:
+          context.reasoning_effort ??
+          (context.mode === "ultra"
+            ? "high"
+            : context.mode === "pro"
+              ? "medium"
+              : context.mode === "thinking"
+                ? "low"
+                : undefined),
+        thread_id: threadId,
+      },
+    });
+  }, [thread, threadId, context]);
+
   return {
     thread: mergedThread,
     pendingUsageMessages,
@@ -1280,6 +1326,9 @@ export function useThreadStream({
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    isPaused,
+    pauseRun,
+    resumeRun,
   } as const;
 }
 
