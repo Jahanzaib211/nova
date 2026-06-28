@@ -19,15 +19,16 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
-        // Use the full chromium binary on the test host (the headless-shell
-        // variant is not present on this dev box). Operators on a fresh
-        // Playwright install can drop the override after `npx playwright
-        // install chromium` populates the headless-shell at the default path.
-        launchOptions: {
-          executablePath:
-            process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
-            "/home/jahanzaib/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
-        },
+        // v7.3 (Nova rebrand): removed the hardcoded executablePath that
+        // pinned to chromium-1228 on one developer's box. CI runners
+        // install a different chromium build (via `npx playwright install
+        // chromium --with-deps`), so the pinned path 404'd every CI run.
+        // Now we use the version Playwright installs by default.
+        // Local developers with a custom browser path can still override
+        // via PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var.
+        ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+          ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } }
+          : {}),
       },
     },
   ],

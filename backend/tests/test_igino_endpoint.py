@@ -10,8 +10,25 @@ def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
 
 
+# Stub the app_config loader so importing the router module (which transitively
+# imports app.gateway.app) does not require config.yaml on disk. CI runners
+# don't have config.yaml (it's gitignored); local devs do. This makes the
+# test hermetic and the suite CI-runnable.
+_EMPTY_CONFIG_PATCHER = patch(
+    "deerflow.config.app_config.get_app_config",
+    return_value=MagicMock(),
+)
+
+
 class TestIGINOEndpoints(unittest.TestCase):
     """Test /api/igino/* router logic (without full FastAPI app)."""
+
+    def setUp(self) -> None:
+        self._patcher = _EMPTY_CONFIG_PATCHER
+        self._patcher.start()
+
+    def tearDown(self) -> None:
+        self._patcher.stop()
 
     def test_router_import(self):
         from app.gateway.routers.igino import router

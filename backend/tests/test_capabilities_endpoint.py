@@ -9,11 +9,42 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.gateway.routers import capabilities as cap
+# Stub the app_config loader (same rationale as test_igino_endpoint.py):
+# the module import chain transitively imports app.gateway.app which loads
+# config.yaml at import time. CI runners don't have config.yaml (it's
+# gitignored); local devs do. The stub makes the test hermetic.
+_EMPTY_CONFIG_PATCHER = patch(
+    "deerflow.config.app_config.get_app_config",
+    return_value=MagicMock(),
+)
+
+
+def _ensure_stub() -> None:
+    """Start the config-stub patcher (idempotent).
+
+    Some test runners (pytest collection) import this module before fixtures
+    fire; starting the patcher here makes the import itself hermetic.
+    Idempotent via try/except since `_patch` has no public `is_started` flag.
+    """
+    global _PATCHER_STARTED
+    if _PATCHER_STARTED:
+        return
+    try:
+        _EMPTY_CONFIG_PATCHER.start()
+        _PATCHER_STARTED = True
+    except RuntimeError:
+        # Already started (re-entrant import); safe to ignore.
+        _PATCHER_STARTED = True
+
+
+_PATCHER_STARTED = False
+_ensure_stub()
+
+from app.gateway.routers import capabilities as cap  # noqa: E402  (after stub)
 
 
 def _make_test_client():
