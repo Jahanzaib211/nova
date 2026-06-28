@@ -1,0 +1,50 @@
+# Release Drafter — auto-drafts release notes from PR labels + titles.
+# https://github.com/release-drafter/release-drafter
+#
+# v7.3 (Nova rebrand): when a tag like `v7.4.0` is pushed, this drafts the release
+# notes from PRs merged since the last tag. Categorizes by area/risk labels
+# already used by .github/labels.yml.
+
+name: Release Drafter
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  update_release_draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Draft release notes
+        uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag: v${{ github.ref_name }}
+          name: Nova v${{ github.ref_name }}
+          version-resolver:
+            major:
+              labels: "breaking"
+            minor:
+              labels: "enhancement"
+            patch:
+              labels: "bug,documentation"
+          categories:
+            - title: "🚀 Features"
+              labels: ["enhancement"]
+            - title: "🐛 Bug Fixes"
+              labels: ["bug"]
+            - title: "📝 Documentation"
+              labels: ["documentation"]
+            - title: "🔒 Security"
+              labels: ["security"]
+            - title: "🏗️ Infra / Build"
+              labels: ["area:ci", "area:deps", "area:docker"]
+          change-template: "- ${{ title }} (#${{ number }}) @${{ author }}"
+          no-changes-template: "## No changes\n\nThis release contains only internal refactors and test updates."

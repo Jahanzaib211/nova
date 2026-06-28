@@ -1,0 +1,40 @@
+# Welcome first-time contributors.
+# https://github.com/actions/first-interaction
+
+name: Welcome
+
+on:
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Greet first-time contributors
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 Welcome to **Nova** — thanks for opening your first PR!
+
+            Nova is an enterprise-grade agent platform built on LangGraph + LangChain.
+            See [NOVA_CHANGELOG.md](./blob/main/NOVA_CHANGELOG.md) for the live plan
+            and [CONTRIBUTING.md](./blob/main/CONTRIBUTING.md) for the workflow.
+
+            A maintainer will review shortly. If your PR changes the run path
+            (middleware, hooks, tools, sandbox), expect a longer review — those
+            are exercised by our [Replay E2E contract tests](./blob/main/.github/workflows/replay-e2e.yml).
+          pr-message: |
+            👋 Welcome to **Nova** — thanks for opening your first PR!
+
+            Nova is an enterprise-grade agent platform built on LangGraph + LangChain.
+            See [NOVA_CHANGELOG.md](./blob/main/NOVA_CHANGELOG.md) for the live plan
+            and [CONTRIBUTING.md](./blob/main/CONTRIBUTING.md) for the workflow.
+
+            A maintainer will review shortly. If your PR changes the run path
+            (middleware, hooks, tools, sandbox), expect a longer review — those
+            are exercised by our [Replay E2E contract tests](./blob/main/.github/workflows/replay-e2e.yml).

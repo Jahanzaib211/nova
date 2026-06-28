@@ -2,11 +2,12 @@
 
 ## Supported Versions
 
-As deer-flow doesn't provide an official release yet, please use the latest version for the security updates.
-Currently, we have two branches to maintain:
-* main branch for deer-flow 2.x
-* main-1.x branch for deer-flow 1.x 
+Nova is under active development and doesn't provide an official release yet.
+Please use the latest version on `main` for security updates.
 
 ## Reporting a Vulnerability
 
-Please go to https://github.com/bytedance/deer-flow/security to report the vulnerability you find.
+Please email security concerns to `alilabsx@gmail.com` or open a private security advisory at
+https://github.com/Jahanzaib211/nova/security/advisories/new.
+
+Please do **not** file public issues for security vulnerabilities.

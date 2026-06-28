@@ -1,6 +1,6 @@
-# Contributing to DeerFlow
+# Contributing to Nova
 
-Thank you for your interest in contributing to DeerFlow! This guide will help you set up your development environment and understand our development workflow.
+Thank you for your interest in contributing to Nova! This guide will help you set up your development environment and understand our development workflow.
 
 ## Development Environment Setup
 
@@ -83,18 +83,18 @@ Use these as practical starting points for development and review environments:
 
 | Scenario | Starting point | Recommended | Notes |
 |---------|-----------|------------|-------|
-| `make dev` on one machine | 4 vCPU, 8 GB RAM | 8 vCPU, 16 GB RAM | Best when DeerFlow uses hosted model APIs. |
+| `make dev` on one machine | 4 vCPU, 8 GB RAM | 8 vCPU, 16 GB RAM | Best when Nova uses hosted model APIs. |
 | `make docker-start` review environment | 4 vCPU, 8 GB RAM | 8 vCPU, 16 GB RAM | Docker image builds and sandbox containers need extra headroom. |
 | Shared Linux test server | 8 vCPU, 16 GB RAM | 16 vCPU, 32 GB RAM | Prefer this for heavier multi-agent runs or multiple reviewers. |
 
-`2 vCPU / 4 GB` environments often fail to start reliably or become unresponsive under normal DeerFlow workloads.
+`2 vCPU / 4 GB` environments often fail to start reliably or become unresponsive under normal Nova workloads.
 
 #### Linux: Docker daemon permission denied
 
 If `make docker-init`, `make docker-start`, or `make docker-stop` fails on Linux with an error like below, your current user likely does not have permission to access the Docker daemon socket:
 
 ```text
-unable to get image 'deer-flow-gateway': permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock
+unable to get image 'nova-gateway': permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock
 ```
 
 Recommended fix: add your current user to the `docker` group so Docker commands work without `sudo`.
@@ -115,7 +115,7 @@ Recommended fix: add your current user to the `docker` group so Docker commands 
    ```bash
    docker ps
    ```
-5. Retry the DeerFlow command:
+5. Retry the Nova command:
    ```bash
    make docker-stop
    make docker-start
@@ -129,6 +129,10 @@ If `docker ps` still reports a permission error after `usermod`, fully log out a
 Host Machine
   ↓
 Docker Compose (deer-flow-dev)
+# docker-compose project name is kept as `deer-flow-dev` for backwards
+# compatibility with `pm2 start` and `docker ps --filter name=deer-flow-*`.
+# Internal service DNS names (`gateway`, `frontend`, `nginx`) match the
+# service definitions in docker/docker-compose-dev.yaml.
   ├→ nginx (port 2026) ← Reverse proxy
   ├→ web (port 3000) ← Frontend with hot-reload
   ├→ gateway (port 8001) ← Gateway API + LangGraph-compatible runtime with hot-reload
@@ -217,7 +221,7 @@ The nginx configuration provides:
 ## Project Structure
 
 ```
-deer-flow/
+deer-flow/   ← repo root (the folder name on disk; brand is Nova)
 ├── config.example.yaml      # Configuration template
 ├── extensions_config.example.json  # MCP and Skills configuration template
 ├── Makefile                 # Build and development commands
@@ -289,7 +293,7 @@ Nginx (port 2026) ← Unified entry point
 
 ## AI assistance disclosure
 
-DeerFlow is an AI project and we welcome AI-assisted contributions. To help
+Nova is an AI project and we welcome AI-assisted contributions. To help
 reviewers calibrate how closely to read a change, **every pull request must
 complete the "AI assistance" section of the
 [PR template](.github/pull_request_template.md)**:
@@ -340,10 +344,10 @@ Every pull request triggers the following CI workflows:
 
 ## Need Help?
 
-- Check existing [Issues](https://github.com/bytedance/deer-flow/issues)
+- Open an [Issue](https://github.com/Jahanzaib211/nova/issues) or email `alilabsx@gmail.com`
 - Read the [Documentation](backend/docs/)
-- Ask questions in [Discussions](https://github.com/bytedance/deer-flow/discussions)
+- Discussions: enabled (see [Nova discussions](https://github.com/Jahanzaib211/nova/discussions))
 
 ## License
 
-By contributing to DeerFlow, you agree that your contributions will be licensed under the [MIT License](./LICENSE).
+By contributing to Nova, you agree that your contributions will be licensed under the [MIT License](./LICENSE).

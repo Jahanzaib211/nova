@@ -16,7 +16,7 @@ body:
     attributes:
       label: Before you start
       options:
-        - label: I searched [existing issues](https://github.com/bytedance/deer-flow/issues?q=is%3Aissue) and this is not a duplicate.
+        - label: I searched [existing issues](https://github.com/Jahanzaib211/nova/issues?q=is%3Aissue) and this is not a duplicate.
           required: true
         - label: I can reproduce this on the latest `main`.
           required: false
@@ -34,7 +34,7 @@ body:
     id: areas
     attributes:
       label: Affected area(s)
-      description: Which part of DeerFlow does this touch? Select all that apply.
+      description: Which part of Nova does this touch? Select all that apply.
       multiple: true
       options:
         - Frontend (UI / Next.js)
@@ -92,7 +92,7 @@ body:
   - type: dropdown
     id: run_mode
     attributes:
-      label: How are you running DeerFlow?
+      label: How are you running Nova?
       options:
         - Local (make dev)
         - Docker (make docker-start)

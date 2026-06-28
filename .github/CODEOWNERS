@@ -1,0 +1,32 @@
+# CODEOWNERS — auto-assigns reviewers based on changed path.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Single-owner declaration today (@Jahanzaib211). As the team grows, replace
+# @Jahanzaib211 with team handles below each block. The order is last-match-wins,
+# so more specific paths come AFTER general ones.
+
+# Default: owner reviews everything
+*                                       @Jahanzaib211
+
+# Backend Python harness
+/backend/                              @Jahanzaib211
+/backend/app/gateway/                  @Jahanzaib211
+/backend/packages/harness/deerflow/     @Jahanzaib211
+
+# Frontend Next.js
+/frontend/                             @Jahanzaib211
+/frontend/src/components/workspace/agent-computer/  @Jahanzaib211
+
+# Infra (nginx / docker / pm2)
+/docker/                               @Jahanzaib211
+/docker-compose*.yaml                  @Jahanzaib211
+/ecosystem.config.js                   @Jahanzaib211
+
+# CI / .github/
+/.github/                              @Jahanzaib211
+/.github/workflows/                    @Jahanzaib211
+
+# Security-sensitive (auth, secrets, sandbox audit)
+/backend/app/gateway/auth*/            @Jahanzaib211
+/backend/app/gateway/*security*        @Jahanzaib211
+/backend/packages/harness/deerflow/sandbox/audit.py   @Jahanzaib211

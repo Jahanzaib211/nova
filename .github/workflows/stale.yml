@@ -1,0 +1,42 @@
+# Stale bot — close abandoned issues / PRs.
+# https://github.com/actions/stale
+
+name: Stale
+
+on:
+  schedule:
+    - cron: "0 4 * * *"  # daily at 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mark stale issues / PRs
+        uses: actions/stale@v9
+        with:
+          # Issues
+          days-before-issue-stale: 30
+          days-before-issue-close: 14
+          exempt-issue-labels: "needs-triage,P0,P1,security,enhancement"
+          stale-issue-message: |
+            This issue has been idle for 30 days. It will be closed in 14 days
+            unless activity resumes. Reply with an update to keep it open, or
+            close it yourself if the work is no longer relevant.
+          close-issue-message: |
+            Closing due to inactivity. Reopen if the issue becomes relevant again.
+
+          # PRs
+          days-before-pr-stale: 21
+          days-before-pr-close: 14
+          exempt-pr-labels: "needs-validation,reviewing,skip-validation"
+          stale-pr-message: |
+            This PR has been idle for 21 days. It will be closed in 14 days
+            unless activity resumes.
+          close-pr-message: |
+            Closing due to inactivity. Reopen if the work becomes active again.

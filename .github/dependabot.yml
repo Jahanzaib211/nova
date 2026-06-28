@@ -1,0 +1,46 @@
+# Dependabot — automated dependency PRs.
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+#
+# v7.3 (Nova rebrand): config-only — Dependabot ALERTS are still disabled on the
+# free GitHub plan. Once we upgrade to Pro (or make the repo public) this
+# config becomes active without further edits. Grouped minor/patch updates
+# keep the PR noise down; security updates are surfaced immediately.
+
+version: 2
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      runtime-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels:
+      - "area:deps"
+      - "risk:low"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      runtime-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels:
+      - "area:deps"
+      - "risk:low"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area:ci"
+      - "risk:low"

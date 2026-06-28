@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for the suggestion. For non-trivial features, please open a
-        [Discussion](https://github.com/bytedance/deer-flow/discussions/categories/ideas)
+        [Discussion](https://github.com/Jahanzaib211/nova/discussions/categories/ideas)
         first to align on scope before writing code.
 
   - type: checkboxes
@@ -15,7 +15,7 @@ body:
     attributes:
       label: Before you start
       options:
-        - label: I searched [existing issues](https://github.com/bytedance/deer-flow/issues?q=is%3Aissue) and this is not a duplicate.
+        - label: I searched [existing issues](https://github.com/Jahanzaib211/nova/issues?q=is%3Aissue) and this is not a duplicate.
           required: true
 
   - type: textarea
@@ -39,7 +39,7 @@ body:
     id: areas
     attributes:
       label: Affected area(s)
-      description: Which part of DeerFlow would this touch? Select all that apply.
+      description: Which part of Nova would this touch? Select all that apply.
       multiple: true
       options:
         - Frontend (UI / Next.js)

@@ -1,0 +1,52 @@
+# CodeQL — GitHub's semantic security scanner.
+# https://docs.github.com/en/code-security/code-scanning/automating-code-scanning-with-codeql-cli/about-codeql-code-scanning
+#
+# v7.3 (Nova rebrand): workflow-only — CodeQL ALERTS require GitHub Pro / public repo.
+# When we upgrade to Pro, this workflow will start producing alerts on main + PRs.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["*"]
+  schedule:
+    # Weekly scan on Fridays at 06:00 UTC (off-peak).
+    - cron: "0 6 * * 5"
+
+permissions:
+  # Required for CodeQL to read the repo and submit alerts.
+  contents: read
+  # Required for GitHub to surface results in the Security tab.
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python", "javascript-typescript"]
+        python:
+          - "backend/**"
+        javascript-typescript:
+          - "frontend/**"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          paths: ${{ matrix[matrix.language] }}
+          queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
