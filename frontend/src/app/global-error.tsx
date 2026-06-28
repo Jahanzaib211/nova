@@ -34,9 +34,16 @@ export default function GlobalError({
           <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
             Something went wrong
           </h1>
-          <p style={{ marginTop: 12, color: "#a1a1aa", fontSize: 14, lineHeight: 1.5 }}>
-            A fatal error occurred while rendering this page. Reload to retry, or check the
-            server logs for the stack trace below.
+          <p
+            style={{
+              marginTop: 12,
+              color: "#a1a1aa",
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            A fatal error occurred while rendering this page. Reload to retry,
+            or check the server logs for the stack trace below.
           </p>
           {error.digest && (
             <code
@@ -54,7 +61,14 @@ export default function GlobalError({
               {error.digest}
             </code>
           )}
-          <div style={{ marginTop: 24, display: "flex", gap: 8, justifyContent: "center" }}>
+          <div
+            style={{
+              marginTop: 24,
+              display: "flex",
+              gap: 8,
+              justifyContent: "center",
+            }}
+          >
             <button
               type="button"
               onClick={reset}

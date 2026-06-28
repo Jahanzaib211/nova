@@ -22,9 +22,9 @@ test.describe("Agent Computer panel", () => {
 
   test("landing page renders with Get Started CTA", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("link", { name: /get started/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /get started/i })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("workspace URL is reachable and not a 500", async ({ page }) => {
@@ -46,7 +46,10 @@ test.describe("Agent Computer panel", () => {
     if ((await trigger.count()) === 0) {
       // In production sign-in mode the trigger is not in the DOM yet.
       // Skip gracefully.
-      test.skip(true, "agent computer trigger not visible (sign-in gate or auth-disabled off)");
+      test.skip(
+        true,
+        "agent computer trigger not visible (sign-in gate or auth-disabled off)",
+      );
       return;
     }
     await trigger.first().click();

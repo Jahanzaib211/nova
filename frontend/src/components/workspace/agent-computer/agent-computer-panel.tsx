@@ -44,7 +44,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShineBorder } from "@/components/ui/shine-border";
 import { Switch } from "@/components/ui/switch";
 import { AgentComputerErrorBoundary } from "@/components/workspace/agent-computer/agent-computer-error-boundary";
-import type { LlmError, TaskProgress, VerifyResult } from "@/components/workspace/messages/context";
+import type {
+  LlmError,
+  TaskProgress,
+  VerifyResult,
+} from "@/components/workspace/messages/context";
 import { useThread } from "@/components/workspace/messages/context";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { getBackendBaseURL } from "@/core/config";
@@ -87,7 +91,11 @@ function getActiveFilePath(messages: Message[]): string | null {
     for (let j = calls.length - 1; j >= 0; j--) {
       const call = calls[j];
       if (!call) continue;
-      if (call.name === "write_file" || call.name === "str_replace" || call.name === "read_file") {
+      if (
+        call.name === "write_file" ||
+        call.name === "str_replace" ||
+        call.name === "read_file"
+      ) {
         const path = (call.args as Record<string, unknown>)?.path;
         if (typeof path === "string") return path;
       }
@@ -113,8 +121,17 @@ function getActiveEdit(messages: Message[]): ActiveEdit | null {
       const args = (call.args ?? {}) as Record<string, unknown>;
       const path = typeof args.path === "string" ? args.path : null;
       if (!path) continue;
-      if (call.name === "str_replace" && typeof args.old_str === "string" && typeof args.new_str === "string") {
-        return { path, kind: "str_replace", oldStr: args.old_str, newStr: args.new_str };
+      if (
+        call.name === "str_replace" &&
+        typeof args.old_str === "string" &&
+        typeof args.new_str === "string"
+      ) {
+        return {
+          path,
+          kind: "str_replace",
+          oldStr: args.old_str,
+          newStr: args.new_str,
+        };
       }
       if (call.name === "write_file" && typeof args.content === "string") {
         return { path, kind: "write_file", content: args.content };
@@ -124,26 +141,47 @@ function getActiveEdit(messages: Message[]): ActiveEdit | null {
   return null;
 }
 
-function getStatusLabel(tool: string | null, isLoading: boolean, filePath: string | null, lineCount: number | undefined, t: ReturnType<typeof useI18n>["t"]): string {
+function getStatusLabel(
+  tool: string | null,
+  isLoading: boolean,
+  filePath: string | null,
+  lineCount: number | undefined,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   const filename = filePath?.split("/").at(-1);
   if (tool === "write_file") {
-    return filename ? t.agentComputer.status.writing(filename, lineCount && lineCount > 1 ? `${lineCount} lines` : undefined) : t.agentComputer.status.usingEditor;
+    return filename
+      ? t.agentComputer.status.writing(
+          filename,
+          lineCount && lineCount > 1 ? `${lineCount} lines` : undefined,
+        )
+      : t.agentComputer.status.usingEditor;
   }
-  if (tool === "str_replace") return filename ? t.agentComputer.status.editing(filename) : t.agentComputer.status.usingEditor;
-  if (tool === "read_file") return filename ? t.agentComputer.status.reading(filename) : t.agentComputer.status.usingEditor;
-  if (tool === "bash" || tool === "execute_command") return t.agentComputer.status.usingTerminal;
+  if (tool === "str_replace")
+    return filename
+      ? t.agentComputer.status.editing(filename)
+      : t.agentComputer.status.usingEditor;
+  if (tool === "read_file")
+    return filename
+      ? t.agentComputer.status.reading(filename)
+      : t.agentComputer.status.usingEditor;
+  if (tool === "bash" || tool === "execute_command")
+    return t.agentComputer.status.usingTerminal;
   if (tool === "search_files") return t.agentComputer.status.searchingFiles;
   if (tool === "grep_files") return t.agentComputer.status.searchingContent;
   if (tool === "task") return t.agentComputer.status.delegatingToSubagent;
-  if (tool === "scaffold_project") return t.agentComputer.status.scaffoldingProject;
-  if (tool === "browser" || tool === "web_search" || tool === "tavily_search") return t.agentComputer.status.usingBrowser;
+  if (tool === "scaffold_project")
+    return t.agentComputer.status.scaffoldingProject;
+  if (tool === "browser" || tool === "web_search" || tool === "tavily_search")
+    return t.agentComputer.status.usingBrowser;
   if (isLoading) return t.agentComputer.status.isThinking;
   return t.agentComputer.status.isIdle;
 }
 
 function getDotClass(tool: string | null, isLoading: boolean): string {
   if (tool === "bash" || tool === "execute_command") return "bg-emerald-400";
-  if (tool === "write_file" || tool === "scaffold_project") return "bg-blue-400";
+  if (tool === "write_file" || tool === "scaffold_project")
+    return "bg-blue-400";
   if (tool === "str_replace") return "bg-purple-400";
   if (tool === "read_file") return "bg-sky-400";
   if (tool === "search_files" || tool === "grep_files") return "bg-orange-400";
@@ -155,15 +193,23 @@ function getDotClass(tool: string | null, isLoading: boolean): string {
 // ──────────────────────────────────────────────────────────
 // Status line
 // ──────────────────────────────────────────────────────────
-function StatusLine({ tool, isLoading, filePath, lineCount }: {
-  tool: string | null; isLoading: boolean; filePath: string | null; lineCount?: number;
+function StatusLine({
+  tool,
+  isLoading,
+  filePath,
+  lineCount,
+}: {
+  tool: string | null;
+  isLoading: boolean;
+  filePath: string | null;
+  lineCount?: number;
 }) {
   const { t } = useI18n();
   const label = getStatusLabel(tool, isLoading, filePath, lineCount, t);
   const dotClass = getDotClass(tool, isLoading);
   const pulse = isLoading || Boolean(tool);
   return (
-    <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5">
+    <div className="border-border/50 flex items-center gap-2 border-b px-3 py-1.5">
       <span className="relative inline-flex h-2 w-2 shrink-0">
         {pulse && (
           <span
@@ -174,7 +220,13 @@ function StatusLine({ tool, isLoading, filePath, lineCount }: {
             aria-hidden="true"
           />
         )}
-        <span className={cn("relative inline-block h-2 w-2 shrink-0 rounded-full transition-colors duration-300", dotClass, pulse && "animate-pulse")} />
+        <span
+          className={cn(
+            "relative inline-block h-2 w-2 shrink-0 rounded-full transition-colors duration-300",
+            dotClass,
+            pulse && "animate-pulse",
+          )}
+        />
       </span>
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
@@ -184,7 +236,7 @@ function StatusLine({ tool, isLoading, filePath, lineCount }: {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
-            className="block truncate text-xs text-muted-foreground"
+            className="text-muted-foreground block truncate text-xs"
           >
             {label}
           </motion.span>
@@ -198,27 +250,63 @@ function StatusLine({ tool, isLoading, filePath, lineCount }: {
 // Tab 1: Terminal — bash/search/grep events, always expanded
 // ──────────────────────────────────────────────────────────
 // Note: "task" (delegate to subagent) stays in Activity, not Terminal
-const TERMINAL_TOOLS = new Set(["bash", "execute_command", "search_files", "grep_files"]);
+const TERMINAL_TOOLS = new Set([
+  "bash",
+  "execute_command",
+  "search_files",
+  "grep_files",
+]);
 
-function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId: string }) {
+function Terminal({
+  events,
+  threadId,
+}: {
+  events: AgentActivityEvent[];
+  threadId: string;
+}) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
   const terminalEvents = events.filter((e) => TERMINAL_TOOLS.has(e.type));
   // "shell" = the sandbox's real interactive ttyd terminal (type into it live);
   // "stream" = the agent's command output log.
   const [mode, setMode] = useState<"stream" | "shell">("stream");
-  const { terminal: terminalUrl } = useSandboxTerminalUrl(threadId, mode === "shell");
+  const { terminal: terminalUrl } = useSandboxTerminalUrl(
+    threadId,
+    mode === "shell",
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [terminalEvents.length, terminalEvents.at(-1)?.output]);
 
   const ModeToggle = (
-    <div className="flex shrink-0 items-center gap-1 border-b border-border/30 bg-black/40 px-2 py-1">
-      <span className="mr-auto font-mono text-[10px] text-muted-foreground/50">{t.agentComputer.terminal.tab}</span>
-      <div className="flex items-center rounded border border-border/40 text-[10px]">
-        <button onClick={() => setMode("stream")} className={cn("px-1.5 py-0.5", mode === "stream" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}>{t.agentComputer.terminal.stream}</button>
-        <button onClick={() => setMode("shell")} className={cn("px-1.5 py-0.5", mode === "shell" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}>{t.agentComputer.terminal.shell}</button>
+    <div className="border-border/30 flex shrink-0 items-center gap-1 border-b bg-black/40 px-2 py-1">
+      <span className="text-muted-foreground/50 mr-auto font-mono text-[10px]">
+        {t.agentComputer.terminal.tab}
+      </span>
+      <div className="border-border/40 flex items-center rounded border text-[10px]">
+        <button
+          onClick={() => setMode("stream")}
+          className={cn(
+            "px-1.5 py-0.5",
+            mode === "stream"
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground/60 hover:text-muted-foreground",
+          )}
+        >
+          {t.agentComputer.terminal.stream}
+        </button>
+        <button
+          onClick={() => setMode("shell")}
+          className={cn(
+            "px-1.5 py-0.5",
+            mode === "shell"
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground/60 hover:text-muted-foreground",
+          )}
+        >
+          {t.agentComputer.terminal.shell}
+        </button>
       </div>
     </div>
   );
@@ -229,10 +317,15 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
         {ModeToggle}
         <div className="min-h-0 flex-1 bg-black">
           {terminalUrl ? (
-            <iframe key={terminalUrl} src={terminalUrl} title={t.agentComputer.terminal.interactiveTitle} className="h-full w-full border-0" />
+            <iframe
+              key={terminalUrl}
+              src={terminalUrl}
+              title={t.agentComputer.terminal.interactiveTitle}
+              className="h-full w-full border-0"
+            />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <LoaderCircleIcon className="h-5 w-5 animate-spin text-muted-foreground/30" />
+              <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
             </div>
           )}
         </div>
@@ -244,12 +337,19 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
     return (
       <div className="flex h-full flex-col">
         {ModeToggle}
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center bg-black/50">
-          <div className="font-mono text-emerald-400/30 text-xl animate-pulse">▮</div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-black/50 text-center">
+          <div className="animate-pulse font-mono text-xl text-emerald-400/30">
+            ▮
+          </div>
           <div>
-            <p className="text-xs font-medium text-muted-foreground/60">{t.agentComputer.terminal.noOutput}</p>
-            <p className="text-[10px] text-muted-foreground/40 mt-1">
-              {t.agentComputer.terminal.noOutputHint} <span className="text-emerald-400/70">{t.agentComputer.terminal.shell}</span>
+            <p className="text-muted-foreground/60 text-xs font-medium">
+              {t.agentComputer.terminal.noOutput}
+            </p>
+            <p className="text-muted-foreground/40 mt-1 text-[10px]">
+              {t.agentComputer.terminal.noOutputHint}{" "}
+              <span className="text-emerald-400/70">
+                {t.agentComputer.terminal.shell}
+              </span>
             </p>
           </div>
         </div>
@@ -264,38 +364,48 @@ function Terminal({ events, threadId }: { events: AgentActivityEvent[]; threadId
         {terminalEvents.map((event, i) => (
           <div key={i} className="mb-4">
             {/* Command prompt line */}
-            <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="mb-1.5 flex items-center gap-1.5">
               <span className="text-emerald-500/70 select-none">❯</span>
-              <span className={cn(
-                "font-medium flex-1",
-                event.type === "search_files" || event.type === "grep_files"
-                  ? "text-orange-400"
-                  : "text-emerald-400",
-              )}>{event.summary}</span>
+              <span
+                className={cn(
+                  "flex-1 font-medium",
+                  event.type === "search_files" || event.type === "grep_files"
+                    ? "text-orange-400"
+                    : "text-emerald-400",
+                )}
+              >
+                {event.summary}
+              </span>
               {event.status === "running" && (
-                <LoaderCircleIcon className="h-3 w-3 animate-spin text-emerald-400/50 shrink-0" />
+                <LoaderCircleIcon className="h-3 w-3 shrink-0 animate-spin text-emerald-400/50" />
               )}
-              <span className="text-muted-foreground/30 text-[10px] shrink-0">{event.ts}</span>
+              <span className="text-muted-foreground/30 shrink-0 text-[10px]">
+                {event.ts}
+              </span>
             </div>
             {/* Output — always shown, no click needed */}
             {event.output ? (
-              <pre className={cn(
-                "leading-relaxed whitespace-pre-wrap break-all pl-4 border-l",
-                event.status === "error"
-                  ? "text-red-400 border-red-900/50"
-                  : "text-emerald-300/80 border-emerald-900/30",
-              )}>
+              <pre
+                className={cn(
+                  "border-l pl-4 leading-relaxed break-all whitespace-pre-wrap",
+                  event.status === "error"
+                    ? "border-red-900/50 text-red-400"
+                    : "border-emerald-900/30 text-emerald-300/80",
+                )}
+              >
                 {event.output}
               </pre>
             ) : event.status === "running" ? (
               <div className="pl-4 text-emerald-400/40">
-                <span className="animate-pulse">{t.agentComputer.terminal.running}</span>
+                <span className="animate-pulse">
+                  {t.agentComputer.terminal.running}
+                </span>
               </div>
             ) : null}
           </div>
         ))}
         <div ref={bottomRef} />
-        <span className="text-emerald-400/60 animate-pulse">▮</span>
+        <span className="animate-pulse text-emerald-400/60">▮</span>
       </div>
     </div>
   );
@@ -324,13 +434,13 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
         <div
           key={i}
           className={cn(
-            "flex whitespace-pre-wrap break-all px-2",
+            "flex px-2 break-all whitespace-pre-wrap",
             l.type === "add" && "bg-emerald-500/10 text-emerald-300",
             l.type === "del" && "bg-red-500/10 text-red-300/90",
             l.type === "ctx" && "text-muted-foreground/70",
           )}
         >
-          <span className="mr-2 inline-block w-3 shrink-0 select-none text-center opacity-60">
+          <span className="mr-2 inline-block w-3 shrink-0 text-center opacity-60 select-none">
             {l.type === "add" ? "+" : l.type === "del" ? "−" : " "}
           </span>
           <span className="min-w-0 flex-1">{l.text || " "}</span>
@@ -354,7 +464,11 @@ function Editor({
   activeEdit: ActiveEdit | null;
 }) {
   const { t } = useI18n();
-  const { content, exists, lineCount } = useLiveFileContent(threadId, filePath, activeTab && Boolean(filePath));
+  const { content, exists, lineCount } = useLiveFileContent(
+    threadId,
+    filePath,
+    activeTab && Boolean(filePath),
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
   const filename = filePath?.split("/").at(-1) ?? "";
   const codeColor = getCodeColor(filename);
@@ -384,8 +498,10 @@ function Editor({
   if (!filePath) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <PencilIcon className="h-6 w-6 text-muted-foreground/30" />
-        <span className="text-xs text-muted-foreground/50">{t.agentComputer.editor.startWriting}</span>
+        <PencilIcon className="text-muted-foreground/30 h-6 w-6" />
+        <span className="text-muted-foreground/50 text-xs">
+          {t.agentComputer.editor.startWriting}
+        </span>
       </div>
     );
   }
@@ -393,9 +509,11 @@ function Editor({
   return (
     <div className="flex h-full flex-col bg-black/50">
       {/* File header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-border/30 bg-black/40 px-3 py-1.5">
-        <CodeIcon className="h-3 w-3 text-muted-foreground/60" />
-        <span className="font-mono text-xs text-muted-foreground/80 truncate">{filename}</span>
+      <div className="border-border/30 flex shrink-0 items-center gap-2 border-b bg-black/40 px-3 py-1.5">
+        <CodeIcon className="text-muted-foreground/60 h-3 w-3" />
+        <span className="text-muted-foreground/80 truncate font-mono text-xs">
+          {filename}
+        </span>
         {showDiff && stats && (stats.added > 0 || stats.removed > 0) && (
           <span className="ml-1 shrink-0 font-mono text-[10px]">
             <span className="text-emerald-400">+{stats.added}</span>{" "}
@@ -404,19 +522,35 @@ function Editor({
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {diff !== null && (
-            <div className="flex items-center rounded border border-border/40 text-[10px]">
+            <div className="border-border/40 flex items-center rounded border text-[10px]">
               <button
                 onClick={() => setMode("diff")}
-                className={cn("px-1.5 py-0.5 transition-colors", mode === "diff" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}
-              >{t.agentComputer.editor.diff}</button>
+                className={cn(
+                  "px-1.5 py-0.5 transition-colors",
+                  mode === "diff"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground/60 hover:text-muted-foreground",
+                )}
+              >
+                {t.agentComputer.editor.diff}
+              </button>
               <button
                 onClick={() => setMode("file")}
-                className={cn("px-1.5 py-0.5 transition-colors", mode === "file" ? "bg-muted text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground")}
-              >{t.agentComputer.editor.file}</button>
+                className={cn(
+                  "px-1.5 py-0.5 transition-colors",
+                  mode === "file"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground/60 hover:text-muted-foreground",
+                )}
+              >
+                {t.agentComputer.editor.file}
+              </button>
             </div>
           )}
           {!showDiff && lineCount > 1 && (
-            <span className="text-[10px] text-muted-foreground/50">{t.agentComputer.editor.lines(lineCount)}</span>
+            <span className="text-muted-foreground/50 text-[10px]">
+              {t.agentComputer.editor.lines(lineCount)}
+            </span>
           )}
           {isWriting && (
             <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">
@@ -431,13 +565,18 @@ function Editor({
         {showDiff && diff ? (
           <DiffView lines={diff} />
         ) : exists && content ? (
-          <pre className={cn("p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-all", codeColor)}>
+          <pre
+            className={cn(
+              "p-3 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap",
+              codeColor,
+            )}
+          >
             {content}
-            {isWriting && <span className="text-white animate-pulse">█</span>}
+            {isWriting && <span className="animate-pulse text-white">█</span>}
           </pre>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <LoaderCircleIcon className="h-5 w-5 animate-spin text-muted-foreground/30" />
+            <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
           </div>
         )}
         <div ref={bottomRef} />
@@ -463,7 +602,13 @@ function Browser({
 }: {
   threadId: string;
   filePath: string | null;
-  devServer: { running: boolean; status: string; port: number | null; url: string | null; compiles?: number };
+  devServer: {
+    running: boolean;
+    status: string;
+    port: number | null;
+    url: string | null;
+    compiles?: number;
+  };
   devServers?: { label: string; running: boolean }[];
   selectedLabel?: string;
   onSelectLabel?: (label: string) => void;
@@ -490,7 +635,9 @@ function Browser({
   // white page. Framework dev servers ship no raw .html artifact → entryRoute "/".
   const entryRoute = useMemo(() => {
     const base = (entryHtmlArtifact ?? "").split("/").at(-1) ?? "";
-    return /\.html?$/i.test(base) && base.toLowerCase() !== "index.html" ? `/${base}` : "/";
+    return /\.html?$/i.test(base) && base.toLowerCase() !== "index.html"
+      ? `/${base}`
+      : "/";
   }, [entryHtmlArtifact]);
   const [navStack, setNavStack] = useState<string[]>([entryRoute]);
   const [navIdx, setNavIdx] = useState(0);
@@ -502,13 +649,16 @@ function Browser({
     setNavStack([entryRoute]);
     setNavIdx(0);
   }, [prefix, entryRoute]);
-  const goRoute = useCallback((raw: string) => {
-    let p = raw.trim();
-    if (!p) p = "/";
-    if (!p.startsWith("/")) p = "/" + p;
-    setNavStack((s) => [...s.slice(0, navIdx + 1), p]);
-    setNavIdx((i) => i + 1);
-  }, [navIdx]);
+  const goRoute = useCallback(
+    (raw: string) => {
+      let p = raw.trim();
+      if (!p) p = "/";
+      if (!p.startsWith("/")) p = "/" + p;
+      setNavStack((s) => [...s.slice(0, navIdx + 1), p]);
+      setNavIdx((i) => i + 1);
+    },
+    [navIdx],
+  );
   const canBack = navIdx > 0;
   const canFwd = navIdx < navStack.length - 1;
   const liveSrc = `${getBackendBaseURL()}${prefix}${route}`;
@@ -518,15 +668,21 @@ function Browser({
   const { vnc: vncUrl } = useSandboxTerminalUrl(threadId, showVnc);
 
   // Agent browser self-test (native sandbox Chromium): console errors + screenshot.
-  const { result: manualTest, running: selfTesting, run: runSelfTest } = useBrowserCheck(threadId);
+  const {
+    result: manualTest,
+    running: selfTesting,
+    run: runSelfTest,
+  } = useBrowserCheck(threadId);
   // The deterministic auto-check runs on every preview — poll it so results show
   // without anyone clicking. Manual run (if any) takes precedence.
   const autoTest = useLastBrowserCheck(threadId, devServer.running);
-  const selfTest = manualTest ?? (autoTest && autoTest.routes.length > 0 ? autoTest : null);
+  const selfTest =
+    manualTest ?? (autoTest && autoTest.routes.length > 0 ? autoTest : null);
   const [showSelfTest, setShowSelfTest] = useState(false);
   // Surface automatically when the self-test found issues.
   useEffect(() => {
-    if (selfTest && !selfTest.ok && selfTest.routes.length > 0) setShowSelfTest(true);
+    if (selfTest && !selfTest.ok && selfTest.routes.length > 0)
+      setShowSelfTest(true);
   }, [selfTest]);
   const triggerSelfTest = useCallback(() => {
     setShowSelfTest(true);
@@ -535,7 +691,10 @@ function Browser({
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (!content || !isHtml) { setBlobUrl(null); return; }
+    if (!content || !isHtml) {
+      setBlobUrl(null);
+      return;
+    }
     const blob = new Blob([content], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     setBlobUrl(url);
@@ -570,7 +729,12 @@ function Browser({
   // Fire once; if it stops later the user can use the manual button.
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (hasRunnableProject && !devServer.running && onStartPreview && !autoStartedRef.current) {
+    if (
+      hasRunnableProject &&
+      !devServer.running &&
+      onStartPreview &&
+      !autoStartedRef.current
+    ) {
       autoStartedRef.current = true;
       void onStartPreview(selectedLabel);
     }
@@ -581,16 +745,29 @@ function Browser({
   if (showVnc) {
     return (
       <div className="flex h-full flex-col">
-        <div className="flex shrink-0 items-center gap-1.5 border-b border-border/30 bg-muted/20 px-2 py-1">
-          <button onClick={() => setShowVnc(false)} className="rounded px-1 text-sm text-muted-foreground hover:text-foreground" title={t.agentComputer.browser.back}>‹</button>
-          <span className="font-mono text-xs text-muted-foreground/70">{t.agentComputer.browser.watchLiveBrowser} · VNC</span>
+        <div className="border-border/30 bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
+          <button
+            onClick={() => setShowVnc(false)}
+            className="text-muted-foreground hover:text-foreground rounded px-1 text-sm"
+            title={t.agentComputer.browser.back}
+          >
+            ‹
+          </button>
+          <span className="text-muted-foreground/70 font-mono text-xs">
+            {t.agentComputer.browser.watchLiveBrowser} · VNC
+          </span>
         </div>
         <div className="min-h-0 flex-1 bg-black">
           {vncUrl ? (
-            <iframe key={vncUrl} src={vncUrl} title={t.agentComputer.browser.watchAgentBrowser} className="h-full w-full border-0" />
+            <iframe
+              key={vncUrl}
+              src={vncUrl}
+              title={t.agentComputer.browser.watchAgentBrowser}
+              className="h-full w-full border-0"
+            />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <LoaderCircleIcon className="h-5 w-5 animate-spin text-muted-foreground/30" />
+              <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
             </div>
           )}
         </div>
@@ -603,21 +780,68 @@ function Browser({
     return (
       <div className="flex h-full flex-col">
         {/* Browser chrome: nav + address bar */}
-        <div className="flex shrink-0 items-center gap-1 border-b border-border/30 bg-muted/20 px-1.5 py-1">
-          <button onClick={() => canBack && setNavIdx((i) => i - 1)} disabled={!canBack} className={cn("rounded px-1 text-sm transition-colors", canBack ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/25")} title={t.agentComputer.browser.back}>‹</button>
-          <button onClick={() => canFwd && setNavIdx((i) => i + 1)} disabled={!canFwd} className={cn("rounded px-1 text-sm transition-colors", canFwd ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground/25")} title={t.agentComputer.browser.forward}>›</button>
-          <button onClick={() => setReloadKey((k) => k + 1)} className="rounded px-1 text-muted-foreground/60 hover:text-foreground transition-colors" title={t.agentComputer.browser.reload}>⟳</button>
-          <span className={cn("ml-0.5 h-2 w-2 shrink-0 rounded-full", devServer.status === "ready" ? "bg-emerald-400" : "bg-yellow-400 animate-pulse")} title={devServer.status === "ready" ? t.agentComputer.browser.live : t.agentComputer.browser.compiling} />
-          <form
-            onSubmit={(e) => { e.preventDefault(); goRoute(routeInput); }}
-            className="flex min-w-0 flex-1 items-center rounded-md border border-border/40 bg-background/40 px-2"
+        <div className="border-border/30 bg-muted/20 flex shrink-0 items-center gap-1 border-b px-1.5 py-1">
+          <button
+            onClick={() => canBack && setNavIdx((i) => i - 1)}
+            disabled={!canBack}
+            className={cn(
+              "rounded px-1 text-sm transition-colors",
+              canBack
+                ? "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground/25",
+            )}
+            title={t.agentComputer.browser.back}
           >
-            <span className="shrink-0 select-none font-mono text-[10px] text-muted-foreground/40">:{devServer.port}</span>
+            ‹
+          </button>
+          <button
+            onClick={() => canFwd && setNavIdx((i) => i + 1)}
+            disabled={!canFwd}
+            className={cn(
+              "rounded px-1 text-sm transition-colors",
+              canFwd
+                ? "text-muted-foreground hover:text-foreground"
+                : "text-muted-foreground/25",
+            )}
+            title={t.agentComputer.browser.forward}
+          >
+            ›
+          </button>
+          <button
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="text-muted-foreground/60 hover:text-foreground rounded px-1 transition-colors"
+            title={t.agentComputer.browser.reload}
+          >
+            ⟳
+          </button>
+          <span
+            className={cn(
+              "ml-0.5 h-2 w-2 shrink-0 rounded-full",
+              devServer.status === "ready"
+                ? "bg-emerald-400"
+                : "animate-pulse bg-yellow-400",
+            )}
+            title={
+              devServer.status === "ready"
+                ? t.agentComputer.browser.live
+                : t.agentComputer.browser.compiling
+            }
+          />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              goRoute(routeInput);
+            }}
+            className="border-border/40 bg-background/40 flex min-w-0 flex-1 items-center rounded-md border px-2"
+          >
+            <span className="text-muted-foreground/40 shrink-0 font-mono text-[10px] select-none">
+              :{devServer.port}
+            </span>
             <input
               value={routeInput}
               onChange={(e) => setRouteInput(e.target.value)}
               spellCheck={false}
-              className="min-w-0 flex-1 bg-transparent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground/90 focus:text-foreground focus:outline-none"
+              className="text-muted-foreground/90 focus:text-foreground min-w-0 flex-1 bg-transparent px-1.5 py-0.5 font-mono text-[11px] focus:outline-none"
               placeholder="/"
             />
           </form>
@@ -625,11 +849,13 @@ function Browser({
             <select
               value={selectedLabel}
               onChange={(e) => onSelectLabel?.(e.target.value)}
-              className="shrink-0 rounded border border-border/40 bg-muted/30 px-1 py-0.5 font-mono text-[10px] text-muted-foreground focus:outline-none"
+              className="border-border/40 bg-muted/30 text-muted-foreground shrink-0 rounded border px-1 py-0.5 font-mono text-[10px] focus:outline-none"
               title={t.agentComputer.browser.switchPreview}
             >
               {devServers.map((s) => (
-                <option key={s.label} value={s.label}>{s.label}</option>
+                <option key={s.label} value={s.label}>
+                  {s.label}
+                </option>
               ))}
             </select>
           )}
@@ -639,65 +865,151 @@ function Browser({
               disabled={selfTesting}
               className={cn(
                 "rounded p-1 transition-colors",
-                selfTesting ? "text-primary"
-                  : selfTest && selfTest.routes.length > 0 ? (selfTest.ok ? "text-emerald-400" : "text-red-400")
-                  : "text-muted-foreground/50 hover:text-muted-foreground",
+                selfTesting
+                  ? "text-primary"
+                  : selfTest && selfTest.routes.length > 0
+                    ? selfTest.ok
+                      ? "text-emerald-400"
+                      : "text-red-400"
+                    : "text-muted-foreground/50 hover:text-muted-foreground",
               )}
               title={t.agentComputer.browser.selfTest}
             >
-              {selfTesting ? <LoaderCircleIcon className="h-3 w-3 animate-spin" /> : <EyeIcon className="h-3 w-3" />}
+              {selfTesting ? (
+                <LoaderCircleIcon className="h-3 w-3 animate-spin" />
+              ) : (
+                <EyeIcon className="h-3 w-3" />
+              )}
             </button>
-            <button onClick={() => setShowVnc(true)} className="rounded px-1 py-0.5 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t.agentComputer.browser.watchAgentBrowser}>
+            <button
+              onClick={() => setShowVnc(true)}
+              className="text-muted-foreground/50 hover:text-muted-foreground rounded px-1 py-0.5 font-mono text-[9px] transition-colors"
+              title={t.agentComputer.browser.watchAgentBrowser}
+            >
               VNC
             </button>
-            <button onClick={() => setViewMode("desktop")} className={cn("rounded p-1 transition-colors", viewMode === "desktop" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")} title={t.agentComputer.browser.desktop}>
+            <button
+              onClick={() => setViewMode("desktop")}
+              className={cn(
+                "rounded p-1 transition-colors",
+                viewMode === "desktop"
+                  ? "text-foreground bg-muted"
+                  : "text-muted-foreground/50 hover:text-muted-foreground",
+              )}
+              title={t.agentComputer.browser.desktop}
+            >
               <MonitorIcon className="h-3 w-3" />
             </button>
-            <button onClick={() => setViewMode("mobile")} className={cn("rounded p-1 transition-colors", viewMode === "mobile" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")} title={t.agentComputer.browser.mobile}>
-              <span className="text-[10px] font-mono">📱</span>
+            <button
+              onClick={() => setViewMode("mobile")}
+              className={cn(
+                "rounded p-1 transition-colors",
+                viewMode === "mobile"
+                  ? "text-foreground bg-muted"
+                  : "text-muted-foreground/50 hover:text-muted-foreground",
+              )}
+              title={t.agentComputer.browser.mobile}
+            >
+              <span className="font-mono text-[10px]">📱</span>
             </button>
-            <button onClick={openLiveInNewTab} className="rounded p-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t.agentComputer.browser.openNewTab}>
+            <button
+              onClick={openLiveInNewTab}
+              className="text-muted-foreground/50 hover:text-muted-foreground rounded p-1 transition-colors"
+              title={t.agentComputer.browser.openNewTab}
+            >
               <ExternalLinkIcon className="h-3 w-3" />
             </button>
           </div>
         </div>
         {/* Self-test results strip */}
         {showSelfTest && (
-          <div className="shrink-0 border-b border-border/30 bg-muted/10 px-2 py-1.5 text-[11px]">
+          <div className="border-border/30 bg-muted/10 shrink-0 border-b px-2 py-1.5 text-[11px]">
             <div className="flex items-center gap-2">
-              <span className={cn("font-medium", selfTesting ? "text-primary" : selfTest?.ok ? "text-emerald-400" : "text-red-400")}>
-                {selfTesting ? t.agentComputer.browser.testingInBrowser : selfTest?.ok ? t.agentComputer.browser.selfTestPassed : t.agentComputer.browser.selfTestIssues}
+              <span
+                className={cn(
+                  "font-medium",
+                  selfTesting
+                    ? "text-primary"
+                    : selfTest?.ok
+                      ? "text-emerald-400"
+                      : "text-red-400",
+                )}
+              >
+                {selfTesting
+                  ? t.agentComputer.browser.testingInBrowser
+                  : selfTest?.ok
+                    ? t.agentComputer.browser.selfTestPassed
+                    : t.agentComputer.browser.selfTestIssues}
               </span>
               {selfTest?.port != null && (
-                <span className="font-mono text-[10px] text-muted-foreground/50">{t.agentComputer.browser.testedPort(String(selfTest.port))}</span>
+                <span className="text-muted-foreground/50 font-mono text-[10px]">
+                  {t.agentComputer.browser.testedPort(String(selfTest.port))}
+                </span>
               )}
-              {selfTest && !selfTest.ok && selfTest.reason && selfTest.routes.length === 0 && (
-                <span className="text-muted-foreground/60">{selfTest.reason}</span>
-              )}
-              <button onClick={() => setShowSelfTest(false)} className="ml-auto text-muted-foreground/40 hover:text-muted-foreground">
+              {selfTest &&
+                !selfTest.ok &&
+                selfTest.reason &&
+                selfTest.routes.length === 0 && (
+                  <span className="text-muted-foreground/60">
+                    {selfTest.reason}
+                  </span>
+                )}
+              <button
+                onClick={() => setShowSelfTest(false)}
+                className="text-muted-foreground/40 hover:text-muted-foreground ml-auto"
+              >
                 <XIcon className="h-3 w-3" />
               </button>
             </div>
             {(selfTest?.routes ?? []).map((r, i) => (
               <div key={i} className="mt-1 flex items-start gap-2">
                 {r.screenshot && (
-                  <a href={r.screenshot} target="_blank" rel="noreferrer" className="shrink-0">
-                    { }
-                    <img src={r.screenshot} alt={`screenshot ${r.route}`} className="h-14 w-24 rounded border border-border/40 object-cover object-top" />
+                  <a
+                    href={r.screenshot}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0"
+                  >
+                    {}
+                    <img
+                      src={r.screenshot}
+                      alt={`screenshot ${r.route}`}
+                      className="border-border/40 h-14 w-24 rounded border object-cover object-top"
+                    />
                   </a>
                 )}
                 <div className="min-w-0 flex-1">
-                  <span className={cn("font-mono", r.ok ? "text-emerald-400" : "text-red-400")}>{r.ok ? "✓" : "✗"} {r.route}</span>
-                  <span className="ml-1 text-muted-foreground/50">[{r.status}]</span>
+                  <span
+                    className={cn(
+                      "font-mono",
+                      r.ok ? "text-emerald-400" : "text-red-400",
+                    )}
+                  >
+                    {r.ok ? "✓" : "✗"} {r.route}
+                  </span>
+                  <span className="text-muted-foreground/50 ml-1">
+                    [{r.status}]
+                  </span>
                   {r.console_errors.slice(0, 3).map((ce, j) => (
-                    <div key={j} className="truncate font-mono text-[10px] text-red-300/80" title={ce}>{ce}</div>
+                    <div
+                      key={j}
+                      className="truncate font-mono text-[10px] text-red-300/80"
+                      title={ce}
+                    >
+                      {ce}
+                    </div>
                   ))}
                 </div>
               </div>
             ))}
           </div>
         )}
-        <div className={cn("flex-1 min-h-0 flex justify-center bg-muted/10 overflow-hidden", viewMode === "mobile" ? "py-2" : "")}>
+        <div
+          className={cn(
+            "bg-muted/10 flex min-h-0 flex-1 justify-center overflow-hidden",
+            viewMode === "mobile" ? "py-2" : "",
+          )}
+        >
           {devServer.status === "ready" ? (
             <iframe
               key={`${reloadKey}-${navIdx}`}
@@ -707,12 +1019,19 @@ function Browser({
               // opaque-origin sandbox prevents the agent-built app from reaching the
               // parent app's cookies / localStorage / auth.
               sandbox="allow-scripts allow-forms allow-popups allow-modals"
-              className={cn("bg-white border-0", viewMode === "mobile" ? "w-[375px] h-full rounded-lg shadow-lg" : "w-full h-full")}
+              className={cn(
+                "border-0 bg-white",
+                viewMode === "mobile"
+                  ? "h-full w-[375px] rounded-lg shadow-lg"
+                  : "h-full w-full",
+              )}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-              <LoaderCircleIcon className="h-6 w-6 animate-spin text-muted-foreground/40" />
-              <p className="text-xs text-muted-foreground/50">{t.agentComputer.browser.devServerCompiling}</p>
+              <LoaderCircleIcon className="text-muted-foreground/40 h-6 w-6 animate-spin" />
+              <p className="text-muted-foreground/50 text-xs">
+                {t.agentComputer.browser.devServerCompiling}
+              </p>
             </div>
           )}
         </div>
@@ -722,11 +1041,19 @@ function Browser({
 
   if (!filePath) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-4">
-        <GlobeIcon className="h-8 w-8 text-muted-foreground/20" />
-        <p className="text-xs text-muted-foreground/50">{t.agentComputer.browser.previewWillAppear}<br/>{t.agentComputer.browser.previewWillAppearLine2}</p>
-        <button onClick={() => setShowVnc(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border/40 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-[--primary]/40 transition-colors">
-          <EyeIcon className="h-3 w-3" /> {t.agentComputer.browser.watchLiveBrowser}
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+        <GlobeIcon className="text-muted-foreground/20 h-8 w-8" />
+        <p className="text-muted-foreground/50 text-xs">
+          {t.agentComputer.browser.previewWillAppear}
+          <br />
+          {t.agentComputer.browser.previewWillAppearLine2}
+        </p>
+        <button
+          onClick={() => setShowVnc(true)}
+          className="border-border/40 text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
+        >
+          <EyeIcon className="h-3 w-3" />{" "}
+          {t.agentComputer.browser.watchLiveBrowser}
         </button>
       </div>
     );
@@ -735,18 +1062,27 @@ function Browser({
   if (!isHtml) {
     // Non-HTML project (Next.js, React, etc.) — show project info instead
     const ext = filename.split(".").at(-1)?.toLowerCase() ?? "";
-    const projectType = ["tsx", "ts", "jsx", "js"].includes(ext) ? t.agentComputer.browser.projectType.react
-      : ext === "py" ? t.agentComputer.browser.projectType.python
-      : ext === "md" ? t.agentComputer.browser.projectType.markdown
-      : t.agentComputer.browser.projectType.code;
+    const projectType = ["tsx", "ts", "jsx", "js"].includes(ext)
+      ? t.agentComputer.browser.projectType.react
+      : ext === "py"
+        ? t.agentComputer.browser.projectType.python
+        : ext === "md"
+          ? t.agentComputer.browser.projectType.markdown
+          : t.agentComputer.browser.projectType.code;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center px-4">
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
         <CodeIcon className="h-8 w-8 text-blue-400/30" />
         <div>
-          <p className="text-xs font-medium text-muted-foreground">{t.agentComputer.browser.projectLabel(projectType)}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground/60 font-mono">{filename}</p>
-          <p className="mt-2 text-[11px] text-muted-foreground/50 leading-relaxed">
-            {t.agentComputer.browser.switchToEditorPrefix} <span className="text-blue-400">{t.agentComputer.tabs.editor}</span> {t.agentComputer.browser.switchToEditorSuffix}
+          <p className="text-muted-foreground text-xs font-medium">
+            {t.agentComputer.browser.projectLabel(projectType)}
+          </p>
+          <p className="text-muted-foreground/60 mt-1 font-mono text-[11px]">
+            {filename}
+          </p>
+          <p className="text-muted-foreground/50 mt-2 text-[11px] leading-relaxed">
+            {t.agentComputer.browser.switchToEditorPrefix}{" "}
+            <span className="text-blue-400">{t.agentComputer.tabs.editor}</span>{" "}
+            {t.agentComputer.browser.switchToEditorSuffix}
           </p>
           {(onStartPreview ?? onAgentMessage) && (
             <button
@@ -754,9 +1090,12 @@ function Browser({
                 // Deterministic path: backend runs find-project → install → start.
                 // Fall back to nudging the agent only if the runner isn't wired.
                 if (onStartPreview) void onStartPreview(selectedLabel);
-                else onAgentMessage?.(`Start the dev server (npm install if needed, then start_dev_server) so I can preview the running app in the ${t.agentComputer.tabs.browser} tab.`);
+                else
+                  onAgentMessage?.(
+                    `Start the dev server (npm install if needed, then start_dev_server) so I can preview the running app in the ${t.agentComputer.tabs.browser} tab.`,
+                  );
               }}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 transition-opacity"
+              className="bg-primary text-primary-foreground mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90"
             >
               <GlobeIcon className="h-3 w-3" />
               {t.agentComputer.browser.startLivePreview}
@@ -770,25 +1109,37 @@ function Browser({
   return (
     <div className="flex h-full flex-col">
       {/* Browser toolbar */}
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-border/30 bg-muted/20 px-2 py-1">
-        <GlobeIcon className="h-3 w-3 text-orange-400 shrink-0" />
-        <span className="font-mono text-xs text-muted-foreground/70 truncate flex-1 min-w-0">{filename}</span>
-        <div className="flex items-center gap-1 shrink-0">
+      <div className="border-border/30 bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
+        <GlobeIcon className="h-3 w-3 shrink-0 text-orange-400" />
+        <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-xs">
+          {filename}
+        </span>
+        <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={() => setViewMode("desktop")}
-            className={cn("rounded p-1 transition-colors", viewMode === "desktop" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")}
+            className={cn(
+              "rounded p-1 transition-colors",
+              viewMode === "desktop"
+                ? "text-foreground bg-muted"
+                : "text-muted-foreground/50 hover:text-muted-foreground",
+            )}
           >
             <MonitorIcon className="h-3 w-3" />
           </button>
           <button
             onClick={() => setViewMode("mobile")}
-            className={cn("rounded p-1 transition-colors", viewMode === "mobile" ? "text-foreground bg-muted" : "text-muted-foreground/50 hover:text-muted-foreground")}
+            className={cn(
+              "rounded p-1 transition-colors",
+              viewMode === "mobile"
+                ? "text-foreground bg-muted"
+                : "text-muted-foreground/50 hover:text-muted-foreground",
+            )}
           >
-            <span className="text-[10px] font-mono">📱</span>
+            <span className="font-mono text-[10px]">📱</span>
           </button>
           <button
             onClick={openInNewTab}
-            className="rounded p-1 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            className="text-muted-foreground/50 hover:text-muted-foreground rounded p-1 transition-colors"
             title={t.agentComputer.browser.openNewTab}
           >
             <DownloadIcon className="h-3 w-3" />
@@ -796,7 +1147,12 @@ function Browser({
         </div>
       </div>
       {/* iframe */}
-      <div className={cn("flex-1 min-h-0 flex justify-center bg-muted/10 overflow-hidden", viewMode === "mobile" ? "py-2" : "")}>
+      <div
+        className={cn(
+          "bg-muted/10 flex min-h-0 flex-1 justify-center overflow-hidden",
+          viewMode === "mobile" ? "py-2" : "",
+        )}
+      >
         {blobUrl ? (
           <iframe
             key={blobUrl}
@@ -804,13 +1160,17 @@ function Browser({
             sandbox="allow-scripts allow-forms"
             title={`Preview: ${filename}`}
             className={cn(
-              "bg-white border-0",
-              viewMode === "mobile" ? "w-[375px] h-full rounded-lg shadow-lg" : "w-full h-full",
+              "border-0 bg-white",
+              viewMode === "mobile"
+                ? "h-full w-[375px] rounded-lg shadow-lg"
+                : "h-full w-full",
             )}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            {exists ? <LoaderCircleIcon className="h-5 w-5 animate-spin text-muted-foreground/30" /> : null}
+            {exists ? (
+              <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
+            ) : null}
           </div>
         )}
       </div>
@@ -823,17 +1183,52 @@ function Browser({
 // ──────────────────────────────────────────────────────────
 function getToolMeta(type: string): { icon: React.ReactNode; color: string } {
   switch (type) {
-    case "write_file": return { icon: <PencilIcon className="h-3 w-3" />, color: "text-blue-400" };
-    case "str_replace": return { icon: <PencilIcon className="h-3 w-3" />, color: "text-purple-400" };
-    case "read_file": return { icon: <FileTextIcon className="h-3 w-3" />, color: "text-sky-400" };
-    case "search_files": case "grep_files": return { icon: <FileSearchIcon className="h-3 w-3" />, color: "text-orange-400" };
-    case "scaffold_project": return { icon: <FolderOpenIcon className="h-3 w-3" />, color: "text-indigo-400" };
-    case "task": return { icon: <SquareTerminalIcon className="h-3 w-3" />, color: "text-indigo-400" };
-    default: return { icon: <TerminalIcon className="h-3 w-3" />, color: "text-emerald-400" };
+    case "write_file":
+      return {
+        icon: <PencilIcon className="h-3 w-3" />,
+        color: "text-blue-400",
+      };
+    case "str_replace":
+      return {
+        icon: <PencilIcon className="h-3 w-3" />,
+        color: "text-purple-400",
+      };
+    case "read_file":
+      return {
+        icon: <FileTextIcon className="h-3 w-3" />,
+        color: "text-sky-400",
+      };
+    case "search_files":
+    case "grep_files":
+      return {
+        icon: <FileSearchIcon className="h-3 w-3" />,
+        color: "text-orange-400",
+      };
+    case "scaffold_project":
+      return {
+        icon: <FolderOpenIcon className="h-3 w-3" />,
+        color: "text-indigo-400",
+      };
+    case "task":
+      return {
+        icon: <SquareTerminalIcon className="h-3 w-3" />,
+        color: "text-indigo-400",
+      };
+    default:
+      return {
+        icon: <TerminalIcon className="h-3 w-3" />,
+        color: "text-emerald-400",
+      };
   }
 }
 
-function ActivityEventCard({ event, index }: { event: AgentActivityEvent; index?: number }) {
+function ActivityEventCard({
+  event,
+  index,
+}: {
+  event: AgentActivityEvent;
+  index?: number;
+}) {
   const meta = getToolMeta(event.type);
   const filename = event.path?.split("/").at(-1);
   const isRunning = event.status === "running";
@@ -842,21 +1237,39 @@ function ActivityEventCard({ event, index }: { event: AgentActivityEvent; index?
     <motion.div
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut", delay: typeof index === "number" ? Math.min(index, 8) * 0.04 : 0 }}
+      transition={{
+        duration: 0.25,
+        ease: "easeOut",
+        delay: typeof index === "number" ? Math.min(index, 8) * 0.04 : 0,
+      }}
       className={cn(
         "rounded border px-2 py-1.5 text-xs",
-        isError ? "border-red-500/20 bg-red-500/5" : "border-border/20 bg-muted/10",
+        isError
+          ? "border-red-500/20 bg-red-500/5"
+          : "border-border/20 bg-muted/10",
       )}
     >
       <div className="flex items-center gap-1.5">
         <span className={cn("shrink-0", meta.color)}>{meta.icon}</span>
-        <span className={cn("font-mono font-medium text-[11px]", meta.color)}>{event.type}</span>
-        {filename && <span className="text-muted-foreground/60 truncate text-[10px]">{filename}</span>}
-        <span className="ml-auto shrink-0 text-muted-foreground/40 text-[10px]">{event.ts}</span>
-        {isRunning && <LoaderCircleIcon className="h-2.5 w-2.5 animate-spin text-muted-foreground/40" />}
+        <span className={cn("font-mono text-[11px] font-medium", meta.color)}>
+          {event.type}
+        </span>
+        {filename && (
+          <span className="text-muted-foreground/60 truncate text-[10px]">
+            {filename}
+          </span>
+        )}
+        <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
+          {event.ts}
+        </span>
+        {isRunning && (
+          <LoaderCircleIcon className="text-muted-foreground/40 h-2.5 w-2.5 animate-spin" />
+        )}
       </div>
       {event.summary && (
-        <div className="mt-0.5 text-muted-foreground/50 text-[10px] pl-5 truncate">{event.summary}</div>
+        <div className="text-muted-foreground/50 mt-0.5 truncate pl-5 text-[10px]">
+          {event.summary}
+        </div>
       )}
     </motion.div>
   );
@@ -864,12 +1277,16 @@ function ActivityEventCard({ event, index }: { event: AgentActivityEvent; index?
 
 function getFileIcon(name: string): React.ReactNode {
   const ext = name.split(".").at(-1)?.toLowerCase() ?? "";
-  if (ext === "html" || ext === "htm") return <GlobeIcon className="h-3 w-3 text-orange-400" />;
-  if (ext === "css" || ext === "scss") return <PaletteIcon className="h-3 w-3 text-pink-400" />;
-  if (ext === "js" || ext === "ts" || ext === "jsx" || ext === "tsx") return <CodeIcon className="h-3 w-3 text-yellow-400" />;
+  if (ext === "html" || ext === "htm")
+    return <GlobeIcon className="h-3 w-3 text-orange-400" />;
+  if (ext === "css" || ext === "scss")
+    return <PaletteIcon className="h-3 w-3 text-pink-400" />;
+  if (ext === "js" || ext === "ts" || ext === "jsx" || ext === "tsx")
+    return <CodeIcon className="h-3 w-3 text-yellow-400" />;
   if (ext === "json") return <BracesIcon className="h-3 w-3 text-green-400" />;
-  if (ext === "md" || ext === "txt") return <FileTextIcon className="h-3 w-3 text-sky-400" />;
-  return <FileIcon className="h-3 w-3 text-muted-foreground/60" />;
+  if (ext === "md" || ext === "txt")
+    return <FileTextIcon className="h-3 w-3 text-sky-400" />;
+  return <FileIcon className="text-muted-foreground/60 h-3 w-3" />;
 }
 
 function formatBytes(bytes: number): string {
@@ -877,12 +1294,19 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)}KB`;
 }
 
-type FileTreeNode = { name: string; children: Record<string, FileTreeNode>; file?: SandboxFile };
+type FileTreeNode = {
+  name: string;
+  children: Record<string, FileTreeNode>;
+  file?: SandboxFile;
+};
 
 function buildFileTree(files: SandboxFile[]): FileTreeNode {
   const root: FileTreeNode = { name: "workspace", children: {} };
   for (const file of files) {
-    const rel = file.virtual_path.replace(/^\/mnt\/user-data\/workspace\/?/, "");
+    const rel = file.virtual_path.replace(
+      /^\/mnt\/user-data\/workspace\/?/,
+      "",
+    );
     const parts = rel.split("/").filter(Boolean);
     let node = root;
     for (let i = 0; i < parts.length; i++) {
@@ -906,24 +1330,40 @@ function sortTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
 }
 
 function FileTreeNode({
-  node, depth = 0, onSelect,
-}: { node: FileTreeNode; depth?: number; onSelect: (f: SandboxFile) => void }) {
+  node,
+  depth = 0,
+  onSelect,
+}: {
+  node: FileTreeNode;
+  depth?: number;
+  onSelect: (f: SandboxFile) => void;
+}) {
   const [open, setOpen] = useState(true);
   const hasChildren = Object.keys(node.children).length > 0;
   if (!node.file && hasChildren) {
     return (
       <div>
         <button
-          onClick={() => setOpen(v => !v)}
-          className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] text-muted-foreground hover:bg-muted/30 transition-colors"
+          onClick={() => setOpen((v) => !v)}
+          className="text-muted-foreground hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
           style={{ paddingLeft: `${depth * 10 + 4}px` }}
         >
-          {open ? <FolderOpenIcon className="h-2.5 w-2.5 text-yellow-400 shrink-0" /> : <FolderIcon className="h-2.5 w-2.5 text-yellow-400 shrink-0" />}
+          {open ? (
+            <FolderOpenIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
+          ) : (
+            <FolderIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
+          )}
           <span className="font-medium">{node.name}/</span>
         </button>
-        {open && sortTreeNodes(Object.values(node.children)).map(child => (
-          <FileTreeNode key={child.name} node={child} depth={depth + 1} onSelect={onSelect} />
-        ))}
+        {open &&
+          sortTreeNodes(Object.values(node.children)).map((child) => (
+            <FileTreeNode
+              key={child.name}
+              node={child}
+              depth={depth + 1}
+              onSelect={onSelect}
+            />
+          ))}
       </div>
     );
   }
@@ -931,12 +1371,14 @@ function FileTreeNode({
     return (
       <button
         onClick={() => onSelect(node.file!)}
-        className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] hover:bg-muted/30 transition-colors"
+        className="hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
         style={{ paddingLeft: `${depth * 10 + 4}px` }}
       >
         {getFileIcon(node.name)}
-        <span className="truncate font-mono text-foreground">{node.name}</span>
-        <span className="ml-auto shrink-0 text-muted-foreground/40">{formatBytes(node.file.size)}</span>
+        <span className="text-foreground truncate font-mono">{node.name}</span>
+        <span className="text-muted-foreground/40 ml-auto shrink-0">
+          {formatBytes(node.file.size)}
+        </span>
       </button>
     );
   }
@@ -962,8 +1404,10 @@ function FilesPanel({
   if (files.length === 0 && artifacts.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <FolderIcon className="h-6 w-6 text-muted-foreground/30" />
-        <span className="text-xs text-muted-foreground/50">{t.agentComputer.files.empty}</span>
+        <FolderIcon className="text-muted-foreground/30 h-6 w-6" />
+        <span className="text-muted-foreground/50 text-xs">
+          {t.agentComputer.files.empty}
+        </span>
       </div>
     );
   }
@@ -972,20 +1416,24 @@ function FilesPanel({
       {/* Outputs (presented deliverables) */}
       {artifacts.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium text-muted-foreground/70">
+          <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
             <FileTextIcon className="h-3 w-3 text-emerald-400" />
             Outputs
-            <span className="rounded bg-muted px-1 text-[10px]">{artifacts.length}</span>
+            <span className="bg-muted rounded px-1 text-[10px]">
+              {artifacts.length}
+            </span>
           </div>
-          <div className="rounded border border-border/20 bg-muted/10 p-1">
+          <div className="border-border/20 bg-muted/10 rounded border p-1">
             {artifacts.map((path) => (
               <button
                 key={path}
                 onClick={() => onSelectArtifact(path)}
-                className="flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] hover:bg-muted/30 transition-colors"
+                className="hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
               >
                 {getFileIcon(path.split("/").at(-1) ?? "")}
-                <span className="truncate font-mono text-foreground">{path.split("/").at(-1)}</span>
+                <span className="text-foreground truncate font-mono">
+                  {path.split("/").at(-1)}
+                </span>
               </button>
             ))}
           </div>
@@ -993,14 +1441,21 @@ function FilesPanel({
       )}
       {/* Repository tree */}
       <div>
-        <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium text-muted-foreground/70">
+        <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
           <FolderIcon className="h-3 w-3 text-yellow-400" />
           Repository
-          <span className="rounded bg-muted px-1 text-[10px]">{files.length}</span>
+          <span className="bg-muted rounded px-1 text-[10px]">
+            {files.length}
+          </span>
         </div>
-        <div className="rounded border border-border/20 bg-muted/10 p-1">
-          {sortTreeNodes(Object.values(tree.children)).map(child => (
-            <FileTreeNode key={child.name} node={child} depth={0} onSelect={onSelectFile} />
+        <div className="border-border/20 bg-muted/10 rounded border p-1">
+          {sortTreeNodes(Object.values(tree.children)).map((child) => (
+            <FileTreeNode
+              key={child.name}
+              node={child}
+              depth={0}
+              onSelect={onSelectFile}
+            />
           ))}
         </div>
       </div>
@@ -1019,24 +1474,26 @@ function FilesPanel({
 // event emitted by the backend's auto-verify-on-present_files gate.
 function LlmErrorBadge({ event }: { event: LlmError }) {
   const reason = (event.reason || "unknown").toLowerCase();
-  const tone = reason === "quota"
-    ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-    : reason === "auth"
-      ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-      : "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
-  const label = reason === "quota"
-    ? "Last turn failed: out of quota"
-    : reason === "auth"
-      ? "Last turn failed: auth error"
-      : reason === "busy" || reason === "transient"
-        ? "Last turn failed: provider busy"
-        : "Last turn failed";
+  const tone =
+    reason === "quota"
+      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      : reason === "auth"
+        ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+        : "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  const label =
+    reason === "quota"
+      ? "Last turn failed: out of quota"
+      : reason === "auth"
+        ? "Last turn failed: auth error"
+        : reason === "busy" || reason === "transient"
+          ? "Last turn failed: provider busy"
+          : "Last turn failed";
   return (
     <div
       role="status"
       aria-live="polite"
       className={cn(
-        "flex shrink-0 items-center gap-2 border-b border-border/30 px-3 py-2 font-mono text-xs",
+        "border-border/30 flex shrink-0 items-center gap-2 border-b px-3 py-2 font-mono text-xs",
         tone,
       )}
       data-testid="llm-error-badge"
@@ -1044,7 +1501,9 @@ function LlmErrorBadge({ event }: { event: LlmError }) {
     >
       <AlertTriangleIcon className="h-3.5 w-3.5" aria-hidden />
       <span className="truncate">{label}</span>
-      <span className="ml-auto text-muted-foreground/70">{event.error_type}</span>
+      <span className="text-muted-foreground/70 ml-auto">
+        {event.error_type}
+      </span>
     </div>
   );
 }
@@ -1062,7 +1521,7 @@ function VerifyResultPill({ event }: { event: VerifyResult }) {
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center gap-2 border-b border-border/30 px-3 py-2 font-mono text-xs",
+        "border-border/30 flex shrink-0 items-center gap-2 border-b px-3 py-2 font-mono text-xs",
         tone,
       )}
       data-testid="verify-result-pill"
@@ -1070,8 +1529,10 @@ function VerifyResultPill({ event }: { event: VerifyResult }) {
       <span aria-hidden>{ok ? "✓" : "✗"}</span>
       <span className="truncate">{summary}</span>
       {event.console_errors_count > 0 ? (
-        <span className="ml-auto text-muted-foreground/70">
-          {t.agentComputer.verifyResult.consoleErrors(event.console_errors_count)}
+        <span className="text-muted-foreground/70 ml-auto">
+          {t.agentComputer.verifyResult.consoleErrors(
+            event.console_errors_count,
+          )}
         </span>
       ) : null}
     </div>
@@ -1089,7 +1550,10 @@ function ActivityPanel({
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const timeline = useMemo(() => events.filter((e) => !TERMINAL_TOOLS.has(e.type)), [events]);
+  const timeline = useMemo(
+    () => events.filter((e) => !TERMINAL_TOOLS.has(e.type)),
+    [events],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1098,14 +1562,14 @@ function ActivityPanel({
   return (
     <div className="flex h-full flex-col">
       {verifyResult ? <VerifyResultPill event={verifyResult} /> : null}
-      <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-muted/20 px-2 py-1">
-        <span className="font-mono text-xs text-muted-foreground/70">
+      <div className="border-border/30 bg-muted/20 flex shrink-0 items-center justify-between border-b px-2 py-1">
+        <span className="text-muted-foreground/70 font-mono text-xs">
           {t.agentComputer.activity.title(timeline.length)}
         </span>
         <a
           href={sandboxAuditDownloadUrl(threadId)}
           download
-          className="rounded p-1 text-muted-foreground/60 hover:text-foreground transition-colors"
+          className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors"
           title={t.agentComputer.activity.exportAuditLog}
         >
           <DownloadIcon className="h-3 w-3" />
@@ -1115,11 +1579,15 @@ function ActivityPanel({
         <div className="flex flex-col gap-1 p-2">
           {timeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-              <FileTextIcon className="h-5 w-5 text-muted-foreground/30" />
-              <span className="text-xs text-muted-foreground/50">{t.agentComputer.activity.empty}</span>
+              <FileTextIcon className="text-muted-foreground/30 h-5 w-5" />
+              <span className="text-muted-foreground/50 text-xs">
+                {t.agentComputer.activity.empty}
+              </span>
             </div>
           ) : (
-            timeline.map((event, i) => <ActivityEventCard key={i} index={i} event={event} />)
+            timeline.map((event, i) => (
+              <ActivityEventCard key={i} index={i} event={event} />
+            ))
           )}
           <div ref={bottomRef} />
         </div>
@@ -1131,19 +1599,27 @@ function ActivityPanel({
 // ──────────────────────────────────────────────────────────
 // Task checklist
 // ──────────────────────────────────────────────────────────
-function TaskChecklist({ todos, taskProgress, activityEvents }: {
-  todos: Todo[]; taskProgress: TaskProgress | null; activityEvents: AgentActivityEvent[];
+function TaskChecklist({
+  todos,
+  taskProgress,
+  activityEvents,
+}: {
+  todos: Todo[];
+  taskProgress: TaskProgress | null;
+  activityEvents: AgentActivityEvent[];
 }) {
   const { t } = useI18n();
   if (todos.length === 0) return null;
 
   // Enrich todo status from activity events (subagent task completions)
-  const completedTaskCount = activityEvents.filter(e => e.type === "task" && e.status === "done").length;
+  const completedTaskCount = activityEvents.filter(
+    (e) => e.type === "task" && e.status === "done",
+  ).length;
   const enrichedTodos = todos.map((todo, i) =>
     i < completedTaskCount ? { ...todo, status: "completed" as const } : todo,
   );
 
-  const done = enrichedTodos.filter(t => t.status === "completed").length;
+  const done = enrichedTodos.filter((t) => t.status === "completed").length;
   const total = enrichedTodos.length;
   const step = taskProgress?.step ?? done;
   const totalSteps = taskProgress?.total ?? total;
@@ -1152,8 +1628,12 @@ function TaskChecklist({ todos, taskProgress, activityEvents }: {
   return (
     <div className="flex flex-col gap-1 px-3 py-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground/70">{t.agentComputer.taskProgress}</span>
-        <span className="text-xs text-muted-foreground/50">{step} / {totalSteps}</span>
+        <span className="text-muted-foreground/70 text-xs font-medium">
+          {t.agentComputer.taskProgress}
+        </span>
+        <span className="text-muted-foreground/50 text-xs">
+          {step} / {totalSteps}
+        </span>
       </div>
       <Progress value={pct} className="h-1" />
       <div className="mt-0.5 flex flex-col gap-0.5">
@@ -1161,18 +1641,32 @@ function TaskChecklist({ todos, taskProgress, activityEvents }: {
           const isCompleted = todo.status === "completed";
           const isInProgress = todo.status === "in_progress";
           return (
-            <div key={i} className={cn("flex items-start gap-1.5 rounded px-1 py-0.5 text-xs", isInProgress && "bg-muted/40")}>
+            <div
+              key={i}
+              className={cn(
+                "flex items-start gap-1.5 rounded px-1 py-0.5 text-xs",
+                isInProgress && "bg-muted/40",
+              )}
+            >
               {isCompleted ? (
                 <CheckCircle2Icon className="mt-px h-3 w-3 shrink-0 text-emerald-500" />
               ) : isInProgress ? (
-                <LoaderCircleIcon className="mt-px h-3 w-3 shrink-0 animate-spin text-primary/70" />
+                <LoaderCircleIcon className="text-primary/70 mt-px h-3 w-3 shrink-0 animate-spin" />
               ) : (
-                <CircleIcon className="mt-px h-3 w-3 shrink-0 text-muted-foreground/30" />
+                <CircleIcon className="text-muted-foreground/30 mt-px h-3 w-3 shrink-0" />
               )}
-              <span className={cn(
-                "leading-snug text-[11px]",
-                isCompleted ? "text-muted-foreground/40 line-through" : isInProgress ? "text-primary/70" : "text-muted-foreground/70",
-              )}>{todo.content}</span>
+              <span
+                className={cn(
+                  "text-[11px] leading-snug",
+                  isCompleted
+                    ? "text-muted-foreground/40 line-through"
+                    : isInProgress
+                      ? "text-primary/70"
+                      : "text-muted-foreground/70",
+                )}
+              >
+                {todo.content}
+              </span>
             </div>
           );
         })}
@@ -1221,21 +1715,27 @@ function ReviewPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-border/30 bg-muted/20 px-2 py-1">
-        <span className="font-mono text-xs text-muted-foreground/70">{t.agentComputer.review.codeReview}</span>
+      <div className="border-border/30 bg-muted/20 flex shrink-0 items-center justify-between border-b px-2 py-1">
+        <span className="text-muted-foreground/70 font-mono text-xs">
+          {t.agentComputer.review.codeReview}
+        </span>
         <div className="flex items-center gap-1">
           <button
             onClick={onRegenerate}
             disabled={isFetching}
-            className="rounded p-1 text-muted-foreground/60 hover:text-foreground transition-colors disabled:opacity-40"
+            className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors disabled:opacity-40"
             title={t.agentComputer.review.regenerate}
           >
-            {isFetching ? <LoaderCircleIcon className="h-3 w-3 animate-spin" /> : <span className="text-[11px]">⟳</span>}
+            {isFetching ? (
+              <LoaderCircleIcon className="h-3 w-3 animate-spin" />
+            ) : (
+              <span className="text-[11px]">⟳</span>
+            )}
           </button>
           <a
             href={sandboxReviewDownloadUrl(threadId)}
             download
-            className="rounded p-1 text-muted-foreground/60 hover:text-foreground transition-colors"
+            className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors"
             title={t.agentComputer.review.download}
           >
             <DownloadIcon className="h-3 w-3" />
@@ -1245,14 +1745,18 @@ function ReviewPanel({
       <ScrollArea className="h-full">
         <div className="flex flex-col gap-3 p-3 text-xs">
           {/* Plain-English verdict */}
-          <div className="rounded-lg border border-border/30 bg-muted/10 p-3">
-            <div className={cn("text-sm font-medium", verdict.cls)}>{verdict.text}</div>
+          <div className="border-border/30 bg-muted/10 rounded-lg border p-3">
+            <div className={cn("text-sm font-medium", verdict.cls)}>
+              {verdict.text}
+            </div>
             {review && (
-              <div className="mt-1 text-[11px] text-muted-foreground/70">
-                {review.files.length} file{review.files.length === 1 ? "" : "s"} changed ·{" "}
+              <div className="text-muted-foreground/70 mt-1 text-[11px]">
+                {review.files.length} file{review.files.length === 1 ? "" : "s"}{" "}
+                changed ·{" "}
                 <span className="text-emerald-400">+{review.added_total}</span>{" "}
                 <span className="text-red-400">−{review.removed_total}</span>
-                {high + med === 0 && ` · ${t.agentComputer.review.noRiskyActions}`}
+                {high + med === 0 &&
+                  ` · ${t.agentComputer.review.noRiskyActions}`}
               </div>
             )}
           </div>
@@ -1260,13 +1764,31 @@ function ReviewPanel({
           {/* Risks */}
           {risks.length > 0 && (
             <div>
-              <div className="mb-1 font-medium text-muted-foreground/70">{t.agentComputer.review.riskFlags}</div>
+              <div className="text-muted-foreground/70 mb-1 font-medium">
+                {t.agentComputer.review.riskFlags}
+              </div>
               <div className="flex flex-col gap-1">
                 {risks.map((r, i) => (
-                  <div key={i} className="rounded border border-border/20 bg-muted/10 px-2 py-1">
-                    <span className={cn("font-mono text-[10px] uppercase", riskColor(r.level))}>{r.level}</span>{" "}
-                    <span className="text-muted-foreground/90">{r.message}</span>
-                    {r.evidence && <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/50">{r.evidence}</div>}
+                  <div
+                    key={i}
+                    className="border-border/20 bg-muted/10 rounded border px-2 py-1"
+                  >
+                    <span
+                      className={cn(
+                        "font-mono text-[10px] uppercase",
+                        riskColor(r.level),
+                      )}
+                    >
+                      {r.level}
+                    </span>{" "}
+                    <span className="text-muted-foreground/90">
+                      {r.message}
+                    </span>
+                    {r.evidence && (
+                      <div className="text-muted-foreground/50 mt-0.5 truncate font-mono text-[10px]">
+                        {r.evidence}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1276,13 +1798,24 @@ function ReviewPanel({
           {/* Changed files */}
           {review && review.files.length > 0 && (
             <div>
-              <div className="mb-1 font-medium text-muted-foreground/70">{t.agentComputer.review.changedFiles}</div>
+              <div className="text-muted-foreground/70 mb-1 font-medium">
+                {t.agentComputer.review.changedFiles}
+              </div>
               <div className="flex flex-col gap-px font-mono text-[11px]">
                 {review.files.slice(0, 200).map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/30">
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground/80">{f.path}</span>
-                    <span className="shrink-0 text-[9px] text-muted-foreground/40">{f.status}</span>
-                    <span className="shrink-0 text-emerald-400">+{f.added}</span>
+                  <div
+                    key={i}
+                    className="hover:bg-muted/30 flex items-center gap-2 rounded px-1 py-0.5"
+                  >
+                    <span className="text-muted-foreground/80 min-w-0 flex-1 truncate">
+                      {f.path}
+                    </span>
+                    <span className="text-muted-foreground/40 shrink-0 text-[9px]">
+                      {f.status}
+                    </span>
+                    <span className="shrink-0 text-emerald-400">
+                      +{f.added}
+                    </span>
                     <span className="shrink-0 text-red-400">−{f.removed}</span>
                   </div>
                 ))}
@@ -1293,11 +1826,17 @@ function ReviewPanel({
           {/* Checks */}
           {review && Object.keys(review.checks).length > 0 && (
             <div>
-              <div className="mb-1 font-medium text-muted-foreground/70">{t.agentComputer.review.detectedChecks}</div>
+              <div className="text-muted-foreground/70 mb-1 font-medium">
+                {t.agentComputer.review.detectedChecks}
+              </div>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(review.checks).map(([name, state]) => (
-                  <span key={name} className="rounded border border-border/20 bg-muted/10 px-1.5 py-0.5 text-[10px] text-muted-foreground/70">
-                    {state === "ok" ? "✅" : state === "warn" ? "⚠️" : "•"} {name.replace(/_/g, " ")}
+                  <span
+                    key={name}
+                    className="border-border/20 bg-muted/10 text-muted-foreground/70 rounded border px-1.5 py-0.5 text-[10px]"
+                  >
+                    {state === "ok" ? "✅" : state === "warn" ? "⚠️" : "•"}{" "}
+                    {name.replace(/_/g, " ")}
                   </span>
                 ))}
               </div>
@@ -1305,7 +1844,9 @@ function ReviewPanel({
           )}
 
           {review?.files.length === 0 && (
-            <div className="text-muted-foreground/50">{t.agentComputer.review.noChanges}</div>
+            <div className="text-muted-foreground/50">
+              {t.agentComputer.review.noChanges}
+            </div>
           )}
         </div>
       </ScrollArea>
@@ -1329,20 +1870,22 @@ function defaultTaskFor(s: Skill): string {
   const explicit = SKILL_DEFAULT_TASK[s.name];
   if (explicit) return explicit;
   const c = `${s.category ?? ""} ${s.name}`.toLowerCase();
-  if (c.includes("research")) return "research the topic I describe next and summarize the findings";
-  if (c.includes("test") || c.includes("qa")) return "test the current project and report any failures";
-  if (c.includes("review") || c.includes("audit") || c.includes("security")) return "review my latest changes in the workspace and flag any blockers";
-  if (c.includes("organize") || c.includes("file")) return "organize the workspace and propose a clean structure";
-  if (c.includes("doc")) return "document the current project (README + key files)";
-  if (c.includes("deploy")) return "prepare the current project for deployment and list the steps";
+  if (c.includes("research"))
+    return "research the topic I describe next and summarize the findings";
+  if (c.includes("test") || c.includes("qa"))
+    return "test the current project and report any failures";
+  if (c.includes("review") || c.includes("audit") || c.includes("security"))
+    return "review my latest changes in the workspace and flag any blockers";
+  if (c.includes("organize") || c.includes("file"))
+    return "organize the workspace and propose a clean structure";
+  if (c.includes("doc"))
+    return "document the current project (README + key files)";
+  if (c.includes("deploy"))
+    return "prepare the current project for deployment and list the steps";
   return "apply this skill to the current workspace";
 }
 
-function SkillLauncher({
-  onRun,
-}: {
-  onRun: (text: string) => void;
-}) {
+function SkillLauncher({ onRun }: { onRun: (text: string) => void }) {
   const { skills } = useSkills();
   const enabled = skills.filter((s) => s.enabled);
   if (enabled.length === 0) return null;
@@ -1351,7 +1894,10 @@ function SkillLauncher({
     const order = Object.keys(SKILL_DEFAULT_TASK);
     const ai = order.indexOf(a.name);
     const bi = order.indexOf(b.name);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.name.localeCompare(b.name);
+    return (
+      (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) ||
+      a.name.localeCompare(b.name)
+    );
   });
   return (
     <DropdownMenu>
@@ -1362,7 +1908,10 @@ function SkillLauncher({
           </Button>
         </DropdownMenuTrigger>
       </Tooltip>
-      <DropdownMenuContent align="end" className="max-h-80 w-64 overflow-y-auto">
+      <DropdownMenuContent
+        align="end"
+        className="max-h-80 w-64 overflow-y-auto"
+      >
         {ordered.map((s) => (
           <DropdownMenuItem
             key={s.name}
@@ -1370,7 +1919,9 @@ function SkillLauncher({
             className="flex flex-col items-start gap-0.5"
           >
             <span className="font-mono text-xs">/{s.name}</span>
-            <span className="text-muted-foreground line-clamp-2 text-[10px] leading-snug">{s.description}</span>
+            <span className="text-muted-foreground line-clamp-2 text-[10px] leading-snug">
+              {s.description}
+            </span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
@@ -1378,17 +1929,34 @@ function SkillLauncher({
   );
 }
 
-type PanelTab = "files" | "terminal" | "editor" | "browser" | "activity" | "review" | "privacy";
+type PanelTab =
+  | "files"
+  | "terminal"
+  | "editor"
+  | "browser"
+  | "activity"
+  | "review"
+  | "privacy";
 
-function TabBtn({ active, onClick, children, badge }: {
-  active: boolean; onClick: () => void; children: React.ReactNode; badge?: number;
+function TabBtn({
+  active,
+  onClick,
+  children,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  badge?: number;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "relative flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors shrink-0",
-        active ? "text-foreground" : "text-muted-foreground/60 hover:text-muted-foreground",
+        "relative flex shrink-0 items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+        active
+          ? "text-foreground"
+          : "text-muted-foreground/60 hover:text-muted-foreground",
       )}
     >
       {children}
@@ -1398,7 +1966,7 @@ function TabBtn({ active, onClick, children, badge }: {
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 500, damping: 22 }}
-          className="rounded-full bg-muted px-1 text-[9px] leading-none text-muted-foreground"
+          className="bg-muted text-muted-foreground rounded-full px-1 text-[9px] leading-none"
         >
           {badge}
         </motion.span>
@@ -1406,7 +1974,7 @@ function TabBtn({ active, onClick, children, badge }: {
       {active && (
         <motion.div
           layoutId="agent-computer-tab-underline"
-          className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-primary via-emerald-400 to-cyan-400"
+          className="from-primary absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gradient-to-r via-emerald-400 to-cyan-400"
           transition={{ type: "spring", stiffness: 400, damping: 32 }}
         />
       )}
@@ -1426,14 +1994,14 @@ function PrivacyPanel() {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center p-4">
-        <LoaderCircleIcon className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoaderCircleIcon className="text-muted-foreground h-4 w-4 animate-spin" />
       </div>
     );
   }
 
   if (!status) {
     return (
-      <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
+      <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
         {t.common.loading}
       </div>
     );
@@ -1445,8 +2013,10 @@ function PrivacyPanel() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldIcon className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium">{t.agentComputer.privacy.title}</span>
+            <ShieldIcon className="text-primary h-4 w-4" />
+            <span className="text-sm font-medium">
+              {t.agentComputer.privacy.title}
+            </span>
           </div>
           <Switch
             checked={status.enabled}
@@ -1459,36 +2029,76 @@ function PrivacyPanel() {
 
         {/* Source Health */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.sourceHealth}</h3>
+          <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            {t.agentComputer.privacy.sourceHealth}
+          </h3>
           <div className="grid grid-cols-2 gap-2">
-            <StatusCard label={t.agentComputer.privacy.searxng} status={status.searxng_healthy ? t.agentComputer.privacy.healthy : t.agentComputer.privacy.unhealthy} healthy={status.searxng_healthy} />
-            <StatusCard label={t.agentComputer.privacy.tor} status={status.tor_available ? t.agentComputer.privacy.available : t.agentComputer.privacy.unavailable} healthy={status.tor_available} />
+            <StatusCard
+              label={t.agentComputer.privacy.searxng}
+              status={
+                status.searxng_healthy
+                  ? t.agentComputer.privacy.healthy
+                  : t.agentComputer.privacy.unhealthy
+              }
+              healthy={status.searxng_healthy}
+            />
+            <StatusCard
+              label={t.agentComputer.privacy.tor}
+              status={
+                status.tor_available
+                  ? t.agentComputer.privacy.available
+                  : t.agentComputer.privacy.unavailable
+              }
+              healthy={status.tor_available}
+            />
           </div>
         </div>
 
         {/* Cache Stats */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.cache}</h3>
+          <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            {t.agentComputer.privacy.cache}
+          </h3>
           <div className="grid grid-cols-3 gap-2">
-            <MetricCard label={t.agentComputer.privacy.size} value={`${status.cache?.size ?? 0}/${status.cache?.max_size ?? 0}`} />
-            <MetricCard label={t.agentComputer.privacy.hitRate} value={`${((status.cache?.hit_rate ?? 0) * 100).toFixed(1)}%`} />
-            <MetricCard label={t.agentComputer.privacy.ttl} value={`${status.cache?.ttl_s ?? 0}s`} />
+            <MetricCard
+              label={t.agentComputer.privacy.size}
+              value={`${status.cache?.size ?? 0}/${status.cache?.max_size ?? 0}`}
+            />
+            <MetricCard
+              label={t.agentComputer.privacy.hitRate}
+              value={`${((status.cache?.hit_rate ?? 0) * 100).toFixed(1)}%`}
+            />
+            <MetricCard
+              label={t.agentComputer.privacy.ttl}
+              value={`${status.cache?.ttl_s ?? 0}s`}
+            />
           </div>
         </div>
 
         {/* Audit Stats */}
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{t.agentComputer.privacy.audit}</h3>
+          <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            {t.agentComputer.privacy.audit}
+          </h3>
           <div className="grid grid-cols-3 gap-2">
-            <MetricCard label={t.agentComputer.privacy.total} value={status.audit?.total_records ?? 0} />
-            <MetricCard label={t.agentComputer.privacy.errors} value={status.audit?.errors ?? 0} />
-            <MetricCard label={t.agentComputer.privacy.torUsage} value={status.audit?.tor_usage ?? 0} />
+            <MetricCard
+              label={t.agentComputer.privacy.total}
+              value={status.audit?.total_records ?? 0}
+            />
+            <MetricCard
+              label={t.agentComputer.privacy.errors}
+              value={status.audit?.errors ?? 0}
+            />
+            <MetricCard
+              label={t.agentComputer.privacy.torUsage}
+              value={status.audit?.tor_usage ?? 0}
+            />
           </div>
         </div>
 
         {/* Error */}
         {status.error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+          <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs">
             {status.error}
           </div>
         )}
@@ -1497,24 +2107,40 @@ function PrivacyPanel() {
   );
 }
 
-function StatusCard({ label, status, healthy }: { label: string; status: string; healthy: boolean }) {
+function StatusCard({
+  label,
+  status,
+  healthy,
+}: {
+  label: string;
+  status: string;
+  healthy: boolean;
+}) {
   return (
-    <div className="rounded-md border border-border/50 p-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={cn(
-        "mt-1 text-sm font-medium",
-        healthy ? "text-emerald-400" : "text-amber-400",
-      )}>
+    <div className="border-border/50 rounded-md border p-2">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div
+        className={cn(
+          "mt-1 text-sm font-medium",
+          healthy ? "text-emerald-400" : "text-amber-400",
+        )}
+      >
         {status}
       </div>
     </div>
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string | number }) {
+function MetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
   return (
-    <div className="rounded-md border border-border/50 p-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="border-border/50 rounded-md border p-2">
+      <div className="text-muted-foreground text-xs">{label}</div>
       <div className="mt-1 text-sm font-medium">{value}</div>
     </div>
   );
@@ -1569,10 +2195,9 @@ export function AgentComputerPanel({
   const devServers = useDevServers(threadId);
   const [selectedLabel, setSelectedLabel] = useState("app");
   // Fall back to an existing label if the selected one is gone (e.g. stopped).
-  const activeLabel =
-    devServers.some((s) => s.label === selectedLabel)
-      ? selectedLabel
-      : (devServers[0]?.label ?? "app");
+  const activeLabel = devServers.some((s) => s.label === selectedLabel)
+    ? selectedLabel
+    : (devServers[0]?.label ?? "app");
   const devServer = useDevServerStatus(threadId, activeLabel);
   const msgFilePath = getActiveFilePath(messages);
   const derivedFilePath = activeWriteFilePath ?? msgFilePath;
@@ -1582,18 +2207,23 @@ export function AgentComputerPanel({
   // Merge with in-flight "running" LangGraph events for the live spinner.
   const sseEvents = useSandboxLogs(threadId);
   const mergedEvents = useMemo<AgentActivityEvent[]>(() => {
-    const fromLog: AgentActivityEvent[] = sseEvents.map((e: SandboxEvent, i) => ({
-      id: `log-${i}-${e.ts}`,
-      ts: e.ts,
-      type: e.type,
-      path: e.path,
-      summary: e.summary,
-      output: e.output,
-      status: "done",
-    }));
-    const seen = new Set(sseEvents.map((e) => `${e.ts}|${e.type}|${e.summary}`));
+    const fromLog: AgentActivityEvent[] = sseEvents.map(
+      (e: SandboxEvent, i) => ({
+        id: `log-${i}-${e.ts}`,
+        ts: e.ts,
+        type: e.type,
+        path: e.path,
+        summary: e.summary,
+        output: e.output,
+        status: "done",
+      }),
+    );
+    const seen = new Set(
+      sseEvents.map((e) => `${e.ts}|${e.type}|${e.summary}`),
+    );
     const running = activityEvents.filter(
-      (e) => e.status === "running" && !seen.has(`${e.ts}|${e.type}|${e.summary}`),
+      (e) =>
+        e.status === "running" && !seen.has(`${e.ts}|${e.type}|${e.summary}`),
     );
     return [...fromLog, ...running];
   }, [sseEvents, activityEvents]);
@@ -1614,7 +2244,8 @@ export function AgentComputerPanel({
   }, [derivedFilePath, storageKey]);
 
   const [activeTab, setActiveTab] = useState<PanelTab>(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem(storageKey)) return "browser";
+    if (typeof window !== "undefined" && sessionStorage.getItem(storageKey))
+      return "browser";
     return "activity";
   });
   const reviewQuery = useSandboxReview(threadId, activeTab === "review");
@@ -1622,9 +2253,18 @@ export function AgentComputerPanel({
   // Auto-switch tabs based on current tool
   useEffect(() => {
     if (!currentTool) return;
-    if (currentTool === "write_file" || currentTool === "str_replace" || currentTool === "scaffold_project") {
+    if (
+      currentTool === "write_file" ||
+      currentTool === "str_replace" ||
+      currentTool === "scaffold_project"
+    ) {
       setActiveTab("editor");
-    } else if (currentTool === "bash" || currentTool === "execute_command" || currentTool === "search_files" || currentTool === "grep_files") {
+    } else if (
+      currentTool === "bash" ||
+      currentTool === "execute_command" ||
+      currentTool === "search_files" ||
+      currentTool === "grep_files"
+    ) {
       setActiveTab("terminal");
     } else if (currentTool === "start_dev_server") {
       setActiveTab("browser");
@@ -1641,7 +2281,7 @@ export function AgentComputerPanel({
   }, [devServer.running]);
 
   // Switch to browser after first write completes
-  const firstWriteDone = mergedEvents.some(e => e.type === "write_file");
+  const firstWriteDone = mergedEvents.some((e) => e.type === "write_file");
   const prevFirstWriteDone = useRef(false);
   useEffect(() => {
     if (firstWriteDone && !prevFirstWriteDone.current) {
@@ -1660,7 +2300,11 @@ export function AgentComputerPanel({
   );
   const shownArtifactRef = useRef<string | null>(null);
   useEffect(() => {
-    if (latestHtmlArtifact && latestHtmlArtifact !== shownArtifactRef.current && !devServer.running) {
+    if (
+      latestHtmlArtifact &&
+      latestHtmlArtifact !== shownArtifactRef.current &&
+      !devServer.running
+    ) {
       shownArtifactRef.current = latestHtmlArtifact;
       setBrowserFilePath(latestHtmlArtifact);
       sessionStorage.setItem(storageKey, latestHtmlArtifact);
@@ -1668,23 +2312,30 @@ export function AgentComputerPanel({
     }
   }, [latestHtmlArtifact, devServer.running, storageKey]);
 
-  const handleSelectFile = useCallback((file: SandboxFile) => {
-    setBrowserFilePath(file.virtual_path);
-    sessionStorage.setItem(storageKey, file.virtual_path);
-    setActiveTab("browser");
-  }, [storageKey]);
+  const handleSelectFile = useCallback(
+    (file: SandboxFile) => {
+      setBrowserFilePath(file.virtual_path);
+      sessionStorage.setItem(storageKey, file.virtual_path);
+      setActiveTab("browser");
+    },
+    [storageKey],
+  );
 
-  const handleSelectArtifact = useCallback((path: string) => {
-    setBrowserFilePath(path);
-    sessionStorage.setItem(storageKey, path);
-    setActiveTab("browser");
-  }, [storageKey]);
+  const handleSelectArtifact = useCallback(
+    (path: string) => {
+      setBrowserFilePath(path);
+      sessionStorage.setItem(storageKey, path);
+      setActiveTab("browser");
+    },
+    [storageKey],
+  );
 
   // Live line count for status
   const { lineCount } = useLiveFileContent(
     threadId,
     derivedFilePath,
-    (currentTool === "write_file" || currentTool === "str_replace") && Boolean(derivedFilePath),
+    (currentTool === "write_file" || currentTool === "str_replace") &&
+      Boolean(derivedFilePath),
   );
 
   // Download button
@@ -1702,9 +2353,13 @@ export function AgentComputerPanel({
       const blob = new Blob([data.content], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = filename; a.click();
+      a.href = url;
+      a.download = filename;
+      a.click();
       URL.revokeObjectURL(url);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   }, [threadId, browserFilePath, files]);
 
   // Download ALL workspace files as zip
@@ -1726,16 +2381,18 @@ export function AgentComputerPanel({
     // URL (which would leak it into .git/config, shell history, and process lists).
     onAgentMessage(
       `Push all files in /mnt/user-data/workspace/ to a new public GitHub repository named "${repoName}". ` +
-      `Steps: cd /mnt/user-data/workspace && git init && git add -A && ` +
-      `git commit -m "Built by DeerFlow" && ` +
-      `git remote add origin https://github.com/$(git config user.name || echo "user")/${repoName}.git && ` +
-      `git -c http.extraHeader="Authorization: Bearer $GITHUB_TOKEN" push -u origin main. ` +
-      `Report the GitHub URL when done. If GITHUB_TOKEN is not set, ask the user to set it in the sandbox environment.`,
+        `Steps: cd /mnt/user-data/workspace && git init && git add -A && ` +
+        `git commit -m "Built by DeerFlow" && ` +
+        `git remote add origin https://github.com/$(git config user.name || echo "user")/${repoName}.git && ` +
+        `git -c http.extraHeader="Authorization: Bearer $GITHUB_TOKEN" push -u origin main. ` +
+        `Report the GitHub URL when done. If GITHUB_TOKEN is not set, ask the user to set it in the sandbox environment.`,
     );
     setActiveTab("terminal");
   }, [onAgentMessage]);
 
-  const terminalCount = mergedEvents.filter(e => TERMINAL_TOOLS.has(e.type)).length;
+  const terminalCount = mergedEvents.filter((e) =>
+    TERMINAL_TOOLS.has(e.type),
+  ).length;
 
   return (
     <motion.div
@@ -1743,10 +2400,10 @@ export function AgentComputerPanel({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 320, opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="flex h-full w-full flex-col overflow-hidden border-l border-border/50 bg-card/50 backdrop-blur-sm"
+      className="border-border/50 bg-card/50 flex h-full w-full flex-col overflow-hidden border-l backdrop-blur-sm"
     >
       {/* ── Header ── */}
-      <div className="relative flex h-10 shrink-0 items-center justify-between border-b border-border/50 bg-card/50 px-3 backdrop-blur-sm overflow-hidden">
+      <div className="border-border/50 bg-card/50 relative flex h-10 shrink-0 items-center justify-between overflow-hidden border-b px-3 backdrop-blur-sm">
         {(isLoading || currentTool) && (
           <ShineBorder
             borderWidth={1}
@@ -1757,10 +2414,10 @@ export function AgentComputerPanel({
         {/* Left: live status pill (replaces the redundant title — page-header toggle owns the name) */}
         <div className="relative z-10 flex min-w-0 items-center">
           {isLoading && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium">
+            <span className="bg-primary/10 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
               <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-50" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-50" />
+                <span className="bg-primary relative inline-flex h-1.5 w-1.5 rounded-full" />
               </span>
               <AuroraText
                 colors={["#10b981", "#34d399", "#06b6d4", "#10b981"]}
@@ -1795,16 +2452,19 @@ export function AgentComputerPanel({
               <DropdownMenuContent align="end" className="w-48">
                 {onAgentMessage && (
                   <DropdownMenuItem onClick={handleGitHubPush}>
-                    <GithubIcon className="mr-2 h-3.5 w-3.5" /> {t.agentComputer.pushToGithub}
+                    <GithubIcon className="mr-2 h-3.5 w-3.5" />{" "}
+                    {t.agentComputer.pushToGithub}
                   </DropdownMenuItem>
                 )}
                 {files.length > 0 && (
                   <>
                     <DropdownMenuItem onClick={handleDownloadZip}>
-                      <FolderOpenIcon className="mr-2 h-3.5 w-3.5" /> {t.agentComputer.downloadAllZip}
+                      <FolderOpenIcon className="mr-2 h-3.5 w-3.5" />{" "}
+                      {t.agentComputer.downloadAllZip}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDownload}>
-                      <DownloadIcon className="mr-2 h-3.5 w-3.5" /> {t.agentComputer.downloadActiveFile}
+                      <DownloadIcon className="mr-2 h-3.5 w-3.5" />{" "}
+                      {t.agentComputer.downloadActiveFile}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -1812,7 +2472,12 @@ export function AgentComputerPanel({
             </DropdownMenu>
           )}
           <Tooltip content="Close">
-            <Button size="icon-sm" variant="ghost" onClick={onClose} className="h-6 w-6">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={onClose}
+              className="h-6 w-6"
+            >
               <XIcon className="h-3.5 w-3.5" />
             </Button>
           </Tooltip>
@@ -1824,38 +2489,69 @@ export function AgentComputerPanel({
         tool={currentTool}
         isLoading={isLoading}
         filePath={derivedFilePath}
-        lineCount={(currentTool === "write_file" && lineCount > 1) ? lineCount : undefined}
+        lineCount={
+          currentTool === "write_file" && lineCount > 1 ? lineCount : undefined
+        }
       />
 
       {/* ── Tab bar ── */}
-      <div className="flex shrink-0 overflow-x-auto border-b border-border/50 scrollbar-none">
-        <TabBtn active={activeTab === "files"} onClick={() => setActiveTab("files")}>
+      <div className="border-border/50 scrollbar-none flex shrink-0 overflow-x-auto border-b">
+        <TabBtn
+          active={activeTab === "files"}
+          onClick={() => setActiveTab("files")}
+        >
           <FolderIcon className="h-3 w-3" />
           {t.agentComputer.tabs.files}
-          {files.length > 0 && <span className="rounded-full bg-muted px-1 text-[9px] text-muted-foreground">{files.length}</span>}
+          {files.length > 0 && (
+            <span className="bg-muted text-muted-foreground rounded-full px-1 text-[9px]">
+              {files.length}
+            </span>
+          )}
         </TabBtn>
-        <TabBtn active={activeTab === "terminal"} onClick={() => setActiveTab("terminal")}>
+        <TabBtn
+          active={activeTab === "terminal"}
+          onClick={() => setActiveTab("terminal")}
+        >
           <SquareTerminalIcon className="h-3 w-3" />
           {t.agentComputer.tabs.terminal}
-          {terminalCount > 0 && <span className="rounded-full bg-emerald-500/20 px-1 text-[9px] text-emerald-400">{terminalCount}</span>}
+          {terminalCount > 0 && (
+            <span className="rounded-full bg-emerald-500/20 px-1 text-[9px] text-emerald-400">
+              {terminalCount}
+            </span>
+          )}
         </TabBtn>
-        <TabBtn active={activeTab === "editor"} onClick={() => setActiveTab("editor")}>
+        <TabBtn
+          active={activeTab === "editor"}
+          onClick={() => setActiveTab("editor")}
+        >
           <PencilIcon className="h-3 w-3" />
           {t.agentComputer.tabs.editor}
         </TabBtn>
-        <TabBtn active={activeTab === "browser"} onClick={() => setActiveTab("browser")}>
+        <TabBtn
+          active={activeTab === "browser"}
+          onClick={() => setActiveTab("browser")}
+        >
           <GlobeIcon className="h-3 w-3" />
           {t.agentComputer.tabs.browser}
         </TabBtn>
-        <TabBtn active={activeTab === "activity"} onClick={() => setActiveTab("activity")}>
+        <TabBtn
+          active={activeTab === "activity"}
+          onClick={() => setActiveTab("activity")}
+        >
           <FileTextIcon className="h-3 w-3" />
           {t.agentComputer.tabs.activity}
         </TabBtn>
-        <TabBtn active={activeTab === "review"} onClick={() => setActiveTab("review")}>
+        <TabBtn
+          active={activeTab === "review"}
+          onClick={() => setActiveTab("review")}
+        >
           <CheckCircle2Icon className="h-3 w-3" />
           {t.agentComputer.tabs.review}
         </TabBtn>
-        <TabBtn active={activeTab === "privacy"} onClick={() => setActiveTab("privacy")}>
+        <TabBtn
+          active={activeTab === "privacy"}
+          onClick={() => setActiveTab("privacy")}
+        >
           <ShieldIcon className="h-3 w-3" />
           {t.agentComputer.tabs.privacy}
         </TabBtn>
@@ -1889,7 +2585,9 @@ export function AgentComputerPanel({
             <Editor
               threadId={threadId}
               filePath={derivedFilePath}
-              isWriting={currentTool === "write_file" || currentTool === "str_replace"}
+              isWriting={
+                currentTool === "write_file" || currentTool === "str_replace"
+              }
               activeTab={activeTab === "editor"}
               activeEdit={activeEdit}
             />
@@ -1926,21 +2624,27 @@ export function AgentComputerPanel({
 
         <AgentComputerErrorBoundary tabName="Activity">
           {activeTab === "activity" ? (
-            <ActivityPanel events={mergedEvents} threadId={threadId} verifyResult={effectiveVerifyResult} />
+            <ActivityPanel
+              events={mergedEvents}
+              threadId={threadId}
+              verifyResult={effectiveVerifyResult}
+            />
           ) : null}
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Privacy">
-          {activeTab === "privacy" ? (
-            <PrivacyPanel />
-          ) : null}
+          {activeTab === "privacy" ? <PrivacyPanel /> : null}
         </AgentComputerErrorBoundary>
       </div>
 
       {/* ── Task checklist ── */}
       {todos.length > 0 && (
-        <div className="shrink-0 border-t border-border/50">
-          <TaskChecklist todos={todos} taskProgress={taskProgress} activityEvents={activityEvents} />
+        <div className="border-border/50 shrink-0 border-t">
+          <TaskChecklist
+            todos={todos}
+            taskProgress={taskProgress}
+            activityEvents={activityEvents}
+          />
         </div>
       )}
     </motion.div>

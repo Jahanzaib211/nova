@@ -53,15 +53,31 @@ describe("iGIN0 types compile", () => {
       tor_available: false,
       searxng_healthy: false,
       base_url: "",
-      cache: { size: 0, max_size: 0, hits: 0, misses: 0, hit_rate: 0, ttl_s: 0 },
-      audit: { total_records: 0, errors: 0, tor_usage: 0, enabled: false, redacted: false },
+      cache: {
+        size: 0,
+        max_size: 0,
+        hits: 0,
+        misses: 0,
+        hit_rate: 0,
+        ttl_s: 0,
+      },
+      audit: {
+        total_records: 0,
+        errors: 0,
+        tor_usage: 0,
+        enabled: false,
+        redacted: false,
+      },
       error: "SearXNG unreachable",
     };
     expect(status.error).toBe("SearXNG unreachable");
   });
 
   test("IGINOToggleResponse conforms to shape", () => {
-    const resp: IGINOToggleResponse = { enabled: true, message: "Toggle successful" };
+    const resp: IGINOToggleResponse = {
+      enabled: true,
+      message: "Toggle successful",
+    };
     expect(resp.enabled).toBe(true);
   });
 
@@ -148,8 +164,21 @@ describe("iGIN0 types compile", () => {
       tor_available: false,
       searxng_healthy: true,
       circuit_states: { default: "closed" },
-      cache_stats: { size: 0, max_size: 100, hits: 0, misses: 0, hit_rate: 0, ttl_s: 3600 },
-      audit_stats: { total_records: 0, errors: 0, tor_usage: 0, enabled: true, redacted: false },
+      cache_stats: {
+        size: 0,
+        max_size: 100,
+        hits: 0,
+        misses: 0,
+        hit_rate: 0,
+        ttl_s: 3600,
+      },
+      audit_stats: {
+        total_records: 0,
+        errors: 0,
+        tor_usage: 0,
+        enabled: true,
+        redacted: false,
+      },
     };
     expect(caps.enabled).toBe(true);
     expect(caps.circuit_states.default).toBe("closed");

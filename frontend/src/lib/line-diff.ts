@@ -28,7 +28,10 @@ export function lineDiff(oldText: string, newText: string): DiffLine[] {
   );
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {
-      lcs[i]![j] = a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+      lcs[i]![j] =
+        a[i] === b[j]
+          ? lcs[i + 1]![j + 1]! + 1
+          : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
     }
   }
 
@@ -50,8 +53,10 @@ export function lineDiff(oldText: string, newText: string): DiffLine[] {
       j++;
     }
   }
-  while (i < n) out.push({ type: "del", text: a[i++]!, oldNo: oldNo++, newNo: null });
-  while (j < m) out.push({ type: "add", text: b[j++]!, oldNo: null, newNo: newNo++ });
+  while (i < n)
+    out.push({ type: "del", text: a[i++]!, oldNo: oldNo++, newNo: null });
+  while (j < m)
+    out.push({ type: "add", text: b[j++]!, oldNo: null, newNo: newNo++ });
   return out;
 }
 

@@ -25,7 +25,10 @@ interface ErrorBoundaryState {
  * white-screens the app. `scope` is reported to the console so
  * attribution stays clear when multiple boundaries are nested.
  */
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -71,13 +74,15 @@ function DefaultErrorPanel({ error, reset }: ErrorPanelProps): ReactNode {
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 p-8 text-center">
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-foreground">Something went wrong</h2>
-        <p className="max-w-md text-sm text-muted-foreground">
-          An unexpected error occurred. The team has been notified. You can retry the action,
-          or refresh the page to start fresh.
+        <h2 className="text-foreground text-lg font-semibold">
+          Something went wrong
+        </h2>
+        <p className="text-muted-foreground max-w-md text-sm">
+          An unexpected error occurred. The team has been notified. You can
+          retry the action, or refresh the page to start fresh.
         </p>
         {process.env.NODE_ENV !== "production" && (
-          <pre className="mx-auto mt-4 max-w-2xl overflow-auto rounded-md bg-muted/40 p-3 text-left text-xs text-muted-foreground">
+          <pre className="bg-muted/40 text-muted-foreground mx-auto mt-4 max-w-2xl overflow-auto rounded-md p-3 text-left text-xs">
             {error.name}: {error.message}
           </pre>
         )}
@@ -86,7 +91,11 @@ function DefaultErrorPanel({ error, reset }: ErrorPanelProps): ReactNode {
         <Button variant="outline" size="sm" onClick={reset}>
           Try again
         </Button>
-        <Button variant="default" size="sm" onClick={() => window.location.reload()}>
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => window.location.reload()}
+        >
           Refresh page
         </Button>
       </div>

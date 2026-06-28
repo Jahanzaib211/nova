@@ -34,7 +34,9 @@ export async function fetchIGINOStatus(): Promise<IGINOStatus> {
   return iginoFetch<IGINOStatus>("/status");
 }
 
-export async function toggleIGINO(enabled: boolean): Promise<IGINOToggleResponse> {
+export async function toggleIGINO(
+  enabled: boolean,
+): Promise<IGINOToggleResponse> {
   return iginoFetch<IGINOToggleResponse>("/toggle", {
     method: "POST",
     body: JSON.stringify({ enabled }),

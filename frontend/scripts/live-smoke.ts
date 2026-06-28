@@ -8,7 +8,8 @@ import { chromium } from "@playwright/test";
 async function main(): Promise<void> {
   const browser = await chromium.launch({
     headless: true,
-    executablePath: "/home/jahanzaib/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
+    executablePath:
+      "/home/jahanzaib/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
   });
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
@@ -17,7 +18,8 @@ async function main(): Promise<void> {
   const consoleErrors: string[] = [];
   page.on("pageerror", (err) => errors.push(`[pageerror] ${err.message}`));
   page.on("console", (msg) => {
-    if (msg.type() === "error") consoleErrors.push(`[console.error] ${msg.text()}`);
+    if (msg.type() === "error")
+      consoleErrors.push(`[console.error] ${msg.text()}`);
   });
 
   for (const url of [
@@ -27,11 +29,17 @@ async function main(): Promise<void> {
   ]) {
     console.log(`\n=== ${url} ===`);
     try {
-      const resp = await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
+      const resp = await page.goto(url, {
+        waitUntil: "networkidle",
+        timeout: 20000,
+      });
       console.log(`status: ${resp?.status()}`);
       // Wait briefly for client hydration / errors.
       await page.waitForTimeout(1500);
-      const body = await page.locator("body").innerText().catch(() => "(no body)");
+      const body = await page
+        .locator("body")
+        .innerText()
+        .catch(() => "(no body)");
       const headline = body.split("\n").slice(0, 12).join("\n  ");
       console.log(`dom (first 12 lines):\n  ${headline}`);
     } catch (err) {

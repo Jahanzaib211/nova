@@ -27,7 +27,10 @@ interface ErrorBoundaryState {
  * Logs the error to the browser console for debugging. Does NOT report
  * to any external service (privacy / no third-party tracking).
  */
-export class AgentComputerErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class AgentComputerErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -36,7 +39,11 @@ export class AgentComputerErrorBoundary extends Component<ErrorBoundaryProps, Er
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     if (typeof console !== "undefined") {
-      console.error(`[AgentComputerErrorBoundary] tab="${this.props.tabName}" crashed:`, error, info);
+      console.error(
+        `[AgentComputerErrorBoundary] tab="${this.props.tabName}" crashed:`,
+        error,
+        info,
+      );
     }
   }
 
@@ -64,12 +71,13 @@ export class AgentComputerErrorBoundary extends Component<ErrorBoundaryProps, Er
           <div className="font-mono text-sm font-medium text-amber-300">
             {tabName} tab crashed
           </div>
-          <div className="text-xs text-muted-foreground/70">
-            The other tabs are unaffected. Reset to retry, or refresh the page if this persists.
+          <div className="text-muted-foreground/70 text-xs">
+            The other tabs are unaffected. Reset to retry, or refresh the page
+            if this persists.
           </div>
         </div>
         {error?.message ? (
-          <pre className="max-w-full overflow-x-auto rounded border border-border/30 bg-muted/30 px-3 py-2 text-left font-mono text-[11px] text-muted-foreground/80">
+          <pre className="border-border/30 bg-muted/30 text-muted-foreground/80 max-w-full overflow-x-auto rounded border px-3 py-2 text-left font-mono text-[11px]">
             {error.message}
           </pre>
         ) : null}
@@ -77,9 +85,9 @@ export class AgentComputerErrorBoundary extends Component<ErrorBoundaryProps, Er
           type="button"
           onClick={this.handleReset}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded border border-border/40 bg-background/60 px-3 py-1.5",
-            "text-xs font-medium text-foreground/90 hover:bg-muted/40 transition-colors",
-            "focus:outline-none focus:ring-2 focus:ring-amber-500/40",
+            "border-border/40 bg-background/60 inline-flex items-center gap-1.5 rounded border px-3 py-1.5",
+            "text-foreground/90 hover:bg-muted/40 text-xs font-medium transition-colors",
+            "focus:ring-2 focus:ring-amber-500/40 focus:outline-none",
           )}
         >
           <RotateCcwIcon className="h-3 w-3" aria-hidden />

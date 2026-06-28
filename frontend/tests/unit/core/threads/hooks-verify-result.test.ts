@@ -11,7 +11,12 @@ interface ParsedVerifyResult {
   thread_id: string;
   ok: boolean;
   verdict: "passed" | "issues";
-  routes: Array<{ route: string; ok: boolean; status: number | null; notes: string }>;
+  routes: Array<{
+    route: string;
+    ok: boolean;
+    status: number | null;
+    notes: string;
+  }>;
   console_errors_count: number;
   screenshot: string | null;
 }
@@ -37,8 +42,11 @@ function parseVerifyResultEvent(event: unknown): ParsedVerifyResult | null {
     thread_id: typeof e.thread_id === "string" ? e.thread_id : "",
     ok: e.ok === true,
     verdict: e.verdict === "issues" ? "issues" : "passed",
-    routes: Array.isArray(e.routes) ? (e.routes as ParsedVerifyResult["routes"]) : [],
-    console_errors_count: typeof e.console_errors_count === "number" ? e.console_errors_count : 0,
+    routes: Array.isArray(e.routes)
+      ? (e.routes as ParsedVerifyResult["routes"])
+      : [],
+    console_errors_count:
+      typeof e.console_errors_count === "number" ? e.console_errors_count : 0,
     screenshot: typeof e.screenshot === "string" ? e.screenshot : null,
   };
 }
@@ -87,7 +95,9 @@ describe("parseVerifyResultEvent", () => {
       thread_id: "xyz-789",
       ok: false,
       verdict: "issues",
-      routes: [{ route: "/", ok: false, status: 500, notes: "Internal Server Error" }],
+      routes: [
+        { route: "/", ok: false, status: 500, notes: "Internal Server Error" },
+      ],
       console_errors_count: 3,
       screenshot: "base64data...",
     });
@@ -119,13 +129,22 @@ describe("parseVerifyResultEvent", () => {
   });
 
   it("coerces verdict='issues' only when exactly that string; everything else is 'passed'", () => {
-    const result1 = parseVerifyResultEvent({ type: "verify_result", verdict: "issues" });
+    const result1 = parseVerifyResultEvent({
+      type: "verify_result",
+      verdict: "issues",
+    });
     expect(result1?.verdict).toBe("issues");
-    const result2 = parseVerifyResultEvent({ type: "verify_result", verdict: "passed" });
+    const result2 = parseVerifyResultEvent({
+      type: "verify_result",
+      verdict: "passed",
+    });
     expect(result2?.verdict).toBe("passed");
-    const result3 = parseVerifyResultEvent({ type: "verify_result", verdict: "unknown" });
-    expect(result3?.verdict).toBe("passed");  // safe default
-    const result4 = parseVerifyResultEvent({ type: "verify_result" });  // missing
+    const result3 = parseVerifyResultEvent({
+      type: "verify_result",
+      verdict: "unknown",
+    });
+    expect(result3?.verdict).toBe("passed"); // safe default
+    const result4 = parseVerifyResultEvent({ type: "verify_result" }); // missing
     expect(result4?.verdict).toBe("passed");
   });
 
@@ -135,14 +154,14 @@ describe("parseVerifyResultEvent", () => {
     const event = { type: "verify_result", ok: false, verdict: "passed" };
     const result = parseVerifyResultEvent(event);
     expect(result?.ok).toBe(false);
-    expect(result?.verdict).toBe("passed");  // preserves the explicit verdict
+    expect(result?.verdict).toBe("passed"); // preserves the explicit verdict
   });
 
   it("treats routes as [] when not an array (defensive)", () => {
     const event = {
       type: "verify_result",
       ok: true,
-      routes: "not an array",  // wrong type
+      routes: "not an array", // wrong type
     };
     const result = parseVerifyResultEvent(event);
     expect(result?.routes).toEqual([]);

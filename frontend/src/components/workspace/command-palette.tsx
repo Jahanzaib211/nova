@@ -138,15 +138,18 @@ export function CommandPalette() {
           <CommandGroup heading="Agent Capabilities (type in chat)">
             <CommandItem onSelect={() => setOpen(false)}>
               <SearchIcon className="mr-2 h-4 w-4" />
-              search_files — find files by pattern (e.g. &quot;search for *.html files&quot;)
+              search_files — find files by pattern (e.g. &quot;search for *.html
+              files&quot;)
             </CommandItem>
             <CommandItem onSelect={() => setOpen(false)}>
               <SearchIcon className="mr-2 h-4 w-4" />
-              grep_files — search file contents (e.g. &quot;grep for nav class in workspace&quot;)
+              grep_files — search file contents (e.g. &quot;grep for nav class
+              in workspace&quot;)
             </CommandItem>
             <CommandItem onSelect={() => setOpen(false)}>
               <DownloadIcon className="mr-2 h-4 w-4" />
-              Download — click ↓ button in Agent&apos;s Computer header when files exist
+              Download — click ↓ button in Agent&apos;s Computer header when
+              files exist
             </CommandItem>
           </CommandGroup>
         </CommandList>

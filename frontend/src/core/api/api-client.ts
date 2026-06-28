@@ -179,7 +179,9 @@ export function getAPIClient(isMock?: boolean): LangGraphClient {
     client = createCompatibleClient(isMock);
     // Tag the instance so Playwright/E2E can match on it without
     // touching internals.
-    (client as unknown as Record<symbol, unknown>)[Symbol.for(LANGGRAPH_SDK_CLIENT_TAG)] = true;
+    (client as unknown as Record<symbol, unknown>)[
+      Symbol.for(LANGGRAPH_SDK_CLIENT_TAG)
+    ] = true;
     _clients.set(cacheKey, client);
   }
 

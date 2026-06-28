@@ -54,12 +54,12 @@ export function TodoList({
         )}
         onClick={handleToggle}
       >
-          <div className="text-muted-foreground">
-            <div className="flex items-center justify-center gap-2">
-              <ListTodoIcon className="size-4" />
-              <div>{t.a11y.todos}</div>
-            </div>
+        <div className="text-muted-foreground">
+          <div className="flex items-center justify-center gap-2">
+            <ListTodoIcon className="size-4" />
+            <div>{t.a11y.todos}</div>
           </div>
+        </div>
         <div>
           <ChevronUpIcon
             className={cn(

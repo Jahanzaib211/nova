@@ -223,7 +223,9 @@ export const ContextContentFooter = ({
     >
       {children ?? (
         <>
-          <span className="text-muted-foreground">{t.aiElements.context.totalCost}</span>
+          <span className="text-muted-foreground">
+            {t.aiElements.context.totalCost}
+          </span>
           <span>{totalCost}</span>
         </>
       )}
@@ -266,7 +268,9 @@ export const ContextInputUsage = ({
       className={cn("flex items-center justify-between text-xs", className)}
       {...props}
     >
-      <span className="text-muted-foreground">{t.aiElements.context.input}</span>
+      <span className="text-muted-foreground">
+        {t.aiElements.context.input}
+      </span>
       <TokensWithCost costText={inputCostText} tokens={inputTokens} />
     </div>
   );
@@ -307,7 +311,9 @@ export const ContextOutputUsage = ({
       className={cn("flex items-center justify-between text-xs", className)}
       {...props}
     >
-      <span className="text-muted-foreground">{t.aiElements.context.output}</span>
+      <span className="text-muted-foreground">
+        {t.aiElements.context.output}
+      </span>
       <TokensWithCost costText={outputCostText} tokens={outputTokens} />
     </div>
   );
@@ -348,7 +354,9 @@ export const ContextReasoningUsage = ({
       className={cn("flex items-center justify-between text-xs", className)}
       {...props}
     >
-      <span className="text-muted-foreground">{t.aiElements.context.reasoning}</span>
+      <span className="text-muted-foreground">
+        {t.aiElements.context.reasoning}
+      </span>
       <TokensWithCost costText={reasoningCostText} tokens={reasoningTokens} />
     </div>
   );
@@ -389,7 +397,9 @@ export const ContextCacheUsage = ({
       className={cn("flex items-center justify-between text-xs", className)}
       {...props}
     >
-      <span className="text-muted-foreground">{t.aiElements.context.cache}</span>
+      <span className="text-muted-foreground">
+        {t.aiElements.context.cache}
+      </span>
       <TokensWithCost costText={cacheCostText} tokens={cacheTokens} />
     </div>
   );

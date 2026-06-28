@@ -686,7 +686,7 @@ function ToolCall({
           <img
             src={src}
             alt="agent screenshot"
-            className="mt-2 max-w-full rounded-md border border-border/40"
+            className="border-border/40 mt-2 max-w-full rounded-md border"
             data-testid="screenshot-output"
           />
         ) : (

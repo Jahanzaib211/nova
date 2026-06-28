@@ -1,8 +1,18 @@
 "use client";
 
-import { BotIcon, MessageSquareIcon, SparklesIcon, Trash2Icon } from "lucide-react";
+import {
+  BotIcon,
+  MessageSquareIcon,
+  SparklesIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ComponentProps, type ReactElement, useMemo, useState } from "react";
+import {
+  type ComponentProps,
+  type ReactElement,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -134,7 +144,10 @@ export function AgentCard({ agent }: AgentCardProps) {
         allSkillNames.every((n) => effectiveSelected.has(n))
           ? null
           : chosen;
-      await updateAgent.mutateAsync({ name: agent.name, request: { skills: skillsValue } });
+      await updateAgent.mutateAsync({
+        name: agent.name,
+        request: { skills: skillsValue },
+      });
       toast.success("Agent skills updated");
       setSkillsOpen(false);
       setSelected(null);
@@ -244,7 +257,13 @@ export function AgentCard({ agent }: AgentCardProps) {
       </Card>
 
       {/* Per-agent skill toggles — deterministic node-level skill scoping */}
-      <Dialog open={skillsOpen} onOpenChange={(o) => { setSkillsOpen(o); if (!o) setSelected(null); }}>
+      <Dialog
+        open={skillsOpen}
+        onOpenChange={(o) => {
+          setSkillsOpen(o);
+          if (!o) setSelected(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t.a11y.skillsFor(agent.name)}</DialogTitle>
@@ -262,13 +281,17 @@ export function AgentCard({ agent }: AgentCardProps) {
                 allSkillNames.map((name) => {
                   const on = effectiveSelected.has(name);
                   return (
-                    <div key={name} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/30">
+                    <div
+                      key={name}
+                      className="hover:bg-muted/30 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5"
+                    >
                       <span className="font-mono text-sm">/{name}</span>
                       <Switch
                         checked={on}
                         onCheckedChange={(checked) => {
                           const next = new Set(effectiveSelected);
-                          if (checked) next.add(name); else next.delete(name);
+                          if (checked) next.add(name);
+                          else next.delete(name);
                           setSelected(next);
                         }}
                       />
@@ -279,7 +302,14 @@ export function AgentCard({ agent }: AgentCardProps) {
             </div>
           </ScrollArea>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setSkillsOpen(false); setSelected(null); }} disabled={updateAgent.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSkillsOpen(false);
+                setSelected(null);
+              }}
+              disabled={updateAgent.isPending}
+            >
               {t.common.cancel}
             </Button>
             <Button onClick={handleSaveSkills} disabled={updateAgent.isPending}>

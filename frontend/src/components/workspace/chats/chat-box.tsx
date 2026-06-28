@@ -34,7 +34,15 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   threadId,
 }) => {
   const { t } = useI18n();
-  const { thread, currentTool, taskProgress, verifyResult, activityEvents, activeWriteFilePath, onAgentMessage } = useThread();
+  const {
+    thread,
+    currentTool,
+    taskProgress,
+    verifyResult,
+    activityEvents,
+    activeWriteFilePath,
+    onAgentMessage,
+  } = useThread();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
 
@@ -63,11 +71,15 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     e.preventDefault();
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
-    const onMove = (ev: MouseEvent) => setComputerWidth(clampWidth(window.innerWidth - ev.clientX));
+    const onMove = (ev: MouseEvent) =>
+      setComputerWidth(clampWidth(window.innerWidth - ev.clientX));
     const onUp = () => {
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
-      localStorage.setItem("agent-computer-width", String(Math.round(computerWidthRef.current)));
+      localStorage.setItem(
+        "agent-computer-width",
+        String(Math.round(computerWidthRef.current)),
+      );
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
@@ -124,7 +136,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   // than pathname, which differs between the SSR snapshot and client navigation
   // and caused a hydration mismatch on the panel id/data-testid.
   const resizableIdBase = useMemo(() => {
-    return `chat-${threadId}`.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+    return `chat-${threadId}`
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
   }, [threadId]);
 
   useEffect(() => {
@@ -198,7 +212,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   ) : (
                     <div className="flex size-full max-w-(--container-width-sm) flex-col justify-center p-4 pt-8">
                       <header className="shrink-0">
-                        <h2 className="text-lg font-medium">{t.a11y.artifacts}</h2>
+                        <h2 className="text-lg font-medium">
+                          {t.a11y.artifacts}
+                        </h2>
                       </header>
                       <main className="min-h-0 grow">
                         <ArtifactFileList
@@ -227,7 +243,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               title={t.a11y.dragResize}
               aria-label={t.a11y.dragResize}
               role="separator"
-              className="w-1 shrink-0 cursor-col-resize bg-border/40 transition-colors hover:bg-[--primary]/60"
+              className="bg-border/40 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-[--primary]/60"
             />
             <div
               style={{ width: computerWidth }}

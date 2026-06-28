@@ -59,9 +59,10 @@ export default function ChatPage() {
   const promptParam = searchParamsForComposer.get("prompt");
   // Cowork can seed a skill (/name) and/or a free-text task via ?skill= / ?prompt=.
   const composerInitialValue = isNewThread
-    ? (skillParam
-        ? `/${skillParam} ${promptParam ?? ""}`.trimEnd() + (promptParam ? "" : " ")
-        : (promptParam ?? undefined))
+    ? skillParam
+      ? `/${skillParam} ${promptParam ?? ""}`.trimEnd() +
+        (promptParam ? "" : " ")
+      : (promptParam ?? undefined)
     : undefined;
   const [settings, setSettings] = useThreadSettings(threadId);
   const [localSettings, setLocalSettings] = useLocalSettings();
@@ -84,8 +85,12 @@ export default function ChatPage() {
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [llmError, setLlmError] = useState<LlmError | null>(null);
-  const [activityEvents, setActivityEvents] = useState<AgentActivityEvent[]>([]);
-  const [activeWriteFilePath, setActiveWriteFilePath] = useState<string | null>(null);
+  const [activityEvents, setActivityEvents] = useState<AgentActivityEvent[]>(
+    [],
+  );
+  const [activeWriteFilePath, setActiveWriteFilePath] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -169,21 +174,32 @@ export default function ChatPage() {
         const idx = prev.findIndex((e) => e.id === id);
         if (idx >= 0) {
           // Update the existing "running" event created by on_tool_start
-          return prev.map((e) => e.id === id ? { ...e, output, status } : e);
+          return prev.map((e) => (e.id === id ? { ...e, output, status } : e));
         }
         // on_tool_start never fired (common with subagents) — create the event now
         const ts = new Date().toLocaleTimeString("en-US", {
-          hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit",
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
         });
         const newEvent: AgentActivityEvent = {
           id: id || `${name}-${Date.now()}`,
-          ts, type: name, path,
-          summary: name === "bash" && cmd ? `$ ${cmd.slice(0, 60)}`
-            : name === "write_file" && path ? `Wrote ${path.split("/").at(-1)}`
-            : name === "str_replace" && path ? `Edited ${path.split("/").at(-1)}`
-            : name === "read_file" && path ? `Read ${path.split("/").at(-1)}`
-            : name,
-          output, status,
+          ts,
+          type: name,
+          path,
+          summary:
+            name === "bash" && cmd
+              ? `$ ${cmd.slice(0, 60)}`
+              : name === "write_file" && path
+                ? `Wrote ${path.split("/").at(-1)}`
+                : name === "str_replace" && path
+                  ? `Edited ${path.split("/").at(-1)}`
+                  : name === "read_file" && path
+                    ? `Read ${path.split("/").at(-1)}`
+                    : name,
+          output,
+          status,
         };
         if (name === "write_file" && path) setActiveWriteFilePath(path);
         return [...prev.slice(-199), newEvent];
@@ -258,7 +274,17 @@ export default function ChatPage() {
 
   return (
     <ThreadContext.Provider
-      value={{ thread, isMock, currentTool, taskProgress, verifyResult, llmError, activityEvents, activeWriteFilePath, onAgentMessage: handleAgentMessage }}
+      value={{
+        thread,
+        isMock,
+        currentTool,
+        taskProgress,
+        verifyResult,
+        llmError,
+        activityEvents,
+        activeWriteFilePath,
+        onAgentMessage: handleAgentMessage,
+      }}
     >
       <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">

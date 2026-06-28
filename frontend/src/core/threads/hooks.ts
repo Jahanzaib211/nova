@@ -89,9 +89,12 @@ function _buildActivitySummary(
   { path, cmd }: { path?: string | null; cmd?: string | null },
 ): string {
   const filename = path?.split("/").at(-1);
-  if (name === "write_file") return filename ? `Writing ${filename}` : "Writing file";
-  if (name === "str_replace") return filename ? `Editing ${filename}` : "Editing file";
-  if (name === "read_file") return filename ? `Reading ${filename}` : "Reading file";
+  if (name === "write_file")
+    return filename ? `Writing ${filename}` : "Writing file";
+  if (name === "str_replace")
+    return filename ? `Editing ${filename}` : "Editing file";
+  if (name === "read_file")
+    return filename ? `Reading ${filename}` : "Reading file";
   if (name === "bash" || name === "execute_command")
     return cmd ? `$ ${cmd.slice(0, 60)}` : "Running command";
   if (name === "search_files") return "Searching files";
@@ -110,7 +113,13 @@ export type ThreadStreamOptions = {
   onFinish?: (state: AgentThreadState) => void;
   onToolEnd?: (event: ToolEndEvent) => void;
   onToolActivity?: (event: AgentActivityEvent) => void;
-  onToolActivityDone?: (info: { id: string; name: string; output: string; path: string | null; cmd: string | null }) => void;
+  onToolActivityDone?: (info: {
+    id: string;
+    name: string;
+    output: string;
+    path: string | null;
+    cmd: string | null;
+  }) => void;
   onTaskProgress?: (progress: TaskProgressEvent) => void;
   onVerifyResult?: (event: VerifyResultEvent) => void;
   onLlmError?: (event: LlmErrorEvent) => void;
@@ -461,7 +470,8 @@ function isReconnectNoise(error: unknown): boolean {
     );
   }
   const nestedMessage =
-    Reflect.get(error, "error") && Reflect.get(Reflect.get(error, "error"), "message");
+    Reflect.get(error, "error") &&
+    Reflect.get(Reflect.get(error, "error"), "message");
   if (typeof nestedMessage === "string") {
     return (
       nestedMessage.includes("Failed to fetch") ||
@@ -580,8 +590,28 @@ export function useThreadStream({
 
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
-    listeners.current = { onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onLlmError, onToolActivity, onToolActivityDone };
-  }, [onSend, onStart, onFinish, onToolEnd, onTaskProgress, onVerifyResult, onLlmError, onToolActivity, onToolActivityDone]);
+    listeners.current = {
+      onSend,
+      onStart,
+      onFinish,
+      onToolEnd,
+      onTaskProgress,
+      onVerifyResult,
+      onLlmError,
+      onToolActivity,
+      onToolActivityDone,
+    };
+  }, [
+    onSend,
+    onStart,
+    onFinish,
+    onToolEnd,
+    onTaskProgress,
+    onVerifyResult,
+    onLlmError,
+    onToolActivity,
+    onToolActivityDone,
+  ]);
 
   useEffect(() => {
     const normalizedThreadId = threadId ?? null;
@@ -689,8 +719,9 @@ export function useThreadStream({
           second: "2-digit",
         });
         const id =
-          (event as unknown as Record<string, unknown>).run_id as string | undefined ??
-          `${event.name}-${Date.now()}`;
+          ((event as unknown as Record<string, unknown>).run_id as
+            | string
+            | undefined) ?? `${event.name}-${Date.now()}`;
         listeners.current.onToolActivity?.({
           id,
           ts,
@@ -709,18 +740,33 @@ export function useThreadStream({
         });
         // Extract output, and try to get input.path/command from on_tool_end data
         // (available in some LangGraph SDK versions alongside the output)
-        const raw = event.data as Record<string, unknown> | string | null | undefined;
+        const raw = event.data as
+          | Record<string, unknown>
+          | string
+          | null
+          | undefined;
         const output =
           typeof raw === "string"
             ? raw
-            : (raw as Record<string, unknown> | null)?.output as string | undefined ?? "";
-        const inputFromEnd = typeof raw !== "string"
-          ? (raw as Record<string, unknown> | null)?.input as Record<string, unknown> | undefined
-          : undefined;
-        const pathFromEnd = typeof inputFromEnd?.path === "string" ? inputFromEnd.path : null;
-        const cmdFromEnd = typeof inputFromEnd?.command === "string" ? inputFromEnd.command : null;
+            : (((raw as Record<string, unknown> | null)?.output as
+                | string
+                | undefined) ?? "");
+        const inputFromEnd =
+          typeof raw !== "string"
+            ? ((raw as Record<string, unknown> | null)?.input as
+                | Record<string, unknown>
+                | undefined)
+            : undefined;
+        const pathFromEnd =
+          typeof inputFromEnd?.path === "string" ? inputFromEnd.path : null;
+        const cmdFromEnd =
+          typeof inputFromEnd?.command === "string"
+            ? inputFromEnd.command
+            : null;
         const id =
-          (event as unknown as Record<string, unknown>).run_id as string | undefined ?? "";
+          ((event as unknown as Record<string, unknown>).run_id as
+            | string
+            | undefined) ?? "";
         // Pass full info so the callback can CREATE an event if on_tool_start never fired
         listeners.current.onToolActivityDone?.({
           id,
@@ -846,8 +892,17 @@ export function useThreadStream({
         "type" in event &&
         event.type === "task_progress"
       ) {
-        const e = event as { type: "task_progress"; step: number; total: number; status: string };
-        listeners.current.onTaskProgress?.({ step: e.step, total: e.total, status: e.status });
+        const e = event as {
+          type: "task_progress";
+          step: number;
+          total: number;
+          status: string;
+        };
+        listeners.current.onTaskProgress?.({
+          step: e.step,
+          total: e.total,
+          status: e.status,
+        });
       }
 
       if (
@@ -861,7 +916,12 @@ export function useThreadStream({
           thread_id: string;
           ok: boolean;
           verdict: "passed" | "issues";
-          routes: Array<{ route: string; ok: boolean; status: number | null; notes: string }>;
+          routes: Array<{
+            route: string;
+            ok: boolean;
+            status: number | null;
+            notes: string;
+          }>;
           console_errors_count: number;
           screenshot: string | null;
         };
@@ -1202,7 +1262,8 @@ export function useThreadStream({
               is_plan_mode: context.mode === "pro" || context.mode === "ultra",
               // Subagents available in pro + ultra (not just ultra) so delegation
               // can fire from the get-go on substantial tasks.
-              subagent_enabled: context.mode === "pro" || context.mode === "ultra",
+              subagent_enabled:
+                context.mode === "pro" || context.mode === "ultra",
               reasoning_effort:
                 context.reasoning_effort ??
                 (context.mode === "ultra"

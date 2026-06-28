@@ -16,4 +16,3 @@ export function ChatProviders({ children }: { children: React.ReactNode }) {
     </PanelsProvider>
   );
 }
-

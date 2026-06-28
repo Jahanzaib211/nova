@@ -56,7 +56,13 @@ import { cn } from "@/lib/utils";
 const MAX_VISIBLE_SKILLS = 8;
 const ROW_HEIGHT = "h-9";
 
-function StatusDot({ openCircuits, t }: { openCircuits: number; t: ReturnType<typeof useI18n>["t"] }) {
+function StatusDot({
+  openCircuits,
+  t,
+}: {
+  openCircuits: number;
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   const { tone, label, Icon } = deriveStatusVisuals(openCircuits, t);
   return (
     <TooltipProvider delayDuration={150}>
@@ -65,7 +71,7 @@ function StatusDot({ openCircuits, t }: { openCircuits: number; t: ReturnType<ty
           <button
             type="button"
             className={cn(
-              "group inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-muted/60",
+              "group hover:bg-muted/60 inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors",
               tone.bg,
             )}
             data-testid="runtime-status-button"
@@ -104,9 +110,17 @@ function StatusDot({ openCircuits, t }: { openCircuits: number; t: ReturnType<ty
   );
 }
 
-function deriveStatusVisuals(openCircuits: number, t: ReturnType<typeof useI18n>["t"]): {
+function deriveStatusVisuals(
+  openCircuits: number,
+  t: ReturnType<typeof useI18n>["t"],
+): {
   tone: { bg: string; dot: string; icon: string };
-  label: { text: string; state: "healthy" | "degraded" | "critical"; tooltipTitle: string; tooltipBody: string };
+  label: {
+    text: string;
+    state: "healthy" | "degraded" | "critical";
+    tooltipTitle: string;
+    tooltipBody: string;
+  };
   Icon: typeof CheckCircle2Icon;
 } {
   if (openCircuits === 0) {
@@ -161,7 +175,11 @@ function SectionDivider() {
   return <span aria-hidden className="bg-border/60 mx-1 h-4 w-px shrink-0" />;
 }
 
-function SkillPill({ skill }: { skill: CapabilitiesResponse["skills"][number] }) {
+function SkillPill({
+  skill,
+}: {
+  skill: CapabilitiesResponse["skills"][number];
+}) {
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
@@ -189,7 +207,7 @@ function SkillPill({ skill }: { skill: CapabilitiesResponse["skills"][number] })
               {skill.description}
             </p>
           )}
-          <p className="text-muted-foreground/70 mt-1 text-[10px] uppercase tracking-wide">
+          <p className="text-muted-foreground/70 mt-1 text-[10px] tracking-wide uppercase">
             {skill.category} · {skill.enabled ? "enabled" : "disabled"}
           </p>
         </TooltipContent>
@@ -198,7 +216,13 @@ function SkillPill({ skill }: { skill: CapabilitiesResponse["skills"][number] })
   );
 }
 
-function SkillRail({ skills, t }: { skills: CapabilitiesResponse["skills"]; t: ReturnType<typeof useI18n>["t"] }) {
+function SkillRail({
+  skills,
+  t,
+}: {
+  skills: CapabilitiesResponse["skills"];
+  t: ReturnType<typeof useI18n>["t"];
+}) {
   const enabled = skills.filter((s) => s.enabled);
   const total = skills.length;
   const overflow = total - MAX_VISIBLE_SKILLS;
@@ -265,7 +289,7 @@ function MetricCounter({
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border/40 bg-background/50 px-1.5 font-mono text-[11px] transition-colors hover:bg-muted/60",
+              "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
               disabled && "opacity-50",
             )}
             data-testid={testId}
@@ -301,14 +325,18 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-border/40 bg-background/50 px-1.5 font-mono text-[11px] transition-colors hover:bg-muted/60",
+              "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
             )}
             data-testid="runtime-igino-pill"
           >
-            <ShieldIcon className="size-3 text-primary" aria-hidden />
-            <span className="text-foreground/80">{t.runtimeBar.igino.label}</span>
+            <ShieldIcon className="text-primary size-3" aria-hidden />
+            <span className="text-foreground/80">
+              {t.runtimeBar.igino.label}
+            </span>
             {status.tor_enabled && (
-              <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">{t.a11y.tor}</span>
+              <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">
+                {t.a11y.tor}
+              </span>
             )}
           </span>
         </TooltipTrigger>
@@ -316,8 +344,12 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
           <p className="font-medium">{t.runtimeBar.igino.title}</p>
           <p className="text-muted-foreground mt-1 text-xs">
             {t.runtimeBar.igino.tooltip(
-              status.searxng_healthy ? t.agentComputer.privacy.healthy : t.agentComputer.privacy.unhealthy,
-              status.tor_available ? t.agentComputer.privacy.available : t.agentComputer.privacy.unavailable,
+              status.searxng_healthy
+                ? t.agentComputer.privacy.healthy
+                : t.agentComputer.privacy.unhealthy,
+              status.tor_available
+                ? t.agentComputer.privacy.available
+                : t.agentComputer.privacy.unavailable,
               `${status.cache.size}/${status.cache.max_size}`,
             )}
           </p>
@@ -430,7 +462,7 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span
-                className="bg-destructive/10 text-destructive inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-destructive/30 px-1.5 font-mono text-[11px] font-medium"
+                className="bg-destructive/10 text-destructive border-destructive/30 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] font-medium"
                 data-testid="runtime-open-circuits-pill"
               >
                 <PlugZapIcon className="size-3" aria-hidden />

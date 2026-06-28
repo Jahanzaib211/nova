@@ -36,7 +36,8 @@ export const enUS: Translations = {
     public: "Public",
     custom: "Custom",
     notAvailableInDemoMode: "Not available in demo mode",
-    agentBusy: "The agent is still working — wait for it to finish, or press Stop.",
+    agentBusy:
+      "The agent is still working — wait for it to finish, or press Stop.",
     loading: "Loading...",
     version: "Version",
     lastUpdated: "Last updated",
@@ -225,7 +226,8 @@ export const enUS: Translations = {
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",
-    skillsDialogDescription: "Toggle which skills this agent loads. Off skills are never activated for this agent (deterministic). All-on = inherit every enabled skill.",
+    skillsDialogDescription:
+      "Toggle which skills this agent loads. Off skills are never activated for this agent (deterministic). All-on = inherit every enabled skill.",
   },
 
   // Breadcrumb
@@ -636,7 +638,8 @@ export const enUS: Translations = {
       selfTestIssues: "\u2717 Self-test found issues",
       testedPort: (port: string) => `tested :${port}`,
       livePreview: "Live preview",
-      devServerCompiling: "Dev server compiling\u2026 preview loads automatically",
+      devServerCompiling:
+        "Dev server compiling\u2026 preview loads automatically",
       previewWillAppear: "Browser preview will appear here",
       previewWillAppearLine2: "once the agent writes an HTML file",
       watchLiveBrowser: "Watch the agent's live browser",
@@ -653,7 +656,8 @@ export const enUS: Translations = {
       switchToEditorSuffix: "to see live code.",
     },
     activity: {
-      title: (count: number) => `activity \u00b7 ${count} action${count === 1 ? "" : "s"}`,
+      title: (count: number) =>
+        `activity \u00b7 ${count} action${count === 1 ? "" : "s"}`,
       exportAuditLog: "Export full audit log (JSONL)",
       empty: "Agent actions will appear here",
     },
@@ -701,11 +705,15 @@ export const enUS: Translations = {
       healthyTitle: "Browser subsystem healthy",
       healthyBody: "All circuit breakers are CLOSED. No active degradation.",
       degraded: (count: number) => `Degraded \u00b7 ${count}`,
-      degradedTitle: (count: number) => `${count} circuit${count === 1 ? "" : "s"} open`,
-      degradedBody: "Some threads have hit the failure threshold. They will auto-recover after cooldown.",
+      degradedTitle: (count: number) =>
+        `${count} circuit${count === 1 ? "" : "s"} open`,
+      degradedBody:
+        "Some threads have hit the failure threshold. They will auto-recover after cooldown.",
       critical: (count: number) => `Critical \u00b7 ${count}`,
-      criticalTitle: (count: number) => `${count} circuits open \u2014 fleet degraded`,
-      criticalBody: "Multiple threads tripped. Check /api/health/browser for the full state.",
+      criticalTitle: (count: number) =>
+        `${count} circuits open \u2014 fleet degraded`,
+      criticalBody:
+        "Multiple threads tripped. Check /api/health/browser for the full state.",
     },
     skills: {
       none: "no skills loaded",
@@ -767,7 +775,8 @@ export const enUS: Translations = {
       subtitle: "See how DeerFlow is used in the wild",
     },
     community: {
-      subtitle: "Contribute brilliant ideas to shape the future of DeerFlow. Collaborate, innovate, and make impacts.",
+      subtitle:
+        "Contribute brilliant ideas to shape the future of DeerFlow. Collaborate, innovate, and make impacts.",
     },
     sandbox: {
       title: "Agent Runtime Environment",
@@ -777,7 +786,8 @@ export const enUS: Translations = {
     },
     whatsNew: {
       title: "What's New in DeerFlow 2.0",
-      subtitle: "DeerFlow is now evolving from a Deep Research agent into a full-stack Super Agent",
+      subtitle:
+        "DeerFlow is now evolving from a Deep Research agent into a full-stack Super Agent",
     },
     skillsAnimation: {
       agentLabel: "DeerFlow Agent",

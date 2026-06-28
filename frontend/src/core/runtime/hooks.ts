@@ -15,14 +15,15 @@ import type { CapabilitiesResponse } from "./types";
 const POLL_INTERVAL_MS = 30_000;
 
 export function useCapabilities() {
-  const { data, isLoading, error, refetch, isFetching } = useQuery<CapabilitiesResponse>({
-    queryKey: ["runtime", "capabilities"],
-    queryFn: () => loadCapabilities(),
-    staleTime: POLL_INTERVAL_MS / 2,
-    refetchInterval: POLL_INTERVAL_MS,
-    refetchOnWindowFocus: true,
-    retry: 1,
-  });
+  const { data, isLoading, error, refetch, isFetching } =
+    useQuery<CapabilitiesResponse>({
+      queryKey: ["runtime", "capabilities"],
+      queryFn: () => loadCapabilities(),
+      staleTime: POLL_INTERVAL_MS / 2,
+      refetchInterval: POLL_INTERVAL_MS,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    });
   return {
     capabilities: data,
     isLoading,

@@ -14,11 +14,13 @@ import { mockLangGraphAPI } from "./utils/mock-api";
 test.describe("Landing → workspace pipeline", () => {
   test("landing page hero renders with the brand and CTA", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("link", { name: /get started/i }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: /get started/i })).toBeVisible({
+      timeout: 15_000,
+    });
     // Brand name is in the header h1 (one of the few landmarks).
-    await expect(page.locator("header").getByText("DeerFlow").first()).toBeVisible();
+    await expect(
+      page.locator("header").getByText("DeerFlow").first(),
+    ).toBeVisible();
   });
 
   test("Get Started CTA navigates to the workspace", async ({ page }) => {

@@ -8,7 +8,12 @@ import { getBackendBaseURL } from "@/core/config";
 
 // ── Event types ────────────────────────────────────────────
 
-export type SandboxEventType = "bash" | "write_file" | "str_replace" | "read_file" | string;
+export type SandboxEventType =
+  | "bash"
+  | "write_file"
+  | "str_replace"
+  | "read_file"
+  | string;
 
 export type SandboxEvent = {
   ts: string;
@@ -94,7 +99,10 @@ export type AuditEvent = {
   output?: string;
 };
 
-export function useSandboxAudit(threadId: string | null, enabled = true): AuditEvent[] {
+export function useSandboxAudit(
+  threadId: string | null,
+  enabled = true,
+): AuditEvent[] {
   const { data } = useQuery<{ events: AuditEvent[] }>({
     queryKey: ["sandbox", "audit", threadId],
     queryFn: async () => {
@@ -119,7 +127,12 @@ export function sandboxAuditDownloadUrl(threadId: string): string {
 // ── useSandboxReview ───────────────────────────────────────
 // Deterministic dual-audience code review (plain-English + developer detail).
 
-export type ReviewFile = { path: string; added: number; removed: number; status: string };
+export type ReviewFile = {
+  path: string;
+  added: number;
+  removed: number;
+  status: string;
+};
 export type ReviewRisk = { level: string; message: string; evidence?: string };
 export type SandboxReview = {
   files: ReviewFile[];
@@ -163,7 +176,10 @@ export type SandboxTerminalUrls = {
   reason?: string;
 };
 
-export function useSandboxTerminalUrl(threadId: string | null, enabled: boolean): SandboxTerminalUrls {
+export function useSandboxTerminalUrl(
+  threadId: string | null,
+  enabled: boolean,
+): SandboxTerminalUrls {
   const { data } = useQuery<SandboxTerminalUrls>({
     queryKey: ["sandbox", "terminal-url", threadId],
     queryFn: async () => {
@@ -255,11 +271,21 @@ export type DevServerStatus = {
   compiles?: number; // increments on recompile → preview auto-reloads
 };
 
-export function useDevServerStatus(threadId: string | null, label = "app"): DevServerStatus {
+export function useDevServerStatus(
+  threadId: string | null,
+  label = "app",
+): DevServerStatus {
   const { data } = useQuery<DevServerStatus>({
     queryKey: ["sandbox", "dev-status", threadId, label],
     queryFn: async () => {
-      if (!threadId) return { running: false, status: "stopped", port: null, url: null, compiles: 0 };
+      if (!threadId)
+        return {
+          running: false,
+          status: "stopped",
+          port: null,
+          url: null,
+          compiles: 0,
+        };
       const res = await fetch(
         `${getBackendBaseURL()}/api/sandbox/dev-status?thread_id=${encodeURIComponent(threadId)}&label=${encodeURIComponent(label)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
@@ -351,23 +377,33 @@ export function useLiveFileContent(
   path: string | null,
   enabled: boolean,
 ): { content: string; exists: boolean; lineCount: number } {
-  const { data } = useQuery<{ content: string; exists: boolean; size: number }>({
-    queryKey: ["sandbox", "live-file", threadId, path],
-    queryFn: async () => {
-      if (!threadId || !path) return { content: "", exists: false, size: 0 };
-      const res = await fetch(
-        `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
-        { method: "GET", headers: { "Content-Type": "application/json" } },
-      );
-      return res.json() as Promise<{ content: string; exists: boolean; size: number }>;
+  const { data } = useQuery<{ content: string; exists: boolean; size: number }>(
+    {
+      queryKey: ["sandbox", "live-file", threadId, path],
+      queryFn: async () => {
+        if (!threadId || !path) return { content: "", exists: false, size: 0 };
+        const res = await fetch(
+          `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
+          { method: "GET", headers: { "Content-Type": "application/json" } },
+        );
+        return res.json() as Promise<{
+          content: string;
+          exists: boolean;
+          size: number;
+        }>;
+      },
+      enabled: enabled && Boolean(threadId) && Boolean(path),
+      refetchInterval: enabled ? 1000 : false,
+      refetchIntervalInBackground: false,
     },
-    enabled: enabled && Boolean(threadId) && Boolean(path),
-    refetchInterval: enabled ? 1000 : false,
-    refetchIntervalInBackground: false,
-  });
+  );
 
   const content = data?.content ?? "";
-  return { content, exists: data?.exists ?? false, lineCount: content.split("\n").length };
+  return {
+    content,
+    exists: data?.exists ?? false,
+    lineCount: content.split("\n").length,
+  };
 }
 
 // ── useSandboxFile ─────────────────────────────────────────
@@ -377,20 +413,26 @@ export function useSandboxFile(
   threadId: string | null,
   path: string | null,
 ): { content: string; exists: boolean; size: number } {
-  const { data } = useQuery<{ content: string; exists: boolean; size: number }>({
-    queryKey: ["sandbox", "file", threadId, path],
-    queryFn: async () => {
-      if (!threadId || !path) return { content: "", exists: false, size: 0 };
-      const res = await fetch(
-        `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
-        { method: "GET", headers: { "Content-Type": "application/json" } },
-      );
-      return res.json() as Promise<{ content: string; exists: boolean; size: number }>;
+  const { data } = useQuery<{ content: string; exists: boolean; size: number }>(
+    {
+      queryKey: ["sandbox", "file", threadId, path],
+      queryFn: async () => {
+        if (!threadId || !path) return { content: "", exists: false, size: 0 };
+        const res = await fetch(
+          `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
+          { method: "GET", headers: { "Content-Type": "application/json" } },
+        );
+        return res.json() as Promise<{
+          content: string;
+          exists: boolean;
+          size: number;
+        }>;
+      },
+      enabled: Boolean(threadId) && Boolean(path),
+      refetchInterval: 2000,
+      refetchIntervalInBackground: false,
     },
-    enabled: Boolean(threadId) && Boolean(path),
-    refetchInterval: 2000,
-    refetchIntervalInBackground: false,
-  });
+  );
 
   return data ?? { content: "", exists: false, size: 0 };
 }

@@ -107,11 +107,11 @@ describe("parseLlmErrorEvent", () => {
   it("fills defaults when fields have wrong types (defensive)", () => {
     const event = {
       type: "llm_error",
-      error_type: 123,           // wrong type
-      reason: null,              // wrong type
+      error_type: 123, // wrong type
+      reason: null, // wrong type
       detail: ["list", "not", "string"],
-      http_status: "429",        // string not number
-      code: 500,                // number not string
+      http_status: "429", // string not number
+      code: 500, // number not string
     };
     const result = parseLlmErrorEvent(event);
     expect(result).toEqual({
@@ -124,7 +124,14 @@ describe("parseLlmErrorEvent", () => {
   });
 
   it("preserves known error reasons as strings (even if backend adds new ones)", () => {
-    for (const reason of ["quota", "auth", "busy", "transient", "circuit_open", "future_reason"]) {
+    for (const reason of [
+      "quota",
+      "auth",
+      "busy",
+      "transient",
+      "circuit_open",
+      "future_reason",
+    ]) {
       const event = { type: "llm_error", error_type: "X", reason, detail: "" };
       const result = parseLlmErrorEvent(event);
       expect(result?.reason).toBe(reason);

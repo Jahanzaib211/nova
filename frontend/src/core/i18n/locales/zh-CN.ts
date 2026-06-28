@@ -213,7 +213,8 @@ export const zhCN: Translations = {
     agentCreated: "智能体已创建！",
     startChatting: "开始对话",
     backToGallery: "返回 Gallery",
-    skillsDialogDescription: "切换此智能体加载的技能。关闭的技能永远不会为此智能体激活（确定性）。全部开启 = 继承每个已启用的技能。",
+    skillsDialogDescription:
+      "切换此智能体加载的技能。关闭的技能永远不会为此智能体激活（确定性）。全部开启 = 继承每个已启用的技能。",
   },
 
   // Breadcrumb
@@ -547,12 +548,10 @@ export const zhCN: Translations = {
     downloadAllZip: "下载全部 (zip)",
     downloadActiveFile: "下载当前文件",
     verifyResult: {
-      passed: (count: number) =>
-        `自检通过${count ? ` · ${count} 条路由` : ""}`,
+      passed: (count: number) => `自检通过${count ? ` · ${count} 条路由` : ""}`,
       failed: (count: number) =>
         `自检发现问题${count ? ` · ${count} 条路由失败` : ""}`,
-      consoleErrors: (count: number) =>
-        `${count} 个控制台错误`,
+      consoleErrors: (count: number) => `${count} 个控制台错误`,
     },
     tabs: {
       files: "文件",
@@ -683,7 +682,8 @@ export const zhCN: Translations = {
       degradedTitle: (count: number) => `${count} 个断路器已开启`,
       degradedBody: "部分线程已达失败阈值，冷却后将自动恢复。",
       critical: (count: number) => `严重 \u00b7 ${count}`,
-      criticalTitle: (count: number) => `${count} 个断路器已开启 \u2014 整体降级`,
+      criticalTitle: (count: number) =>
+        `${count} 个断路器已开启 \u2014 整体降级`,
       criticalBody: "多个线程触发。请查看 /api/health/browser 获取完整状态。",
     },
     skills: {
@@ -746,7 +746,8 @@ export const zhCN: Translations = {
       subtitle: "看看 DeerFlow 在实际场景中如何被使用",
     },
     community: {
-      subtitle: "贡献您的创意，共同塑造 DeerFlow 的未来。协作、创新、创造影响。",
+      subtitle:
+        "贡献您的创意，共同塑造 DeerFlow 的未来。协作、创新、创造影响。",
     },
     sandbox: {
       title: "智能体运行时环境",

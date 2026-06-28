@@ -224,7 +224,9 @@ The chat page is a **two-column flex inside `<ChatBox>`**:
       <MessageList className="size-full …" />
     </div>
     <div className="right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4">
-      <div className="relative w-full max-w-(--container-width-md)">  // = 204 * 0.25rem = 51rem ≈ 816px
+      <div className="relative w-full max-w-(--container-width-md)">
+        {" "}
+        // = 204 * 0.25rem = 51rem ≈ 816px
         <TodoList />
         <InputBox />
       </div>
@@ -235,14 +237,14 @@ The chat page is a **two-column flex inside `<ChatBox>`**:
 
 Layout summary:
 
-| Region                | Class                                              | Notes                                                     |
-| --------------------- | -------------------------------------------------- | --------------------------------------------------------- |
-| Outer wrap            | `flex size-full min-h-0 justify-between`           | `size-full` = `h-full w-full`                             |
-| Header                | `absolute top-0 left-0 right-0 z-30 h-12`          | Floats above; backdrop-blur in normal mode                |
-| Main                  | `flex min-h-0 max-w-full grow flex-col`            | Single column; only `MessageList` + Input dock            |
-| MessageList container | `flex min-h-0 flex-1 justify-center`               | The list is `size-full`                                   |
+| Region                | Class                                              | Notes                                                    |
+| --------------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| Outer wrap            | `flex size-full min-h-0 justify-between`           | `size-full` = `h-full w-full`                            |
+| Header                | `absolute top-0 left-0 right-0 z-30 h-12`          | Floats above; backdrop-blur in normal mode               |
+| Main                  | `flex min-h-0 max-w-full grow flex-col`            | Single column; only `MessageList` + Input dock           |
+| MessageList container | `flex min-h-0 flex-1 justify-center`               | The list is `size-full`                                  |
 | Input dock            | `flex justify-center px-3 sm:px-4`                 | `<div>` inside has `w-full max-w-(--container-width-md)` |
-| Welcome-mode dock     | `absolute` (vertically centered with `-translate`) | Same inner `max-w-(--container-width-sm)`                 |
+| Welcome-mode dock     | `absolute` (vertically centered with `-translate`) | Same inner `max-w-(--container-width-sm)`                |
 
 ### 2.3 The only real panel split — `chat-box.tsx`
 
@@ -273,7 +275,7 @@ Two presets:
 
 ```ts
 const CLOSE_MODE = { chat: 100, artifacts: 0 };
-const OPEN_MODE  = { chat: 60,  artifacts: 40 };
+const OPEN_MODE = { chat: 60, artifacts: 40 };
 ```
 
 Layout is driven imperatively via `layoutRef.current.setLayout(OPEN_MODE | CLOSE_MODE)`
@@ -286,20 +288,20 @@ CSS variables (`src/styles/globals.css`, line 387):
 
 ```css
 :root {
-  --container-width-xs: calc(var(--spacing) * 72);   /* 18rem */
-  --container-width-sm: calc(var(--spacing) * 144);  /* 36rem */
-  --container-width-md: calc(var(--spacing) * 204);  /* 51rem */
-  --container-width-lg: calc(var(--spacing) * 256);  /* 64rem */
+  --container-width-xs: calc(var(--spacing) * 72); /* 18rem */
+  --container-width-sm: calc(var(--spacing) * 144); /* 36rem */
+  --container-width-md: calc(var(--spacing) * 204); /* 51rem */
+  --container-width-lg: calc(var(--spacing) * 256); /* 64rem */
 }
 ```
 
 Sidebar variables (in `ui/sidebar.tsx`):
 
 ```ts
-SIDEBAR_WIDTH         = "16rem";
-SIDEBAR_WIDTH_MOBILE  = "18rem";
-SIDEBAR_WIDTH_ICON    = "3rem";
-SIDEBAR_KEYBOARD_SHORTCUT = "b";     // ⌘B / Ctrl+B
+SIDEBAR_WIDTH = "16rem";
+SIDEBAR_WIDTH_MOBILE = "18rem";
+SIDEBAR_WIDTH_ICON = "3rem";
+SIDEBAR_KEYBOARD_SHORTCUT = "b"; // ⌘B / Ctrl+B
 ```
 
 `Sidebar` renders as a fixed `<aside>` (md+) or `<Sheet>` (mobile). Width
@@ -316,15 +318,15 @@ collapse uses `transition-[width]` and is cookie-persisted (`sidebar_state`,
 
 ### 2.6 Other grid/responsive surfaces
 
-| File                                         | Layout                                                       |
-| -------------------------------------------- | ------------------------------------------------------------ |
-| `components/workspace/agents/agent-gallery.tsx` | `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` |
-| `components/workspace/agents/agent-gallery.tsx` (`AgentCard`) | card grid; individual card uses `flex` |
-| `components/workspace/recent-chat-list.tsx`    | Vertical `flex flex-col gap-1`                              |
-| `components/workspace/channels/workspace-channels-list.tsx` | `SidebarGroup` of providers (vertical) |
-| `components/workspace/token-usage-indicator.tsx` (preset list) | `grid gap-0.5` inside dropdown items |
-| `components/ai-elements/conversation.tsx`      | `StickToBottom` (`use-stick-to-bottom`); flex column        |
-| `components/workspace/input-box.tsx`          | `flex` columns, with floating follow-up chips              |
+| File                                                           | Layout                                                          |
+| -------------------------------------------------------------- | --------------------------------------------------------------- |
+| `components/workspace/agents/agent-gallery.tsx`                | `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4` |
+| `components/workspace/agents/agent-gallery.tsx` (`AgentCard`)  | card grid; individual card uses `flex`                          |
+| `components/workspace/recent-chat-list.tsx`                    | Vertical `flex flex-col gap-1`                                  |
+| `components/workspace/channels/workspace-channels-list.tsx`    | `SidebarGroup` of providers (vertical)                          |
+| `components/workspace/token-usage-indicator.tsx` (preset list) | `grid gap-0.5` inside dropdown items                            |
+| `components/ai-elements/conversation.tsx`                      | `StickToBottom` (`use-stick-to-bottom`); flex column            |
+| `components/workspace/input-box.tsx`                           | `flex` columns, with floating follow-up chips                   |
 
 No CSS grid layout exists outside of `agent-gallery.tsx`. Everything else is
 `flex` + width/height utilities.
@@ -382,20 +384,20 @@ export function getLangGraphBaseURL(isMock?: boolean) {
   (see §4.2),
 - patches `client.runs.stream` and `client.runs.joinStream` to disable any
   per-call CSRF strip and to recover from "inactive run stream" (`HTTP 409 … not
-  active on this worker … cannot be streamed`),
+active on this worker … cannot be streamed`),
 - short-circuits `runs.list`, `runs.stream`, `runs.joinStream` to empty
   generators when `isStaticWebsiteOnly()` (the public demo).
 
 ### 3.3 Pollers / intervals (also "long-lived")
 
-| Source                                        | Trigger                                                            | Cadence                                  |
-| --------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------- |
-| `components/workspace/gateway-offline-banner.tsx` | `gatewayUnavailable` prop + `user === null`                  | every 10 s (`OFFLINE_BANNER_RETRY_INTERVAL_MS`) |
-| `core/auth/AuthProvider.tsx`                  | `visibilitychange` → `visible`                                    | throttled to once per 60 s                |
-| `core/channels/connect-poll.ts`               | `useConnectChannelProvider` `onSuccess`                            | every 2 s (`CONNECT_POLL_INTERVAL_MS`) up to `expires_in` (default 600 s) |
-| `components/workspace/messages/message-list.tsx` (`LoadMoreHistoryIndicator`) | top sentinel IntersectionObserver | 1.2 s throttle (`LOAD_MORE_HISTORY_THROTTLE_MS`) |
-| `components/workspace/recent-chat-list.tsx`   | sentinel IntersectionObserver                                     | `rootMargin: "120px 0px 120px 0px"`       |
-| `components/workspace/messages/context.ts` + thread hooks | LangGraph SDK reconnects on mount | "reconnectOnMount: true" |
+| Source                                                                        | Trigger                                     | Cadence                                                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------- |
+| `components/workspace/gateway-offline-banner.tsx`                             | `gatewayUnavailable` prop + `user === null` | every 10 s (`OFFLINE_BANNER_RETRY_INTERVAL_MS`)                           |
+| `core/auth/AuthProvider.tsx`                                                  | `visibilitychange` → `visible`              | throttled to once per 60 s                                                |
+| `core/channels/connect-poll.ts`                                               | `useConnectChannelProvider` `onSuccess`     | every 2 s (`CONNECT_POLL_INTERVAL_MS`) up to `expires_in` (default 600 s) |
+| `components/workspace/messages/message-list.tsx` (`LoadMoreHistoryIndicator`) | top sentinel IntersectionObserver           | 1.2 s throttle (`LOAD_MORE_HISTORY_THROTTLE_MS`)                          |
+| `components/workspace/recent-chat-list.tsx`                                   | sentinel IntersectionObserver               | `rootMargin: "120px 0px 120px 0px"`                                       |
+| `components/workspace/messages/context.ts` + thread hooks                     | LangGraph SDK reconnects on mount           | "reconnectOnMount: true"                                                  |
 
 ### 3.4 PostMessage iframe channel
 
@@ -434,59 +436,59 @@ types:  "save" | "restore-request"
 
 ### 4.2 FastAPI gateway endpoints (and where they are called)
 
-| Method | Path (relative to `getBackendBaseURL()`)        | Caller(s)                                                |
-| ------ | ----------------------------------------------- | -------------------------------------------------------- |
-| GET    | `/api/models`                                   | `core/models/api.ts` → `useModels` (`MessageList`-adjacent models) |
-| GET    | `/api/agents`                                   | `core/agents/api.ts` → `useAgents` (AgentGallery)         |
-| POST   | `/api/agents`                                   | `core/agents/api.ts` → `useCreateAgent` (admin form)      |
-| GET    | `/api/agents/{name}`                            | `core/agents/api.ts` → `useAgent`, also `getAgentWithRetry` in `agents/new/page.tsx` |
-| PUT    | `/api/agents/{name}`                            | `core/agents/api.ts` → `useUpdateAgent`                   |
-| DELETE | `/api/agents/{name}`                            | `core/agents/api.ts` → `useDeleteAgent`                   |
-| GET    | `/api/agents/check?name=...`                    | `core/agents/api.ts` → `checkAgentName` (`agents/new`)    |
-| GET    | `/api/skills`                                   | `core/skills/api.ts` → `loadSkills`                       |
-| POST   | `/api/skills/{name}`                            | `core/skills/api.ts` → `enableSkill`                      |
-| POST   | `/api/skills/install`                           | `core/skills/api.ts` → `installSkill` (artifact list/detail) |
-| GET    | `/api/memory`                                   | `core/memory/api.ts` → `loadMemory`; also proxied via `src/app/api/memory/route.ts` |
-| DELETE | `/api/memory`                                   | `core/memory/api.ts` → `clearMemory`; proxied             |
-| GET    | `/api/memory/facts/{factId}`                    | `core/memory/api.ts` → `useMemoryFact` (proxy too)        |
-| POST   | `/api/memory/facts`                             | `core/memory/api.ts` → `createMemoryFact`                 |
-| PATCH  | `/api/memory/facts/{factId}`                    | `core/memory/api.ts` → `updateMemoryFact`                 |
-| DELETE | `/api/memory/facts/{factId}`                    | `core/memory/api.ts` → `deleteMemoryFact`                 |
-| GET    | `/api/memory/export`                            | `core/memory/api.ts` → `exportMemory` (browser download)  |
-| POST   | `/api/memory/import`                            | `core/memory/api.ts` → `importMemory` (multipart)         |
-| GET    | `/api/mcp/config`                               | `core/mcp/api.ts` → `loadMCPConfig`                       |
-| PUT    | `/api/mcp/config`                               | `core/mcp/api.ts` → `saveMCPConfig`                       |
-| GET    | `/api/channels/providers`                       | `core/channels/api.ts` → `listChannelProviders`           |
-| GET    | `/api/channels/connections`                     | `core/channels/api.ts` → `listChannelConnections`         |
-| POST   | `/api/channels/{provider}/connect`              | `core/channels/api.ts` → `connectChannelProvider`         |
-| PUT    | ` /api/channels/{provider}/config`              | `core/channels/api.ts` → `configureChannelProvider`       |
-| POST   | `/api/channels/{provider}/disconnect`           | `core/channels/api.ts` → `disconnectChannelProvider`      |
-| DELETE | `/api/channels/connections/{connectionId}`      | `core/channels/api.ts` → `disconnectChannelConnection`    |
-| GET    | `/api/suggestions/config`                       | `core/suggestions/api.ts` → `loadSuggestionsConfig` (404 → enabled) |
+| Method | Path (relative to `getBackendBaseURL()`)        | Caller(s)                                                                             |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
+| GET    | `/api/models`                                   | `core/models/api.ts` → `useModels` (`MessageList`-adjacent models)                    |
+| GET    | `/api/agents`                                   | `core/agents/api.ts` → `useAgents` (AgentGallery)                                     |
+| POST   | `/api/agents`                                   | `core/agents/api.ts` → `useCreateAgent` (admin form)                                  |
+| GET    | `/api/agents/{name}`                            | `core/agents/api.ts` → `useAgent`, also `getAgentWithRetry` in `agents/new/page.tsx`  |
+| PUT    | `/api/agents/{name}`                            | `core/agents/api.ts` → `useUpdateAgent`                                               |
+| DELETE | `/api/agents/{name}`                            | `core/agents/api.ts` → `useDeleteAgent`                                               |
+| GET    | `/api/agents/check?name=...`                    | `core/agents/api.ts` → `checkAgentName` (`agents/new`)                                |
+| GET    | `/api/skills`                                   | `core/skills/api.ts` → `loadSkills`                                                   |
+| POST   | `/api/skills/{name}`                            | `core/skills/api.ts` → `enableSkill`                                                  |
+| POST   | `/api/skills/install`                           | `core/skills/api.ts` → `installSkill` (artifact list/detail)                          |
+| GET    | `/api/memory`                                   | `core/memory/api.ts` → `loadMemory`; also proxied via `src/app/api/memory/route.ts`   |
+| DELETE | `/api/memory`                                   | `core/memory/api.ts` → `clearMemory`; proxied                                         |
+| GET    | `/api/memory/facts/{factId}`                    | `core/memory/api.ts` → `useMemoryFact` (proxy too)                                    |
+| POST   | `/api/memory/facts`                             | `core/memory/api.ts` → `createMemoryFact`                                             |
+| PATCH  | `/api/memory/facts/{factId}`                    | `core/memory/api.ts` → `updateMemoryFact`                                             |
+| DELETE | `/api/memory/facts/{factId}`                    | `core/memory/api.ts` → `deleteMemoryFact`                                             |
+| GET    | `/api/memory/export`                            | `core/memory/api.ts` → `exportMemory` (browser download)                              |
+| POST   | `/api/memory/import`                            | `core/memory/api.ts` → `importMemory` (multipart)                                     |
+| GET    | `/api/mcp/config`                               | `core/mcp/api.ts` → `loadMCPConfig`                                                   |
+| PUT    | `/api/mcp/config`                               | `core/mcp/api.ts` → `saveMCPConfig`                                                   |
+| GET    | `/api/channels/providers`                       | `core/channels/api.ts` → `listChannelProviders`                                       |
+| GET    | `/api/channels/connections`                     | `core/channels/api.ts` → `listChannelConnections`                                     |
+| POST   | `/api/channels/{provider}/connect`              | `core/channels/api.ts` → `connectChannelProvider`                                     |
+| PUT    | ` /api/channels/{provider}/config`              | `core/channels/api.ts` → `configureChannelProvider`                                   |
+| POST   | `/api/channels/{provider}/disconnect`           | `core/channels/api.ts` → `disconnectChannelProvider`                                  |
+| DELETE | `/api/channels/connections/{connectionId}`      | `core/channels/api.ts` → `disconnectChannelConnection`                                |
+| GET    | `/api/suggestions/config`                       | `core/suggestions/api.ts` → `loadSuggestionsConfig` (404 → enabled)                   |
 | POST   | `/api/threads/{threadId}/suggestions`           | `components/workspace/input-box.tsx` (raw `fetch`, not the wrapper) — follow-up chips |
-| GET    | `/api/threads/{threadId}/token-usage`           | `core/threads/api.ts` → `useThreadTokenUsage`             |
-| POST   | `/api/threads/{threadId}/runs/{runId}/feedback` | `core/api/feedback.ts` (thumbs up/down on AI messages)    |
+| GET    | `/api/threads/{threadId}/token-usage`           | `core/threads/api.ts` → `useThreadTokenUsage`                                         |
+| POST   | `/api/threads/{threadId}/runs/{runId}/feedback` | `core/api/feedback.ts` (thumbs up/down on AI messages)                                |
 
 Same-origin auth routes (Next.js → FastAPI, hits gateway via Vite/Next rewrites):
 
-| Method | Path                          | Caller                                       |
-| ------ | ----------------------------- | -------------------------------------------- |
-| GET    | `/api/v1/auth/me`             | `core/auth/AuthProvider.tsx` (`refreshUser`), `gateway-offline-banner.tsx`, `core/auth/server.ts` (SSR) |
-| POST   | `/api/v1/auth/logout`         | `core/auth/AuthProvider.tsx` (`logout`)      |
-| GET    | `/api/v1/auth/setup-status`   | `app/(auth)/login/page.tsx`, `app/(auth)/setup/page.tsx` |
-| POST   | `/api/v1/auth/login/local`    | `app/(auth)/login/page.tsx`                  |
-| POST   | `/api/v1/auth/register`       | `app/(auth)/login/page.tsx`                  |
-| POST   | `/api/v1/auth/initialize`     | `app/(auth)/setup/page.tsx`                  |
-| POST   | `/api/v1/auth/change-password`| `app/(auth)/setup/page.tsx`, `components/workspace/settings/account-settings-page.tsx` |
+| Method | Path                           | Caller                                                                                                  |
+| ------ | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/auth/me`              | `core/auth/AuthProvider.tsx` (`refreshUser`), `gateway-offline-banner.tsx`, `core/auth/server.ts` (SSR) |
+| POST   | `/api/v1/auth/logout`          | `core/auth/AuthProvider.tsx` (`logout`)                                                                 |
+| GET    | `/api/v1/auth/setup-status`    | `app/(auth)/login/page.tsx`, `app/(auth)/setup/page.tsx`                                                |
+| POST   | `/api/v1/auth/login/local`     | `app/(auth)/login/page.tsx`                                                                             |
+| POST   | `/api/v1/auth/register`        | `app/(auth)/login/page.tsx`                                                                             |
+| POST   | `/api/v1/auth/initialize`      | `app/(auth)/setup/page.tsx`                                                                             |
+| POST   | `/api/v1/auth/change-password` | `app/(auth)/setup/page.tsx`, `components/workspace/settings/account-settings-page.tsx`                  |
 
 Static / mock (used only when `NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"`):
 
-| URL                                                                       | Used by |
-| ------------------------------------------------------------------------- | ------- |
-| `GET /demo/threads/{threadId}/thread.json`                                | `core/threads/static-demo.ts` (loaded via `globalThis.fetch`) |
-| `GET /mock/api/threads/{threadId}/history`                                | Next route handler reads `public/demo/threads/<id>/thread.json` |
-| `GET /mock/api/threads/{threadId}/artifacts/...` (and `?download=true`)   | Next route handler serves files under `public/demo/threads/<id>/` |
-| `GET /api/threads/{threadId}/artifacts/...` (`isMock=true`)               | `core/artifacts/utils.ts` switches backend↔mock via `isMock` flag |
+| URL                                                                     | Used by                                                           |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `GET /demo/threads/{threadId}/thread.json`                              | `core/threads/static-demo.ts` (loaded via `globalThis.fetch`)     |
+| `GET /mock/api/threads/{threadId}/history`                              | Next route handler reads `public/demo/threads/<id>/thread.json`   |
+| `GET /mock/api/threads/{threadId}/artifacts/...` (and `?download=true`) | Next route handler serves files under `public/demo/threads/<id>/` |
+| `GET /api/threads/{threadId}/artifacts/...` (`isMock=true`)             | `core/artifacts/utils.ts` switches backend↔mock via `isMock` flag |
 
 > **Note.** `/api/langgraph/*` is the **rewritten** LangGraph base used by the
 > SDK — handled by Next.js rewrites (or your reverse proxy in prod) and not
@@ -498,15 +500,15 @@ The full `ThreadsClient` / `RunsClient` / `AssistantsClient` surface from
 `@langchain/langgraph-sdk` is exposed via `getAPIClient()`. Call sites in this
 codebase:
 
-| SDK method                                       | Where                                                 |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| `client.runs.stream(threadId, "lead_agent", payload)` | `useStream({ assistantId: "lead_agent", … })` (transitively all message sending) |
-| `client.runs.joinStream(threadId, runId)`        | Reconnect logic in `api-client.ts` patch             |
-| `client.threads.getState<AgentThreadState>(threadId)` | `components/workspace/recent-chat-list.tsx` (`handleExport`) |
-| `client.threads.update(threadId, { metadata })`  | `useStream.onCreated` (writes `agent_name`)           |
-| `client.threads.search(params, …)`               | `useInfiniteThreads` / `useThreads` (`core/threads/hooks.ts`) — uses `useInfiniteQuery` with `pageParam` derived from `pages.flat()` |
-| `client.threads.create({ … })`                   | Implicit via `client.runs.stream` with a new threadId (no `client.threads.create` direct call here; threads are created by the run) |
-| `client.threads.delete(threadId)`                | `useDeleteThread` (via `core/threads/hooks.ts`)      |
+| SDK method                                            | Where                                                                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `client.runs.stream(threadId, "lead_agent", payload)` | `useStream({ assistantId: "lead_agent", … })` (transitively all message sending)                                                     |
+| `client.runs.joinStream(threadId, runId)`             | Reconnect logic in `api-client.ts` patch                                                                                             |
+| `client.threads.getState<AgentThreadState>(threadId)` | `components/workspace/recent-chat-list.tsx` (`handleExport`)                                                                         |
+| `client.threads.update(threadId, { metadata })`       | `useStream.onCreated` (writes `agent_name`)                                                                                          |
+| `client.threads.search(params, …)`                    | `useInfiniteThreads` / `useThreads` (`core/threads/hooks.ts`) — uses `useInfiniteQuery` with `pageParam` derived from `pages.flat()` |
+| `client.threads.create({ … })`                        | Implicit via `client.runs.stream` with a new threadId (no `client.threads.create` direct call here; threads are created by the run)  |
+| `client.threads.delete(threadId)`                     | `useDeleteThread` (via `core/threads/hooks.ts`)                                                                                      |
 
 SDK state history (`fetchStateHistory: { limit: 1 }`) is used by `useStream`
 to bootstrap messages before joining the live stream.
@@ -519,7 +521,7 @@ to bootstrap messages before joining the live stream.
   401-redirect.
 - `core/threads/static-demo.ts` — `globalThis.fetch` for `/demo/...` static assets.
 - `components/workspace/input-box.tsx` (suggestions) — uses raw `fetch(...)`
-  without CSRF or auto-redirect, but the call is `POST` so this *would* 403
+  without CSRF or auto-redirect, but the call is `POST` so this _would_ 403
   without a CSRF token in strict mode. (Today it works because
   `/api/threads/{threadId}/suggestions` is likely a state-changing endpoint
   exempt from CSRF in the gateway, or because the wrapper omission is a bug.
@@ -539,26 +541,26 @@ the nature of the change.
 
 ### 5.1 Core layout containers (must change)
 
-| File                                                                       | Change                                                                                                  |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `src/components/workspace/chats/chat-box.tsx`                              | Replace 2-panel `ResizablePanelGroup` with a 4-panel grid (or nested groups: vertical split, then horizontal). Add the new `OPEN_MODE`/`CLOSE_MODE` presets and the `setLayout` calls for each panel. Update the imperative ref type if a nested group is introduced. |
-| `src/app/workspace/chats/[thread_id]/providers.tsx`                        | Possibly introduce a fourth context (e.g. `AgentToolsProvider`) if the new panel owns state.            |
-| `src/app/workspace/agents/[agent_name]/chats/[thread_id]/layout.tsx`      | Mirror the providers change above.                                                                      |
-| `src/app/workspace/chats/[thread_id]/page.tsx`                            | Wire the new header trigger(s) (open/close the 3rd panel), pass `selectedTool` state into ChatBox.    |
-| `src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx`        | Same as above for the per-agent variant.                                                                |
-| `src/components/ui/resizable.tsx`                                          | If you need a *vertical* outer group + horizontal inner group, no changes required (the primitive already supports both orientations); otherwise add helpers. |
-| `src/styles/globals.css`                                                   | Add new `--container-width-*` tokens if the new panel needs a different max-width than the existing four (`xs`/`sm`/`md`/`lg`). |
-| `src/components/workspace/todo-list.tsx`                                   | This currently renders as an **overlay card** over the InputBox. For a 4-panel grid, lift it into the bottom panel as the primary content; remove the absolute-positioning classes. |
+| File                                                                 | Change                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/components/workspace/chats/chat-box.tsx`                        | Replace 2-panel `ResizablePanelGroup` with a 4-panel grid (or nested groups: vertical split, then horizontal). Add the new `OPEN_MODE`/`CLOSE_MODE` presets and the `setLayout` calls for each panel. Update the imperative ref type if a nested group is introduced. |
+| `src/app/workspace/chats/[thread_id]/providers.tsx`                  | Possibly introduce a fourth context (e.g. `AgentToolsProvider`) if the new panel owns state.                                                                                                                                                                          |
+| `src/app/workspace/agents/[agent_name]/chats/[thread_id]/layout.tsx` | Mirror the providers change above.                                                                                                                                                                                                                                    |
+| `src/app/workspace/chats/[thread_id]/page.tsx`                       | Wire the new header trigger(s) (open/close the 3rd panel), pass `selectedTool` state into ChatBox.                                                                                                                                                                    |
+| `src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx`   | Same as above for the per-agent variant.                                                                                                                                                                                                                              |
+| `src/components/ui/resizable.tsx`                                    | If you need a _vertical_ outer group + horizontal inner group, no changes required (the primitive already supports both orientations); otherwise add helpers.                                                                                                         |
+| `src/styles/globals.css`                                             | Add new `--container-width-*` tokens if the new panel needs a different max-width than the existing four (`xs`/`sm`/`md`/`lg`).                                                                                                                                       |
+| `src/components/workspace/todo-list.tsx`                             | This currently renders as an **overlay card** over the InputBox. For a 4-panel grid, lift it into the bottom panel as the primary content; remove the absolute-positioning classes.                                                                                   |
 
 ### 5.2 New panel content (new components to create)
 
-| Purpose                                                    | Suggested new file                                                                                       |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Bottom panel shell                                        | `src/components/workspace/agent-tools/agent-tools-panel.tsx` (or similar)                                  |
-| Subtask list rendered in bottom panel                      | Lift `subtask-card.tsx` and `SubtasksContext` usage out of `message-list.tsx` and into the new panel.     |
-| TodoList (already exists)                                  | Move it from overlay → panel content; or keep both and decide per context.                                |
-| Per-thread tool-call registry / status / debug console     | `src/components/workspace/agent-tools/agent-tools-tool-call-list.tsx`                                     |
-| Settings for the new panel (toggle bottom dock, etc.)      | Add a section in `src/components/workspace/settings/tools-settings-section.tsx` (and register in `settings/index.ts`). |
+| Purpose                                                | Suggested new file                                                                                                     |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Bottom panel shell                                     | `src/components/workspace/agent-tools/agent-tools-panel.tsx` (or similar)                                              |
+| Subtask list rendered in bottom panel                  | Lift `subtask-card.tsx` and `SubtasksContext` usage out of `message-list.tsx` and into the new panel.                  |
+| TodoList (already exists)                              | Move it from overlay → panel content; or keep both and decide per context.                                             |
+| Per-thread tool-call registry / status / debug console | `src/components/workspace/agent-tools/agent-tools-tool-call-list.tsx`                                                  |
+| Settings for the new panel (toggle bottom dock, etc.)  | Add a section in `src/components/workspace/settings/tools-settings-section.tsx` (and register in `settings/index.ts`). |
 
 ### 5.3 Components inside ChatBox that need their container queries updated
 
@@ -566,77 +568,77 @@ These all currently assume they're inside a flex column or a fixed-width
 right-hand panel; once you add a bottom panel the heights must be `flex-1` /
 `min-h-0` aware:
 
-| File                                                                              | Change                                                                              |
-| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `src/components/workspace/artifacts/context.tsx`                                  | Add `bottomPanelOpen` state (or rename to a `panels` reducer); wire to `ChatBox`.  |
-| `src/components/workspace/artifacts/artifact-trigger.tsx`                         | If you also add a header trigger for the new panel.                                   |
-| `src/components/workspace/artifacts/artifact-file-list.tsx`                       | Only CSS impact (height fill).                                                      |
-| `src/components/workspace/artifacts/artifact-file-detail.tsx`                     | Only CSS impact; ensure `iframe` is `size-full` and parent is `min-h-0`.            |
-| `src/components/workspace/input-box.tsx`                                          | If the InputBox becomes a sibling of the new panel rather than a footer dock, move the dock logic out of `page.tsx`. |
-| `src/components/workspace/messages/message-list.tsx`                              | The `MESSAGE_LIST_DEFAULT_PADDING_BOTTOM` constant may need a new value if the bottom panel is collapsible; verify `Conversation` (`flex-1 overflow-y-hidden` from `ai-elements/conversation.tsx`) still gets correct height. |
-| `src/components/workspace/todo-list.tsx`                                          | Convert from absolute-positioned overlay to a panel-resident component (see §5.1).   |
-| `src/components/workspace/export-trigger.tsx`                                     | Header-only; no functional change.                                                  |
-| `src/components/workspace/token-usage-indicator.tsx`                              | Header-only; no functional change.                                                  |
-| `src/components/workspace/thread-title.tsx`                                       | Header-only; no functional change.                                                  |
-| `src/components/workspace/gateway-offline-banner.tsx`                             | Banner positioned `absolute` — should still work, but verify z-index above 4 panels. |
-| `src/components/workspace/command-palette.tsx`                                    | Add a command to toggle the new panel if you want.                                  |
+| File                                                          | Change                                                                                                                                                                                                                        |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/components/workspace/artifacts/context.tsx`              | Add `bottomPanelOpen` state (or rename to a `panels` reducer); wire to `ChatBox`.                                                                                                                                             |
+| `src/components/workspace/artifacts/artifact-trigger.tsx`     | If you also add a header trigger for the new panel.                                                                                                                                                                           |
+| `src/components/workspace/artifacts/artifact-file-list.tsx`   | Only CSS impact (height fill).                                                                                                                                                                                                |
+| `src/components/workspace/artifacts/artifact-file-detail.tsx` | Only CSS impact; ensure `iframe` is `size-full` and parent is `min-h-0`.                                                                                                                                                      |
+| `src/components/workspace/input-box.tsx`                      | If the InputBox becomes a sibling of the new panel rather than a footer dock, move the dock logic out of `page.tsx`.                                                                                                          |
+| `src/components/workspace/messages/message-list.tsx`          | The `MESSAGE_LIST_DEFAULT_PADDING_BOTTOM` constant may need a new value if the bottom panel is collapsible; verify `Conversation` (`flex-1 overflow-y-hidden` from `ai-elements/conversation.tsx`) still gets correct height. |
+| `src/components/workspace/todo-list.tsx`                      | Convert from absolute-positioned overlay to a panel-resident component (see §5.1).                                                                                                                                            |
+| `src/components/workspace/export-trigger.tsx`                 | Header-only; no functional change.                                                                                                                                                                                            |
+| `src/components/workspace/token-usage-indicator.tsx`          | Header-only; no functional change.                                                                                                                                                                                            |
+| `src/components/workspace/thread-title.tsx`                   | Header-only; no functional change.                                                                                                                                                                                            |
+| `src/components/workspace/gateway-offline-banner.tsx`         | Banner positioned `absolute` — should still work, but verify z-index above 4 panels.                                                                                                                                          |
+| `src/components/workspace/command-palette.tsx`                | Add a command to toggle the new panel if you want.                                                                                                                                                                            |
 
 ### 5.4 Hooks and contexts (state plumbing)
 
-| File                                                                          | Change                                                                                                   |
-| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/components/workspace/messages/context.ts`                                | Extend `ThreadContextType` only if the new panel needs thread-scoped state.                              |
-| `src/components/workspace/artifacts/context.tsx`                              | Lift panel-state into a more general `PanelsContext` (artifacts + new panel).                          |
-| `src/core/tasks/context.tsx`                                                  | Already thread-scoped. No change unless you want per-panel filtering.                                    |
-| `src/core/threads/hooks.ts`                                                   | The `runsRef` / optimistic-message plumbing does not need to change for the layout itself.               |
-| `src/components/workspace/chats/use-thread-chat.ts`                           | No change.                                                                                              |
-| `src/hooks/use-global-shortcuts.ts`                                           | Add a shortcut for toggling the new panel (optional, via `CommandPalette`).                              |
-| `src/components/workspace/command-palette.tsx`                                | Register the new shortcut.                                                                              |
+| File                                                | Change                                                                                     |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `src/components/workspace/messages/context.ts`      | Extend `ThreadContextType` only if the new panel needs thread-scoped state.                |
+| `src/components/workspace/artifacts/context.tsx`    | Lift panel-state into a more general `PanelsContext` (artifacts + new panel).              |
+| `src/core/tasks/context.tsx`                        | Already thread-scoped. No change unless you want per-panel filtering.                      |
+| `src/core/threads/hooks.ts`                         | The `runsRef` / optimistic-message plumbing does not need to change for the layout itself. |
+| `src/components/workspace/chats/use-thread-chat.ts` | No change.                                                                                 |
+| `src/hooks/use-global-shortcuts.ts`                 | Add a shortcut for toggling the new panel (optional, via `CommandPalette`).                |
+| `src/components/workspace/command-palette.tsx`      | Register the new shortcut.                                                                 |
 
 ### 5.5 I18N strings to add
 
-| File                                                 | Change                                                                              |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `src/core/i18n/locales/en-US.ts`                     | Add keys for the new panel title, toggle, and any new tool-call labels.             |
-| `src/core/i18n/locales/zh-CN.ts`                     | Mirror in zh-CN.                                                                    |
-| `src/core/i18n/locales/types.ts`                     | Update the dictionary types so the new keys are type-safe.                          |
+| File                             | Change                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `src/core/i18n/locales/en-US.ts` | Add keys for the new panel title, toggle, and any new tool-call labels. |
+| `src/core/i18n/locales/zh-CN.ts` | Mirror in zh-CN.                                                        |
+| `src/core/i18n/locales/types.ts` | Update the dictionary types so the new keys are type-safe.              |
 
 ### 5.6 Settings dialog (if you want the new panel toggleable)
 
-| File                                                  | Change                                                                                          |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `src/components/workspace/settings/index.ts`          | Register the new section (e.g. `"agent-tools"`).                                                |
+| File                                                           | Change                                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/components/workspace/settings/index.ts`                   | Register the new section (e.g. `"agent-tools"`).                                                 |
 | `src/components/workspace/settings/tools-settings-section.tsx` | New section file: toggle "Show agent tools panel", default size, collapsed/expanded start state. |
-| `src/core/settings/local.ts`                          | Persist the new toggles in `localStorage`.                                                      |
-| `src/core/settings/store.ts`                          | Thread-scoped persistence (if per-thread visibility is desired).                                |
-| `src/core/settings/index.ts`                          | Add the new settings keys + hooks.                                                              |
+| `src/core/settings/local.ts`                                   | Persist the new toggles in `localStorage`.                                                       |
+| `src/core/settings/store.ts`                                   | Thread-scoped persistence (if per-thread visibility is desired).                                 |
+| `src/core/settings/index.ts`                                   | Add the new settings keys + hooks.                                                               |
 
 ### 5.7 Static / mock route surface (likely no change, but verify)
 
-| File                                                  | Change                                                                                  |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `src/app/mock/api/threads/[thread_id]/history/route.ts`             | None.                                                                            |
-| `src/app/mock/api/threads/[thread_id]/artifacts/[[...artifact_path]]/route.ts` | None.                                                                       |
-| `src/core/threads/static-demo.ts`                                   | None.                                                                            |
-| `src/core/artifacts/utils.ts`                                        | None (URL builder is unaffected).                                              |
+| File                                                                           | Change                            |
+| ------------------------------------------------------------------------------ | --------------------------------- |
+| `src/app/mock/api/threads/[thread_id]/history/route.ts`                        | None.                             |
+| `src/app/mock/api/threads/[thread_id]/artifacts/[[...artifact_path]]/route.ts` | None.                             |
+| `src/core/threads/static-demo.ts`                                              | None.                             |
+| `src/core/artifacts/utils.ts`                                                  | None (URL builder is unaffected). |
 
 ### 5.8 Backend / API surface
 
 **No backend changes are strictly required** to host a 4-panel layout, but if
 the new panel needs data the current surface lacks:
 
-| Possible addition                                     | Owner        | Notes                                                                |
-| ----------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
-| `GET /api/threads/{threadId}/subagents` (subtask registry) | Backend | If you want a long-lived "tools" list rather than per-message cards. |
-| `GET /api/threads/{threadId}/tool-calls`               | Backend      | Same.                                                                |
-| `GET /api/threads/{threadId}/todos`                    | Backend      | Currently `useStream.onUpdateEvent` derives them; if persisted, expose them. |
+| Possible addition                                          | Owner   | Notes                                                                        |
+| ---------------------------------------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `GET /api/threads/{threadId}/subagents` (subtask registry) | Backend | If you want a long-lived "tools" list rather than per-message cards.         |
+| `GET /api/threads/{threadId}/tool-calls`                   | Backend | Same.                                                                        |
+| `GET /api/threads/{threadId}/todos`                        | Backend | Currently `useStream.onUpdateEvent` derives them; if persisted, expose them. |
 
 ### 5.9 Tests / docs (low priority for an audit, flagged for completeness)
 
-| File                                              | Change                                                                                |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `frontend/CLAUDE.md`, `frontend/AGENTS.md`        | Document the 4-panel structure and the new providers tree.                            |
-| Any Cypress / Playwright specs                    | Update selectors that target `aria-label` / `[data-testid]` inside the affected areas. |
+| File                                       | Change                                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `frontend/CLAUDE.md`, `frontend/AGENTS.md` | Document the 4-panel structure and the new providers tree.                             |
+| Any Cypress / Playwright specs             | Update selectors that target `aria-label` / `[data-testid]` inside the affected areas. |
 
 ---
 
@@ -694,17 +696,16 @@ settings/{account-settings-page,appearance-settings-section,…,index}.tsx
 
 ## Appendix B — Provider/state ownership map
 
-| Concern                                  | Provider                          | Hook / API                                          |
-| ---------------------------------------- | --------------------------------- | --------------------------------------------------- |
-| Authentication                          | `AuthProvider` (`core/auth`)      | `useAuth`, `useRequireAuth`                         |
-| QueryClient (REST cache)                 | `QueryClientProvider` (top-level) | `useQuery`, `useMutation`, `useInfiniteQuery`       |
-| i18n                                     | `I18nProvider` (`core/i18n`)      | `useI18n`                                           |
-| Theme                                    | `ThemeProvider` (next-themes)     | `useTheme`                                          |
-| Sidebar (left rail)                      | `SidebarProvider` (shadcn)        | `useSidebar`                                        |
-| Thread (LangGraph `BaseStream`)          | `ThreadContext` (`components/workspace/messages/context.ts`) | `useThread` |
-| Subtasks                                 | `SubtasksProvider` (`core/tasks/context.tsx`) | `useSubtask`, `useUpdateSubtask`, `useSubtaskContext` |
-| Artifacts                                | `ArtifactsProvider` (`components/workspace/artifacts/context.tsx`) | `useArtifacts` |
-| Prompt input (model/MCP/files)           | `PromptInputProvider` (`components/ai-elements/prompt-input.tsx`) | `usePromptInput` |
-| Thread id + mock flag                    | `useThreadChat`                   | (URL-derived state, no context)                     |
-| Panels (post-4-panel layout)             | **NEW** `PanelsProvider`          | `usePanels`                                         |
-
+| Concern                         | Provider                                                           | Hook / API                                            |
+| ------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------- |
+| Authentication                  | `AuthProvider` (`core/auth`)                                       | `useAuth`, `useRequireAuth`                           |
+| QueryClient (REST cache)        | `QueryClientProvider` (top-level)                                  | `useQuery`, `useMutation`, `useInfiniteQuery`         |
+| i18n                            | `I18nProvider` (`core/i18n`)                                       | `useI18n`                                             |
+| Theme                           | `ThemeProvider` (next-themes)                                      | `useTheme`                                            |
+| Sidebar (left rail)             | `SidebarProvider` (shadcn)                                         | `useSidebar`                                          |
+| Thread (LangGraph `BaseStream`) | `ThreadContext` (`components/workspace/messages/context.ts`)       | `useThread`                                           |
+| Subtasks                        | `SubtasksProvider` (`core/tasks/context.tsx`)                      | `useSubtask`, `useUpdateSubtask`, `useSubtaskContext` |
+| Artifacts                       | `ArtifactsProvider` (`components/workspace/artifacts/context.tsx`) | `useArtifacts`                                        |
+| Prompt input (model/MCP/files)  | `PromptInputProvider` (`components/ai-elements/prompt-input.tsx`)  | `usePromptInput`                                      |
+| Thread id + mock flag           | `useThreadChat`                                                    | (URL-derived state, no context)                       |
+| Panels (post-4-panel layout)    | **NEW** `PanelsProvider`                                           | `usePanels`                                           |

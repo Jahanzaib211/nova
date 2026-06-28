@@ -353,7 +353,11 @@ function MessageContent_({
     <AIElementMessageContent className={className}>
       {filesList}
       {!isHuman && (!!reasoningContent || wasLoading) && (
-        <Reasoning isStreaming={isLoading} startTimeProp={turnStartTime} defaultOpen={false}>
+        <Reasoning
+          isStreaming={isLoading}
+          startTimeProp={turnStartTime}
+          defaultOpen={false}
+        >
           <ReasoningTrigger hasContent={!!reasoningContent} />
           {reasoningContent && (
             <ReasoningContent>{reasoningContent}</ReasoningContent>

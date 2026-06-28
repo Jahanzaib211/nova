@@ -512,9 +512,15 @@ export function MessageList({
           );
         })}
         {thread.isLoading && !hasActiveAssistantText && (
-          <div className="flex w-full items-center gap-2 px-4 py-3 text-muted-foreground/70" data-testid="streaming-indicator" aria-label="Agent is thinking">
+          <div
+            className="text-muted-foreground/70 flex w-full items-center gap-2 px-4 py-3"
+            data-testid="streaming-indicator"
+            aria-label="Agent is thinking"
+          >
             <StreamingIndicator size="sm" />
-            <span className="font-mono text-xs">{t.agentComputer.thinking}</span>
+            <span className="font-mono text-xs">
+              {t.agentComputer.thinking}
+            </span>
           </div>
         )}
         <div style={{ height: `${paddingBottom}px` }} />

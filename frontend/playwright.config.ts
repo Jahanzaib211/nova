@@ -24,8 +24,9 @@ export default defineConfig({
         // Playwright install can drop the override after `npx playwright
         // install chromium` populates the headless-shell at the default path.
         launchOptions: {
-          executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
-            ?? "/home/jahanzaib/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
+          executablePath:
+            process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ??
+            "/home/jahanzaib/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome",
         },
       },
     },
