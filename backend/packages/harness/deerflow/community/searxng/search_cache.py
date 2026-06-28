@@ -17,7 +17,7 @@ import json
 import os
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 _TTL_S = float(os.environ.get("DEERFLOW_IGINO_CACHE_TTL_S", "300"))

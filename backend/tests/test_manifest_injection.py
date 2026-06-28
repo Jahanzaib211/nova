@@ -7,13 +7,11 @@ fire-once-per-thread contract and the non-fatal fallback.
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from deerflow.agents.middlewares.thread_data_middleware import (
-    ThreadDataMiddleware,
     _MANIFEST_TAG,
+    ThreadDataMiddleware,
 )
 
 

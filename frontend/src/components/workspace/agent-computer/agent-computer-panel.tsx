@@ -459,6 +459,7 @@ function Browser({
   onStartPreview,
   hasRunnableProject = false,
   onAgentMessage,
+  entryHtmlArtifact = null,
 }: {
   threadId: string;
   filePath: string | null;
@@ -469,6 +470,7 @@ function Browser({
   onStartPreview?: (label?: string) => void | Promise<void>;
   hasRunnableProject?: boolean;
   onAgentMessage?: (text: string) => void;
+  entryHtmlArtifact?: string | null;
 }) {
   const { t } = useI18n();
   const { content, exists } = useSandboxFile(threadId, filePath);
@@ -483,16 +485,23 @@ function Browser({
   // back/forward replay the routes we pushed. Routes reset when the server/label
   // changes (prefix changes).
   const prefix = (devServer.url ?? "").replace(/\/$/, "");
-  const [navStack, setNavStack] = useState<string[]>(["/"]);
+  // For a single static HTML deliverable whose entry isn't index.html, default the
+  // preview route to that file so the dev-server root ("/") doesn't 404 to a blank
+  // white page. Framework dev servers ship no raw .html artifact → entryRoute "/".
+  const entryRoute = useMemo(() => {
+    const base = (entryHtmlArtifact ?? "").split("/").at(-1) ?? "";
+    return /\.html?$/i.test(base) && base.toLowerCase() !== "index.html" ? `/${base}` : "/";
+  }, [entryHtmlArtifact]);
+  const [navStack, setNavStack] = useState<string[]>([entryRoute]);
   const [navIdx, setNavIdx] = useState(0);
   const route = navStack[navIdx] ?? "/";
-  const [routeInput, setRouteInput] = useState("/");
+  const [routeInput, setRouteInput] = useState(entryRoute);
   useEffect(() => setRouteInput(route), [route]);
   useEffect(() => {
-    // New dev server / switched label → fresh history.
-    setNavStack(["/"]);
+    // New dev server / switched label / new deliverable → fresh history at entry route.
+    setNavStack([entryRoute]);
     setNavIdx(0);
-  }, [prefix]);
+  }, [prefix, entryRoute]);
   const goRoute = useCallback((raw: string) => {
     let p = raw.trim();
     if (!p) p = "/";
@@ -1899,6 +1908,7 @@ export function AgentComputerPanel({
               onStartPreview={startPreview}
               hasRunnableProject={hasRunnableProject}
               onAgentMessage={onAgentMessage}
+              entryHtmlArtifact={latestHtmlArtifact}
             />
           ) : null}
         </AgentComputerErrorBoundary>

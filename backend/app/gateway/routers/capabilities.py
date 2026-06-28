@@ -124,8 +124,8 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
     handles empty descriptions gracefully.
     """
     try:
-        from deerflow.tools.tools import BUILTIN_TOOLS
         from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
+        from deerflow.tools.tools import BUILTIN_TOOLS
 
         out: list[ToolSummary] = []
         seen: set[str] = set()

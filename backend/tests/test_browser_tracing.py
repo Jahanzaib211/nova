@@ -10,7 +10,6 @@ import io
 import json
 import logging
 import threading
-from unittest.mock import MagicMock
 
 import pytest
 

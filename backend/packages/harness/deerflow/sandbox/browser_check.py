@@ -37,7 +37,6 @@ import re
 import shlex
 import threading
 import time
-import weakref
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -241,7 +240,7 @@ _LAST_CHECKS_LOCK = threading.Lock()
 # Per-thread locks so concurrent ``run_browser_check`` calls on the SAME
 # ``thread_id`` don't race on the shared Playwright session or the cache.
 # WeakValueDictionary so dead threads don't accumulate locks forever.
-_thread_locks: "WeakValueDictionary[str, threading.Lock]" = WeakValueDictionary()
+_thread_locks: WeakValueDictionary[str, threading.Lock] = WeakValueDictionary()
 _THREAD_LOCKS_META = threading.Lock()  # guards creation of entries in _thread_locks
 
 

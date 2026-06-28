@@ -92,7 +92,7 @@ async def stream_sandbox_logs(
 
             if log_path.exists():
                 try:
-                    with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                    with open(log_path, encoding="utf-8", errors="replace") as fh:
                         fh.seek(seek_pos)
                         chunk = fh.read()
                         seek_pos = fh.tell()

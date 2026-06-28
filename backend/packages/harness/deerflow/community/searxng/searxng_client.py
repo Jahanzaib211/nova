@@ -180,7 +180,7 @@ class SearxngClient:
 
                 if resp.status_code == 429:
                     raise SearchTransientError(
-                        f"SearXNG rate limited (HTTP 429)",
+                        "SearXNG rate limited (HTTP 429)",
                         context={"status": 429, "query": query},
                     )
                 if resp.status_code >= 500:

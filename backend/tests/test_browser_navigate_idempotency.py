@@ -18,8 +18,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from deerflow.tools.builtins.workspace_tools import (
-    _BrowserNavigateIdempotency,
     _browser_navigate_idempotency,
+    _BrowserNavigateIdempotency,
 )
 
 

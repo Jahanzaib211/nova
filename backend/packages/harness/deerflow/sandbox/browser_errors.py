@@ -42,7 +42,7 @@ class BrowserError(Exception):
         self.message = message
         self.context: dict = dict(context) if context else {}
 
-    def with_context(self, **kwargs) -> "BrowserError":
+    def with_context(self, **kwargs) -> BrowserError:
         """Return self with additional context fields merged in.
 
         Idempotent and safe to chain::

@@ -239,7 +239,6 @@ def test_wrap_model_call_injects_queued_warning_into_messages():
     mw.after_model(state, _runtime())
     # Now we have a queued warning. Simulate wrap_model_call by calling
     # the internal injection helper directly.
-    from langchain.agents.middleware.types import ModelRequest
 
     # Build a minimal ModelRequest stand-in
     request = SimpleNamespace(

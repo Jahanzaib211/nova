@@ -24,13 +24,13 @@ from deerflow.tools.builtins.workspace_tools import (
     screenshot_tool,
     search_files_tool,
     shell_kill_tool,
-    system_probe_tool,
     shell_session_tool,
     shell_view_tool,
     shell_wait_tool,
     shell_write_tool,
     start_dev_server_tool,
     stop_dev_server_tool,
+    system_probe_tool,
 )
 from deerflow.tools.mcp_metadata import tag_mcp_tool
 from deerflow.tools.sync import make_sync_tool_wrapper

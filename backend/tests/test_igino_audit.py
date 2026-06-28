@@ -1,13 +1,12 @@
 """Tests for iGIN0 privacy audit trail."""
 
 import unittest
-from unittest.mock import patch
 
 
 class TestAuditTrail(unittest.TestCase):
 
     def test_record_search(self):
-        from deerflow.community.searxng.audit import AuditTrail, AuditRecord
+        from deerflow.community.searxng.audit import AuditTrail
         trail = AuditTrail(enabled=True)
         rec = trail.search(
             thread_id="t1",

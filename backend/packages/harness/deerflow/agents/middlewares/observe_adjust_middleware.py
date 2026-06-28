@@ -39,6 +39,9 @@ _verified_present: set[tuple[str, tuple[str, ...]]] = set()
 _BUILD_JOURNAL_MAX_LINES = 80
 _BUILD_JOURNAL_INJECT_LINES = 40
 _journals: dict[str, deque[str]] = {}
+# Last journal tail injected per thread — used to skip re-injecting an unchanged
+# block on consecutive model calls (idempotent injection).
+_last_injected: dict[str, str] = {}
 
 # Tools that mutate the build (worth journaling) vs. read-only/search tools (noise).
 _JOURNAL_MUTATION_TOOLS = {
@@ -436,10 +439,20 @@ class ObserveAdjustMiddleware(AgentMiddleware):
                     thread_id = ctx.get("thread_id")
                 except Exception:
                     thread_id = getattr(ctx, "thread_id", None)
-            buf = _journals.get(str(thread_id)) if thread_id else None
+            tid = str(thread_id) if thread_id else None
+            buf = _journals.get(tid) if tid else None
             if not buf:
                 return request
             tail = list(buf)[-_BUILD_JOURNAL_INJECT_LINES:]
+            # Idempotent: only inject when the journal changed since the last
+            # injection for this thread. Avoids re-appending the same block every
+            # turn (token cost + prompt-cache churn). Durable continuity lives in
+            # workspace/BUILD_JOURNAL.md (the prompt tells the agent to read it).
+            tail_key = "\n".join(tail)
+            if tid and _last_injected.get(tid) == tail_key:
+                return request
+            if tid:
+                _last_injected[tid] = tail_key
             reminder = (
                 "<system-reminder>\n<build_journal>\n"
                 "Auto-maintained record of what you have built so far in this thread "

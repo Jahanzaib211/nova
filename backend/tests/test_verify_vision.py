@@ -62,7 +62,7 @@ class _FakeRequest:
         self.messages = messages
         self.runtime = runtime
 
-    def override(self, *, messages: list) -> "_FakeRequest":
+    def override(self, *, messages: list) -> _FakeRequest:
         self.messages = messages
         return self
 

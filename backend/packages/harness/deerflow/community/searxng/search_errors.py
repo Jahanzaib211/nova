@@ -22,7 +22,7 @@ class SearchError(Exception):
         self.message = message
         self.context: dict = dict(context) if context else {}
 
-    def with_context(self, **kwargs) -> "SearchError":
+    def with_context(self, **kwargs) -> SearchError:
         self.context.update({k: v for k, v in kwargs.items() if v is not None})
         return self
 

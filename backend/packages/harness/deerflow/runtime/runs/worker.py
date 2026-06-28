@@ -306,19 +306,10 @@ async def run_agent(
         logger.info("Run %s: streaming with modes %s (requested: %s)", run_id, lg_modes, requested_modes)
 
         # 7. Stream using graph.astream
-        #
-        # RESUME-after-interrupt: when a run carries no new input (empty
-        # ``graph_input``, e.g. the Stop→pause then Resume flow), LangGraph only
-        # continues from the saved checkpoint when invoked with ``None``. An
-        # empty ``{}`` is treated as fresh (empty) input and would NOT resume.
-        # Map empty→None so Resume actually continues the interrupted run.
-        astream_input = graph_input if graph_input else None
-        if astream_input is None:
-            logger.info("Run %s: empty input — resuming from checkpoint", run_id)
         if len(lg_modes) == 1 and not stream_subgraphs:
             # Single mode, no subgraphs: astream yields raw chunks
             single_mode = lg_modes[0]
-            async for chunk in agent.astream(astream_input, config=runnable_config, stream_mode=single_mode):
+            async for chunk in agent.astream(graph_input, config=runnable_config, stream_mode=single_mode):
                 if record.abort_event.is_set():
                     logger.info("Run %s abort requested — stopping", run_id)
                     break
@@ -328,7 +319,7 @@ async def run_agent(
         else:
             # Multiple modes or subgraphs: astream yields tuples
             async for item in agent.astream(
-                astream_input,
+                graph_input,
                 config=runnable_config,
                 stream_mode=lg_modes,
                 subgraphs=stream_subgraphs,

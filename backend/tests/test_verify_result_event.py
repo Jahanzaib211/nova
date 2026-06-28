@@ -17,7 +17,6 @@ These tests assert:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
@@ -46,7 +45,6 @@ def test_verify_result_event_has_documented_shape():
         screenshot_b64 = None
 
     # Patch the import inside _auto_verify_present_files
-    from deerflow.agents.middlewares import observe_adjust_middleware as oa
 
     async def fake_run(*args, **kwargs):
         return _FakeCheck()

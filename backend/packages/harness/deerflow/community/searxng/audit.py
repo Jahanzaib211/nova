@@ -15,10 +15,9 @@ import json
 import logging
 import os
 import threading
-import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ _REDACT = os.environ.get("DEERFLOW_IGINO_AUDIT_REDACT", "false").lower() in ("tr
 @dataclass
 class AuditRecord:
     audit_id: str = field(default_factory=lambda: uuid.uuid4().hex[:16])
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     thread_id: str = ""
     query: str = ""
     privacy_mode: bool = False

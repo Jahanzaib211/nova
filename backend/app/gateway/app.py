@@ -28,12 +28,14 @@ from app.gateway.routers import (
     memory,
     models,
     runs,
-    sandbox as sandbox_router,
     skills,
     suggestions,
     thread_runs,
     threads,
     uploads,
+)
+from app.gateway.routers import (
+    sandbox as sandbox_router,
 )
 from deerflow.config import app_config as deerflow_app_config
 from deerflow.config.app_config import apply_logging_level

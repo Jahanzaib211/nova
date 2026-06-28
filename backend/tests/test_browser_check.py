@@ -26,25 +26,23 @@ import pytest
 
 from deerflow.sandbox import browser_check as bc
 from deerflow.sandbox.browser_check import (
+    _DEFAULT_RENDER_BUDGET_MS,
+    _LAST_CHECKS_LOCK,
+    _MAX_RENDER_BUDGET_MS,
     BrowserCheck,
     RouteResult,
     _adaptive_wait,
-    _BLANK_SCREENSHOT_MAX_BYTES,
     _cdp_url_for_gateway,
     _clamp_render_budget_ms,
     _console_entries_to_errors,
-    _DEFAULT_RENDER_BUDGET_MS,
     _detect_app_port,
     _get_thread_lock,
-    _LAST_CHECKS_LOCK,
-    _MAX_RENDER_BUDGET_MS,
     _rewrite_cdp_netloc,
     _run_browser_check_unlocked,
     _scan_html_errors,
     get_last_browser_check,
     run_browser_check,
 )
-
 
 # ============================================================
 # _scan_html_errors

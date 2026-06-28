@@ -24,9 +24,6 @@ from __future__ import annotations
 
 import re
 
-import pytest
-
-
 # Canonical keywords the manifest MUST contain. These are the seam
 # the agent uses to recognize its capabilities. If you remove or rename
 # one, the model loses a piece of self-knowledge — fail loud.
@@ -252,12 +249,12 @@ def test_manifest_is_pure_string_no_side_effects():
     makes network calls, the output varies across calls and the
     determinism test above would flake.
     """
-    from deerflow.agents import manifest as manifest_mod
-
     # Source-level check: the function body must not contain
     # open/read/requests/urlopen calls outside the explicitly-fallback
     # exception handler in _resolve_project_root.
     import inspect
+
+    from deerflow.agents import manifest as manifest_mod
 
     source = inspect.getsource(manifest_mod.build_agent_manifest)
     forbidden = ("open(", "Path.read_", "Path.write_", "requests.", "urllib.", "urlopen(")
@@ -351,7 +348,7 @@ def _collect_tools_with_boom(_boom):
     """Helper that wraps the import failure fallback path."""
     try:
         _boom()
-    except Exception as exc:
+    except Exception:
         from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
 
         return sorted(_TOOL_PURPOSE_OVERRIDES.items())
@@ -360,7 +357,6 @@ def _collect_tools_with_boom(_boom):
 def test_collect_tools_dedupes_against_overrides(monkeypatch):
     """If BUILTIN_TOOLS contains a tool whose name is also in overrides, dedupe."""
     from deerflow.agents import manifest as manifest_mod
-    from deerflow.tools.tools import BUILTIN_TOOLS
 
     class _FakeTool:
         def __init__(self, name, desc):

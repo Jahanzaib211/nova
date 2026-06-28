@@ -43,8 +43,11 @@ class TestSearchErrors(unittest.TestCase):
 
     def test_hierarchy(self):
         from deerflow.community.searxng.search_errors import (
-            SearchError, SearchTransientError, SearchPermanentError,
-            SearchUnavailableError, SearchCircuitOpenError,
+            SearchCircuitOpenError,
+            SearchError,
+            SearchPermanentError,
+            SearchTransientError,
+            SearchUnavailableError,
         )
         self.assertTrue(issubclass(SearchTransientError, SearchError))
         self.assertTrue(issubclass(SearchPermanentError, SearchError))
@@ -63,8 +66,12 @@ class TestSearchErrors(unittest.TestCase):
 
     def test_is_transient(self):
         from deerflow.community.searxng.search_errors import (
-            SearchTransientError, SearchConnectionError, SearchTimeoutError,
-            SearchPermanentError, is_transient, is_permanent,
+            SearchConnectionError,
+            SearchPermanentError,
+            SearchTimeoutError,
+            SearchTransientError,
+            is_permanent,
+            is_transient,
         )
         self.assertTrue(is_transient(SearchTransientError()))
         self.assertTrue(is_transient(SearchConnectionError()))

@@ -17,7 +17,6 @@ so the patch is scoped exactly where the import is used.
 
 from __future__ import annotations
 
-import json
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -26,10 +25,9 @@ import pytest
 
 from deerflow.agents.middlewares.preflight_quota_middleware import (
     PreflightQuotaMiddleware,
-    _ProbeResult,
     _extract_balance,
+    _ProbeResult,
 )
-
 
 # ───────────────────────────────────────────────────────────────────────
 # Pure helper tests
@@ -218,7 +216,6 @@ async def test_no_block_when_no_provider_detected(monkeypatch):
 @pytest.mark.asyncio
 async def test_abefore_model_returns_blocked_message(monkeypatch):
     """When blocked, abefore_model returns a synthetic AIMessage with the right flags."""
-    from langchain.agents import AgentState
     from langchain_core.messages import AIMessage
 
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
@@ -244,7 +241,6 @@ async def test_abefore_model_returns_blocked_message(monkeypatch):
 @pytest.mark.asyncio
 async def test_abefore_model_returns_none_when_not_blocked(monkeypatch):
     """Happy path: provider has balance → no synthetic message → original state passes through."""
-    from langchain.agents import AgentState
 
     state = SimpleNamespace(messages=[])
 
@@ -258,7 +254,6 @@ async def test_abefore_model_returns_none_when_not_blocked(monkeypatch):
 @pytest.mark.asyncio
 async def test_abefore_model_returns_none_when_probe_fails(monkeypatch):
     """Probe exception → wrapped in try/except → returns None (non-fatal)."""
-    from langchain.agents import AgentState
 
     state = SimpleNamespace(messages=[])
 
@@ -276,7 +271,6 @@ async def test_abefore_model_returns_none_when_probe_fails(monkeypatch):
 @pytest.mark.asyncio
 async def test_abefore_model_no_provider_returns_none(monkeypatch):
     """No OpenAI-compatible provider detected → no-op."""
-    from langchain.agents import AgentState
 
     for key in ("OPENAI_API_KEY", "OPENAI_API_BASE", "LLM_API_KEY", "LLM_BASE_URL"):
         monkeypatch.delenv(key, raising=False)

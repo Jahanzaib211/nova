@@ -32,14 +32,13 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-import os
 import secrets
 import threading
 import time
-import uuid
+from collections.abc import Iterator
 from contextvars import ContextVar, copy_context
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +82,7 @@ def new_trace_id() -> str:
 
 # ---------- span stack (parent/child) ----------
 
-_current_spans: ContextVar[list["BrowserSpan"] | None] = ContextVar("deerflow_current_spans", default=None)
+_current_spans: ContextVar[list[BrowserSpan] | None] = ContextVar("deerflow_current_spans", default=None)
 
 
 @dataclass

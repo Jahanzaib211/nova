@@ -19,9 +19,9 @@ from types import SimpleNamespace
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from deerflow.agents.middlewares.loop_detection_middleware import (
-    LoopDetectionMiddleware,
     _DEAD_END_HARD_LIMIT,
     _DEAD_END_WARN_THRESHOLD,
+    LoopDetectionMiddleware,
 )
 
 

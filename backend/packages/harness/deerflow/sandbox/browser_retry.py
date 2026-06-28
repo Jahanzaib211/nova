@@ -50,17 +50,17 @@ import asyncio
 import logging
 import random
 import time
-from typing import Any, Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 from deerflow.sandbox.browser_circuit_breaker import (
-    guard_browser_call,
     get_circuit_state,
+    guard_browser_call,
 )
 from deerflow.sandbox.browser_errors import (
     BrowserCircuitOpenError,
     BrowserError,
     is_permanent,
-    is_transient,
 )
 
 logger = logging.getLogger(__name__)

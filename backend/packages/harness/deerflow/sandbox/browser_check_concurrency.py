@@ -130,7 +130,7 @@ async def run_browser_check_bounded(
             _BROWSER_CHECK_SEMAPHORE.acquire(),
             timeout=queue,
         )
-    except asyncio.TimeoutError as e:
+    except TimeoutError as e:
         waited = queue
         logger.warning(
             "browser_check saturated (waited %.1fs, capacity=%d) for thread_id=%s",
@@ -156,7 +156,7 @@ async def run_browser_check_bounded(
                 ),
                 timeout=remaining,
             )
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             logger.warning(
                 "browser_check exceeded total budget of %.1fs for thread_id=%s",
                 total,

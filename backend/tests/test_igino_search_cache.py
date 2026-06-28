@@ -1,14 +1,14 @@
 """Tests for iGIN0 search cache (LRU+TTL)."""
 
-import time
 import threading
+import time
 import unittest
 
 
 class TestSearchCache(unittest.TestCase):
 
     def _make_cache(self, max_size: int = 3, ttl_s: float = 60.0):
-        from deerflow.community.searxng.search_cache import SearchCache, CacheKey
+        from deerflow.community.searxng.search_cache import CacheKey, SearchCache
         self._CacheKey = CacheKey
         return SearchCache(ttl_s=ttl_s, max_size=max_size)
 

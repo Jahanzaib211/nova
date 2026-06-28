@@ -541,7 +541,7 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
             proc.terminate()
         try:
             await asyncio.wait_for(proc.wait(), timeout=5)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 proc.kill()
     return True

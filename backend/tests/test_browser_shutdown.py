@@ -16,9 +16,10 @@ import time
 
 import pytest
 
-from deerflow.sandbox import browser_circuit_breaker as cb
 from deerflow.sandbox import browser_check as bc
+from deerflow.sandbox import browser_circuit_breaker as cb
 from deerflow.sandbox import shutdown
+from deerflow.sandbox.browser_check import BrowserCheck
 from deerflow.sandbox.shutdown import (
     install_shutdown_hooks,
     reset_for_testing,
@@ -27,7 +28,6 @@ from deerflow.sandbox.shutdown import (
 from deerflow.tools.builtins.workspace_tools import (
     _browser_navigate_idempotency,
 )
-from deerflow.sandbox.browser_check import BrowserCheck
 
 
 @pytest.fixture(autouse=True)
@@ -172,7 +172,6 @@ class TestInstallHooks:
     def test_install_registers_atexit(self) -> None:
         # We don't actually trigger atexit (would terminate the test process).
         # Instead, verify _safe_shutdown is registered.
-        import atexit
 
         # Check that the registered atexit hooks include ours.
         # (atexit._exithandlers is internal but stable across CPython versions.)
@@ -255,12 +254,13 @@ class TestShutdownBudget:
 class TestBrowserCheckLastCleared:
     def test_last_browser_check_returns_none_after_shutdown(self) -> None:
         """High-level integration: get_last_browser_check returns None after shutdown."""
+        from unittest.mock import MagicMock, patch
+
         from deerflow.sandbox.browser_check import (
             BrowserCheck,
             get_last_browser_check,
             run_browser_check,
         )
-        from unittest.mock import MagicMock, patch
 
         def fake_unlocked(thread_id, sandbox, *, label, routes, with_screenshot, render_budget_ms):
             return BrowserCheck(ok=True, reason="ok")

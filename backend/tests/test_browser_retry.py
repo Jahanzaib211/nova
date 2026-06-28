@@ -8,18 +8,10 @@ and the on_retry callback contract.
 from __future__ import annotations
 
 import asyncio
-import time
-from unittest.mock import MagicMock
 
 import pytest
 
 from deerflow.sandbox import browser_circuit_breaker as cb
-from deerflow.sandbox import browser_retry as br
-from deerflow.sandbox.browser_retry import (
-    _compute_backoff_ms,
-    retry_browser_call,
-    retry_browser_call_async,
-)
 from deerflow.sandbox.browser_circuit_breaker import (
     CircuitState,
     record_failure,
@@ -29,6 +21,11 @@ from deerflow.sandbox.browser_errors import (
     BrowserCircuitOpenError,
     BrowserPermanentError,
     BrowserTransientError,
+)
+from deerflow.sandbox.browser_retry import (
+    _compute_backoff_ms,
+    retry_browser_call,
+    retry_browser_call_async,
 )
 
 
@@ -271,7 +268,6 @@ class TestAsyncRetry:
     @pytest.mark.asyncio
     async def test_async_uses_event_loop_sleep(self) -> None:
         """Confirm we're not blocking the event loop with time.sleep."""
-        import asyncio
 
         async def ok():
             return "ok"

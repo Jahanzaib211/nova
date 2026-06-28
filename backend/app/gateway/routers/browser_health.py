@@ -92,7 +92,7 @@ def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool, float, str | None]:
                     with socket.create_connection((host, port), timeout=timeout_s):
                         latency = (time.monotonic() - start) * 1000.0
                         return (True, round(latency, 2), cdp_url)
-                except (socket.timeout, OSError):
+                except (TimeoutError, OSError):
                     # Connection refused or unreachable — record latency but mark unreachable.
                     latency = (time.monotonic() - start) * 1000.0
                     return (False, round(latency, 2), cdp_url)

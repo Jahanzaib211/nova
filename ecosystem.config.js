@@ -20,11 +20,12 @@ module.exports = {
         "compose " +
         "-f /home/jahanzaib/Desktop/nova/docker/docker-compose-dev.yaml " +
         "-f /home/jahanzaib/Desktop/nova/docker/docker-compose.dood.yaml " +
-        // searxng/tor are optional iGIN0 services (disabled by default). They are
-        // scaled to 0 because searxng was grabbing the gateway's pinned static IP
-        // (192.168.200.3) and tor crash-loops under the non-root hardening
-        // (setgid EPERM). Re-enable by removing these scales once those are fixed.
-        "-p deer-flow-dev up --no-build --scale provisioner=0 --scale searxng=0 --scale tor=0",
+        // searxng is an optional iGIN0 service (disabled by default). It is
+        // scaled to 0 because it was grabbing the gateway's pinned static IP
+        // (192.168.200.3). The tor service was removed from the compose entirely
+        // (it crash-looped under the non-root hardening). Re-enable searxng by
+        // removing its scale once the IP conflict is fixed.
+        "-p deer-flow-dev up --no-build --scale provisioner=0 --scale searxng=0",
       cwd: "/home/jahanzaib/Desktop/nova",
       env: {
         DEER_FLOW_ROOT: "/home/jahanzaib/Desktop/nova",

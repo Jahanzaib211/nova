@@ -1225,6 +1225,14 @@ export function useThreadStream({
         setOptimisticThreadId(null);
         setLiveMessagesThreadId(null);
         setIsUploading(false);
+        // A 409 "thread already has an active run" is an expected concurrency
+        // conflict (the user sent a message while the agent was still working),
+        // not a failure to surface as a red error overlay. Show a calm hint and
+        // swallow it — the optimistic message was already rolled back above.
+        if (getHttpStatus(error) === 409) {
+          toast.info(t.common.agentBusy);
+          return;
+        }
         throw error;
       } finally {
         sendInFlightRef.current = false;
@@ -1233,6 +1241,7 @@ export function useThreadStream({
     [
       thread,
       t.uploads.uploadingFiles,
+      t.common.agentBusy,
       context,
       queryClient,
       humanMessageCount,
@@ -1272,51 +1281,35 @@ export function useThreadStream({
     messages: mergedMessages,
   } as typeof thread;
 
-  // ── Pause / Resume (OpenHands-style) ──────────────────────────────────────
-  // The Stop button interrupts the in-flight run, but the backend keeps the
-  // LangGraph checkpoint (cancel action="interrupt"), so the agent resumes from
-  // exactly where it paused instead of being hard-killed.
-  const [isPaused, setIsPaused] = useState(false);
-
-  // Any new run (fresh send OR resume) drives isLoading true → clear paused.
-  // Keying off the loading transition keeps the streaming path untouched.
-  useEffect(() => {
-    if (thread.isLoading) setIsPaused(false);
-  }, [thread.isLoading]);
-
-  const pauseRun = useCallback(() => {
-    setIsPaused(true);
-    void thread.stop();
-  }, [thread]);
-
-  const resumeRun = useCallback(async () => {
-    if (!threadId) return;
-    setIsPaused(false);
-    // LangGraph treats an undefined/null input as "resume after interrupt"
-    // (invoke(None, config)) — it continues from the preserved checkpoint.
-    await thread.submit(undefined, {
-      threadId,
-      streamSubgraphs: true,
-      streamResumable: true,
-      config: { recursion_limit: 1000 },
-      context: {
-        ...context,
-        thinking_enabled: context.mode !== "flash",
-        is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-        subagent_enabled: context.mode === "pro" || context.mode === "ultra",
-        reasoning_effort:
-          context.reasoning_effort ??
-          (context.mode === "ultra"
-            ? "high"
-            : context.mode === "pro"
-              ? "medium"
-              : context.mode === "thinking"
-                ? "low"
-                : undefined),
-        thread_id: threadId,
-      },
-    });
-  }, [thread, threadId, context]);
+  // Stop = hard cancel. ``thread.stop()`` aborts the client stream; the run was
+  // created with ``onDisconnect: "cancel"`` so the backend run is cancelled too.
+  // As a belt-and-suspenders guarantee that the agent actually halts when the
+  // user asks (and isn't left running by a resumable-stream race), also issue an
+  // explicit cancel of the thread's active run. Non-fatal: any failure here is
+  // swallowed so Stop never throws.
+  const stopRun = useCallback(async () => {
+    try {
+      await thread.stop();
+    } finally {
+      if (threadId && !isMock) {
+        try {
+          const client = getAPIClient();
+          const runs = await client.runs.list(threadId);
+          await Promise.all(
+            runs
+              .filter((r) => r.status === "pending" || r.status === "running")
+              .map((r) =>
+                client.runs
+                  .cancel(threadId, r.run_id, false, "interrupt")
+                  .catch(() => undefined),
+              ),
+          );
+        } catch {
+          // best-effort — thread.stop() already disconnected the stream
+        }
+      }
+    }
+  }, [thread, threadId, isMock]);
 
   return {
     thread: mergedThread,
@@ -1326,9 +1319,7 @@ export function useThreadStream({
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
-    isPaused,
-    pauseRun,
-    resumeRun,
+    stopRun,
   } as const;
 }
 
