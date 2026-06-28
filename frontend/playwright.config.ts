@@ -27,7 +27,11 @@ export default defineConfig({
         // Local developers with a custom browser path can still override
         // via PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var.
         ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
-          ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH } }
+          ? {
+              launchOptions: {
+                executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+              },
+            }
           : {}),
       },
     },
