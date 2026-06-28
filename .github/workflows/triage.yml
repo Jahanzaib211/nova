@@ -38,7 +38,7 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: Apply PR labels from live state
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -147,7 +147,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Add reviewing label for maintainer reviews
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -192,7 +192,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Add needs-triage label
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { owner, repo } = context.repo;
