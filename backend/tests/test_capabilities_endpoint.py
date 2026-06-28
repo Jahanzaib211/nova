@@ -9,42 +9,43 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import pytest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-# Stub the app_config loader (same rationale as test_igino_endpoint.py):
-# the module import chain transitively imports app.gateway.app which loads
-# config.yaml at import time. CI runners don't have config.yaml (it's
-# gitignored); local devs do. The stub makes the test hermetic.
-_EMPTY_CONFIG_PATCHER = patch(
-    "deerflow.config.app_config.get_app_config",
-    return_value=MagicMock(),
-)
+# v7.3 (Nova rebrand): make this test CI-runnable without config.yaml.
+# The capabilities router imports `app.gateway.deps.get_config` which calls
+# `deerflow.config.app_config.get_app_config` which tries to read
+# config.yaml from disk. CI runners don't have config.yaml (gitignored);
+# local devs do. Patching the module-level singleton (`_app_config_path`
+# and friends) makes the test hermetic — same pattern as
+# test_replay_golden.py and test_runtime_lifecycle_e2e.py.
+_APP_CONFIG_MODULE = "deerflow.config.app_config"
+_HERMETIC_PATCHERS = [
+    patch(f"{_APP_CONFIG_MODULE}._app_config_path", None),
+    patch(f"{_APP_CONFIG_MODULE}._app_config", None),
+    patch(f"{_APP_CONFIG_MODULE}._app_config_mtime", None),
+    patch(f"{_APP_CONFIG_MODULE}._app_config_signature", None),
+    patch(f"{_APP_CONFIG_MODULE}._app_config_is_custom", True),
+]
 
 
-def _ensure_stub() -> None:
-    """Start the config-stub patcher (idempotent).
-
-    Some test runners (pytest collection) import this module before fixtures
-    fire; starting the patcher here makes the import itself hermetic.
-    Idempotent via try/except since `_patch` has no public `is_started` flag.
-    """
-    global _PATCHER_STARTED
-    if _PATCHER_STARTED:
-        return
-    try:
-        _EMPTY_CONFIG_PATCHER.start()
-        _PATCHER_STARTED = True
-    except RuntimeError:
-        # Already started (re-entrant import); safe to ignore.
-        _PATCHER_STARTED = True
-
-
-_PATCHER_STARTED = False
-_ensure_stub()
-
-from app.gateway.routers import capabilities as cap  # noqa: E402  (after stub)
+@pytest.fixture(autouse=True)
+def _hermetic_config():
+    """Auto-apply the hermetic config patchers to every test in this module."""
+    with patch(f"{_APP_CONFIG_MODULE}._app_config_path", None), \
+         patch(f"{_APP_CONFIG_MODULE}._app_config", None), \
+         patch(f"{_APP_CONFIG_MODULE}._app_config_mtime", None), \
+         patch(f"{_APP_CONFIG_MODULE}._app_config_signature", None), \
+         patch(f"{_APP_CONFIG_MODULE}._app_config_is_custom", True):
+        # Import the router AFTER the patchers are in place, so the module
+        # imports see a "no config.yaml" world. Using a lazy import inside
+        # the fixture is intentional: this avoids the chain that triggers
+        # config.yaml disk read at module-import time.
+        global cap
+        from app.gateway.routers import capabilities as cap  # noqa: E402
+        yield
 
 
 def _make_test_client():

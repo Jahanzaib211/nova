@@ -2,12 +2,19 @@
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 def _run(coro):
-    """Run an async coroutine synchronously from a sync test."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    """Run an async coroutine synchronously from a sync test.
+
+    Uses asyncio.run() (the public API) rather than get_event_loop() +
+    run_until_complete(); the latter raises "There is no current event loop
+    in thread 'MainThread'" on Python 3.10+ when called from a worker thread
+    that was not entered via asyncio.run/coroutine. asyncio.run() creates
+    and tears down its own loop per call.
+    """
+    return asyncio.run(coro)
 
 
 # Stub the app_config loader so importing the router module (which transitively
