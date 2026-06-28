@@ -891,12 +891,19 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
             from deerflow.sandbox.browser_check import run_browser_check
 
             if not is_local_sandbox(runtime):
-                chk = run_browser_check(thread_id, sandbox, with_screenshot=False)
+                # Capture a screenshot so a vision-capable model can SEE the build
+                # (ViewImageMiddleware injects it next turn). Best-effort, non-fatal.
+                chk = run_browser_check(thread_id, sandbox, with_screenshot=True)
                 ok = ok and (chk.ok or not chk.routes)
                 lines.append(f"## Browser: {'✓ ok' if chk.ok else '✗ ' + chk.reason}")
                 for r in chk.routes:
                     lines.append(f"- {r.route} [{r.status}]" + (f" — {r.notes}" if r.notes else ""))
                 lines.append("")
+                try:
+                    from deerflow.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
+                    stash_verify_screenshot(thread_id, _first_route_screenshot(chk))
+                except Exception:
+                    pass
         except Exception as e:
             lines.append(f"## Browser: (skipped: {str(e)[:80]})\n")
 

@@ -81,14 +81,17 @@ def _pass_content(extra: str = "") -> str:
 # ───────────────────────────────────────────────────────────────────────
 
 
-def test_first_issues_does_not_force_final_answer():
-    """1st ISSUES result: counter = 1, no forced message yet."""
+def test_first_issues_drives_a_fix_not_a_final_answer():
+    """1st ISSUES: counter = 1, a DRIVE-to-green directive is queued (not a STOP)."""
     mw = ReflectFixBudgetMiddleware()
     mw.before_agent({}, _runtime())
     state = _make_state_with_messages(_make_dev_verify_tool_message(_issue_content()))
     mw.after_model(state, _runtime())
-    # No forced warning queued
-    assert mw._pending_warnings.get(("t1", "r1")) is None
+    pending = mw._pending_warnings.get(("t1", "r1"))
+    # A fix directive is queued — NOT the budget-hit "stop" message.
+    assert pending is not None and len(pending) == 1
+    assert "[VERIFY FAILED — FIX REQUIRED]" in pending[0]
+    assert "[REFLECT BUDGET HIT]" not in pending[0]
     # Counter at 1
     assert mw._consecutive_issues[("t1", "r1")] == 1
 
@@ -100,11 +103,12 @@ def test_second_issues_hits_budget_and_queues_warning():
     state = _make_state_with_messages(_make_dev_verify_tool_message(_issue_content()))
     mw.after_model(state, _runtime())
     mw.after_model(state, _runtime())
-    # Forced warning queued
+    # Two directives queued: a DRIVE (1st) then the budget-hit STOP (2nd).
     pending = mw._pending_warnings.get(("t1", "r1"))
-    assert pending is not None and len(pending) == 1
-    assert "[REFLECT BUDGET HIT]" in pending[0]
-    assert "2 times" in pending[0]
+    assert pending is not None and len(pending) == 2
+    assert "[VERIFY FAILED — FIX REQUIRED]" in pending[0]
+    assert "[REFLECT BUDGET HIT]" in pending[-1]
+    assert "2 times" in pending[-1]
 
 
 def test_third_issues_keeps_incrementing_counter_and_re_queues():
@@ -117,9 +121,9 @@ def test_third_issues_keeps_incrementing_counter_and_re_queues():
     mw.after_model(state, _runtime())
     # Counter increments past budget (it's just a count, not a cap)
     assert mw._consecutive_issues[("t1", "r1")] == 3
-    # Two warnings queued (one per post-budget call; dedup at inject time)
+    # Three directives queued: DRIVE (1st) + STOP (2nd) + STOP (3rd).
     pending = mw._pending_warnings.get(("t1", "r1"))
-    assert pending is not None and len(pending) == 2
+    assert pending is not None and len(pending) == 3
 
 
 def test_pass_resets_budget_to_zero():
@@ -275,7 +279,8 @@ def test_wrap_model_call_dedupes_multiple_warnings():
     mw.after_model(state, _runtime())
     mw.after_model(state, _runtime())
     mw.after_model(state, _runtime())  # queues another warning
-    assert len(mw._pending_warnings[("t1", "r1")]) == 2
+    # DRIVE (1st) + STOP@2 + STOP@3 = 3 queued (the two STOPs differ by count).
+    assert len(mw._pending_warnings[("t1", "r1")]) == 3
 
     request = SimpleNamespace(
         messages=[_make_ai_message(content="hi")],
@@ -360,10 +365,39 @@ def test_custom_budget():
     state = _make_state_with_messages(_make_dev_verify_tool_message(_issue_content()))
     for _ in range(4):
         mw.after_model(state, _runtime())
-    # After 4 ISSUES, budget of 5 NOT yet hit
-    assert mw._pending_warnings.get(("t1", "r1")) is None
-    mw.after_model(state, _runtime())  # 5th
-    assert mw._pending_warnings.get(("t1", "r1")) is not None
+    # After 4 ISSUES, budget of 5 NOT yet hit → 4 DRIVE directives, no STOP.
+    pending = mw._pending_warnings.get(("t1", "r1"))
+    assert pending is not None and len(pending) == 4
+    assert all("[VERIFY FAILED — FIX REQUIRED]" in p for p in pending)
+    mw.after_model(state, _runtime())  # 5th → budget hit
+    assert "[REFLECT BUDGET HIT]" in mw._pending_warnings[("t1", "r1")][-1]
+
+
+def test_drive_directive_quotes_failing_items():
+    """The under-budget DRIVE directive quotes the concrete failing lines."""
+    mw = ReflectFixBudgetMiddleware()
+    mw.before_agent({}, _runtime())
+    content = (
+        "# dev_verify\n**Verdict: ⚠️ ISSUES**\n"
+        "## Tests: ✗ fail\n"
+        "## Browser: ✗ render_error\n- / [render_error] — boom\n"
+        "## Review: 1 HIGH\n- 🔴 risky thing\n"
+    )
+    state = _make_state_with_messages(_make_dev_verify_tool_message(content))
+    mw.after_model(state, _runtime())
+    directive = mw._pending_warnings[("t1", "r1")][0]
+    assert "Failing items:" in directive
+    assert "render_error" in directive
+    assert "🔴 risky thing" in directive
+
+
+def test_parse_dev_verify_issues_is_bounded_and_generic():
+    """The parser keys off failure markers only and is capped (no project knowledge)."""
+    big = "\n".join(f"- ✗ fail line {i}" for i in range(50))
+    out = ReflectFixBudgetMiddleware._parse_dev_verify_issues(big)
+    assert 0 < out.count("\n") <= 14  # capped at 15 lines
+    # Non-failure content yields nothing.
+    assert ReflectFixBudgetMiddleware._parse_dev_verify_issues("## Tests: ✓ pass\nall good") == ""
 
 
 # ───────────────────────────────────────────────────────────────────────

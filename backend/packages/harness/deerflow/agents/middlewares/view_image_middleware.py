@@ -4,9 +4,11 @@ import logging
 from typing import override
 
 from langchain.agents.middleware import AgentMiddleware
+from langchain.agents.middleware.types import ModelCallResult, ModelRequest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.runtime import Runtime
 
+from deerflow.agents.middlewares.verify_vision import pop_verify_screenshot
 from deerflow.agents.thread_state import ThreadState
 
 logger = logging.getLogger(__name__)
@@ -222,3 +224,53 @@ class ViewImageMiddleware(AgentMiddleware[ViewImageMiddlewareState]):
             State update with additional human message, or None if no update needed
         """
         return self._inject_image_message(state)
+
+    # ── Verify-screenshot vision injection ────────────────────────────────────
+    # This middleware is registered ONLY for vision-capable models, so injecting
+    # image content here is automatically safe for text-only models (they never
+    # get this middleware). The verify path stashes a rendered screenshot per
+    # thread; we surface it to the model TRANSIENTLY (via request.override, not
+    # persisted state) and ONE-SHOT (pop), so the model can SEE its build without
+    # bloating conversation history. Non-fatal by construction.
+    def _inject_verify_screenshot(self, request: ModelRequest) -> ModelRequest:
+        try:
+            runtime = getattr(request, "runtime", None)
+            ctx = getattr(runtime, "context", None) if runtime is not None else None
+            thread_id = None
+            if ctx is not None:
+                try:
+                    thread_id = ctx.get("thread_id")
+                except Exception:
+                    thread_id = getattr(ctx, "thread_id", None)
+            shot = pop_verify_screenshot(str(thread_id)) if thread_id else None
+            if not shot or not shot.get("base64"):
+                return request
+            mime = shot.get("mime", "image/png")
+            content = [
+                {
+                    "type": "text",
+                    "text": (
+                        "Screenshot of your build's current rendered state (from the latest "
+                        "verification). Use it to catch VISUAL problems — blank page, broken "
+                        "layout, overlapping or invisible elements, wrong render — that console "
+                        "errors alone do not reveal. If it looks wrong, fix it before finishing."
+                    ),
+                },
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{shot['base64']}"}},
+            ]
+            new_messages = [
+                *request.messages,
+                HumanMessage(content=content, additional_kwargs={"hide_from_ui": True}, name="verify_screenshot"),
+            ]
+            return request.override(messages=new_messages)
+        except Exception:
+            logger.debug("verify screenshot inject skipped", exc_info=True)
+            return request
+
+    @override
+    def wrap_model_call(self, request: ModelRequest, handler) -> ModelCallResult:
+        return handler(self._inject_verify_screenshot(request))
+
+    @override
+    async def awrap_model_call(self, request: ModelRequest, handler) -> ModelCallResult:
+        return await handler(self._inject_verify_screenshot(request))

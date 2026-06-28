@@ -463,6 +463,7 @@ You: "Deploying to staging..." [proceed]
 - For PDF, PPT, Excel, and Word files, converted Markdown versions (*.md) are available alongside originals
 - All temporary work happens in `/mnt/user-data/workspace`
 - Treat `/mnt/user-data/workspace` as your default current working directory for coding and file-editing tasks
+- A `CHANGELOG.md` is auto-maintained in the workspace from your own tool activity — it is the source of truth for what you have built so far in this thread. A summary is also surfaced to you each turn; use it to stay consistent and avoid redoing finished work.
 - When writing scripts or commands that create/read files from the workspace, prefer relative paths such as `hello.txt`, `../uploads/data.csv`, and `../outputs/report.md`
 - Avoid hardcoding `/mnt/user-data/...` inside generated scripts when a relative path from the workspace is enough
 - Final deliverables must be copied to `/mnt/user-data/outputs` and presented using `present_files` tool

@@ -121,11 +121,42 @@ class ReflectFixBudgetMiddleware(AgentMiddleware[AgentState]):
                 return m
         return None
 
-    def _on_issues(self, runtime: Runtime) -> tuple[str | None, int]:
-        """Increment budget; return (warning_or_none, new_count).
+    @staticmethod
+    def _parse_dev_verify_issues(content: str) -> str:
+        """Extract the concrete failing lines from a dev_verify markdown report.
 
-        warning_or_none is non-None iff the budget was hit and a forced
-        HumanMessage should be queued for the next wrap_model_call.
+        Generic by construction — keys off failure MARKERS only (✗, 🔴, error,
+        fail, render/console/unreachable/blank route statuses), with zero project
+        or framework knowledge. Bounded so the injected directive stays small.
+        """
+        if not isinstance(content, str):
+            return ""
+        markers = (
+            "✗", "🔴", "error", "fail", "[render_error]", "[console_errors]",
+            "[unreachable]", "[blank]",
+        )
+        out: list[str] = []
+        for raw in content.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("# "):
+                continue
+            low = line.lower()
+            if any(m in low for m in markers):
+                out.append(line if line.startswith(("-", "*")) else f"- {line}")
+            if len(out) >= 15:
+                break
+        return "\n".join(out)
+
+    def _on_issues(self, runtime: Runtime, content: str = "") -> tuple[str | None, int]:
+        """Increment budget; queue a forced HumanMessage for the next model call.
+
+        Drive-to-green (bounded):
+        - **Under budget**: queue a DRIVE directive quoting the concrete failing
+          items so the agent fixes exactly those and re-verifies. (Previously this
+          was silent — the agent was merely *asked* to iterate by the prompt.)
+        - **At/over budget**: queue a STOP directive forcing an honest final answer.
+
+        Always returns the queued directive + the new count.
         """
         keys = self._keys(runtime)
         with self._lock:
@@ -141,7 +172,17 @@ class ReflectFixBudgetMiddleware(AgentMiddleware[AgentState]):
                 )
                 self._pending_warnings.setdefault(keys, []).append(warning)
                 return warning, count
-            return None, count
+            directive = (
+                f"[VERIFY FAILED — FIX REQUIRED] dev_verify returned ISSUES "
+                f"(attempt {count} of {self.budget}). Fix exactly the items below, then "
+                f"call dev_verify again. Do NOT present final results or tell the user "
+                f"you are done until dev_verify returns PASS."
+            )
+            issues = self._parse_dev_verify_issues(content)
+            if issues:
+                directive += "\nFailing items:\n" + issues
+            self._pending_warnings.setdefault(keys, []).append(directive)
+            return directive, count
 
     @override
     def after_model(self, state: AgentState, runtime: Runtime) -> dict | None:
@@ -163,7 +204,7 @@ class ReflectFixBudgetMiddleware(AgentMiddleware[AgentState]):
                     self._consecutive_issues.pop(self._keys(runtime), None)
                 return None
             if verdict == "issues":
-                self._on_issues(runtime)
+                self._on_issues(runtime, getattr(last_tool, "content", "") or "")
             # verdict == "error" or None → ignore
         except Exception:  # noqa: BLE001 — middleware is non-fatal
             logger.debug("ReflectFixBudgetMiddleware: after_model failed", exc_info=True)
