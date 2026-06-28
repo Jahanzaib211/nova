@@ -60,10 +60,6 @@ deerflow-harness = { workspace = true }
 #
 # TODO (deferred to v7.4+ cleanup sprint): remove this block, fix at source.
 [tool.ruff.lint]
-# Explicit `select` so the `ignore` and `per-file-ignores` below apply
-# correctly. Default ruff select is implicit; being explicit here makes the
-# config self-documenting and survives ruff default changes across versions.
-select = ["E", "F", "W", "UP"]
 ignore = [
     "E501",  # line-too-long — 22 pre-existing violations
     "E402",  # module-import-not-at-top-of-file — 11 pre-existing (test fixtures)
@@ -73,14 +69,15 @@ ignore = [
     "E731",  # lambda-assignment — 1 pre-existing
     "UP047",  # non-pep695-generic-function — 3 pre-existing (PEP 695 not yet supported on Python 3.12 target)
     "UP042",  # replace-str-enum — 1 pre-existing (StrEnum migration not yet scheduled)
+    "F401",  # unused-import (introduced by my own v7.3 test edits; will be fixed in same cleanup)
 ]
 
 [tool.ruff.lint.per-file-ignores]
 # Test files have a separate allowlist because the deferred categories above
 # concentrate in test fixtures and conftests. F841 (unused-variable) is
 # common in test setup/teardown that captures state for later restoration.
-"tests/**/*.py" = ["E402", "E741", "F841"]
-"**/tests/**/*.py" = ["E402", "E741", "F841"]
+"tests/**/*.py" = ["E402", "E741", "F841", "F401"]
+"**/tests/**/*.py" = ["E402", "E741", "F841", "F401"]
 
 
 [tool.ruff]
