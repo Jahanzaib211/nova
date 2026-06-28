@@ -80,7 +80,8 @@ services:
       - frontend
       - gateway
     networks:
-      - deer-flow-dev
+      deer-flow-dev:
+        ipv4_address: 192.168.200.2
     restart: unless-stopped
 
   # Frontend - Next.js Development Server
@@ -121,7 +122,8 @@ services:
     env_file:
       - ../frontend/.env
     networks:
-      - deer-flow-dev
+      deer-flow-dev:
+        ipv4_address: 192.168.200.4
     restart: unless-stopped
 
   # Backend - Gateway API
