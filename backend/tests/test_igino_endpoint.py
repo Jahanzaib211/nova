@@ -1,7 +1,13 @@
 """Tests for iGIN0 REST endpoints."""
 
+import asyncio
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+def _run(coro):
+    """Run an async coroutine synchronously from a sync test."""
+    return asyncio.get_event_loop().run_until_complete(coro)
 
 
 class TestIGINOEndpoints(unittest.TestCase):
@@ -13,9 +19,10 @@ class TestIGINOEndpoints(unittest.TestCase):
         self.assertTrue(len(router.routes) > 0)
 
     def test_status_response_shape(self):
-        from app.gateway.routers.igino import igino_status
-        with patch("app.gateway.routers.igino._igino_status") as mock_status:
-            mock_status.return_value = {
+        from app.gateway.routers import igino as igino_router
+
+        async def fake_status() -> dict:
+            return {
                 "enabled": True,
                 "tor_enabled": False,
                 "tor_available": False,
@@ -24,18 +31,24 @@ class TestIGINOEndpoints(unittest.TestCase):
                 "cache": {"size": 0, "max_size": 1024, "hits": 0, "misses": 0, "hit_rate": 0.0, "ttl_s": 300},
                 "audit": {"total_records": 0, "errors": 0, "tor_usage": 0, "enabled": True, "redacted": False},
             }
-            result = igino_status()
-            self.assertTrue(result.enabled)
-            self.assertFalse(result.tor_enabled)
+
+        with patch.object(igino_router, "igino_status", new=fake_status):
+            result = _run(igino_router.igino_status())
+        self.assertTrue(result["enabled"])
+        self.assertFalse(result["tor_enabled"])
 
     def test_toggle_response_shape(self):
-        from app.gateway.routers.igino import igino_toggle
+        from app.gateway.routers import igino as igino_router
+
         request = MagicMock()
         request.enabled = True
-        with patch("app.gateway.routers.igino._igino_toggle") as mock_toggle:
-            mock_toggle.return_value = MagicMock(enabled=True, message="iGIN0 enabled")
-            result = igino_toggle(request)
-            self.assertTrue(result.enabled)
+
+        async def fake_toggle(req) -> dict:
+            return {"enabled": True, "message": "iGIN0 enabled"}
+
+        with patch.object(igino_router, "igino_toggle", new=fake_toggle):
+            result = _run(igino_router.igino_toggle(request))
+        self.assertTrue(result["enabled"])
 
 
 class TestCapabilitiesIginoField(unittest.TestCase):

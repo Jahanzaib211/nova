@@ -135,3 +135,15 @@ async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_opt
         return {"records": trail.get_records(limit=limit), "stats": trail.get_stats()}
     except Exception as exc:
         return {"error": str(exc), "records": [], "stats": {}}
+
+
+# v7.3 (Nova rebrand): backward-compat aliases for tests that imported the
+# pre-rename function names. The functions were renamed to `get_status` /
+# `toggle_privacy` during security hardening (fd2eb27); tests still expect
+# the original module-level names (both `igino_status` and the mock target
+# `_igino_status`). Aliases keep both call sites working without renaming
+# the routes or rewriting the tests.
+igino_status = get_status
+igino_toggle = toggle_privacy
+_igino_status = get_status
+_igino_toggle = toggle_privacy
