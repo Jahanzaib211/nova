@@ -23,7 +23,7 @@ export function CommunitySection() {
       <div className="flex justify-center">
         <Button className="text-xl" size="lg" asChild>
           <Link
-            href="https://github.com/bytedance/deer-flow"
+            href="https://github.com/Jahanzaib211/nova"
             target="_blank"
             rel="noopener noreferrer"
           >

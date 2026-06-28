@@ -711,7 +711,7 @@ export default function ProgressiveSkillsAnimation() {
           {/* Chat Input (decorative) */}
           <div className="border-t border-zinc-800 p-4">
             <div className="rounded-xl bg-zinc-800 px-4 py-3 text-sm text-zinc-500">
-              Ask DeerFlow anything...
+              Ask Nova anything...
             </div>
           </div>
         </div>

@@ -17,7 +17,7 @@ export function SandboxSection({ className }: { className?: string }) {
       title={t.landing.sandbox.title}
       subtitle={
         <p>
-          We give DeerFlow a &quot;computer&quot;, which can execute commands,
+          We give Nova a &quot;computer&quot;, which can execute commands,
           manage files, and run long tasks — all in a secure Docker-based
           sandbox
         </p>

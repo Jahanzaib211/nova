@@ -31,7 +31,7 @@ export function Hero({ className }: { className?: string }) {
         />
       </div>
       <FlickeringGrid
-        className="absolute inset-0 z-0 translate-y-8 mask-[url(/images/deer.svg)] mask-size-[100vw] mask-center mask-no-repeat md:mask-size-[72vh]"
+        className="absolute inset-0 z-0 translate-y-8"
         squareSize={4}
         gridGap={4}
         color={"white"}
@@ -57,7 +57,7 @@ export function Hero({ className }: { className?: string }) {
               "Learn Anything",
             ]}
           />{" "}
-          <div>with DeerFlow</div>
+          <div>with Nova</div>
         </h1>
         {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY && (
           <a
