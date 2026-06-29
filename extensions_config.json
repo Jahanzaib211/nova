@@ -63,7 +63,7 @@
     },
     "nova-sandbox-debug": {
       "name": "nova-sandbox-debug",
-      "description": "Debug a Nova sandbox failure (Local vs AIO) — which provider is active, why browser_check / dev_verify / save_skill are skipping, and how to flip providers.",
+      "description": "Debug a Nova sandbox failure (Local vs AIO) \u2014 which provider is active, why browser_check / dev_verify / save_skill are skipping, and how to flip providers.",
       "enabled": true
     },
     "nova-deploy-local": {
@@ -94,6 +94,9 @@
     "domain-modeling": {
       "name": "domain-modeling",
       "description": "Actively build and sharpen the project's domain model. Use when terminology is fuzzy. (From mattpocock/skills)",
+      "enabled": true
+    },
+    "nova-agent": {
       "enabled": true
     }
   }
