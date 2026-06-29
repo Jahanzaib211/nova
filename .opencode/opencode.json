@@ -1,0 +1,74 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "github": {
+      "type": "local",
+      "command": ["npx", "-y", "@github/github-mcp-server"],
+      "enabled": true,
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp"],
+      "enabled": true
+    },
+    "fetch": {
+      "type": "local",
+      "command": ["uvx", "mcp-server-fetch"],
+      "enabled": true
+    }
+  },
+  "skills": {
+    "paths": [".opencode/skill", ".agent/skills", "/home/jahanzaib/.claude/skills/mattpocock/skills"]
+  },
+  "references": {
+    "backend-docs": {
+      "path": "backend/docs",
+      "description": "Nova backend architecture, configuration, and operational docs"
+    },
+    "frontend-src": {
+      "path": "frontend/src",
+      "description": "Nova frontend source (Next.js 16 App Router)"
+    },
+    "sandbox-spec": {
+      "path": "backend/packages/harness/deerflow/sandbox",
+      "description": "Sandbox runtime — AIO + Local providers, browser_check, dev_server"
+    },
+    "replay-fixtures": {
+      "path": "backend/tests/fixtures/replay",
+      "description": "Replayed SSE event shapes for the front-back contract test"
+    },
+    "middleware-table": {
+      "path": "backend/packages/harness/deerflow/agents/middlewares",
+      "description": "All LangChain middlewares; each file is one hook in the agent loop"
+    },
+    "mattpocock-skills": {
+      "path": "/home/jahanzaib/.claude/skills/mattpocock/skills",
+      "description": "Matt Pocock's workflow + discipline skills (grill-me, tdd, diagnosing-bugs, etc.)"
+    }
+  },
+  "instructions": [
+    "AGENTS.md",
+    "backend/AGENTS.md",
+    "NOVA_CHANGELOG.md"
+  ],
+  "permission": {
+    "bash": {
+      "git status": "allow",
+      "git diff": "allow",
+      "git log": "allow",
+      "gh *": "allow",
+      "uv *": "allow",
+      "uvx *": "allow",
+      "pnpm *": "allow",
+      "pnpx *": "allow",
+      "docker *": "allow",
+      "kubectl *": "ask",
+      "rm -rf *": "deny",
+      "sudo *": "deny",
+      "*": "ask"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+---
+description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. Wraps the mattpocock/improve-codebase-architecture skill.
+agent: plan
+---
+
+/improve-codebase-architecture
