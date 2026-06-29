@@ -79,6 +79,22 @@ class LocalSkillStorage(SkillStorage):
                     continue
                 yield category, category_path, Path(current_root) / SKILL_MD_FILE
 
+        # v7.4-d2: also walk external Matt Pocock skill paths
+        # (Jahanzaib211/skills fork, cloned to ~/.claude/skills/mattpocock).
+        # These are surfaced as SkillCategory.PUBLIC (read-only to Nova)
+        # so the agent can auto-reach them via extensions_config.json.
+        mattpocock_roots = [
+            Path(os.path.expanduser("~/.claude/skills/mattpocock/skills")),
+        ]
+        for mattpocock_root in mattpocock_roots:
+            if not mattpocock_root.exists() or not mattpocock_root.is_dir():
+                continue
+            for current_root, dir_names, file_names in os.walk(mattpocock_root, followlinks=True):
+                dir_names[:] = sorted(name for name in dir_names if not name.startswith("."))
+                if SKILL_MD_FILE not in file_names:
+                    continue
+                yield SkillCategory.PUBLIC, mattpocock_root, Path(current_root) / SKILL_MD_FILE
+
     def read_custom_skill(self, name: str) -> str:
         if not self.custom_skill_exists(name):
             raise FileNotFoundError(f"Custom skill '{name}' not found.")

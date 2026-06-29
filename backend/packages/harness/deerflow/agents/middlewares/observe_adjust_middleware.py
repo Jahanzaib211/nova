@@ -315,6 +315,17 @@ class ObserveAdjustMiddleware(AgentMiddleware):
             todos = (state.get("todos") if hasattr(state, "get") else None) or []
             writer = config.get("writer") if isinstance(config, dict) else None
 
+            # v7.4-d2: emit hook_emit via the run journal (non-fatal, wraps in try/except)
+            self._try_record_hook(
+                config,
+                "observe_adjust",
+                "aafter_tool",
+                "observe",
+                {
+                    "todos_count": len(todos) if todos else 0,
+                },
+            )
+
             if todos:
                 done = 0
                 total = len(todos)
@@ -467,3 +478,28 @@ class ObserveAdjustMiddleware(AgentMiddleware):
 
     async def awrap_model_call(self, request: ModelRequest, handler) -> ModelCallResult:
         return await handler(self._inject_journal(request))
+
+    @staticmethod
+    def _try_record_hook(config: Any, tag: str, hook: str, action: str, changes: dict) -> None:
+        """Write a middleware audit event to the run journal (non-fatal, best-effort).
+
+        Works from tool-lifecycle hooks (aafter_tool/after_tool) where the journal
+        lives at config["configurable"]["__pregel_runtime"].context["__run_journal"].
+        Silently skips when the journal is unavailable (unit tests, subagents,
+        no-event-store paths).
+        """
+        try:
+            runtime = (config.get("configurable") or {}).get("__pregel_runtime") if isinstance(config, dict) else None
+            ctx = getattr(runtime, "context", None) if runtime is not None else None
+            journal = ctx.get("__run_journal") if isinstance(ctx, dict) else None
+            if journal is None:
+                return
+            journal.record_middleware(
+                tag,
+                name="ObserveAdjustMiddleware",
+                hook=hook,
+                action=action,
+                changes=changes,
+            )
+        except Exception:
+            pass

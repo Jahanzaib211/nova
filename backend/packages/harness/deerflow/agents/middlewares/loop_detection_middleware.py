@@ -787,6 +787,20 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
         warnings = self._drain_pending_warnings(request.runtime)
         if not warnings:
             return request
+        # v7.4-d2: journal the loop-warning injection for audit trail
+        try:
+            ctx = getattr(getattr(request, "runtime", None), "context", None)
+            journal = ctx.get("__run_journal") if isinstance(ctx, dict) else None
+            if journal is not None:
+                journal.record_middleware(
+                    "loop_detect",
+                    name="LoopDetectionMiddleware",
+                    hook="wrap_model_call",
+                    action="inject_warning",
+                    changes={"warning_count": len(warnings)},
+                )
+        except Exception:
+            pass
         new_messages = [
             *request.messages,
             HumanMessage(content=self._format_warning_message(warnings), name="loop_warning"),

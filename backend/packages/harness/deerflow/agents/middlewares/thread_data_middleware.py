@@ -118,6 +118,21 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
 
         messages = self._maybe_inject_manifest(messages)
 
+        # v7.4-d2: journal thread-data initialisation for audit trail
+        try:
+            ctx = runtime.context if isinstance(runtime.context, dict) else {}
+            journal = ctx.get("__run_journal")
+            if journal is not None:
+                journal.record_middleware(
+                    "thread_data",
+                    name="ThreadDataMiddleware",
+                    hook="before_agent",
+                    action="init_paths",
+                    changes={"thread_id": thread_id, "lazy": self._lazy_init},
+                )
+        except Exception:
+            pass
+
         return {
             "thread_data": {
                 **paths,

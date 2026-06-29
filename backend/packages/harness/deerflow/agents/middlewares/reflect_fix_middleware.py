@@ -231,6 +231,20 @@ class ReflectFixBudgetMiddleware(AgentMiddleware[AgentState]):
         if not warnings:
             return request
         deduped = list(dict.fromkeys(warnings))
+        # v7.4-d2: journal the directive injection for audit trail
+        try:
+            ctx = getattr(getattr(request, "runtime", None), "context", None)
+            journal = ctx.get("__run_journal") if isinstance(ctx, dict) else None
+            if journal is not None:
+                journal.record_middleware(
+                    "reflect_fix",
+                    name="ReflectFixBudgetMiddleware",
+                    hook="wrap_model_call",
+                    action="inject_directive",
+                    changes={"directive_count": len(deduped)},
+                )
+        except Exception:
+            pass
         new_messages = [
             *request.messages,
             HumanMessage(content="\n\n".join(deduped), name="reflect_budget"),
