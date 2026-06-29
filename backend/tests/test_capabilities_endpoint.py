@@ -9,9 +9,9 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 # v7.3 (Nova rebrand): make this test CI-runnable without config.yaml.
@@ -34,17 +34,20 @@ _HERMETIC_PATCHERS = [
 @pytest.fixture(autouse=True)
 def _hermetic_config():
     """Auto-apply the hermetic config patchers to every test in this module."""
-    with patch(f"{_APP_CONFIG_MODULE}._app_config_path", None), \
-         patch(f"{_APP_CONFIG_MODULE}._app_config", None), \
-         patch(f"{_APP_CONFIG_MODULE}._app_config_mtime", None), \
-         patch(f"{_APP_CONFIG_MODULE}._app_config_signature", None), \
-         patch(f"{_APP_CONFIG_MODULE}._app_config_is_custom", True):
+    with (
+        patch(f"{_APP_CONFIG_MODULE}._app_config_path", None),
+        patch(f"{_APP_CONFIG_MODULE}._app_config", None),
+        patch(f"{_APP_CONFIG_MODULE}._app_config_mtime", None),
+        patch(f"{_APP_CONFIG_MODULE}._app_config_signature", None),
+        patch(f"{_APP_CONFIG_MODULE}._app_config_is_custom", True),
+    ):
         # Import the router AFTER the patchers are in place, so the module
         # imports see a "no config.yaml" world. Using a lazy import inside
         # the fixture is intentional: this avoids the chain that triggers
         # config.yaml disk read at module-import time.
         global cap
         from app.gateway.routers import capabilities as cap  # noqa: E402
+
         yield
 
 
