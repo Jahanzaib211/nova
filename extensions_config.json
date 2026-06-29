@@ -1,0 +1,100 @@
+{
+  "mcpInterceptors": [
+    "my_package.mcp.auth:build_auth_interceptor"
+  ],
+  "mcpServers": {
+    "github": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      },
+      "url": null,
+      "headers": {},
+      "oauth": null,
+      "description": "GitHub MCP server for repository operations (upgraded from deprecated @modelcontextprotocol/server-github)"
+    },
+    "postgres": {
+      "enabled": true,
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://localhost/mydb"
+      ],
+      "env": {},
+      "url": null,
+      "headers": {},
+      "oauth": null,
+      "description": "PostgreSQL database access"
+    }
+  },
+  "skills": {
+    "nova-replay-verify": {
+      "name": "nova-replay-verify",
+      "description": "Verify a Nova change against the existing replay E2E contract. Use when changing any code that touches the agent loop, middlewares, tools, gateway routes, or sandbox behavior.",
+      "enabled": true
+    },
+    "nova-hooks-author": {
+      "name": "nova-hooks-author",
+      "description": "Author or wire a new hook emission in Nova's LangChain agent loop. Use when adding observability for a new tool, when promoting a logged audit event to a structured receipt, or when extending the agent's self-evaluation storage.",
+      "enabled": true
+    },
+    "nova-receipts-author": {
+      "name": "nova-receipts-author",
+      "description": "Author a typed post-run receipt for a new Nova agent run or a new tool. Use when adding observability for an end-to-end workflow, when a tool produces artifacts a judge could re-verify, or when the 'code is the ultimate proof' thesis needs a new structured artifact.",
+      "enabled": true
+    },
+    "nova-subagent-router": {
+      "name": "nova-subagent-router",
+      "description": "Configure per-tool-type model routing in Nova to save 40-60% of LLM tokens. Use when configuring config.yaml to use a cheaper model for browser_check, code_review, system_probe, save_skill while keeping the lead agent on opus.",
+      "enabled": true
+    },
+    "nova-loop-detect": {
+      "name": "nova-loop-detect",
+      "description": "Diagnose and fix a loop-detection firing in Nova's agent run. Use when the agent keeps doing the same thing or after observing a loop in the Activity tab.",
+      "enabled": true
+    },
+    "nova-sandbox-debug": {
+      "name": "nova-sandbox-debug",
+      "description": "Debug a Nova sandbox failure (Local vs AIO) — which provider is active, why browser_check / dev_verify / save_skill are skipping, and how to flip providers.",
+      "enabled": true
+    },
+    "nova-deploy-local": {
+      "name": "nova-deploy-local",
+      "description": "Run Nova locally end-to-end (Docker Compose + PM2 + dev-entrypoint.sh). Use when starting Nova or running make dev for the first time.",
+      "enabled": true
+    },
+    "nova-prompt-author": {
+      "name": "nova-prompt-author",
+      "description": "Edit the lead agent's system prompt with discipline. Use when telling the agent a new rule or before merging any change touching agents/lead_agent/prompt.py.",
+      "enabled": true
+    },
+    "tdd": {
+      "name": "tdd",
+      "description": "Test-driven development with a red-green-refactor loop. Use when building features or fixing bugs. (From mattpocock/skills)",
+      "enabled": true
+    },
+    "diagnosing-bugs": {
+      "name": "diagnosing-bugs",
+      "description": "Disciplined diagnosis loop for hard bugs and performance regressions: reproduce -> minimise -> hypothesise -> instrument -> fix -> regression-test. (From mattpocock/skills)",
+      "enabled": true
+    },
+    "codebase-design": {
+      "name": "codebase-design",
+      "description": "Shared discipline and vocabulary for designing deep modules: a lot of behaviour behind a small interface, placed at a clean seam, testable through that interface. (From mattpocock/skills)",
+      "enabled": true
+    },
+    "domain-modeling": {
+      "name": "domain-modeling",
+      "description": "Actively build and sharpen the project's domain model. Use when terminology is fuzzy. (From mattpocock/skills)",
+      "enabled": true
+    }
+  }
+}
