@@ -7,7 +7,9 @@ import requests
 MINIMAX_DEFAULT_HOST = "https://api.minimaxi.com"
 
 
-def _resolve_provider(override_env: str, existing_provider: str, has_existing_creds: bool) -> str:
+def _resolve_provider(
+    override_env: str, existing_provider: str, has_existing_creds: bool
+) -> str:
     """Pick the provider: <SKILL>_PROVIDER override > existing creds > MiniMax fallback."""
     override = os.getenv(override_env)
     if override:
@@ -36,7 +38,9 @@ def _ensure_output_dir(output_file: str) -> None:
 def _check_base_resp(payload: dict) -> None:
     base = payload.get("base_resp") or {}
     if base.get("status_code", 0) != 0:
-        raise Exception(f"MiniMax error {base.get('status_code')}: {base.get('status_msg')}")
+        raise Exception(
+            f"MiniMax error {base.get('status_code')}: {base.get('status_msg')}"
+        )
 
 
 def _guess_mime(image_path: str) -> str:
@@ -56,8 +60,9 @@ def _to_data_url(image_path: str) -> str:
     return f"data:{_guess_mime(image_path)};base64,{b64}"
 
 
-def _poll_video_task(host: str, auth: str, task_id: str,
-                     max_attempts: int = 120, interval: int = 3) -> str:
+def _poll_video_task(
+    host: str, auth: str, task_id: str, max_attempts: int = 120, interval: int = 3
+) -> str:
     for _ in range(max_attempts):
         response = requests.get(
             f"{host}/v1/query/video_generation",
@@ -80,7 +85,9 @@ def _poll_video_task(host: str, auth: str, task_id: str,
         # base_resp without a terminal status, then keep polling.
         _check_base_resp(payload)
         time.sleep(interval)
-    raise Exception(f"MiniMax video task {task_id} timed out after {max_attempts} polls")
+    raise Exception(
+        f"MiniMax video task {task_id} timed out after {max_attempts} polls"
+    )
 
 
 def _retrieve_file_url(host: str, auth: str, file_id: str) -> str:
@@ -112,7 +119,10 @@ def _generate_video_minimax(
         return "MINIMAX_API_KEY is not set"
     host = _minimax_host()
     auth = f"Bearer {api_key}"
-    body = {"model": os.getenv("MINIMAX_VIDEO_MODEL", "MiniMax-Hailuo-2.3"), "prompt": prompt}
+    body = {
+        "model": os.getenv("MINIMAX_VIDEO_MODEL", "MiniMax-Hailuo-2.3"),
+        "prompt": prompt,
+    }
     if reference_images:
         body["first_frame_image"] = _to_data_url(reference_images[0])
     response = requests.post(
@@ -151,8 +161,10 @@ def _generate_video_gemini(
         with open(reference_image, "rb") as f:
             image_b64 = base64.b64encode(f.read()).decode("utf-8")
         reference_payload.append(
-            {"image": {"mimeType": "image/jpeg", "bytesBase64Encoded": image_b64},
-             "referenceType": "asset"}
+            {
+                "image": {"mimeType": "image/jpeg", "bytesBase64Encoded": image_b64},
+                "referenceType": "asset",
+            }
         )
     if reference_payload:
         request_json["instances"][0]["referenceImages"] = reference_payload
@@ -200,23 +212,45 @@ def generate_video(
         return _generate_video_minimax(prompt, reference_images, output_file)
     if provider in ("gemini", "google"):
         return _generate_video_gemini(prompt, reference_images, output_file)
-    raise ValueError(f"Unknown video provider: {provider!r} (use 'gemini' or 'minimax')")
+    raise ValueError(
+        f"Unknown video provider: {provider!r} (use 'gemini' or 'minimax')"
+    )
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate videos using Gemini or MiniMax API")
-    parser.add_argument("--prompt-file", required=True, help="Absolute path to JSON prompt file")
-    parser.add_argument("--reference-images", nargs="*", default=[],
-                        help="Absolute paths to reference images (space-separated)")
-    parser.add_argument("--output-file", required=True, help="Output path for generated video")
-    parser.add_argument("--aspect-ratio", required=False, default="16:9",
-                        help="Aspect ratio of the generated video (Gemini only)")
+    parser = argparse.ArgumentParser(
+        description="Generate videos using Gemini or MiniMax API"
+    )
+    parser.add_argument(
+        "--prompt-file", required=True, help="Absolute path to JSON prompt file"
+    )
+    parser.add_argument(
+        "--reference-images",
+        nargs="*",
+        default=[],
+        help="Absolute paths to reference images (space-separated)",
+    )
+    parser.add_argument(
+        "--output-file", required=True, help="Output path for generated video"
+    )
+    parser.add_argument(
+        "--aspect-ratio",
+        required=False,
+        default="16:9",
+        help="Aspect ratio of the generated video (Gemini only)",
+    )
     args = parser.parse_args()
 
     try:
-        print(generate_video(args.prompt_file, args.reference_images,
-                             args.output_file, args.aspect_ratio))
+        print(
+            generate_video(
+                args.prompt_file,
+                args.reference_images,
+                args.output_file,
+                args.aspect_ratio,
+            )
+        )
     except Exception as e:
         print(f"Error while generating video: {e}")

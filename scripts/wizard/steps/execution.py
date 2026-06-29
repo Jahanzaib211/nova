@@ -20,7 +20,9 @@ class ExecutionStepResult:
 
 def run_execution_step(step_label: str = "Step 3/4") -> ExecutionStepResult:
     print_header(f"{step_label} · Execution & Safety")
-    print_info("Choose how much execution power DeerFlow should have in this workspace.")
+    print_info(
+        "Choose how much execution power DeerFlow should have in this workspace."
+    )
 
     options = [
         "Local sandbox  —  fastest, uses host filesystem paths",
@@ -34,9 +36,13 @@ def run_execution_step(step_label: str = "Step 3/4") -> ExecutionStepResult:
         print_warning(
             "Local sandbox is convenient but not a secure shell isolation boundary."
         )
-        print_info("Keep host bash disabled unless this is a fully trusted local workflow.")
+        print_info(
+            "Keep host bash disabled unless this is a fully trusted local workflow."
+        )
     else:
-        print_info("Container sandbox isolates shell execution better than host-local mode.")
+        print_info(
+            "Container sandbox isolates shell execution better than host-local mode."
+        )
 
     include_bash_tool = ask_yes_no("Enable bash command execution?", default=False)
     include_write_tools = ask_yes_no(

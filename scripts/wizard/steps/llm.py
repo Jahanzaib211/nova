@@ -36,7 +36,9 @@ def run_llm_step(step_label: str = "Step 1/3") -> LLMStepResult:
     if len(provider.models) > 1:
         print_info(f"Available models for {provider.display_name}:")
         default_model_idx = provider.models.index(provider.default_model)
-        model_idx = ask_choice("Select model", provider.models, default=default_model_idx)
+        model_idx = ask_choice(
+            "Select model", provider.models, default=default_model_idx
+        )
         model_name = provider.models[model_idx]
     else:
         model_name = provider.models[0]
@@ -48,7 +50,9 @@ def run_llm_step(step_label: str = "Step 1/3") -> LLMStepResult:
 
     if provider.base_url_prompt:
         print_header(f"{step_label} · Connection details")
-        base_url = ask_text(provider.base_url_prompt, default=base_url or "", required=True)
+        base_url = ask_text(
+            provider.base_url_prompt, default=base_url or "", required=True
+        )
         if provider.model_prompt:
             model_name = ask_text(provider.model_prompt, default=model_name)
 

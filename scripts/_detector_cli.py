@@ -20,7 +20,9 @@ TEST_SUPPORT_PATH = Path(__file__).resolve().parents[1] / "backend" / "tests"
 def run_detector(module_name: str, argv: Sequence[str] | None = None) -> int:
     """Import a `support.detectors.*` module and run its `main(argv)`."""
     if not TEST_SUPPORT_PATH.is_dir():
-        raise RuntimeError(f"detector support path not found: {TEST_SUPPORT_PATH}; the scripts/ directory has moved relative to backend/tests")
+        raise RuntimeError(
+            f"detector support path not found: {TEST_SUPPORT_PATH}; the scripts/ directory has moved relative to backend/tests"
+        )
     if str(TEST_SUPPORT_PATH) not in sys.path:
         sys.path.insert(0, str(TEST_SUPPORT_PATH))
     module = importlib.import_module(module_name)

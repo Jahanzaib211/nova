@@ -76,9 +76,13 @@ except ImportError:
             timeout: int = DEFAULT_TIMEOUT_SECONDS,
         ) -> _UrllibResponse:
             if params:
-                query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote_plus)
+                query = urllib.parse.urlencode(
+                    params, quote_via=urllib.parse.quote_plus
+                )
                 url = f"{url}?{query}"
-            req = urllib.request.Request(url, headers={"User-Agent": "deerflow-slr-skill/0.1"})
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "deerflow-slr-skill/0.1"}
+            )
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     return _UrllibResponse(resp.read(), resp.status)
@@ -153,10 +157,17 @@ def _parse_entry(entry: Any) -> dict:
     raw_id = _text("atom:id")
     arxiv_id = _normalise_arxiv_id(raw_id)
 
-    authors = [(a.findtext("atom:name", default="", namespaces=NS_MAP) or "").strip() for a in entry.findall("atom:author", NS_MAP)]
+    authors = [
+        (a.findtext("atom:name", default="", namespaces=NS_MAP) or "").strip()
+        for a in entry.findall("atom:author", NS_MAP)
+    ]
     authors = [a for a in authors if a]
 
-    categories = [c.get("term", "") for c in entry.findall("atom:category", NS_MAP) if c.get("term")]
+    categories = [
+        c.get("term", "")
+        for c in entry.findall("atom:category", NS_MAP)
+        if c.get("term")
+    ]
 
     pdf_url = ""
     abs_url = raw_id  # default

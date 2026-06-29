@@ -231,7 +231,9 @@ def detect_from_config(path: Path) -> list[str]:
         extras.add("postgres")
     if (section_value(lines, "checkpointer", "type") or "").lower() == "postgres":
         extras.add("postgres")
-    if (nested_section_value(lines, "channels.discord", "enabled") or "").lower() == "true":
+    if (
+        nested_section_value(lines, "channels.discord", "enabled") or ""
+    ).lower() == "true":
         extras.add("discord")
     return sorted(extras)
 

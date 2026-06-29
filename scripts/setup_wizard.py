@@ -51,10 +51,14 @@ def main() -> int:
         if config_path.exists():
             print(yellow("Existing configuration detected."))
             print()
-            should_reconfigure = ask_yes_no("Do you want to reconfigure?", default=False)
+            should_reconfigure = ask_yes_no(
+                "Do you want to reconfigure?", default=False
+            )
             if not should_reconfigure:
                 print()
-                print_info("Keeping existing config. Run 'make doctor' to verify your setup.")
+                print_info(
+                    "Keeping existing config. Run 'make doctor' to verify your setup."
+                )
                 return 0
             print()
 
@@ -92,11 +96,19 @@ def main() -> int:
             extra_model_config=llm.provider.extra_config_for(llm.model_name) or None,
             base_url=llm.base_url,
             search_use=search_provider.use if search_provider else None,
-            search_tool_name=search_provider.tool_name if search_provider else "web_search",
-            search_extra_config=search_provider.extra_config if search_provider else None,
+            search_tool_name=search_provider.tool_name
+            if search_provider
+            else "web_search",
+            search_extra_config=search_provider.extra_config
+            if search_provider
+            else None,
             web_fetch_use=fetch_provider.use if fetch_provider else None,
-            web_fetch_tool_name=fetch_provider.tool_name if fetch_provider else "web_fetch",
-            web_fetch_extra_config=fetch_provider.extra_config if fetch_provider else None,
+            web_fetch_tool_name=fetch_provider.tool_name
+            if fetch_provider
+            else "web_fetch",
+            web_fetch_extra_config=fetch_provider.extra_config
+            if fetch_provider
+            else None,
             sandbox_use=execution.sandbox_use,
             allow_host_bash=execution.allow_host_bash,
             include_bash_tool=execution.include_bash_tool,
@@ -109,6 +121,7 @@ def main() -> int:
             env_example = project_root / ".env.example"
             if env_example.exists():
                 import shutil
+
                 shutil.copyfile(env_example, env_path)
 
         env_pairs: dict[str, str] = {}
@@ -127,11 +140,14 @@ def main() -> int:
         frontend_env_example = project_root / "frontend" / ".env.example"
         if not frontend_env.exists() and frontend_env_example.exists():
             import shutil
+
             shutil.copyfile(frontend_env_example, frontend_env)
             print_success("frontend/.env created from example")
 
         print_header("Setup complete!")
-        print(f"  {green('✓')} LLM:        {llm.provider.display_name} / {llm.model_name}")
+        print(
+            f"  {green('✓')} LLM:        {llm.provider.display_name} / {llm.model_name}"
+        )
         if search_provider:
             print(f"  {green('✓')} Web search: {search_provider.display_name}")
         else:
@@ -140,7 +156,11 @@ def main() -> int:
             print(f"  {green('✓')} Web fetch:  {fetch_provider.display_name}")
         else:
             print(f"  {'—':>3} Web fetch:  not configured")
-        sandbox_label = "Local sandbox" if execution.sandbox_use.endswith("LocalSandboxProvider") else "Container sandbox"
+        sandbox_label = (
+            "Local sandbox"
+            if execution.sandbox_use.endswith("LocalSandboxProvider")
+            else "Container sandbox"
+        )
         print(f"  {green('✓')} Execution:  {sandbox_label}")
         if execution.include_bash_tool:
             bash_label = "enabled"
@@ -154,7 +174,9 @@ def main() -> int:
         else:
             print(f"  {'—':>3} File write: disabled")
         if channels.enabled_providers:
-            print(f"  {green('✓')} IM channels: {', '.join(channels.enabled_providers)}")
+            print(
+                f"  {green('✓')} IM channels: {', '.join(channels.enabled_providers)}"
+            )
         else:
             print(f"  {'—':>3} IM channels: disabled")
         print()

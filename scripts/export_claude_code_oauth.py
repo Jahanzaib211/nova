@@ -35,7 +35,9 @@ def default_service_name() -> str:
     service = f"Claude Code{claude_code_oauth_file_suffix()}-credentials"
     config_dir = os.getenv("CLAUDE_CONFIG_DIR")
     if config_dir:
-        config_hash = sha256(str(Path(config_dir).expanduser()).encode()).hexdigest()[:8]
+        config_hash = sha256(str(Path(config_dir).expanduser()).encode()).hexdigest()[
+            :8
+        ]
         service = f"{service}-{config_hash}"
     return service
 
@@ -60,7 +62,9 @@ def load_keychain_container(service: str, account: str) -> dict[str, Any]:
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip() or "unknown Keychain error"
-        raise RuntimeError(f"Keychain lookup failed for service={service!r} account={account!r}: {stderr}")
+        raise RuntimeError(
+            f"Keychain lookup failed for service={service!r} account={account!r}: {stderr}"
+        )
 
     secret = (result.stdout or "").strip()
     if not secret:
@@ -69,18 +73,24 @@ def load_keychain_container(service: str, account: str) -> dict[str, Any]:
     try:
         data = json.loads(secret)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("Claude Code Keychain item did not contain valid JSON.") from exc
+        raise RuntimeError(
+            "Claude Code Keychain item did not contain valid JSON."
+        ) from exc
 
     access_token = data.get("claudeAiOauth", {}).get("accessToken", "")
     if not access_token:
-        raise RuntimeError("Claude Code Keychain item did not contain claudeAiOauth.accessToken.")
+        raise RuntimeError(
+            "Claude Code Keychain item did not contain claudeAiOauth.accessToken."
+        )
 
     return data
 
 
 def write_credentials_file(output_path: Path, data: dict[str, Any]) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(prefix=f"{output_path.name}.", suffix=".tmp", dir=output_path.parent)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f"{output_path.name}.", suffix=".tmp", dir=output_path.parent
+    )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(json.dumps(data, indent=2) + "\n")
@@ -136,7 +146,10 @@ def main() -> int:
 
     if not any([args.print_token, args.print_export, args.write_credentials]):
         if not args.show_target:
-            print("No export action selected. Use --show-target, --print-export, --print-token, or --write-credentials.", file=sys.stderr)
+            print(
+                "No export action selected. Use --show-target, --print-export, --print-token, or --write-credentials.",
+                file=sys.stderr,
+            )
             return 2
         return 0
 

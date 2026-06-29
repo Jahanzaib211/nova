@@ -278,7 +278,9 @@ def _build_volumes(thread_id: str) -> list[k8s_client.V1Volume]:
     return [skills_vol, userdata_vol]
 
 
-def _build_volume_mounts(thread_id: str, user_id: str = DEFAULT_USER_ID) -> list[k8s_client.V1VolumeMount]:
+def _build_volume_mounts(
+    thread_id: str, user_id: str = DEFAULT_USER_ID
+) -> list[k8s_client.V1VolumeMount]:
     """Build volume mount list, using subPath for PVC user-data."""
     userdata_mount = k8s_client.V1VolumeMount(
         name="user-data",
@@ -286,7 +288,9 @@ def _build_volume_mounts(thread_id: str, user_id: str = DEFAULT_USER_ID) -> list
         read_only=False,
     )
     if USERDATA_PVC_NAME:
-        userdata_mount.sub_path = f"deer-flow/users/{user_id}/threads/{thread_id}/user-data"
+        userdata_mount.sub_path = (
+            f"deer-flow/users/{user_id}/threads/{thread_id}/user-data"
+        )
 
     return [
         k8s_client.V1VolumeMount(
@@ -298,7 +302,9 @@ def _build_volume_mounts(thread_id: str, user_id: str = DEFAULT_USER_ID) -> list
     ]
 
 
-def _build_pod(sandbox_id: str, thread_id: str, user_id: str = DEFAULT_USER_ID) -> k8s_client.V1Pod:
+def _build_pod(
+    sandbox_id: str, thread_id: str, user_id: str = DEFAULT_USER_ID
+) -> k8s_client.V1Pod:
     """Construct a Pod manifest for a single sandbox."""
     return k8s_client.V1Pod(
         metadata=k8s_client.V1ObjectMeta(
@@ -459,7 +465,9 @@ async def create_sandbox(req: CreateSandboxRequest):
 
     # ── Create Pod ───────────────────────────────────────────────────
     try:
-        core_v1.create_namespaced_pod(K8S_NAMESPACE, _build_pod(sandbox_id, thread_id, user_id=user_id))
+        core_v1.create_namespaced_pod(
+            K8S_NAMESPACE, _build_pod(sandbox_id, thread_id, user_id=user_id)
+        )
         logger.info(f"Created Pod {_pod_name(sandbox_id)}")
     except ApiException as exc:
         if exc.status != 409:  # 409 = AlreadyExists

@@ -200,7 +200,9 @@ def check_nginx() -> CheckResult:
     return CheckResult(
         "nginx",
         "fail",
-        fix=("macOS:   brew install nginx\nUbuntu:  sudo apt install nginx\nWindows: use WSL or Docker mode"),
+        fix=(
+            "macOS:   brew install nginx\nUbuntu:  sudo apt install nginx\nWindows: use WSL or Docker mode"
+        ),
     )
 
 
@@ -229,7 +231,9 @@ def check_config_version(config_path: Path, project_root: Path) -> CheckResult:
 
     example_path = project_root / "config.example.yaml"
     if not example_path.exists():
-        return CheckResult("config.yaml version", "skip", "config.example.yaml not found")
+        return CheckResult(
+            "config.yaml version", "skip", "config.example.yaml not found"
+        )
 
     try:
         import yaml
@@ -388,9 +392,17 @@ def check_llm_auth(config_path: Path) -> list[CheckResult]:
             model_name = model.get("name", "default")
 
             if use == "deerflow.models.openai_codex_provider:CodexChatModel":
-                auth_path = Path(os.environ.get("CODEX_AUTH_PATH", "~/.codex/auth.json")).expanduser()
+                auth_path = Path(
+                    os.environ.get("CODEX_AUTH_PATH", "~/.codex/auth.json")
+                ).expanduser()
                 if auth_path.exists():
-                    results.append(CheckResult(f"Codex CLI auth available (model: {model_name})", "ok", str(auth_path)))
+                    results.append(
+                        CheckResult(
+                            f"Codex CLI auth available (model: {model_name})",
+                            "ok",
+                            str(auth_path),
+                        )
+                    )
                 else:
                     results.append(
                         CheckResult(
@@ -402,8 +414,14 @@ def check_llm_auth(config_path: Path) -> list[CheckResult]:
                     )
 
             if use == "deerflow.models.claude_provider:ClaudeChatModel":
-                credential_paths = [Path(os.environ["CLAUDE_CODE_CREDENTIALS_PATH"]).expanduser() for env_name in ("CLAUDE_CODE_CREDENTIALS_PATH",) if os.environ.get(env_name)]
-                credential_paths.append(Path("~/.claude/.credentials.json").expanduser())
+                credential_paths = [
+                    Path(os.environ["CLAUDE_CODE_CREDENTIALS_PATH"]).expanduser()
+                    for env_name in ("CLAUDE_CODE_CREDENTIALS_PATH",)
+                    if os.environ.get(env_name)
+                ]
+                credential_paths.append(
+                    Path("~/.claude/.credentials.json").expanduser()
+                )
                 has_oauth_env = any(
                     os.environ.get(name)
                     for name in (
@@ -413,16 +431,24 @@ def check_llm_auth(config_path: Path) -> list[CheckResult]:
                         "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
                     )
                 )
-                existing_path = next((path for path in credential_paths if path.exists()), None)
+                existing_path = next(
+                    (path for path in credential_paths if path.exists()), None
+                )
                 if has_oauth_env or existing_path is not None:
                     detail = "env var set" if has_oauth_env else str(existing_path)
-                    results.append(CheckResult(f"Claude auth available (model: {model_name})", "ok", detail))
+                    results.append(
+                        CheckResult(
+                            f"Claude auth available (model: {model_name})", "ok", detail
+                        )
+                    )
                 else:
                     results.append(
                         CheckResult(
                             f"Claude auth available (model: {model_name})",
                             "fail",
-                            fix=("Set ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN, or place credentials at ~/.claude/.credentials.json"),
+                            fix=(
+                                "Set ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN, or place credentials at ~/.claude/.credentials.json"
+                            ),
                         )
                     )
     except Exception as exc:
@@ -431,7 +457,9 @@ def check_llm_auth(config_path: Path) -> list[CheckResult]:
 
 
 def check_web_search(config_path: Path) -> CheckResult:
-    return check_web_tool(config_path, tool_name="web_search", label="web search configured")
+    return check_web_tool(
+        config_path, tool_name="web_search", label="web search configured"
+    )
 
 
 def check_web_tool(config_path: Path, *, tool_name: str, label: str) -> CheckResult:
@@ -460,7 +488,9 @@ def check_web_tool(config_path: Path, *, tool_name: str, label: str) -> CheckRes
         free_providers = {
             "web_search": {"ddg_search": "DuckDuckGo (no key needed)"},
             "web_fetch": {"jina_ai": "Jina AI Reader (no key needed)"},
-            "image_search": {"deerflow.community.image_search.tools": "DuckDuckGo Images (no key needed)"},
+            "image_search": {
+                "deerflow.community.image_search.tools": "DuckDuckGo Images (no key needed)"
+            },
         }
         key_providers = {
             "web_search": {
@@ -482,7 +512,9 @@ def check_web_tool(config_path: Path, *, tool_name: str, label: str) -> CheckRes
             },
         }
 
-        def _configured_key_detail(tool: dict, default_var: str) -> tuple[Status, str] | None:
+        def _configured_key_detail(
+            tool: dict, default_var: str
+        ) -> tuple[Status, str] | None:
             api_key = tool.get("api_key")
             if isinstance(api_key, str) and api_key.strip():
                 key = api_key.strip()
@@ -555,11 +587,15 @@ def check_web_tool(config_path: Path, *, tool_name: str, label: str) -> CheckRes
 
 
 def check_web_fetch(config_path: Path) -> CheckResult:
-    return check_web_tool(config_path, tool_name="web_fetch", label="web fetch configured")
+    return check_web_tool(
+        config_path, tool_name="web_fetch", label="web fetch configured"
+    )
 
 
 def check_image_search(config_path: Path) -> CheckResult:
-    return check_web_tool(config_path, tool_name="image_search", label="image search configured")
+    return check_web_tool(
+        config_path, tool_name="image_search", label="image search configured"
+    )
 
 
 def check_frontend_env(project_root: Path) -> CheckResult:
@@ -619,7 +655,9 @@ def check_sandbox(config_path: Path) -> list[CheckResult]:
                 )
         elif "AioSandboxProvider" in sandbox_use:
             results.append(CheckResult("sandbox configured", "ok", "Container sandbox"))
-            if not sandbox.get("provisioner_url") and not (shutil.which("docker") or shutil.which("container")):
+            if not sandbox.get("provisioner_url") and not (
+                shutil.which("docker") or shutil.which("container")
+            ):
                 results.append(
                     CheckResult(
                         "container runtime available",
@@ -710,7 +748,11 @@ def main() -> int:
     sections.append(("LLM Provider", llm_checks))
 
     # ── Web Capabilities ─────────────────────────────────────────────────────
-    search_checks = [check_web_search(config_path), check_web_fetch(config_path), check_image_search(config_path)]
+    search_checks = [
+        check_web_search(config_path),
+        check_web_fetch(config_path),
+        check_image_search(config_path),
+    ]
     sections.append(("Web Capabilities", search_checks))
 
     # ── Sandbox ──────────────────────────────────────────────────────────────

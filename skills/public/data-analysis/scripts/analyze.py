@@ -22,13 +22,17 @@ try:
     import duckdb
 except ImportError:
     logger.error("duckdb is not installed. Installing...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "duckdb", "openpyxl", "-q"], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "duckdb", "openpyxl", "-q"], check=True
+    )
     import duckdb
 
 try:
     import openpyxl  # noqa: F401
 except ImportError:
-    subprocess.run([sys.executable, "-m", "pip", "install", "openpyxl", "-q"], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "openpyxl", "-q"], check=True
+    )
 
 # Cache directory for persistent DuckDB databases
 CACHE_DIR = os.path.join(tempfile.gettempdir(), ".data-analysis-cache")

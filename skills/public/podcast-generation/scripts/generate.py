@@ -23,13 +23,19 @@ DEFAULT_MINIMAX_MAX_WORKERS = 1
 
 
 class ScriptLine:
-    def __init__(self, speaker: Literal["male", "female"] = "male", paragraph: str = ""):
+    def __init__(
+        self, speaker: Literal["male", "female"] = "male", paragraph: str = ""
+    ):
         self.speaker = speaker
         self.paragraph = paragraph
 
 
 class Script:
-    def __init__(self, locale: Literal["en", "zh"] = "en", lines: Optional[list[ScriptLine]] = None):
+    def __init__(
+        self,
+        locale: Literal["en", "zh"] = "en",
+        lines: Optional[list[ScriptLine]] = None,
+    ):
         self.locale = locale
         self.lines = lines or []
 
@@ -38,13 +44,17 @@ class Script:
         script = cls(locale=data.get("locale", "en"))
         for line in data.get("lines", []):
             script.lines.append(
-                ScriptLine(speaker=line.get("speaker", "male"),
-                           paragraph=line.get("paragraph", ""))
+                ScriptLine(
+                    speaker=line.get("speaker", "male"),
+                    paragraph=line.get("paragraph", ""),
+                )
             )
         return script
 
 
-def _resolve_provider(override_env: str, existing_provider: str, has_existing_creds: bool) -> str:
+def _resolve_provider(
+    override_env: str, existing_provider: str, has_existing_creds: bool
+) -> str:
     override = os.getenv(override_env)
     if override:
         return override.strip().lower()
@@ -103,7 +113,7 @@ def _backoff_sleep(attempt: int, retry_after: Optional[float]) -> None:
     Jitter de-synchronizes concurrent workers that all got rate-limited at once,
     avoiding a thundering-herd retry storm.
     """
-    base = retry_after if retry_after else min(2 ** attempt, 30)
+    base = retry_after if retry_after else min(2**attempt, 30)
     time.sleep(base + random.uniform(0, 1))
 
 
@@ -120,13 +130,20 @@ def text_to_speech_volcengine(
     if max_retries is None:
         max_retries = _default_max_retries()
     url = "https://openspeech.bytedance.com/api/v1/tts"
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer;{access_token}"}
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer;{access_token}",
+    }
     payload = {
         "app": {"appid": app_id, "token": "access_token", "cluster": cluster},
         "user": {"uid": "podcast-generator"},
         "audio": {"voice_type": voice_type, "encoding": "mp3", "speed_ratio": 1.2},
-        "request": {"reqid": str(uuid.uuid4()), "text": text,
-                    "text_type": "plain", "operation": "query"},
+        "request": {
+            "reqid": str(uuid.uuid4()),
+            "text": text,
+            "text_type": "plain",
+            "operation": "query",
+        },
     }
     for attempt in range(max_retries + 1):
         try:
@@ -151,7 +168,9 @@ def text_to_speech_volcengine(
             return None
         result = response.json()
         if result.get("code") != 3000:
-            logger.error(f"TTS error: {result.get('message')} (code: {result.get('code')})")
+            logger.error(
+                f"TTS error: {result.get('message')} (code: {result.get('code')})"
+            )
             return None
         audio_data = result.get("data")
         if audio_data:
@@ -177,14 +196,22 @@ def text_to_speech_minimax(
         "model": os.getenv("MINIMAX_TTS_MODEL", "speech-2.6-hd"),
         "text": text,
         "voice_setting": {"voice_id": voice_id, "speed": 1.0, "vol": 1.0, "pitch": 0},
-        "audio_setting": {"sample_rate": 32000, "bitrate": 128000, "format": "mp3", "channel": 1},
+        "audio_setting": {
+            "sample_rate": 32000,
+            "bitrate": 128000,
+            "format": "mp3",
+            "channel": 1,
+        },
         "output_format": "hex",
     }
     for attempt in range(max_retries + 1):
         try:
             response = requests.post(
                 f"{host}/v1/t2a_v2",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
                 json=payload,
                 timeout=60,
             )
@@ -228,7 +255,9 @@ def text_to_speech_minimax(
     return None
 
 
-def _process_line(args: tuple[int, ScriptLine, int, str]) -> tuple[int, Optional[bytes]]:
+def _process_line(
+    args: tuple[int, ScriptLine, int, str],
+) -> tuple[int, Optional[bytes]]:
     """Process a single script line for TTS. Returns (index, audio_bytes)."""
     i, line, total, provider = args
     logger.info(f"Processing line {i + 1}/{total} ({line.speaker}) via {provider}")
@@ -272,7 +301,9 @@ def tts_node(script: Script) -> list[bytes]:
         )
     if provider == "minimax" and not os.getenv("MINIMAX_API_KEY"):
         raise ValueError("MiniMax TTS selected but MINIMAX_API_KEY is not set")
-    logger.info(f"Converting script to audio using {max_workers} workers (provider={provider})...")
+    logger.info(
+        f"Converting script to audio using {max_workers} workers (provider={provider})..."
+    )
     tasks = [(i, line, total, provider) for i, line in enumerate(script.lines)]
 
     results: dict[int, Optional[bytes]] = {}
@@ -311,14 +342,17 @@ def mix_audio(audio_chunks: list[bytes]) -> bytes:
 def generate_markdown(script: Script, title: str = "Podcast Script") -> str:
     lines = [f"# {title}", ""]
     for line in script.lines:
-        speaker_name = "**Host (Male)**" if line.speaker == "male" else "**Host (Female)**"
+        speaker_name = (
+            "**Host (Male)**" if line.speaker == "male" else "**Host (Female)**"
+        )
         lines.append(f"{speaker_name}: {line.paragraph}")
         lines.append("")
     return "\n".join(lines)
 
 
-def generate_podcast(script_file: str, output_file: str,
-                     transcript_file: Optional[str] = None) -> str:
+def generate_podcast(
+    script_file: str, output_file: str, transcript_file: Optional[str] = None
+) -> str:
     with open(script_file, "r", encoding="utf-8") as f:
         script_json = json.load(f)
     if "lines" not in script_json:
@@ -356,18 +390,29 @@ def generate_podcast(script_file: str, output_file: str,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate podcast from script JSON file")
-    parser.add_argument("--script-file", required=True, help="Absolute path to script JSON file")
-    parser.add_argument("--output-file", required=True, help="Output path for generated podcast MP3")
-    parser.add_argument("--transcript-file", required=False,
-                        help="Output path for transcript markdown file (optional)")
+    parser = argparse.ArgumentParser(
+        description="Generate podcast from script JSON file"
+    )
+    parser.add_argument(
+        "--script-file", required=True, help="Absolute path to script JSON file"
+    )
+    parser.add_argument(
+        "--output-file", required=True, help="Output path for generated podcast MP3"
+    )
+    parser.add_argument(
+        "--transcript-file",
+        required=False,
+        help="Output path for transcript markdown file (optional)",
+    )
     args = parser.parse_args()
 
     try:
-        result = generate_podcast(args.script_file, args.output_file,
-                                  args.transcript_file)
+        result = generate_podcast(
+            args.script_file, args.output_file, args.transcript_file
+        )
         print(result)
     except Exception as e:
         import traceback
+
         print(f"Error generating podcast: {e}")
         traceback.print_exc()

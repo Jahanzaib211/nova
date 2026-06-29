@@ -12,24 +12,35 @@ vid = load("video-generation")
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
-    for k in ["GEMINI_API_KEY", "MINIMAX_API_KEY", "VIDEO_GENERATION_PROVIDER",
-              "MINIMAX_API_HOST", "MINIMAX_VIDEO_MODEL"]:
+    for k in [
+        "GEMINI_API_KEY",
+        "MINIMAX_API_KEY",
+        "VIDEO_GENERATION_PROVIDER",
+        "MINIMAX_API_HOST",
+        "MINIMAX_VIDEO_MODEL",
+    ]:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(vid.time, "sleep", lambda *_: None)
 
 
 def test_resolve_prefers_gemini():
-    assert vid._resolve_provider("VIDEO_GENERATION_PROVIDER", "gemini", True) == "gemini"
+    assert (
+        vid._resolve_provider("VIDEO_GENERATION_PROVIDER", "gemini", True) == "gemini"
+    )
 
 
 def test_resolve_falls_back_to_minimax(monkeypatch):
     monkeypatch.setenv("MINIMAX_API_KEY", "m")
-    assert vid._resolve_provider("VIDEO_GENERATION_PROVIDER", "gemini", False) == "minimax"
+    assert (
+        vid._resolve_provider("VIDEO_GENERATION_PROVIDER", "gemini", False) == "minimax"
+    )
 
 
 def test_resolve_override(monkeypatch):
     monkeypatch.setenv("VIDEO_GENERATION_PROVIDER", "minimax")
-    assert vid._resolve_provider("VIDEO_GENERATION_PROVIDER", "gemini", True) == "minimax"
+    assert (
+        vid._resolve_provider("VIDEO_GENERATION_PROVIDER", "gemini", True) == "minimax"
+    )
 
 
 def test_unknown_provider_raises(monkeypatch, tmp_path):
@@ -53,12 +64,17 @@ def test_minimax_full_flow(monkeypatch, tmp_path):
     def fake_get(url, headers=None, params=None, **kw):
         if url.endswith("/v1/query/video_generation"):
             assert params["task_id"] == "T1"
-            return FakeResp({"status": "Success", "file_id": "F1",
-                             "base_resp": {"status_code": 0}})
+            return FakeResp(
+                {"status": "Success", "file_id": "F1", "base_resp": {"status_code": 0}}
+            )
         if url.endswith("/v1/files/retrieve"):
             assert params["file_id"] == "F1"
-            return FakeResp({"file": {"download_url": "https://dl/v.mp4"},
-                             "base_resp": {"status_code": 0}})
+            return FakeResp(
+                {
+                    "file": {"download_url": "https://dl/v.mp4"},
+                    "base_resp": {"status_code": 0},
+                }
+            )
         return FakeResp(content=b"MP4DATA")  # the actual download
 
     monkeypatch.setattr(vid.requests, "post", fake_post)
@@ -85,9 +101,16 @@ def test_minimax_reference_first_frame(monkeypatch, tmp_path):
 
     def fake_get(url, headers=None, params=None, **kw):
         if url.endswith("/v1/query/video_generation"):
-            return FakeResp({"status": "Success", "file_id": "F1", "base_resp": {"status_code": 0}})
+            return FakeResp(
+                {"status": "Success", "file_id": "F1", "base_resp": {"status_code": 0}}
+            )
         if url.endswith("/v1/files/retrieve"):
-            return FakeResp({"file": {"download_url": "https://dl/v.mp4"}, "base_resp": {"status_code": 0}})
+            return FakeResp(
+                {
+                    "file": {"download_url": "https://dl/v.mp4"},
+                    "base_resp": {"status_code": 0},
+                }
+            )
         return FakeResp(content=b"X")
 
     monkeypatch.setattr(vid.requests, "post", fake_post)
@@ -107,7 +130,12 @@ def test_minimax_task_fail(monkeypatch, tmp_path):
         return FakeResp({"task_id": "T1", "base_resp": {"status_code": 0}})
 
     def fake_get(url, headers=None, params=None, **kw):
-        return FakeResp({"status": "Fail", "base_resp": {"status_code": 1027, "status_msg": "blocked"}})
+        return FakeResp(
+            {
+                "status": "Fail",
+                "base_resp": {"status_code": 1027, "status_msg": "blocked"},
+            }
+        )
 
     monkeypatch.setattr(vid.requests, "post", fake_post)
     monkeypatch.setattr(vid.requests, "get", fake_get)
@@ -136,7 +164,12 @@ def test_minimax_task_fail_keeps_task_context(monkeypatch, tmp_path):
         return FakeResp({"task_id": "T1", "base_resp": {"status_code": 0}})
 
     def fake_get(url, headers=None, params=None, **kw):
-        return FakeResp({"status": "Fail", "base_resp": {"status_code": 1027, "status_msg": "blocked"}})
+        return FakeResp(
+            {
+                "status": "Fail",
+                "base_resp": {"status_code": 1027, "status_msg": "blocked"},
+            }
+        )
 
     monkeypatch.setattr(vid.requests, "post", fake_post)
     monkeypatch.setattr(vid.requests, "get", fake_get)

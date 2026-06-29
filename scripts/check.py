@@ -23,7 +23,9 @@ def configure_stdio() -> None:
 def run_command(command: list[str]) -> str | None:
     """Run a command and return trimmed stdout, or None on failure."""
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True, shell=False)
+        result = subprocess.run(
+            command, capture_output=True, text=True, check=True, shell=False
+        )
     except (OSError, subprocess.CalledProcessError):
         return None
     return result.stdout.strip() or result.stderr.strip()
@@ -115,7 +117,9 @@ def main() -> int:
         uv_version_text = run_command(["uv", "--version"])
         if uv_version_text:
             uv_version_parts = uv_version_text.split()
-            uv_version = uv_version_parts[1] if len(uv_version_parts) > 1 else uv_version_text
+            uv_version = (
+                uv_version_parts[1] if len(uv_version_parts) > 1 else uv_version_text
+            )
             print(f"  OK uv {uv_version}")
         else:
             print("  INFO Unable to determine uv version")

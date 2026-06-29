@@ -29,6 +29,7 @@ def _project_root() -> Path:
 
 # ── .env helpers ──────────────────────────────────────────────────────────────
 
+
 def read_env_file(env_path: Path) -> dict[str, str]:
     """Parse a .env file into a dict (ignores comments and blank lines)."""
     result: dict[str, str] = {}
@@ -75,19 +76,47 @@ def write_env_file(env_path: Path, pairs: dict[str, str]) -> None:
 
 # ── config.yaml helpers ───────────────────────────────────────────────────────
 
+
 def _yaml_dump(data: Any) -> str:
-    return yaml.safe_dump(data, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    return yaml.safe_dump(
+        data, default_flow_style=False, allow_unicode=True, sort_keys=False
+    )
 
 
 def _default_tools() -> list[dict[str, Any]]:
     return [
-        {"name": "image_search", "use": "deerflow.community.image_search.tools:image_search_tool", "group": "web", "max_results": 5},
+        {
+            "name": "image_search",
+            "use": "deerflow.community.image_search.tools:image_search_tool",
+            "group": "web",
+            "max_results": 5,
+        },
         {"name": "ls", "use": "deerflow.sandbox.tools:ls_tool", "group": "file:read"},
-        {"name": "read_file", "use": "deerflow.sandbox.tools:read_file_tool", "group": "file:read"},
-        {"name": "glob", "use": "deerflow.sandbox.tools:glob_tool", "group": "file:read"},
-        {"name": "grep", "use": "deerflow.sandbox.tools:grep_tool", "group": "file:read"},
-        {"name": "write_file", "use": "deerflow.sandbox.tools:write_file_tool", "group": "file:write"},
-        {"name": "str_replace", "use": "deerflow.sandbox.tools:str_replace_tool", "group": "file:write"},
+        {
+            "name": "read_file",
+            "use": "deerflow.sandbox.tools:read_file_tool",
+            "group": "file:read",
+        },
+        {
+            "name": "glob",
+            "use": "deerflow.sandbox.tools:glob_tool",
+            "group": "file:read",
+        },
+        {
+            "name": "grep",
+            "use": "deerflow.sandbox.tools:grep_tool",
+            "group": "file:read",
+        },
+        {
+            "name": "write_file",
+            "use": "deerflow.sandbox.tools:write_file_tool",
+            "group": "file:write",
+        },
+        {
+            "name": "str_replace",
+            "use": "deerflow.sandbox.tools:str_replace_tool",
+            "group": "file:write",
+        },
         {"name": "bash", "use": "deerflow.sandbox.tools:bash_tool", "group": "bash"},
     ]
 
@@ -108,7 +137,14 @@ def _build_tools(
     tools = [
         tool
         for tool in tools
-        if tool.get("name") not in {search_tool_name, web_fetch_tool_name, "write_file", "str_replace", "bash"}
+        if tool.get("name")
+        not in {
+            search_tool_name,
+            web_fetch_tool_name,
+            "write_file",
+            "str_replace",
+            "bash",
+        }
     ]
 
     web_group = "web"
@@ -137,13 +173,23 @@ def _build_tools(
     if include_write_tools:
         tools.extend(
             [
-                {"name": "write_file", "use": "deerflow.sandbox.tools:write_file_tool", "group": "file:write"},
-                {"name": "str_replace", "use": "deerflow.sandbox.tools:str_replace_tool", "group": "file:write"},
+                {
+                    "name": "write_file",
+                    "use": "deerflow.sandbox.tools:write_file_tool",
+                    "group": "file:write",
+                },
+                {
+                    "name": "str_replace",
+                    "use": "deerflow.sandbox.tools:str_replace_tool",
+                    "group": "file:write",
+                },
             ]
         )
 
     if include_bash_tool:
-        tools.append({"name": "bash", "use": "deerflow.sandbox.tools:bash_tool", "group": "bash"})
+        tools.append(
+            {"name": "bash", "use": "deerflow.sandbox.tools:bash_tool", "group": "bash"}
+        )
 
     return tools
 
@@ -165,11 +211,16 @@ def _build_channel_connections_config(enabled_providers: list[str]) -> dict[str,
     selected = set(enabled_providers)
     unknown = selected.difference(CHANNEL_CONNECTION_PROVIDERS)
     if unknown:
-        raise ValueError(f"Unknown channel connection provider(s): {', '.join(sorted(unknown))}")
+        raise ValueError(
+            f"Unknown channel connection provider(s): {', '.join(sorted(unknown))}"
+        )
 
     return {
         "enabled": bool(selected),
-        **{provider: {"enabled": provider in selected} for provider in CHANNEL_CONNECTION_PROVIDERS},
+        **{
+            provider: {"enabled": provider in selected}
+            for provider in CHANNEL_CONNECTION_PROVIDERS
+        },
     }
 
 
@@ -235,7 +286,9 @@ def build_minimal_config(
         include_write_tools=include_write_tools,
     )
     data["tools"] = tools
-    sandbox_config = deepcopy(data.get("sandbox") if isinstance(data.get("sandbox"), dict) else {})
+    sandbox_config = deepcopy(
+        data.get("sandbox") if isinstance(data.get("sandbox"), dict) else {}
+    )
     sandbox_config["use"] = sandbox_use
     if sandbox_use == "deerflow.sandbox.local:LocalSandboxProvider":
         sandbox_config["allow_host_bash"] = allow_host_bash
@@ -243,7 +296,9 @@ def build_minimal_config(
         sandbox_config.pop("allow_host_bash", None)
     data["sandbox"] = sandbox_config
     if channel_connection_providers is not None:
-        data["channel_connections"] = _build_channel_connections_config(channel_connection_providers)
+        data["channel_connections"] = _build_channel_connections_config(
+            channel_connection_providers
+        )
 
     header = (
         f"# DeerFlow Configuration\n"
@@ -284,6 +339,7 @@ def write_config_yaml(
     if example_path.exists():
         try:
             import yaml as _yaml
+
             raw = _yaml.safe_load(example_path.read_text(encoding="utf-8")) or {}
             config_version = int(raw.get("config_version", 5))
             example_defaults = raw

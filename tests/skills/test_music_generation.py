@@ -20,8 +20,13 @@ def _post_ok(captured):
         captured["url"] = url
         captured["headers"] = headers
         captured["json"] = json
-        return FakeResp({"data": {"audio": b"songbytes".hex(), "status": 2},
-                         "base_resp": {"status_code": 0}})
+        return FakeResp(
+            {
+                "data": {"audio": b"songbytes".hex(), "status": 2},
+                "base_resp": {"status_code": 0},
+            }
+        )
+
     return fake_post
 
 
@@ -30,8 +35,10 @@ def test_with_lyrics_payload_and_writes(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(mus.requests, "post", _post_ok(captured))
     spec = tmp_path / "s.json"
-    spec.write_text('{"title":"X","prompt":"pop, happy","lyrics":"[verse]\\nla la"}',
-                    encoding="utf-8")
+    spec.write_text(
+        '{"title":"X","prompt":"pop, happy","lyrics":"[verse]\\nla la"}',
+        encoding="utf-8",
+    )
     out = tmp_path / "o.mp3"
     msg = mus.generate_music(str(spec), str(out))
     assert out.read_bytes() == b"songbytes"
@@ -81,7 +88,9 @@ def test_raises_on_base_resp_error(monkeypatch, tmp_path):
     monkeypatch.setenv("MINIMAX_API_KEY", "m")
 
     def fake_post(url, headers=None, json=None, **kw):
-        return FakeResp({"base_resp": {"status_code": 1008, "status_msg": "no balance"}})
+        return FakeResp(
+            {"base_resp": {"status_code": 1008, "status_msg": "no balance"}}
+        )
 
     monkeypatch.setattr(mus.requests, "post", fake_post)
     spec = tmp_path / "s.json"
@@ -119,7 +128,9 @@ def test_empty_prompt_raises(monkeypatch, tmp_path):
 
     monkeypatch.setattr(mus.requests, "post", fake_post)
     spec = tmp_path / "s.json"
-    spec.write_text('{"title":"X","lyrics":"[verse]\\nhi"}', encoding="utf-8")  # no prompt
+    spec.write_text(
+        '{"title":"X","lyrics":"[verse]\\nhi"}', encoding="utf-8"
+    )  # no prompt
     with pytest.raises(ValueError, match="prompt"):
         mus.generate_music(str(spec), str(tmp_path / "o.mp3"))
 

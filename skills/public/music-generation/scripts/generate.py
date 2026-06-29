@@ -10,7 +10,9 @@ MINIMAX_DEFAULT_HOST = "https://api.minimaxi.com"
 def _check_base_resp(payload: dict) -> None:
     base = payload.get("base_resp") or {}
     if base.get("status_code", 0) != 0:
-        raise Exception(f"MiniMax error {base.get('status_code')}: {base.get('status_msg')}")
+        raise Exception(
+            f"MiniMax error {base.get('status_code')}: {base.get('status_msg')}"
+        )
 
 
 def generate_music(prompt_file: str, output_file: str) -> str:
@@ -50,7 +52,10 @@ def generate_music(prompt_file: str, output_file: str) -> str:
     host = os.getenv("MINIMAX_API_HOST", MINIMAX_DEFAULT_HOST).rstrip("/")
     response = requests.post(
         f"{host}/v1/music_generation",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
         json=body,
         timeout=300,
     )
@@ -71,9 +76,14 @@ def generate_music(prompt_file: str, output_file: str) -> str:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate music using MiniMax API")
-    parser.add_argument("--prompt-file", required=True,
-                        help="Absolute path to JSON spec file {title, prompt, lyrics?, is_instrumental?}")
-    parser.add_argument("--output-file", required=True, help="Output path for generated MP3")
+    parser.add_argument(
+        "--prompt-file",
+        required=True,
+        help="Absolute path to JSON spec file {title, prompt, lyrics?, is_instrumental?}",
+    )
+    parser.add_argument(
+        "--output-file", required=True, help="Output path for generated MP3"
+    )
     args = parser.parse_args()
 
     try:

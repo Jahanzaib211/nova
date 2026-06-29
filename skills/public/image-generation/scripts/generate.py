@@ -25,7 +25,9 @@ def validate_image(image_path: str) -> bool:
         return False
 
 
-def _resolve_provider(override_env: str, existing_provider: str, has_existing_creds: bool) -> str:
+def _resolve_provider(
+    override_env: str, existing_provider: str, has_existing_creds: bool
+) -> str:
     """Pick the generation provider.
 
     1. Explicit <SKILL>_PROVIDER override wins.
@@ -128,11 +130,15 @@ def _generate_image_minimax(
         # Reference images are passed as character subjects as-is; unlike the Gemini
         # path we do not pre-validate them — invalid files surface as a MiniMax API error.
         body["subject_reference"] = [
-            {"type": "character", "image_file": _to_data_url(p)} for p in reference_images
+            {"type": "character", "image_file": _to_data_url(p)}
+            for p in reference_images
         ]
     response = requests.post(
         f"{_minimax_host()}/v1/image_generation",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
         json=body,
         timeout=60,
     )
@@ -160,7 +166,9 @@ def _generate_image_gemini(
             print(f"Skipping invalid reference image: {ref_img}")
     if len(valid_reference_images) < len(reference_images):
         skipped = len(reference_images) - len(valid_reference_images)
-        print(f"Note: {skipped} reference image(s) were skipped due to validation failure.")
+        print(
+            f"Note: {skipped} reference image(s) were skipped due to validation failure."
+        )
 
     for reference_image in valid_reference_images:
         with open(reference_image, "rb") as f:
@@ -203,26 +211,52 @@ def generate_image(
         "IMAGE_GENERATION_PROVIDER", "gemini", bool(os.getenv("GEMINI_API_KEY"))
     )
     if provider == "minimax":
-        return _generate_image_minimax(prompt, reference_images, output_file, aspect_ratio)
+        return _generate_image_minimax(
+            prompt, reference_images, output_file, aspect_ratio
+        )
     if provider in ("gemini", "google"):
-        return _generate_image_gemini(prompt, reference_images, output_file, aspect_ratio)
-    raise ValueError(f"Unknown image provider: {provider!r} (use 'gemini' or 'minimax')")
+        return _generate_image_gemini(
+            prompt, reference_images, output_file, aspect_ratio
+        )
+    raise ValueError(
+        f"Unknown image provider: {provider!r} (use 'gemini' or 'minimax')"
+    )
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate images using Gemini or MiniMax API")
-    parser.add_argument("--prompt-file", required=True, help="Absolute path to JSON prompt file")
-    parser.add_argument("--reference-images", nargs="*", default=[],
-                        help="Absolute paths to reference images (space-separated)")
-    parser.add_argument("--output-file", required=True, help="Output path for generated image")
-    parser.add_argument("--aspect-ratio", required=False, default="16:9",
-                        help="Aspect ratio of the generated image")
+    parser = argparse.ArgumentParser(
+        description="Generate images using Gemini or MiniMax API"
+    )
+    parser.add_argument(
+        "--prompt-file", required=True, help="Absolute path to JSON prompt file"
+    )
+    parser.add_argument(
+        "--reference-images",
+        nargs="*",
+        default=[],
+        help="Absolute paths to reference images (space-separated)",
+    )
+    parser.add_argument(
+        "--output-file", required=True, help="Output path for generated image"
+    )
+    parser.add_argument(
+        "--aspect-ratio",
+        required=False,
+        default="16:9",
+        help="Aspect ratio of the generated image",
+    )
     args = parser.parse_args()
 
     try:
-        print(generate_image(args.prompt_file, args.reference_images,
-                             args.output_file, args.aspect_ratio))
+        print(
+            generate_image(
+                args.prompt_file,
+                args.reference_images,
+                args.output_file,
+                args.aspect_ratio,
+            )
+        )
     except Exception as e:
         print(f"Error while generating image: {e}")

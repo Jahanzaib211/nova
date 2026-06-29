@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - non-Unix fallback
 
 # ── ANSI colours ──────────────────────────────────────────────────────────────
 
+
 def _supports_color() -> bool:
     return hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
@@ -51,6 +52,7 @@ def inverse(text: str) -> str:
 
 # ── UI primitives ─────────────────────────────────────────────────────────────
 
+
 def print_header(title: str) -> None:
     width = max(len(title) + 4, 44)
     bar = "═" * width
@@ -83,7 +85,9 @@ def print_info(message: str) -> None:
     print(f"  {cyan('→')} {message}")
 
 
-def _ask_choice_with_numbers(prompt: str, options: list[str], default: int | None = None) -> int:
+def _ask_choice_with_numbers(
+    prompt: str, options: list[str], default: int | None = None
+) -> int:
     for i, opt in enumerate(options, 1):
         marker = f" {green('*')}" if default is not None and i - 1 == default else "  "
         print(f"{marker} {i}. {opt}")
@@ -160,7 +164,9 @@ def _render_choice_menu(options: list[str], selected: int) -> int:
     return len(options)
 
 
-def _ask_choice_with_arrows(prompt: str, options: list[str], default: int | None = None) -> int:
+def _ask_choice_with_arrows(
+    prompt: str, options: list[str], default: int | None = None
+) -> int:
     selected = default if default is not None else 0
     typed = ""
     fd = sys.stdin.fileno()
@@ -224,7 +230,9 @@ def ask_choice(prompt: str, options: list[str], default: int | None = None) -> i
     return _ask_choice_with_numbers(prompt, options, default=default)
 
 
-def ask_multi_choice(prompt: str, options: list[str], default: list[int] | None = None) -> list[int]:
+def ask_multi_choice(
+    prompt: str, options: list[str], default: list[int] | None = None
+) -> list[int]:
     """Present a numbered multi-select menu and return 0-based indexes."""
     has_default = default is not None
     default_indexes = list(default or [])
@@ -248,7 +256,9 @@ def ask_multi_choice(prompt: str, options: list[str], default: list[int] | None 
         if raw == "all":
             return list(range(len(options)))
 
-        parts = [part.strip() for part in raw.replace(" ", ",").split(",") if part.strip()]
+        parts = [
+            part.strip() for part in raw.replace(" ", ",").split(",") if part.strip()
+        ]
         selected: list[int] = []
         valid = bool(parts)
         for part in parts:
@@ -264,7 +274,9 @@ def ask_multi_choice(prompt: str, options: list[str], default: list[int] | None 
         if valid:
             return selected
 
-        print(f"  Enter comma-separated numbers between 1 and {len(options)}, 'all', or 'none'.")
+        print(
+            f"  Enter comma-separated numbers between 1 and {len(options)}, 'all', or 'none'."
+        )
 
 
 def ask_text(prompt: str, default: str = "", required: bool = False) -> str:

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wizard.providers import SEARCH_PROVIDERS, WEB_FETCH_PROVIDERS, SearchProvider, WebProvider
+from wizard.providers import (
+    SEARCH_PROVIDERS,
+    WEB_FETCH_PROVIDERS,
+    SearchProvider,
+    WebProvider,
+)
 from wizard.ui import ask_choice, ask_secret, print_header, print_info, print_success
 
 
@@ -38,7 +43,9 @@ def run_search_step(step_label: str = "Step 3/3") -> SearchStepResult:
             print_success(f"Key will be saved to .env as {search_provider.env_var}")
 
     print()
-    fetch_options = [f"{p.display_name}  —  {p.description}" for p in WEB_FETCH_PROVIDERS]
+    fetch_options = [
+        f"{p.display_name}  —  {p.description}" for p in WEB_FETCH_PROVIDERS
+    ]
     fetch_options.append("Skip for now  (agent can still answer without web fetch)")
 
     idx = ask_choice("Choose a web fetch provider", fetch_options, default=0)

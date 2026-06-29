@@ -9,7 +9,7 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,25 +18,18 @@ from fastapi.testclient import TestClient
 # The capabilities router imports `app.gateway.deps.get_config` which calls
 # `deerflow.config.app_config.get_app_config` which tries to read
 # config.yaml from disk. CI runners don't have config.yaml (gitignored);
-# local devs do. Patching the module-level singleton (`_app_config_path`
-# and friends) makes the test hermetic — same pattern as
-# test_replay_golden.py and test_runtime_lifecycle_e2e.py.
+# local devs do. We pre-seed the module-level cache with a MagicMock so
+# the "no reload needed" branch in get_app_config() short-circuits.
 _APP_CONFIG_MODULE = "deerflow.config.app_config"
-_HERMETIC_PATCHERS = [
-    patch(f"{_APP_CONFIG_MODULE}._app_config_path", None),
-    patch(f"{_APP_CONFIG_MODULE}._app_config", None),
-    patch(f"{_APP_CONFIG_MODULE}._app_config_mtime", None),
-    patch(f"{_APP_CONFIG_MODULE}._app_config_signature", None),
-    patch(f"{_APP_CONFIG_MODULE}._app_config_is_custom", True),
-]
+_HERMETIC_CONFIG = MagicMock(name="AppConfig")  # plays the role of a real AppConfig
 
 
 @pytest.fixture(autouse=True)
-def _hermetic_config():
-    """Auto-apply the hermetic config patchers to every test in this module."""
+def _hermetic_config_fixture():
+    """Auto-apply the hermetic config patches to every test in this module."""
     with (
+        patch(f"{_APP_CONFIG_MODULE}._app_config", _HERMETIC_CONFIG),
         patch(f"{_APP_CONFIG_MODULE}._app_config_path", None),
-        patch(f"{_APP_CONFIG_MODULE}._app_config", None),
         patch(f"{_APP_CONFIG_MODULE}._app_config_mtime", None),
         patch(f"{_APP_CONFIG_MODULE}._app_config_signature", None),
         patch(f"{_APP_CONFIG_MODULE}._app_config_is_custom", True),

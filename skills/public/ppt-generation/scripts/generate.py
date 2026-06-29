@@ -93,7 +93,11 @@ def generate_ppt(
 
             # Add image to slide
             slide.shapes.add_picture(
-                img_bytes, left, top, Inches(new_width_emu / 914400), Inches(new_height_emu / 914400)
+                img_bytes,
+                left,
+                top,
+                Inches(new_width_emu / 914400),
+                Inches(new_height_emu / 914400),
             )
 
         # Add speaker notes if available in plan
