@@ -252,6 +252,22 @@ async def probe_llama_loopback(host: str = "127.0.0.1", port: int = 8081) -> Pro
     )
 
 
+async def probe_llama_bridge(host: str = "172.17.0.1", port: int = 8081) -> ProbeResult:
+    """Probe llama-server via the docker bridge IP — the path Nova's container
+    actually uses (via `host.docker.internal:8081` → bridge → loopback).
+
+    Without this probe the watchdog only sees P5_llama_loopback which targets
+    127.0.0.1 directly. If the bridge dies but llama-server stays up, P5 is
+    GREEN and Nova's container silently loses reachability. This probe
+    catches that failure mode.
+    """
+    return await _http_probe(
+        "P9_bridge",
+        f"http://{host}:{port}/v1/models",
+        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
+    )
+
+
 async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str = "") -> ProbeResult:
     """Issue a 1-token chat completion to confirm VRAM is loaded.
 
@@ -470,6 +486,10 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
         ),
         ("P7_containers", asyncio.ensure_future(probe_containers())),
         ("P8_attestation", asyncio.ensure_future(probe_attestation())),
+        (
+            "P9_bridge",
+            asyncio.ensure_future(probe_llama_bridge(host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1"))),
+        ),
     ]
     results = await asyncio.gather(*(c for _, c in probes), return_exceptions=True)
     for (name, _), result in zip(probes, results):
