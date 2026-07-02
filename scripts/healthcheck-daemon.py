@@ -27,7 +27,8 @@ Auto-fixes (only safe, reversible ones):
 
 Status:
   - Exits 0 every cycle when all probes are GREEN.
-  - Exits 1 on the first RED probe (PM2 will restart with backoff).
+  - Exits 1 if a cycle exceeds CYCLE_DEADLINE_SEC (a probe hung); PM2 will
+    restart, and the next cycle starts fresh.
   - Exits 2 if the binary itself is in an inconsistent state (manual review).
 
 Reads:
@@ -35,6 +36,7 @@ Reads:
   - ${LLAMA_HOST:-127.0.0.1}:8081 for llama-server probe
   - ${ALI_KERNEL_PORT:-9000} for ali-kernel probe
   - ${DEER_FLOW_HOME:-/home/jahanzaib/Desktop/nova/backend/.deer-flow}
+  - ${HEALTHCHECK_CYCLE_DEADLINE_SEC:-60} hard deadline per cycle (self-watchdog)
 """
 
 from __future__ import annotations
@@ -55,6 +57,8 @@ from enum import Enum
 from typing import Awaitable, Callable, Optional
 
 import httpx
+
+CYCLE_DEADLINE_SEC = float(os.environ.get("HEALTHCHECK_CYCLE_DEADLINE_SEC", "60"))
 
 # Logs go to stderr so they don't get mixed with the per-cycle JSON status
 # line on stdout. PM2 captures stderr into error_file, stdout into out_file;
@@ -508,7 +512,33 @@ async def main_loop(args: argparse.Namespace) -> int:
 
     while not stop.is_set():
         try:
-            report = await run_cycle(state)
+            # Per-cycle deadline (self-watchdog): a single hung probe (e.g.
+            # llama_vram's 15s timeout during a network partition) shouldn't
+            # be able to stall the watchdog beyond CYCLE_DEADLINE_SEC. If we
+            # exceed it, treat the cycle as RED and force a restart via exit 1
+            # so PM2 reaps us and comes back fresh.
+            report = await asyncio.wait_for(run_cycle(state), timeout=CYCLE_DEADLINE_SEC)
+        except asyncio.TimeoutError:
+            log.error(
+                "cycle exceeded %.0fs deadline — assuming hung; emitting RED report and exiting for PM2 restart",
+                CYCLE_DEADLINE_SEC,
+            )
+            stuck_report = CycleReport(
+                cycle_id=state.cycle_id + 1,
+                started_at=time.time(),
+                duration_ms=CYCLE_DEADLINE_SEC * 1000,
+                overall=Status.RED,
+                exit_code=1,
+            )
+            stuck_report.add(
+                ProbeResult(
+                    name="__watchdog_self__",
+                    status=Status.RED,
+                    detail=f"cycle exceeded {CYCLE_DEADLINE_SEC:.0f}s deadline (a probe hung)",
+                )
+            )
+            print(json.dumps(stuck_report.to_dict()), flush=True)
+            return 1  # PM2 restart
         except Exception:
             log.exception("cycle raised")
             await asyncio.sleep(args.interval)
@@ -535,6 +565,14 @@ def main() -> int:
     parser.add_argument("--interval", type=int, default=30, help="seconds between cycles")
     parser.add_argument("--once", action="store_true", help="run a single cycle and exit")
     args = parser.parse_args()
+    if args.interval < 1:
+        parser.error(f"--interval must be >= 1 (got {args.interval}); tighter loops would saturate the probe targets")
+    if CYCLE_DEADLINE_SEC < args.interval:
+        # The deadline must always exceed the cycle interval, otherwise the
+        # watchdog would self-abort on every normal cycle.
+        parser.error(
+            f"HEALTHCHECK_CYCLE_DEADLINE_SEC ({CYCLE_DEADLINE_SEC}) must be >= --interval ({args.interval})"
+        )
     try:
         return asyncio.run(main_loop(args))
     except KeyboardInterrupt:

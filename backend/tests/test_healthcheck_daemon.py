@@ -10,6 +10,7 @@ the dispatch logic, status transitions, and the moat-clear fix.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import sys
 from pathlib import Path
@@ -301,3 +302,74 @@ class TestLogRouting:
         httpcore_logger = _logging.getLogger("httpcore")
         assert httpx_logger.level >= _logging.WARNING, "httpx logger must be silenced to WARNING+"
         assert httpcore_logger.level >= _logging.WARNING, "httpcore logger must be silenced to WARNING+"
+
+
+class TestCycleDeadline:
+    """Self-watchdog: if a probe hangs, the cycle's asyncio.wait_for fires
+    and main_loop returns 1 so PM2 can restart us."""
+
+    @pytest.mark.asyncio
+    async def test_hung_probe_triggers_deadline(self, monkeypatch):
+        """A probe that hangs longer than CYCLE_DEADLINE_SEC must be cut off
+        by asyncio.wait_for, and main_loop must exit 1 with a RED report."""
+
+        async def fake_hang(*args, **kwargs):
+            # Hang for longer than any reasonable deadline
+            await asyncio.sleep(60)
+            return healthcheck.ProbeResult("mock", healthcheck.Status.GREEN)
+
+        for name in [
+            "probe_nginx",
+            "probe_gateway",
+            "probe_frontend",
+            "probe_ali_kernel",
+            "probe_llama_loopback",
+            "probe_llama_vram",
+            "probe_containers",
+            "probe_attestation",
+        ]:
+            monkeypatch.setattr(healthcheck, name, fake_hang)
+
+        # Patch the deadline module-global so we can prove the trigger without
+        # sitting in CI for 60s.
+        monkeypatch.setattr(healthcheck, "CYCLE_DEADLINE_SEC", 0.5)
+
+        from types import SimpleNamespace
+
+        args = SimpleNamespace(interval=30, once=True)
+        # main_loop with once=True returns after the first cycle. The cycle
+        # itself is bounded by asyncio.wait_for(CYCLE_DEADLINE_SEC=0.5), so
+        # the hang should be cut off and we should exit 1.
+        runner = asyncio.create_task(healthcheck.main_loop(args))
+        result = await asyncio.wait_for(runner, timeout=5)
+        assert result == 1, f"expected exit 1 (hung cycle), got {result}"
+
+
+class TestArgValidation:
+    def test_interval_must_be_positive(self):
+        """--interval 0 or negative would create a tight loop and saturate the
+        probe targets. argparse should reject it."""
+        import subprocess
+
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "--interval", "0"],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "--interval must be >= 1" in result.stderr
+
+    def test_deadline_must_exceed_interval(self):
+        """HEALTHCHECK_CYCLE_DEADLINE_SEC < --interval would cause the watchdog
+        to self-abort on every normal cycle."""
+        import subprocess
+
+        env = {**__import__("os").environ, "HEALTHCHECK_CYCLE_DEADLINE_SEC": "1"}
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "--interval", "30"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert result.returncode != 0
+        assert "must be >= --interval" in result.stderr
