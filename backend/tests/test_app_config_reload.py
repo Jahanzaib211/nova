@@ -232,6 +232,9 @@ def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp
         initial_signature = app_config_module._app_config_signature
         assert initial.models[0].name == "model-a"
         assert initial_signature is not None
+        # Combined signature: (config.yaml sig, runtime_models.yaml sig)
+        initial_cfg_sig = initial_signature[0]
+        assert initial_cfg_sig is not None
 
         _write_config(config_path, model_name="model-b", supports_thinking=False)
 
@@ -239,8 +242,10 @@ def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp
 
         def stale_metadata_signature(path: Path):
             current_signature = real_get_config_signature(path)
-            assert current_signature is not None
-            return (initial_signature[0], initial_signature[1], current_signature[2])
+            if current_signature is None:
+                # e.g. the runtime models store, which does not exist here
+                return None
+            return (initial_cfg_sig[0], initial_cfg_sig[1], current_signature[2])
 
         monkeypatch.setattr(app_config_module, "_get_config_mtime", lambda _path: initial_mtime)
         monkeypatch.setattr(app_config_module, "_get_config_signature", stale_metadata_signature)
@@ -249,8 +254,9 @@ def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp
         assert reloaded.models[0].name == "model-b"
         assert reloaded is not initial
         assert app_config_module._app_config_signature is not None
-        assert app_config_module._app_config_signature[:2] == initial_signature[:2]
-        assert app_config_module._app_config_signature[2] != initial_signature[2]
+        cached_cfg_sig = app_config_module._app_config_signature[0]
+        assert cached_cfg_sig[:2] == initial_cfg_sig[:2]
+        assert cached_cfg_sig[2] != initial_cfg_sig[2]
     finally:
         _reset_config_singletons()
 

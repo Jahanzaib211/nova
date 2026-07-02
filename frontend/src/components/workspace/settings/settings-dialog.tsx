@@ -3,6 +3,7 @@
 import {
   BellIcon,
   CableIcon,
+  CpuIcon,
   InfoIcon,
   BrainIcon,
   PaletteIcon,
@@ -24,6 +25,7 @@ import { AccountSettingsPage } from "@/components/workspace/settings/account-set
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
 import { ChannelsSettingsPage } from "@/components/workspace/settings/channels-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
+import { ModelsSettingsPage } from "@/components/workspace/settings/models-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
@@ -34,6 +36,7 @@ type SettingsSection =
   | "account"
   | "appearance"
   | "channels"
+  | "models"
   | "memory"
   | "tools"
   | "skills"
@@ -81,6 +84,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: CableIcon,
       },
       {
+        id: "models",
+        label: t.settings.sections.models,
+        icon: CpuIcon,
+      },
+      {
         id: "memory",
         label: t.settings.sections.memory,
         icon: BrainIcon,
@@ -93,6 +101,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.account,
       t.settings.sections.appearance,
       t.settings.sections.channels,
+      t.settings.sections.models,
       t.settings.sections.memory,
       t.settings.sections.tools,
       t.settings.sections.skills,
@@ -153,6 +162,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               )}
               {activeSection === "notification" && <NotificationSettingsPage />}
               {activeSection === "channels" && <ChannelsSettingsPage />}
+              {activeSection === "models" && <ModelsSettingsPage />}
               {activeSection === "about" && <AboutSettingsPage />}
             </div>
           </ScrollArea>

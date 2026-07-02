@@ -54,7 +54,7 @@ import { SubtaskCard } from "./subtask-card";
 
 export const MESSAGE_LIST_DEFAULT_PADDING_BOTTOM = 24;
 
-const LOAD_MORE_HISTORY_THROTTLE_MS = 1200;
+const LOAD_MORE_HISTORY_THROTTLE_MS = 400;
 
 function LoadMoreHistoryIndicator({
   isLoading,
@@ -130,6 +130,27 @@ function LoadMoreHistoryIndicator({
       }
     };
   }, []);
+
+  // IntersectionObserver only fires on threshold *crossings*. After a page of
+  // history loads, the sentinel often stays inside the viewport (short runs
+  // don't push it out), so no new intersection event ever fires and loading
+  // stalls until the user jiggles the scroll. When a load finishes and the
+  // sentinel is still visible, keep loading.
+  useEffect(() => {
+    if (isLoading || !hasMore) {
+      return;
+    }
+    const element = sentinelRef.current;
+    if (!element) {
+      return;
+    }
+    const rect = element.getBoundingClientRect();
+    const viewportHeight =
+      window.innerHeight || document.documentElement.clientHeight;
+    if (rect.bottom >= 0 && rect.top <= viewportHeight + 120) {
+      throttledLoadMore();
+    }
+  }, [isLoading, hasMore, throttledLoadMore]);
 
   if (!hasMore && !isLoading) {
     return null;

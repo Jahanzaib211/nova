@@ -235,6 +235,7 @@ class AppConfig(BaseModel):
         config_data["extensions"] = extensions_config.model_dump()
 
         result = cls.model_validate(config_data)
+        cls._merge_runtime_models(result, resolved_path)
         if not result.models:
             logger.warning(
                 "No models are configured in %s. Add at least one entry under `models:` (see the commented examples in config.example.yaml) or run `make setup`.",
@@ -243,6 +244,34 @@ class AppConfig(BaseModel):
         acp_agents = cls._validate_acp_agents(config_data.get("acp_agents", {}))
         cls._apply_singleton_configs(result, acp_agents)
         return result
+
+    @classmethod
+    def _merge_runtime_models(cls, config: Self, resolved_path: Path) -> None:
+        """Append models from the runtime store (API-managed) after config.yaml models.
+
+        config.yaml wins on name collisions; invalid runtime entries are skipped
+        with a warning rather than failing the whole config load.
+        """
+        from deerflow.config.runtime_models import load_runtime_model_dicts, runtime_models_path
+
+        entries = load_runtime_model_dicts(runtime_models_path(resolved_path))
+        if not entries:
+            return
+        existing_names = {m.name for m in config.models}
+        for entry in entries:
+            try:
+                model = ModelConfig.model_validate(entry)
+            except Exception:
+                logger.warning("Skipping invalid runtime model entry %r", entry.get("name", entry))
+                continue
+            if model.name in existing_names:
+                logger.warning(
+                    "Runtime model %r collides with a config.yaml model — config.yaml wins, runtime entry ignored",
+                    model.name,
+                )
+                continue
+            config.models.append(model)
+            existing_names.add(model.name)
 
     @classmethod
     def _validate_acp_agents(
@@ -402,7 +431,8 @@ _app_config: AppConfig | None = None
 _app_config_path: Path | None = None
 _app_config_mtime: float | None = None
 _ConfigSignature = tuple[float | None, int | None, str | None]
-_app_config_signature: _ConfigSignature | None = None
+_CombinedSignature = tuple[_ConfigSignature | None, _ConfigSignature | None]
+_app_config_signature: _CombinedSignature | None = None
 _app_config_is_custom = False
 _current_app_config: ContextVar[AppConfig | None] = ContextVar("deerflow_current_app_config", default=None)
 _current_app_config_stack: ContextVar[tuple[AppConfig | None, ...]] = ContextVar("deerflow_current_app_config_stack", default=())
@@ -434,6 +464,17 @@ def _get_config_signature(config_path: Path) -> _ConfigSignature | None:
     return (stat_result.st_mtime, stat_result.st_size, digest.hexdigest())
 
 
+def _get_combined_signature(config_path: Path) -> _CombinedSignature:
+    """Signature covering config.yaml and the runtime models store, so a write
+    to either file triggers the mtime/content reload in get_app_config()."""
+    from deerflow.config.runtime_models import runtime_models_path
+
+    return (
+        _get_config_signature(config_path),
+        _get_config_signature(runtime_models_path(config_path)),
+    )
+
+
 def _load_and_cache_app_config(config_path: str | None = None) -> AppConfig:
     """Load config from disk and refresh cache metadata."""
     global _app_config, _app_config_path, _app_config_mtime, _app_config_signature, _app_config_is_custom
@@ -442,7 +483,7 @@ def _load_and_cache_app_config(config_path: str | None = None) -> AppConfig:
     _app_config = AppConfig.from_file(str(resolved_path))
     _app_config_path = resolved_path
     _app_config_mtime = _get_config_mtime(resolved_path)
-    _app_config_signature = _get_config_signature(resolved_path)
+    _app_config_signature = _get_combined_signature(resolved_path)
     _app_config_is_custom = False
     return _app_config
 
@@ -466,7 +507,7 @@ def get_app_config() -> AppConfig:
 
     resolved_path = AppConfig.resolve_config_path()
     current_mtime = _get_config_mtime(resolved_path)
-    current_signature = _get_config_signature(resolved_path)
+    current_signature = _get_combined_signature(resolved_path)
 
     should_reload = _app_config is None or _app_config_path != resolved_path or _app_config_signature != current_signature
     if should_reload:
