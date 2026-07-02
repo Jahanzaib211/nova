@@ -237,10 +237,11 @@ async def delete_model(model_name: str, config: AppConfig = Depends(get_config))
 
 DISCOVER_TIMEOUT_SEC = 2.0
 
-# Well-known local OpenAI-compatible servers: llama.cpp server / ali-kernel
-# gateway / Ollama, both from inside a container (host.docker.internal) and
-# from a bare-metal gateway (127.0.0.1). Override/extend with a comma-separated
-# DEER_FLOW_LOCAL_LLM_URLS env var.
+# Well-known local OpenAI-compatible servers: any local OpenAI-compatible
+# gateway (e.g. on :9000), llama.cpp server (typically :8081), or Ollama
+# (typically :11434), reachable both from inside a container
+# (host.docker.internal) and from a bare-metal gateway (127.0.0.1).
+# Override/extend with a comma-separated DEER_FLOW_LOCAL_LLM_URLS env var.
 _DEFAULT_DISCOVER_URLS = [
     "http://host.docker.internal:9000/v1",
     "http://host.docker.internal:8081/v1",

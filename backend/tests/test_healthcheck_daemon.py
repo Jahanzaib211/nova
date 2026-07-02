@@ -122,13 +122,13 @@ class TestDispatchFixes:
         # First RED is treated as transient — fix only kicks in after 2 consecutive.
         state = healthcheck.WatchdogState()
         report = healthcheck.CycleReport(cycle_id=1, started_at=0.0, duration_ms=0.0)
-        report.add(healthcheck.ProbeResult("P8_attestation", healthcheck.Status.RED, "drift"))
+        report.add(healthcheck.ProbeResult("P8_binary_attestation", healthcheck.Status.RED, "drift"))
         healthcheck.dispatch_fixes(report, state)
         assert not any(p.fixed for p in report.probes)
-        assert state.consecutive_red["P8_attestation"] == 1
+        assert state.consecutive_red["P8_binary_attestation"] == 1
 
     def test_two_consecutive_reds_triggers_attestation_fix(self, tmp_path, monkeypatch):
-        # Patch fix_attestation to use a fake moat under tmp_path, then verify
+        # Patch fix_binary_attestation to use a fake moat under tmp_path, then verify
         # the moat was cleared after two consecutive RED cycles.
         import shutil as _shutil
 
@@ -141,33 +141,33 @@ class TestDispatchFixes:
             _shutil.rmtree(moat, ignore_errors=True)
             return True
 
-        monkeypatch.setattr(healthcheck, "fix_attestation", patched_fix)
+        monkeypatch.setattr(healthcheck, "fix_binary_attestation", patched_fix)
 
-        # Run two cycles of RED for P8_attestation
+        # Run two cycles of RED for P8_binary_attestation
         state = healthcheck.WatchdogState()
         for cycle in (1, 2):
             report = healthcheck.CycleReport(cycle_id=cycle, started_at=0.0, duration_ms=0.0)
-            report.add(healthcheck.ProbeResult("P8_attestation", healthcheck.Status.RED, "drift"))
+            report.add(healthcheck.ProbeResult("P8_binary_attestation", healthcheck.Status.RED, "drift"))
             healthcheck.dispatch_fixes(report, state)
 
         assert not moat.exists(), "moat should have been cleared by the auto-fix"
 
     def test_yellow_resets_red_counter(self):
         state = healthcheck.WatchdogState()
-        state.consecutive_red["P8_attestation"] = 1
+        state.consecutive_red["P8_binary_attestation"] = 1
         report = healthcheck.CycleReport(cycle_id=2, started_at=0.0, duration_ms=0.0)
-        report.add(healthcheck.ProbeResult("P8_attestation", healthcheck.Status.YELLOW))
+        report.add(healthcheck.ProbeResult("P8_binary_attestation", healthcheck.Status.YELLOW))
         healthcheck.dispatch_fixes(report, state)
-        assert state.consecutive_red.get("P8_attestation", 0) == 0
-        assert state.consecutive_yellow.get("P8_attestation", 0) == 1
+        assert state.consecutive_red.get("P8_binary_attestation", 0) == 0
+        assert state.consecutive_yellow.get("P8_binary_attestation", 0) == 1
 
 
 # ---------------------------------------------------------------------------
-# fix_attestation behavior (no real systemd needed)
+# fix_binary_attestation behavior (no real systemd needed)
 # ---------------------------------------------------------------------------
 
 
-class TestFixAttestation:
+class TestFixBinaryAttestation:
     def test_clears_existing_moat(self, tmp_path, monkeypatch):
         # Redirect /tmp/ali-ram-moat to tmp_path/ali-ram-moat by patching shutil.rmtree
         moat = tmp_path / "ali-ram-moat"
@@ -184,7 +184,7 @@ class TestFixAttestation:
 
         monkeypatch.setattr(healthcheck.shutil, "rmtree", fake_rmtree)
 
-        result = healthcheck.fix_attestation()
+        result = healthcheck.fix_binary_attestation()
         assert result is True
         assert captured["called"], "shutil.rmtree should have targeted ali-ram-moat"
 
@@ -205,11 +205,11 @@ class TestRunCycleSmoke:
             "probe_nginx",
             "probe_gateway",
             "probe_frontend",
-            "probe_ali_kernel",
+            "probe_local_llm_gateway",
             "probe_llama_loopback",
             "probe_llama_vram",
             "probe_containers",
-            "probe_attestation",
+            "probe_binary_attestation",
             "probe_llama_bridge",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
@@ -236,25 +236,25 @@ class TestRunCycleSmoke:
             "probe_nginx",
             "probe_gateway",
             "probe_frontend",
-            "probe_ali_kernel",
+            "probe_local_llm_gateway",
             "probe_llama_loopback",
             "probe_llama_vram",
             "probe_containers",
             "probe_llama_bridge",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
-        monkeypatch.setattr(healthcheck, "probe_attestation", fake_boom)
+        monkeypatch.setattr(healthcheck, "probe_binary_attestation", fake_boom)
 
         state = healthcheck.WatchdogState()
         report = await healthcheck.run_cycle(state)
 
-        # The attestation probe should appear as RED with its real name (P8_attestation),
+        # The attestation probe should appear as RED with its real name (P8_binary_attestation),
         # not some auto-generated placeholder. This is the regression that
         # motivated the (name, coroutine) pair refactor.
         by_name = {p.name: p for p in report.probes}
-        assert "P8_attestation" in by_name
-        assert by_name["P8_attestation"].status == healthcheck.Status.RED
-        assert "RuntimeError" in by_name["P8_attestation"].detail
+        assert "P8_binary_attestation" in by_name
+        assert by_name["P8_binary_attestation"].status == healthcheck.Status.RED
+        assert "RuntimeError" in by_name["P8_binary_attestation"].detail
         # The other 8 should still be GREEN and the cycle should still report.
         assert report.overall == healthcheck.Status.RED
         assert report.exit_code == 1
@@ -324,11 +324,11 @@ class TestCycleDeadline:
             "probe_nginx",
             "probe_gateway",
             "probe_frontend",
-            "probe_ali_kernel",
+            "probe_local_llm_gateway",
             "probe_llama_loopback",
             "probe_llama_vram",
             "probe_containers",
-            "probe_attestation",
+            "probe_binary_attestation",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_hang)
 

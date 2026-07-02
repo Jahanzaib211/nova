@@ -69,6 +69,17 @@ config-upgrade:
 check:
 	@$(PYTHON) ./scripts/check.py
 
+# AI self-test: enforce cross-project isolation (see AGENTS.md)
+cross-ref-check:
+	@bash ./scripts/check_no_cross_references.sh
+
+# Apply the auto-fix tool to all detected cross-reference violations
+fix-cross-refs:
+	@$(PYTHON) ./scripts/fix_cross_references.py
+
+fix-cross-refs-dry-run:
+	@$(PYTHON) ./scripts/fix_cross_references.py --dry-run
+
 # Install all dependencies
 install:
 	@echo "Installing backend dependencies..."

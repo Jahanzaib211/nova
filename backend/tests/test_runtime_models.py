@@ -65,8 +65,8 @@ def client(config_env):
 
 
 LLAMA_ENTRY = {
-    "name": "ornith-local",
-    "model": "ornith",
+    "name": "local-llm",
+    "model": "local-model-gguf",
     "use": "langchain_openai:ChatOpenAI",
     "base_url": "http://127.0.0.1:8081/v1",
     "api_key": "not-needed",
@@ -86,7 +86,7 @@ def test_runtime_models_merge_into_app_config(config_env):
     save_runtime_model_dicts([LLAMA_ENTRY])
     config = get_app_config()
     names = [m.name for m in config.models]
-    assert names == ["config-model", "ornith-local"]
+    assert names == ["config-model", "local-llm"]
 
 
 def test_config_yaml_wins_on_name_collision(config_env):
@@ -100,7 +100,7 @@ def test_hot_reload_after_runtime_store_write(config_env):
     assert [m.name for m in get_app_config().models] == ["config-model"]
     # A later write to the runtime store alone must trigger the signature reload.
     save_runtime_model_dicts([LLAMA_ENTRY])
-    assert [m.name for m in get_app_config().models] == ["config-model", "ornith-local"]
+    assert [m.name for m in get_app_config().models] == ["config-model", "local-llm"]
 
 
 def test_post_creates_runtime_model(client, config_env):
@@ -114,9 +114,9 @@ def test_post_creates_runtime_model(client, config_env):
     assert "api_key" not in body["model"]
 
     listing = client.get("/api/models").json()
-    assert [m["name"] for m in listing["models"]] == ["config-model", "ornith-local"]
+    assert [m["name"] for m in listing["models"]] == ["config-model", "local-llm"]
     sources = {m["name"]: m["source"] for m in listing["models"]}
-    assert sources == {"config-model": "config", "ornith-local": "runtime"}
+    assert sources == {"config-model": "config", "local-llm": "runtime"}
 
 
 def test_post_duplicate_name_conflicts(client):
@@ -130,7 +130,7 @@ def test_put_updates_and_preserves_api_key_when_omitted(client, config_env):
     client.post("/api/models", json=LLAMA_ENTRY)
     update = {k: v for k, v in LLAMA_ENTRY.items() if k != "api_key"}
     update["display_name"] = "Ornith v2"
-    res = client.put("/api/models/ornith-local", json=update)
+    res = client.put("/api/models/local-llm", json=update)
     assert res.status_code == 200, res.text
     assert res.json()["model"]["display_name"] == "Ornith v2"
 
@@ -145,7 +145,7 @@ def test_put_config_model_is_forbidden(client):
 
 def test_delete_runtime_model(client):
     client.post("/api/models", json=LLAMA_ENTRY)
-    assert client.delete("/api/models/ornith-local").status_code == 200
+    assert client.delete("/api/models/local-llm").status_code == 200
     names = [m["name"] for m in client.get("/api/models").json()["models"]]
     assert names == ["config-model"]
 
@@ -159,7 +159,7 @@ def test_invalid_runtime_entries_are_skipped_not_fatal(config_env):
     path = runtime_models_path()
     path.write_text(yaml.safe_dump({"models": [{"display_name": "missing required fields"}, LLAMA_ENTRY]}), encoding="utf-8")
     config = get_app_config()
-    assert [m.name for m in config.models] == ["config-model", "ornith-local"]
+    assert [m.name for m in config.models] == ["config-model", "local-llm"]
 
 
 def test_env_override_for_store_path(tmp_path, monkeypatch, config_env):

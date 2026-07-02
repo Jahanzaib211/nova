@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""nova-healthcheck — supervisor watchdog for the Nova/DeerFlow + ali-kernel
-stack. Polls 8 probes every CYCLE_INTERVAL seconds and auto-fixes common
-breakage so `pm2 list nova-healthcheck` is the operator's single pane of glass.
+"""nova-healthcheck — supervisor watchdog for the local dev stack.
+
+Polls 9 probes every CYCLE_INTERVAL seconds and auto-fixes common breakage
+so `pm2 list nova-healthcheck` is the operator's single pane of glass.
+
+Generic by design — this code knows nothing about specific upstream services.
+All probe targets are configured via environment variables.
 
 Probes:
   P1. nginx on http://localhost:2026/health
-  P2. gateway reachable via nginx (GET /api/health if no auth; fall back to
-      authenticated probe via /api/models without creds → expect 401, not 5xx)
+  P2. gateway reachable via nginx (probes /api/models without creds; the
+      auth wall — 401/403 — proves the gateway + auth middleware are up)
   P3. frontend root on http://localhost:2026/ (200 + html body)
-  P4. ali-kernel gateway on http://localhost:9000/health (returns
-      `backend: "healthy"|"unreachable"` and `backend_local: bool`)
+  P4. local LLM gateway on http://localhost:${LOCAL_LLM_GATEWAY_PORT:-9000}/health
   P5. llama-server loopback reachability (127.0.0.1:8081/v1/models → 200)
-  P6. llama-server VRAM readiness (tiny 1-token chat completion — distinguishes
-      server-up from model-loaded; takes ~30s after boot)
+  P6. llama-server VRAM readiness (tiny 1-token chat completion)
   P7. Docker container count for the deer-flow-dev project (≥ 3 expected)
-  P8. ali-kernel binary + SOUL.md attestation drift (sha256 mismatch between
-      on-disk binary and /tmp/ali-ram-moat/golden_binary.hash triggers a
-      restart; SOUL.md mismatch the same)
+  P8. binary attestation drift (env-driven paths; skipped if unset)
+  P9. llama-bridge reachability (172.17.0.1:8081 → the path Nova's
+      container actually uses via host.docker.internal)
 
 Auto-fixes (only safe, reversible ones):
-  - Attestation drift → rm -rf /tmp/ali-ram-moat && systemctl --user restart
-    ali-kernel.service (binary tamper self-heal per ali-kernel CLAUDE.md).
-  - Container count < 3 → pm2 restart deerflow (lets PM2 re-run the
-    foreground docker compose up).
-  - llama-server ECONNREFUSED at boot → wait one cycle, no action (cold load).
+  - Attestation drift → clear the hash dir (and run WATCHDOG_ATTESTATION_RESTART_CMD
+    if set)
+  - Container count < 3 → pm2 restart deerflow
+  - llama-server ECONNREFUSED at boot → wait one cycle, no action (cold load)
 
 Status:
   - Exits 0 every cycle when all probes are GREEN.
   - Exits 1 if a cycle exceeds CYCLE_DEADLINE_SEC (a probe hung); PM2 will
     restart, and the next cycle starts fresh.
-  - Exits 2 if the binary itself is in an inconsistent state (manual review).
 
 Reads:
-  - ${LLAMA_BRIDGE_HOST:-172.17.0.1}:8081 for bridge probe
-  - ${LLAMA_HOST:-127.0.0.1}:8081 for llama-server probe
-  - ${ALI_KERNEL_PORT:-9000} for ali-kernel probe
-  - ${DEER_FLOW_HOME:-/home/jahanzaib/Desktop/nova/backend/.deer-flow}
-  - ${HEALTHCHECK_CYCLE_DEADLINE_SEC:-60} hard deadline per cycle (self-watchdog)
+  - ${LOCAL_LLM_GATEWAY_HOST:-127.0.0.1}:${LOCAL_LLM_GATEWAY_PORT:-9000} for P4
+  - ${LLAMA_HOST:-127.0.0.1}:8081 for P5/P6
+  - ${LLAMA_BRIDGE_HOST:-172.17.0.1}:8081 for P9
+  - ${WATCHDOG_ATTESTATION_BINARY_PATH} for P8 (skipped if unset)
+  - ${HEALTHCHECK_CYCLE_DEADLINE_SEC:-60} hard deadline per cycle
 """
 
 from __future__ import annotations
@@ -219,7 +219,7 @@ async def probe_frontend(port: int = 2026) -> ProbeResult:
     return await _do()
 
 
-async def probe_ali_kernel(port: int = 9000) -> ProbeResult:
+async def probe_local_llm_gateway(port: int = 9000) -> ProbeResult:
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
         try:
@@ -227,19 +227,19 @@ async def probe_ali_kernel(port: int = 9000) -> ProbeResult:
                 res = await client.get(f"http://localhost:{port}/health")
             latency = (time.perf_counter() - t0) * 1000
             if res.status_code != 200:
-                return ProbeResult("P4_ali_kernel", Status.RED, f"HTTP {res.status_code}", latency)
+                return ProbeResult("P4_local_llm_gateway", Status.RED, f"HTTP {res.status_code}", latency)
             payload = res.json()
             backend = payload.get("backend", "?")
             if backend == "healthy":
-                return ProbeResult("P4_ali_kernel", Status.GREEN, f"backend={backend}", latency)
+                return ProbeResult("P4_local_llm_gateway", Status.GREEN, f"backend={backend}", latency)
             if backend == "unreachable":
                 # llama-server cold or down — mask as yellow for 2 cycles
-                return ProbeResult("P4_ali_kernel", Status.YELLOW, f"backend={backend} (llama cold?)", latency)
-            return ProbeResult("P4_ali_kernel", Status.RED, f"backend={backend}", latency)
+                return ProbeResult("P4_local_llm_gateway", Status.YELLOW, f"backend={backend} (llama cold?)", latency)
+            return ProbeResult("P4_local_llm_gateway", Status.RED, f"backend={backend}", latency)
         except (httpx.ConnectError, httpx.ConnectTimeout):
-            return ProbeResult("P4_ali_kernel", Status.RED, "ECONNREFUSED", (time.perf_counter() - t0) * 1000)
+            return ProbeResult("P4_local_llm_gateway", Status.RED, "ECONNREFUSED", (time.perf_counter() - t0) * 1000)
         except Exception as e:
-            return ProbeResult("P4_ali_kernel", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult("P4_local_llm_gateway", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
 
     return await _do()
 
@@ -342,32 +342,89 @@ async def probe_containers(project: str = "deer-flow-dev", min_count: int = 3) -
     return await _do()
 
 
-async def probe_attestation(ali_kernel_binary: str = "/home/jahanzaib/ali-kernel/target/release/ali-kernel", soul_path: str = "/home/jahanzaib/ali-kernel/constitutions/SOUL.md") -> ProbeResult:
+async def probe_binary_attestation() -> ProbeResult:
+    """Probe binary attestation: compare SHA-256 of an on-disk binary to a
+    reference hash, and optionally compare a second file (e.g. a
+    constitution) to a second reference hash.
+
+    All paths are operator-configured via env vars:
+      WATCHDOG_ATTESTATION_BINARY_PATH        — file to hash
+      WATCHDOG_ATTESTATION_CONSTITUTION_PATH  — optional second file
+      WATCHDOG_ATTESTATION_HASH_DIR           — directory containing
+                                               reference hashes
+    """
     import hashlib
+
+    binary_path = os.environ.get("WATCHDOG_ATTESTATION_BINARY_PATH")
+    if not binary_path:
+        return ProbeResult(
+            "P8_binary_attestation",
+            Status.GREEN,
+            "skipped (WATCHDOG_ATTESTATION_BINARY_PATH unset)",
+            0.0,
+        )
+
+    constitution_path = os.environ.get("WATCHDOG_ATTESTATION_CONSTITUTION_PATH")
+    hash_dir = os.environ.get("WATCHDOG_ATTESTATION_HASH_DIR", "/tmp/ali-ram-moat")
+
+    binary_basename = Path(binary_path).name
+    binary_hash_file = Path(hash_dir) / f"{binary_basename}.hash"
+    constitution_hash_file = (
+        Path(hash_dir) / f"{binary_basename}.constitution-hash"
+        if constitution_path
+        else None
+    )
 
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
         try:
-            # If the moat dir is absent (fresh boot or just cleared), no
-            # attestation has been recorded yet → trivially healthy.
-            if not os.path.isdir("/tmp/ali-ram-moat"):
-                return ProbeResult("P8_attestation", Status.GREEN, "no moat (fresh boot)", (time.perf_counter() - t0) * 1000)
-
-            expected_bin = Path("/tmp/ali-ram-moat/golden_binary.hash").read_text().strip()
-            expected_soul = Path("/tmp/ali-ram-moat/soul_golden_hash.txt").read_text().strip()
-            actual_bin = hashlib.sha256(Path(ali_kernel_binary).read_bytes()).hexdigest()
-            actual_soul = hashlib.sha256(Path(soul_path).read_bytes()).hexdigest() if Path(soul_path).exists() else ""
+            if not Path(hash_dir).is_dir():
+                return ProbeResult(
+                    "P8_binary_attestation",
+                    Status.GREEN,
+                    "no attestation record (fresh boot)",
+                    (time.perf_counter() - t0) * 1000,
+                )
 
             mismatches = []
-            if expected_bin and actual_bin != expected_bin:
-                mismatches.append(f"binary {actual_bin[:8]}…≠{expected_bin[:8]}…")
-            if expected_soul and actual_soul != expected_soul:
-                mismatches.append(f"SOUL {actual_soul[:8]}…≠{expected_soul[:8]}…")
+
+            if binary_hash_file.exists():
+                expected = binary_hash_file.read_text().strip()
+                actual = hashlib.sha256(Path(binary_path).read_bytes()).hexdigest()
+                if expected and actual != expected:
+                    mismatches.append(f"binary {actual[:8]}…≠{expected[:8]}…")
+            else:
+                mismatches.append(f"missing reference: {binary_hash_file.name}")
+
+            if constitution_path and constitution_hash_file and constitution_hash_file.exists():
+                expected_s = constitution_hash_file.read_text().strip()
+                if Path(constitution_path).exists():
+                    actual_s = hashlib.sha256(Path(constitution_path).read_bytes()).hexdigest()
+                    if expected_s and actual_s != expected_s:
+                        mismatches.append(f"constitution {actual_s[:8]}…≠{expected_s[:8]}…")
+                else:
+                    mismatches.append(f"missing file: {constitution_path}")
+
             if mismatches:
-                return ProbeResult("P8_attestation", Status.RED, "drift: " + ", ".join(mismatches), (time.perf_counter() - t0) * 1000)
-            return ProbeResult("P8_attestation", Status.GREEN, "binary + SOUL match", (time.perf_counter() - t0) * 1000)
+                return ProbeResult(
+                    "P8_binary_attestation",
+                    Status.RED,
+                    "drift: " + ", ".join(mismatches),
+                    (time.perf_counter() - t0) * 1000,
+                )
+            return ProbeResult(
+                "P8_binary_attestation",
+                Status.GREEN,
+                "binary + constitution match",
+                (time.perf_counter() - t0) * 1000,
+            )
         except Exception as e:
-            return ProbeResult("P8_attestation", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P8_binary_attestation",
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
 
     return await _do()
 
@@ -377,31 +434,35 @@ async def probe_attestation(ali_kernel_binary: str = "/home/jahanzaib/ali-kernel
 # ---------------------------------------------------------------------------
 
 
-def fix_attestation() -> bool:
-    """Clear ali-kernel binary attestation. Per ali-kernel/CLAUDE.md: after
-    every cargo build the binary hash changes, so the next start fails with
-    "Binary tampered!" until /tmp/ali-ram-moat is cleared.
+def fix_binary_attestation() -> bool:
+    """Clear the binary attestation record directory and (optionally) restart
+    the consumer service.
 
-    The moat clear is safe and reversible (just deletes the seal; ali-kernel
-    re-seals on next start). The systemd restart that consumes the cleared
-    moat is NOT done by this watchdog because ali-kernel.service is a system
-    unit owned by root and the watchdog runs unprivileged. We surface a
-    clear actionable error so the operator (or a sudoer-equipped cron) can
-    issue `sudo systemctl restart ali-kernel.service` when ready.
-
-    Returns True if the moat was cleared successfully (the part we CAN do).
+    Generic — operates on whatever directory WATCHDOG_ATTESTATION_HASH_DIR
+    points at. If WATCHDOG_ATTESTATION_RESTART_CMD is set, it's executed
+    after the clear.
     """
-    log.warning("auto-fix: clearing ali-kernel attestation (/tmp/ali-ram-moat)")
+    hash_dir = os.environ.get("WATCHDOG_ATTESTATION_HASH_DIR", "/tmp/ali-ram-moat")
+    log.warning(f"auto-fix: clearing binary attestation ({hash_dir})")
     try:
-        shutil.rmtree("/tmp/ali-ram-moat", ignore_errors=True)
+        shutil.rmtree(hash_dir, ignore_errors=True)
     except Exception as e:
-        log.error("auto-fix: failed to clear moat: %s", e)
+        log.error(f"auto-fix: failed to clear attestation: {e}")
         return False
+    restart_cmd = os.environ.get("WATCHDOG_ATTESTATION_RESTART_CMD")
+    if restart_cmd:
+        try:
+            subprocess.run(restart_cmd, shell=True, check=True, timeout=10, capture_output=True)
+            log.warning(f"auto-fix: restart command succeeded: {restart_cmd}")
+            return True
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            log.error(f"auto-fix: restart command failed: {e}")
+            return False
     log.warning(
-        "auto-fix: moat cleared. Operator action required to consume the new seal:\n"
-        "    sudo systemctl restart ali-kernel.service\n"
-        "Until then, the running ali-kernel process is the previous binary and the next\n"
-        "auto-fix cycle will re-clear the moat (idempotent, harmless)."
+        f"auto-fix: attestation cleared. Set WATCHDOG_ATTESTATION_RESTART_CMD to\n"
+        f"    consume the new seal automatically, or restart the consumer manually.\n"
+        f"Until then, the running process is the previous binary and the next\n"
+        f"auto-fix cycle will re-clear (idempotent, harmless)."
     )
     return True
 
@@ -449,8 +510,8 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
         # Only fix after 2 consecutive REDs (one cycle might be a transient blip)
         if state.consecutive_red[probe.name] < 2:
             continue
-        if probe.name == "P8_attestation":
-            if fix_attestation():
+        if probe.name == "P8_binary_attestation":
+            if fix_binary_attestation():
                 probe.fixed = True
                 probe.detail += " [attestation reset + restart issued]"
         elif probe.name == "P7_containers":
@@ -473,8 +534,8 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
         ("P2_gateway", asyncio.ensure_future(probe_gateway())),
         ("P3_frontend", asyncio.ensure_future(probe_frontend())),
         (
-            "P4_ali_kernel",
-            asyncio.ensure_future(probe_ali_kernel(port=int(os.environ.get("ALI_KERNEL_PORT", "9000")))),
+            "P4_local_llm_gateway",
+            asyncio.ensure_future(probe_local_llm_gateway(port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000")))),
         ),
         (
             "P5_llama_loopback",
@@ -485,7 +546,7 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
             asyncio.ensure_future(probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))),
         ),
         ("P7_containers", asyncio.ensure_future(probe_containers())),
-        ("P8_attestation", asyncio.ensure_future(probe_attestation())),
+        ("P8_binary_attestation", asyncio.ensure_future(probe_binary_attestation())),
         (
             "P9_bridge",
             asyncio.ensure_future(probe_llama_bridge(host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1"))),
@@ -581,7 +642,7 @@ async def main_loop(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Nova/DeerFlow + ali-kernel watchdog")
+    parser = argparse.ArgumentParser(description="Nova local-dev-stack watchdog (generic)")
     parser.add_argument("--interval", type=int, default=30, help="seconds between cycles")
     parser.add_argument("--once", action="store_true", help="run a single cycle and exit")
     args = parser.parse_args()

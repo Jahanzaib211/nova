@@ -212,7 +212,7 @@ function ModelFormDialog({
             <Input
               value={form.name}
               disabled={isEdit}
-              placeholder="ornith-local"
+              placeholder="local-llm"
               onChange={(e) => set("name", e.target.value)}
             />
           </FieldRow>
@@ -254,7 +254,7 @@ function ModelFormDialog({
           <FieldRow label={strings.fieldModelId}>
             <Input
               value={form.model}
-              placeholder="ornith"
+              placeholder="model-id"
               onChange={(e) => set("model", e.target.value)}
             />
           </FieldRow>

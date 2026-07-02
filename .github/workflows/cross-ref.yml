@@ -1,0 +1,28 @@
+name: Cross-Reference Isolation
+
+on:
+  push:
+    branches: [ "fork-v7-browser-determinism", "master" ]
+  pull_request:
+    branches: [ "fork-v7-browser-determinism", "master" ]
+
+jobs:
+  cross-ref-check:
+    name: Fail if ali-kernel or ornith literal appears in source
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Run cross-reference check
+        run: |
+          uv run python3 backend/tests/test_no_cross_references.py
+
+      - name: Run with pytest (same check, integrated)
+        run: |
+          cd backend && PYTHONPATH=../scripts uv run pytest tests/test_no_cross_references.py -v
