@@ -217,3 +217,87 @@ class TestRunCycleSmoke:
         assert report.overall == healthcheck.Status.GREEN
         assert len(report.probes) == 8
         assert all(p.status == healthcheck.Status.GREEN for p in report.probes)
+
+    @pytest.mark.asyncio
+    async def test_run_cycle_survives_single_probe_exception(self, monkeypatch):
+        """A single probe raising must not kill the whole cycle — the JSON
+        status line should still emit, the other 7 probes should be GREEN,
+        and the failed probe should appear as a labeled RED."""
+
+        async def fake_green(*args, **kwargs):
+            return healthcheck.ProbeResult("mock", healthcheck.Status.GREEN, "mock-ok", 1.0)
+
+        async def fake_boom(*args, **kwargs):
+            raise RuntimeError("simulated probe failure")
+
+        for name in [
+            "probe_nginx",
+            "probe_gateway",
+            "probe_frontend",
+            "probe_ali_kernel",
+            "probe_llama_loopback",
+            "probe_llama_vram",
+            "probe_containers",
+        ]:
+            monkeypatch.setattr(healthcheck, name, fake_green)
+        monkeypatch.setattr(healthcheck, "probe_attestation", fake_boom)
+
+        state = healthcheck.WatchdogState()
+        report = await healthcheck.run_cycle(state)
+
+        # The attestation probe should appear as RED with its real name (P8_attestation),
+        # not some auto-generated placeholder. This is the regression that
+        # motivated the (name, coroutine) pair refactor.
+        by_name = {p.name: p for p in report.probes}
+        assert "P8_attestation" in by_name
+        assert by_name["P8_attestation"].status == healthcheck.Status.RED
+        assert "RuntimeError" in by_name["P8_attestation"].detail
+        # The other 7 should still be GREEN and the cycle should still report.
+        assert report.overall == healthcheck.Status.RED
+        assert report.exit_code == 1
+        green_count = sum(1 for p in report.probes if p.status == healthcheck.Status.GREEN)
+        assert green_count == 7
+
+
+class TestLogRouting:
+    def test_logs_go_to_stderr(self):
+        """Logs must route to stderr so they don't pollute the JSON status line
+        on stdout — PM2 splits stdout/stderr into out_file vs error_file.
+
+        pytest replaces log handlers with capture hooks, so we can't inspect
+        the live handler stream. Instead, re-import the module in a subprocess
+        with stderr captured and verify the log line landed in stderr (not
+        stdout). That proves logging.basicConfig(stream=sys.stderr) was honored.
+        """
+        import subprocess
+
+        script_path = str(SCRIPT_PATH)
+        code = (
+            "import sys, importlib.util;"
+            "spec = importlib.util.spec_from_file_location('hc', "
+            f"{script_path!r});"
+            "m = importlib.util.module_from_spec(spec); "
+            "sys.modules['hc'] = m; "  # @dataclass needs the module in sys.modules
+            "spec.loader.exec_module(m);"
+            "m.log.warning('test_log_routing_marker')"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            cwd="/home/jahanzaib/Desktop/nova",
+        )
+        assert "test_log_routing_marker" in result.stderr, (
+            f"expected marker in stderr, got stdout={result.stdout!r} stderr={result.stderr!r}"
+        )
+        assert "test_log_routing_marker" not in result.stdout, (
+            f"marker leaked to stdout: {result.stdout!r}"
+        )
+
+    def test_httpx_logging_silenced(self):
+        import logging as _logging
+
+        httpx_logger = _logging.getLogger("httpx")
+        httpcore_logger = _logging.getLogger("httpcore")
+        assert httpx_logger.level >= _logging.WARNING, "httpx logger must be silenced to WARNING+"
+        assert httpcore_logger.level >= _logging.WARNING, "httpcore logger must be silenced to WARNING+"

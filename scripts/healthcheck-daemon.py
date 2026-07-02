@@ -56,11 +56,20 @@ from typing import Awaitable, Callable, Optional
 
 import httpx
 
+# Logs go to stderr so they don't get mixed with the per-cycle JSON status
+# line on stdout. PM2 captures stderr into error_file, stdout into out_file;
+# `pm2 logs nova-healthcheck --lines 1 --nostream` then shows just the JSON,
+# while `pm2 logs nova-healthcheck --lines 30 --nostream --err` shows the
+# diagnostic narrative.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s nova-healthcheck %(levelname)s %(message)s",
-    stream=sys.stdout,
+    stream=sys.stderr,
 )
+# Silence httpx's per-request INFO noise — with 8 probes per cycle and a 30s
+# interval that's ~16 lines per minute of pure noise polluting the log.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger("nova-healthcheck")
 
 
@@ -437,19 +446,41 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
     t0 = time.perf_counter()
     report = CycleReport(cycle_id=state.cycle_id, started_at=t0, duration_ms=0.0)
 
-    probes = [
-        probe_nginx(),
-        probe_gateway(),
-        probe_frontend(),
-        probe_ali_kernel(port=int(os.environ.get("ALI_KERNEL_PORT", "9000"))),
-        probe_llama_loopback(host=os.environ.get("LLAMA_HOST", "127.0.0.1")),
-        probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1")),
-        probe_containers(),
-        probe_attestation(),
+    # (name, coroutine) pairs so we can label a probe correctly even if it
+    # raises before producing its own ProbeResult.
+    probes: list[tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]] = [
+        ("P1_nginx", asyncio.ensure_future(probe_nginx())),
+        ("P2_gateway", asyncio.ensure_future(probe_gateway())),
+        ("P3_frontend", asyncio.ensure_future(probe_frontend())),
+        (
+            "P4_ali_kernel",
+            asyncio.ensure_future(probe_ali_kernel(port=int(os.environ.get("ALI_KERNEL_PORT", "9000")))),
+        ),
+        (
+            "P5_llama_loopback",
+            asyncio.ensure_future(probe_llama_loopback(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))),
+        ),
+        (
+            "P6_llama_vram",
+            asyncio.ensure_future(probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))),
+        ),
+        ("P7_containers", asyncio.ensure_future(probe_containers())),
+        ("P8_attestation", asyncio.ensure_future(probe_attestation())),
     ]
-    results = await asyncio.gather(*probes, return_exceptions=False)
-    for r in results:
-        report.add(r)
+    results = await asyncio.gather(*(c for _, c in probes), return_exceptions=True)
+    for (name, _), result in zip(probes, results):
+        if isinstance(result, BaseException):
+            log.exception("probe %s raised", name)
+            report.add(
+                ProbeResult(
+                    name=name,
+                    status=Status.RED,
+                    detail=f"probe raised: {type(result).__name__}: {result}",
+                    latency_ms=0.0,
+                )
+            )
+        else:
+            report.add(result)
 
     dispatch_fixes(report, state)
 
