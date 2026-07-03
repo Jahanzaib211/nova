@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   Sidebar,
   SidebarHeader,
@@ -32,6 +34,14 @@ export function WorkspaceSidebar({
         </SidebarContent>
         <SidebarFooter>
           <WorkspaceNavMenu />
+          {isSidebarOpen && (
+            <Link
+              href="/saas"
+              className="text-muted-foreground/60 hover:text-muted-foreground cursor-pointer px-2 pb-1 text-center text-[10px] tracking-wide transition"
+            >
+              Made by Ali Technologies
+            </Link>
+          )}
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

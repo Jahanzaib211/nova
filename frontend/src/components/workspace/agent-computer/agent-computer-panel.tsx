@@ -2376,13 +2376,13 @@ export function AgentComputerPanel({
   // GitHub push
   const handleGitHubPush = useCallback(() => {
     if (!onAgentMessage) return;
-    const repoName = `deerflow-${Date.now()}`;
+    const repoName = `nova-${Date.now()}`;
     // Use http.extraHeader for auth — avoids embedding GITHUB_TOKEN in the remote
     // URL (which would leak it into .git/config, shell history, and process lists).
     onAgentMessage(
       `Push all files in /mnt/user-data/workspace/ to a new public GitHub repository named "${repoName}". ` +
         `Steps: cd /mnt/user-data/workspace && git init && git add -A && ` +
-        `git commit -m "Built by DeerFlow" && ` +
+        `git commit -m "Built by Nova" && ` +
         `git remote add origin https://github.com/$(git config user.name || echo "user")/${repoName}.git && ` +
         `git -c http.extraHeader="Authorization: Bearer $GITHUB_TOKEN" push -u origin main. ` +
         `Report the GitHub URL when done. If GITHUB_TOKEN is not set, ask the user to set it in the sandbox environment.`,

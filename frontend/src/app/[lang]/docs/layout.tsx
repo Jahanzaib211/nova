@@ -40,7 +40,7 @@ export default async function DocLayout({ children, params }) {
         />
       }
       pageMap={pageMap}
-      docsRepositoryBase="https://github.com/bytedance/deerflow/tree/main/frontend/src/content"
+      docsRepositoryBase="https://github.com/Jahanzaib211/nova/tree/main/frontend/src/content"
       footer={<Footer className="mt-0" />}
       i18n={i18n}
       // ... Your additional layout options

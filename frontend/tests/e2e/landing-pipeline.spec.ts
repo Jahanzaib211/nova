@@ -19,7 +19,7 @@ test.describe("Landing → workspace pipeline", () => {
     });
     // Brand name is in the header h1 (one of the few landmarks).
     await expect(
-      page.locator("header").getByText("DeerFlow").first(),
+      page.locator("header").getByText("Nova").first(),
     ).toBeVisible();
   });
 

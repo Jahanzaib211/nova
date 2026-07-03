@@ -2,7 +2,7 @@ import type { MetaRecord } from "nextra";
 
 const meta: MetaRecord = {
   "why-deerflow": {
-    title: "为什么选择 DeerFlow",
+    title: "为什么选择 Nova",
   },
   "core-concepts": {
     title: "核心概念",

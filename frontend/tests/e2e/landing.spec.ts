@@ -8,7 +8,7 @@ test.describe("Landing page", () => {
 
     // Header brand name
     await expect(
-      page.locator("header h1", { hasText: "DeerFlow" }),
+      page.locator("header h1", { hasText: "Nova" }),
     ).toBeVisible();
 
     // "Get Started" call-to-action button in hero

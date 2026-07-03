@@ -31,11 +31,12 @@ test.describe("Agent Computer panel", () => {
     const resp = await page.goto("/workspace/chats/new");
     expect(resp?.status()).toBeLessThan(500);
     // Sign-in form OR chat input — both are valid dev-mode renderings.
+    // Wait for hydration instead of counting instantly (flaked in CI).
     const signInBtn = page.getByRole("button", { name: /sign in/i });
     const chatInput = page.getByPlaceholder(/how can i assist you/i);
-    const signInCount = await signInBtn.count();
-    const chatCount = await chatInput.count();
-    expect(signInCount + chatCount).toBeGreaterThan(0);
+    await expect(signInBtn.or(chatInput).first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("agent computer panel opens with terminal trigger", async ({ page }) => {

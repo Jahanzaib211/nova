@@ -1,3 +1,9 @@
+# Nova — The Agent's Computer
+
+> **Nova** создан Ali Technologies на основе открытого проекта [DeerFlow](https://github.com/bytedance/deer-flow). Лицензия MIT и оригинальные уведомления об авторских правах полностью сохранены (см. [LICENSE](./LICENSE) и [NOTICE.md](./NOTICE.md)). Ниже приведена документация исходного проекта DeerFlow.
+
+---
+
 # 🦌 DeerFlow - 2.0
 
 [English](./README.md) | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](./README_fr.md) | Русский

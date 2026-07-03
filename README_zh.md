@@ -1,3 +1,9 @@
+# Nova — 智能体的电脑
+
+> **Nova** 由 Ali Technologies 基于开源项目 [DeerFlow](https://github.com/bytedance/deer-flow) 构建。上游 MIT 许可证与版权声明完整保留（见 [LICENSE](./LICENSE) 与 [NOTICE.md](./NOTICE.md)）。以下为上游 DeerFlow 文档。
+
+---
+
 # 🦌 DeerFlow - 2.0
 
 [English](./README.md) | 中文 | [日本語](./README_ja.md) | [Français](./README_fr.md) | [Русский](./README_ru.md)

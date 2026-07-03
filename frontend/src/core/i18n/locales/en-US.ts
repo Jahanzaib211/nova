@@ -62,13 +62,13 @@ export const enUS: Translations = {
 
   // Welcome
   welcome: {
-    greeting: "Hello, again!",
+    greeting: "Hi, I'm Nova.",
     description:
-      "Welcome to 🦌 DeerFlow, an open source super agent. With built-in and custom skills, DeerFlow helps you search on the web, analyze data, and generate artifacts like slides, web pages and do almost anything.",
+      "I'm your computer agent. Give me a task and watch my computer go to work — researching, writing and running code in my own sandbox, and shipping real apps, slides, reports, and web pages, live.",
 
     createYourOwnSkill: "Create Your Own Skill",
     createYourOwnSkillDescription:
-      "Create your own skill to release the power of DeerFlow. With customized skills,\nDeerFlow can help you search on the web, analyze data, and generate\n artifacts like slides, web pages and do almost anything.",
+      "Create your own skill to release the power of Nova. With customized skills,\nNova can help you search on the web, analyze data, and generate\n artifacts like slides, web pages and do almost anything.",
   },
 
   // Clipboard
@@ -215,13 +215,13 @@ export const enUS: Translations = {
     save: "Save agent",
     saving: "Saving agent...",
     saveRequested:
-      "Save requested. DeerFlow is generating and saving an initial version now.",
+      "Save requested. Nova is generating and saving an initial version now.",
     saveHint:
       "You can save this agent at any time from the top-right menu, even if this is only a first draft.",
     saveCommandMessage:
       "Please save this custom agent now based on everything we have discussed so far. Treat this as my explicit confirmation to save. If some details are still missing, make reasonable assumptions, generate a concise first SOUL.md in English, and call setup_agent immediately without asking me for more confirmation.",
     agentCreatedPendingRefresh:
-      "The agent was created, but DeerFlow could not load it yet. Please refresh this page in a moment.",
+      "The agent was created, but Nova could not load it yet. Please refresh this page in a moment.",
     more: "More actions",
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
@@ -238,13 +238,13 @@ export const enUS: Translations = {
 
   // Workspace
   workspace: {
-    officialWebsite: "DeerFlow's official website",
-    githubTooltip: "DeerFlow on Github",
+    officialWebsite: "Nova's official website",
+    githubTooltip: "Nova on Github",
     settingsAndMore: "Settings and more",
-    visitGithub: "DeerFlow on GitHub",
+    visitGithub: "Nova on GitHub",
     reportIssue: "Report a issue",
     contactUs: "Contact us",
-    about: "About DeerFlow",
+    about: "About Nova",
     logout: "Log out",
     gatewayUnavailable: "Gateway is temporarily unavailable.",
     gatewayUnavailableRetrying: "Retrying in the background…",
@@ -286,20 +286,20 @@ export const enUS: Translations = {
     saveAndConnect: "Save and connect",
     saveChanges: "Save changes",
     descriptions: {
-      telegram: "Telegram direct messages through your DeerFlow bot.",
+      telegram: "Telegram direct messages through your Nova bot.",
       slack: "Slack workspace messages and mentions.",
-      discord: "Discord server messages through your DeerFlow bot.",
-      feishu: "Feishu and Lark messages through your DeerFlow app.",
-      dingtalk: "DingTalk Stream Push messages through your DeerFlow bot.",
-      wechat: "WeChat iLink messages through your DeerFlow bot.",
-      wecom: "WeCom messages through your DeerFlow AI bot.",
+      discord: "Discord server messages through your Nova bot.",
+      feishu: "Feishu and Lark messages through your Nova app.",
+      dingtalk: "DingTalk Stream Push messages through your Nova bot.",
+      wechat: "WeChat iLink messages through your Nova bot.",
+      wecom: "WeCom messages through your Nova AI bot.",
     },
     connectedAs: (name: string) => `Connected as ${name}.`,
   },
 
   // Page titles (document title)
   pages: {
-    appName: "DeerFlow",
+    appName: "Nova",
     chats: "Chats",
     newChat: "New chat",
     untitled: "Untitled",
@@ -325,7 +325,7 @@ export const enUS: Translations = {
     writeFile: "Write file",
     clickToViewContent: "Click to view file content",
     writeTodos: "Update to-do list",
-    skillInstallTooltip: "Install skill and make it available to DeerFlow",
+    skillInstallTooltip: "Install skill and make it available to Nova",
   },
 
   // Subtasks
@@ -385,7 +385,7 @@ export const enUS: Translations = {
     actions: "Actions",
     keyboardShortcuts: "Keyboard Shortcuts",
     keyboardShortcutsDescription:
-      "Navigate DeerFlow faster with keyboard shortcuts.",
+      "Navigate Nova faster with keyboard shortcuts.",
     openCommandPalette: "Open Command Palette",
     toggleSidebar: "Toggle Sidebar",
   },
@@ -393,7 +393,7 @@ export const enUS: Translations = {
   // Settings
   settings: {
     title: "Settings",
-    description: "Adjust how DeerFlow looks and behaves for you.",
+    description: "Adjust how Nova looks and behaves for you.",
     sections: {
       account: "Account",
       appearance: "Appearance",
@@ -408,7 +408,7 @@ export const enUS: Translations = {
     models: {
       title: "Models",
       description:
-        "Manage the AI models available to DeerFlow. Models from config.yaml are read-only; models you add here are stored separately and take effect immediately.",
+        "Manage the AI models available to Nova. Models from config.yaml are read-only; models you add here are stored separately and take effect immediately.",
       loadError: "Failed to load models.",
       sourceConfig: "config",
       sourceRuntime: "custom",
@@ -443,7 +443,7 @@ export const enUS: Translations = {
     memory: {
       title: "Memory",
       description:
-        "DeerFlow automatically learns from your conversations in the background. These memories help DeerFlow understand you better and deliver a more personalized experience.",
+        "Nova automatically learns from your conversations in the background. These memories help Nova understand you better and deliver a more personalized experience.",
       empty: "No memory data to display.",
       rawJson: "Raw JSON",
       exportButton: "Export memory",
@@ -541,7 +541,7 @@ export const enUS: Translations = {
     channels: {
       title: "Channels",
       description:
-        "Connect IM accounts that can send messages to DeerFlow from outside the browser.",
+        "Connect IM accounts that can send messages to Nova from outside the browser.",
       disabled:
         "Channel connections are not enabled on this server. Ask an administrator to enable channel_connections.",
     },
@@ -552,18 +552,18 @@ export const enUS: Translations = {
       createSkill: "Create skill",
       emptyTitle: "No agent skill yet",
       emptyDescription:
-        "Put your agent skill folders under the `/skills/custom` folder under the root folder of DeerFlow.",
+        "Put your agent skill folders under the `/skills/custom` folder under the root folder of Nova.",
       emptyButton: "Create Your First Skill",
     },
     notification: {
       title: "Notification",
       description:
-        "DeerFlow only sends a completion notification when the window is not active. This is especially useful for long-running tasks so you can switch to other work and get notified when done.",
+        "Nova only sends a completion notification when the window is not active. This is especially useful for long-running tasks so you can switch to other work and get notified when done.",
       requestPermission: "Request notification permission",
       deniedHint:
         "Notification permission was denied. You can enable it in your browser's site settings to receive completion alerts.",
       testButton: "Send test notification",
-      testTitle: "DeerFlow",
+      testTitle: "Nova",
       testBody: "This is a test notification.",
       notSupported: "Your browser does not support notifications.",
       disableNotification: "Disable notification",
@@ -808,11 +808,11 @@ export const enUS: Translations = {
     },
     caseStudy: {
       title: "Case Studies",
-      subtitle: "See how DeerFlow is used in the wild",
+      subtitle: "See how Nova is used in the wild",
     },
     community: {
       subtitle:
-        "Contribute brilliant ideas to shape the future of DeerFlow. Collaborate, innovate, and make impacts.",
+        "Contribute brilliant ideas to shape the future of Nova. Collaborate, innovate, and make impacts.",
     },
     sandbox: {
       title: "Agent Runtime Environment",
@@ -821,12 +821,12 @@ export const enUS: Translations = {
       title: "Agent Skills",
     },
     whatsNew: {
-      title: "What's New in DeerFlow 2.0",
+      title: "What's New in Nova 2.0",
       subtitle:
-        "DeerFlow is now evolving from a Deep Research agent into a full-stack Super Agent",
+        "Nova is now evolving from a Deep Research agent into a full-stack Super Agent",
     },
     skillsAnimation: {
-      agentLabel: "DeerFlow Agent",
+      agentLabel: "Nova Agent",
       loadingSkill: (skillName: string) => `Loading ${skillName}/SKILL.md...`,
       generating: (file: string) => `Generating ${file}...`,
       executing: (script: string) => `Executing ${script}`,

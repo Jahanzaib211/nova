@@ -1,3 +1,9 @@
+# Nova — The Agent's Computer
+
+> **Nova** は Ali Technologies がオープンソースの [DeerFlow](https://github.com/bytedance/deer-flow) を基盤に構築したものです。上流の MIT ライセンスと著作権表示はそのまま保持されています（[LICENSE](./LICENSE)、[NOTICE.md](./NOTICE.md) を参照）。以下は上流 DeerFlow のドキュメントです。
+
+---
+
 # 🦌 DeerFlow - 2.0
 
 [English](./README.md) | [中文](./README_zh.md) | 日本語 | [Français](./README_fr.md) | [Русский](./README_ru.md)
