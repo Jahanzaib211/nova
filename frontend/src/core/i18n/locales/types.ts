@@ -585,6 +585,7 @@ export interface Translations {
       switchToEditorPrefix: string;
       switchToEditorSuffix: string;
       startLivePreview: string;
+      fileMissing: (name: string) => string;
     };
     activity: {
       title: (count: number) => string;

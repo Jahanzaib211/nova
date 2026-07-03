@@ -1,4 +1,5 @@
 import logging
+import os
 
 from langchain.chat_models import BaseChatModel
 
@@ -45,6 +46,31 @@ def _enable_stream_usage_by_default(model_use_path: str, model_settings_from_con
         return
     if "base_url" in model_settings_from_config or "openai_api_base" in model_settings_from_config:
         model_settings_from_config["stream_usage"] = True
+
+
+# Placeholder API key for OpenAI-compatible endpoints that require none.
+#
+# Local inference servers (llama.cpp / llama-bridge, vLLM, Ollama, LM Studio)
+# speak the OpenAI protocol but do not authenticate. langchain's ChatOpenAI
+# still hard-fails at construction when it can find no key (config, kwargs,
+# or OPENAI_API_KEY env) — which turned every run against a runtime-registered
+# local model into an immediate OpenAIError before a single token streamed.
+# The placeholder is injected only when a custom base_url is configured, so
+# real api.openai.com usage with a missing key still fails loudly.
+_LOCAL_ENDPOINT_PLACEHOLDER_API_KEY = "sk-no-key-required"
+
+
+def _apply_local_endpoint_api_key_default(model_use_path: str, model_settings_from_config: dict) -> None:
+    """Inject a placeholder api_key for keyless OpenAI-compatible local endpoints."""
+    if model_use_path != "langchain_openai:ChatOpenAI":
+        return
+    if model_settings_from_config.get("api_key") or model_settings_from_config.get("openai_api_key"):
+        return
+    if not (model_settings_from_config.get("base_url") or model_settings_from_config.get("openai_api_base")):
+        return
+    if os.environ.get("OPENAI_API_KEY"):
+        return
+    model_settings_from_config["api_key"] = _LOCAL_ENDPOINT_PLACEHOLDER_API_KEY
 
 
 # Default chunk-gap budget for OpenAI-compatible streaming responses.
@@ -161,6 +187,7 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
 
     _enable_stream_usage_by_default(model_config.use, model_settings_from_config)
     _apply_stream_chunk_timeout_default(model_config.use, model_settings_from_config)
+    _apply_local_endpoint_api_key_default(model_config.use, model_settings_from_config)
 
     # For Codex Responses API models: map thinking mode to reasoning_effort
     from deerflow.models.openai_codex_provider import CodexChatModel

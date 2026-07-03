@@ -49,7 +49,9 @@ test.describe("Sidebar navigation", () => {
       expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth + 1);
     };
 
-    await expectInsideViewport(page.getByText(/Give me a task|交给我一个任务/).first());
+    await expectInsideViewport(
+      page.getByText(/Give me a task|交给我一个任务/).first(),
+    );
     await expectInsideViewport(page.getByRole("textbox").first());
     await expectInsideViewport(page.locator("[data-slot='suggestions-list']"));
 

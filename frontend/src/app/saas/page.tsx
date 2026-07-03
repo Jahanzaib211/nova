@@ -20,7 +20,10 @@ const plans = [
       "Bring your own LLM provider keys",
       "Community support on GitHub",
     ],
-    cta: { label: "Get the code", href: "https://github.com/Jahanzaib211/nova" },
+    cta: {
+      label: "Get the code",
+      href: "https://github.com/Jahanzaib211/nova",
+    },
     highlight: false,
   },
   {
@@ -35,7 +38,10 @@ const plans = [
       "Watchdogs, receipts & reliability tooling",
       "Priority email support",
     ],
-    cta: { label: "Request access", href: "mailto:alilabsx@gmail.com?subject=Nova%20Cloud%20access" },
+    cta: {
+      label: "Request access",
+      href: "mailto:alilabsx@gmail.com?subject=Nova%20Cloud%20access",
+    },
     highlight: true,
   },
   {
@@ -50,7 +56,10 @@ const plans = [
       "Security review & isolation hardening",
       "Dedicated support with SLA",
     ],
-    cta: { label: "Talk to us", href: "mailto:alilabsx@gmail.com?subject=Nova%20Enterprise" },
+    cta: {
+      label: "Talk to us",
+      href: "mailto:alilabsx@gmail.com?subject=Nova%20Enterprise",
+    },
     highlight: false,
   },
 ];
@@ -87,7 +96,7 @@ export default function SaasPage() {
               }
             >
               {plan.highlight && (
-                <span className="bg-gradient-to-r from-violet-600 to-cyan-600 absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-0.5 text-xs font-medium text-white">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-violet-600 to-cyan-600 px-3 py-0.5 text-xs font-medium text-white">
                   Most popular
                 </span>
               )}
@@ -163,7 +172,13 @@ export default function SaasPage() {
             >
               Ali Technologies
             </a>{" "}
-            · <a className="cursor-pointer underline underline-offset-4 hover:opacity-80" href="mailto:alilabsx@gmail.com">alilabsx@gmail.com</a>
+            ·{" "}
+            <a
+              className="cursor-pointer underline underline-offset-4 hover:opacity-80"
+              href="mailto:alilabsx@gmail.com"
+            >
+              alilabsx@gmail.com
+            </a>
           </p>
         </section>
       </div>

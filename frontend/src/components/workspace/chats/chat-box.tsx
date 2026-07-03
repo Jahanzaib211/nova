@@ -29,10 +29,11 @@ import { useThread } from "../messages/context";
 const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
 
-const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
-  children,
-  threadId,
-}) => {
+const ChatBox: React.FC<{
+  children: React.ReactNode;
+  threadId: string;
+  isNewThread?: boolean;
+}> = ({ children, threadId, isNewThread = false }) => {
   const { t } = useI18n();
   const {
     thread,
@@ -132,14 +133,20 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     return artifactsOpen;
   }, [artifactsOpen, artifacts, agentComputerOpen]);
 
-  // Derive the resizable group id from threadId (stable across SSR/client) rather
-  // than pathname, which differs between the SSR snapshot and client navigation
-  // and caused a hydration mismatch on the panel id/data-testid.
+  // For unsaved threads the threadId is a client-generated uuid that differs
+  // between the SSR snapshot and hydration (each render pass draws a fresh
+  // uuid), which put a mismatched id/data-testid in the DOM and triggered a
+  // React hydration error on every /chats/new load. Use the stable "chat-new"
+  // id until the thread is persisted; layout prefs then also survive across
+  // new chats.
   const resizableIdBase = useMemo(() => {
+    if (isNewThread) {
+      return "chat-new";
+    }
     return `chat-${threadId}`
       .replace(/[^a-zA-Z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "");
-  }, [threadId]);
+  }, [isNewThread, threadId]);
 
   useEffect(() => {
     if (layoutRef.current) {

@@ -290,12 +290,8 @@ class TestLogRouting:
             text=True,
             cwd="/home/jahanzaib/Desktop/nova",
         )
-        assert "test_log_routing_marker" in result.stderr, (
-            f"expected marker in stderr, got stdout={result.stdout!r} stderr={result.stderr!r}"
-        )
-        assert "test_log_routing_marker" not in result.stdout, (
-            f"marker leaked to stdout: {result.stdout!r}"
-        )
+        assert "test_log_routing_marker" in result.stderr, f"expected marker in stderr, got stdout={result.stdout!r} stderr={result.stderr!r}"
+        assert "test_log_routing_marker" not in result.stdout, f"marker leaked to stdout: {result.stdout!r}"
 
     def test_httpx_logging_silenced(self):
         import logging as _logging

@@ -652,6 +652,8 @@ export const zhCN: Translations = {
       livePreview: "实时预览",
       devServerCompiling: "开发服务器编译中\u2026预览将自动加载",
       previewWillAppear: "浏览器预览将显示在这里",
+      fileMissing: (name: string) =>
+        `预览文件 ${name || "(无)"} 在当前工作区不可用。`,
       previewWillAppearLine2: "当智能体写入 HTML 文件后即可显示",
       watchLiveBrowser: "查看智能体实时浏览器",
       projectType: {
@@ -782,8 +784,7 @@ export const zhCN: Translations = {
       subtitle: "看看 Nova 在实际场景中如何被使用",
     },
     community: {
-      subtitle:
-        "贡献您的创意，共同塑造 Nova 的未来。协作、创新、创造影响。",
+      subtitle: "贡献您的创意，共同塑造 Nova 的未来。协作、创新、创造影响。",
     },
     sandbox: {
       title: "智能体运行时环境",

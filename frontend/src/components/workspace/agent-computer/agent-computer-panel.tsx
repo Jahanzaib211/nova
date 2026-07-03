@@ -1167,10 +1167,26 @@ function Browser({
             )}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
             {exists ? (
               <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
-            ) : null}
+            ) : (
+              <>
+                <GlobeIcon className="text-muted-foreground/20 h-6 w-6" />
+                <p className="text-muted-foreground/60 text-xs">
+                  {t.agentComputer.browser.fileMissing(filename)}
+                </p>
+                {onStartPreview && (
+                  <button
+                    onClick={() => void onStartPreview(selectedLabel)}
+                    className="border-border/40 text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors"
+                  >
+                    <GlobeIcon className="h-3 w-3" />
+                    {t.agentComputer.browser.startLivePreview}
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1974,7 +1990,7 @@ function TabBtn({
       {active && (
         <motion.div
           layoutId="agent-computer-tab-underline"
-          className="from-primary absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gradient-to-r via-emerald-400 to-cyan-400"
+          className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-violet-500 to-cyan-400"
           transition={{ type: "spring", stiffness: 400, damping: 32 }}
         />
       )}
@@ -2408,7 +2424,7 @@ export function AgentComputerPanel({
           <ShineBorder
             borderWidth={1}
             duration={8}
-            shineColor={["#10b981", "#06b6d4", "#34d399", "#10b981"]}
+            shineColor={["#8b5cf6", "#06b6d4", "#a78bfa", "#8b5cf6"]}
           />
         )}
         {/* Left: live status pill (replaces the redundant title — page-header toggle owns the name) */}
@@ -2420,7 +2436,7 @@ export function AgentComputerPanel({
                 <span className="bg-primary relative inline-flex h-1.5 w-1.5 rounded-full" />
               </span>
               <AuroraText
-                colors={["#10b981", "#34d399", "#06b6d4", "#10b981"]}
+                colors={["#8b5cf6", "#a78bfa", "#06b6d4", "#8b5cf6"]}
                 speed={1.5}
                 className="text-[10px] font-medium"
               >

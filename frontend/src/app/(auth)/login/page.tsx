@@ -141,7 +141,9 @@ export default function LoginPage() {
       />
       <div className="border-border/20 bg-background/5 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
         <div className="text-center">
-          <h1 className="bg-gradient-to-r from-violet-600 to-cyan-600 dark:from-violet-400 dark:to-cyan-300 bg-clip-text font-serif text-3xl font-semibold text-transparent">Nova</h1>
+          <h1 className="bg-gradient-to-r from-violet-600 to-cyan-600 bg-clip-text font-serif text-3xl font-semibold text-transparent dark:from-violet-400 dark:to-cyan-300">
+            Nova
+          </h1>
           <p className="text-muted-foreground mt-2">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </p>

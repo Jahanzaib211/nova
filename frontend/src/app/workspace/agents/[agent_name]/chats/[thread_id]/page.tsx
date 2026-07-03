@@ -2,7 +2,7 @@
 
 import { BotIcon, PlusSquare, TerminalIcon } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   type VerifyResult,
 } from "@/components/workspace/messages/context";
 import { usePanels } from "@/components/workspace/panels/context";
+import { useAutoOpenAgentComputer } from "@/components/workspace/panels/use-auto-open-agent-computer";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { TokenUsageIndicator } from "@/components/workspace/token-usage-indicator";
@@ -62,6 +63,7 @@ export default function AgentChatPage() {
 
   // Agent's Computer panel state
   const { agentComputerOpen, setAgentComputerOpen } = usePanels();
+  const { notifyComputerActivity, syncRunState } = useAutoOpenAgentComputer();
   const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
@@ -146,12 +148,14 @@ export default function AgentChatPage() {
       setLlmError(event);
     },
     onToolActivity: (event) => {
+      notifyComputerActivity();
       setActivityEvents((prev) => [...prev.slice(-199), event]);
       if (event.type === "write_file" && event.path) {
         setActiveWriteFilePath(event.path);
       }
     },
     onToolActivityDone: ({ id, name, output, path, cmd }) => {
+      notifyComputerActivity();
       const status = output.startsWith("Error:") ? "error" : "done";
       setActivityEvents((prev) => {
         const idx = prev.findIndex((e) => e.id === id);
@@ -190,16 +194,11 @@ export default function AgentChatPage() {
 
   const hasThreadMessages = thread.messages.length > 0;
 
-  // Auto-open Agent's Computer panel only on the transition into "loading" (a new
-  // run starting), NOT on every render while loading — otherwise a manual close
-  // mid-build instantly re-opens (panel "not collapsible during the build").
-  const prevLoadingRef = useRef(false);
+  // Auto-open the Agent's Computer panel only when the agent actually uses
+  // its computer (first tool activity of a run); see AgentComputerAutoOpenPolicy.
   useEffect(() => {
-    if (thread.isLoading && !prevLoadingRef.current) {
-      setAgentComputerOpen(true);
-    }
-    prevLoadingRef.current = thread.isLoading;
-  }, [thread.isLoading, setAgentComputerOpen]);
+    syncRunState(thread.isLoading);
+  }, [thread.isLoading, syncRunState]);
 
   useEffect(() => {
     if (
@@ -267,7 +266,7 @@ export default function AgentChatPage() {
         onAgentMessage: handleAgentMessage,
       }}
     >
-      <ChatBox threadId={threadId}>
+      <ChatBox threadId={threadId} isNewThread={isNewThread}>
         <div className="relative flex size-full min-h-0 justify-between">
           <header
             className={cn(

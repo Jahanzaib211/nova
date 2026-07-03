@@ -1182,3 +1182,118 @@ def test_stream_chunk_timeout_popped_for_non_openai_provider_when_user_set_it(mo
     factory_module.create_chat_model(name="anthropic-with-stray-timeout")
 
     assert "stream_chunk_timeout" not in captured
+
+
+# ── Local-endpoint placeholder api_key (keyless llama.cpp / vLLM / Ollama) ──
+
+
+def _make_local_endpoint_model(**overrides) -> ModelConfig:
+    params = {
+        "name": "local-llm",
+        "display_name": "Local LLM",
+        "description": None,
+        "use": "langchain_openai:ChatOpenAI",
+        "model": "/models/some-local.gguf",
+    }
+    params.update(overrides)
+    return ModelConfig(**params)
+
+
+def test_local_endpoint_without_key_gets_placeholder(monkeypatch):
+    """A runtime-registered local model (base_url set, no api_key, no env key)
+    must not crash ChatOpenAI construction with OpenAIError — the factory
+    injects a placeholder key. Regression for local llama-bridge models
+    erroring every run with 'api_key client option must be set'."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    model = _make_local_endpoint_model(base_url="http://host.docker.internal:8081/v1")
+    cfg = _make_app_config([model])
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    _patch_factory(monkeypatch, cfg, model_class=CapturingModel)
+    factory_module.create_chat_model(name="local-llm")
+
+    assert captured.get("api_key") == factory_module._LOCAL_ENDPOINT_PLACEHOLDER_API_KEY
+
+
+def test_local_endpoint_env_key_wins_over_placeholder(monkeypatch):
+    """When OPENAI_API_KEY is exported, langchain resolves it natively — the
+    factory must stay out of the way."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-real")
+    model = _make_local_endpoint_model(base_url="http://localhost:8081/v1")
+    cfg = _make_app_config([model])
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    _patch_factory(monkeypatch, cfg, model_class=CapturingModel)
+    factory_module.create_chat_model(name="local-llm")
+
+    assert "api_key" not in captured
+
+
+def test_openai_dot_com_without_key_still_fails_loudly(monkeypatch):
+    """No base_url means real OpenAI — a missing key must NOT be papered over
+    with a placeholder (silent 401s are worse than a clear startup error)."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    model = _make_local_endpoint_model()
+    cfg = _make_app_config([model])
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    _patch_factory(monkeypatch, cfg, model_class=CapturingModel)
+    factory_module.create_chat_model(name="local-llm")
+
+    assert "api_key" not in captured
+
+
+def test_local_endpoint_explicit_key_preserved(monkeypatch):
+    """An explicit api_key in the model config is forwarded untouched."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    model = _make_local_endpoint_model(base_url="http://localhost:8081/v1", api_key="sk-mine")
+    cfg = _make_app_config([model])
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    _patch_factory(monkeypatch, cfg, model_class=CapturingModel)
+    factory_module.create_chat_model(name="local-llm")
+
+    assert captured.get("api_key") == "sk-mine"
+
+
+def test_placeholder_not_injected_for_non_openai_provider(monkeypatch):
+    """Anthropic/Vertex/etc. constructors must not receive a foreign api_key."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    model = _make_local_endpoint_model(use="langchain_anthropic:ChatAnthropic", base_url="http://localhost:8081/v1")
+    cfg = _make_app_config([model])
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    _patch_factory(monkeypatch, cfg, model_class=CapturingModel)
+    factory_module.create_chat_model(name="local-llm")
+
+    assert "api_key" not in captured

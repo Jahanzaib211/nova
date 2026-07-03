@@ -49,6 +49,7 @@ import {
   useTestModel,
   useUpdateModel,
 } from "@/core/models/hooks";
+import { getModelLabel } from "@/core/models/types";
 import type { Model, ModelWriteRequest } from "@/core/models/types";
 
 import { SettingsSection } from "./settings-section";
@@ -362,7 +363,7 @@ function ModelItem({
       </ItemMedia>
       <ItemContent>
         <ItemTitle>
-          {model.display_name?.trim() ? model.display_name : model.name}
+          {getModelLabel(model)}
           <Badge variant={isRuntime ? "default" : "secondary"}>
             {isRuntime ? (
               strings.sourceRuntime

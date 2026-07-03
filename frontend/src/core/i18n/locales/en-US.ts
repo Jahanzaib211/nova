@@ -677,6 +677,8 @@ export const enUS: Translations = {
       devServerCompiling:
         "Dev server compiling\u2026 preview loads automatically",
       previewWillAppear: "Browser preview will appear here",
+      fileMissing: (name: string) =>
+        `Preview file ${name || "(none)"} is not available in this workspace.`,
       previewWillAppearLine2: "once the agent writes an HTML file",
       watchLiveBrowser: "Watch the agent's live browser",
       projectType: {

@@ -362,7 +362,10 @@ export function RecentChatList() {
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          className="sm:max-w-[425px]"
+          aria-describedby={undefined}
+        >
           <DialogHeader>
             <DialogTitle>{t.common.rename}</DialogTitle>
           </DialogHeader>

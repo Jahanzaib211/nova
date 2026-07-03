@@ -386,6 +386,18 @@ export function useLiveFileContent(
           `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
           { method: "GET", headers: { "Content-Type": "application/json" } },
         );
+        if (!res.ok) {
+          // Surface transport failures as "missing" instead of letting
+          // res.json() throw and leave the query stuck on stale data.
+          const warnKey = `${threadId}:${path}:${res.status}`;
+          if (!warnedFilePaths.has(warnKey)) {
+            warnedFilePaths.add(warnKey);
+            console.warn(
+              `[nova] sandbox file read failed (${res.status}) for ${path}`,
+            );
+          }
+          return { content: "", exists: false, size: 0 };
+        }
         return res.json() as Promise<{
           content: string;
           exists: boolean;
@@ -409,6 +421,9 @@ export function useLiveFileContent(
 // ── useSandboxFile ─────────────────────────────────────────
 // Polls /api/sandbox/file every 2 s for a specific path.
 
+// One warning per failing path — the 2 s poll would otherwise flood the console.
+const warnedFilePaths = new Set<string>();
+
 export function useSandboxFile(
   threadId: string | null,
   path: string | null,
@@ -422,6 +437,18 @@ export function useSandboxFile(
           `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
           { method: "GET", headers: { "Content-Type": "application/json" } },
         );
+        if (!res.ok) {
+          // Surface transport failures as "missing" instead of letting
+          // res.json() throw and leave the query stuck on stale data.
+          const warnKey = `${threadId}:${path}:${res.status}`;
+          if (!warnedFilePaths.has(warnKey)) {
+            warnedFilePaths.add(warnKey);
+            console.warn(
+              `[nova] sandbox file read failed (${res.status}) for ${path}`,
+            );
+          }
+          return { content: "", exists: false, size: 0 };
+        }
         return res.json() as Promise<{
           content: string;
           exists: boolean;

@@ -60,6 +60,7 @@ import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useModels } from "@/core/models/hooks";
+import { getModelLabel } from "@/core/models/types";
 import type { Skill } from "@/core/skills";
 import { useSkills } from "@/core/skills/hooks";
 import { useSuggestionsConfig } from "@/core/suggestions/hooks";
@@ -1020,7 +1021,7 @@ export function InputBox({
                 <PromptInputButton className="max-w-40 min-w-0 sm:max-w-56">
                   <div className="flex min-w-0 flex-col items-start text-left">
                     <ModelSelectorName className="text-xs font-normal">
-                      {selectedModel?.display_name}
+                      {selectedModel ? getModelLabel(selectedModel) : ""}
                     </ModelSelectorName>
                   </div>
                 </PromptInputButton>
@@ -1035,7 +1036,9 @@ export function InputBox({
                       onSelect={() => handleModelSelect(m.name)}
                     >
                       <div className="flex min-w-0 flex-1 flex-col">
-                        <ModelSelectorName>{m.display_name}</ModelSelectorName>
+                        <ModelSelectorName>
+                          {getModelLabel(m)}
+                        </ModelSelectorName>
                         <span className="text-muted-foreground truncate text-[10px]">
                           {m.model}
                         </span>

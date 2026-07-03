@@ -4,7 +4,7 @@ export interface Model {
   id: string;
   name: string;
   model: string;
-  display_name: string;
+  display_name?: string | null;
   description?: string | null;
   supports_thinking?: boolean;
   supports_reasoning_effort?: boolean;
@@ -46,4 +46,15 @@ export interface ModelWriteResponse {
 export interface ModelTestResponse {
   ok: boolean;
   message: string;
+}
+
+/**
+ * Human-readable label for a model. Runtime-registered models (e.g. local
+ * llama-bridge models) often have no display_name — never render an empty
+ * label; fall back to the stable model name.
+ */
+export function getModelLabel(
+  model: Pick<Model, "name" | "display_name">,
+): string {
+  return model.display_name?.trim() ? model.display_name.trim() : model.name;
 }
