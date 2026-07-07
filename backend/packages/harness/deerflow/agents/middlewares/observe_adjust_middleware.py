@@ -210,7 +210,12 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
 
         sandbox = get_sandbox_provider().get(sandbox_id)
         if sandbox is None or getattr(sandbox, "_client", None) is None:
-            return  # no browser-capable (AIO) sandbox → nothing to verify
+            # No browser-capable (AIO) sandbox → cannot verify. Say so in the
+            # audit trail instead of skipping silently: a presented build that
+            # was never self-tested must not read as implicitly green (a
+            # corrupted HTML deliverable shipped exactly this way once).
+            _append_devlog_to_sandbox_log(thread_id, "[self-test] skipped — no browser-capable sandbox; deliverable NOT verified")
+            return
 
         check = await asyncio.to_thread(run_browser_check, thread_id, sandbox, routes=["/"], with_screenshot=True)
         verdict = "✓ passed" if check.ok else "✗ found issues"

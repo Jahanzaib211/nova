@@ -80,10 +80,15 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
         if (open) {
           open.messages.push(message);
         } else {
-          console.error(
-            "Unexpected tool message outside a processing group",
-            message,
-          );
+          // Orphan tool result — its parent AI message (with tool_calls) was
+          // stripped (error-fallback filter) or the run died mid-cycle. Render
+          // it in its own processing group instead of dropping it, so the user
+          // still sees the tool output on resumed/recovered threads.
+          groups.push({
+            id: message.id,
+            type: "assistant:processing",
+            messages: [message],
+          });
         }
       }
       continue;

@@ -541,3 +541,23 @@ describe("multi-part content with bare-string continuations", () => {
     );
   });
 });
+
+describe("orphan tool messages (parent AI message stripped)", () => {
+  test("renders in its own processing group instead of being dropped", () => {
+    const messages = [
+      { id: "h-1", type: "human", content: "run ls" },
+      { id: "a-1", type: "ai", content: "Done — here is the listing." },
+      // Orphan: the AI message that carried this tool_call was stripped
+      // (error-fallback filter) or the run died mid-cycle.
+      { id: "t-1", type: "tool", content: "total 8", tool_call_id: "call-1" },
+    ] as unknown as Message[];
+
+    const groups = getMessageGroups(messages);
+    const toolGroup = groups.find((g) =>
+      g.messages.some((m) => m.id === "t-1"),
+    );
+    expect(toolGroup).toBeDefined();
+    expect(toolGroup?.type).toBe("assistant:processing");
+    expect(groups).toHaveLength(3);
+  });
+});

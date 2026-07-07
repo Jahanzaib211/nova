@@ -400,6 +400,16 @@ def build_middlewares(
 
     # ClarificationMiddleware should always be last
     middlewares.append(ClarificationMiddleware())
+
+    # SystemMessageCoalescingMiddleware — registered after Clarification so it
+    # is innermost for wrap_model_call and sees every earlier middleware's
+    # injections. Folds stray SystemMessages from the message list into the
+    # single leading system message; strict llama.cpp chat templates 400 on
+    # system messages at position > 0 ("System message must be at the
+    # beginning"), hosted providers are unaffected by the merge.
+    from deerflow.agents.middlewares.system_message_coalescing_middleware import SystemMessageCoalescingMiddleware
+
+    middlewares.append(SystemMessageCoalescingMiddleware())
     return middlewares
 
 

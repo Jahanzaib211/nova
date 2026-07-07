@@ -679,3 +679,21 @@ def test_user_message_for_quota_unchanged() -> None:
 
     assert "out of quota" in message
     assert "streaming response was interrupted" not in message
+
+
+def test_classify_error_context_overflow_is_not_retriable() -> None:
+    middleware = _build_middleware()
+    exc = FakeError(
+        "Error code: 400 - {'error': {'code': 400, 'message': 'request (19765 tokens) exceeds the available context size (16384 tokens), try increasing it', 'type': 'exceed_context_size_error'}}",
+        status_code=400,
+    )
+    retriable, reason = middleware._classify_error(exc)
+    assert retriable is False
+    assert reason == "context_overflow"
+
+
+def test_context_overflow_user_message_names_the_fix() -> None:
+    middleware = _build_middleware()
+    msg = middleware._build_user_message(FakeError("exceed_context_size_error"), "context_overflow")
+    assert "context" in msg.lower()
+    assert "n_ctx" in msg or "-c" in msg

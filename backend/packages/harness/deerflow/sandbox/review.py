@@ -215,6 +215,36 @@ def _scan_secret_risks(work_dir: Path, files: list[FileChange]) -> list[Risk]:
     return risks
 
 
+def _scan_malformed_html_risks(work_dir: Path, files: list[FileChange]) -> list[Risk]:
+    """Flag .html deliverables whose content does not start like an HTML document.
+
+    Catches the chunked-write clobber failure mode: an agent writes a page in
+    parts, each write_file overwrites the previous part, and the surviving file
+    starts mid-script. Such a file is always a broken deliverable, and this is
+    the deterministic backstop for sandboxes where browser_check cannot run.
+    """
+    risks: list[Risk] = []
+    for fc in files:
+        if fc.status == "deleted" or not fc.path.lower().endswith((".html", ".htm")):
+            continue
+        p = work_dir / fc.path
+        if not p.is_file():
+            continue
+        try:
+            head = p.read_text(encoding="utf-8", errors="ignore")[:512].lstrip().lower()
+        except OSError:
+            continue
+        if not (head.startswith("<!doctype") or head.startswith("<html") or "<html" in head[:256]):
+            risks.append(
+                Risk(
+                    level="high",
+                    message=f"{fc.path} does not look like a complete HTML document (starts mid-content) — likely a truncated or clobbered write",
+                    evidence=head[:80],
+                )
+            )
+    return risks
+
+
 def _find_project_dir(work_dir: Path) -> Path:
     """Locate the runnable project root: the workspace itself, or the nearest
     immediate subdirectory holding package.json / pyproject (projects are often
@@ -329,7 +359,7 @@ def build_review(thread_id: str, user_id: str | None = None, *, write_file: bool
     rv.files = _changes_from_git(work_dir) if rv.is_git else _changes_from_scan(work_dir)
     rv.added_total = sum(f.added for f in rv.files)
     rv.removed_total = sum(f.removed for f in rv.files)
-    rv.risks = _scan_audit_risks(thread_dir) + _scan_secret_risks(work_dir, rv.files)
+    rv.risks = _scan_audit_risks(thread_dir) + _scan_secret_risks(work_dir, rv.files) + _scan_malformed_html_risks(work_dir, rv.files)
     rv.checks = _detect_checks(work_dir, rv.files)
     rv.markdown = _render_markdown(rv)
 

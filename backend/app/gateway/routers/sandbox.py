@@ -762,8 +762,8 @@ def _make_absproxy_wrapper(method: str):
     warning emitted by the openapi generator for multi-method routes.
     """
 
-    def handler(thread_id: str, port: int, path: str, request: Request) -> Response:
-        return _absproxy_impl(thread_id, port, path, request)
+    async def handler(thread_id: str, port: int, path: str, request: Request) -> Response:
+        return await _absproxy_impl(thread_id, port, path, request)
 
     handler.__name__ = f"absproxy_{method.lower()}"
     handler.__qualname__ = handler.__name__
@@ -832,8 +832,8 @@ def _make_preview_default_wrapper(method: str):
     Same unique-id rationale as _make_absproxy_wrapper above.
     """
 
-    def handler(thread_id: str, path: str, request: Request) -> Response:
-        return _proxy_dev_server(thread_id, DEFAULT_LABEL, path, request)
+    async def handler(thread_id: str, path: str, request: Request) -> Response:
+        return await _proxy_dev_server(thread_id, DEFAULT_LABEL, path, request)
 
     handler.__name__ = f"preview_default_label_{method.lower()}"
     handler.__qualname__ = handler.__name__
@@ -852,8 +852,8 @@ for _method in _PROXY_METHODS:
 def _make_preview_labeled_wrapper(method: str):
     """Per-method wrapper around _proxy_dev_server for /lpreview/<id>/<label>/<path>."""
 
-    def handler(thread_id: str, label: str, path: str, request: Request) -> Response:
-        return _proxy_dev_server(thread_id, label, path, request)
+    async def handler(thread_id: str, label: str, path: str, request: Request) -> Response:
+        return await _proxy_dev_server(thread_id, label, path, request)
 
     handler.__name__ = f"preview_labeled_{method.lower()}"
     handler.__qualname__ = handler.__name__

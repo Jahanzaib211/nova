@@ -192,6 +192,12 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
             return False, "quota"
         if _matches_any(lowered, _AUTH_PATTERNS):
             return False, "auth"
+        # llama.cpp / local OpenAI-compatible backends reject oversized prompts
+        # with a 400 whose payload names the ctx budget. Not retriable — the
+        # same request will always overflow — and worth its own reason so the
+        # user learns the actual fix (smaller request or larger -c / n_ctx).
+        if "exceed_context_size" in lowered or ("context size" in lowered and "exceeds" in lowered):
+            return False, "context_overflow"
 
         exc_name = exc.__class__.__name__
         if exc_name in {
@@ -250,6 +256,8 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
             return "The configured LLM provider rejected the request because the account is out of quota, billing is unavailable, or usage is restricted. Please fix the provider account and try again."
         if reason == "auth":
             return "The configured LLM provider rejected the request because authentication or access is invalid. Please check the provider credentials and try again."
+        if reason == "context_overflow":
+            return "The request does not fit in the model's context window. Use a model with a larger context, raise the local server's context size (llama-server -c / n_ctx), or start a fresh thread with a shorter request."
         if reason in {"busy", "transient"}:
             # Stream-drop failures (chunk-gap timeout, peer-closed connection,
             # raw read error) almost always point at a single oversized

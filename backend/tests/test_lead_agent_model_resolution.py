@@ -338,9 +338,11 @@ def test_build_middlewares_uses_resolved_model_name_for_vision(monkeypatch):
     assert any(isinstance(m, lead_agent_module.ViewImageMiddleware) for m in middlewares)
     # verify the custom middleware is injected correctly.
     # Chain tail order after the custom middleware is:
-    #   ..., custom, SafetyFinishReasonMiddleware, ClarificationMiddleware
-    # so the custom mock sits at index [-3].
-    assert len(middlewares) > 0 and isinstance(middlewares[-3], MagicMock)
+    #   ..., custom, SafetyFinishReasonMiddleware, ClarificationMiddleware,
+    #   SystemMessageCoalescingMiddleware (innermost — folds stray system
+    #   messages for strict chat templates)
+    # so the custom mock sits at index [-4].
+    assert len(middlewares) > 0 and isinstance(middlewares[-4], MagicMock)
 
 
 def test_build_middlewares_passes_explicit_app_config_to_shared_factory(monkeypatch):
