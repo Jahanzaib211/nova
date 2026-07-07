@@ -12,13 +12,24 @@ Nova is built by **[Ali Technologies](https://www.alilabsx.com)** on top of the 
 
 > Say hello: *"I am Nova, the computer agent."*
 
+![Nova workspace — the agent builds a tip calculator and previews it live in the Agent's Computer Browser tab](./docs/images/nova-workspace.png)
+
 ## What Nova adds on top of DeerFlow
 
-- **Agent's Computer** — a 3-panel live view (terminal, editor, browser) of what the agent is doing.
-- **Per-thread container isolation** — every conversation runs in its own Docker sandbox.
-- **Watchdogs, receipts, and self-improvement loops** — reliability tooling for long-running agent work.
+Nova is a full-stack refactor of DeerFlow 2.0 — **+35,738 lines across 338 files** (verified: `git diff --shortstat v2.0.0-rc1 HEAD` against the upstream tag). The headline additions, all built for Nova:
 
-See [FORK.md](./FORK.md) and [NOVA_CHANGELOG.md](./NOVA_CHANGELOG.md) for the full delta.
+- **Agent's Computer** — a 6-tab live panel (Terminal, Editor with red/green live diff, Browser preview, Activity timeline, Files, Review) streaming what the agent is doing in real time.
+- **Verify loop** — the agent tests its own builds: headless-Chromium self-checks against the running dev server (console errors, blank-render detection, screenshots), auto-triggered on dev-server-ready and on shipped HTML, with a vision path so the model *sees* its build.
+- **Deterministic code review** — a no-LLM review engine producing a plain-English verdict for non-coders plus per-file stats and risk flags for developers.
+- **Self-correction middlewares** — runtime-enforced iteration budgets, dead-end loop detection, preflight quota checks, error-message decontamination, live task progress.
+- **32 agent tools** — shell sessions, browser navigate/click/input/eval, screenshot, scaffold, dev-server lifecycle, dev_verify, code_review, skill saving, and more.
+- **iGIN0 privacy research** — hardened SearXNG client with retry, circuit breaker, caching, optional TOR routing, and a privacy audit trail.
+- **Runtime model management** — add/switch models through the API and settings UI without touching config files.
+- **Ops layer** — 11-probe self-healing watchdog, PM2-owned Docker lifecycle, reboot persistence.
+- **Local + free models via LiteLLM** — an Ollama preset in settings and a PM2-managed LiteLLM proxy expose four free Ollama cloud models (MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B) alongside paid providers.
+- **8,112 lines of new tests** across 37 new backend test files.
+
+Upstream DeerFlow provides the agent harness (sub-agents, memory, LangGraph runtime), the skills system, and per-thread Docker sandboxes — credit where due. The complete, reproducible attribution map is in **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)**.
 
 ## Table of Contents
 

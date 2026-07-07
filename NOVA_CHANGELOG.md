@@ -12,7 +12,42 @@
 
 ---
 
-## v7.4 — hooks surface + receipts + opencode skills (hackathon sprint)
+## v7.5 — live audit hardening + Ollama/LiteLLM free-model gateway
+
+**Session pattern:** full-stack live audit (act-as-user via Playwright) → every blocker turned into a production-grade fix with a regression test.
+
+### Audit fixes (all with tests)
+
+- **Preview proxy 500 (P0):** the Batch-3.1 per-method route wrappers in `app/gateway/routers/sandbox.py` were sync `def` returning un-awaited coroutines — every `/api/sandbox/preview|lpreview|absproxy` request 500'd ("'coroutine' object is not iterable"), breaking the Browser tab. Made async; pinned by `test_preview_route_handlers_async.py`.
+- **llama-bridge drift:** pm2's saved dump pointed at a deleted script path; the "online" process was orphaned stale code on the wrong port. Re-registered from `ecosystem.config.js`; watchdog `fix_llama_bridge()` now heals both crash and drift.
+- **Watchdog gaps:** P9 had no auto-fix and warned every 30s unread for days. Added P9 + P10 auto-fixes and streak-deduped the no-auto-fix warning.
+- **Strict chat-template 400:** middlewares inject SystemMessages mid-conversation; llama.cpp templates reject system at position > 0. New `SystemMessageCoalescingMiddleware` (innermost) folds them into the single leading system message.
+- **Context overflow classified:** llama.cpp `exceed_context_size_error` now maps to a non-retriable `context_overflow` reason with an actionable message.
+- **Silent verify skip:** auto-verify-on-present_files no-opped silently on non-AIO sandboxes — a corrupted deliverable shipped as "verified clean". Skip is now logged as "deliverable NOT verified".
+- **Clobbered-HTML backstop:** deterministic review flags `.html` deliverables that don't start like HTML (`_scan_malformed_html_risks`) — catches the chunked-write overwrite failure observed live (maree.html written 3×, each write clobbering the last).
+- **Orphan tool messages:** frontend grouping now renders tool results whose parent AI message was stripped instead of console.error + drop.
+- **CSP blocked the Browser tab (nginx):** the app-shell CSP had no `frame-src`, so the blob-URL preview iframe (which inherits the parent page's CSP) was refused, and Google Fonts pulled by generated HTML were blocked. `docker/nginx/nginx.conf` `$csp_policy` map now allows `frame-src 'self' blob: http://localhost:*` plus fonts.googleapis.com/fonts.gstatic.com in the app-shell policy only — the strict `/api/` policy (`default-src 'none'`) is untouched. Note: the nginx container copies the mounted conf from a template at start, so `docker restart deer-flow-nginx` (not `nginx -s reload`) is required to apply edits.
+
+### Ollama + LiteLLM free-model gateway
+
+- `docker/litellm/config.yaml` + `scripts/pm2-litellm.sh` + pm2 app `nova-litellm` (LiteLLM 1.91.0 in a dedicated venv at `~/.nova-litellm`, bound to the docker bridge IP only).
+- Four verified-free Ollama cloud models registered via the runtime models API: MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B (`*-free`), reachable from the gateway at `host.docker.internal:4000/v1`.
+- Watchdog P10_litellm probe + auto-fix; 10/10 probes green.
+- Settings → Models: new "Add Ollama model (via LiteLLM)" preset (en/zh locales).
+
+### Ecosystem: OpenCode + Dify on the same LiteLLM gateway
+
+- **OpenCode**: `nova-litellm` provider in the global config (`~/.config/opencode/opencode.jsonc`) with all four free models and real limits pulled from `ollama show` (MiniMax M3 524K / Nemotron 262K / Qwen3-Coder 262K / GPT-OSS 131K context, 64K output); nova's `.opencode/opencode.json` pins `qwen3-coder-480b-free` as project default. Verified live via `opencode run`.
+- **Dify** (fork `Jahanzaib211/dify` at `~/Desktop/dify`): full stack under PM2 as `nova-dify` (foreground compose, same pattern as `deerflow`), UI on `127.0.0.1:8088` only — upstream's 0.0.0.0 plugin-debug mapping replaced via `ports: !override`. Containers reach LiteLLM through `host.docker.internal:host-gateway`. Provider + 4 models configured as a real user via Playwright (context sizes set explicitly — the OpenAI-compatible plugin defaults to 4096); E2E chat verified ("DIFY-LITELLM-OK" on minimax-m3-free). Session lifetimes raised for the localhost-only install (access 7d / refresh 365d). Fork-side files committed to `Jahanzaib211/dify@main`.
+- **Watchdog P11_dify**: probes `/console/api/setup` for `step=finished` (api-up-but-uninitialized reads as unhealthy); auto-fix heals the `nova-dify` pm2 app with re-register-on-drift. 11/11 probes green live; regression tests added (probe validator, both fix paths, dispatch streak).
+
+### Attribution
+
+- `NOVA_VS_DEERFLOW.md` — verified upstream-vs-Nova attribution map (fork base deer-flow v2.0.0-rc1, reproducible diff commands); README "What Nova adds" rewritten to match.
+- Attribution numbers recomputed pre-commit: 338 files, +35,738/−1,278 vs v2.0.0-rc1 (152 new files ~28.7k lines; 37 new backend test files).
+- README hero: `docs/images/nova-workspace.png` — real capture of a MiniMax M3 (free) session building a tip calculator, previewed live in the Agent's Computer Browser tab (zero console errors at capture).
+
+---
 
 **Sprint window:** 5 days. **Pattern:** Sequential Pipeline + De-Sloppify + per-day CI gate.
 **Loop pattern (per Autonomous Loops skill):** daily `claude -p` chain, context bridge via `SHARED_TASK_NOTES.md`, magic-phrase completion signals.

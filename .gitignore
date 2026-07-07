@@ -82,3 +82,5 @@ temp/
 pr-build/
 /tmp/
 .kilo/
+.opencode/nova-agent-workspace/
+.playwright-mcp/
