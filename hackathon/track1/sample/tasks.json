@@ -1,0 +1,7 @@
+[
+  { "task_id": "t1", "prompt": "Summarise in one sentence: The mitochondrion is the powerhouse of the cell, producing ATP through respiration." },
+  { "task_id": "t2", "prompt": "What is 17 * 23?" },
+  { "task_id": "t3", "prompt": "Classify the sentiment (positive/negative/neutral): 'The service was slow and the food was cold.'" },
+  { "task_id": "t4", "prompt": "Extract the person, organization and location: 'Satya Nadella, CEO of Microsoft, spoke in Seattle.'" },
+  { "task_id": "t5", "prompt": "Write a Python function is_palindrome(s) that returns True if s is a palindrome, ignoring case and non-alphanumeric characters." }
+]

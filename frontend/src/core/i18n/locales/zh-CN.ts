@@ -398,6 +398,8 @@ export const zhCN: Translations = {
       addButton: "添加模型",
       addLlamaCppButton: "添加本地 llama.cpp 模型",
       addOllamaButton: "添加 Ollama 模型（经 LiteLLM）",
+      addFireworksButton: "添加 Fireworks 模型（AMD MI300X）",
+      addAmdCloudButton: "添加 AMD Instinct 模型（vLLM/ROCm）",
       addTitle: "添加模型",
       editTitle: "编辑模型",
       formDescription:

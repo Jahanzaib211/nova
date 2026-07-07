@@ -31,6 +31,15 @@ Nova is a full-stack refactor of DeerFlow 2.0 — **+35,738 lines across 338 fil
 
 Upstream DeerFlow provides the agent harness (sub-agents, memory, LangGraph runtime), the skills system, and per-thread Docker sandboxes — credit where due. The complete, reproducible attribution map is in **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)**.
 
+## Runs on AMD compute
+
+Nova serves its inference on **AMD Instinct** GPUs, and makes that a first-class, one-click choice — built for the **AMD Developer Hackathon (Act II)**.
+
+- **Two AMD paths, as presets** in Settings → Models: **Fireworks AI** (managed, served on AMD Instinct MI300X) and **AMD Developer Cloud** (Nova's own inference via **vLLM on ROCm**, `scripts/amd-serve-vllm.sh`). Adding AMD compute is configuration, not code.
+- **Verifiable usage** — `GET /api/models/amd-usage` returns a machine-readable AMD-usage summary, and AMD-backed models show an **AMD** badge. Detection is conservative and honest: only verified AMD-hosted endpoints are auto-claimed.
+- **Track 1 agent** — a lean, token-efficient Fireworks batch harness in [`hackathon/track1/`](./hackathon/track1/); build and smoke-test with `make hackathon-track1`.
+- Full setup + the AMD-compute writeup: **[docs/AMD_INTEGRATION.md](./docs/AMD_INTEGRATION.md)**.
+
 ## Table of Contents
 
 - [Nova — The Agent's Computer](#nova--the-agents-computer)

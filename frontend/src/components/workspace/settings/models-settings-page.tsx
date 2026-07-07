@@ -69,6 +69,7 @@ const LLAMA_CPP_PRESET: FormState = {
   supports_thinking: false,
   supports_reasoning_effort: false,
   supports_vision: false,
+  amd_compute: "",
 };
 
 // Ollama models served through the nova-litellm proxy (docker/litellm/config.yaml).
@@ -85,6 +86,43 @@ const OLLAMA_PRESET: FormState = {
   supports_thinking: false,
   supports_reasoning_effort: false,
   supports_vision: false,
+  amd_compute: "",
+};
+
+// Fireworks AI — managed inference served on AMD Instinct MI300X GPUs
+// (OpenAI-compatible). Set FIREWORKS_API_KEY in the environment; api_key is left
+// as a $-placeholder so the key is resolved from env, never persisted in plain
+// text. Gemma models (accounts/fireworks/models/gemma-3-27b-it) additionally
+// qualify for the hackathon Gemma side prize.
+const FIREWORKS_PRESET: FormState = {
+  name: "",
+  display_name: "Fireworks (AMD MI300X)",
+  model: "accounts/fireworks/models/llama-v4-maverick",
+  providerChoice: OPENAI_COMPATIBLE,
+  customUse: "",
+  base_url: "https://api.fireworks.ai/inference/v1",
+  api_key: "$FIREWORKS_API_KEY",
+  supports_thinking: false,
+  supports_reasoning_effort: false,
+  supports_vision: true,
+  amd_compute: "",
+};
+
+// AMD Developer Cloud — Nova's own inference on a bare-metal AMD Instinct GPU via
+// vLLM on ROCm (native VllmChatModel provider). Replace <amd-droplet-ip> with the
+// droplet address. Gemma is the default (strong on MI300X + side-prize eligible).
+const AMD_CLOUD_PRESET: FormState = {
+  name: "",
+  display_name: "AMD Instinct (vLLM/ROCm)",
+  model: "google/gemma-3-27b-it",
+  providerChoice: CUSTOM,
+  customUse: "deerflow.models.vllm_provider:VllmChatModel",
+  base_url: "http://<amd-droplet-ip>:8000/v1",
+  api_key: "not-needed",
+  supports_thinking: false,
+  supports_reasoning_effort: false,
+  supports_vision: false,
+  amd_compute: "AMD Instinct MI300X (vLLM/ROCm)",
 };
 
 interface FormState {
@@ -98,6 +136,7 @@ interface FormState {
   supports_thinking: boolean;
   supports_reasoning_effort: boolean;
   supports_vision: boolean;
+  amd_compute: string;
 }
 
 function emptyForm(): FormState {
@@ -112,6 +151,7 @@ function emptyForm(): FormState {
     supports_thinking: false,
     supports_reasoning_effort: false,
     supports_vision: false,
+    amd_compute: "",
   };
 }
 
@@ -130,6 +170,7 @@ function formFromModel(model: Model): FormState {
     supports_thinking: model.supports_thinking ?? false,
     supports_reasoning_effort: model.supports_reasoning_effort ?? false,
     supports_vision: model.supports_vision ?? false,
+    amd_compute: model.amd_compute ?? "",
   };
 }
 
@@ -156,6 +197,9 @@ function formToRequest(form: FormState, isEdit: boolean): ModelWriteRequest {
     request.api_key = form.api_key.trim();
   } else if (!isEdit) {
     request.api_key = undefined;
+  }
+  if (form.amd_compute.trim()) {
+    request.amd_compute = form.amd_compute.trim();
   }
   return request;
 }
@@ -389,6 +433,11 @@ function ModelItem({
               </>
             )}
           </Badge>
+          {model.amd_compute ? (
+            <Badge variant="default" title={model.amd_compute}>
+              <CpuIcon className="size-3" /> AMD
+            </Badge>
+          ) : null}
         </ItemTitle>
         <ItemDescription>
           {model.model}
@@ -481,6 +530,20 @@ export function ModelsSettingsPage() {
             >
               <ServerIcon className="size-4" />
               {strings.addOllamaButton}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => openAdd({ ...FIREWORKS_PRESET })}
+            >
+              <CpuIcon className="size-4" />
+              {strings.addFireworksButton}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => openAdd({ ...AMD_CLOUD_PRESET })}
+            >
+              <CpuIcon className="size-4" />
+              {strings.addAmdCloudButton}
             </Button>
           </div>
         </div>

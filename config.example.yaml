@@ -484,6 +484,34 @@ models:
   #   write_timeout: 60.0
   #   pool_timeout: 30.0
 
+  # ── AMD compute (AMD Developer Hackathon) ────────────────────────────────
+  # Nova ships one-click UI presets for both of these under Settings → Models
+  # ("Add Fireworks model" / "Add AMD Instinct model"). The entries below are
+  # the equivalent hand-config form. Both are AMD-backed inference paths.
+  #
+  # Example: Fireworks AI — managed inference on AMD Instinct MI300X GPUs.
+  # OpenAI-compatible; $-placeholders resolve from the environment.
+  # - name: fireworks-amd
+  #   display_name: Fireworks (AMD MI300X)
+  #   use: langchain_openai:ChatOpenAI
+  #   model: accounts/fireworks/models/llama-v4-maverick
+  #   base_url: https://api.fireworks.ai/inference/v1
+  #   api_key: $FIREWORKS_API_KEY
+  #   max_tokens: 8192
+  #   supports_vision: true
+  #
+  # Example: AMD Developer Cloud — Nova's own inference on a bare-metal AMD
+  # Instinct GPU via vLLM on ROCm. `vllm serve google/gemma-3-27b-it` on the
+  # droplet, then point base_url at it. Gemma is side-prize eligible.
+  # - name: amd-instinct-vllm
+  #   display_name: AMD Instinct (vLLM/ROCm)
+  #   use: deerflow.models.vllm_provider:VllmChatModel
+  #   model: google/gemma-3-27b-it
+  #   base_url: http://<amd-droplet-ip>:8000/v1
+  #   api_key: not-needed
+  #   request_timeout: 600.0
+  #   max_tokens: 8192
+
 # ============================================================================
 # Tool Groups Configuration
 # ============================================================================

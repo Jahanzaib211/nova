@@ -13,6 +13,8 @@ export interface Model {
   use?: string | null;
   base_url?: string | null;
   has_api_key?: boolean;
+  /** AMD-compute backing label (e.g. "AMD Instinct MI300X (Fireworks)"); null if not AMD-backed. */
+  amd_compute?: string | null;
 }
 
 export interface TokenUsageSettings {
@@ -36,6 +38,8 @@ export interface ModelWriteRequest {
   supports_thinking?: boolean;
   supports_reasoning_effort?: boolean;
   supports_vision?: boolean;
+  /** AMD-compute label for self-hosted AMD endpoints (Fireworks is auto-detected). */
+  amd_compute?: string | null;
 }
 
 export interface ModelWriteResponse {

@@ -415,6 +415,8 @@ export const enUS: Translations = {
       addButton: "Add model",
       addLlamaCppButton: "Add local llama.cpp model",
       addOllamaButton: "Add Ollama model (via LiteLLM)",
+      addFireworksButton: "Add Fireworks model (AMD MI300X)",
+      addAmdCloudButton: "Add AMD Instinct model (vLLM/ROCm)",
       addTitle: "Add model",
       editTitle: "Edit model",
       formDescription:

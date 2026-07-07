@@ -260,7 +260,11 @@ class AppConfig(BaseModel):
         existing_names = {m.name for m in config.models}
         for entry in entries:
             try:
-                model = ModelConfig.model_validate(entry)
+                # Resolve $VAR placeholders (e.g. api_key: $FIREWORKS_API_KEY) the
+                # same way config.yaml entries are resolved at line ~226, so
+                # UI-added providers are env-driven and never persist raw secrets.
+                resolved_entry = cls.resolve_env_variables(entry)
+                model = ModelConfig.model_validate(resolved_entry)
             except Exception:
                 logger.warning("Skipping invalid runtime model entry %r", entry.get("name", entry))
                 continue

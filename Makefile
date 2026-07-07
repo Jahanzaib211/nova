@@ -171,3 +171,58 @@ up:
 # Stop and remove production containers
 down:
 	@$(RUN_WITH_GIT_BASH) ./scripts/deploy.sh down
+
+# ==========================================
+# AMD Hackathon (Act II) submission automation
+# ==========================================
+# Override REGISTRY with your registry, e.g.:
+#   make hackathon-track1-submit REGISTRY=ghcr.io/your-org
+REGISTRY ?= ghcr.io/jahanzaib211
+TRACK1_TAG ?= latest
+TRACK1_IMAGE = $(REGISTRY)/nova-track1:$(TRACK1_TAG)
+
+.PHONY: hackathon-track1-build hackathon-track1-smoke hackathon-track1-push hackathon-track1-verify hackathon-track1 hackathon-track1-submit
+
+# Local build (linux/amd64, loaded into the local docker for smoke testing).
+hackathon-track1-build:
+	docker buildx build --platform linux/amd64 -t $(TRACK1_IMAGE) --load hackathon/track1
+
+# Hermetic unit test + in-container contract run (bogus endpoint → valid output, exit 0).
+hackathon-track1-smoke:
+	cd backend && uv run pytest ../hackathon/track1/test_agent.py -q
+	rm -rf hackathon/track1/out && mkdir -p hackathon/track1/out
+	docker run --rm \
+	  -e FIREWORKS_API_KEY=smoke -e FIREWORKS_BASE_URL=http://127.0.0.1:9/v1 \
+	  -e ALLOWED_MODELS=gemma-4-31b-it -e TRACK1_CONCURRENCY=2 \
+	  -v "$(PWD)/hackathon/track1/sample:/input:ro" \
+	  -v "$(PWD)/hackathon/track1/out:/output" \
+	  $(TRACK1_IMAGE)
+	$(PYTHON) -c "import json;d=json.load(open('hackathon/track1/out/results.json'));assert isinstance(d,list) and all('task_id' in x and 'answer' in x for x in d);print('contract OK:',len(d),'results')"
+
+# Build straight to the registry for linux/amd64 (public push).
+hackathon-track1-push:
+	docker buildx build --platform linux/amd64 -t $(TRACK1_IMAGE) --push hackathon/track1
+
+# Verify the pushed image: public, linux/amd64 manifest, <= 10GB.
+hackathon-track1-verify:
+	@$(RUN_WITH_GIT_BASH) ./scripts/hackathon-verify-image.sh $(TRACK1_IMAGE)
+
+# Local pipeline: build then smoke.
+hackathon-track1: hackathon-track1-build hackathon-track1-smoke
+
+# Full automated submission: smoke locally, push, then verify the public image.
+hackathon-track1-submit: hackathon-track1-build hackathon-track1-smoke hackathon-track1-push hackathon-track1-verify
+	@echo "Track 1 image submitted: $(TRACK1_IMAGE)"
+
+.PHONY: hackathon-track3-deck hackathon-track3-prescreen
+# Render the Track 3 slide deck HTML → PDF (needs google-chrome/chromium).
+hackathon-track3-deck:
+	@CHROME=$$(command -v google-chrome || command -v chromium || command -v chromium-browser); \
+	  [ -n "$$CHROME" ] || { echo "no chrome/chromium found" >&2; exit 1; }; \
+	  "$$CHROME" --headless --disable-gpu --no-sandbox --no-pdf-header-footer \
+	    --print-to-pdf=hackathon/track3/deck.pdf "file://$(PWD)/hackathon/track3/deck.html"
+	@echo "wrote hackathon/track3/deck.pdf"
+
+# Self-audit the Track 3 submission (repo evidence; live demo if NOVA_LIVE_URL set).
+hackathon-track3-prescreen:
+	@$(RUN_WITH_GIT_BASH) ./scripts/hackathon-track3-prescreen.sh

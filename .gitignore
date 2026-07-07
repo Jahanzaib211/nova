@@ -84,3 +84,6 @@ pr-build/
 .kilo/
 .opencode/nova-agent-workspace/
 .playwright-mcp/
+
+# AMD hackathon local smoke-test artifacts
+hackathon/track1/out/

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Nova — AMD Developer Hackathon (Act II)</title>
+<style>
+  :root {
+    --amd: #ed1c24; --ink: #0f1115; --muted: #5b6472; --line: #e3e7ee;
+    --bg: #ffffff; --accent: #111827; --chip: #f3f4f6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--ink); }
+  @page { size: 1280px 720px; margin: 0; }
+  .slide {
+    width: 1280px; height: 720px; padding: 72px 88px; background: var(--bg);
+    page-break-after: always; position: relative; display: flex; flex-direction: column;
+    border-bottom: 1px solid var(--line);
+  }
+  .slide:last-child { page-break-after: auto; }
+  .kicker { color: var(--amd); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 15px; }
+  h1 { font-size: 62px; line-height: 1.05; margin-top: 14px; letter-spacing: -0.02em; }
+  h2 { font-size: 40px; line-height: 1.1; margin-top: 10px; letter-spacing: -0.01em; }
+  p, li { font-size: 22px; line-height: 1.5; color: var(--accent); }
+  .sub { color: var(--muted); font-size: 24px; margin-top: 18px; max-width: 60ch; }
+  ul { margin: 22px 0 0 26px; } li { margin: 10px 0; }
+  .foot { position: absolute; left: 88px; bottom: 40px; color: var(--muted); font-size: 15px; }
+  .pageno { position: absolute; right: 88px; bottom: 40px; color: var(--muted); font-size: 15px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 30px; }
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 24px 26px; }
+  .card h3 { font-size: 24px; margin-bottom: 8px; }
+  .card p { font-size: 19px; color: var(--muted); }
+  .chip { display: inline-block; background: var(--chip); border: 1px solid var(--line); border-radius: 999px;
+          padding: 6px 14px; font-size: 16px; color: var(--accent); margin: 6px 8px 0 0; }
+  .big { font-size: 30px; line-height: 1.35; margin-top: 24px; max-width: 30ch; }
+  .flag { color: var(--amd); font-weight: 700; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 18px;
+         background: var(--chip); padding: 2px 8px; border-radius: 6px; }
+  .spacer { flex: 1; }
+  .center { justify-content: center; }
+</style>
+</head>
+<body>
+
+<section class="slide center">
+  <div class="kicker">AMD Developer Hackathon · Act II</div>
+  <h1>Nova</h1>
+  <p class="big">A full-stack AI agent platform that runs its inference on <span class="flag">AMD Instinct</span> compute.</p>
+  <div style="margin-top:28px">
+    <span class="chip">Track 3 · Unicorn (flagship)</span>
+    <span class="chip">Track 1 · General-Purpose Agent</span>
+    <span class="chip">Gemma side-prize ready</span>
+  </div>
+  <div class="foot">github.com/&lt;org&gt;/nova · live demo + docs/AMD_INTEGRATION.md</div>
+  <div class="pageno">01</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">The opportunity</div>
+  <h2>Agent platforms are model-locked. Nova is not.</h2>
+  <p class="sub">Teams want capable agents without being trapped by one vendor's API, price, or hardware. Nova is a complete agent workspace — planning, tools, a live "Agent's Computer", sandboxed browser & editor — with a <strong>config-driven model layer</strong> that runs on whatever compute you choose.</p>
+  <ul>
+    <li>Swap providers with a config entry — no code changes.</li>
+    <li>First-class support for <strong>AMD Instinct</strong> compute, managed or bare-metal.</li>
+    <li>Token usage tracked end-to-end, so efficiency is measurable.</li>
+  </ul>
+  <div class="pageno">02</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Product completeness</div>
+  <h2>Nova is a shipped product, not a demo</h2>
+  <div class="grid">
+    <div class="card"><h3>Agent workspace</h3><p>Multi-step planning, tool use, an "Agent's Computer" with live terminal, editor, and sandboxed browser preview.</p></div>
+    <div class="card"><h3>Provider system</h3><p>Any OpenAI-compatible, Ollama, vLLM, Anthropic, Gemini endpoint — added via UI or config, hot-reloaded.</p></div>
+    <div class="card"><h3>Ops hardened</h3><p>PM2 full-stack, a self-healing watchdog, regression tests on every fix from live audits.</p></div>
+    <div class="card"><h3>Token telemetry</h3><p>Per-model input/output token accounting surfaced in the workspace.</p></div>
+  </div>
+  <div class="pageno">03</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Use of AMD platforms · the core</div>
+  <h2>Two AMD compute paths, one-click in Nova</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Fireworks AI · managed</h3>
+      <p>Inference served on <strong>AMD Instinct MI300X</strong>. Added via the "Add Fireworks model (AMD MI300X)" preset. Powers the Track 1 agent.</p>
+    </div>
+    <div class="card">
+      <h3>AMD Developer Cloud · bare-metal</h3>
+      <p>Nova serves its <strong>own</strong> inference with <strong>vLLM on ROCm</strong> on an AMD Instinct instance — <code>scripts/amd-serve-vllm.sh</code>.</p>
+    </div>
+  </div>
+  <p class="sub">Adding AMD compute is configuration, not code: Nova's model layer already treats every provider as a <code>use</code> + <code>base_url</code> + <code>api_key</code> entry.</p>
+  <div class="pageno">04</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Architecture</div>
+  <h2>Config-driven providers → AMD compute</h2>
+  <ul>
+    <li><strong>UI / API</strong> → runtime model store (<code>runtime_models.yaml</code>), env-driven (<code>$FIREWORKS_API_KEY</code> resolved at load, never persisted).</li>
+    <li><strong>Model factory</strong> instantiates the LangChain provider from <code>use:</code> — Fireworks via <code>ChatOpenAI</code>, AMD Instinct via the native <code>VllmChatModel</code>.</li>
+    <li><strong>Telemetry</strong>: every run's provider is tagged AMD-backed; an <code>AMD</code> badge appears in the UI.</li>
+    <li><strong>Signal</strong>: <code>GET /api/models/amd-usage</code> reports AMD usage as machine-readable JSON for pre-screening.</li>
+  </ul>
+  <div class="pageno">05</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Demonstrable — and honest</div>
+  <h2>AMD usage you can verify</h2>
+  <p class="sub"><code>curl /api/models/amd-usage</code> →</p>
+  <p style="margin-top:14px"><code>{ "amd_backed": true, "count": 2, "summary": "Nova is running on AMD compute: 2 AMD-backed model(s)…" }</code></p>
+  <ul>
+    <li>Only verifiably AMD-hosted endpoints (Fireworks) are auto-claimed.</li>
+    <li>Self-hosted vLLM must opt in explicitly — a bare vLLM server is never assumed to be AMD.</li>
+    <li>The badge never overstates where inference actually ran.</li>
+  </ul>
+  <div class="pageno">06</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Coverage</div>
+  <h2>One product, all three tracks</h2>
+  <div class="grid">
+    <div class="card"><h3>Track 3 · Unicorn <span class="flag">(flagship)</span></h3><p>Nova as an original, AMD-powered agent platform. Repo + live demo + this deck.</p></div>
+    <div class="card"><h3>Track 1 · General agent</h3><p>Lean Fireworks batch harness, token-efficient by design. <code>make hackathon-track1</code>.</p></div>
+    <div class="card"><h3>Gemma side prize</h3><p>Gemma is a default in the AMD presets (Fireworks + vLLM/ROCm).</p></div>
+    <div class="card"><h3>Track 2 · Video captioning</h3><p>Reuses Nova's vision layer — planned stretch on the same provider system.</p></div>
+  </div>
+  <div class="pageno">07</div>
+</section>
+
+<section class="slide">
+  <div class="kicker">Why it matters</div>
+  <h2>Market potential</h2>
+  <p class="sub">Every team adopting agents faces the same buy: capable, controllable, cost-predictable inference. Nova decouples the agent product from the model vendor — and makes <strong>AMD Instinct</strong> a first-class, one-click backend. That is a credible on-ramp for AMD compute into the fast-growing agent tooling market.</p>
+  <ul>
+    <li><strong>For teams:</strong> vendor-flexible agents, measurable token cost.</li>
+    <li><strong>For AMD:</strong> a polished product that showcases MI300X + ROCm to agent builders.</li>
+  </ul>
+  <div class="pageno">08</div>
+</section>
+
+<section class="slide center">
+  <div class="kicker">Nova</div>
+  <h1>Agents on AMD.</h1>
+  <p class="big">Complete product · genuine AMD compute · verifiable usage.</p>
+  <ul>
+    <li>Repo: <code>github.com/&lt;org&gt;/nova</code></li>
+    <li>Live demo: <code>&lt;hosted-url&gt;</code></li>
+    <li>AMD setup: <code>docs/AMD_INTEGRATION.md</code> · usage: <code>/api/models/amd-usage</code></li>
+  </ul>
+  <div class="pageno">09</div>
+</section>
+
+</body>
+</html>

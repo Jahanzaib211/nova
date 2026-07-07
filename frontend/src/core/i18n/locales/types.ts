@@ -330,6 +330,8 @@ export interface Translations {
       addButton: string;
       addLlamaCppButton: string;
       addOllamaButton: string;
+      addFireworksButton: string;
+      addAmdCloudButton: string;
       addTitle: string;
       editTitle: string;
       formDescription: string;
