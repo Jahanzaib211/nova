@@ -2,7 +2,7 @@
 
 import { TerminalIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,14 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
 import {
+  activeWriteFilePathFromActivity,
+  currentToolFromActivity,
+  messagesToActivityEvents,
+} from "@/core/threads/activity";
+import {
   useThreadMetadata,
   useThreadStream,
   useThreadTokenUsage,
-  type AgentActivityEvent,
 } from "@/core/threads/hooks";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
@@ -83,16 +87,9 @@ export default function ChatPage() {
   // Agent's Computer panel state
   const { agentComputerOpen, setAgentComputerOpen } = usePanels();
   const { notifyComputerActivity, syncRunState } = useAutoOpenAgentComputer();
-  const [currentTool, setCurrentTool] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [llmError, setLlmError] = useState<LlmError | null>(null);
-  const [activityEvents, setActivityEvents] = useState<AgentActivityEvent[]>(
-    [],
-  );
-  const [activeWriteFilePath, setActiveWriteFilePath] = useState<string | null>(
-    null,
-  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -104,12 +101,9 @@ export default function ChatPage() {
 
   // Reset all agent computer state when thread changes
   useEffect(() => {
-    setCurrentTool(null);
     setTaskProgress(null);
     setVerifyResult(null);
     setLlmError(null);
-    setActivityEvents([]);
-    setActiveWriteFilePath(null);
   }, [threadId]);
 
   const { showNotification } = useNotification();
@@ -152,9 +146,6 @@ export default function ChatPage() {
         showNotification(state.title, { body });
       }
     },
-    onToolEnd: (event) => {
-      setCurrentTool(event.name);
-    },
     onTaskProgress: (progress) => {
       setTaskProgress(progress);
     },
@@ -164,54 +155,38 @@ export default function ChatPage() {
     onLlmError: (event) => {
       setLlmError(event);
     },
-    onToolActivity: (event) => {
-      notifyComputerActivity();
-      setActivityEvents((prev) => [...prev.slice(-199), event]);
-      if (event.type === "write_file" && event.path) {
-        setActiveWriteFilePath(event.path);
-      }
-    },
-    onToolActivityDone: ({ id, name, output, path, cmd }) => {
-      notifyComputerActivity();
-      const status = output.startsWith("Error:") ? "error" : "done";
-      setActivityEvents((prev) => {
-        const idx = prev.findIndex((e) => e.id === id);
-        if (idx >= 0) {
-          // Update the existing "running" event created by on_tool_start
-          return prev.map((e) => (e.id === id ? { ...e, output, status } : e));
-        }
-        // on_tool_start never fired (common with subagents) — create the event now
-        const ts = new Date().toLocaleTimeString("en-US", {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        });
-        const newEvent: AgentActivityEvent = {
-          id: id || `${name}-${Date.now()}`,
-          ts,
-          type: name,
-          path,
-          summary:
-            name === "bash" && cmd
-              ? `$ ${cmd.slice(0, 60)}`
-              : name === "write_file" && path
-                ? `Wrote ${path.split("/").at(-1)}`
-                : name === "str_replace" && path
-                  ? `Edited ${path.split("/").at(-1)}`
-                  : name === "read_file" && path
-                    ? `Read ${path.split("/").at(-1)}`
-                    : name,
-          output,
-          status,
-        };
-        if (name === "write_file" && path) setActiveWriteFilePath(path);
-        return [...prev.slice(-199), newEvent];
-      });
-    },
   });
 
   const hasThreadMessages = thread.messages.length > 0;
+
+  // The Agent's Computer live layer (activity feed, current-tool status, active
+  // editor file, auto-open) is derived from the message stream. It used to come
+  // from `onLangChainEvent` (on_tool_start/on_tool_end), but the gateway worker
+  // doesn't emit LangGraph `events` mode, so that path is dead at runtime. The
+  // `messages` mode is supported and carries the same tool_calls + results.
+  const activityEvents = useMemo(
+    () => messagesToActivityEvents(thread.messages),
+    [thread.messages],
+  );
+  const currentTool = useMemo(
+    () => currentToolFromActivity(activityEvents),
+    [activityEvents],
+  );
+  const activeWriteFilePath = useMemo(
+    () => activeWriteFilePathFromActivity(activityEvents),
+    [activityEvents],
+  );
+
+  // Auto-open on new tool activity. The policy (unit-tested) opens once per run
+  // on first activity and respects a manual close; syncRunState re-arms it each
+  // run, so firing on every count increase is safe and idempotent.
+  const prevActivityCountRef = useRef(0);
+  useEffect(() => {
+    if (activityEvents.length > prevActivityCountRef.current) {
+      notifyComputerActivity();
+    }
+    prevActivityCountRef.current = activityEvents.length;
+  }, [activityEvents.length, notifyComputerActivity]);
 
   // Auto-open the Agent's Computer panel only when the agent actually uses
   // its computer (first tool activity of a run) — never for thinking-only
