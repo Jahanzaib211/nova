@@ -397,6 +397,7 @@ export const zhCN: Translations = {
       sourceRuntime: "自定义",
       addButton: "添加模型",
       addLlamaCppButton: "添加本地 llama.cpp 模型",
+      addOllamaButton: "添加 Ollama 模型（经 LiteLLM）",
       addTitle: "添加模型",
       editTitle: "编辑模型",
       formDescription:

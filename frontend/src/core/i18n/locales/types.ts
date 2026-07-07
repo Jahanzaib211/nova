@@ -329,6 +329,7 @@ export interface Translations {
       sourceRuntime: string;
       addButton: string;
       addLlamaCppButton: string;
+      addOllamaButton: string;
       addTitle: string;
       editTitle: string;
       formDescription: string;

@@ -58,7 +58,44 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
-      // Watchdog for the whole stack — probes 9 things every 30s and
+      // LiteLLM proxy — Nova's unified OpenAI-compatible model gateway.
+      // Routes to the Ollama daemon (127.0.0.1:11434) and its free cloud
+      // models; add more providers in docker/litellm/config.yaml. Bound to
+      // the docker bridge IP only (same "never 0.0.0.0" rule as llama-bridge)
+      // so Nova's container reaches it at host.docker.internal:4000.
+      // Watchdog probe P10_litellm auto-heals this app.
+      name: "nova-litellm",
+      script: "/home/jahanzaib/Desktop/nova/scripts/pm2-litellm.sh",
+      interpreter: "none",
+      cwd: "/home/jahanzaib/Desktop/nova",
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 3000,
+      kill_timeout: 8000,
+      out_file: "/home/jahanzaib/.pm2/logs/nova-litellm-out.log",
+      error_file: "/home/jahanzaib/.pm2/logs/nova-litellm-error.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+    {
+      // Dify stack (fork: Jahanzaib211/dify at ~/Desktop/dify) — same
+      // foreground-compose pattern as the deerflow app so PM2 owns the
+      // lifecycle and reboots bring it back. UI at 127.0.0.1:8088; its
+      // api/worker/plugin_daemon reach the nova-litellm proxy via
+      // host.docker.internal:4000 (see dify/docker/docker-compose.override.yaml).
+      name: "nova-dify",
+      script: "/home/jahanzaib/Desktop/dify/docker/pm2-dify.sh",
+      interpreter: "none",
+      cwd: "/home/jahanzaib/Desktop/dify/docker",
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      kill_timeout: 30000,
+      out_file: "/home/jahanzaib/.pm2/logs/nova-dify-out.log",
+      error_file: "/home/jahanzaib/.pm2/logs/nova-dify-error.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+    {
+      // Watchdog for the whole stack — probes 11 things every 30s and
       // auto-fixes known-broken cases (binary attestation drift, missing
       // docker containers). Its own pm2 status is the operator's single
       // pane of glass: green = everything healthy, red = probe failed and
@@ -83,6 +120,10 @@ module.exports = {
         LOCAL_LLM_GATEWAY_PORT: "9000",
         LLAMA_HOST: "127.0.0.1",
         LLAMA_BRIDGE_HOST: "172.17.0.1",
+        LITELLM_HOST: "172.17.0.1",
+        LITELLM_PORT: "4000",
+        DIFY_HOST: "127.0.0.1",
+        DIFY_PORT: "8088",
         // Binary-attestation probe — left unset by default. To enable:
         //   WATCHDOG_ATTESTATION_BINARY_PATH=/path/to/binary
         //   WATCHDOG_ATTESTATION_CONSTITUTION_PATH=/path/to/constitution

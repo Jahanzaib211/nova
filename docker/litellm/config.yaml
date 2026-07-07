@@ -1,0 +1,32 @@
+# LiteLLM proxy config — Nova's unified model gateway.
+#
+# Topology: Nova gateway (docker) -> host.docker.internal:4000 (this proxy,
+# bound to the docker bridge IP only — never 0.0.0.0) -> Ollama daemon on
+# 127.0.0.1:11434 -> ollama.com free cloud models.
+#
+# Managed by pm2 app `nova-litellm` (scripts/pm2-litellm.sh). Watchdog probe
+# P10_litellm auto-heals it. Add providers here (OpenAI, Anthropic, etc.) to
+# expose them to Nova through one OpenAI-compatible surface.
+
+model_list:
+  - model_name: minimax-m3-free
+    litellm_params:
+      model: ollama_chat/minimax-m3:cloud
+      api_base: http://127.0.0.1:11434
+  - model_name: nemotron-3-super-free
+    litellm_params:
+      model: ollama_chat/nemotron-3-super:cloud
+      api_base: http://127.0.0.1:11434
+  - model_name: qwen3-coder-480b-free
+    litellm_params:
+      model: ollama_chat/qwen3-coder:480b-cloud
+      api_base: http://127.0.0.1:11434
+  - model_name: gpt-oss-120b-free
+    litellm_params:
+      model: ollama_chat/gpt-oss:120b-cloud
+      api_base: http://127.0.0.1:11434
+
+litellm_settings:
+  request_timeout: 600
+  drop_params: true
+  num_retries: 2

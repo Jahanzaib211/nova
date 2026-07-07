@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """nova-healthcheck — supervisor watchdog for the local dev stack.
 
-Polls 9 probes every CYCLE_INTERVAL seconds and auto-fixes common breakage
+Polls 11 probes every CYCLE_INTERVAL seconds and auto-fixes common breakage
 so `pm2 list nova-healthcheck` is the operator's single pane of glass.
 
 Generic by design — this code knows nothing about specific upstream services.
@@ -19,12 +19,19 @@ Probes:
   P8. binary attestation drift (env-driven paths; skipped if unset)
   P9. llama-bridge reachability (172.17.0.1:8081 → the path Nova's
       container actually uses via host.docker.internal)
+  P10. nova-litellm proxy reachability (172.17.0.1:4000/v1/models — the
+      unified gateway for Ollama cloud models)
+  P11. Dify stack health (127.0.0.1:8088/console/api/setup → step=finished;
+      pm2 app nova-dify running the compose stack)
 
 Auto-fixes (only safe, reversible ones):
   - Attestation drift → clear the hash dir (and run WATCHDOG_ATTESTATION_RESTART_CMD
     if set)
   - Container count < 3 → pm2 restart deerflow
   - llama-server ECONNREFUSED at boot → wait one cycle, no action (cold load)
+  - P9 llama-bridge dead → pm2 restart (re-register from ecosystem.config.js on drift)
+  - P10 nova-litellm dead → pm2 restart (start from ecosystem.config.js if missing)
+  - P11 Dify dead → pm2 restart nova-dify (start from ecosystem.config.js if missing)
 
 Status:
   - Exits 0 every cycle when all probes are GREEN.
@@ -35,6 +42,8 @@ Reads:
   - ${LOCAL_LLM_GATEWAY_HOST:-127.0.0.1}:${LOCAL_LLM_GATEWAY_PORT:-9000} for P4
   - ${LLAMA_HOST:-127.0.0.1}:8081 for P5/P6
   - ${LLAMA_BRIDGE_HOST:-172.17.0.1}:8081 for P9
+  - ${LITELLM_HOST:-172.17.0.1}:${LITELLM_PORT:-4000} for P10
+  - ${DIFY_HOST:-127.0.0.1}:${DIFY_PORT:-8088} for P11
   - ${WATCHDOG_ATTESTATION_BINARY_PATH} for P8 (skipped if unset)
   - ${HEALTHCHECK_CYCLE_DEADLINE_SEC:-60} hard deadline per cycle
 """
@@ -268,6 +277,30 @@ async def probe_llama_bridge(host: str = "172.17.0.1", port: int = 8081) -> Prob
     )
 
 
+async def probe_litellm(host: str = "172.17.0.1", port: int = 4000) -> ProbeResult:
+    """Probe the nova-litellm proxy on the docker bridge IP — the unified
+    OpenAI-compatible gateway Nova's container uses for Ollama cloud models
+    (host.docker.internal:4000). RED here means every litellm-routed model is
+    unreachable even if Ollama itself is healthy."""
+    return await _http_probe(
+        "P10_litellm",
+        f"http://{host}:{port}/v1/models",
+        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
+    )
+
+
+async def probe_dify(host: str = "127.0.0.1", port: int = 8088) -> ProbeResult:
+    """Probe the Dify stack (pm2 app nova-dify, fork at ~/Desktop/dify) via
+    its localhost-bound nginx. /console/api/setup returns step=finished on a
+    healthy, initialized deployment; anything else means the api container
+    (or the whole compose stack) is down or mid-migration."""
+    return await _http_probe(
+        "P11_dify",
+        f"http://{host}:{port}/console/api/setup",
+        body_validator=lambda d: d.get("step") == "finished",
+    )
+
+
 async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str = "") -> ProbeResult:
     """Issue a 1-token chat completion to confirm VRAM is loaded.
 
@@ -479,6 +512,81 @@ def fix_deerflow_containers() -> bool:
         return False
 
 
+def fix_llama_bridge() -> bool:
+    """Heal the llama-bridge PM2 app for a RED P9_bridge.
+
+    Two failure modes observed in production:
+      1. Process crashed/hung — a plain ``pm2 restart`` clears it.
+      2. Registration drift — pm2's saved dump points at a script path that no
+         longer exists (e.g. after the bridge source moved repos), so the
+         "online" process is orphaned stale code and restart just resurrects
+         the wrong thing. In that case re-register from ecosystem.config.js,
+         which is the source of truth for the script path, and persist.
+    """
+    ecosystem = os.environ.get("NOVA_ECOSYSTEM_FILE", str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"))
+    try:
+        described = subprocess.run(["pm2", "describe", "llama-bridge"], timeout=15, capture_output=True, text=True)
+        script_path = None
+        for line in described.stdout.splitlines():
+            if "script path" in line:
+                script_path = line.split("│")[-2].strip() if "│" in line else None
+        drifted = script_path is not None and not Path(script_path).exists()
+        if described.returncode != 0 or drifted:
+            log.warning("auto-fix: llama-bridge %s — re-registering from %s", "script path missing on disk" if drifted else "not registered", ecosystem)
+            subprocess.run(["pm2", "delete", "llama-bridge"], timeout=15, capture_output=True)
+            subprocess.run(["pm2", "start", ecosystem, "--only", "llama-bridge"], check=True, timeout=30, capture_output=True)
+            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
+        else:
+            log.warning("auto-fix: pm2 restart llama-bridge")
+            subprocess.run(["pm2", "restart", "llama-bridge"], check=True, timeout=30, capture_output=True)
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        log.error("auto-fix: failed to heal llama-bridge: %s", e)
+        return False
+
+
+def fix_litellm() -> bool:
+    """Heal the nova-litellm PM2 app for a RED P10_litellm: restart, or
+    re-register from ecosystem.config.js if the app is missing (same drift
+    protection as fix_llama_bridge)."""
+    ecosystem = os.environ.get("NOVA_ECOSYSTEM_FILE", str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"))
+    try:
+        described = subprocess.run(["pm2", "describe", "nova-litellm"], timeout=15, capture_output=True, text=True)
+        if described.returncode != 0:
+            log.warning("auto-fix: nova-litellm not registered — starting from %s", ecosystem)
+            subprocess.run(["pm2", "start", ecosystem, "--only", "nova-litellm"], check=True, timeout=30, capture_output=True)
+            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
+        else:
+            log.warning("auto-fix: pm2 restart nova-litellm")
+            subprocess.run(["pm2", "restart", "nova-litellm"], check=True, timeout=30, capture_output=True)
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        log.error("auto-fix: failed to heal nova-litellm: %s", e)
+        return False
+
+
+def fix_dify() -> bool:
+    """Heal the nova-dify PM2 app for a RED P11_dify: restart, or re-register
+    from ecosystem.config.js if the app is missing. The pm2 app runs
+    `docker compose up` in the foreground, so a restart reconciles the whole
+    Dify compose stack. Longer timeout than the other fixes — a full stack
+    bring-up is not instant."""
+    ecosystem = os.environ.get("NOVA_ECOSYSTEM_FILE", str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"))
+    try:
+        described = subprocess.run(["pm2", "describe", "nova-dify"], timeout=15, capture_output=True, text=True)
+        if described.returncode != 0:
+            log.warning("auto-fix: nova-dify not registered — starting from %s", ecosystem)
+            subprocess.run(["pm2", "start", ecosystem, "--only", "nova-dify"], check=True, timeout=60, capture_output=True)
+            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
+        else:
+            log.warning("auto-fix: pm2 restart nova-dify")
+            subprocess.run(["pm2", "restart", "nova-dify"], check=True, timeout=60, capture_output=True)
+        return True
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+        log.error("auto-fix: failed to heal nova-dify: %s", e)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Cycle orchestrator
 # ---------------------------------------------------------------------------
@@ -518,8 +626,25 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
             if fix_deerflow_containers():
                 probe.fixed = True
                 probe.detail += " [pm2 restart deerflow issued]"
+        elif probe.name == "P9_bridge":
+            if fix_llama_bridge():
+                probe.fixed = True
+                probe.detail += " [llama-bridge healed via pm2]"
+        elif probe.name == "P10_litellm":
+            if fix_litellm():
+                probe.fixed = True
+                probe.detail += " [nova-litellm healed via pm2]"
+        elif probe.name == "P11_dify":
+            if fix_dify():
+                probe.fixed = True
+                probe.detail += " [nova-dify healed via pm2]"
         else:
-            log.warning("no auto-fix registered for %s — investigate", probe.name)
+            # Warn once when the probe first becomes fix-eligible, then every
+            # 20th cycle while it stays RED — not every 30s forever (the P9
+            # regression sat in exactly that spam pattern for days, unread).
+            streak = state.consecutive_red[probe.name]
+            if streak == 2 or streak % 20 == 0:
+                log.warning("no auto-fix registered for %s — investigate (RED for %d cycles)", probe.name, streak)
 
 
 async def run_cycle(state: WatchdogState) -> CycleReport:
@@ -550,6 +675,24 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
         (
             "P9_bridge",
             asyncio.ensure_future(probe_llama_bridge(host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1"))),
+        ),
+        (
+            "P10_litellm",
+            asyncio.ensure_future(
+                probe_litellm(
+                    host=os.environ.get("LITELLM_HOST", "172.17.0.1"),
+                    port=int(os.environ.get("LITELLM_PORT", "4000")),
+                )
+            ),
+        ),
+        (
+            "P11_dify",
+            asyncio.ensure_future(
+                probe_dify(
+                    host=os.environ.get("DIFY_HOST", "127.0.0.1"),
+                    port=int(os.environ.get("DIFY_PORT", "8088")),
+                )
+            ),
         ),
     ]
     results = await asyncio.gather(*(c for _, c in probes), return_exceptions=True)

@@ -414,6 +414,7 @@ export const enUS: Translations = {
       sourceRuntime: "custom",
       addButton: "Add model",
       addLlamaCppButton: "Add local llama.cpp model",
+      addOllamaButton: "Add Ollama model (via LiteLLM)",
       addTitle: "Add model",
       editTitle: "Edit model",
       formDescription:

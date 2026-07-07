@@ -211,13 +211,15 @@ class TestRunCycleSmoke:
             "probe_containers",
             "probe_binary_attestation",
             "probe_llama_bridge",
+            "probe_litellm",
+            "probe_dify",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
         state = healthcheck.WatchdogState()
         report = await healthcheck.run_cycle(state)
         assert report.overall == healthcheck.Status.GREEN
-        assert len(report.probes) == 9
+        assert len(report.probes) == 11
         assert all(p.status == healthcheck.Status.GREEN for p in report.probes)
 
     @pytest.mark.asyncio
@@ -241,6 +243,8 @@ class TestRunCycleSmoke:
             "probe_llama_vram",
             "probe_containers",
             "probe_llama_bridge",
+            "probe_litellm",
+            "probe_dify",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
         monkeypatch.setattr(healthcheck, "probe_binary_attestation", fake_boom)
@@ -255,11 +259,11 @@ class TestRunCycleSmoke:
         assert "P8_binary_attestation" in by_name
         assert by_name["P8_binary_attestation"].status == healthcheck.Status.RED
         assert "RuntimeError" in by_name["P8_binary_attestation"].detail
-        # The other 8 should still be GREEN and the cycle should still report.
+        # The other 9 should still be GREEN and the cycle should still report.
         assert report.overall == healthcheck.Status.RED
         assert report.exit_code == 1
         green_count = sum(1 for p in report.probes if p.status == healthcheck.Status.GREEN)
-        assert green_count == 8
+        assert green_count == 10
 
 
 class TestLogRouting:
@@ -371,3 +375,112 @@ class TestArgValidation:
         )
         assert result.returncode != 0
         assert "must be >= --interval" in result.stderr
+
+
+class TestLitellmFix:
+    def test_fix_litellm_restarts_registered_app(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+
+            class R:
+                returncode = 0
+                stdout = "script path  x"
+
+            return R()
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
+        assert healthcheck.fix_litellm() is True
+        assert ["pm2", "restart", "nova-litellm"] in calls
+
+    def test_fix_litellm_starts_from_ecosystem_when_missing(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+
+            class R:
+                returncode = 1 if cmd[:2] == ["pm2", "describe"] else 0
+                stdout = ""
+
+            return R()
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
+        assert healthcheck.fix_litellm() is True
+        assert any(cmd[:2] == ["pm2", "start"] and "--only" in cmd and "nova-litellm" in cmd for cmd in calls)
+
+
+class TestDifyProbeAndFix:
+    @pytest.mark.asyncio
+    async def test_probe_dify_green_on_finished_setup(self, monkeypatch):
+        async def fake_http_probe(name, url, body_validator=None, **kwargs):
+            assert name == "P11_dify"
+            assert "/console/api/setup" in url
+            ok = body_validator({"step": "finished", "setup_at": "2026-07-06"})
+            return healthcheck.ProbeResult(name, healthcheck.Status.GREEN if ok else healthcheck.Status.RED, "ok", 1.0)
+
+        monkeypatch.setattr(healthcheck, "_http_probe", fake_http_probe)
+        result = await healthcheck.probe_dify()
+        assert result.status == healthcheck.Status.GREEN
+
+    @pytest.mark.asyncio
+    async def test_probe_dify_validator_rejects_uninitialized(self, monkeypatch):
+        """step=not_started (fresh DB, migrations pending) must not read as
+        healthy — that state means the api is up but the deployment isn't."""
+        captured = {}
+
+        async def fake_http_probe(name, url, body_validator=None, **kwargs):
+            captured["validator"] = body_validator
+            return healthcheck.ProbeResult(name, healthcheck.Status.GREEN, "ok", 1.0)
+
+        monkeypatch.setattr(healthcheck, "_http_probe", fake_http_probe)
+        await healthcheck.probe_dify()
+        assert captured["validator"]({"step": "finished"}) is True
+        assert captured["validator"]({"step": "not_started", "setup_at": None}) is False
+        assert captured["validator"]({}) is False
+
+    def test_fix_dify_restarts_registered_app(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+
+            class R:
+                returncode = 0
+                stdout = "script path  x"
+
+            return R()
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
+        assert healthcheck.fix_dify() is True
+        assert ["pm2", "restart", "nova-dify"] in calls
+
+    def test_fix_dify_starts_from_ecosystem_when_missing(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+
+            class R:
+                returncode = 1 if cmd[:2] == ["pm2", "describe"] else 0
+                stdout = ""
+
+            return R()
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
+        assert healthcheck.fix_dify() is True
+        assert any(cmd[:2] == ["pm2", "start"] and "--only" in cmd and "nova-dify" in cmd for cmd in calls)
+
+    def test_dispatch_fixes_heals_red_p11_after_two_cycles(self, monkeypatch):
+        fixed: list[str] = []
+        monkeypatch.setattr(healthcheck, "fix_dify", lambda: fixed.append("dify") or True)
+
+        state = healthcheck.WatchdogState()
+        for _ in range(2):
+            report = healthcheck.CycleReport(cycle_id=1, started_at=0.0, duration_ms=0.0)
+            report.add(healthcheck.ProbeResult("P11_dify", healthcheck.Status.RED, "down", 1.0))
+            healthcheck.dispatch_fixes(report, state)
+
+        assert fixed == ["dify"]
+        assert report.probes[0].fixed is True

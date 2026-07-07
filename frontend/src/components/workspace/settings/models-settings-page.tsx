@@ -71,6 +71,22 @@ const LLAMA_CPP_PRESET: FormState = {
   supports_vision: false,
 };
 
+// Ollama models served through the nova-litellm proxy (docker/litellm/config.yaml).
+// The gateway runs in Docker, so the base_url targets the host's docker bridge
+// via host.docker.internal — not 127.0.0.1.
+const OLLAMA_PRESET: FormState = {
+  name: "",
+  display_name: "",
+  model: "minimax-m3-free",
+  providerChoice: OPENAI_COMPATIBLE,
+  customUse: "",
+  base_url: "http://host.docker.internal:4000/v1",
+  api_key: "not-needed",
+  supports_thinking: false,
+  supports_reasoning_effort: false,
+  supports_vision: false,
+};
+
 interface FormState {
   name: string;
   display_name: string;
@@ -458,6 +474,13 @@ export function ModelsSettingsPage() {
             >
               <ServerIcon className="size-4" />
               {strings.addLlamaCppButton}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => openAdd({ ...OLLAMA_PRESET })}
+            >
+              <ServerIcon className="size-4" />
+              {strings.addOllamaButton}
             </Button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "nova-litellm/qwen3-coder-480b-free",
   "mcp": {
     "github": {
       "type": "local",
