@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-import deerflow.community.serper.tools as serper_mod
+from deerflow.community.serper import tools as serper_mod
 
 
 @pytest.fixture(autouse=True)

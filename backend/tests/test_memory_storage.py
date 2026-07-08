@@ -229,7 +229,7 @@ class TestGetMemoryStorage:
     @pytest.fixture(autouse=True)
     def reset_storage_instance(self):
         """Reset the global storage instance before and after each test."""
-        import deerflow.agents.memory.storage as storage_mod
+        from deerflow.agents.memory import storage as storage_mod
 
         storage_mod._storage_instance = None
         yield
