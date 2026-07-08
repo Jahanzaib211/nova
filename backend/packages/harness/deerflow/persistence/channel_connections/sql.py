@@ -189,7 +189,9 @@ class ChannelConnectionRepository:
                     # revokes the newly-committed owner, and writes our row.
                     last_error = exc
                     await session.rollback()
-            raise last_error  # type: ignore[misc]  # loop runs at least once
+            if last_error is None:
+                raise RuntimeError("upsert loop completed without error or return")
+            raise last_error
 
     async def list_connections(self, owner_user_id: str) -> list[dict[str, Any]]:
         async with self.session_factory() as session:

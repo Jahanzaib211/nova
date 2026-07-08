@@ -176,7 +176,7 @@ async def get_agent(name: str) -> AgentResponse:
     """
     _require_agents_api_enabled()
     _validate_agent_name(name)
-    name = _normalize_agent_name(name)
+    name = _normalize_agent_name(name).replace("\n", "").replace("\r", "")
     user_id = get_effective_user_id()
 
     try:
@@ -291,7 +291,7 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
     """
     _require_agents_api_enabled()
     _validate_agent_name(name)
-    name = _normalize_agent_name(name)
+    name = _normalize_agent_name(name).replace("\n", "").replace("\r", "")
     user_id = get_effective_user_id()
 
     try:
@@ -439,7 +439,7 @@ async def delete_agent(name: str) -> None:
     """
     _require_agents_api_enabled()
     _validate_agent_name(name)
-    name = _normalize_agent_name(name)
+    name = _normalize_agent_name(name).replace("\n", "").replace("\r", "")
     user_id = get_effective_user_id()
     paths = get_paths()
 

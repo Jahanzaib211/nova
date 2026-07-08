@@ -196,7 +196,7 @@ async def _auto_verify_preview(thread_id: str, sandbox: object, label: str) -> N
             for ce in r.console_errors[:3]:
                 _append_devlog_to_sandbox_log(thread_id, f"[self-test] console: {ce[:160]}")
     except Exception as e:  # pragma: no cover - best effort
-        logger.debug("auto-verify preview failed for %s: %s", thread_id, e)
+        logger.debug("auto-verify preview failed for %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
 
 
 def _allocate_port() -> int:

@@ -252,6 +252,7 @@ async def create_model(request: ModelWriteRequest, config: AppConfig = Depends(g
     description="Update a runtime-managed model entry. Models defined in config.yaml are read-only via the API.",
 )
 async def update_model(model_name: str, request: ModelWriteRequest, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    model_name = model_name.replace("\n", "").replace("\r", "")
     entries = load_runtime_model_dicts()
     idx = next((i for i, m in enumerate(entries) if m.get("name") == model_name), None)
     if idx is None:
@@ -286,6 +287,7 @@ async def update_model(model_name: str, request: ModelWriteRequest, config: AppC
     description="Remove a runtime-managed model entry. Models defined in config.yaml are read-only via the API.",
 )
 async def delete_model(model_name: str, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    model_name = model_name.replace("\n", "").replace("\r", "")
     entries = load_runtime_model_dicts()
     remaining = [m for m in entries if m.get("name") != model_name]
     if len(remaining) == len(entries):

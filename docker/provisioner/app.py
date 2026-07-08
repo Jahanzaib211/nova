@@ -443,9 +443,9 @@ async def create_sandbox(req: CreateSandboxRequest):
     If the sandbox already exists, returns the existing information
     (idempotent).
     """
-    sandbox_id = req.sandbox_id
-    thread_id = req.thread_id
-    user_id = req.user_id
+    sandbox_id = req.sandbox_id.replace("\n", "").replace("\r", "")
+    thread_id = req.thread_id.replace("\n", "").replace("\r", "")
+    user_id = req.user_id.replace("\n", "").replace("\r", "")
 
     logger.info(
         "Received request to create sandbox '%s' for thread '%s' user '%s'",

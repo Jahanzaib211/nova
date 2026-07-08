@@ -42,6 +42,7 @@ async def get_channels_status() -> ChannelStatusResponse:
 async def restart_channel(name: str, request: Request) -> ChannelRestartResponse:
     """Restart a specific IM channel."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    name = name.replace("\n", "").replace("\r", "")
 
     from app.channels.service import get_channel_service
 

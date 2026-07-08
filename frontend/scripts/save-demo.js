@@ -1,7 +1,6 @@
 import { config } from "dotenv";
 import fs from "fs";
 import path from "path";
-import { env } from "process";
 
 export async function main() {
   const url = new URL(process.argv[2]);
