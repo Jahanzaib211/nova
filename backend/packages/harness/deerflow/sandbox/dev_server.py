@@ -196,7 +196,7 @@ async def _auto_verify_preview(thread_id: str, sandbox: object, label: str) -> N
             for ce in r.console_errors[:3]:
                 _append_devlog_to_sandbox_log(thread_id, f"[self-test] console: {ce[:160]}")
     except Exception as e:  # pragma: no cover - best effort
-        logger.debug("auto-verify preview failed for %s: %s", thread_id, e)
+        logger.debug("auto-verify preview failed for %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
 
 
 def _allocate_port() -> int:
@@ -455,7 +455,7 @@ async def _start_dev_server_aio(
         if getter is not None:
             endpoint = getter(thread_id, container_port)
     except Exception as e:
-        logger.warning("Failed to resolve preview endpoint for thread %s: %s", thread_id, e)
+        logger.warning("Failed to resolve preview endpoint for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
 
     if endpoint is None:
         handle.status = "error"
@@ -512,7 +512,7 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
     if poller is not None and not poller.done():
         poller.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
-            await poller
+            _ = await poller
 
     # AIO mode: kill the WHOLE process group + free the port. The recorded PID is
     # the setsid group leader, so `kill -- -<pid>` (negative = process group)

@@ -162,7 +162,7 @@ def main() -> int:
     access_token = data["claudeAiOauth"]["accessToken"]
 
     if args.print_token:
-        print(access_token)
+        print(access_token)  # nosec B105 — CLI tool; token printed only when explicitly requested via --print-token
 
     if args.print_export:
         print(f"export CLAUDE_CODE_OAUTH_TOKEN={shlex.quote(access_token)}")

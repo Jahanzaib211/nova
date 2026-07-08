@@ -191,7 +191,7 @@ def run_shutdown(budget_s: float | None = None) -> dict[str, Any]:
         log["completed_at"] = time.monotonic()
 
         _LAST_RESULT["value"] = log
-        _shutdown_completed = True
+        _shutdown_completed = True  # CodeQL[py/unused-global-variable]: used in _safe_shutdown and reset_for_testing
         logger.info(
             "shutdown: completed in %.1fms (budget %.1fs)",
             log["total_elapsed_ms"],
@@ -238,7 +238,7 @@ def install_shutdown_hooks() -> bool:
     with _shutdown_lock:
         if _installed:
             return False
-        _installed = True
+        _installed = True  # CodeQL[py/unused-global-variable]: used in install_shutdown_hooks guard
 
     # atexit runs on normal interpreter shutdown — covers `python -c "..."`
     # and clean process exits. It does NOT run on SIGKILL.

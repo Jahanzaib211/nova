@@ -69,19 +69,6 @@ class TestTitleMiddleware:
         assert middleware is not None
         assert middleware.state_schema is not None
 
-    # TODO: Add integration tests with mock Runtime
-    # def test_should_generate_title(self):
-    #     """Test title generation trigger logic."""
-    #     pass
-
-    # def test_generate_title(self):
-    #     """Test title generation."""
-    #     pass
-
-    # def test_after_agent_hook(self):
-    #     """Test after_agent hook."""
-    #     pass
-
 
 # TODO: Add integration tests
 # - Test with real LangGraph runtime

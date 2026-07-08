@@ -137,8 +137,6 @@ def test_failed_task_does_not_abort_batch(tmp_path, monkeypatch):
 
     class _Boom:
         def __init__(self):
-            parent = self
-
             class _Completions:
                 def create(self, *, model, messages, **kw):
                     if messages[-1]["content"] == "x":

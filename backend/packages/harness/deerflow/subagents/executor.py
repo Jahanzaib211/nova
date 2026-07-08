@@ -147,7 +147,7 @@ _scheduler_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="subagent
 # fresh loop per execution and then closing async resources bound to it.
 _isolated_subagent_loop: asyncio.AbstractEventLoop | None = None
 _isolated_subagent_loop_thread: threading.Thread | None = None
-_isolated_subagent_loop_started: threading.Event | None = None
+_isolated_subagent_loop_started: threading.Event | None = None  # CodeQL[py/unused-global-variable]: used in _get_isolated_subagent_loop and _shutdown_isolated_subagent_loop
 _isolated_subagent_loop_lock = threading.Lock()
 
 

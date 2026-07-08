@@ -52,6 +52,7 @@ try:
 
     _igino_search_total = get_registry().register_counter(Counter("igino_search_total", "Total iGIN0 searches, partitioned by outcome.", labelnames=("outcome",)))
     _igino_search_duration = get_registry().register_histogram(Histogram("igino_search_duration_ms", "iGIN0 search latency in milliseconds.", labelnames=("source",)))
+    # CodeQL: unused-global-variable false positive — registered as Prometheus metric
     _igino_fetch_total = get_registry().register_counter(Counter("igino_fetch_total", "Total iGIN0 fetches, partitioned by outcome.", labelnames=("outcome",)))
     _HAS_METRICS = True
 except Exception:

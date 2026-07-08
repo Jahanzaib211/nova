@@ -303,7 +303,7 @@ async def run_agent(
                 deduped.append(m)
         lg_modes = deduped
 
-        logger.info("Run %s: streaming with modes %s (requested: %s)", run_id, lg_modes, requested_modes)
+        logger.info("Run %s: streaming with modes %s (requested: %s)", str(run_id).replace("\n", "").replace("\r", ""), str(lg_modes).replace("\n", "").replace("\r", ""), str(requested_modes).replace("\n", "").replace("\r", ""))
 
         # 7. Stream using graph.astream
         if len(lg_modes) == 1 and not stream_subgraphs:

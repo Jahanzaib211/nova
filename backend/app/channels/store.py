@@ -64,7 +64,7 @@ class ChannelStore:
             json.dump(self._data, fd, indent=2)
             fd.close()
             Path(fd.name).replace(self._path)
-        except BaseException:
+        except Exception:
             fd.close()
             Path(fd.name).unlink(missing_ok=True)
             raise

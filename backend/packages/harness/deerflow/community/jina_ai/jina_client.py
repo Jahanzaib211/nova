@@ -19,6 +19,7 @@ class JinaClient:
         if os.getenv("JINA_API_KEY"):
             headers["Authorization"] = f"Bearer {os.getenv('JINA_API_KEY')}"
         elif not _api_key_warned:
+            # CodeQL: unused-global-variable false positive
             _api_key_warned = True
             logger.warning("Jina API key is not set. Provide your own key to access a higher rate limit. See https://jina.ai/reader for more information.")
         data = {"url": url}

@@ -1017,7 +1017,7 @@ def test_str_replace_parallel_updates_should_preserve_both_edits(monkeypatch) ->
                 new_str=new_str,
             )
             assert result == "OK"
-        except BaseException as exc:  # pragma: no cover - failure is asserted below
+        except Exception as exc:  # pragma: no cover - failure is asserted below
             failures.append(exc)
 
     threads = [
@@ -1096,7 +1096,7 @@ def test_str_replace_parallel_updates_in_isolated_sandboxes_should_not_share_pat
                 new_str=new_str,
             )
             assert result == "OK"
-        except BaseException as exc:  # pragma: no cover - failure is asserted below
+        except Exception as exc:  # pragma: no cover - failure is asserted below
             failures.append(exc)
 
     threads = [
@@ -1160,7 +1160,7 @@ def test_str_replace_and_append_on_same_path_should_preserve_both_updates(monkey
                 new_str="ALPHA",
             )
             assert result == "OK"
-        except BaseException as exc:  # pragma: no cover - failure is asserted below
+        except Exception as exc:  # pragma: no cover - failure is asserted below
             failures.append(exc)
 
     def append_worker() -> None:
@@ -1174,7 +1174,7 @@ def test_str_replace_and_append_on_same_path_should_preserve_both_updates(monkey
                 append=True,
             )
             assert result == "OK"
-        except BaseException as exc:  # pragma: no cover - failure is asserted below
+        except Exception as exc:  # pragma: no cover - failure is asserted below
             failures.append(exc)
 
     replace_thread = threading.Thread(target=replace_worker)

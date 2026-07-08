@@ -241,7 +241,7 @@ async def create_model(request: ModelWriteRequest, config: AppConfig = Depends(g
     fresh = reload_app_config()
 
     model = fresh.get_model_config(request.name)
-    logger.info("Runtime model %r created", request.name)
+    logger.info("Runtime model %r created", request.name.replace("\n", "").replace("\r", ""))
     return ModelWriteResponse(ok=True, model=_to_response(model, runtime_model_names()) if model else None)
 
 
@@ -252,6 +252,7 @@ async def create_model(request: ModelWriteRequest, config: AppConfig = Depends(g
     description="Update a runtime-managed model entry. Models defined in config.yaml are read-only via the API.",
 )
 async def update_model(model_name: str, request: ModelWriteRequest, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    model_name = model_name.replace("\n", "").replace("\r", "")
     entries = load_runtime_model_dicts()
     idx = next((i for i, m in enumerate(entries) if m.get("name") == model_name), None)
     if idx is None:
@@ -275,7 +276,7 @@ async def update_model(model_name: str, request: ModelWriteRequest, config: AppC
     fresh = reload_app_config()
 
     model = fresh.get_model_config(request.name)
-    logger.info("Runtime model %r updated", model_name)
+    logger.info("Runtime model %r updated", model_name.replace("\n", "").replace("\r", ""))
     return ModelWriteResponse(ok=True, model=_to_response(model, runtime_model_names()) if model else None)
 
 
@@ -286,6 +287,7 @@ async def update_model(model_name: str, request: ModelWriteRequest, config: AppC
     description="Remove a runtime-managed model entry. Models defined in config.yaml are read-only via the API.",
 )
 async def delete_model(model_name: str, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    model_name = model_name.replace("\n", "").replace("\r", "")
     entries = load_runtime_model_dicts()
     remaining = [m for m in entries if m.get("name") != model_name]
     if len(remaining) == len(entries):
@@ -295,7 +297,7 @@ async def delete_model(model_name: str, config: AppConfig = Depends(get_config))
 
     save_runtime_model_dicts(remaining)
     reload_app_config()
-    logger.info("Runtime model %r deleted", model_name)
+    logger.info("Runtime model %r deleted", model_name.replace("\n", "").replace("\r", ""))
     return ModelWriteResponse(ok=True)
 
 

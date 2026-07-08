@@ -158,8 +158,8 @@ def reset_checkpointer() -> None:
                 _checkpointer_ctx.__exit__(None, None, None)
             except Exception:
                 logger.warning("Error during checkpointer cleanup", exc_info=True)
-            _checkpointer_ctx = None
-        _checkpointer = None
+            _checkpointer_ctx = None  # CodeQL: unused-global-variable false positive — global reset
+        _checkpointer = None  # CodeQL: unused-global-variable false positive — global reset
 
 
 # ---------------------------------------------------------------------------

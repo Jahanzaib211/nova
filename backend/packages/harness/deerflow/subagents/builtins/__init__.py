@@ -8,8 +8,10 @@ __all__ = [
     "BASH_AGENT_CONFIG",
 ]
 
-# Registry of built-in subagents
+# Registry of built-in subagents — imported by deerflow.subagents.registry
+# CodeQL: unused-global-variable false positive
 BUILTIN_SUBAGENTS = {
     "general-purpose": GENERAL_PURPOSE_CONFIG,
     "bash": BASH_AGENT_CONFIG,
 }
+

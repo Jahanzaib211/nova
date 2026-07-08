@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 
 # Import the agent graph first so deerflow.sandbox.tools loads in the same order
 # as production (avoids a tools-first circular import with deerflow.agents).
-import deerflow.agents  # noqa: F401,E402  (import-order priming)
+
 from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
 from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
 

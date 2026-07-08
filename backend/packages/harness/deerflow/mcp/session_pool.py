@@ -99,7 +99,7 @@ class MCPSessionPool:
         cm = create_session(connection)
         try:
             session = await cm.__aenter__()
-        except BaseException as e:
+        except Exception as e:
             # Never entered the cancel scope, so there is nothing to exit.
             if not ready.done():
                 ready.set_exception(e)
@@ -114,7 +114,7 @@ class MCPSessionPool:
             if not ready.done():
                 ready.set_result(session)
             await close_evt.wait()
-        except BaseException as e:
+        except Exception as e:
             if not ready.done():
                 ready.set_exception(e)
         finally:
@@ -217,7 +217,7 @@ class MCPSessionPool:
         # Phase 3: wait for our owner task to publish the initialized session.
         try:
             session = await asyncio.shield(ready)
-        except BaseException:
+        except Exception:
             # Two distinct cases reach here:
             #
             # 1. The owner task failed (e.g. connect/initialize error) and
@@ -238,7 +238,7 @@ class MCPSessionPool:
                 task.cancel()
             try:
                 await asyncio.shield(task)
-            except BaseException:
+            except Exception:
                 logger.debug("Owner task ended during get_session unwind", exc_info=True)
             with self._lock:
                 if self._inflight.get(key) == (current_loop, ready, task, close_evt):

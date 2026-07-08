@@ -36,7 +36,8 @@ class SummarizationEvent:
 class BeforeSummarizationHook(Protocol):
     """Hook invoked before summarization removes messages from state."""
 
-    def __call__(self, event: SummarizationEvent) -> None: ...
+    def __call__(self, event: SummarizationEvent) -> None:
+        pass
 
 
 def _resolve_thread_id(runtime: Runtime) -> str | None:

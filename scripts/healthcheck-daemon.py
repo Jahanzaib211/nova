@@ -144,12 +144,7 @@ class CycleReport:
 
 async def timed(coro_factory: Callable[[], Awaitable[ProbeResult]]) -> ProbeResult:
     t0 = time.perf_counter()
-    try:
-        return await coro_factory()
-    finally:
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-        # stamp latency on whatever the coro produced
-        # (caller is responsible for putting it on the result)
+    return await coro_factory()
 
 
 def _http_probe(name: str, url: str, *, expected_status: tuple[int, ...] = (200,), timeout: float = 3.0, body_validator: Optional[Callable[[dict], bool]] = None) -> ProbeResult:

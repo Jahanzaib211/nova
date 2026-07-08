@@ -1,8 +1,6 @@
 """Tests for ToolContext dependency injection."""
 
 import threading
-from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest

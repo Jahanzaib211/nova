@@ -227,5 +227,5 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         if callbacks:
             existing_callbacks = model_instance.callbacks or []
             model_instance.callbacks = [*existing_callbacks, *callbacks]
-            logger.debug(f"Tracing attached to model '{name}' with providers={len(callbacks)}")
+            logger.debug("Tracing attached to model '%s' with providers=%d", name.replace("\n", "").replace("\r", ""), len(callbacks))
     return model_instance

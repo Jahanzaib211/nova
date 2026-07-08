@@ -161,7 +161,7 @@ const defaultGetThinkingMessage = (
   startTime?: number | null,
 ) => {
   const { t } = useI18n();
-  if (isStreaming && startTime != null && startTime !== undefined) {
+  if (isStreaming && startTime != null) {
     return <LiveTimer startTime={startTime} />;
   }
   if (isStreaming || duration === 0) {

@@ -229,7 +229,7 @@ def test_summarization_does_not_mutate_shared_model_across_concurrent_runs() -> 
         # A concurrent run reads the shared model while summarization is in flight.
         observed_models.append(middleware.model)
         release.set()
-        await summarizing
+        _ = await summarizing
 
     asyncio.run(_run())
 

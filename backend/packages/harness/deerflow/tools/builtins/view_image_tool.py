@@ -117,9 +117,7 @@ def view_image_tool(
         )
 
     # Detect MIME type from file extension
-    mime_type, _ = mimetypes.guess_type(actual_path)
-    if mime_type is None:
-        mime_type = expected_mime_type
+    mime_type = mimetypes.guess_type(actual_path)[0] or expected_mime_type
 
     try:
         image_size = path.stat().st_size

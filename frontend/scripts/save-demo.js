@@ -1,7 +1,6 @@
 import { config } from "dotenv";
 import fs from "fs";
 import path from "path";
-import { env } from "process";
 
 export async function main() {
   const url = new URL(process.argv[2]);
@@ -34,6 +33,7 @@ export async function main() {
     fs.rmSync(rootPath, { recursive: true });
   }
   fs.mkdirSync(rootPath, { recursive: true });
+  // CodeQL[js/http-to-file-access]: intentional — saving demo thread data to local filesystem
   fs.writeFileSync(
     path.resolve(rootPath, "thread.json"),
     JSON.stringify(data, null, 2),

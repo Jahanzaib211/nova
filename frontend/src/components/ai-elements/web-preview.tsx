@@ -26,6 +26,17 @@ export type WebPreviewContextValue = {
   setConsoleOpen: (open: boolean) => void;
 };
 
+const ALLOWED_IFRAME_PROTOCOLS = ["http:", "https:"];
+
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_IFRAME_PROTOCOLS.includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
 const WebPreviewContext = createContext<WebPreviewContextValue | null>(null);
 
 const useWebPreview = () => {
@@ -185,7 +196,7 @@ export const WebPreviewBody = ({
       <iframe
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
-        src={(src ?? url) || undefined}
+        src={(src ?? url) && isSafeUrl(src ?? url) ? (src ?? url) : undefined}
         title={t.aiElements.webPreview.previewTitle}
         {...props}
       />

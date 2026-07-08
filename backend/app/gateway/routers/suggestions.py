@@ -182,5 +182,5 @@ async def generate_suggestions(
         cleaned = cleaned[:n]
         return SuggestionsResponse(suggestions=cleaned)
     except Exception as exc:
-        logger.exception("Failed to generate suggestions: thread_id=%s err=%s", thread_id, exc)
+        logger.exception("Failed to generate suggestions: thread_id=%s err=%s", thread_id.replace("\n", "").replace("\r", ""), str(exc).replace("\n", "").replace("\r", ""))
         return SuggestionsResponse(suggestions=[])
