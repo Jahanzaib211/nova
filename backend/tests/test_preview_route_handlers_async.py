@@ -23,11 +23,7 @@ PROXY_PATH_PREFIXES = (
 
 
 def test_all_proxy_route_handlers_are_async() -> None:
-    routes = [
-        r
-        for r in sandbox_router.router.routes
-        if getattr(r, "path", "").startswith(PROXY_PATH_PREFIXES) and hasattr(r, "endpoint")
-    ]
+    routes = [r for r in sandbox_router.router.routes if getattr(r, "path", "").startswith(PROXY_PATH_PREFIXES) and hasattr(r, "endpoint")]
     assert routes, "expected preview/lpreview/absproxy routes to be registered"
     not_async = [f"{r.path} [{','.join(sorted(getattr(r, 'methods', []) or []))}]" for r in routes if not asyncio.iscoroutinefunction(r.endpoint)]
     assert not not_async, f"sync proxy handlers return un-awaited coroutines (500 on every request): {not_async}"

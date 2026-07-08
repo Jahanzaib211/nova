@@ -63,9 +63,7 @@ class TestThreadResolverLookup:
         result = await thread_resolver.lookup_thread_id(inbound_message)
 
         assert result == "thread-123"
-        mock_store.get_thread_id.assert_called_once_with(
-            "slack", "C123", topic_id=None
-        )
+        mock_store.get_thread_id.assert_called_once_with("slack", "C123", topic_id=None)
 
     @pytest.mark.asyncio
     async def test_lookup_thread_id_from_connection_repo(self, thread_resolver, mock_connection_repo, inbound_message):
@@ -76,9 +74,7 @@ class TestThreadResolverLookup:
         result = await thread_resolver.lookup_thread_id(inbound_message)
 
         assert result == "thread-456"
-        mock_connection_repo.get_thread_id.assert_called_once_with(
-            "conn-123", "C123", None
-        )
+        mock_connection_repo.get_thread_id.assert_called_once_with("conn-123", "C123", None)
 
     @pytest.mark.asyncio
     async def test_lookup_thread_id_returns_none(self, thread_resolver, mock_store, inbound_message):
@@ -100,9 +96,7 @@ class TestThreadResolverStore:
 
         await thread_resolver.store_thread_id(inbound_message, "thread-123")
 
-        mock_store.set_thread_id.assert_called_once_with(
-            "slack", "C123", "thread-123", topic_id=None, user_id="U123"
-        )
+        mock_store.set_thread_id.assert_called_once_with("slack", "C123", "thread-123", topic_id=None, user_id="U123")
 
     @pytest.mark.asyncio
     async def test_store_thread_id_in_connection_repo(self, thread_resolver, mock_connection_repo, inbound_message):
@@ -131,8 +125,7 @@ class TestThreadResolverCreate:
         mock_client = AsyncMock()
         mock_client.threads.create.return_value = {"thread_id": "new-thread-123"}
 
-        with patch("app.channels.manager._thread_channel_metadata") as mock_metadata, \
-             patch("app.channels.manager._owner_headers") as mock_headers:
+        with patch("app.channels.manager._thread_channel_metadata") as mock_metadata, patch("app.channels.manager._owner_headers") as mock_headers:
             mock_metadata.return_value = {"channel_source": {"type": "im_channel"}}
             mock_headers.return_value = None
 

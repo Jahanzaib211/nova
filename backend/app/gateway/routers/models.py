@@ -188,11 +188,7 @@ async def list_models(config: AppConfig = Depends(get_config)) -> ModelsListResp
     description="Report which configured models run on AMD compute. Defined before the /{model_name} route so the static path is not shadowed by the path parameter.",
 )
 async def amd_usage(config: AppConfig = Depends(get_config)) -> AmdUsageResponse:
-    entries = [
-        AmdModelEntry(name=m.name, label=label)
-        for m in config.models
-        if (label := detect_amd_compute(m))
-    ]
+    entries = [AmdModelEntry(name=m.name, label=label) for m in config.models if (label := detect_amd_compute(m))]
     if entries:
         listed = ", ".join(f"{e.name} → {e.label}" for e in entries)
         summary = f"Nova is running on AMD compute: {len(entries)} AMD-backed model(s) configured ({listed})."

@@ -288,7 +288,7 @@ async def upload_files(
             if safe_filename != original_filename:
                 file_info["original_filename"] = original_filename
 
-            logger.info("Saved file: %s (%d bytes) to %s", safe_filename, file_size, file_info['path'])
+            logger.info("Saved file: %s (%d bytes) to %s", safe_filename, file_size, file_info["path"])
 
             file_ext = file_path.suffix.lower()
             if auto_convert_documents and file_ext in CONVERTIBLE_EXTENSIONS:

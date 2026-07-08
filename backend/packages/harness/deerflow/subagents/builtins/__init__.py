@@ -14,4 +14,3 @@ BUILTIN_SUBAGENTS = {
     "general-purpose": GENERAL_PURPOSE_CONFIG,
     "bash": BASH_AGENT_CONFIG,
 }
-

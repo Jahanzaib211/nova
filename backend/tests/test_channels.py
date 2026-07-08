@@ -388,6 +388,7 @@ class TestChannelBase:
         from app.channels.slack import SlackChannel
         from app.channels.telegram import TelegramChannel
         from app.channels.wechat import WechatChannel
+
         bus = MessageBus()
         defaults = {
             "dingtalk": DingTalkChannel(bus=bus, config={}).supports_streaming,
