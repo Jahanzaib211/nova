@@ -1,7 +1,7 @@
 """Middleware for memory mechanism."""
 
 import logging
-from typing import TYPE_CHECKING, override
+from typing import override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
@@ -12,9 +12,6 @@ from deerflow.agents.memory.message_processing import detect_correction, detect_
 from deerflow.agents.memory.queue import get_memory_queue
 from deerflow.config.memory_config import get_memory_config
 from deerflow.runtime.user_context import get_effective_user_id
-
-if TYPE_CHECKING:
-    from deerflow.config.memory_config import MemoryConfig
 
 logger = logging.getLogger(__name__)
 

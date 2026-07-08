@@ -143,7 +143,6 @@ class CycleReport:
 
 
 async def timed(coro_factory: Callable[[], Awaitable[ProbeResult]]) -> ProbeResult:
-    t0 = time.perf_counter()
     return await coro_factory()
 
 

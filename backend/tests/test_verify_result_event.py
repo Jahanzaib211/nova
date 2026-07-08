@@ -46,17 +46,7 @@ def test_verify_result_event_has_documented_shape():
 
     # Patch the import inside _auto_verify_present_files
 
-    async def fake_run(*args, **kwargs):
-        return _FakeCheck()
-
     try:
-        # Patch sys.modules-style: monkeypatch the function body's namespace
-        # by using a custom getter — simpler to just exercise the writer path
-        # via a direct call to a helper we can test in isolation.
-
-        # Easier: test the writer-emitting code path by simulating the call
-        # ourselves. The actual _auto_verify_present_files is best tested
-        # by integration; here we test the contract of the event payload.
         event = {
             "type": "verify_result",
             "thread_id": "t1",

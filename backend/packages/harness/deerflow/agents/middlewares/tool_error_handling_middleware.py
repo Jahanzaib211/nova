@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, override
+from typing import override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
@@ -16,9 +16,6 @@ from deerflow.subagents.status_contract import (
     extract_subagent_status,
     make_subagent_additional_kwargs,
 )
-
-if TYPE_CHECKING:
-    from deerflow.tools.builtins.tool_search import DeferredToolSetup
 
 logger = logging.getLogger(__name__)
 

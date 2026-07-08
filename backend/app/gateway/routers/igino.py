@@ -136,7 +136,7 @@ async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_opt
         trail = get_audit_trail()
         return {"records": trail.get_records(limit=limit), "stats": trail.get_stats()}
     except Exception as exc:
-        return {"error": str(exc), "records": [], "stats": {}}
+        return {"error": "Failed to fetch audit records", "records": [], "stats": {}}
 
 
 # v7.3 (Nova rebrand): backward-compat aliases for tests that imported the
