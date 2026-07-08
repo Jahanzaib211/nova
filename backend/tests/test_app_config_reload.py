@@ -190,7 +190,7 @@ def test_app_config_warns_when_no_models_configured(tmp_path, monkeypatch, caplo
     assert "No models are configured" in caplog.text
 
 
-def test_app_config_module.get_app_config_reloads_when_file_changes(tmp_path, monkeypatch):
+def test_app_config_reloads_when_file_changes(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
