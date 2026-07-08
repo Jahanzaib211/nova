@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import mimetypes
 import posixpath
+
 from app.channels.message_bus import ResolvedAttachment
 
 logger = logging.getLogger(__name__)

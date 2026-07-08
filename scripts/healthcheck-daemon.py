@@ -486,10 +486,10 @@ def fix_binary_attestation() -> bool:
             log.error(f"auto-fix: restart command failed: {e}")
             return False
     log.warning(
-        f"auto-fix: attestation cleared. Set WATCHDOG_ATTESTATION_RESTART_CMD to\n"
-        f"    consume the new seal automatically, or restart the consumer manually.\n"
-        f"Until then, the running process is the previous binary and the next\n"
-        f"auto-fix cycle will re-clear (idempotent, harmless)."
+        "auto-fix: attestation cleared. Set WATCHDOG_ATTESTATION_RESTART_CMD to\n"
+        "    consume the new seal automatically, or restart the consumer manually.\n"
+        "Until then, the running process is the previous binary and the next\n"
+        "auto-fix cycle will re-clear (idempotent, harmless)."
     )
     return True
 
