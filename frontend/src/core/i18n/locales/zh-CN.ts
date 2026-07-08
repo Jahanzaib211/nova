@@ -178,6 +178,12 @@ export const zhCN: Translations = {
     newAgent: "新建智能体",
     emptyTitle: "还没有自定义智能体",
     emptyDescription: "创建你的第一个自定义智能体，设置专属系统提示词。",
+    apiDisabledTitle: "智能体管理已关闭",
+    apiDisabledDescription:
+      "此服务器已停用自定义智能体管理。请在 config.yaml 中设置 agents_api.enabled 以在此创建和管理智能体。",
+    loadErrorTitle: "无法加载智能体",
+    loadErrorDescription: "连接 Nova 后端时出错。请检查网关后重试。",
+    retry: "重试",
     chat: "对话",
     delete: "删除",
     deleteConfirm: "确定要删除该智能体吗？此操作不可撤销。",

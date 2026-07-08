@@ -187,6 +187,13 @@ export const enUS: Translations = {
     emptyTitle: "No custom agents yet",
     emptyDescription:
       "Create your first custom agent with a specialized system prompt.",
+    apiDisabledTitle: "Agent management is turned off",
+    apiDisabledDescription:
+      "Custom-agent management is disabled on this server. Enable agents_api.enabled in config.yaml to create and manage agents here.",
+    loadErrorTitle: "Couldn't load agents",
+    loadErrorDescription:
+      "Something went wrong reaching the Nova backend. Check the gateway and try again.",
+    retry: "Try again",
     chat: "Chat",
     delete: "Delete",
     deleteConfirm:

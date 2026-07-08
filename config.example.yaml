@@ -1128,9 +1128,12 @@ memory:
 # Custom Agent Management API
 # ============================================================================
 # Controls whether the HTTP gateway exposes custom-agent SOUL/USER.md management.
-# Keep this disabled unless the gateway is behind a trusted authenticated admin boundary.
+# Enabled so the /workspace/agents surface is fully functional (create/edit/delete
+# custom agents). These routes share the same trust boundary as the rest of the
+# gateway (chat, models, threads); put an authenticated proxy in front before
+# exposing the gateway to an untrusted network.
 agents_api:
-  enabled: false
+  enabled: true
 
 # ============================================================================
 # Skill Self-Evolution Configuration

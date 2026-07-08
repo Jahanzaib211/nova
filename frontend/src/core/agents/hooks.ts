@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  AgentsApiDisabledError,
   createAgent,
   deleteAgent,
   getAgent,
@@ -13,8 +14,18 @@ export function useAgents() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["agents"],
     queryFn: () => listAgents(),
+    // A disabled agents API is a deterministic config state, not a transient
+    // failure — never retry it (avoids a multi-second phantom "Loading…").
+    // Other failures (network, 5xx) get a bounded retry.
+    retry: (failureCount, err) =>
+      !(err instanceof AgentsApiDisabledError) && failureCount < 2,
   });
-  return { agents: data ?? [], isLoading, error };
+  return {
+    agents: data ?? [],
+    isLoading,
+    error,
+    isDisabled: error instanceof AgentsApiDisabledError,
+  };
 }
 
 export function useAgent(name: string | null | undefined) {
