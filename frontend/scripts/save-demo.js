@@ -33,6 +33,7 @@ export async function main() {
     fs.rmSync(rootPath, { recursive: true });
   }
   fs.mkdirSync(rootPath, { recursive: true });
+  // CodeQL[js/http-to-file-access]: intentional — saving demo thread data to local filesystem
   fs.writeFileSync(
     path.resolve(rootPath, "thread.json"),
     JSON.stringify(data, null, 2),

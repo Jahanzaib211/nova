@@ -463,7 +463,7 @@ def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with
                 # sleep so the caller never waits more than ``render_budget_ms``
                 # total — even if networkidle never settles (long-polling,
                 # websockets, infinite animations).
-                _elapsed_ms, _mode = _adaptive_wait(page, render_budget_ms)
+                _adaptive_wait(page, render_budget_ms)
 
                 # Capture the screenshot first — it's the ground truth for "did it render".
                 shot = b""

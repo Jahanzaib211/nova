@@ -512,7 +512,7 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
     if poller is not None and not poller.done():
         poller.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
-            await poller
+            _ = await poller
 
     # AIO mode: kill the WHOLE process group + free the port. The recorded PID is
     # the setsid group leader, so `kill -- -<pid>` (negative = process group)

@@ -145,14 +145,17 @@ def test_put_config_model_is_forbidden(client):
 
 def test_delete_runtime_model(client):
     client.post("/api/models", json=LLAMA_ENTRY)
-    assert client.delete("/api/models/local-llm").status_code == 200
+    resp = client.delete("/api/models/local-llm")
+    assert resp.status_code == 200
     names = [m["name"] for m in client.get("/api/models").json()["models"]]
     assert names == ["config-model"]
 
 
 def test_delete_config_model_forbidden_and_unknown_404(client):
-    assert client.delete("/api/models/config-model").status_code == 403
-    assert client.delete("/api/models/nope").status_code == 404
+    resp1 = client.delete("/api/models/config-model")
+    assert resp1.status_code == 403
+    resp2 = client.delete("/api/models/nope")
+    assert resp2.status_code == 404
 
 
 def test_invalid_runtime_entries_are_skipped_not_fatal(config_env):

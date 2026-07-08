@@ -49,12 +49,6 @@ def test_verify_result_event_has_documented_shape():
     async def fake_run(*args, **kwargs):
         return _FakeCheck()
 
-    fake_provider = type("P", (), {"get": staticmethod(lambda _id: type("S", (), {"_client": object()})())})()
-
-    original_run = None
-    original_provider = None
-    original_log = lambda *a, **k: None
-
     try:
         # Monkeypatch the imports that happen inside the function body
         import deerflow.agents.middlewares.observe_adjust_middleware as mod

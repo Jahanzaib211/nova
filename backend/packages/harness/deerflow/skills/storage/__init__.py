@@ -9,7 +9,7 @@ from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
 from deerflow.skills.storage.skill_storage import SkillStorage
 
 _default_skill_storage: SkillStorage | None = None
-_default_skill_storage_config: object | None = None  # AppConfig identity the singleton was built from
+_default_skill_storage_config: object | None = None
 
 
 def get_or_new_skill_storage(**kwargs) -> SkillStorage:
@@ -64,7 +64,7 @@ def get_or_new_skill_storage(**kwargs) -> SkillStorage:
     app_config_now = get_app_config()
     if _default_skill_storage is None or _default_skill_storage_config is not app_config_now:
         _default_skill_storage = _make_storage(app_config_now.skills, **kwargs)
-        _default_skill_storage_config = app_config_now
+        _default_skill_storage_config = app_config_now  # CodeQL[py/unused-global-variable]: used in get_skill_storage and reset_skill_storage
     return _default_skill_storage
 
 

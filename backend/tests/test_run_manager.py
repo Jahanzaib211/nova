@@ -982,7 +982,7 @@ async def test_create_or_reject_reaps_stale_dead_task_run():
         return None
 
     task = asyncio.create_task(_noop())
-    await task
+    _ = await task
     stale.task = task
     stale.status = RunStatus.running
 
@@ -1015,4 +1015,4 @@ async def test_create_or_reject_still_rejects_genuinely_active_run():
             await manager.create_or_reject("thread-active", multitask_strategy="reject")
     finally:
         release.set()
-        await task
+        _ = await task

@@ -1118,7 +1118,7 @@ async def test_get_session_cancelled_while_initializing_does_not_leak():
         await asyncio.sleep(0.01)
         call.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await call
+            _ = await call
 
         # Release initialize() so the owner task can finish its shutdown path.
         gate.set()
@@ -1256,7 +1256,7 @@ async def test_close_all_during_in_flight_creation_does_not_resurrect_session():
         # Even if the gate is released afterwards, nothing must come back.
         gate.set()
         with pytest.raises(asyncio.CancelledError):
-            await call
+            _ = await call
 
     assert len(pool._entries) == 0
     assert len(pool._inflight) == 0
@@ -1290,7 +1290,7 @@ def test_get_session_cross_loop_in_flight_does_not_raise_assertion():
     def run_in_own_loop():
         try:
             results.append(asyncio.run(pool.get_session("s", "t1", conn)))
-        except BaseException as e:  # noqa: BLE001 - capture for assertion
+        except Exception as e:  # noqa: BLE001 - capture for assertion
             errors.append(e)
 
     with patch("langchain_mcp_adapters.sessions.create_session", side_effect=make_cm):
@@ -1364,7 +1364,7 @@ def test_cross_loop_preempting_blocked_in_flight_does_not_hang_owner():
     def run_get(name):
         try:
             results.append((name, asyncio.run(pool.get_session("s", "t1", conn))))
-        except BaseException as e:  # noqa: BLE001 - capture for assertion
+        except Exception as e:  # noqa: BLE001 - capture for assertion
             errors.append((name, e))
 
     with patch("langchain_mcp_adapters.sessions.create_session", side_effect=make_cm):

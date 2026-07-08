@@ -723,14 +723,13 @@ async def _ingest_inbound_files(thread_id: str, msg: InboundMessage, *, user_id:
                 )
                 continue
 
-            dest = uploads_dir / safe_name
             try:
                 dest = await asyncio.to_thread(write_upload_file_no_symlink, uploads_dir, safe_name, data)
             except UnsafeUploadPathError:
                 logger.warning("[Manager] skipping inbound file with unsafe destination: %s", safe_name)
                 continue
             except Exception:
-                logger.exception("[Manager] failed to write inbound file: %s", dest)
+                logger.exception("[Manager] failed to write inbound file: %s", uploads_dir / safe_name)
                 continue
 
             created.append(

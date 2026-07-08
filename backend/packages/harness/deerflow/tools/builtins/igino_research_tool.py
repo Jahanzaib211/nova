@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 _RESEARCH_TIMEOUT_S = float(os.environ.get("DEERFLOW_IGINO_RESEARCH_TIMEOUT_S", "30"))
 _FETCH_DEPTH = int(os.environ.get("DEERFLOW_IGINO_FETCH_DEPTH", "5"))
 _MAX_SOURCES = int(os.environ.get("DEERFLOW_IGINO_MAX_SOURCES", "10"))
-_FETCH_TIMEOUT_S = 10.0
 _FETCH_CONCURRENCY = 4
 
 

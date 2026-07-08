@@ -55,7 +55,7 @@ def _stage_temp(path: Path, text: str) -> Path:
         fd.flush()
         fd.close()
         return Path(fd.name)
-    except BaseException:
+    except Exception:
         fd.close()
         Path(fd.name).unlink(missing_ok=True)
         raise

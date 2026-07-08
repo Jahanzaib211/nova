@@ -1184,7 +1184,7 @@ class WechatChannel(Channel):
 
         raw = value.strip()
         parsers = (
-            (lambda: bytes.fromhex(raw), lambda key: _validate_aes_128_key(key)),
+            (lambda: bytes.fromhex(raw), _validate_aes_128_key),
             (lambda: cls._decode_base64_aes_key(raw), None),
         )
         if not prefer_hex:
@@ -1386,7 +1386,7 @@ class WechatChannel(Channel):
                     json.dump(data, fd, ensure_ascii=False, indent=2)
                     fd.close()
                     Path(fd.name).replace(self._auth_path)
-                except BaseException:
+                except Exception:
                     fd.close()
                     Path(fd.name).unlink(missing_ok=True)
                     raise

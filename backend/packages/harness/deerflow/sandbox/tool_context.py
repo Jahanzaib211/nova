@@ -6,17 +6,9 @@ needed by sandbox tools, enabling independent testability without global singlet
 
 from __future__ import annotations
 
-import asyncio
 import threading
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
-    from deerflow.config.paths import PathResolver
-    from deerflow.sandbox.file_operation_lock import FileOperationLock
-    from deerflow.sandbox.sandbox import Sandbox
-    from deerflow.sandbox.sandbox_provider import SandboxProvider
+from typing import Any
 
 
 @dataclass(frozen=False)

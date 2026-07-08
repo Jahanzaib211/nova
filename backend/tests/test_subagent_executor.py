@@ -1435,7 +1435,7 @@ class TestThreadSafety:
                     result="done",
                     token_usage_records=token_usage_records,
                 )
-            except BaseException as exc:
+            except Exception as exc:
                 writer_errors.append(exc)
 
         writer = threading.Thread(target=set_terminal)
@@ -1721,14 +1721,14 @@ class TestCooperativeCancellation:
 
     def test_execute_async_runs_without_calling_execute(self, executor_module, classes, base_config):
         """Regression: execute_async should not route through execute()/asyncio.run()."""
-        import concurrent.futures
+        from concurrent.futures import Future
 
         SubagentExecutor = classes["SubagentExecutor"]
         SubagentResult = classes["SubagentResult"]
         SubagentStatus = classes["SubagentStatus"]
 
         def run_inline(fn, *args, **kwargs):
-            future = concurrent.futures.Future()
+            future = Future()
             try:
                 future.set_result(fn(*args, **kwargs))
             except Exception as exc:
@@ -1768,7 +1768,7 @@ class TestCooperativeCancellation:
 
     def test_execute_async_propagates_user_context_to_isolated_loop(self, executor_module, classes, base_config):
         """Regression: background subagent execution must keep request user context."""
-        import concurrent.futures
+        from concurrent.futures import ThreadPoolExecutor
 
         from deerflow.runtime.user_context import (
             get_effective_user_id,
@@ -1793,7 +1793,7 @@ class TestCooperativeCancellation:
             trace_id="test-trace",
         )
 
-        scheduler = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        scheduler = ThreadPoolExecutor(max_workers=1)
         token = set_current_user(SimpleNamespace(id="alice"))
         try:
             with (

@@ -226,11 +226,13 @@ class TestChannelStore:
 
     def test_remove(self, store):
         store.set_thread_id("slack", "ch1", "t1")
-        assert store.remove("slack", "ch1") is True
+        remove_result = store.remove("slack", "ch1")
+        assert remove_result is True
         assert store.get_thread_id("slack", "ch1") is None
 
     def test_remove_nonexistent_returns_false(self, store):
-        assert store.remove("slack", "nope") is False
+        remove_result = store.remove("slack", "nope")
+        assert remove_result is False
 
     def test_list_entries_all(self, store):
         store.set_thread_id("slack", "ch1", "t1")
@@ -3880,7 +3882,7 @@ class TestFeishuChannel:
             prepare_task = asyncio.create_task(channel._prepare_inbound("om-source-msg", inbound))
 
             await _wait_for(lambda: bus.publish_inbound.await_count == 1)
-            await prepare_task
+            _ = await prepare_task
 
             assert reply_started.is_set()
             assert "om-source-msg" in channel._running_card_tasks
@@ -3948,8 +3950,8 @@ class TestFeishuChannel:
             assert channel._reply_card.await_count == 1
 
             release_reply.set()
-            await prepare_task
-            await send_task
+            _ = await prepare_task
+            _ = await send_task
 
             assert channel._reply_card.await_count == 1
             channel._update_card.assert_awaited_once_with("om-running-card", "Hello")
@@ -4215,8 +4217,6 @@ class TestWeComChannel:
         _run(go())
 
     def test_on_ws_task_done_logs_error_on_exception(self, caplog):
-        import logging
-
         from app.channels.wecom import WeComChannel
 
         channel = WeComChannel(MessageBus(), config={})
@@ -4230,8 +4230,6 @@ class TestWeComChannel:
         assert any("WeCom WebSocket connection task failed" in r.message and r.levelno == logging.ERROR for r in caplog.records)
 
     def test_on_ws_task_done_silent_when_cancelled(self, caplog):
-        import logging
-
         from app.channels.wecom import WeComChannel
 
         channel = WeComChannel(MessageBus(), config={})
@@ -4245,8 +4243,6 @@ class TestWeComChannel:
         assert caplog.records == []
 
     def test_on_ws_task_done_silent_when_no_exception(self, caplog):
-        import logging
-
         from app.channels.wecom import WeComChannel
 
         channel = WeComChannel(MessageBus(), config={})
@@ -4260,8 +4256,6 @@ class TestWeComChannel:
         assert caplog.records == []
 
     def test_on_ws_error_logs_error(self, caplog):
-        import logging
-
         from app.channels.wecom import WeComChannel
 
         channel = WeComChannel(MessageBus(), config={})
@@ -4272,8 +4266,6 @@ class TestWeComChannel:
         assert any("WeCom WebSocket error" in r.message and r.levelno == logging.ERROR for r in caplog.records)
 
     def test_on_ws_disconnected_logs_warning(self, caplog):
-        import logging
-
         from app.channels.wecom import WeComChannel
 
         channel = WeComChannel(MessageBus(), config={})
@@ -4284,8 +4276,6 @@ class TestWeComChannel:
         assert any("WeCom WebSocket disconnected" in r.message and r.levelno == logging.WARNING for r in caplog.records)
 
     def test_on_ws_disconnected_logs_reason_when_present(self, caplog):
-        import logging
-
         from app.channels.wecom import WeComChannel
 
         channel = WeComChannel(MessageBus(), config={})
@@ -4691,8 +4681,6 @@ class TestChannelService:
 
     def test_disabled_channel_with_string_creds_emits_warning(self, caplog):
         """Warning is emitted when a channel has string credentials but enabled=false."""
-        import logging
-
         from app.channels.service import ChannelService
 
         async def go():
@@ -4711,8 +4699,6 @@ class TestChannelService:
 
     def test_disabled_channel_with_int_creds_emits_warning(self, caplog):
         """Warning is emitted even when YAML-parsed integer credentials are present."""
-        import logging
-
         from app.channels.service import ChannelService
 
         async def go():
@@ -4732,8 +4718,6 @@ class TestChannelService:
 
     def test_disabled_channel_without_creds_emits_info(self, caplog):
         """Only an info log (no warning) is emitted when a channel is disabled with no credentials."""
-        import logging
-
         from app.channels.service import ChannelService
 
         async def go():

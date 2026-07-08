@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # that reach into ``local_sandbox_provider._singleton`` directly. New code reads
 # the provider instance attributes (``_generic_sandbox`` / ``_thread_sandboxes``)
 # instead.
-_singleton: LocalSandbox | None = None
+_singleton: LocalSandbox | None = None  # CodeQL[py/unused-global-variable]: backward-compat alias, accessed by external callers
 
 # Virtual prefixes that must be reserved by the per-thread mappings created in
 # ``acquire`` — custom mounts from ``config.yaml`` may not overlap with these.

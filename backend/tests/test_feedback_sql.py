@@ -126,18 +126,21 @@ class TestFeedbackRepositoryDelete:
     @pytest.mark.anyio
     async def test_delete_removes_row(self, repo):
         result = await repo.create(run_id="r1", thread_id="t1", rating=1)
-        assert await repo.delete(result["feedback_id"]) is True
+        delete_result = await repo.delete(result["feedback_id"])
+        assert delete_result is True
         assert await repo.get(result["feedback_id"]) is None
 
     @pytest.mark.anyio
     async def test_delete_missing_returns_false(self, repo):
-        assert await repo.delete("nonexistent") is False
+        result = await repo.delete("nonexistent")
+        assert result is False
 
     @pytest.mark.anyio
     async def test_delete_owner_mismatch_returns_false(self, repo):
         result = await repo.create(run_id="r1", thread_id="t1", rating=1, user_id="alice")
         # Bob can't delete Alice's feedback.
-        assert await repo.delete(result["feedback_id"], user_id="bob") is False
+        delete_result = await repo.delete(result["feedback_id"], user_id="bob")
+        assert delete_result is False
         # Row still exists for Alice.
         assert await repo.get(result["feedback_id"], user_id="alice") is not None
 

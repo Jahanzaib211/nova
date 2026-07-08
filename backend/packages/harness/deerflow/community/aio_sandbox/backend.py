@@ -86,7 +86,6 @@ class SandboxBackend(ABC):
         Returns:
             SandboxInfo with connection details.
         """
-        ...
 
     @abstractmethod
     def destroy(self, info: SandboxInfo) -> None:
@@ -95,7 +94,6 @@ class SandboxBackend(ABC):
         Args:
             info: The sandbox metadata to destroy.
         """
-        ...
 
     @abstractmethod
     def is_alive(self, info: SandboxInfo) -> bool:
@@ -110,7 +108,6 @@ class SandboxBackend(ABC):
         Returns:
             True if the sandbox appears to be alive.
         """
-        ...
 
     @abstractmethod
     def discover(self, sandbox_id: str) -> SandboxInfo | None:
@@ -125,7 +122,6 @@ class SandboxBackend(ABC):
         Returns:
             SandboxInfo if found and healthy, None otherwise.
         """
-        ...
 
     def list_running(self) -> list[SandboxInfo]:
         """Enumerate all running sandboxes managed by this backend.
