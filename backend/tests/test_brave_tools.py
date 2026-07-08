@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def reset_api_key_warned():
     """Reset the module-level warning flag before each test."""
-    import deerflow.community.brave.tools as brave_mod
+    from deerflow.community.brave import tools as brave_mod
 
     brave_mod._api_key_warned = False
     yield

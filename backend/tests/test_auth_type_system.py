@@ -380,7 +380,7 @@ def test_get_auth_config_missing_env_var_generates_ephemeral(caplog):
     """get_auth_config() auto-generates ephemeral secret when AUTH_JWT_SECRET is unset."""
     import logging
 
-    import app.gateway.auth.config as cfg
+    from app.gateway.auth import config as cfg
 
     old = cfg._auth_config
     cfg._auth_config = None
