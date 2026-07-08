@@ -4279,7 +4279,7 @@ class TestWeComChannel:
                 "aibot",
                 SimpleNamespace(
                     WSClient=lambda options: ws_client,
-                    WSClientOptions=lambda **kwargs: SimpleNamespace(**kwargs),
+                    WSClientOptions=SimpleNamespace,
                 ),
             )
 

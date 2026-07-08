@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 # Registry of built-in subagents — imported by deerflow.subagents.registry
-# CodeQL: unused-global-variable false positive
+# noinspection PyUnusedLocal
 BUILTIN_SUBAGENTS = {
     "general-purpose": GENERAL_PURPOSE_CONFIG,
     "bash": BASH_AGENT_CONFIG,
