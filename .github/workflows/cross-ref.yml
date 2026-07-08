@@ -2,9 +2,16 @@ name: Cross-Reference Isolation
 
 on:
   push:
-    branches: [ "fork-v7-browser-determinism", "master" ]
+    branches: [ "main", "fork-v7-browser-determinism" ]
   pull_request:
-    branches: [ "fork-v7-browser-determinism", "master" ]
+    branches: [ "*" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   cross-ref-check:
@@ -12,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
 

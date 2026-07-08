@@ -44,6 +44,15 @@ class TestNormalizeFilename:
         with pytest.raises(ValueError, match="unsafe"):
             normalize_filename(".")
 
+    def test_strips_control_chars(self):
+        # CR/LF in a filename enable log injection (CodeQL py/log-injection).
+        assert normalize_filename("report\r\n.pdf") == "report.pdf"
+        assert normalize_filename("a\tb\x00c.txt") == "abc.txt"
+
+    def test_rejects_control_chars_only(self):
+        with pytest.raises(ValueError, match="unsafe"):
+            normalize_filename("\n\r\t")
+
 
 # ---------------------------------------------------------------------------
 # claim_unique_filename

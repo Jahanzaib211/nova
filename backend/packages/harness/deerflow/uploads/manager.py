@@ -67,6 +67,8 @@ def normalize_filename(filename: str) -> str:
     if not filename:
         raise ValueError("Filename is empty")
     safe = Path(filename).name
+    # Strip control characters (incl. CR/LF): they enable log injection and are invalid in paths.
+    safe = "".join(ch for ch in safe if ch.isprintable())
     if not safe or safe in {".", ".."}:
         raise ValueError(f"Filename is unsafe: {filename!r}")
     # Reject backslashes — on Linux Path.name keeps them as literal chars,
