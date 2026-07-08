@@ -96,8 +96,8 @@ async def list_skills(config: AppConfig = Depends(get_config)) -> SkillsListResp
         skills = get_or_new_skill_storage(app_config=config).load_skills(enabled_only=False)
         return SkillsListResponse(skills=[_skill_to_response(skill) for skill in skills])
     except Exception as e:
-        logger.error(f"Failed to load skills: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to load skills: {str(e)}")
+        logger.error("Failed to load skills: %s", str(e).replace("\n", "").replace("\r", ""), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load skills")
 
 
 @router.post(
@@ -121,8 +121,8 @@ async def install_skill(request: SkillInstallRequest, config: AppConfig = Depend
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to install skill: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to install skill: {str(e)}")
+        logger.error("Failed to install skill: %s", str(e).replace("\n", "").replace("\r", ""), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to install skill")
 
 
 @router.get("/skills/custom", response_model=SkillsListResponse, summary="List Custom Skills")
@@ -319,7 +319,7 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest, config: App
         config_path = ExtensionsConfig.resolve_config_path()
         if config_path is None:
             config_path = Path.cwd().parent / "extensions_config.json"
-            logger.info(f"No existing extensions config found. Creating new config at: {config_path}")
+            logger.info("No existing extensions config found. Creating new config at: %s", config_path)
 
         extensions_config = get_extensions_config()
         extensions_config.skills[skill_name] = SkillStateConfig(enabled=request.enabled)
@@ -332,7 +332,7 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest, config: App
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config_data, f, indent=2)
 
-        logger.info(f"Skills configuration updated and saved to: {config_path}")
+        logger.info("Skills configuration updated and saved to: %s", config_path)
         reload_extensions_config()
         await refresh_skills_system_prompt_cache_async()
 
@@ -342,7 +342,7 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest, config: App
         if updated_skill is None:
             raise HTTPException(status_code=500, detail=f"Failed to reload skill '{skill_name}' after update")
 
-        logger.info(f"Skill '{skill_name}' enabled status updated to {request.enabled}")
+        logger.info("Skill '%s' enabled status updated to %s", skill_name, request.enabled)
         return _skill_to_response(updated_skill)
 
     except HTTPException:
