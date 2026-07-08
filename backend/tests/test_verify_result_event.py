@@ -50,13 +50,6 @@ def test_verify_result_event_has_documented_shape():
         return _FakeCheck()
 
     try:
-        # Monkeypatch the imports that happen inside the function body
-        import deerflow.agents.middlewares.observe_adjust_middleware as mod
-
-        class _FakeBrowserCheckModule:
-            run_browser_check = staticmethod(fake_run)
-
-        mod._FAKE_BROWSER_CHECK = _FakeBrowserCheckModule
         # Patch sys.modules-style: monkeypatch the function body's namespace
         # by using a custom getter — simpler to just exercise the writer path
         # via a direct call to a helper we can test in isolation.

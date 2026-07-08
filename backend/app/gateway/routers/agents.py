@@ -185,8 +185,8 @@ async def get_agent(name: str) -> AgentResponse:
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
     except Exception as e:
-        logger.error(f"Failed to get agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get agent: {str(e)}")
+        logger.error(f"Failed to get agent '{name.replace(chr(10), '').replace(chr(13), '')}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get agent")
 
 
 @router.post(
@@ -261,8 +261,8 @@ async def create_agent_endpoint(request: AgentCreateRequest) -> AgentResponse:
     try:
         response = await asyncio.to_thread(_create_agent)
     except Exception as e:
-        logger.error(f"Failed to create agent '{request.name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create agent: {str(e)}")
+        logger.error(f"Failed to create agent '{request.name.replace(chr(10), '').replace(chr(13), '')}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create agent")
 
     if response is None:
         raise HTTPException(status_code=409, detail=f"Agent '{normalized_name}' already exists")
@@ -344,7 +344,7 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             soul_path = agent_dir / "SOUL.md"
             soul_path.write_text(request.soul, encoding="utf-8")
 
-        logger.info(f"Updated agent '{name}'")
+        logger.info(f"Updated agent '{name.replace(chr(10), '').replace(chr(13), '')}'")
 
         refreshed_cfg = load_agent_config(name, user_id=user_id)
         return _agent_config_to_response(refreshed_cfg, include_soul=True, user_id=user_id)
@@ -352,8 +352,8 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
+        logger.error(f"Failed to update agent '{name.replace(chr(10), '').replace(chr(13), '')}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update agent")
 
 
 class UserProfileResponse(BaseModel):
@@ -457,8 +457,8 @@ async def delete_agent(name: str) -> None:
     try:
         outcome, agent_dir = await asyncio.to_thread(_remove_agent_dir)
     except Exception as e:
-        logger.error(f"Failed to delete agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to delete agent: {str(e)}")
+        logger.error(f"Failed to delete agent '{name.replace(chr(10), '').replace(chr(13), '')}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete agent")
 
     if outcome == "legacy":
         raise HTTPException(
@@ -468,4 +468,4 @@ async def delete_agent(name: str) -> None:
     if outcome == "missing":
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
 
-    logger.info(f"Deleted agent '{name}' from {agent_dir}")
+    logger.info(f"Deleted agent '{name.replace(chr(10), '').replace(chr(13), '')}' from {agent_dir}")

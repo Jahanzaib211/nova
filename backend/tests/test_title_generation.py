@@ -69,10 +69,6 @@ class TestTitleMiddleware:
         assert middleware is not None
         assert middleware.state_schema is not None
 
-    # def test_after_agent_hook(self):
-    #     """Test after_agent hook."""
-    #     pass
-
 
 # TODO: Add integration tests
 # - Test with real LangGraph runtime

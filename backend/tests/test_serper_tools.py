@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+import deerflow.community.serper.tools as serper_mod
+
 
 @pytest.fixture(autouse=True)
 def reset_api_key_warned():
     """Reset the module-level warning flag before each test."""
-    import deerflow.community.serper.tools as serper_mod
-
     serper_mod._api_key_warned = set()
     yield
     serper_mod._api_key_warned = set()
@@ -185,8 +185,6 @@ class TestMissingKeyError:
     def test_warns_once_per_tool_name(self, caplog):
         import logging
 
-        import deerflow.community.serper.tools as serper_mod
-
         with caplog.at_level(logging.WARNING):
             serper_mod._missing_key_error("q1", "web_search")
             serper_mod._missing_key_error("q2", "web_search")
@@ -198,8 +196,6 @@ class TestMissingKeyError:
     def test_warns_separately_for_each_tool(self, caplog):
         import logging
 
-        import deerflow.community.serper.tools as serper_mod
-
         with caplog.at_level(logging.WARNING):
             serper_mod._missing_key_error("q1", "web_search")
             serper_mod._missing_key_error("q2", "image_search")
@@ -209,8 +205,6 @@ class TestMissingKeyError:
         assert any("image_search" in m for m in warned_tools)
 
     def test_returns_structured_error_json(self):
-        import deerflow.community.serper.tools as serper_mod
-
         parsed = json.loads(serper_mod._missing_key_error("hello", "web_search"))
         assert parsed["error"] == "SERPER_API_KEY is not configured"
         assert parsed["query"] == "hello"

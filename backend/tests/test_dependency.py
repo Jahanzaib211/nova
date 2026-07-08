@@ -1,7 +1,5 @@
 """Tests for dependency injection provider."""
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from deerflow.sandbox.dependency import (

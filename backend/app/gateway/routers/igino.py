@@ -144,5 +144,7 @@ async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_opt
 # `toggle_privacy` during security hardening (fd2eb27); tests still expect
 # the original module-level names. Aliases keep both call sites working
 # without renaming the routes or rewriting the tests.
+# CodeQL: unused-global-variable false positive
 igino_status = get_status
+# CodeQL: unused-global-variable false positive
 igino_toggle = toggle_privacy

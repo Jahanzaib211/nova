@@ -23,6 +23,7 @@ from app.channels.message_bus import (
     ResolvedAttachment,
 )
 from app.channels.store import ChannelStore
+from app.channels.wecom import WeComChannel
 from deerflow.skills.types import Skill, SkillCategory
 from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
 
@@ -387,8 +388,6 @@ class TestChannelBase:
         from app.channels.slack import SlackChannel
         from app.channels.telegram import TelegramChannel
         from app.channels.wechat import WechatChannel
-        from app.channels.wecom import WeComChannel
-
         bus = MessageBus()
         defaults = {
             "dingtalk": DingTalkChannel(bus=bus, config={}).supports_streaming,
@@ -4036,8 +4035,6 @@ class TestFeishuChannel:
 
 class TestWeComChannel:
     def test_publish_ws_inbound_starts_stream_and_publishes_message(self, monkeypatch):
-        from app.channels.wecom import WeComChannel
-
         async def go():
             bus = MessageBus()
             bus.publish_inbound = AsyncMock()
@@ -4080,8 +4077,6 @@ class TestWeComChannel:
         _run(go())
 
     def test_publish_ws_inbound_uses_configured_working_message(self, monkeypatch):
-        from app.channels.wecom import WeComChannel
-
         async def go():
             bus = MessageBus()
             bus.publish_inbound = AsyncMock()
@@ -4109,8 +4104,6 @@ class TestWeComChannel:
         _run(go())
 
     def test_publish_ws_inbound_treats_slash_prefixed_paths_as_chat(self, monkeypatch):
-        from app.channels.wecom import WeComChannel
-
         async def go():
             bus = MessageBus()
             bus.publish_inbound = AsyncMock()
@@ -4139,8 +4132,6 @@ class TestWeComChannel:
         _run(go())
 
     def test_on_outbound_sends_attachment_before_clearing_context(self, tmp_path):
-        from app.channels.wecom import WeComChannel
-
         async def go():
             bus = MessageBus()
             channel = WeComChannel(bus, config={})
@@ -4192,8 +4183,6 @@ class TestWeComChannel:
         _run(go())
 
     def test_send_falls_back_to_send_message_without_thread_context(self):
-        from app.channels.wecom import WeComChannel
-
         async def go():
             bus = MessageBus()
             channel = WeComChannel(bus, config={})
@@ -4217,8 +4206,6 @@ class TestWeComChannel:
         _run(go())
 
     def test_on_ws_task_done_logs_error_on_exception(self, caplog):
-        from app.channels.wecom import WeComChannel
-
         channel = WeComChannel(MessageBus(), config={})
         task = MagicMock()
         task.cancelled.return_value = False
@@ -4230,8 +4217,6 @@ class TestWeComChannel:
         assert any("WeCom WebSocket connection task failed" in r.message and r.levelno == logging.ERROR for r in caplog.records)
 
     def test_on_ws_task_done_silent_when_cancelled(self, caplog):
-        from app.channels.wecom import WeComChannel
-
         channel = WeComChannel(MessageBus(), config={})
         task = MagicMock()
         task.cancelled.return_value = True
@@ -4243,8 +4228,6 @@ class TestWeComChannel:
         assert caplog.records == []
 
     def test_on_ws_task_done_silent_when_no_exception(self, caplog):
-        from app.channels.wecom import WeComChannel
-
         channel = WeComChannel(MessageBus(), config={})
         task = MagicMock()
         task.cancelled.return_value = False
@@ -4256,8 +4239,6 @@ class TestWeComChannel:
         assert caplog.records == []
 
     def test_on_ws_error_logs_error(self, caplog):
-        from app.channels.wecom import WeComChannel
-
         channel = WeComChannel(MessageBus(), config={})
 
         with caplog.at_level(logging.ERROR):
@@ -4266,8 +4247,6 @@ class TestWeComChannel:
         assert any("WeCom WebSocket error" in r.message and r.levelno == logging.ERROR for r in caplog.records)
 
     def test_on_ws_disconnected_logs_warning(self, caplog):
-        from app.channels.wecom import WeComChannel
-
         channel = WeComChannel(MessageBus(), config={})
 
         with caplog.at_level(logging.WARNING):
@@ -4276,8 +4255,6 @@ class TestWeComChannel:
         assert any("WeCom WebSocket disconnected" in r.message and r.levelno == logging.WARNING for r in caplog.records)
 
     def test_on_ws_disconnected_logs_reason_when_present(self, caplog):
-        from app.channels.wecom import WeComChannel
-
         channel = WeComChannel(MessageBus(), config={})
 
         with caplog.at_level(logging.WARNING):
@@ -4286,8 +4263,6 @@ class TestWeComChannel:
         assert any("connection reset" in r.message and r.levelno == logging.WARNING for r in caplog.records)
 
     def test_start_subscribes_connection_lifecycle_events(self, monkeypatch):
-        from app.channels.wecom import WeComChannel
-
         async def go():
             bus = MessageBus()
             channel = WeComChannel(bus, config={"bot_id": "corp123", "bot_secret": "secret"})

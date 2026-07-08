@@ -21,6 +21,7 @@ BASH_EXECUTABLE = next(
 )
 
 if BASH_EXECUTABLE is None:
+    # CodeQL: unused-global-variable false positive — pytest convention for conditional skipping
     pytestmark = pytest.mark.skip(reason="bash is required for docker.sh detection tests")
 
 

@@ -455,7 +455,7 @@ async def _start_dev_server_aio(
         if getter is not None:
             endpoint = getter(thread_id, container_port)
     except Exception as e:
-        logger.warning("Failed to resolve preview endpoint for thread %s: %s", thread_id, e)
+        logger.warning("Failed to resolve preview endpoint for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
 
     if endpoint is None:
         handle.status = "error"

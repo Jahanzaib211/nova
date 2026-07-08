@@ -288,7 +288,7 @@ async def upload_files(
             if safe_filename != original_filename:
                 file_info["original_filename"] = original_filename
 
-            logger.info(f"Saved file: {safe_filename} ({file_size} bytes) to {file_info['path']}")
+            logger.info(f"Saved file: {safe_filename.replace(chr(10), '').replace(chr(13), '')} ({file_size} bytes) to {file_info['path']}")
 
             file_ext = file_path.suffix.lower()
             if auto_convert_documents and file_ext in CONVERTIBLE_EXTENSIONS:
@@ -391,5 +391,5 @@ async def delete_uploaded_file(thread_id: str, filename: str, request: Request) 
     except PathTraversalError:
         raise HTTPException(status_code=400, detail="Invalid path")
     except Exception as e:
-        logger.error(f"Failed to delete {filename}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete {filename}: {str(e)}")
+        logger.error(f"Failed to delete {filename.replace(chr(10), '').replace(chr(13), '')}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete file")

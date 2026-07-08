@@ -19,7 +19,9 @@ import hashlib
 
 import bcrypt
 
+# CodeQL: unused-global-variable false positive
 _PREFIX_V2 = "$dfv2$"
+# CodeQL: unused-global-variable false positive
 _PREFIX_V1 = "$dfv1$"
 
 

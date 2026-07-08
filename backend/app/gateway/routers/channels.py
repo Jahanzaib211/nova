@@ -52,8 +52,8 @@ async def restart_channel(name: str, request: Request) -> ChannelRestartResponse
 
     success = await service.restart_channel(name)
     if success:
-        logger.info("Channel %s restarted successfully", name)
+        logger.info("Channel %s restarted successfully", name.replace("\n", "").replace("\r", ""))
         return ChannelRestartResponse(success=True, message=f"Channel {name} restarted successfully")
     else:
-        logger.warning("Failed to restart channel %s", name)
+        logger.warning("Failed to restart channel %s", name.replace("\n", "").replace("\r", ""))
         return ChannelRestartResponse(success=False, message=f"Failed to restart channel {name}")

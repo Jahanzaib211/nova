@@ -192,9 +192,7 @@ def _ask_choice_with_arrows(
 
             if key in ("\r", "\n"):
                 if typed:
-                    idx = int(typed) - 1
-                    if 0 <= idx < len(options):
-                        selected = idx
+                    selected = int(typed) - 1
                 break
 
             if key == "\x1b[A":

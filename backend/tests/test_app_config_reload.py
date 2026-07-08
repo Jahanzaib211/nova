@@ -11,7 +11,6 @@ from pydantic import ValidationError
 import deerflow.config.app_config as app_config_module
 from deerflow.config.acp_config import load_acp_config_from_dict
 from deerflow.config.agents_api_config import get_agents_api_config, load_agents_api_config_from_dict
-from deerflow.config.app_config import AppConfig, get_app_config, reset_app_config
 from deerflow.config.checkpointer_config import get_checkpointer_config, load_checkpointer_config_from_dict
 from deerflow.config.guardrails_config import get_guardrails_config, load_guardrails_config_from_dict
 from deerflow.config.memory_config import get_memory_config, load_memory_config_from_dict
@@ -37,7 +36,7 @@ def _reset_config_singletons() -> None:
     load_acp_config_from_dict({})
     reset_checkpointer()
     reset_store()
-    reset_app_config()
+    app_config_module.reset_app_config()
 
 
 def _write_config(path: Path, *, model_name: str, supports_thinking: bool) -> None:
@@ -112,7 +111,7 @@ def test_app_config_defaults_missing_database_to_sqlite(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
 
-    config = AppConfig.from_file(str(config_path))
+    config = app_config_module.AppConfig.from_file(str(config_path))
 
     assert config.database.backend == "sqlite"
     assert config.database.sqlite_dir == ".deer-flow/data"
@@ -134,7 +133,7 @@ def test_app_config_defaults_empty_database_to_sqlite(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
 
-    config = AppConfig.from_file(str(config_path))
+    config = app_config_module.AppConfig.from_file(str(config_path))
 
     assert config.database.backend == "sqlite"
     assert config.database.sqlite_dir == ".deer-flow/data"
@@ -163,7 +162,7 @@ def test_app_config_coerces_commented_out_list_sections(tmp_path, monkeypatch):
     )
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
 
-    config = AppConfig.from_file(str(config_path))
+    config = app_config_module.AppConfig.from_file(str(config_path))
 
     assert config.models == []
     assert config.tools == []
@@ -186,12 +185,12 @@ def test_app_config_warns_when_no_models_configured(tmp_path, monkeypatch, caplo
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
 
     with caplog.at_level("WARNING", logger="deerflow.config.app_config"):
-        AppConfig.from_file(str(config_path))
+        app_config_module.AppConfig.from_file(str(config_path))
 
     assert "No models are configured" in caplog.text
 
 
-def test_get_app_config_reloads_when_file_changes(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_reloads_when_file_changes(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -199,24 +198,24 @@ def test_get_app_config_reloads_when_file_changes(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_path))
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
-    reset_app_config()
+    app_config_module.reset_app_config()
 
     try:
-        initial = get_app_config()
+        initial = app_config_module.get_app_config()
         assert initial.models[0].supports_thinking is False
 
         _write_config(config_path, model_name="first-model", supports_thinking=True)
         next_mtime = config_path.stat().st_mtime + 5
         os.utime(config_path, (next_mtime, next_mtime))
 
-        reloaded = get_app_config()
+        reloaded = app_config_module.get_app_config()
         assert reloaded.models[0].supports_thinking is True
         assert reloaded is not initial
     finally:
-        reset_app_config()
+        app_config_module.reset_app_config()
 
 
-def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_reloads_when_content_digest_changes_without_metadata(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -227,7 +226,7 @@ def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp
     _reset_config_singletons()
 
     try:
-        initial = get_app_config()
+        initial = app_config_module.get_app_config()
         initial_mtime = app_config_module._app_config_mtime
         initial_signature = app_config_module._app_config_signature
         assert initial.models[0].name == "model-a"
@@ -250,7 +249,7 @@ def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp
         monkeypatch.setattr(app_config_module, "_get_config_mtime", lambda _path: initial_mtime)
         monkeypatch.setattr(app_config_module, "_get_config_signature", stale_metadata_signature)
 
-        reloaded = get_app_config()
+        reloaded = app_config_module.get_app_config()
         assert reloaded.models[0].name == "model-b"
         assert reloaded is not initial
         assert app_config_module._app_config_signature is not None
@@ -261,7 +260,7 @@ def test_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp
         _reset_config_singletons()
 
 
-def test_get_app_config_reloads_when_config_path_changes(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_reloads_when_config_path_changes(tmp_path, monkeypatch):
     config_a = tmp_path / "config-a.yaml"
     config_b = tmp_path / "config-b.yaml"
     extensions_path = tmp_path / "extensions_config.json"
@@ -271,21 +270,21 @@ def test_get_app_config_reloads_when_config_path_changes(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
     monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_a))
-    reset_app_config()
+    app_config_module.reset_app_config()
 
     try:
-        first = get_app_config()
+        first = app_config_module.get_app_config()
         assert first.models[0].name == "model-a"
 
         monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_b))
-        second = get_app_config()
+        second = app_config_module.get_app_config()
         assert second.models[0].name == "model-b"
         assert second is not first
     finally:
-        reset_app_config()
+        app_config_module.reset_app_config()
 
 
-def test_get_app_config_resets_agents_api_config_when_section_removed(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_resets_agents_api_config_when_section_removed(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -298,10 +297,10 @@ def test_get_app_config_resets_agents_api_config_when_section_removed(tmp_path, 
 
     monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_path))
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
-    reset_app_config()
+    app_config_module.reset_app_config()
 
     try:
-        initial = get_app_config()
+        initial = app_config_module.get_app_config()
         assert initial.models[0].name == "first-model"
         assert get_agents_api_config().enabled is True
 
@@ -313,14 +312,14 @@ def test_get_app_config_resets_agents_api_config_when_section_removed(tmp_path, 
         next_mtime = config_path.stat().st_mtime + 5
         os.utime(config_path, (next_mtime, next_mtime))
 
-        reloaded = get_app_config()
+        reloaded = app_config_module.get_app_config()
         assert reloaded is not initial
         assert get_agents_api_config().enabled is False
     finally:
-        reset_app_config()
+        app_config_module.reset_app_config()
 
 
-def test_get_app_config_resets_singleton_configs_when_sections_removed(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_resets_singleton_configs_when_sections_removed(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -340,10 +339,10 @@ def test_get_app_config_resets_singleton_configs_when_sections_removed(tmp_path,
 
     monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_path))
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
-    reset_app_config()
+    app_config_module.reset_app_config()
 
     try:
-        get_app_config()
+        app_config_module.get_app_config()
         assert get_title_config().enabled is False
         assert get_summarization_config().enabled is True
         assert get_memory_config().enabled is False
@@ -357,7 +356,7 @@ def test_get_app_config_resets_singleton_configs_when_sections_removed(tmp_path,
         next_mtime = config_path.stat().st_mtime + 5
         os.utime(config_path, (next_mtime, next_mtime))
 
-        get_app_config()
+        app_config_module.get_app_config()
         assert get_title_config().enabled is True
         assert get_summarization_config().enabled is False
         assert get_memory_config().enabled is True
@@ -370,7 +369,7 @@ def test_get_app_config_resets_singleton_configs_when_sections_removed(tmp_path,
         _reset_config_singletons()
 
 
-def test_get_app_config_resets_persistence_runtime_singletons_when_checkpointer_removed(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_resets_persistence_runtime_singletons_when_checkpointer_removed(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -380,10 +379,10 @@ def test_get_app_config_resets_persistence_runtime_singletons_when_checkpointer_
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
     reset_checkpointer()
     reset_store()
-    reset_app_config()
+    app_config_module.reset_app_config()
 
     try:
-        get_app_config()
+        app_config_module.get_app_config()
         initial_checkpointer = get_checkpointer()
         initial_store = get_store()
 
@@ -391,7 +390,7 @@ def test_get_app_config_resets_persistence_runtime_singletons_when_checkpointer_
         next_mtime = config_path.stat().st_mtime + 5
         os.utime(config_path, (next_mtime, next_mtime))
 
-        get_app_config()
+        app_config_module.get_app_config()
 
         assert get_checkpointer_config() is None
         assert get_checkpointer() is not initial_checkpointer
@@ -400,7 +399,7 @@ def test_get_app_config_resets_persistence_runtime_singletons_when_checkpointer_
         _reset_config_singletons()
 
 
-def test_get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_unchanged(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_unchanged(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -417,7 +416,7 @@ def test_get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_u
     _reset_config_singletons()
 
     try:
-        get_app_config()
+        app_config_module.get_app_config()
         initial_checkpointer = get_checkpointer()
         initial_store = get_store()
 
@@ -431,7 +430,7 @@ def test_get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_u
         next_mtime = config_path.stat().st_mtime + 5
         os.utime(config_path, (next_mtime, next_mtime))
 
-        get_app_config()
+        app_config_module.get_app_config()
 
         assert get_checkpointer() is initial_checkpointer
         assert get_store() is initial_store
@@ -439,7 +438,7 @@ def test_get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_u
         _reset_config_singletons()
 
 
-def test_get_app_config_does_not_mutate_singletons_when_reload_validation_fails(tmp_path, monkeypatch):
+def test_app_config_module.get_app_config_does_not_mutate_singletons_when_reload_validation_fails(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -457,7 +456,7 @@ def test_get_app_config_does_not_mutate_singletons_when_reload_validation_fails(
     _reset_config_singletons()
 
     try:
-        previous_app_config = get_app_config()
+        previous_app_config = app_config_module.get_app_config()
         initial_checkpointer = get_checkpointer()
         initial_store = get_store()
 
@@ -473,7 +472,7 @@ def test_get_app_config_does_not_mutate_singletons_when_reload_validation_fails(
         os.utime(config_path, (next_mtime, next_mtime))
 
         with pytest.raises(ValidationError):
-            get_app_config()
+            app_config_module.get_app_config()
 
         assert app_config_module._app_config is previous_app_config
         assert get_title_config().enabled is False

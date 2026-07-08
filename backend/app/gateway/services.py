@@ -239,7 +239,7 @@ def build_run_config(
             if "configurable" in request_config:
                 logger.warning(
                     "build_run_config: client sent both 'context' and 'configurable'; preferring 'context' (LangGraph >= 0.6.0). thread_id=%s, caller_configurable keys=%s",
-                    thread_id,
+                    thread_id.replace("\n", "").replace("\r", ""),
                     list(request_config.get("configurable", {}).keys()),
                 )
             context_value = request_config["context"]
