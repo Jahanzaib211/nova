@@ -215,7 +215,7 @@ def test_app_config_reloads_when_file_changes(tmp_path, monkeypatch):
         app_config_module.reset_app_config()
 
 
-def test_app_config_module.get_app_config_reloads_when_content_digest_changes_without_metadata(tmp_path, monkeypatch):
+def test_app_config_get_app_config_reloads_when_content_digest_changes_without_metadata(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -260,7 +260,7 @@ def test_app_config_module.get_app_config_reloads_when_content_digest_changes_wi
         _reset_config_singletons()
 
 
-def test_app_config_module.get_app_config_reloads_when_config_path_changes(tmp_path, monkeypatch):
+def test_app_config_get_app_config_reloads_when_config_path_changes(tmp_path, monkeypatch):
     config_a = tmp_path / "config-a.yaml"
     config_b = tmp_path / "config-b.yaml"
     extensions_path = tmp_path / "extensions_config.json"
@@ -284,7 +284,7 @@ def test_app_config_module.get_app_config_reloads_when_config_path_changes(tmp_p
         app_config_module.reset_app_config()
 
 
-def test_app_config_module.get_app_config_resets_agents_api_config_when_section_removed(tmp_path, monkeypatch):
+def test_app_config_get_app_config_resets_agents_api_config_when_section_removed(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -319,7 +319,7 @@ def test_app_config_module.get_app_config_resets_agents_api_config_when_section_
         app_config_module.reset_app_config()
 
 
-def test_app_config_module.get_app_config_resets_singleton_configs_when_sections_removed(tmp_path, monkeypatch):
+def test_app_config_get_app_config_resets_singleton_configs_when_sections_removed(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -369,7 +369,7 @@ def test_app_config_module.get_app_config_resets_singleton_configs_when_sections
         _reset_config_singletons()
 
 
-def test_app_config_module.get_app_config_resets_persistence_runtime_singletons_when_checkpointer_removed(tmp_path, monkeypatch):
+def test_app_config_get_app_config_resets_persistence_runtime_singletons_when_checkpointer_removed(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -399,7 +399,7 @@ def test_app_config_module.get_app_config_resets_persistence_runtime_singletons_
         _reset_config_singletons()
 
 
-def test_app_config_module.get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_unchanged(tmp_path, monkeypatch):
+def test_app_config_get_app_config_keeps_persistence_runtime_singletons_when_checkpointer_unchanged(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
@@ -438,7 +438,7 @@ def test_app_config_module.get_app_config_keeps_persistence_runtime_singletons_w
         _reset_config_singletons()
 
 
-def test_app_config_module.get_app_config_does_not_mutate_singletons_when_reload_validation_fails(tmp_path, monkeypatch):
+def test_app_config_get_app_config_does_not_mutate_singletons_when_reload_validation_fails(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     extensions_path = tmp_path / "extensions_config.json"
     _write_extensions_config(extensions_path)
