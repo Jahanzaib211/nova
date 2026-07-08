@@ -1,10 +1,4 @@
-# Nova — The Agent's Computer
-
-> **Nova** は Ali Technologies がオープンソースの [DeerFlow](https://github.com/bytedance/deer-flow) を基盤に構築したものです。上流の MIT ライセンスと著作権表示はそのまま保持されています（[LICENSE](./LICENSE)、[NOTICE.md](./NOTICE.md) を参照）。以下は上流 DeerFlow のドキュメントです。
-
----
-
-# 🦌 DeerFlow - 2.0
+# Nova — エージェントのコンピュータ
 
 [English](./README.md) | [中文](./README_zh.md) | 日本語 | [Français](./README_fr.md) | [Русский](./README_ru.md)
 
@@ -12,63 +6,60 @@
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-<a href="https://trendshift.io/repositories/14699" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14699" alt="bytedance%2Fdeer-flow | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-> 2026年2月28日、バージョン2のリリースに伴い、DeerFlowはGitHub Trendingで🏆 第1位を獲得しました。素晴らしいコミュニティの皆さん、ありがとうございます！💪🔥
+**Nova** は、リサーチ、コーディング、クリエイティブを行えるフルスタックの**コンピュータエージェント**です。**サブエージェント**、**メモリ**、**スレッドごとのサンドボックス**をオーケストレーションし、**拡張可能なスキル**とエージェント自身のコンピュータのライブストリーミングビューで、ほぼあらゆるタスクを実行できます——ターミナル、エディタ、ブラウザプレビュー、タスク進捗をリアルタイムで表示。
 
-DeerFlow（**D**eep **E**xploration and **E**fficient **R**esearch **Flow**）は、**サブエージェント**、**メモリ**、**サンドボックス**を統合し、**拡張可能なスキル**によってあらゆるタスクを実行できるオープンソースの**スーパーエージェントハーネス**です。
+Nova は **[Ali Technologies](https://www.alilabsx.com)** がオープンソースの [DeerFlow](https://github.com/bytedance/deer-flow) スーパーエージェントハーネスの上に構築しました。上流 MIT ライセンスとすべての元の著作権表示は保持されています——[ライセンス](#ライセンス) と [NOTICE.md](./NOTICE.md) を参照。
 
-https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
+> 挨拶しましょう：*"私はNova、コンピュータエージェントです。"*
 
-> [!NOTE]
-> **DeerFlow 2.0はゼロからの完全な書き直しです。** v1とコードを共有していません。オリジナルのDeep Researchフレームワークをお探しの場合は、[`1.x`ブランチ](https://github.com/bytedance/deer-flow/tree/main-1.x)で引き続きメンテナンスされています。現在の開発は2.0に移行しています。
+![Nova ワークスペース — エージェントがチップ計算機を構築し、Agent's Computer ブラウザタブでライブプレビュー](./docs/images/nova-workspace.png)
 
-## 公式ウェブサイト
+## Nova が DeerFlow の上に追加したもの
 
-[<img width="2880" height="1600" alt="image" src="https://github.com/user-attachments/assets/a598c49f-3b2f-41ea-a052-05e21349188a" />](https://deerflow.tech)
+Nova は DeerFlow 2.0 のフルスタックリファクタリングです——**338 ファイルで +35,738 行**（検証済み：`git diff --shortstat v2.0.0-rc1 HEAD`）。主な追加機能はすべて Nova 用に構築：
 
-**実際のデモ**は[**公式ウェブサイト**](https://deerflow.tech)でご覧いただけます。
+- **Agent's Computer** — 6タブライブパネル（ターミナル、赤/緑ライブ差分付きエディタ、ブラウザプレビュー、アクティビティタイムライン、ファイル、レビュー）がエージェントの操作をリアルタイムでストリーミング。
+- **検証ループ** — エージェントがビルドをテスト：ヘッドレスChromiumがランニング開発サーバー against のセルフチェック（コンソエラー、空白レンダリング検出、スクリーンショット）、開発サーバー準備完了時とHTML納品時に自動トリガー。
+- **決定論的コードレビュー** — LLM不要のレビューエンジン。非エンジニアにプレーンイングリッシュの判定、開発者にファイルごとの統計とリスクフラグ。
+- **自己修正ミドルウェア** — ランタイム強制反復予算、デッドエンドループ検出、プリフライトクォータチェック、エラーメッセージ汚染除去、ライブタスク進捗。
+- **32個のエージェントツール** — シェルセッション、ブラウザナビゲーション/クリック/入力/eval、スクリーンショット、スキャフォールド、開発サーバーライフサイクル、dev_verify、code_review、スキル保存など。
+- **iGIN0 プライバシーリサーチ** — リトライ、サーキットブレーカー、LRU+TTLキャッシュ、オプションTORルーティング、プライバシーアウドトレイル付きの强化されたSearXNGクライアント。
+- **ランタイムモデル管理** — APIと設定UIでモデルを追加/切り替え、Config ファイルの編集不要。
+- **オペレーション層** — 11プローブ自己修復ウォッチドッグ、PM2管理Dockerライフサイクル、再起動永続化。
+- **ローカル + 無料モデル via LiteLLM** — 設定のOllamaプリセットとPM2管理LiteLLMプロキシで、4つの無料Ollamaクラウドモデル（MiniMax M3、Nemotron 3 Super、Qwen3 Coder 480B、GPT-OSS 120B）と有料プロバイダーを公開。
+- **8,112行の新テスト** — 37の新しいバックエンドテストファイルにまたがる。
 
-## ByteDance Volcengine のコーディングプラン
+上流DeerFlowはエージェントハーネス（サブエージェント、メモリ、LangGraphランタイム）、スキルシステム、スレッドごとのDockerサンドボックスを提供——功劳は上流に。完全で再現可能な帰属マップは **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)** にあります。
 
-<img width="4808" height="2400" alt="英文方舟" src="https://github.com/user-attachments/assets/2ecc7b9d-50be-4185-b1f7-5542d222fb2d" />
+## AMD コンピュータで実行
 
-- DeerFlowの実行には、Doubao-Seed-2.0-Code、DeepSeek v3.2、Kimi 2.5の使用を強く推奨します
-- [詳細はこちら](https://www.byteplus.com/en/activity/codingplan?utm_campaign=deer_flow&utm_content=deer_flow&utm_medium=devrel&utm_source=OWO&utm_term=deer_flow)
-- [中国大陸の開発者はこちらをクリック](https://www.volcengine.com/activity/codingplan?utm_campaign=deer_flow&utm_content=deer_flow&utm_medium=devrel&utm_source=OWO&utm_term=deer_flow)
+Nova は **AMD Instinct** GPU で推論を提供し、それをワンクリックの初等選択肢として構築——**AMD 開発者ハッカソン（Act II）** 用。
 
-## InfoQuest
-
-DeerFlowは、BytePlusが独自に開発したインテリジェント検索・クローリングツールセット「[InfoQuest（無料オンライン体験対応）](https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest)」を新たに統合しました。
-
-<a href="https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest" target="_blank">
-  <img
-    src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/hubseh7bsbps/20251208-160108.png"   alt="InfoQuest_banner"
-  />
-</a>
-
----
+- **2つのAMDパス、設定のプリセットとして** → モデル：**Fireworks AI**（マネージド、AMD Instinct MI300X上で提供）と **AMD 開発者クラウド**（Nova独自の推論 via **vLLM on ROCm**、`scripts/amd-serve-vllm.sh`）。AMD コンピュータの追加は設定であり、コードではありません。
+- **検証可能な使用量** — `GET /api/models/amd-usage` が機械可読のAMD使用量サマリーを返し、AMD対応モデルには **AMD** バッジを表示。
+- **Track 1 エージェント** — [`hackathon/track1/`](./hackathon/track1/) のリーンでトークン効率の良いFireworksバッチハーネス；`make hackathon-track1` でビルド＆スモークテスト。
+- 完全なセットアップ + AMD コンピュータドキュメント：**[docs/AMD_INTEGRATION.md](./docs/AMD_INTEGRATION.md)**。
 
 ## 目次
 
-- [🦌 DeerFlow - 2.0](#-deerflow---20)
-  - [公式ウェブサイト](#公式ウェブサイト)
-  - [InfoQuest](#infoquest)
+- [Nova — エージェントのコンピュータ](#nova--エージェントのコンピュータ)
   - [目次](#目次)
-  - [Coding Agent に一文でセットアップを依頼](#coding-agent-に一文でセットアップを依頼)
+  - [ワンクリックエージェントセットアップ](#ワンクリックエージェントセットアップ)
   - [クイックスタート](#クイックスタート)
     - [設定](#設定)
     - [アプリケーションの実行](#アプリケーションの実行)
-      - [オプション1: Docker（推奨）](#オプション1-docker推奨)
-      - [オプション2: ローカル開発](#オプション2-ローカル開発)
-    - [詳細設定](#詳細設定)
+      - [デプロイサイズ](#デプロイサイズ)
+      - [方法1：Docker（推奨）](#方法1docker推奨)
+      - [方法2：ローカル開発](#方法2ローカル開発)
+    - [高度な設定](#高度な設定)
       - [サンドボックスモード](#サンドボックスモード)
       - [MCPサーバー](#mcpサーバー)
-      - [IMチャネル](#imチャネル)
+      - [IMチャンネル](#imチャンネル)
       - [LangSmithトレーシング](#langsmithトレーシング)
-  - [Deep Researchからスーパーエージェントハーネスへ](#deep-researchからスーパーエージェントハーネスへ)
+      - [Langfuseトレーシング](#langfuseトレーシング)
+  - [ディープリサーチからスーパーエージェントハーネスへ](#ディープリサーチからスーパーエージェントハーネスへ)
   - [コア機能](#コア機能)
     - [スキルとツール](#スキルとツール)
-      - [Claude Code連携](#claude-code連携)
     - [サブエージェント](#サブエージェント)
     - [サンドボックスとファイルシステム](#サンドボックスとファイルシステム)
     - [コンテキストエンジニアリング](#コンテキストエンジニアリング)
@@ -77,304 +68,122 @@ DeerFlowは、BytePlusが独自に開発したインテリジェント検索・�
   - [組み込みPythonクライアント](#組み込みpythonクライアント)
   - [ドキュメント](#ドキュメント)
   - [⚠️ セキュリティに関する注意](#️-セキュリティに関する注意)
-  - [コントリビュート](#コントリビュート)
+  - [コントリビューション](#コントリビューション)
   - [ライセンス](#ライセンス)
-  - [謝辞](#謝辞)
-    - [主要コントリビューター](#主要コントリビューター)
-  - [Star History](#star-history)
 
-## Coding Agent に一文でセットアップを依頼
+## ワンクリックエージェントセットアップ
 
-Claude Code、Codex、Cursor、Windsurf などの coding agent を使っているなら、次の一文をそのまま渡せます。
+Claude Code、Codex、Cursor、Windsurf、または他のコーディングエージェントを使用している場合、セットアップ手順を一文で渡すことができます：
 
 ```text
-DeerFlow がまだ clone されていなければ先に clone してから、https://raw.githubusercontent.com/bytedance/deer-flow/main/Install.md に従ってローカル開発環境を初期化してください
+Help me clone Nova if needed, then bootstrap it for local development by following https://raw.githubusercontent.com/Jahanzaib211/nova/main/docs/Install.md
 ```
 
-このプロンプトは coding agent 向けです。必要なら先にリポジトリを clone し、Docker が使える場合は Docker を優先して初期セットアップを行い、最後に次の起動コマンドと不足している設定項目だけを返します。
+このプロンプトはコーディングエージェントを対象としています。エージェントにリポジトリのクローン（必要に応じて）、Dockerの選択（可能な場合）、必要なユーザー入力と不足している設定で停止するよう指示します。
 
 ## クイックスタート
 
 ### 設定
 
-1. **DeerFlowリポジトリをクローン**
+1. **Novaリポジトリをクローン**
 
    ```bash
-   git clone https://github.com/bytedance/deer-flow.git
-   cd deer-flow
+   git clone https://github.com/Jahanzaib211/nova.git
+   cd nova
    ```
 
-2. **ローカル設定ファイルの生成**
+2. **セットアップウィザードを実行**
 
-   プロジェクトルートディレクトリ（`deer-flow/`）から以下を実行します：
+   プロジェクトルート（`nova/`）から：
 
    ```bash
-   make config
+   make setup
    ```
 
-   このコマンドは、提供されたテンプレートに基づいてローカル設定ファイルを作成します。
+   対話式ウィザードがLLMプロバイダー、オプションのWeb検索、実行/サンドボックスモードなどの設定をガイドします。`config.yaml`を生成し、`.env`にキーを書き込みます。約2分で完了。
 
-3. **使用するモデルの設定**
-
-   `config.yaml`を編集し、少なくとも1つのモデルを定義します：
-
-   ```yaml
-   models:
-     - name: gpt-4                       # 内部識別子
-       display_name: GPT-4               # 表示名
-       use: langchain_openai:ChatOpenAI  # LangChainクラスパス
-       model: gpt-4                      # API用モデル識別子
-       api_key: $OPENAI_API_KEY          # APIキー（推奨：環境変数を使用）
-       max_tokens: 4096                  # リクエストあたりの最大トークン数
-       temperature: 0.7                  # サンプリング温度
-
-     - name: openrouter-gemini-2.5-flash
-       display_name: Gemini 2.5 Flash (OpenRouter)
-       use: langchain_openai:ChatOpenAI
-       model: google/gemini-2.5-flash-preview
-       api_key: $OPENAI_API_KEY          # OpenRouterもここではOpenAI互換のフィールド名を使用
-       base_url: https://openrouter.ai/api/v1
-   ```
-
-   OpenRouterやOpenAI互換のゲートウェイは、`langchain_openai:ChatOpenAI`と`base_url`で設定します。プロバイダー固有の環境変数名を使用したい場合は、`api_key`でその変数を明示的に指定してください（例：`api_key: $OPENROUTER_API_KEY`）。
-
-4. **設定したモデルのAPIキーを設定**
-
-   以下のいずれかの方法を選択してください：
-
-- オプションA：プロジェクトルートの`.env`ファイルを編集（推奨）
-
-   ```bash
-   TAVILY_API_KEY=your-tavily-api-key
-   OPENAI_API_KEY=your-openai-api-key
-   # OpenRouterもlangchain_openai:ChatOpenAI + base_url使用時はOPENAI_API_KEYを使用します。
-   # 必要に応じて他のプロバイダーキーを追加
-   INFOQUEST_API_KEY=your-infoquest-api-key
-   ```
-
-- オプションB：シェルで環境変数をエクスポート
-
-   ```bash
-   export OPENAI_API_KEY=your-openai-api-key
-   ```
-
-- オプションC：`config.yaml`を直接編集（本番環境には非推奨）
-
-   ```yaml
-   models:
-     - name: gpt-4
-       api_key: your-actual-api-key-here  # プレースホルダーを置換
-   ```
+   いつでも `make doctor` を実行してセットアップを検証し、修正ヒントを取得できます。
 
 ### アプリケーションの実行
 
-#### オプション1: Docker（推奨）
+#### デプロイサイズ
 
-**開発環境**（ホットリロード、ソースマウント）：
+| デプロイターゲット | スターティングポイント | 推奨 | 注意 |
+|---------|-----------|------------|-------|
+| ローカル評価 / `make dev` | 4 vCPU, 8 GB RAM, 20 GB SSD | 8 vCPU, 16 GB RAM | 1人の開発者または1つのライトセッションに最適 |
+| Docker開発 / `make docker-start` | 4 vCPU, 8 GB RAM, 25 GB SSD | 8 vCPU, 16 GB RAM | イメージビルド、バインドマウント、サンドボックスコンテナにはヘッドルームが必要 |
+| 長時間稼働サーバー / `make up` | 8 vCPU, 16 GB RAM, 40 GB SSD | 16 vCPU, 32 GB RAM | 共有使用、マルチエージェント実行に推奨 |
+
+#### 方法1：Docker（推奨）
+
+**開発**（ホットリロード、ソースマウント）：
 
 ```bash
-make docker-init    # サンドボックスイメージをプル（初回またはイメージ更新時のみ）
-make docker-start   # サービスを開始（config.yamlからサンドボックスモードを自動検出）
+make docker-init    # サンドボックスイメージをプル（初回または更新時のみ）
+make docker-start   # サービスを起動（config.yamlからサンドボックスモードを自動検出）
 ```
 
-`make docker-start`は、`config.yaml`がプロビジョナーモード（`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider`と`provisioner_url`）を使用している場合にのみ`provisioner`を起動します。
-
-**本番環境**（ローカルでイメージをビルドし、ランタイム設定とデータをマウント）：
+**本番**（ローカルでイメージをビルド、ランタイムConfigとデータをマウント）：
 
 ```bash
-make up     # イメージをビルドして全本番サービスを開始
-make down   # コンテナを停止して削除
+make up     # イメージをビルドし、すべての本番サービスを起動
+make down   # サービスを停止し、コンテナを削除
 ```
 
-> [!NOTE]
-> Agentランタイムは現在Gateway内で実行されます。`/api/langgraph/*`はnginxによってGatewayのLangGraph-compatible APIへ書き換えられます。
+アクセス：http://localhost:2026
 
-アクセス: http://localhost:2026
+#### 方法2：ローカル開発
 
-詳細なDocker開発ガイドは[CONTRIBUTING.md](CONTRIBUTING.md)をご覧ください。
-
-#### オプション2: ローカル開発
-
-サービスをローカルで実行する場合：
-
-前提条件：上記の「設定」手順を先に完了してください（`make config`とモデルAPIキー）。`make dev`には有効な設定ファイルが必要です（デフォルトはプロジェクトルートの`config.yaml`。`DEER_FLOW_CONFIG_PATH`で上書き可能）。
-
-1. **前提条件の確認**：
+1. **前提条件を確認**：
    ```bash
-   make check  # Node.js 22+、pnpm、uv、nginxを検証
+   make check  # Node.js 22+, pnpm, uv, nginx を検証
    ```
 
-2. **依存関係のインストール**：
+2. **依存関係をインストール**：
    ```bash
-   make install  # バックエンド＋フロントエンドの依存関係をインストール
+   make install  # バックエンド + フロントエンドの依存関係をインストール
    ```
 
-3. **（オプション）サンドボックスイメージの事前プル**：
-   ```bash
-   # Docker/コンテナベースのサンドボックス使用時に推奨
-   make setup-sandbox
-   ```
-
-4. **サービスの開始**：
+3. **サービスを起動**：
    ```bash
    make dev
    ```
 
-5. **アクセス**: http://localhost:2026
+4. **アクセス**：http://localhost:2026
 
-### 詳細設定
+### 高度な設定
+
 #### サンドボックスモード
 
-DeerFlowは複数のサンドボックス実行モードをサポートしています：
-- **ローカル実行**（ホストマシン上で直接サンドボックスコードを実行）
-- **Docker実行**（分離されたDockerコンテナ内でサンドボックスコードを実行）
-- **KubernetesによるDocker実行**（プロビジョナーサービス経由でKubernetesポッドでサンドボックスコードを実行）
+Nova は複数のサンドボックス実行モードをサポート：
+- **ローカル実行**（ホスト上で直接コードを実行）
+- **Docker実行**（分離されたDockerコンテナで実行）
+- **Docker + Kubernetes実行**（provisionerサービス経由でK8s Podで実行）
 
-Docker開発では、サービスの起動は`config.yaml`のサンドボックスモードに従います。ローカル/Dockerモードでは`provisioner`は起動されません。
-
-お好みのモードの設定については[サンドボックス設定ガイド](backend/docs/CONFIGURATION.md#sandbox)をご覧ください。
+詳細は [サンドボックス設定ガイド](backend/docs/CONFIGURATION.md#sandbox) を参照。
 
 #### MCPサーバー
 
-DeerFlowは、機能を拡張するための設定可能なMCPサーバーとスキルをサポートしています。
-HTTP/SSE MCPサーバーでは、OAuthトークンフロー（`client_credentials`、`refresh_token`）がサポートされています。
-詳細な手順は[MCPサーバーガイド](backend/docs/MCP_SERVER.md)をご覧ください。
+Nova は設定可能なMCPサーバーとスキルをサポートし、機能を拡張します。HTTP/SSE MCPサーバーはOAuthトークンフローをサポート（`client_credentials`、`refresh_token`）。詳細は [MCPサーバーガイド](backend/docs/MCP_SERVER.md) を参照。
 
-#### IMチャネル
+#### IMチャンネル
 
-DeerFlowはメッセージングアプリからのタスク受信をサポートしています。チャネルは設定時に自動的に開始されます。いずれもパブリックIPは不要です。
+Nova はメッセージングアプリからタスクを受信できます。チャンネルは設定後自動起動——パブリックIPは不要。
 
-| チャネル | トランスポート | 難易度 |
+| チャンネル | トランスポート | 難易度 |
 |---------|-----------|------------|
-| Telegram | Bot API（ロングポーリング） | 簡単 |
+| Telegram | Bot API（長ポーリング） | 簡単 |
 | Slack | Socket Mode | 中程度 |
 | Feishu / Lark | WebSocket | 中程度 |
+| WeChat | Tencent iLink（長ポーリング） | 中程度 |
+| WeCom | WebSocket | 中程度 |
 | DingTalk | Stream Push（WebSocket） | 中程度 |
 
-**`config.yaml`での設定：**
-
-```yaml
-channels:
-  # LangGraph-compatible Gateway API base URL（デフォルト: http://localhost:8001/api）
-  langgraph_url: http://localhost:8001/api
-  # Gateway API URL（デフォルト: http://localhost:8001）
-  gateway_url: http://localhost:8001
-
-  # オプション: 全モバイルチャネルのグローバルセッションデフォルト
-  session:
-    assistant_id: lead_agent
-    config:
-      recursion_limit: 100
-    context:
-      thinking_enabled: true
-      is_plan_mode: false
-      subagent_enabled: false
-
-  feishu:
-    enabled: true
-    app_id: $FEISHU_APP_ID
-    app_secret: $FEISHU_APP_SECRET
-    # domain: https://open.feishu.cn       # China (default)
-    # domain: https://open.larksuite.com   # International
-
-  slack:
-    enabled: true
-    bot_token: $SLACK_BOT_TOKEN     # xoxb-...
-    app_token: $SLACK_APP_TOKEN     # xapp-...（Socket Mode）
-    allowed_users: []               # 空 = 全員許可
-
-  telegram:
-    enabled: true
-    bot_token: $TELEGRAM_BOT_TOKEN
-    allowed_users: []               # 空 = 全員許可
-
-    # オプション: チャネル/ユーザーごとのセッション設定
-    session:
-      assistant_id: mobile_agent
-      context:
-        thinking_enabled: false
-      users:
-        "123456789":
-          assistant_id: vip_agent
-          config:
-            recursion_limit: 150
-          context:
-            thinking_enabled: true
-            subagent_enabled: true
-
-  dingtalk:
-    enabled: true
-    client_id: $DINGTALK_CLIENT_ID             # DingTalk Open PlatformのClientId
-    client_secret: $DINGTALK_CLIENT_SECRET     # DingTalk Open PlatformのClientSecret
-    allowed_users: []                          # 空 = 全員許可
-    card_template_id: ""                       # オプション：ストリーミングタイプライター効果用のAIカードテンプレートID
-```
-
-対応するAPIキーを`.env`ファイルに設定します：
-
-```bash
-# Telegram
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
-
-# Slack
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-
-# Feishu / Lark
-FEISHU_APP_ID=cli_xxxx
-FEISHU_APP_SECRET=your_app_secret
-
-# DingTalk
-DINGTALK_CLIENT_ID=your_client_id
-DINGTALK_CLIENT_SECRET=your_client_secret
-```
-
-**Telegramのセットアップ**
-
-1. [@BotFather](https://t.me/BotFather)とチャットし、`/newbot`を送信してHTTP APIトークンをコピーします。
-2. `.env`に`TELEGRAM_BOT_TOKEN`を設定し、`config.yaml`でチャネルを有効にします。
-
-**Slackのセットアップ**
-
-1. [api.slack.com/apps](https://api.slack.com/apps)でSlackアプリを作成 → 新規アプリ作成 → 最初から作成。
-2. **OAuth & Permissions**で、Botトークンスコープを追加：`app_mentions:read`、`chat:write`、`im:history`、`im:read`、`im:write`、`files:write`。
-3. **Socket Mode**を有効化 → `connections:write`スコープのApp-Levelトークン（`xapp-…`）を生成。
-4. **Event Subscriptions**で、ボットイベントを購読：`app_mention`、`message.im`。
-5. `.env`に`SLACK_BOT_TOKEN`と`SLACK_APP_TOKEN`を設定し、`config.yaml`でチャネルを有効にします。
-
-**Feishu / Larkのセットアップ**
-
-1. [Feishu Open Platform](https://open.feishu.cn/)でアプリを作成 → **ボット**機能を有効化。
-2. 権限を追加：`im:message`、`im:message.p2p_msg:readonly`、`im:resource`。
-3. **イベント**で`im.message.receive_v1`を購読し、**ロングコネクション**モードを選択。
-4. App IDとApp Secretをコピー。`.env`に`FEISHU_APP_ID`と`FEISHU_APP_SECRET`を設定し、`config.yaml`でチャネルを有効にします。
-
-**DingTalkのセットアップ**
-
-1. [DingTalk Open Platform](https://open.dingtalk.com/)でアプリを作成し、**ロボット**機能を有効化します。
-2. ロボット設定ページでメッセージ受信モードを**Streamモード**に設定します。
-3. `Client ID`と`Client Secret`をコピー。`.env`に`DINGTALK_CLIENT_ID`と`DINGTALK_CLIENT_SECRET`を設定し、`config.yaml`でチャネルを有効にします。
-4. *（オプション）* ストリーミングAIカード返信（タイプライター効果）を有効にするには、[DingTalkカードプラットフォーム](https://open.dingtalk.com/document/dingstart/typewriter-effect-streaming-ai-card)で**AIカード**テンプレートを作成し、`config.yaml`の`card_template_id`にテンプレートIDを設定します。`Card.Streaming.Write` および `Card.Instance.Write` 権限の申請も必要です。
-
-**コマンド**
-
-チャネル接続後、チャットから直接DeerFlowと対話できます：
-
-| コマンド | 説明 |
-|---------|-------------|
-| `/new` | 新しい会話を開始 |
-| `/status` | 現在のスレッド情報を表示 |
-| `/models` | 利用可能なモデルを一覧表示 |
-| `/memory` | メモリを表示 |
-| `/help` | ヘルプを表示 |
-
-> コマンドプレフィックスのないメッセージは通常のチャットとして扱われ、DeerFlowがスレッドを作成して会話形式で応答します。
+`config.yaml` で設定し、`.env` に対応するAPIキーを設定します。
 
 #### LangSmithトレーシング
 
-DeerFlowには[LangSmith](https://smith.langchain.com)による可観測性が組み込まれています。有効にすると、すべてのLLM呼び出し、エージェント実行、ツール実行がトレースされ、LangSmithダッシュボードで確認できます。
-
-`.env`ファイルに以下を追加します：
+Nova は組み込みの [LangSmith](https://smith.langchain.com) 統合を提供。有効にすると、すべてのLLM呼び出し、エージェント実行、ツール実行がトレースされ、LangSmithダッシュボードに表示されます。
 
 ```bash
 LANGSMITH_TRACING=true
@@ -383,128 +192,85 @@ LANGSMITH_API_KEY=lsv2_pt_xxxxxxxxxxxxxxxx
 LANGSMITH_PROJECT=xxx
 ```
 
-Dockerデプロイでは、トレーシングはデフォルトで無効です。`.env`で`LANGSMITH_TRACING=true`と`LANGSMITH_API_KEY`を設定して有効にします。
+#### Langfuseトレーシング
 
-## Deep Researchからスーパーエージェントハーネスへ
+Nova は [Langfuse](https://langfuse.com) 可観測性もサポート。
 
-DeerFlowはDeep Researchフレームワークとして始まり、コミュニティがそれを大きく発展させました。リリース以来、開発者たちはリサーチを超えて活用してきました：データパイプラインの構築、スライドデッキの生成、ダッシュボードの立ち上げ、コンテンツワークフローの自動化。私たちが予想もしなかったことです。
+```bash
+LANGFUSE_TRACING=true
+LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxxxxxxxxxx
+LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxxxxxxxxxx
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
 
-これは重要なことを示していました：DeerFlowは単なるリサーチツールではなかったのです。それは**ハーネス**——エージェントが実際に仕事をこなすためのインフラを提供するランタイムでした。
+## ディープリサーチからスーパーエージェントハーネスへ
 
-そこで、ゼロから再構築しました。
+Nova はディープリサーチフレームワークとして始まりました——コミュニティがそれをさらに推し進めました。開発者はデータパイプラインの構築、スライドデッキの生成、ダッシュボードの作成、コンテンツワークフローの自動化に使用。私たちが予想していなかったことです。
 
-DeerFlow 2.0は、もはやつなぎ合わせるフレームワークではありません。バッテリー同梱、完全に拡張可能なスーパーエージェントハーネスです。LangGraphとLangChainの上に構築され、エージェントが必要とするすべてを標準搭載しています：ファイルシステム、メモリ、スキル、サンドボックス実行、そして複雑なマルチステップタスクのためのプランニングとサブエージェントの生成機能。
+それは重要なことを伝えました：Nova は単なるリサーチツールではありません。それは**ハーネス**——エージェントが実際に作業を遂行するためのインフラストラクチャを提供するランタイムです。
 
-そのまま使うもよし。分解して自分のものにするもよし。
+だからゼロから作り直しました。
+
+Nova 2.0 はもはやWire togetherするフレームワークではありません。バッテリー付き、完全に拡張可能なスーパーエージェントハーネスです。LangGraphとLangChain上に構築され、エージェントに必要なすべてを出荷時から搭載：ファイルシステム、メモリ、スキル、サンドボックス認識実行、複雑なマルチステップタスクの計画とサブエージェント生成能力。
+
+そのまま使う。または分解してカスタマイズ。
 
 ## コア機能
 
 ### スキルとツール
 
-スキルこそが、DeerFlowを*ほぼ何でもできる*ものにしています。
+スキルがNova を*ほぼ何でも*できるようにします。
 
-標準的なエージェントスキルは構造化された機能モジュールです——ワークフロー、ベストプラクティス、サポートリソースへの参照を定義するMarkdownファイルです。DeerFlowにはリサーチ、レポート生成、スライド作成、Webページ、画像・動画生成などの組み込みスキルが付属しています。しかし、真の力は拡張性にあります：独自のスキルを追加し、組み込みスキルを置き換え、複合ワークフローに組み合わせることができます。
+標準エージェントスキルは構造化された機能モジュール——ワークフロー、ベストプラクティス、サポートリソースの参照を定義するMarkdownファイルです。Nova はリサーチ、レポート生成、スライド作成、Webページ、画像・動画生成などのビルトインスキルを同梱。しかし真の力は拡張性：独自のスキルを追加、ビルトインを置換、複合ワークフローに組み合わせ。
 
-スキルはプログレッシブに読み込まれます——タスクが必要とする時にのみ、一度にすべてではありません。これによりコンテキストウィンドウを軽量に保ち、トークンに敏感なモデルでもDeerFlowがうまく動作します。
+スキルは段階的に読み込まれ——タスクが必要な時だけ、まとめてではありません。これによりコンテキストウィンドウがスリムに保たれ、トークン敏感なモデルでも良好に動作します。
 
-Gateway経由で`.skill`アーカイブをインストールする際、DeerFlowは`version`、`author`、`compatibility`などの標準的なオプショナルフロントマターメタデータを受け入れ、有効な外部スキルを拒否しません。
-
-ツールも同じ哲学に従います。DeerFlowにはコアツールセット——Web検索、Webフェッチ、ファイル操作、bash実行——が付属し、MCPサーバーやPython関数によるカスタムツールをサポートしています。何でも入れ替え可能、何でも追加可能です。
-
-Gatewayが生成するフォローアップ提案は、プレーン文字列のモデル出力とブロック/リスト形式のリッチコンテンツの両方をJSON配列レスポンスの解析前に正規化するため、プロバイダー固有のコンテンツラッパーが提案をサイレントにドロップすることはありません。
-
-```
-# サンドボックスコンテナ内のパス
-/mnt/skills/public
-├── research/SKILL.md
-├── report-generation/SKILL.md
-├── slide-creation/SKILL.md
-├── web-page/SKILL.md
-└── image-generation/SKILL.md
-
-/mnt/skills/custom
-└── your-custom-skill/SKILL.md      ← あなたのカスタムスキル
-```
-
-#### Claude Code連携
-
-`claude-to-deerflow`スキルを使えば、[Claude Code](https://docs.anthropic.com/en/docs/claude-code)から直接、実行中のDeerFlowインスタンスと対話できます。リサーチタスクの送信、ステータスの確認、スレッドの管理——すべてターミナルから離れずに実行できます。
-
-**スキルのインストール**：
-
-```bash
-npx skills add https://github.com/bytedance/deer-flow --skill claude-to-deerflow
-```
-
-DeerFlowが実行中であることを確認し（デフォルトは`http://localhost:2026`）、Claude Codeで`/claude-to-deerflow`コマンドを使用します。
-
-**できること**：
-- DeerFlowにメッセージを送信してストリーミングレスポンスを取得
-- 実行モードの選択：flash（高速）、standard、pro（プランニング）、ultra（サブエージェント）
-- DeerFlowのヘルスチェック、モデル/スキル/エージェントの一覧表示
-- スレッドと会話履歴の管理
-- 分析用ファイルのアップロード
-
-**環境変数**（オプション、カスタムエンドポイント用）：
-
-```bash
-DEERFLOW_URL=http://localhost:2026            # 統合プロキシベースURL
-DEERFLOW_GATEWAY_URL=http://localhost:2026    # Gateway API
-DEERFLOW_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
-```
-
-完全なAPIリファレンスは[`skills/public/claude-to-deerflow/SKILL.md`](skills/public/claude-to-deerflow/SKILL.md)をご覧ください。
+ツールも同じ哲学。Nova にはコアツールセット——Web検索、Webフェッチ、ファイル操作、bash実行——が同梱され、MCPサーバーとPython関数でカスタムツールをサポート。何でも置換。何でも追加。
 
 ### サブエージェント
 
-複雑なタスクは単一のパスに収まりません。DeerFlowはそれを分解します。
+複雑なタスクは単一のパスで処理できないことが多い。Nova はそれを分解。
 
-リードエージェントはオンザフライでサブエージェントを生成できます——それぞれ独自のスコープ付きコンテキスト、ツール、終了条件を持ちます。サブエージェントは可能な限り並列で実行され、構造化された結果を報告し、リードエージェントがすべてを一貫した出力に統合します。
+リードエージェントは動的にサブエージェントを生成可能——それぞれが独立したスコープのコンテキスト、ツール、終了条件を持つ。サブエージェントは可能な限り並列実行し、構造化された結果を報告。リードエージェントはすべてを統合して一貫した出力を生成。
 
-これがDeerFlowが数分から数時間かかるタスクを処理する方法です：リサーチタスクが十数のサブエージェントに展開され、それぞれが異なる角度を探索し、1つのレポート——またはWebサイト——または生成されたビジュアル付きのスライドデッキに収束します。1つのハーネス、多くの手。
+これがNova が数分から数時間のタスクを処理する方法：リサーチタスクがダズンものサブエージェントに分散し、それぞれが異なる角度を探索し、単一のレポートに収束——またはウェブサイト——または生成されたビジュアルを含むスライドデッキ。一つのハーネス、複数の手。
 
 ### サンドボックスとファイルシステム
 
-DeerFlowは物事を*語る*だけではありません。自分のコンピューターを持っています。
+Nova は単に*物事を行う*と*話す*だけでなく、独自のコンピュータを持っています。
 
-各タスクは、完全なファイルシステムを持つ分離されたDockerコンテナ内で実行されます——スキル、ワークスペース、アップロード、出力。エージェントはファイルの読み書き・編集を行います。bashコマンドを実行し、コーディングを行います。画像を表示します。すべてサンドボックス化され、すべて監査可能で、セッション間の汚染はゼロです。
+各タスクは完全なファイルシステムビューを持つ実行環境を取得——スキル、ワークスペース、アップロード、出力。エージェントはファイルを読み取り、書き込み、編集。画像を表示し、安全に設定された場合シェルコマンドを実行可能。
 
-これが、ツールアクセスのあるチャットボットと、実際の実行環境を持つエージェントの違いです。
+`AioSandboxProvider`使用時、シェル実行は分離されたコンテナで実行。`LocalSandboxProvider`使用時、ファイルツールはホスト上のスレッド別ディレクトリにマッピングされますが、ホスト`bash`はデフォルトで無効（安全な分離境界ではないため）。
 
-```
-# サンドボックスコンテナ内のパス
-/mnt/user-data/
-├── uploads/          ← あなたのファイル
-├── workspace/        ← エージェントの作業ディレクトリ
-└── outputs/          ← 最終成果物
-```
+これがチャットボットのツールアクセスと実際の実行環境を持つエージェントの違いです。
 
 ### コンテキストエンジニアリング
 
-**分離されたサブエージェントコンテキスト**：各サブエージェントは独自の分離されたコンテキストで実行されます。これにより、サブエージェントはメインエージェントや他のサブエージェントのコンテキストを見ることができません。これは、サブエージェントが目の前のタスクに集中し、メインエージェントや他のサブエージェントのコンテキストに気を取られないようにするために重要です。
+**分離されたサブエージェントコンテキスト**：各サブエージェントは独自の分離されたコンテキストで実行。メインエージェントや他のサブエージェントのコンテキストを参照不可。
 
-**要約化**：セッション内で、DeerFlowはコンテキストを積極的に管理します——完了したサブタスクの要約、中間結果のファイルシステムへのオフロード、もはや直接関係のないものの圧縮。これにより、コンテキストウィンドウを超えることなく、長いマルチステップタスク全体を通じてシャープさを維持します。
+**要約**：セッション内、Nova はコンテキストを積極的に管理——完了したサブタスクを要約、中間結果をファイルシステムにオフロード、直ちに必要でないものを圧縮。これにより長時間のマルチステップタスクでもコンテキストウィンドウを超過せずにシャープを維持。
+
+**厳格なツール呼び出し回復**：プロバイダーまたはミドルウェアがツール呼び出しループを中断した場合、Nova は強制停止アシスタントメッセージからプロバイダーレベルの生ツール呼び出しメタデータを剥ぎ取り、次のモデル呼び出し前にダングリング呼び出しにプレースホルダーツール結果を注入。
 
 ### 長期メモリ
 
-ほとんどのエージェントは、会話が終わるとすべてを忘れます。DeerFlowは記憶します。
+ほとんどのエージェントは会話が終わるとすべてを忘れる。Nova は覚えている。
 
-セッションをまたいで、DeerFlowはあなたのプロフィール、好み、蓄積された知識の永続的なメモリを構築します。使えば使うほど、あなたのことをよく知るようになります——あなたの文体、技術スタック、繰り返されるワークフロー。メモリはローカルに保存され、あなたの管理下にあります。
-
-メモリ更新は適用時に重複するファクトエントリをスキップするようになり、繰り返される好みやコンテキストがセッションをまたいで際限なく蓄積されることはありません。
+セッションを越えて、Nova はプロファイル、設定、蓄積された知識の永続的なメモリを構築。使用するほど、 Writing style、技術スタック、繰り返しワークフローを理解。メモリはローカルに保存され、ユーザーの管理下。
 
 ## 推奨モデル
 
-DeerFlowはモデルに依存しません——OpenAI互換APIを実装する任意のLLMで動作します。とはいえ、以下をサポートするモデルで最高のパフォーマンスを発揮します：
+Nova はモデル非依存——OpenAI互換APIを実装するすべてのLLMで動作。ただし、以下をサポートするモデルで最適：
 
-- **長いコンテキストウィンドウ**（10万トークン以上）：深いリサーチとマルチステップタスク向け
-- **推論能力**：適応的なプランニングと複雑な分解向け
-- **マルチモーダル入力**：画像理解と動画理解向け
-- **強力なツール使用**：信頼性の高いファンクションコーリングと構造化された出力向け
+- **長いコンテキストウィンドウ**（100k+トークン）でディープリサーチとマルチステップタスク
+- **推論能力**でアダプティブプランニングと複雑な分解
+- **マルチモーダル入力**で画像理解とビデオ理解
+- **強力なツール使用**で信頼性の高い関数呼び出しと構造化出力
 
 ## 組み込みPythonクライアント
 
-DeerFlowは、完全なHTTPサービスを実行せずに組み込みPythonライブラリとして使用できます。`DeerFlowClient`は、すべてのエージェントとGateway機能へのプロセス内直接アクセスを提供し、HTTP Gateway APIと同じレスポンススキーマを返します：
+Nova は完全なHTTPサービスを実行せずに、組み込みPythonライブラリとして使用可能。`DeerFlowClient`はすべてのエージェントとGateway機能への直接プロセス内アクセスを提供し、HTTP Gateway APIと同じレスポンススキーマを返却：
 
 ```python
 from deerflow.client import DeerFlowClient
@@ -512,77 +278,53 @@ from deerflow.client import DeerFlowClient
 client = DeerFlowClient()
 
 # チャット
-response = client.chat("Analyze this paper for me", thread_id="my-thread")
+response = client.chat("この論文を分析して", thread_id="my-thread")
 
-# ストリーミング（LangGraph SSEプロトコル：values、messages-tuple、end）
+# ストリーミング（LangGraph SSEプロトコル：values, messages-tuple, end）
 for event in client.stream("hello"):
     if event.type == "messages-tuple" and event.data.get("type") == "ai":
         print(event.data["content"])
 
-# 設定＆管理 — Gateway準拠のdictを返す
+# 設定と管理 — Gatewayアライン辞書を返却
 models = client.list_models()        # {"models": [...]}
 skills = client.list_skills()        # {"skills": [...]}
 client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-すべてのdict返却メソッドはCIでGateway Pydanticレスポンスモデルに対して検証されており（`TestGatewayConformance`）、組み込みクライアントがHTTP APIスキーマと同期していることを保証します。完全なAPIドキュメントは`backend/packages/harness/deerflow/client.py`をご覧ください。
+完全なAPIドキュメントは `backend/packages/harness/deerflow/client.py` を参照。
 
 ## ドキュメント
 
-- [コントリビュートガイド](CONTRIBUTING.md) - 開発環境のセットアップとワークフロー
-- [設定ガイド](backend/docs/CONFIGURATION.md) - セットアップと設定の手順
-- [アーキテクチャ概要](backend/CLAUDE.md) - 技術的なアーキテクチャの詳細
+- [コントリビューションガイド](CONTRIBUTING.md) - 開発環境セットアップとワークフロー
+- [設定ガイド](backend/docs/CONFIGURATION.md) - セットアップと設定手順
+- [アーキテクチャ概述](backend/CLAUDE.md) - 技術アーキテクチャの詳細
 - [バックエンドアーキテクチャ](backend/README.md) - バックエンドアーキテクチャとAPIリファレンス
+- [エンタープライズ監査](docs/AUDIT.md) - フルスタック監査と改善計画
+- [フロントエンド監査](docs/FRONTEND_AUDIT.md) - フロントエンドコンポーネントツリーとデータフロー
 
 ## ⚠️ セキュリティに関する注意
 
-### 不適切なデプロイはセキュリティリスクを引き起こす可能性があります
+### 不適切なデプロイによりセキュリティリスクが生じる可能性
 
-DeerFlowは**システムコマンドの実行、リソース操作、ビジネスロジックの呼び出し**などの重要な高権限機能を備えており、デフォルトでは**ローカルの信頼できる環境（127.0.0.1のループバックアクセスのみ）にデプロイされる設計**になっています。信頼できないLAN、公開クラウドサーバー、または複数のエンドポイントからアクセス可能なネットワーク環境にエージェントをデプロイし、厳格なセキュリティ対策を講じない場合、以下のようなセキュリティリスクが生じる可能性があります：
+Nova は**システムコマンド実行、リソース操作、ビジネスロジック呼び出し**などの高権限機能を持ち、デフォルトでは**ローカル信頼環境（127.0.0.1ループバックインターフェースのみからアクセス可能）でデプロイ**されるよう設計。信頼できない環境——LANネットワーク、パブリッククラウドサーバー、その他のマルチエンドポイントアクセス可能環境——に厳格なセキュリティ対策なしでデプロイすると、セキュリティリスクが生じる可能性。
 
-- **不正な違法呼び出し**：エージェントの機能が権限のない第三者や悪意のあるインターネットスキャナーに発見され、システムコマンドやファイル読み書きなどの高リスク操作を実行する不正な一括リクエストが引き起こされ、重大なセキュリティ上の問題が発生する可能性があります。
-- **コンプライアンスおよび法的リスク**：エージェントがサイバー攻撃やデータ窃取などの違法行為に不正使用された場合、法的責任やコンプライアンス上のリスクが生じる可能性があります。
+**ローカル信頼ネットワーク環境でのデプロイを強く推奨します。** クロスデバイスまたはクロスネットワークデプロイが必要な場合、IP許可リスト、認証ゲートウェイ、ネットワーク分離などの厳格なセキュリティ対策を実装する必要があります。
 
-### セキュリティ推奨事項
+## コントリビューション
 
-**注意：DeerFlowはローカルの信頼できるネットワーク環境にデプロイすることを強く推奨します。** クロスデバイス・クロスネットワークのデプロイが必要な場合は、以下のような厳格なセキュリティ対策を実装する必要があります：
-
-- **IPホワイトリストの設定**：`iptables`を使用するか、ハードウェアファイアウォール / ACL機能付きスイッチをデプロイして**IPホワイトリストルールを設定**し、他のすべてのIPアドレスからのアクセスを拒否します。
-- **前置認証**：リバースプロキシ（nginxなど）を設定し、**強力な前置認証を有効化**して、認証なしのアクセスをブロックします。
-- **ネットワーク分離**：可能であれば、エージェントと信頼できるデバイスを**同一の専用VLAN**に配置し、他のネットワークデバイスから隔離します。
-- **アップデートを継続的に確認**：DeerFlowのセキュリティ機能のアップデートを継続的にフォローしてください。
-
-## コントリビュート
-
-コントリビューションを歓迎します！開発環境のセットアップ、ワークフロー、ガイドラインについては[CONTRIBUTING.md](CONTRIBUTING.md)をご覧ください。
-
-回帰テストのカバレッジには、`backend/tests/`でのDockerサンドボックスモード検出とプロビジョナーkubeconfig-pathハンドリングテストが含まれます。
+コントリビューションを歓迎します！開発セットアップ、ワークフロー、ガイドラインについては [CONTRIBUTING.md](CONTRIBUTING.md) を参照。
 
 ## ライセンス
 
-このプロジェクトはオープンソースであり、[MITライセンス](./LICENSE)の下で提供されています。
+DeerFlow ファウンデーションプロジェクトは [MITライセンス](./LICENSE) の下でオープンソース。元のライセンステキストとすべての上流著作権通知は完全に保持。
 
-## 謝辞
+Nova固有の追加（Agent's Computer UI、スレッドごとのコンテナ分離、ウォッチドッグ、レシートおよび関連ツール）は **Ali Technologiesの专有** — [NOTICE.md](./NOTICE.md) を参照。
 
-DeerFlowはオープンソースコミュニティの素晴らしい成果の上に構築されています。DeerFlowを可能にしてくれたすべてのプロジェクトとコントリビューターに深く感謝いたします。まさに、巨人の肩の上に立っています。
+## 致謝
 
-以下のプロジェクトの貴重な貢献に心からの感謝を申し上げます：
+Nova は ByteDance の [DeerFlow](https://github.com/bytedance/deer-flow) とそのコミュニティの上に構築。Nova を可能にしているプロジェクトとコントリビューターに深く感謝——本当に、私たちは巨人の肩の上に立っています。
 
-- **[LangChain](https://github.com/langchain-ai/langchain)**：その優れたフレームワークがLLMのインタラクションとチェーンを支え、シームレスな統合と機能を実現しています。
-- **[LangGraph](https://github.com/langchain-ai/langgraph)**：マルチエージェントオーケストレーションへの革新的なアプローチが、DeerFlowの洗練されたワークフローの実現に大きく貢献しています。
-
-これらのプロジェクトはオープンソースコラボレーションの変革的な力を体現しており、その基盤の上に構築できることを誇りに思います。
-
-### 主要コントリビューター
-
-`DeerFlow`のコア著者に心からの感謝を捧げます。そのビジョン、情熱、献身がこのプロジェクトに命を吹き込みました：
-
-- **[Daniel Walnut](https://github.com/hetaoBackend/)**
-- **[Henry Li](https://github.com/magiccube/)**
-
-揺るぎないコミットメントと専門知識が、DeerFlowの成功の原動力です。この旅の先頭に立ってくださっていることを光栄に思います。
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=bytedance/deer-flow&type=Date)](https://star-history.com/#bytedance/deer-flow&Date)
+- **[DeerFlow](https://github.com/bytedance/deer-flow)**: Nova が構築されているスーパーエージェントハーネス。
+- **[LangChain](https://github.com/langchain-ai/langchain)**: LLM インタラクションとチェーンを駆動。
+- **[LangGraph](https://github.com/langchain-ai/langgraph)**: 複雑なマルチエージェントオーケストレーションを実現。

@@ -11,19 +11,19 @@
 module.exports = {
   apps: [
     {
-      name: "deerflow",
+      name: "nova",
       // Absolute path + interpreter:none so PM2 execs docker directly instead of
       // trying to require() it as a Node module.
       // Run via a wrapper shell script so DEER_FLOW_ROOT and cwd are set
       // explicitly before exec'ing docker compose. PM2's `env:` block isn't
       // reliably inherited by docker compose subprocesses — using a wrapper
       // makes the env deterministic regardless of PM2 version or fork mode.
-      script: "/home/jahanzaib/Desktop/nova/scripts/pm2-deerflow.sh",
+      script: `${require("path").resolve(__dirname, "scripts/pm2-deerflow.sh")}`,
       interpreter: "none",
       args: "",
-      cwd: "/home/jahanzaib/Desktop/nova",
+      cwd: __dirname,
       env: {
-        DEER_FLOW_ROOT: "/home/jahanzaib/Desktop/nova",
+        DEER_FLOW_ROOT: __dirname,
       },
       autorestart: true,
       // Boot is slow (~90s for compose + VRAM cold start); cap the backoff so
@@ -53,8 +53,8 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       restart_delay: 2000,
-      out_file: "/home/jahanzaib/.pm2/logs/llama-bridge-out.log",
-      error_file: "/home/jahanzaib/.pm2/logs/llama-bridge-error.log",
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/llama-bridge-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/llama-bridge-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
@@ -65,15 +65,15 @@ module.exports = {
       // so Nova's container reaches it at host.docker.internal:4000.
       // Watchdog probe P10_litellm auto-heals this app.
       name: "nova-litellm",
-      script: "/home/jahanzaib/Desktop/nova/scripts/pm2-litellm.sh",
+      script: `${require("path").resolve(__dirname, "scripts/pm2-litellm.sh")}`,
       interpreter: "none",
-      cwd: "/home/jahanzaib/Desktop/nova",
+      cwd: __dirname,
       autorestart: true,
       max_restarts: 10,
       restart_delay: 3000,
       kill_timeout: 8000,
-      out_file: "/home/jahanzaib/.pm2/logs/nova-litellm-out.log",
-      error_file: "/home/jahanzaib/.pm2/logs/nova-litellm-error.log",
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-litellm-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-litellm-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
@@ -83,15 +83,15 @@ module.exports = {
       // api/worker/plugin_daemon reach the nova-litellm proxy via
       // host.docker.internal:4000 (see dify/docker/docker-compose.override.yaml).
       name: "nova-dify",
-      script: "/home/jahanzaib/Desktop/dify/docker/pm2-dify.sh",
+      script: `${require("path").resolve(require("os").homedir(), "Desktop/dify/docker/pm2-dify.sh")}`,
       interpreter: "none",
-      cwd: "/home/jahanzaib/Desktop/dify/docker",
+      cwd: `${require("path").resolve(require("os").homedir(), "Desktop/dify/docker")}`,
       autorestart: true,
       max_restarts: 10,
       restart_delay: 5000,
       kill_timeout: 30000,
-      out_file: "/home/jahanzaib/.pm2/logs/nova-dify-out.log",
-      error_file: "/home/jahanzaib/.pm2/logs/nova-dify-error.log",
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-dify-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-dify-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
@@ -102,14 +102,14 @@ module.exports = {
       // auto-fix did not recover, yellow = something is masked (e.g.
       // upstream gateway cold).
       name: "nova-healthcheck",
-      script: "/home/jahanzaib/Desktop/nova/scripts/healthcheck-daemon.py",
+      script: `${require("path").resolve(__dirname, "scripts/healthcheck-daemon.py")}`,
       interpreter: "none",
       args: "--interval 30",
       autorestart: true,
       max_restarts: 5,
       restart_delay: 10000,
-      out_file: "/home/jahanzaib/.pm2/logs/nova-healthcheck-out.log",
-      error_file: "/home/jahanzaib/.pm2/logs/nova-healthcheck-error.log",
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-healthcheck-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-healthcheck-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
       // Generic — these env vars configure probe targets and the optional
       // binary-attestation probe. Operators can override per-deployment

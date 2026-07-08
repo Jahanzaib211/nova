@@ -1,10 +1,4 @@
-# Nova — The Agent's Computer
-
-> **Nova** est construit par Ali Technologies sur la base du projet open source [DeerFlow](https://github.com/bytedance/deer-flow). La licence MIT et les mentions de copyright d'origine sont intégralement conservées (voir [LICENSE](./LICENSE) et [NOTICE.md](./NOTICE.md)). La documentation ci-dessous est celle du projet DeerFlow en amont.
-
----
-
-# 🦌 DeerFlow - 2.0
+# Nova — L'Ordinateur de l'Agent
 
 [English](./README.md) | [中文](./README_zh.md) | [日本語](./README_ja.md) | Français | [Русский](./README_ru.md)
 
@@ -12,416 +6,187 @@
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-<a href="https://trendshift.io/repositories/14699" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14699" alt="bytedance%2Fdeer-flow | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-> Le 28 février 2026, DeerFlow a décroché la 🏆 1re place sur GitHub Trending suite au lancement de la version 2. Un immense merci à notre incroyable communauté — c'est grâce à vous ! 💪🔥
+**Nova** est un **agent informatique** full-stack qui recherche, code et crée. Il orchestre des **sous-agents**, de la **mémoire** et des **sandboxes par thread** pour accomplir presque n'importe quelle tâche — propulsé par des **skills extensibles** et une vue en direct du propre ordinateur de l'agent : terminal, éditeur, aperçu de navigateur et progression des tâches, le tout en temps réel.
 
-DeerFlow (**D**eep **E**xploration and **E**fficient **R**esearch **Flow**) est un **super agent harness** open source qui orchestre des **sub-agents**, de la **mémoire** et des **sandboxes** pour accomplir pratiquement n'importe quelle tâche — le tout propulsé par des **skills extensibles**.
+Nova est construit par **[Ali Technologies](https://www.alilabsx.com)** sur la base du framework open source [DeerFlow](https://github.com/bytedance/deer-flow). La licence MIT en amont et toutes les mentions de copyright originales sont conservées — voir [Licence](#licence) et [NOTICE.md](./NOTICE.md).
 
-https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
+> Dites bonjour : *"Je suis Nova, l'agent informatique."*
 
-> [!NOTE]
-> **DeerFlow 2.0 est une réécriture complète.** Il ne partage aucun code avec la v1. Si vous cherchez le framework Deep Research original, il est maintenu sur la [branche `1.x`](https://github.com/bytedance/deer-flow/tree/main-1.x) — les contributions y sont toujours les bienvenues. Le développement actif a migré vers la 2.0.
+![Espace Nova — l'agent construit une calculatrice de pourboire et l'aperçoit en direct dans l'onglet Navigateur de l'Agent's Computer](./docs/images/nova-workspace.png)
 
-## Site officiel
+## Ce que Nova ajoute à DeerFlow
 
-[<img width="2880" height="1600" alt="image" src="https://github.com/user-attachments/assets/a598c49f-3b2f-41ea-a052-05e21349188a" />](https://deerflow.tech)
+Nova est un refactoring full-stack de DeerFlow 2.0 — **+35 738 lignes sur 338 fichiers** (vérifié : `git diff --shortstat v2.0.0-rc1 HEAD`). Les ajouts principaux, tous construits pour Nova :
 
-Découvrez-en plus et regardez des **démos réelles** sur notre [**site officiel**](https://deerflow.tech).
+- **Agent's Computer** — panneau 6 onglets en direct (Terminal, Éditeur avec diff rouge/vert, Aperçu navigateur, Chronologie d'activité, Fichiers, Revue) diffusant en temps réel ce que l'agent fait.
+- **Boucle de vérification** — l'agent teste ses propres builds : Chromium headless auto-vérifie le serveur de dev en cours (erreurs console, détection de rendu vide, captures d'écran), déclenché automatiquement sur le serveur de dev prêt et sur les livrables HTML, avec un chemin visuel pour que le modèle *voie* son build.
+- **Revue de code déterministe** — un moteur de revue sans LLM produisant un verdict en langage clair pour les non-développeurs plus des statistiques et drapeaux de risque par fichier pour les développeurs.
+- **Middlewares d'auto-correction** — budgets d'itération imposés à l'exécution, détection de boucles mortes, vérification de quota prévol, décontamination des messages d'erreur, progression des tâches en direct.
+- **32 outils d'agent** — sessions shell, navigation/clic/saisie/eval navigateur, capture d'écran, scaffold, cycle de vie du serveur de dev, dev_verify, code_review, sauvegarde de skills, et plus.
+- **Recherche iGIN0** — client SearXNG renforcé avec retry, disjoncteur, cache LRU+TTL, routage TOR optionnel et piste d'audit de confidentialité.
+- **Gestion des modèles en temps réel** — ajoutez/commutez des modèles via l'API et l'interface de configuration sans toucher aux fichiers de config.
+- **Couche ops** — watchdog auto-réparation 11 sondes, cycle de vie Docker géré par PM2, persistance après redémarrage.
+- **Modèles locaux + gratuits via LiteLLM** — preset Ollama dans les paramètres et proxy LiteLLM géré par PM2 exposant quatre modèles cloud Ollama gratuits (MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B) aux côtés des fournisseurs payants.
+- **8 112 lignes de nouveaux tests** répartis dans 37 nouveaux fichiers de tests backend.
 
-## Coding Plan de ByteDance Volcengine
+DeerFlow upstream fournit le framework agent (sous-agents, mémoire, runtime LangGraph), le système de skills et les sandboxes Docker par thread — crédit au mérite. La cartographie complète et reproductible des attributions se trouve dans **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)**.
 
-<img width="4808" height="2400" alt="英文方舟" src="https://github.com/user-attachments/assets/2ecc7b9d-50be-4185-b1f7-5542d222fb2d" />
+## Fonctionne sur du calcul AMD
 
-- Nous recommandons fortement d'utiliser Doubao-Seed-2.0-Code, DeepSeek v3.2 et Kimi 2.5 pour exécuter DeerFlow
-- [En savoir plus](https://www.byteplus.com/en/activity/codingplan?utm_campaign=deer_flow&utm_content=deer_flow&utm_medium=devrel&utm_source=OWO&utm_term=deer_flow)
-- [Développeurs en Chine continentale, cliquez ici](https://www.volcengine.com/activity/codingplan?utm_campaign=deer_flow&utm_content=deer_flow&utm_medium=devrel&utm_source=OWO&utm_term=deer_flow)
+Nova fournit son inférence sur des **GPU AMD Instinct**, et en fait un choix de premier plan en un clic — construit pour le **Hackathon Développeur AMD (Act II)**.
 
-## InfoQuest
-
-DeerFlow intègre désormais le toolkit de recherche et de crawling intelligent développé par BytePlus — [InfoQuest (essai gratuit en ligne)](https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest)
-
-<a href="https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest" target="_blank">
-  <img
-    src="https://sf16-sg.tiktokcdn.com/obj/eden-sg/hubseh7bsbps/20251208-160108.png"   alt="InfoQuest_banner"
-  />
-</a>
-
----
+- **Deux chemins AMD, comme presets** dans Paramètres → Modèles : **Fireworks AI** (géré, servi sur AMD Instinct MI300X) et **Cloud Développeur AMD** (inférence Nova via **vLLM on ROCm**, `scripts/amd-serve-vllm.sh`). Ajouter du calcul AMD est de la configuration, pas du code.
+- **Utilisation vérifiable** — `GET /api/models/amd-usage` retourne un résumé machine-liable de l'utilisation AMD, et les modèles AMD affichent un badge **AMD**.
+- **Agent Track 1** — un framework batch Fireworks économe en tokens dans [`hackathon/track1/`](./hackathon/track1/) ; build et smoke-test avec `make hackathon-track1`.
+- Configuration complète + documentation calcul AMD : **[docs/AMD_INTEGRATION.md](./docs/AMD_INTEGRATION.md)**.
 
 ## Table des matières
 
-- [🦌 DeerFlow - 2.0](#-deerflow---20)
-  - [Site officiel](#site-officiel)
-  - [InfoQuest](#infoquest)
-  - [Table des matières](#table-des-matières)
-  - [Installation en une phrase pour un coding agent](#installation-en-une-phrase-pour-un-coding-agent)
+- [Nova — L'Ordinateur de l'Agent](#nova--lordinateur-de-lagent)
+  - [Table des matières](#table-des-matinées)
+  - [Configuration Agent en une ligne](#configuration-agent-en-une-ligne)
   - [Démarrage rapide](#démarrage-rapide)
     - [Configuration](#configuration)
-    - [Lancer l'application](#lancer-lapplication)
-      - [Option 1 : Docker (recommandé)](#option-1--docker-recommandé)
-      - [Option 2 : Développement local](#option-2--développement-local)
+    - [Exécution de l'application](#exécution-de-lapplication)
+      - [Taille de déploiement](#taille-de-déploiement)
+      - [Option 1 : Docker (Recommandé)](#option-1-docker-recommandé)
+      - [Option 2 : Développement local](#option-2-développement-local)
     - [Avancé](#avancé)
-      - [Mode Sandbox](#mode-sandbox)
+      - [Mode sandbox](#mode-sandbox)
       - [Serveur MCP](#serveur-mcp)
-      - [Canaux de messagerie](#canaux-de-messagerie)
+      - [Canaux IM](#canaux-im)
       - [Traçage LangSmith](#traçage-langsmith)
-  - [Du Deep Research au Super Agent Harness](#du-deep-research-au-super-agent-harness)
-  - [Fonctionnalités principales](#fonctionnalités-principales)
-    - [Skills et outils](#skills-et-outils)
-      - [Intégration Claude Code](#intégration-claude-code)
-    - [Sub-Agents](#sub-agents)
-    - [Sandbox et système de fichiers](#sandbox-et-système-de-fichiers)
-    - [Context Engineering](#context-engineering)
-    - [Mémoire à long terme](#mémoire-à-long-terme)
-  - [Modèles recommandés](#modèles-recommandés)
-  - [Client Python intégré](#client-python-intégré)
+      - [Traçage Langfuse](#traçage-langfuse)
+  - [De la Recherche Approfondie au Framework Super Agent](#de-la-recherche-approfondie-au-framework-super-agent)
+  - [Fonctionnalités Principales](#fonctionnalités-principales)
+    - [Skills et Outils](#skills-et-outils)
+    - [Sous-Agents](#sous-agents)
+    - [Sandbox et Système de Fichiers](#sandbox-et-système-de-fichiers)
+    - [Ingénierie du Contexte](#ingénierie-du-contexte)
+    - [Mémoire à Long Terme](#mémoire-à-long-terme)
+  - [Modèles Recommandés](#modèles-recommandés)
+  - [Client Python Intégré](#client-python-intégré)
   - [Documentation](#documentation)
-  - [⚠️ Avertissement de sécurité](#️-avertissement-de-sécurité)
-  - [Contribuer](#contribuer)
+  - [⚠️ Avis de Sécurité](#️-avis-de-sécurité)
+  - [Contribution](#contribution)
   - [Licence](#licence)
-  - [Remerciements](#remerciements)
-    - [Contributeurs principaux](#contributeurs-principaux)
-  - [Star History](#star-history)
 
-## Installation en une phrase pour un coding agent
+## Configuration Agent en une ligne
 
-Si vous utilisez Claude Code, Codex, Cursor, Windsurf ou un autre coding agent, vous pouvez simplement lui envoyer cette phrase :
+Si vous utilisez Claude Code, Codex, Cursor, Windsurf ou un autre agent de code, vous pouvez lui remettre les instructions de configuration en une phrase :
 
 ```text
-Aide-moi à cloner DeerFlow si nécessaire, puis à initialiser son environnement de développement local en suivant https://raw.githubusercontent.com/bytedance/deer-flow/main/Install.md
+Help me clone Nova if needed, then bootstrap it for local development by following https://raw.githubusercontent.com/Jahanzaib211/nova/main/docs/Install.md
 ```
 
-Ce prompt est destiné aux coding agents. Il leur demande de cloner le dépôt si nécessaire, de privilégier Docker quand il est disponible, puis de s'arrêter avec la commande exacte pour lancer DeerFlow et la liste des configurations encore manquantes.
+Ce prompt est destiné aux agents de code. Il dit à l'agent de cloner le dépôt si nécessaire, de choisir Docker quand disponible, et de s'arrêter avec la commande exacte suivante plus toute configuration manquante.
 
 ## Démarrage rapide
 
 ### Configuration
 
-1. **Cloner le dépôt DeerFlow**
+1. **Cloner le dépôt Nova**
 
    ```bash
-   git clone https://github.com/bytedance/deer-flow.git
-   cd deer-flow
+   git clone https://github.com/Jahanzaib211/nova.git
+   cd nova
    ```
 
-2. **Générer les fichiers de configuration locaux**
+2. **Lancer l'assistant de configuration**
 
-   Depuis le répertoire racine du projet (`deer-flow/`), exécutez :
+   Depuis la racine du projet (`nova/`) :
 
    ```bash
-   make config
+   make setup
    ```
 
-   Cette commande crée les fichiers de configuration locaux à partir des templates fournis.
+   Cela lance un assistant interactif qui vous guide dans le choix du fournisseur LLM, de la recherche web optionnelle et des préférences d'exécution/sécurité. Il génère un `config.yaml` minimal et écrit vos clés dans `.env`. Environ 2 minutes.
 
-3. **Configurer le(s) modèle(s) de votre choix**
+   Lancez `make doctor` à tout moment pour vérifier votre installation et obtenir des conseils de correction.
 
-   Éditez `config.yaml` et définissez au moins un modèle :
+### Exécution de l'application
 
-   ```yaml
-   models:
-     - name: gpt-4                       # Internal identifier
-       display_name: GPT-4               # Human-readable name
-       use: langchain_openai:ChatOpenAI  # LangChain class path
-       model: gpt-4                      # Model identifier for API
-       api_key: $OPENAI_API_KEY          # API key (recommended: use env var)
-       max_tokens: 4096                  # Maximum tokens per request
-       temperature: 0.7                  # Sampling temperature
+#### Taille de déploiement
 
-     - name: openrouter-gemini-2.5-flash
-       display_name: Gemini 2.5 Flash (OpenRouter)
-       use: langchain_openai:ChatOpenAI
-       model: google/gemini-2.5-flash-preview
-       api_key: $OPENAI_API_KEY          # OpenRouter still uses the OpenAI-compatible field name here
-       base_url: https://openrouter.ai/api/v1
+| Cible de déploiement | Point de départ | Recommandé | Notes |
+|---------|-----------|------------|-------|
+| Évaluation locale / `make dev` | 4 vCPU, 8 Go RAM, 20 Go SSD | 8 vCPU, 16 Go RAM | Pour un développeur ou une session légère |
+| Développement Docker / `make docker-start` | 4 vCPU, 8 Go RAM, 25 Go SSD | 8 vCPU, 16 Go RAM | Les builds d'images et montages ont besoin de plus d'espace |
+| Serveur longue durée / `make up` | 8 vCPU, 16 Go RAM, 40 Go SSD | 16 vCPU, 32 Go RAM | Préféré pour l'usage partagé ou les charges lourdes |
 
-     - name: gpt-5-responses
-       display_name: GPT-5 (Responses API)
-       use: langchain_openai:ChatOpenAI
-       model: gpt-5
-       api_key: $OPENAI_API_KEY
-       use_responses_api: true
-       output_version: responses/v1
-   ```
+#### Option 1 : Docker (Recommandé)
 
-   OpenRouter et les passerelles compatibles OpenAI similaires doivent être configurés avec `langchain_openai:ChatOpenAI` et `base_url`. Si vous préférez utiliser un nom de variable d'environnement propre au fournisseur, pointez `api_key` vers cette variable explicitement (par exemple `api_key: $OPENROUTER_API_KEY`).
-
-   Pour router les modèles OpenAI via `/v1/responses`, continuez d'utiliser `langchain_openai:ChatOpenAI` et définissez `use_responses_api: true` avec `output_version: responses/v1`.
-
-   Exemples de providers basés sur un CLI :
-
-   ```yaml
-   models:
-     - name: gpt-5.4
-       display_name: GPT-5.4 (Codex CLI)
-       use: deerflow.models.openai_codex_provider:CodexChatModel
-       model: gpt-5.4
-       supports_thinking: true
-       supports_reasoning_effort: true
-
-     - name: claude-sonnet-4.6
-       display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-       use: deerflow.models.claude_provider:ClaudeChatModel
-       model: claude-sonnet-4-6
-       max_tokens: 4096
-       supports_thinking: true
-   ```
-
-   - Codex CLI lit `~/.codex/auth.json`
-   - L'endpoint Responses de Codex rejette actuellement `max_tokens` et `max_output_tokens`, donc `CodexChatModel` n'expose pas de limite de tokens par requête
-   - Claude Code accepte `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`, `CLAUDE_CODE_CREDENTIALS_PATH`, ou en clair `~/.claude/.credentials.json`
-   - Sur macOS, DeerFlow ne sonde pas le Keychain automatiquement. Exportez l'auth Claude Code explicitement si nécessaire :
-
-   ```bash
-   eval "$(python3 scripts/export_claude_code_oauth.py --print-export)"
-   ```
-
-4. **Définir les clés API pour le(s) modèle(s) configuré(s)**
-
-   Choisissez l'une des méthodes suivantes :
-
-- Option A : Éditer le fichier `.env` à la racine du projet (recommandé)
-
-
-   ```bash
-   TAVILY_API_KEY=your-tavily-api-key
-   OPENAI_API_KEY=your-openai-api-key
-   # OpenRouter also uses OPENAI_API_KEY when your config uses langchain_openai:ChatOpenAI + base_url.
-   # Add other provider keys as needed
-   INFOQUEST_API_KEY=your-infoquest-api-key
-   ```
-
-- Option B : Exporter les variables d'environnement dans votre shell
-
-   ```bash
-   export OPENAI_API_KEY=your-openai-api-key
-   ```
-
-   Pour les providers basés sur un CLI :
-   - Codex CLI : `~/.codex/auth.json`
-   - Claude Code OAuth : handoff explicite via env/fichier ou `~/.claude/.credentials.json`
-
-- Option C : Éditer `config.yaml` directement (non recommandé en production)
-
-   ```yaml
-   models:
-     - name: gpt-4
-       api_key: your-actual-api-key-here  # Replace placeholder
-   ```
-
-### Lancer l'application
-
-#### Option 1 : Docker (recommandé)
-
-**Développement** (hot-reload, montage des sources) :
+**Développement** (rechargement à chaud, montages source) :
 
 ```bash
-make docker-init    # Pull sandbox image (only once or when image updates)
-make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
+make docker-init    # Télécharger l'image sandbox (une seule fois ou lors de la mise à jour)
+make docker-start   # Démarrer les services (détection automatique du mode sandbox)
 ```
-
-`make docker-start` ne lance `provisioner` que si `config.yaml` utilise le mode provisioner (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` avec `provisioner_url`).
-Les processus backend récupèrent automatiquement les changements dans `config.yaml` au prochain accès à la configuration, donc les mises à jour de métadonnées des modèles ne nécessitent pas de redémarrage manuel en développement.
 
 > [!TIP]
-> Sous Linux, si les commandes Docker échouent avec `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`, ajoutez votre utilisateur au groupe `docker` et reconnectez-vous avant de réessayer. Voir [CONTRIBUTING.md](CONTRIBUTING.md#linux-docker-daemon-permission-denied) pour la solution complète.
+> Sur Linux, si les commandes Docker échouent avec `permission denied`, ajoutez votre utilisateur au groupe `docker` et re-connectez-vous. Voir [CONTRIBUTING.md](CONTRIBUTING.md#linux-docker-daemon-permission-denied) pour la correction complète.
 
-**Production** (build des images en local, montage de la config et des données) :
+**Production** (build local des images, montage de la config et des données) :
 
 ```bash
-make up     # Build images and start all production services
-make down   # Stop and remove containers
+make up     # Construire les images et démarrer tous les services
+make down   # Arrêter et supprimer les conteneurs
 ```
-
-> [!NOTE]
-> Le runtime d'agent s'exécute actuellement dans la Gateway. nginx réécrit `/api/langgraph/*` vers l'API compatible LangGraph servie par la Gateway.
 
 Accès : http://localhost:2026
 
-Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour le guide complet de développement avec Docker.
-
 #### Option 2 : Développement local
-
-Si vous préférez lancer les services en local :
-
-Prérequis : complétez d'abord les étapes de « Configuration » ci-dessus (`make config` et clés API des modèles). `make dev` nécessite un fichier de configuration valide (par défaut `config.yaml` à la racine du projet ; modifiable via `DEER_FLOW_CONFIG_PATH`).
 
 1. **Vérifier les prérequis** :
    ```bash
-   make check  # Verifies Node.js 22+, pnpm, uv, nginx
+   make check  # Vérifie Node.js 22+, pnpm, uv, nginx
    ```
 
 2. **Installer les dépendances** :
    ```bash
-   make install  # Install backend + frontend dependencies
+   make install  # Installe les dépendances backend + frontend + hooks pre-commit
    ```
 
-3. **(Optionnel) Pré-télécharger l'image sandbox** :
-   ```bash
-   # Recommended if using Docker/Container-based sandbox
-   make setup-sandbox
-   ```
-
-4. **Démarrer les services** :
+3. **Démarrer les services** :
    ```bash
    make dev
    ```
 
-5. **Accès** : http://localhost:2026
+4. **Accès** : http://localhost:2026
 
 ### Avancé
-#### Mode Sandbox
 
-DeerFlow supporte plusieurs modes d'exécution sandbox :
-- **Exécution locale** (exécute le code sandbox directement sur la machine hôte)
-- **Exécution Docker** (exécute le code sandbox dans des conteneurs Docker isolés)
-- **Exécution Docker avec Kubernetes** (exécute le code sandbox dans des pods Kubernetes via le service provisioner)
+#### Mode sandbox
 
-En développement Docker, le démarrage des services suit le mode sandbox défini dans `config.yaml`. En mode Local/Docker, `provisioner` n'est pas démarré.
+Nova supporte plusieurs modes d'exécution sandbox :
+- **Exécution locale** (code exécuté directement sur l'hôte)
+- **Exécution Docker** (code exécuté dans des conteneurs Docker isolés)
+- **Docker + Kubernetes** (code exécuté dans des Pods via le service provisioner)
 
-Voir le [Guide de configuration Sandbox](backend/docs/CONFIGURATION.md#sandbox) pour configurer le mode de votre choix.
+Voir le [Guide de Configuration Sandbox](backend/docs/CONFIGURATION.md#sandbox) pour configurer votre mode préféré.
 
 #### Serveur MCP
 
-DeerFlow supporte des serveurs MCP et des skills configurables pour étendre ses capacités.
-Pour les serveurs MCP HTTP/SSE, les flux de tokens OAuth sont supportés (`client_credentials`, `refresh_token`).
-Voir le [Guide MCP Server](backend/docs/MCP_SERVER.md) pour les instructions détaillées.
+Nova supporte des serveurs MCP et des skills configurables pour étendre ses capacités. Les serveurs MCP HTTP/SSE supportent les flux OAuth (`client_credentials`, `refresh_token`). Voir le [Guide Serveur MCP](backend/docs/MCP_SERVER.md) pour les instructions détaillées.
 
-#### Canaux de messagerie
+#### Canaux IM
 
-DeerFlow peut recevoir des tâches depuis des applications de messagerie. Les canaux démarrent automatiquement une fois configurés — aucune IP publique n'est requise.
+Nova supporte la réception de tâches depuis des applications de messagerie. Les canaux démarrent automatiquement quand configurés — aucune IP publique requise.
 
 | Canal | Transport | Difficulté |
 |---------|-----------|------------|
 | Telegram | Bot API (long-polling) | Facile |
-| Slack | Socket Mode | Modérée |
-| Feishu / Lark | WebSocket | Modérée |
-| DingTalk | Stream Push (WebSocket) | Modérée |
+| Slack | Socket Mode | Modéré |
+| Feishu / Lark | WebSocket | Modéré |
+| WeChat | Tencent iLink (long-polling) | Modéré |
+| WeCom | WebSocket | Modéré |
+| DingTalk | Stream Push (WebSocket) | Modéré |
 
-**Configuration dans `config.yaml` :**
-
-```yaml
-channels:
-  # LangGraph-compatible Gateway API base URL (default: http://localhost:8001/api)
-  langgraph_url: http://localhost:8001/api
-  # Gateway API URL (default: http://localhost:8001)
-  gateway_url: http://localhost:8001
-
-  # Optional: global session defaults for all mobile channels
-  session:
-    assistant_id: lead_agent
-    config:
-      recursion_limit: 100
-    context:
-      thinking_enabled: true
-      is_plan_mode: false
-      subagent_enabled: false
-
-  feishu:
-    enabled: true
-    app_id: $FEISHU_APP_ID
-    app_secret: $FEISHU_APP_SECRET
-    # domain: https://open.feishu.cn       # China (default)
-    # domain: https://open.larksuite.com   # International
-
-  slack:
-    enabled: true
-    bot_token: $SLACK_BOT_TOKEN     # xoxb-...
-    app_token: $SLACK_APP_TOKEN     # xapp-... (Socket Mode)
-    allowed_users: []               # empty = allow all
-
-  telegram:
-    enabled: true
-    bot_token: $TELEGRAM_BOT_TOKEN
-    allowed_users: []               # empty = allow all
-
-    # Optional: per-channel / per-user session settings
-    session:
-      assistant_id: mobile_agent
-      context:
-        thinking_enabled: false
-      users:
-        "123456789":
-          assistant_id: vip_agent
-          config:
-            recursion_limit: 150
-          context:
-            thinking_enabled: true
-            subagent_enabled: true
-
-  dingtalk:
-    enabled: true
-    client_id: $DINGTALK_CLIENT_ID             # ClientId depuis DingTalk Open Platform
-    client_secret: $DINGTALK_CLIENT_SECRET     # ClientSecret depuis DingTalk Open Platform
-    allowed_users: []                          # vide = tout le monde autorisé
-    card_template_id: ""                       # Optionnel : ID de modèle AI Card pour l'effet machine à écrire en streaming
-```
-
-Définissez les clés API correspondantes dans votre fichier `.env` :
-
-```bash
-# Telegram
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
-
-# Slack
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-
-# Feishu / Lark
-FEISHU_APP_ID=cli_xxxx
-FEISHU_APP_SECRET=your_app_secret
-
-# DingTalk
-DINGTALK_CLIENT_ID=your_client_id
-DINGTALK_CLIENT_SECRET=your_client_secret
-```
-
-**Configuration Telegram**
-
-1. Ouvrez une conversation avec [@BotFather](https://t.me/BotFather), envoyez `/newbot`, et copiez le token HTTP API.
-2. Définissez `TELEGRAM_BOT_TOKEN` dans `.env` et activez le canal dans `config.yaml`.
-
-**Configuration Slack**
-
-1. Créez une Slack App sur [api.slack.com/apps](https://api.slack.com/apps) → Create New App → From scratch.
-2. Dans **OAuth & Permissions**, ajoutez les Bot Token Scopes : `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`, `files:write`.
-3. Activez le **Socket Mode** → générez un App-Level Token (`xapp-…`) avec le scope `connections:write`.
-4. Dans **Event Subscriptions**, abonnez-vous aux bot events : `app_mention`, `message.im`.
-5. Définissez `SLACK_BOT_TOKEN` et `SLACK_APP_TOKEN` dans `.env` et activez le canal dans `config.yaml`.
-
-**Configuration Feishu / Lark**
-
-1. Créez une application sur [Feishu Open Platform](https://open.feishu.cn/) → activez la capacité **Bot**.
-2. Ajoutez les permissions : `im:message`, `im:message.p2p_msg:readonly`, `im:resource`.
-3. Dans **Events**, abonnez-vous à `im.message.receive_v1` et sélectionnez le mode **Long Connection**.
-4. Copiez l'App ID et l'App Secret. Définissez `FEISHU_APP_ID` et `FEISHU_APP_SECRET` dans `.env` et activez le canal dans `config.yaml`.
-
-**Configuration DingTalk**
-
-1. Créez une application sur [DingTalk Open Platform](https://open.dingtalk.com/) et activez la capacité **Robot**.
-2. Dans la page de configuration du robot, définissez le mode de réception des messages sur **Stream**.
-3. Copiez le `Client ID` et le `Client Secret`. Définissez `DINGTALK_CLIENT_ID` et `DINGTALK_CLIENT_SECRET` dans `.env` et activez le canal dans `config.yaml`.
-4. *(Optionnel)* Pour activer les réponses en streaming AI Card (effet machine à écrire), créez un modèle **AI Card** sur la [plateforme de cartes DingTalk](https://open.dingtalk.com/document/dingstart/typewriter-effect-streaming-ai-card), puis définissez `card_template_id` dans `config.yaml` avec l'ID du modèle. Vous devez également demander les permissions `Card.Streaming.Write` et `Card.Instance.Write`.
-
-**Commandes**
-
-Une fois un canal connecté, vous pouvez interagir avec DeerFlow directement depuis le chat :
-
-| Commande | Description |
-|---------|-------------|
-| `/new` | Démarrer une nouvelle conversation |
-| `/status` | Afficher les infos du thread en cours |
-| `/models` | Lister les modèles disponibles |
-| `/memory` | Consulter la mémoire |
-| `/help` | Afficher l'aide |
-
-> Les messages sans préfixe de commande sont traités comme du chat classique — DeerFlow crée un thread et répond de manière conversationnelle.
+Configurez dans `config.yaml` et définissez les clés API correspondantes dans `.env`.
 
 #### Traçage LangSmith
 
-DeerFlow intègre nativement [LangSmith](https://smith.langchain.com) pour l'observabilité. Une fois activé, tous les appels LLM, les exécutions d'agents et les exécutions d'outils sont tracés et visibles dans le tableau de bord LangSmith.
-
-Ajoutez les lignes suivantes à votre fichier `.env` :
+Nova intègre [LangSmith](https://smith.langchain.com). Quand activé, tous les appels LLM, exécutions d'agents et exécutions d'outils sont tracés et visibles dans le tableau de bord LangSmith.
 
 ```bash
 LANGSMITH_TRACING=true
@@ -430,128 +195,85 @@ LANGSMITH_API_KEY=lsv2_pt_xxxxxxxxxxxxxxxx
 LANGSMITH_PROJECT=xxx
 ```
 
-Pour les déploiements Docker, le traçage est désactivé par défaut. Définissez `LANGSMITH_TRACING=true` et `LANGSMITH_API_KEY` dans votre `.env` pour l'activer.
+#### Traçage Langfuse
 
-## Du Deep Research au Super Agent Harness
-
-DeerFlow a démarré comme un framework de Deep Research — et la communauté s'en est emparée. Depuis le lancement, les développeurs l'ont poussé bien au-delà de la recherche : construction de pipelines de données, génération de présentations, mise en place de dashboards, automatisation de workflows de contenu. Des usages qu'on n'avait jamais anticipés.
-
-Ça nous a révélé quelque chose d'important : DeerFlow n'était pas qu'un simple outil de recherche. C'était un **harness** — un runtime qui donne aux agents l'infrastructure nécessaire pour vraiment accomplir du travail.
-
-On l'a donc reconstruit de zéro.
-
-DeerFlow 2.0 n'est plus un framework à assembler soi-même. C'est un super agent harness — clé en main et entièrement extensible. Construit sur LangGraph et LangChain, il embarque tout ce dont un agent a besoin out of the box : un système de fichiers, de la mémoire, des skills, une exécution sandboxée, et la capacité de planifier et de lancer des sub-agents pour les tâches complexes et multi-étapes.
-
-Utilisez-le tel quel. Ou démontez-le et faites-en le vôtre.
-
-## Fonctionnalités principales
-
-### Skills et outils
-
-Les skills sont ce qui permet à DeerFlow de faire *pratiquement n'importe quoi*.
-
-Un Agent Skill standard est un module de capacité structuré — un fichier Markdown qui définit un workflow, des bonnes pratiques et des références vers des ressources associées. DeerFlow est livré avec des skills intégrés pour la recherche, la génération de rapports, la création de présentations, les pages web, la génération d'images et de vidéos, et bien plus. Mais la vraie force réside dans l'extensibilité : ajoutez vos propres skills, remplacez ceux fournis, ou combinez-les en workflows composites.
-
-Les skills sont chargés progressivement — uniquement quand la tâche le nécessite, pas tous en même temps. Ça permet de garder la fenêtre de contexte légère et de bien fonctionner même avec des modèles sensibles au nombre de tokens.
-
-Quand vous installez des archives `.skill` via le Gateway, DeerFlow accepte les métadonnées frontmatter optionnelles standard comme `version`, `author` et `compatibility`, plutôt que de rejeter des skills externes par ailleurs valides.
-
-Les outils suivent la même philosophie. DeerFlow est livré avec un ensemble d'outils de base — recherche web, fetch de pages web, opérations sur les fichiers, exécution bash — et supporte les outils custom via des serveurs MCP et des fonctions Python. Remplacez n'importe quoi. Ajoutez n'importe quoi.
-
-Les suggestions de suivi générées par le Gateway normalisent désormais aussi bien la sortie texte brut du modèle que le contenu riche au format bloc/liste avant de parser la réponse en tableau JSON, de sorte que les wrappers de contenu propres à chaque provider ne suppriment plus silencieusement les suggestions.
-
-```
-# Paths inside the sandbox container
-/mnt/skills/public
-├── research/SKILL.md
-├── report-generation/SKILL.md
-├── slide-creation/SKILL.md
-├── web-page/SKILL.md
-└── image-generation/SKILL.md
-
-/mnt/skills/custom
-└── your-custom-skill/SKILL.md      ← yours
-```
-
-#### Intégration Claude Code
-
-Le skill `claude-to-deerflow` vous permet d'interagir avec une instance DeerFlow en cours d'exécution directement depuis [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Envoyez des tâches de recherche, vérifiez le statut, gérez les threads — le tout sans quitter le terminal.
-
-**Installer le skill** :
+Nova supporte également l'observabilité [Langfuse](https://langfuse.com).
 
 ```bash
-npx skills add https://github.com/bytedance/deer-flow --skill claude-to-deerflow
+LANGFUSE_TRACING=true
+LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxxxxxxxxxx
+LANGFUSE_SECRET_KEY=sk-lf-xxxxxxxxxxxxxxxx
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
-Assurez-vous ensuite que DeerFlow tourne (par défaut sur `http://localhost:2026`) et utilisez la commande `/claude-to-deerflow` dans Claude Code.
+## De la Recherche Approfondie au Framework Super Agent
 
-**Ce que vous pouvez faire** :
-- Envoyer des messages à DeerFlow et recevoir des réponses en streaming
-- Choisir le mode d'exécution : flash (rapide), standard, pro (planification), ultra (sub-agents)
-- Vérifier la santé de DeerFlow, lister les modèles/skills/agents
-- Gérer les threads et l'historique des conversations
-- Upload des fichiers pour analyse
+Nova a commencé comme un framework de recherche approfondie — et la communauté l'a poussé plus loin. Les développeurs l'ont utilisé pour construire des pipelines de données, générer des présentations, créer des tableaux de bord, automatiser des flux de contenu. Nous ne l'avions pas anticipé.
 
-**Variables d'environnement** (optionnel, pour des endpoints custom) :
+Cela nous a dit quelque chose d'important : Nova n'était pas seulement un outil de recherche. C'était un **framework** — un runtime qui donne aux agents l'infrastructure pour accomplir le travail.
 
-```bash
-DEERFLOW_URL=http://localhost:2026            # Unified proxy base URL
-DEERFLOW_GATEWAY_URL=http://localhost:2026    # Gateway API
-DEERFLOW_LANGGRAPH_URL=http://localhost:2026/api/langgraph  # LangGraph API
-```
+Donc nous l'avons reconstruit de zéro.
 
-Voir [`skills/public/claude-to-deerflow/SKILL.md`](skills/public/claude-to-deerflow/SKILL.md) pour la référence API complète.
+Nova 2.0 n'est plus un framework à assembler. C'est un super agent framework — batteries incluses, entièrement extensible. Construit sur LangGraph et LangChain, il fournit tout ce dont un agent a besoin dès le départ : un système de fichiers, de la mémoire, des skills, une exécution sandbox-aware, et la capacité de planifier et de générer des sous-agents pour des tâches complexes multi-étapes.
 
-### Sub-Agents
+Utilisez-le tel quel. Ou déconstruisez-le et personnalisez-le.
 
-Les tâches complexes tiennent rarement en une seule passe. DeerFlow les décompose.
+## Fonctionnalités Principales
 
-L'agent principal peut lancer des sub-agents à la volée — chacun avec son propre contexte délimité, ses outils et ses conditions d'arrêt. Les sub-agents s'exécutent en parallèle quand c'est possible, remontent des résultats structurés, et l'agent principal synthétise le tout en une sortie cohérente.
+### Skills et Outils
 
-C'est comme ça que DeerFlow gère les tâches qui prennent de quelques minutes à plusieurs heures : une tâche de recherche peut se déployer en une dizaine de sub-agents, chacun explorant un angle différent, puis converger vers un seul rapport — ou un site web — ou un jeu de slides avec des visuels générés. Un seul harness, de nombreuses mains.
+Les skills sont ce qui permet à Nova de faire *presque tout*.
 
-### Sandbox et système de fichiers
+Un skill standard d'agent est un module de capacité structuré — un fichier Markdown qui définit un workflow, des meilleures pratiques et des références à des ressources de support. Nova ship avec des skills intégrés pour la recherche, la génération de rapports, la création de slides, les pages web, la génération d'images et de vidéos, et plus. Mais le vrai pouvoir est l'extensibilité : ajoutez vos propres skills, remplacez les intégrés, ou combinez-les en workflows composites.
 
-DeerFlow ne se contente pas de *parler* de faire les choses. Il dispose de son propre ordinateur.
+Les skills sont chargés progressivement — uniquement quand la tâche en a besoin, pas tous en une fois. Cela garde la fenêtre de contexte légère et fait fonctionner Nova même avec des modèles sensibles aux tokens.
 
-Chaque tâche s'exécute dans un conteneur Docker isolé avec un système de fichiers complet — skills, workspace, uploads, outputs. L'agent lit, écrit et édite des fichiers. Il exécute des commandes bash et du code. Il visualise des images. Le tout sandboxé, le tout auditable, zéro contamination entre les sessions.
+Les outils suivent la même philosophie. Nova ship avec un ensemble d'outils de base — recherche web, fetch web, opérations fichiers, exécution bash — et supporte les outils personnalisés via les serveurs MCP et les fonctions Python. Remplacez tout. Ajoutez tout.
 
-C'est la différence entre un chatbot avec accès à des outils et un agent doté d'un véritable environnement d'exécution.
+### Sous-Agents
 
-```
-# Paths inside the sandbox container
-/mnt/user-data/
-├── uploads/          ← your files
-├── workspace/        ← agents' working directory
-└── outputs/          ← final deliverables
-```
+Les tâches complexes tiennent rarement en un seul passage. Nova les décompose.
 
-### Context Engineering
+L'agent principal peut générer des sous-agents à la volée — chacun avec son propre contexte, outils et conditions de terminaison. Les sous-agents s'exécutent en parallèle quand possible, retournent des résultats structurés, et l'agent principal synthétise tout en une sortie cohérente.
 
-**Contexte isolé des Sub-Agents** : chaque sub-agent s'exécute dans son propre contexte isolé. Il ne peut voir ni le contexte de l'agent principal, ni celui des autres sub-agents. L'objectif est de garantir que chaque sub-agent reste concentré sur sa tâche sans être parasité par des informations non pertinentes.
+C'est comme Nova gère les tâches de plusieurs minutes à plusieurs heures : une tâche de recherche peut se disperser en une douzaine de sous-agents, chacun explorant un angle différent, puis converger en un seul rapport — ou un site web — ou une présentation avec des visuels générés. Un agent, plusieurs mains.
 
-**Résumé** : au sein d'une session, DeerFlow gère le contexte de manière agressive — en résumant les sous-tâches terminées, en déchargeant les résultats intermédiaires vers le système de fichiers, en compressant ce qui n'est plus immédiatement pertinent. Ça lui permet de rester efficace sur des tâches longues et multi-étapes sans faire exploser la fenêtre de contexte.
+### Sandbox et Système de Fichiers
 
-### Mémoire à long terme
+Nova ne se contente pas de *parler* de faire des choses. Il a son propre ordinateur.
 
-La plupart des agents oublient tout dès qu'une conversation se termine. DeerFlow, lui, se souvient.
+Chaque tâche obtient son propre environnement d'exécution avec une vue complète du système de fichiers — skills, espace de travail, uploads, livrables. L'agent lit, écrit et édite des fichiers. Il peut voir des images et, quand configuré en toute sécurité, exécuter des commandes shell.
 
-D'une session à l'autre, DeerFlow construit une mémoire persistante de votre profil, de vos préférences et de vos connaissances accumulées. Plus vous l'utilisez, mieux il vous connaît — votre style d'écriture, votre stack technique, vos workflows récurrents. La mémoire est stockée localement et reste sous votre contrôle.
+Avec `AioSandboxProvider`, l'exécution shell se fait dans des conteneurs isolés. Avec `LocalSandboxProvider`, les outils fichiers mappent toujours vers des répertoires par thread sur l'hôte, mais le `bash` hôte est désactivé par défaut car ce n'est pas un frontière d'isolamento sécurisée.
 
-Les mises à jour de la mémoire ignorent désormais les entrées de faits en double au moment de l'application, de sorte que les préférences et le contexte répétés ne s'accumulent plus indéfiniment entre les sessions.
+C'est la différence entre un chatbot avec accès aux outils et un agent avec un véritable environnement d'exécution.
 
-## Modèles recommandés
+### Ingénierie du Contexte
 
-DeerFlow est agnostique en termes de modèle — il fonctionne avec n'importe quel LLM implémentant l'API compatible OpenAI. Cela dit, il offre de meilleures performances avec des modèles qui supportent :
+**Contexte Sous-Agent Isolé** : Chaque sous-agent s'exécute dans son propre contexte isolé. Cela signifie que le sous-agent ne peut pas voir le contexte de l'agent principal ou des autres sous-agents.
 
-- **De longues fenêtres de contexte** (100k+ tokens) pour la recherche approfondie et les tâches multi-étapes
-- **Des capacités de raisonnement** pour la planification adaptative et la décomposition de tâches complexes
-- **Des entrées multimodales** pour la compréhension d'images et de vidéos
-- **Un usage fiable des outils (tool use)** pour des appels de fonctions et des sorties structurées fiables
+**Résumé** : Dans une session, Nova gère agressivement le contexte — résumant les sous-tâches terminées, déchargeant les résultats intermédiaires sur le filesystem, compressant ce qui n'est plus immédiatement pertinent. Cela lui permet de rester affûté sur de longues tâches multi-étapes sans exploser la fenêtre de contexte.
 
-## Client Python intégré
+**Récupération Stricte des Appels d'Outils** : Quand un fournisseur ou middleware interrompt une boucle d'appels d'outils, Nova dépouille maintenant les métadonnées brutes de niveau fournisseur sur les messages assistant à arrêt forcé et injecte des résultats d'outils placeholder pour les appels en attente avant la prochaine invocation du modèle.
 
-DeerFlow peut être utilisé comme bibliothèque Python intégrée sans lancer l'ensemble des services HTTP. Le `DeerFlowClient` fournit un accès direct in-process à toutes les capacités d'agent et de Gateway, en retournant les mêmes schémas de réponse que l'API HTTP Gateway. Le HTTP Gateway expose également `DELETE /api/threads/{thread_id}` pour supprimer les données de thread locales gérées par DeerFlow après la suppression du thread LangGraph :
+### Mémoire à Long Terme
+
+La plupart des agents oublient tout à la fin d'une conversation. Nova se souvient.
+
+Au fil des sessions, Nova construit une mémoire persistante de votre profil, préférences et connaissances accumulées. Plus vous l'utilisez, mieux il vous connaît — votre style d'écriture, votre stack technique, vos workflows récurrents. La mémoire est stockée localement et reste sous votre contrôle.
+
+## Modèles Recommandés
+
+Nova est agnostique au modèle — il fonctionne avec n'importe quel LLM implémentant l'API compatible OpenAI. Cela dit, il performe mieux avec les modèles qui supportent :
+
+- **Fenêtres de contexte longues** (100k+ tokens) pour la recherche approfondie et les tâches multi-étapes
+- **Capacités de raisonnement** pour la planification adaptative et la décomposition complexe
+- **Entrées multimodales** pour la compréhension d'images et de vidéos
+- **Fort usage des outils** pour les appels de fonctions fiables et les sorties structurées
+
+## Client Python Intégré
+
+Nova peut être utilisé comme bibliothèque Python intégrée sans exécuter les services HTTP complets. Le `DeerFlowClient` fournit un accès direct en-processus à toutes les capacités agent et Gateway, retournant les mêmes schémas de réponse que l'API HTTP Gateway :
 
 ```python
 from deerflow.client import DeerFlowClient
@@ -559,77 +281,53 @@ from deerflow.client import DeerFlowClient
 client = DeerFlowClient()
 
 # Chat
-response = client.chat("Analyze this paper for me", thread_id="my-thread")
+response = client.chat("Analysez cet article pour moi", thread_id="my-thread")
 
-# Streaming (LangGraph SSE protocol: values, messages-tuple, end)
+# Streaming (protocole SSE LangGraph : values, messages-tuple, end)
 for event in client.stream("hello"):
     if event.type == "messages-tuple" and event.data.get("type") == "ai":
         print(event.data["content"])
 
-# Configuration & management — returns Gateway-aligned dicts
+# Configuration et gestion — retourne des dicts alignés Gateway
 models = client.list_models()        # {"models": [...]}
 skills = client.list_skills()        # {"skills": [...]}
 client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-Toutes les méthodes retournant des dicts sont validées en CI contre les modèles de réponse Pydantic du Gateway (`TestGatewayConformance`), garantissant que le client intégré reste synchronisé avec les schémas de l'API HTTP. Voir `backend/packages/harness/deerflow/client.py` pour la documentation API complète.
+Voir `backend/packages/harness/deerflow/client.py` pour la documentation API complète.
 
 ## Documentation
 
-- [Guide de contribution](CONTRIBUTING.md) - Mise en place de l'environnement de développement et workflow
-- [Guide de configuration](backend/docs/CONFIGURATION.md) - Instructions d'installation et de configuration
-- [Vue d'ensemble de l'architecture](backend/CLAUDE.md) - Détails de l'architecture technique
-- [Architecture backend](backend/README.md) - Architecture backend et référence API
+- [Guide de Contribution](CONTRIBUTING.md) - Mise en place de l'environnement de développement et flux de travail
+- [Guide de Configuration](backend/docs/CONFIGURATION.md) - Instructions de configuration
+- [Vue d'Ensemble Architecture](backend/CLAUDE.md) - Détails de l'architecture technique
+- [Architecture Backend](backend/README.md) - Architecture backend et référence API
+- [Audit Entreprise](docs/AUDIT.md) - Audit full-stack et plan d'amélioration
+- [Audit Frontend](docs/FRONTEND_AUDIT.md) - Arbre de composants frontend et flux de données
 
-## ⚠️ Avertissement de sécurité
+## ⚠️ Avis de Sécurité
 
-### Un déploiement inapproprié peut introduire des risques de sécurité
+### Un Déploiement Inadapté Peut Introduire des Risques de Sécurité
 
-DeerFlow dispose de capacités clés à hauts privilèges, notamment **l'exécution de commandes système, les opérations sur les ressources et l'invocation de logique métier**. Il est conçu par défaut pour être **déployé dans un environnement local de confiance (accessible uniquement via l'interface de loopback 127.0.0.1)**. Si vous déployez l'agent dans des environnements non fiables — tels que des réseaux LAN, des serveurs cloud publics ou d'autres environnements accessibles depuis plusieurs terminaux — sans mesures de sécurité strictes, cela peut introduire des risques, notamment :
+Nova possède des capacités à haut privilège, y compris **l'exécution de commandes système, les opérations de ressources et l'invocation de logique métier**, et est conçu par défaut pour être **déployé dans un environnement local de confiance (accessible uniquement via l'interface boucle de retour 127.0.0.1)**. Si vous déployez l'agent dans des environnements non fiables — tels que des réseaux LAN, des serveurs cloud publics ou d'autres environnements accessibles multi-points — sans mesures de sécurité strictes, cela peut introduire des risques de sécurité.
 
-- **Invocation non autorisée** : les fonctionnalités de l'agent pourraient être découvertes par des tiers non autorisés ou des scanners malveillants, déclenchant des requêtes non autorisées en masse qui exécutent des opérations à haut risque (commandes système, lecture/écriture de fichiers), pouvant causer de graves conséquences.
-- **Risques juridiques et de conformité** : si l'agent est utilisé illégalement pour mener des cyberattaques, du vol de données ou d'autres activités illicites, cela peut entraîner des responsabilités juridiques et des risques de conformité.
+**Nous recommandons fortement de déployer Nova dans un environnement réseau local de confiance.** Si un déploiement inter-appareils ou inter-réseau est nécessaire, vous devez implémenter des mesures de sécurité strictes telles que des listes blanches IP, une passerelle d'authentification et une isolation réseau.
 
-### Recommandations de sécurité
+## Contribution
 
-**Note : nous recommandons fortement de déployer DeerFlow dans un environnement réseau local de confiance.** Si vous avez besoin d'un déploiement multi-appareils ou multi-réseaux, vous devez mettre en place des mesures de sécurité strictes, par exemple :
-
-- **Liste blanche d'IP** : utilisez `iptables`, ou déployez des pare-feux matériels / commutateurs avec ACL, pour **configurer des règles de liste blanche d'IP** et refuser l'accès à toutes les autres adresses IP.
-- **Passerelle d'authentification** : configurez un proxy inverse (ex. nginx) et **activez une authentification forte en amont**, bloquant tout accès non authentifié.
-- **Isolation réseau** : si possible, placez l'agent et les appareils de confiance dans le **même VLAN dédié**, isolé des autres équipements réseau.
-- **Restez informé** : continuez à suivre les mises à jour de sécurité du projet DeerFlow.
-
-## Contribuer
-
-Les contributions sont les bienvenues ! Consultez [CONTRIBUTING.md](CONTRIBUTING.md) pour la mise en place de l'environnement de développement, le workflow et les conventions.
-
-La couverture de tests de régression inclut la détection du mode sandbox Docker et les tests de gestion du kubeconfig-path du provisioner dans `backend/tests/`.
+Nous accueillons les contributions ! Veuillez consulter [CONTRIBUTING.md](CONTRIBUTING.md) pour la mise en place du développement, le flux de travail et les directives.
 
 ## Licence
 
-Ce projet est open source et disponible sous la [Licence MIT](./LICENSE).
+La fondation DeerFlow de ce projet est open source sous la [Licence MIT](./LICENSE). Le texte de la licence originale et toutes les mentions de copyright en amont sont conservés intacts et non modifiés.
+
+Les ajouts spécifiques à Nova par Ali Technologies (l'interface Agent's Computer, l'isolation de conteneurs par thread, les watchdogs, les reçus et outils connexes) sont **propriétaires d'Ali Technologies** — voir [NOTICE.md](./NOTICE.md).
 
 ## Remerciements
 
-DeerFlow est construit sur le travail remarquable de la communauté open source. Nous sommes profondément reconnaissants envers tous les projets et contributeurs dont les efforts ont rendu DeerFlow possible. Nous nous tenons véritablement sur les épaules de géants.
+Nova est construit sur [DeerFlow](https://github.com/bytedance/deer-flow) par ByteDance et sa communauté. Nous sommes profondément reconnaissants envers les projets et contributeurs dont le travail rend Nova possible — vraiment, nous nous tenons sur les épaules de géants.
 
-Nous tenons à exprimer notre sincère gratitude aux projets suivants pour leurs contributions inestimables :
-
-- **[LangChain](https://github.com/langchain-ai/langchain)** : leur excellent framework propulse nos interactions LLM et nos chaînes, permettant une intégration et des fonctionnalités fluides.
-- **[LangGraph](https://github.com/langchain-ai/langgraph)** : leur approche innovante de l'orchestration multi-agents a été déterminante pour les workflows sophistiqués de DeerFlow.
-
-Ces projets illustrent le pouvoir transformateur de la collaboration open source, et nous sommes fiers de bâtir sur leurs fondations.
-
-### Contributeurs principaux
-
-Un grand merci aux auteurs principaux de `DeerFlow`, dont la vision, la passion et le dévouement ont donné vie à ce projet :
-
-- **[Daniel Walnut](https://github.com/hetaoBackend/)**
-- **[Henry Li](https://github.com/magiccube/)**
-
-Votre engagement sans faille et votre expertise sont le moteur du succès de DeerFlow. Nous sommes honorés de vous avoir à la barre de cette aventure.
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=bytedance/deer-flow&type=Date)](https://star-history.com/#bytedance/deer-flow&Date)
+- **[DeerFlow](https://github.com/bytedance/deer-flow)** : Le framework super agent sur lequel Nova est construit.
+- **[LangChain](https://github.com/langchain-ai/langchain)** : Alimente nos interactions LLM et chaînes.
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** : Permet l'orchestration multi-agent sophistiquée.

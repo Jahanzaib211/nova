@@ -10,6 +10,9 @@ import {
   useMemo,
 } from "react";
 
+// Create motion component once at module level to avoid recreation on every render
+const MotionComponent = motion.create("span" as keyof JSX.IntrinsicElements);
+
 export type TextShimmerProps = {
   children: string;
   as?: ElementType;
@@ -20,15 +23,11 @@ export type TextShimmerProps = {
 
 const ShimmerComponent = ({
   children,
-  as: Component = "p",
+  as: Component = "span",
   className,
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  const MotionComponent = motion.create(
-    Component as keyof JSX.IntrinsicElements,
-  );
-
   const dynamicSpread = useMemo(
     () => (children?.length ?? 0) * spread,
     [children, spread],
@@ -40,6 +39,7 @@ const ShimmerComponent = ({
       className={cn(
         "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
         "[background-repeat:no-repeat,padding-box] [--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))]",
+        "will-change-[background-position] transform-gpu",
         className,
       )}
       initial={{ backgroundPosition: "100% center" }}

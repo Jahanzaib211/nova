@@ -1,6 +1,7 @@
-# Changelog
+# Changelog (Upstream DeerFlow)
 
-All notable changes to DeerFlow are documented in this file.
+All notable changes to the upstream DeerFlow project are documented in this file.
+This is the base that Nova was forked from — see [NOVA_CHANGELOG.md](./NOVA_CHANGELOG.md) for Nova-specific changes.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

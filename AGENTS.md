@@ -98,5 +98,5 @@ All must succeed. If cross-ref-check finds a violation:
 
 - `backend/CLAUDE.md` — broader project rules
 - `frontend/CLAUDE.md` — frontend rules
-- `FORK.md` — the fork history (Nova forked from DeerFlow)
-- `FORK_V2.md` through `FORK_V5.md` — subsequent fork changes
+- `NOVA_CHANGELOG.md` — the canonical changelog and plan
+- `NOVA_VS_DEERFLOW.md` — verified attribution map

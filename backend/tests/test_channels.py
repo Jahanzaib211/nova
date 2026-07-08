@@ -728,8 +728,10 @@ class TestChannelManager:
 
         _run(go())
 
-    def test_handle_chat_calls_channel_receive_file_for_inbound_files(self, monkeypatch):
+    def test_handle_chat_calls_channel_receive_file_for_inbound_files(self, monkeypatch, tmp_path):
         from app.channels.manager import ChannelManager
+
+        monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
 
         async def go():
             bus = MessageBus()

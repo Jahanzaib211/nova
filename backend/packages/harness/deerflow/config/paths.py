@@ -331,8 +331,14 @@ class Paths:
             self.sandbox_outputs_dir(thread_id, user_id=user_id),
             self.acp_workspace_dir(thread_id, user_id=user_id),
         ]:
-            d.mkdir(parents=True, exist_ok=True)
-            d.chmod(0o777)
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                continue
+            try:
+                d.chmod(0o777)
+            except PermissionError:
+                pass
 
     def delete_thread_dir(self, thread_id: str, *, user_id: str | None = None) -> None:
         """Delete all persisted data for a thread.

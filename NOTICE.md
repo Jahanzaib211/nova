@@ -29,7 +29,7 @@ and are NOT licensed under the MIT License unless explicitly stated otherwise:
   "Nova — The Agent's Computer", "Made by Ali Technologies").
 
 For the full list of changes on top of stock DeerFlow, see
-[FORK.md](./FORK.md) and [NOVA_CHANGELOG.md](./NOVA_CHANGELOG.md).
+[NOVA_CHANGELOG.md](./NOVA_CHANGELOG.md) and [NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md).
 
 ## Trademarks
 

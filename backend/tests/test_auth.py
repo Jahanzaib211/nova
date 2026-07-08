@@ -755,10 +755,13 @@ def test_missing_jwt_secret_generates_ephemeral(monkeypatch, caplog):
     config_module._auth_config = None
     monkeypatch.delenv("AUTH_JWT_SECRET", raising=False)
 
+    # Mock _load_or_create_secret to avoid filesystem dependency
+    monkeypatch.setattr(config_module, "_load_or_create_secret", lambda: "ephemeral-test-secret")
+
     with caplog.at_level(logging.WARNING):
         config = config_module.get_auth_config()
 
-    assert config.jwt_secret  # non-empty ephemeral secret
+    assert config.jwt_secret == "ephemeral-test-secret"
     assert any("AUTH_JWT_SECRET" in msg for msg in caplog.messages)
 
     # Cleanup

@@ -2,8 +2,8 @@
 
 ## Supported Versions
 
-Nova is under active development and doesn't provide an official release yet.
-Please use the latest version on `main` for security updates.
+Use the latest tagged release (`v7.5.0` or later) for security updates.
+Check the [releases page](https://github.com/Jahanzaib211/nova/releases) for the most recent stable version.
 
 ## Reporting a Vulnerability
 

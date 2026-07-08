@@ -1,6 +1,7 @@
-# 更新日志
+# 更新日志（上游 DeerFlow）
 
-本文件记录 DeerFlow 的所有重要变更。
+本文件记录上游 DeerFlow 项目的所有重要变更。
+这是 Nova 的基础分支 — Nova 的变更请参见 [NOVA_CHANGELOG.md](./NOVA_CHANGELOG.md)。
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本规范](https://semver.org/lang/zh-CN/)。

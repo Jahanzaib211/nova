@@ -5,6 +5,9 @@ English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](.
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![CI](https://github.com/Jahanzaib211/nova/actions/workflows/backend-unit-tests.yml/badge.svg)](https://github.com/Jahanzaib211/nova/actions)
+[![CodeQL](https://github.com/Jahanzaib211/nova/actions/workflows/codeql.yml/badge.svg)](https://github.com/Jahanzaib211/nova/actions/workflows/codeql.yml)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-blue?logo=dependabot)](https://github.com/dependabot)
 
 **Nova** is a full-stack **computer agent** that researches, codes, and creates. It orchestrates **sub-agents**, **memory**, and **per-thread sandboxes** to do almost anything — powered by **extensible skills** and a live, streaming view of the agent's own computer: terminal, editor, browser preview, and task progress, all in real time.
 
@@ -83,7 +86,7 @@ Nova serves its inference on **AMD Instinct** GPUs, and makes that a first-class
 If you use Claude Code, Codex, Cursor, Windsurf, or another coding agent, you can hand it the setup instructions in one sentence:
 
 ```text
-Help me clone Nova if needed, then bootstrap it for local development by following https://raw.githubusercontent.com/Jahanzaib211/nova/main/Install.md
+Help me clone Nova if needed, then bootstrap it for local development by following https://raw.githubusercontent.com/Jahanzaib211/nova/main/docs/Install.md
 ```
 
 That prompt is intended for coding agents. It tells the agent to clone the repo if needed, choose Docker when available, and stop with the exact next command plus any missing config the user still needs to provide.
@@ -741,6 +744,13 @@ Nova has key high-privilege capabilities including **system command execution, r
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, workflow, and guidelines.
 
+**Quick start:**
+1. Fork the repo and create a feature branch
+2. Run `make setup` (Docker) or `make install` (local)
+3. Make changes with hot-reload enabled
+4. Run `cd backend && uv run pytest` and `cd frontend && pnpm test`
+5. Submit a PR — CI will run format, lint, typecheck, and tests
+
 Regression coverage includes Docker sandbox mode detection and provisioner kubeconfig-path handling tests in `backend/tests/`.
 Backend blocking-IO diagnostics are available from the repository root with
 `make detect-blocking-io`: it statically scans backend business code for
@@ -768,3 +778,7 @@ Nova is built on [DeerFlow](https://github.com/bytedance/deer-flow) by ByteDance
 
 - **[Daniel Walnut](https://github.com/hetaoBackend/)**
 - **[Henry Li](https://github.com/magiccube/)**
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Jahanzaib211/nova&type=Date)](https://star-history.com/#Jahanzaib211/nova&Date)

@@ -1,8 +1,7 @@
 # NOVA_CHANGELOG
 
 > **Canonical forward-looking plan + change log for Nova** (formerly the DeerFlow
-> fork; renamed at v4, rename tidy at v5). Continues `FORK.md`, `FORK_V2.md`,
-> `FORK_V3.md`, `FORK_V4.md`, `FORK_V5.md`, `AUDIT.md`, `SESSION_HANDOFF.md`.
+> fork; renamed at v4, rename tidy at v5).
 >
 > **Audience:** the owner (Jahanzaib) + future contributors + the next agent
 > that picks up after a token cap. Read this before touching anything.

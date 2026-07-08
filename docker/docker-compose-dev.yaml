@@ -1,4 +1,4 @@
-# DeerFlow Development Environment
+# Nova Development Environment
 # Usage: docker-compose -f docker-compose-dev.yaml up --build
 #
 # Services:
@@ -218,7 +218,7 @@ services:
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     environment:
-      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:-changeme}
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:?Set SEARXNG_SECRET_KEY in .env}
       - SEARXNG_BASE_URL=http://searxng:8080
     networks:
       - deer-flow-dev

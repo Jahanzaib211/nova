@@ -221,7 +221,7 @@ The nginx configuration provides:
 ## Project Structure
 
 ```
-deer-flow/   ← repo root (the folder name on disk; brand is Nova)
+nova/         ← repo root
 ├── config.example.yaml      # Configuration template
 ├── extensions_config.example.json  # MCP and Skills configuration template
 ├── Makefile                 # Build and development commands

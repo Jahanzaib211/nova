@@ -204,6 +204,5 @@ serialization stripping, deterministic-review risk scanners, and more.
 
 ## Historical documents
 
-`FORK.md` through `FORK_V5.md` and `NOVA_CHANGELOG.md` are point-in-time
-development snapshots kept for history. Where they disagree with this document,
-this document (and the diff commands above) win.
+`NOVA_CHANGELOG.md` is the canonical forward-looking plan and changelog. Where
+it disagrees with this document, this document (and the diff commands above) win.
