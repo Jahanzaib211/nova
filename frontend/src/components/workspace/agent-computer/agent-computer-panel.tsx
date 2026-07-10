@@ -1436,15 +1436,18 @@ function FilesPanel({
   onSelectFile,
   onSelectArtifact,
   threadId,
+  runningEvents,
 }: {
   files: SandboxFile[];
   artifacts: string[];
   onSelectFile: (f: SandboxFile) => void;
   onSelectArtifact: (path: string) => void;
   threadId: string;
+  runningEvents: AgentActivityEvent[];
 }) {
   const { t } = useI18n();
   const tree = useMemo(() => buildFileTree(files), [files]);
+  const runningCount = runningEvents.filter((e) => TERMINAL_TOOLS.has(e.type)).length;
 
   const handleDownloadZip = useCallback(() => {
     const url = `${getBackendBaseURL()}/api/sandbox/download-zip?thread_id=${encodeURIComponent(threadId)}`;
@@ -1500,13 +1503,28 @@ function FilesPanel({
       )}
       {/* Repository tree */}
       <div>
-        <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
+        <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
           <FolderIcon className="h-3 w-3 text-yellow-400" />
-          Repository
+          <span className="text-muted-foreground/70">Repository</span>
           <span className="bg-muted rounded px-1 text-[10px]">
             {files.length}
           </span>
+          {runningCount > 0 && (
+            <div className="ml-auto flex items-center gap-1.5">
+              <LoaderCircleIcon className="text-muted-foreground/60 h-2.5 w-2.5 animate-spin" aria-hidden />
+              <span className="text-muted-foreground/60 text-[10px]">
+                {runningCount} running
+              </span>
+            </div>
+          )}
         </div>
+        {runningCount > 0 && (
+          <Progress
+            value={0}
+            className="mb-1 h-0.5"
+            aria-label="Agent is working"
+          />
+        )}
         <div className="border-border/20 bg-muted/10 rounded border p-1">
           {sortTreeNodes(Object.values(tree.children)).map((child) => (
             <FileTreeNode
@@ -2629,6 +2647,7 @@ export function AgentComputerPanel({
                 onSelectFile={handleSelectFile}
                 onSelectArtifact={handleSelectArtifact}
                 threadId={threadId}
+                runningEvents={mergedEvents}
               />
             </ScrollArea>
           ) : null}
