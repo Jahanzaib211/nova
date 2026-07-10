@@ -362,7 +362,7 @@ export function useSandboxFiles(threadId: string | null): SandboxFile[] {
       return res.json() as Promise<{ files: SandboxFile[] }>;
     },
     enabled: Boolean(threadId),
-    refetchInterval: 3000,
+    refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
 
