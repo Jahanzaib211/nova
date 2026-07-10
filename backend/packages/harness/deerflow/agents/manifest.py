@@ -193,6 +193,8 @@ Browser-over-CDP (browser_navigate/click/input/eval) against the AIO chromium.
 Self-observation: screenshot captures the current viewport inline for visual verification.
 File ops: file.*, scaffold_project, search_files, grep_files.
 Network: deploy_expose (absproxy publish), agent_notify (activity feed).
+Host access: localhost inside the sandbox is the container itself; services
+running on the host machine are at http://host.docker.internal:<port>.
 
 {tool_block}
 

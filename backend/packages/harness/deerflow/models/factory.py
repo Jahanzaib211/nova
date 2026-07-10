@@ -141,6 +141,7 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
             "name",
             "display_name",
             "description",
+            "amd_compute",
             "supports_thinking",
             "supports_reasoning_effort",
             "when_thinking_enabled",

@@ -559,6 +559,14 @@ class LocalContainerBackend(SandboxBackend):
         # Docker-specific security options
         if self._runtime == "docker":
             cmd.extend(["--security-opt", "seccomp=unconfined"])
+            # Make host services reachable from inside the sandbox at
+            # host.docker.internal (Linux needs the explicit host-gateway
+            # mapping; Docker Desktop provides it natively). Without this,
+            # a user's dev server on the host (e.g. python -m http.server
+            # 8765) is unreachable and in-sandbox browser navigation to it
+            # dead-ends. Podman resolves host.containers.internal natively,
+            # so this stays docker-only.
+            cmd.extend(["--add-host", "host.docker.internal:host-gateway"])
 
         bind_host = _resolve_docker_bind_host()
         if self._runtime == "docker":

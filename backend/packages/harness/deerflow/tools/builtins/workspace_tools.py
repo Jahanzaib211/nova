@@ -420,6 +420,72 @@ class _BrowserNavigateIdempotency:
 _browser_navigate_idempotency = _BrowserNavigateIdempotency()
 
 
+def _localhost_navigate_hint(url: str, page_text: str | None) -> str | None:
+    """Actionable hint when navigating a loopback URL that has nothing behind it.
+
+    Inside the sandbox, ``localhost`` is the container itself — a user's server
+    on the host machine lives at ``host.docker.internal:<port>``. Returns a
+    hint string when the URL targets loopback and the navigation errored or the
+    page reads like a connection failure / 404; None otherwise.
+    """
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url if "://" in url else f"http://{url}")
+    except ValueError:
+        return None
+    if parsed.hostname not in ("localhost", "127.0.0.1", "0.0.0.0"):
+        return None
+    if page_text is not None:
+        lowered = page_text[:2000].lower()
+        markers = ("404", "not found", "refused", "err_connection", "can't be reached", "cannot be reached", "no such host", "502", "connection reset")
+        if not any(m in lowered for m in markers):
+            return None
+    port = parsed.port or 80
+    return (
+        f"\n\nHint: nothing answered at {url} inside the sandbox — localhost here is the sandbox container, not the host machine. "
+        f"If the server runs on the host, navigate to http://host.docker.internal:{port} instead. "
+        f"If it should run inside the sandbox, start it first (see dev_server / system_probe)."
+    )
+
+
+def _cdp_browser_op(client, op):
+    """Run a page operation over CDP against the sandbox's live chromium.
+
+    Fallback for AIO images that predate the SDK's ``/v1/browser_page/*`` REST
+    routes (the pinned ``all-in-one-sandbox:latest`` serves only the low-level
+    ``/v1/browser/actions`` input API and 404s every page-level call). The CDP
+    websocket from ``/v1/browser/info`` always exists, and driving it hits the
+    same chromium the Browser tab streams over VNC — the user still watches
+    the navigation live.
+
+    ``op`` receives a Playwright ``Page`` (the currently visible tab when one
+    exists, else a fresh one) and returns a string.
+    """
+    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+
+    cdp_url = _cdp_url_for_gateway(client)
+    if not cdp_url:
+        raise RuntimeError("CDP endpoint unavailable (browser info returned no cdp_url)")
+
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
+        try:
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            return op(page)
+        finally:
+            browser.close()
+
+
+def _sdk_page_api_missing(exc: Exception) -> bool:
+    """True when the SDK's browser_page REST call hit an image without those routes."""
+    text = str(exc).lower()
+    return "404" in text and "not found" in text
+
+
 def _data_str(resp) -> str:
     """Best-effort stringify of a Fern response's .data."""
     data = getattr(resp, "data", resp)
@@ -551,6 +617,11 @@ def browser_navigate_tool(
 ) -> str:
     """Open a URL in the sandbox's real browser (watch it live in the Browser tab's VNC view).
 
+    URLs on ``localhost`` / ``127.0.0.1`` refer to the sandbox container
+    itself — use them for servers you started inside the sandbox. Services
+    running on the host machine are reachable at
+    ``http://host.docker.internal:<port>`` instead.
+
     Args:
         description: Why you are navigating. ALWAYS PROVIDE THIS FIRST.
         url: The URL to open.
@@ -571,17 +642,31 @@ def browser_navigate_tool(
             return cached
 
     try:
-        client.browser_page.navigate(url=url, wait_until="load", timeout=20000)
-        text = _data_str(client.browser_page.get_text())[:1500]
+        try:
+            client.browser_page.navigate(url=url, wait_until="load", timeout=20000)
+            text = _data_str(client.browser_page.get_text())[:1500]
+        except Exception as sdk_exc:
+            if not _sdk_page_api_missing(sdk_exc):
+                raise
+
+            # Image predates /v1/browser_page — drive the same chromium over CDP.
+            def _nav(page):
+                page.goto(url, wait_until="load", timeout=20000)
+                return page.inner_text("body", timeout=5000)
+
+            text = _cdp_browser_op(client, _nav)[:1500]
         _write_sandbox_observation(_get_sandbox_id(runtime), "browser", url, f"navigated to {url[:80]}")
         result = f"Opened {url}\n\n{text}"
+        hint = _localhost_navigate_hint(url, text)
+        if hint:
+            result += hint
         if navigate_id and _tid is not None:
             _browser_navigate_idempotency.put(_tid, navigate_id, result)
         return result
     except Exception as e:
         # Don't cache errors — let the next call (if it succeeds) populate
         # the cache, OR let the user retry with a different navigate_id.
-        return f"Error: {e}"
+        return f"Error: {e}{_localhost_navigate_hint(url, None) or ''}"
 
 
 @tool("browser_click", parse_docstring=True)
@@ -596,7 +681,12 @@ def browser_click_tool(runtime: Runtime, description: str, selector: str) -> str
     if err:
         return err
     try:
-        client.browser_page.click(selector=selector)
+        try:
+            client.browser_page.click(selector=selector)
+        except Exception as sdk_exc:
+            if not _sdk_page_api_missing(sdk_exc):
+                raise
+            _cdp_browser_op(client, lambda page: page.click(selector, timeout=10000) or "")
         return f"Clicked {selector}."
     except Exception as e:
         return f"Error: {e}"
@@ -616,9 +706,21 @@ def browser_input_tool(runtime: Runtime, description: str, selector: str, text: 
     if err:
         return err
     try:
-        client.browser_page.fill(selector=selector, value=text)
-        if press_enter:
-            client.browser_page.press_key(key="Enter")
+        try:
+            client.browser_page.fill(selector=selector, value=text)
+            if press_enter:
+                client.browser_page.press_key(key="Enter")
+        except Exception as sdk_exc:
+            if not _sdk_page_api_missing(sdk_exc):
+                raise
+
+            def _fill(page):
+                page.fill(selector, text, timeout=10000)
+                if press_enter:
+                    page.keyboard.press("Enter")
+                return ""
+
+            _cdp_browser_op(client, _fill)
         return f"Typed into {selector}."
     except Exception as e:
         return f"Error: {e}"
@@ -636,7 +738,13 @@ def browser_eval_tool(runtime: Runtime, description: str, script: str) -> str:
     if err:
         return err
     try:
-        return _data_str(client.browser_page.evaluate(script=script))[:2000] or "(no result)"
+        try:
+            return _data_str(client.browser_page.evaluate(script=script))[:2000] or "(no result)"
+        except Exception as sdk_exc:
+            if not _sdk_page_api_missing(sdk_exc):
+                raise
+            result = _cdp_browser_op(client, lambda page: str(page.evaluate(script)))
+            return result[:2000] or "(no result)"
     except Exception as e:
         return f"Error: {e}"
 
