@@ -41,6 +41,7 @@ import {
   usePromptInputController,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfettiButton } from "@/components/ui/confetti-button";
 import {
@@ -1024,6 +1025,14 @@ export function InputBox({
                       {selectedModel ? getModelLabel(selectedModel) : ""}
                     </ModelSelectorName>
                   </div>
+                  {selectedModel?.amd_compute ? (
+                    <Badge
+                      variant="outline"
+                      className="ml-1 hidden shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 sm:inline-flex dark:text-red-400"
+                    >
+                      AMD
+                    </Badge>
+                  ) : null}
                 </PromptInputButton>
               </ModelSelectorTrigger>
               <ModelSelectorContent>
@@ -1043,6 +1052,14 @@ export function InputBox({
                           {m.model}
                         </span>
                       </div>
+                      {m.amd_compute ? (
+                        <Badge
+                          variant="outline"
+                          className="ml-2 shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 dark:text-red-400"
+                        >
+                          {m.amd_compute}
+                        </Badge>
+                      ) : null}
                       {m.name === context.model_name ? (
                         <CheckIcon className="ml-auto size-4" />
                       ) : (
