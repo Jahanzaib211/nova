@@ -19,7 +19,6 @@ import {
   AlertTriangleIcon,
   LoaderCircleIcon,
   MonitorIcon,
-  MoreHorizontalIcon,
   PaletteIcon,
   PencilIcon,
   SparklesIcon,
@@ -1449,10 +1448,6 @@ function FilesPanel({
   const tree = useMemo(() => buildFileTree(files), [files]);
   const runningCount = runningEvents.filter((e) => TERMINAL_TOOLS.has(e.type)).length;
 
-  const handleDownloadZip = useCallback(() => {
-    const url = `${getBackendBaseURL()}/api/sandbox/download-zip?thread_id=${encodeURIComponent(threadId)}`;
-    window.location.href = url;
-  }, [threadId]);
   if (files.length === 0 && artifacts.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
@@ -1476,14 +1471,6 @@ function FilesPanel({
                 {artifacts.length}
               </span>
             </div>
-            <button
-              onClick={handleDownloadZip}
-              className="text-muted-foreground/60 hover:text-foreground flex items-center gap-1 rounded px-1 py-0.5 text-[10px] transition-colors"
-              title={t.agentComputer.downloadAllZip}
-            >
-              <DownloadIcon className="h-3 w-3" />
-              {t.agentComputer.downloadAllZip}
-            </button>
           </div>
           <div className="border-border/20 bg-muted/10 rounded border p-1">
             {artifacts.map((path) => (
@@ -2528,37 +2515,44 @@ export function AgentComputerPanel({
               }}
             />
           )}
-          {/* Secondary actions collapsed into one overflow menu (enterprise: no icon soup) */}
-          {(Boolean(onAgentMessage) || files.length > 0) && (
-            <DropdownMenu>
-              <Tooltip content="More actions">
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon-sm" variant="ghost" className="h-6 w-6">
-                    <MoreHorizontalIcon className="h-3.5 w-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </Tooltip>
-              <DropdownMenuContent align="end" className="w-48">
-                {onAgentMessage && (
-                  <DropdownMenuItem onClick={handleGitHubPush}>
-                    <GithubIcon className="mr-2 h-3.5 w-3.5" />{" "}
-                    {t.agentComputer.pushToGithub}
-                  </DropdownMenuItem>
-                )}
-                {files.length > 0 && (
-                  <>
-                    <DropdownMenuItem onClick={handleDownloadZip}>
-                      <FolderOpenIcon className="mr-2 h-3.5 w-3.5" />{" "}
-                      {t.agentComputer.downloadAllZip}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDownload}>
-                      <DownloadIcon className="mr-2 h-3.5 w-3.5" />{" "}
-                      {t.agentComputer.downloadActiveFile}
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          {/* Download all (zip) — visible primary action */}
+          {files.length > 0 && (
+            <Tooltip content={t.agentComputer.downloadAllZip}>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={handleDownloadZip}
+              >
+                <FolderOpenIcon className="h-3.5 w-3.5" />
+              </Button>
+            </Tooltip>
+          )}
+          {/* Download active file — only when the editor has an open file */}
+          {browserFilePath && (
+            <Tooltip content={t.agentComputer.downloadActiveFile}>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={handleDownload}
+              >
+                <DownloadIcon className="h-3.5 w-3.5" />
+              </Button>
+            </Tooltip>
+          )}
+          {/* Push to GitHub */}
+          {onAgentMessage && (
+            <Tooltip content={t.agentComputer.pushToGithub}>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={handleGitHubPush}
+              >
+                <GithubIcon className="h-3.5 w-3.5" />
+              </Button>
+            </Tooltip>
           )}
           <Tooltip content="Close">
             <Button
