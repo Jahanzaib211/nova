@@ -208,6 +208,27 @@ function StatusLine({
   const label = getStatusLabel(tool, isLoading, filePath, lineCount, t);
   const dotClass = getDotClass(tool, isLoading);
   const pulse = isLoading || Boolean(tool);
+  const startRef = useRef<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (pulse && startRef.current === null) {
+      startRef.current = Date.now();
+    } else if (!pulse) {
+      startRef.current = null;
+      setElapsed(0);
+      return;
+    }
+    const id = setInterval(() => {
+      if (startRef.current !== null) {
+        setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+      }
+    }, 1000);
+    return () => {
+      clearInterval(id);
+    };
+  }, [pulse]);
+
   return (
     <div className="border-border/50 flex items-center gap-2 border-b px-3 py-1.5">
       <span className="relative inline-flex h-2 w-2 shrink-0">
@@ -236,9 +257,14 @@ function StatusLine({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
-            className="text-muted-foreground block truncate text-xs"
+            className="text-muted-foreground flex items-center gap-1 truncate text-xs"
           >
-            {label}
+            <span className="truncate">{label}</span>
+            {elapsed > 0 && (
+              <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                · {elapsed}s
+              </span>
+            )}
           </motion.span>
         </AnimatePresence>
       </div>
