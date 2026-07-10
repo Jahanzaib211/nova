@@ -259,7 +259,7 @@ const ChatBox: React.FC<{
               {/* Status bar above the panel — purely additive.
                   Fixed-height row; the panel fills the remaining height below
                   so its internal scroll areas and footer are not clipped. */}
-              <RuntimeCapabilitiesBar className="shrink-0" />
+              <RuntimeCapabilitiesBar className="shrink-0" sandboxEvents={activityEvents} />
               <div className="min-h-0 flex-1">
                 <AgentComputerPanel
                   threadId={threadId}

@@ -36,7 +36,7 @@ import {
   XCircleIcon,
   type BoxesIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -48,6 +48,7 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import { useIGINOStatus } from "@/core/igino/hooks";
 import { useCapabilities, useOpenCircuitCount } from "@/core/runtime/hooks";
+import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { CapabilitiesResponse } from "@/core/runtime/types";
 import { cn } from "@/lib/utils";
 
@@ -359,10 +360,42 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
   );
 }
 
-export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
+const INSTALLER_PATTERN = /(npm (i|install|run|yarn|pnpm|yarn)|pip install|bun install|pipenv|poetry install)/;
+const INSTALLER_LABELS: Record<string, string> = {
+  npm: "npm",
+  yarn: "Yarn",
+  pnpm: "pnpm",
+  pip: "pip",
+  bun: "Bun",
+};
+
+export function RuntimeCapabilitiesBar({
+  className,
+  sandboxEvents,
+}: {
+  className?: string;
+  sandboxEvents?: AgentActivityEvent[];
+}) {
   const { t } = useI18n();
   const { capabilities, isFetching, error } = useCapabilities();
   const openCircuits = useOpenCircuitCount();
+
+  const installState = useMemo<{
+    label: string;
+    elapsed: number;
+    running: boolean;
+  } | null>(() => {
+    if (!sandboxEvents?.length) return null;
+    const last = sandboxEvents[sandboxEvents.length - 1];
+    if (last?.status === "running" && INSTALLER_PATTERN.test(last.summary)) {
+      const match = last.summary.match(/(npm|yarn|pnpm|pip|bun)/);
+      const _matched: string | undefined = match?.[1];
+      const label = _matched ? (INSTALLER_LABELS[_matched] ?? _matched) : "Installing…";
+      const elapsed = last.ts ? Math.floor((Date.now() - new Date(last.ts).getTime()) / 1000) : 0;
+      return { label, elapsed, running: true };
+    }
+    return null;
+  }, [sandboxEvents]);
 
   // Avoid hydration mismatch (server can't know capabilities).
   const [mounted, setMounted] = useState(false);
@@ -492,6 +525,19 @@ export function RuntimeCapabilitiesBar({ className }: { className?: string }) {
               </p>
             </TooltipContent>
           </Tooltip>
+        )}
+
+        {installState && (
+          <span
+            className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] font-medium"
+            data-testid="runtime-installing-pill"
+          >
+            <Loader2Icon className="size-3 animate-spin" aria-hidden />
+            <span>Installing {installState.label}</span>
+            {installState.elapsed > 0 && (
+              <span className="tabular-nums">{installState.elapsed}s</span>
+            )}
+          </span>
         )}
 
         <div className="ml-auto flex items-center gap-2">
