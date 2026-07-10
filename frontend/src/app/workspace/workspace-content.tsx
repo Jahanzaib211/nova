@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 
 import { QueryClientProvider } from "@/components/query-client-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AuthSuccessToast } from "@/components/workspace/auth-success-toast";
 import { CommandPalette } from "@/components/workspace/command-palette";
 import { GatewayOfflineBanner } from "@/components/workspace/gateway-offline-banner";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
@@ -38,6 +39,9 @@ export async function WorkspaceContent({
       </SidebarProvider>
       <CommandPalette />
       <Toaster position="top-center" />
+      {/* Must mount after Toaster: sibling effects run in tree order, and the
+          toast fired here is dropped unless sonner is already subscribed. */}
+      <AuthSuccessToast />
     </QueryClientProvider>
   );
 }
