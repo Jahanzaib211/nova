@@ -1,0 +1,66 @@
+[Unit]
+Description=Cloudflare Tunnel for Nova Hackathon (nova.alilabsx.com)
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
+# Order: this tunnel depends on the network stack being up. We intentionally
+# do NOT require docker.service or any Nova service — cloudflared itself
+# only needs the loopback interface and outbound 443 to Cloudflare.
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+# Restart policy (unit-level): systemd restarts the service on any failure.
+# 10 restarts within 5 minutes = marked failed (operator must intervene).
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# We use Type=simple instead of Type=notify because cloudflared's sd_notify
+# signal timing isn't deterministic on all Linux distros (sometimes fires
+# before the tunnel is fully registered with the edge, causing systemd to
+# think the service is ready when it isn't). Type=simple + Restart=always
+# gives the same operational behavior with one fewer moving part.
+# See https://github.com/cloudflare/cloudflared/issues/2180 for context.
+
+# Token + config come from /etc/cloudflared (mode 0600 for env).
+EnvironmentFile=/etc/cloudflared/env
+ExecStart=/usr/bin/cloudflared \
+  --no-autoupdate \
+  --config /etc/cloudflared/config.yml \
+  --metrics 127.0.0.1:20001 \
+  --pidfile /var/run/cloudflared-nova.pid \
+  tunnel run --token ${TUNNEL_TOKEN}
+
+# Restart policy: 5s delay, exponential backoff capped at 60s. cloudflared's
+# own reconnect logic handles transient edge outages inside the start-limit
+# window (StartLimitIntervalSec/StartLimitBurst above in [Unit]).
+Restart=always
+RestartSec=5s
+
+# Hardening: cloudflared does not need any filesystem access. Lock it down.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Cloudflared needs outbound 443 to the edge + inbound from loopback for
+# metrics — no other network namespace access required.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Logs go to journald AND to flat files under /var/log/cloudflared/ so
+# logrotate can prune them. Stdout is the systemd journal; the wrapper
+# script (pm2-cloudflared-nova.sh) tails /var/log/cloudflared/nova-out.log
+# when PM2 needs to surface them.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cloudflared-nova
+
+[Install]
+WantedBy=multi-user.target

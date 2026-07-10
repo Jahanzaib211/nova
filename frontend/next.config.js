@@ -20,6 +20,11 @@ const config = {
     process.env.NEXT_CONFIG_BUILD_OUTPUT === "standalone"
       ? "standalone"
       : undefined,
+  // The dev server is exposed through nginx (localhost:2026) and a Cloudflare
+  // tunnel (nova.alilabsx.com). Next 16 silently refuses to hydrate pages
+  // served from origins it doesn't trust in dev — buttons render but do
+  // nothing (native form GET). Whitelist every public-facing origin.
+  allowedDevOrigins: ["localhost:2026", "nova.alilabsx.com"],
   i18n: {
     locales: ["en", "zh"],
     defaultLocale: "en",

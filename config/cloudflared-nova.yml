@@ -1,0 +1,55 @@
+# Nova Hackathon Cloudflare Tunnel — enterprise-grade config
+#
+# Tunnel: Nova hackathon (id 1e6cb156-0584-4c42-ad99-d1cb4ffb723b)
+# Origin: http://localhost:2026 (Nova gateway via nginx)
+# DNS:    nova.alilabsx.com → CNAME → <tunnel>.cfargotunnel.com (DNS-only)
+#
+# Boot persistence is owned by /etc/systemd/system/cloudflared-nova.service
+# which passes the tunnel token via Environment= (kept in /etc/cloudflared/env,
+# mode 0600). This avoids fragile credentials-file management — Cloudflare's
+# dashboard can rotate the token without us touching this server.
+#
+# Watchdog monitoring: PM2 `nova-tunnel` wrapper + the nova-healthcheck
+# daemon's P12_tunnel probe.
+#
+# Logs:   /var/log/cloudflared/nova-*.log (logrotate-managed)
+# Metrics: 127.0.0.1:20001/metrics (Prometheus scrape target)
+#
+# To rotate the tunnel token (Cloudflare dashboard → Zero Trust →
+# Networks → Tunnels → Nova hackathon → Configure → Regenerate token):
+#   1. paste new token into /etc/cloudflared/env
+#   2. sudo systemctl restart cloudflared-nova
+
+# NO `tunnel:` line — we use --token via systemd Environment= instead.
+# (Putting the tunnel UUID here and credentials-file below would require
+#  us to keep a JSON keyfile in sync with Cloudflare; the --token path is
+#  the one Cloudflare recommends for dashboards-created tunnels.)
+
+# WARP routing is unused — explicit disable so cloudflared doesn't try to
+# enroll this connector in a private network it isn't part of.
+warp-routing:
+  enabled: false
+
+# Origin connection hardening. cloudflared re-establishes the connection
+# automatically on TCP errors; 30s is generous for nginx on localhost.
+originRequest:
+  connectTimeout: 30s
+  noHappyEyeballs: true
+  keepAliveConnections: 16
+  keepAliveTimeout: 90s
+
+ingress:
+  # Lightweight tunnel-internal health endpoint. Cloudflare's edge polls
+  # this on tunnel connect; returns 200 OK without hitting the origin.
+  - hostname: nova.alilabsx.com
+    path: ^/_health(/.*)?$
+    service: http_status:200
+  # Primary public hostname → Nova gateway (nginx on :2026).
+  # Plain HTTP on localhost is the right boundary — TLS terminates at
+  # Cloudflare's edge, which is the trust boundary for this hackathon.
+  - hostname: nova.alilabsx.com
+    service: http://127.0.0.1:2026
+    originRequest:
+      httpHostHeader: nova.alilabsx.com
+  # Required catch-all per cloudflared docs — without it, tunnel refuses to start.
+  - service: http_status:404
