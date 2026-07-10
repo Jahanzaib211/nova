@@ -2256,6 +2256,14 @@ export function AgentComputerPanel({
   onAgentMessage,
 }: AgentComputerPanelProps) {
   const { t } = useI18n();
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const listener = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", listener);
+    return () => mq.removeEventListener("change", listener);
+  }, []);
   // Context fallback for verifyResult when the caller doesn't pass it
   // explicitly. The chat page sets the context state via onVerifyResult;
   // we read it here so the Activity pill always has the latest value.
@@ -2481,7 +2489,7 @@ export function AgentComputerPanel({
     >
       {/* ── Header ── */}
       <div className="border-border/50 bg-card/50 relative flex h-10 shrink-0 items-center justify-between overflow-hidden border-b px-3 backdrop-blur-sm">
-        {(isLoading || currentTool) && (
+        {!reducedMotion && (isLoading || currentTool) && (
           <ShineBorder
             borderWidth={1}
             duration={8}
@@ -2496,13 +2504,17 @@ export function AgentComputerPanel({
                 <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-50" />
                 <span className="bg-primary relative inline-flex h-1.5 w-1.5 rounded-full" />
               </span>
-              <AuroraText
-                colors={["#8b5cf6", "#a78bfa", "#06b6d4", "#8b5cf6"]}
-                speed={1.5}
-                className="text-[10px] font-medium"
-              >
-                {t.agentComputer.live}
-              </AuroraText>
+              {reducedMotion ? (
+                <span className="text-[10px] font-medium">{t.agentComputer.live}</span>
+              ) : (
+                <AuroraText
+                  colors={["#8b5cf6", "#a78bfa", "#06b6d4", "#8b5cf6"]}
+                  speed={1.5}
+                  className="text-[10px] font-medium"
+                >
+                  {t.agentComputer.live}
+                </AuroraText>
+              )}
             </span>
           )}
         </div>
