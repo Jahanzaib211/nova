@@ -1409,14 +1409,21 @@ function FilesPanel({
   artifacts,
   onSelectFile,
   onSelectArtifact,
+  threadId,
 }: {
   files: SandboxFile[];
   artifacts: string[];
   onSelectFile: (f: SandboxFile) => void;
   onSelectArtifact: (path: string) => void;
+  threadId: string;
 }) {
   const { t } = useI18n();
   const tree = useMemo(() => buildFileTree(files), [files]);
+
+  const handleDownloadZip = useCallback(() => {
+    const url = `${getBackendBaseURL()}/api/sandbox/download-zip?thread_id=${encodeURIComponent(threadId)}`;
+    window.location.href = url;
+  }, [threadId]);
   if (files.length === 0 && artifacts.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
@@ -1432,12 +1439,22 @@ function FilesPanel({
       {/* Outputs (presented deliverables) */}
       {artifacts.length > 0 && (
         <div>
-          <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
-            <FileTextIcon className="h-3 w-3 text-emerald-400" />
-            Outputs
-            <span className="bg-muted rounded px-1 text-[10px]">
-              {artifacts.length}
-            </span>
+          <div className="flex items-center justify-between px-1 pb-1">
+            <div className="text-muted-foreground/70 flex items-center gap-1.5 text-[11px] font-medium">
+              <FileTextIcon className="h-3 w-3 text-emerald-400" />
+              Outputs
+              <span className="bg-muted rounded px-1 text-[10px]">
+                {artifacts.length}
+              </span>
+            </div>
+            <button
+              onClick={handleDownloadZip}
+              className="text-muted-foreground/60 hover:text-foreground flex items-center gap-1 rounded px-1 py-0.5 text-[10px] transition-colors"
+              title={t.agentComputer.downloadAllZip}
+            >
+              <DownloadIcon className="h-3 w-3" />
+              {t.agentComputer.downloadAllZip}
+            </button>
           </div>
           <div className="border-border/20 bg-muted/10 rounded border p-1">
             {artifacts.map((path) => (
@@ -2585,6 +2602,7 @@ export function AgentComputerPanel({
                 artifacts={artifacts}
                 onSelectFile={handleSelectFile}
                 onSelectArtifact={handleSelectArtifact}
+                threadId={threadId}
               />
             </ScrollArea>
           ) : null}
