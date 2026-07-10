@@ -39,10 +39,26 @@ const MAX_EVENTS = 200;
 export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
   const [events, setEvents] = useState<SandboxEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
+  const pendingRef = useRef<SandboxEvent[]>([]);
+  const rafRef = useRef<number | null>(null);
+  const flush = () => {
+    if (pendingRef.current.length === 0) return;
+    setEvents((prev) => {
+      const next = prev.concat(pendingRef.current);
+      pendingRef.current = [];
+      return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next;
+    });
+    rafRef.current = null;
+  };
 
   useEffect(() => {
     // Reset on thread change
     setEvents([]);
+    pendingRef.current = [];
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
   }, [threadId]);
 
   useEffect(() => {
@@ -60,12 +76,10 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
       try {
         const parsed = JSON.parse(raw) as SandboxEvent;
         if (parsed.type && parsed.ts !== undefined) {
-          setEvents((prev) => {
-            const next = [...prev, parsed];
-            return next.length > MAX_EVENTS
-              ? next.slice(next.length - MAX_EVENTS)
-              : next;
-          });
+          pendingRef.current.push(parsed);
+          if (rafRef.current === null) {
+            rafRef.current = requestAnimationFrame(flush);
+          }
         }
       } catch {
         // Non-JSON line (old format or noise) — skip silently
@@ -79,6 +93,11 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
     return () => {
       es.close();
       esRef.current = null;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      pendingRef.current = [];
     };
   }, [threadId]);
 
