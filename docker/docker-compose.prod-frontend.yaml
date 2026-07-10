@@ -1,0 +1,32 @@
+# Production frontend override for the public-facing stack.
+#
+# The dev target (`pnpm dev` + src bind-mounts) is not a public serving
+# surface: dev-origin hydration gating, heavy uncompiled turbopack chunks over
+# the Cloudflare tunnel, and HMR-websocket dependence all caused live-only
+# breakage. This override swaps the frontend service to the Dockerfile's
+# `prod` target (full `next build` baked in, `pnpm start`).
+#
+# Usage (matches scripts/pm2-deerflow.sh):
+#   docker compose -f docker-compose-dev.yaml -f docker-compose.dood.yaml \
+#     -f docker-compose.prod-frontend.yaml -p deer-flow-dev up ...
+#
+# Local dev workflow with this active: run `pnpm dev` directly in frontend/
+# (port 3000), or drop this file from the -f chain to return to the dev target.
+services:
+  frontend:
+    build:
+      context: ../
+      dockerfile: frontend/Dockerfile
+      target: prod
+      args:
+        PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+    # Must override the dev service's command (compose merge keeps it
+    # otherwise). Plain `pnpm start`; logs go to `docker logs deer-flow-frontend`
+    # — the prod image runs as uid 1000 (node) which cannot write the
+    # root-owned ../logs mount the dev command redirected into.
+    command: sh -c "cd frontend && pnpm start"
+    environment:
+      - NODE_ENV=production
+      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
+      - DEER_FLOW_AUTH_DISABLED=${DEER_FLOW_AUTH_DISABLED:-1}

@@ -132,5 +132,30 @@ module.exports = {
         HEALTHCHECK_CYCLE_DEADLINE_SEC: "60",
       },
     },
+    {
+      // Cloudflare Tunnel — public hostname nova.alilabsx.com → Nova
+      // gateway on localhost:2026. The tunnel itself is owned by systemd
+      // (cloudflared-nova.service) for boot persistence; this PM2 entry
+      // is the observability wrapper — tails journald into PM2 logs and
+      // emits a 30s heartbeat that the watchdog's P12_tunnel probe reads.
+      //
+      // If the systemd unit dies, the wrapper exits and PM2 restarts us,
+      // which re-nudges `systemctl start cloudflared-nova.service`. Both
+      // layers independently auto-recover — see
+      // scripts/pm2-cloudflared-nova.sh for the exact sequence.
+      name: "nova-tunnel",
+      script: `${require("path").resolve(__dirname, "scripts/pm2-cloudflared-nova.sh")}`,
+      interpreter: "none",
+      cwd: __dirname,
+      autorestart: true,
+      // systemd does the real work; this wrapper is just a tail. Cap
+      // restarts so we don't loop forever if systemd is broken.
+      max_restarts: 10,
+      restart_delay: 10000,
+      kill_timeout: 5000,
+      out_file: "/var/log/cloudflared/nova-out.log",
+      error_file: "/var/log/cloudflared/nova-error.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
   ],
 };

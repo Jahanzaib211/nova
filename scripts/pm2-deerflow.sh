@@ -26,6 +26,7 @@ cd "$DEER_FLOW_ROOT"
 exec /usr/bin/docker compose \
   -f "$DEER_FLOW_ROOT/docker/docker-compose-dev.yaml" \
   -f "$DEER_FLOW_ROOT/docker/docker-compose.dood.yaml" \
+  -f "$DEER_FLOW_ROOT/docker/docker-compose.prod-frontend.yaml" \
   -p deer-flow-dev \
   up --no-build --scale provisioner=0 --scale searxng=0 \
   "$@"

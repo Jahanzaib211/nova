@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """nova-healthcheck — supervisor watchdog for the local dev stack.
 
-Polls 11 probes every CYCLE_INTERVAL seconds and auto-fixes common breakage
+Polls 12 probes every CYCLE_INTERVAL seconds and auto-fixes common breakage
 so `pm2 list nova-healthcheck` is the operator's single pane of glass.
 
 Generic by design — this code knows nothing about specific upstream services.
@@ -23,6 +23,12 @@ Probes:
       unified gateway for Ollama cloud models)
   P11. Dify stack health (127.0.0.1:8088/console/api/setup → step=finished;
       pm2 app nova-dify running the compose stack)
+  P12. Cloudflare Tunnel — systemd unit active + public URL reachable.
+      Two layers: (a) cloudflared-nova.service is active, (b) the URL in
+      CLOUDFLARE_TUNNEL_URL (default https://nova.alilabsx.com/health)
+      returns HTTP 200 from the public edge. Auto-fix: sudo systemctl
+      restart cloudflared-nova.service. Requires sudoers NOPASSWD for
+      systemctl on this unit (set up by the boot script).
 
 Auto-fixes (only safe, reversible ones):
   - Attestation drift → clear the hash dir (and run WATCHDOG_ATTESTATION_RESTART_CMD
@@ -32,6 +38,7 @@ Auto-fixes (only safe, reversible ones):
   - P9 llama-bridge dead → pm2 restart (re-register from ecosystem.config.js on drift)
   - P10 nova-litellm dead → pm2 restart (start from ecosystem.config.js if missing)
   - P11 Dify dead → pm2 restart nova-dify (start from ecosystem.config.js if missing)
+  - P12 tunnel dead → sudo systemctl restart cloudflared-nova.service
 
 Status:
   - Exits 0 every cycle when all probes are GREEN.
@@ -44,6 +51,7 @@ Reads:
   - ${LLAMA_BRIDGE_HOST:-172.17.0.1}:8081 for P9
   - ${LITELLM_HOST:-172.17.0.1}:${LITELLM_PORT:-4000} for P10
   - ${DIFY_HOST:-127.0.0.1}:${DIFY_PORT:-8088} for P11
+  - ${CLOUDFLARE_TUNNEL_URL:-https://nova.alilabsx.com/health} for P12
   - ${WATCHDOG_ATTESTATION_BINARY_PATH} for P8 (skipped if unset)
   - ${HEALTHCHECK_CYCLE_DEADLINE_SEC:-60} hard deadline per cycle
 """
@@ -462,6 +470,83 @@ async def probe_binary_attestation() -> ProbeResult:
     return await _do()
 
 
+async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> ProbeResult:
+    """Probe the Cloudflare Tunnel public-domain reachability.
+
+    Two layers, two checks (both must be GREEN for an overall GREEN):
+      1. systemd cloudflared-nova.service is active — proves the local
+         connector is up and registered with Cloudflare's edge.
+      2. The public URL (e.g. https://nova.alilabsx.com/health) returns
+         HTTP 200 from the external Cloudflare edge → proves the route
+         + DNS + proxy are wired end-to-end from a real client's
+         perspective.
+
+    Operators can override PUBLIC_URL via env (CLOUDFLARE_TUNNEL_URL) to
+    point at any hostname they tunnel; the default is the hackathon demo
+    domain nova.alilabsx.com → Nova gateway. If the public URL is empty
+    or unset, only the systemd probe runs (useful for behind-the-firewall
+    deployments that don't expose a public hostname).
+    """
+    public_url = os.environ.get("CLOUDFLARE_TUNNEL_URL", public_url).strip()
+    t0 = time.perf_counter()
+
+    # Layer 1: systemd unit must be active.
+    try:
+        proc = subprocess.run(
+            ["systemctl", "is-active", "cloudflared-nova.service"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        systemd_state = proc.stdout.strip() if proc.returncode == 0 else "inactive"
+        systemd_green = proc.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        systemd_state = f"err:{type(e).__name__}"
+        systemd_green = False
+
+    if not systemd_green:
+        return ProbeResult(
+            "P12_tunnel",
+            Status.RED,
+            f"systemd={systemd_state}",
+            (time.perf_counter() - t0) * 1000,
+        )
+
+    # Layer 2: public URL must respond (only if configured).
+    if not public_url:
+        return ProbeResult(
+            "P12_tunnel",
+            Status.GREEN,
+            f"systemd=active (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
+            (time.perf_counter() - t0) * 1000,
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
+            res = await client.get(public_url)
+        latency = (time.perf_counter() - t0) * 1000
+        if res.status_code != 200:
+            return ProbeResult(
+                "P12_tunnel",
+                Status.RED,
+                f"systemd=active edge={public_url} HTTP {res.status_code}",
+                latency,
+            )
+        return ProbeResult(
+            "P12_tunnel",
+            Status.GREEN,
+            f"systemd=active edge HTTP 200 {latency:.0f}ms",
+            latency,
+        )
+    except Exception as e:
+        return ProbeResult(
+            "P12_tunnel",
+            Status.RED,
+            f"systemd=active edge={type(e).__name__}",
+            (time.perf_counter() - t0) * 1000,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Auto-fixers
 # ---------------------------------------------------------------------------
@@ -587,6 +672,44 @@ def fix_dify() -> bool:
         return False
 
 
+def fix_tunnel() -> bool:
+    """Heal cloudflared-nova.service for a RED P12_tunnel.
+
+    Two failure modes observed in production:
+      1. systemd unit crashed/inactive — `systemctl restart` brings it back.
+         cloudflared's reconnect logic will then re-register with the edge.
+      2. cloudflared is up locally but the public URL isn't reachable —
+         that means DNS or the Cloudflare-side route broke; a local restart
+         won't fix that. We restart anyway because it's cheap and often
+         works (e.g. QUIC reconnect after edge-IP rotation), and surface the
+         detail to the operator.
+
+    Requires sudo for the systemctl call. The watchdog already runs as the
+    user who owns the PM2 process, so we delegate to sudo non-interactively
+    (the operator's sudoers should allow systemctl for this unit without a
+    password for the watchdog user — the boot script does this).
+    """
+    log.warning("auto-fix: systemctl restart cloudflared-nova.service")
+    try:
+        subprocess.run(
+            ["sudo", "-n", "systemctl", "restart", "cloudflared-nova.service"],
+            check=True,
+            timeout=30,
+            capture_output=True,
+        )
+        return True
+    except subprocess.CalledProcessError as e:
+        log.error(
+            "auto-fix: systemctl restart failed (%s). If sudo requires a password, "
+            "run: sudo systemctl restart cloudflared-nova.service manually.",
+            e,
+        )
+        return False
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        log.error("auto-fix: failed to restart tunnel: %s", e)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Cycle orchestrator
 # ---------------------------------------------------------------------------
@@ -638,6 +761,10 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
             if fix_dify():
                 probe.fixed = True
                 probe.detail += " [nova-dify healed via pm2]"
+        elif probe.name == "P12_tunnel":
+            if fix_tunnel():
+                probe.fixed = True
+                probe.detail += " [systemctl restart cloudflared-nova issued]"
         else:
             # Warn once when the probe first becomes fix-eligible, then every
             # 20th cycle while it stays RED — not every 30s forever (the P9
@@ -693,6 +820,10 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
                     port=int(os.environ.get("DIFY_PORT", "8088")),
                 )
             ),
+        ),
+        (
+            "P12_tunnel",
+            asyncio.ensure_future(probe_tunnel()),
         ),
     ]
     results = await asyncio.gather(*(c for _, c in probes), return_exceptions=True)
