@@ -87,3 +87,6 @@ pr-build/
 
 # AMD hackathon local smoke-test artifacts
 hackathon/track1/out/
+
+# Cloudflare Tunnel secret (commit the .example instead)
+config/cloudflared-nova.env
