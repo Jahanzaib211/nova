@@ -244,15 +244,25 @@ def install_shutdown_hooks() -> bool:
     # and clean process exits. It does NOT run on SIGKILL.
     atexit.register(_safe_shutdown)
 
-    # SIGTERM / SIGINT handlers — best-effort. Uvicorn installs its own
-    # signal handlers in many deployments; ours is additive (we run alongside).
+    # SIGTERM / SIGINT handlers — best-effort. signal.signal() REPLACES the
+    # existing handler (it does not stack), so we must save the previous one
+    # and chain to it. Uvicorn's handler sets should_exit; if we swallow the
+    # signal the server never shuts down and dev reloads wedge forever.
+    _prev_handlers: dict[int, Any] = {}
+
     def _signal_handler(signum: int, frame: Any) -> None:
         logger.info("shutdown: received signal %d; running shutdown", signum)
         _safe_shutdown()
+        prev = _prev_handlers.get(signum)
+        if callable(prev):
+            prev(signum, frame)
+        elif prev == signal.SIG_DFL:
+            signal.signal(signum, signal.SIG_DFL)
+            signal.raise_signal(signum)
 
     for sig in (signal.SIGTERM, signal.SIGINT):
         try:
-            signal.signal(sig, _signal_handler)
+            _prev_handlers[sig] = signal.signal(sig, _signal_handler)
         except (ValueError, OSError):
             # Not in main thread / unsupported on this platform — skip silently.
             pass

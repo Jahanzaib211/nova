@@ -42,6 +42,7 @@ import {
   messagesToActivityEvents,
 } from "@/core/threads/activity";
 import {
+  useActiveRun,
   useThreadMetadata,
   useThreadStream,
   useThreadTokenUsage,
@@ -236,6 +237,14 @@ export default function ChatPage() {
     void stopRun();
   }, [stopRun]);
 
+  // Server truth for the composer: if a run is active on the backend, the
+  // composer must stay in "streaming" (Stop available) even when the local
+  // SSE died (e.g. Firefox "Error in input stream" after a proxy hiccup or
+  // dev reload) — stopRun cancels over REST and needs no live stream.
+  const activeRun = useActiveRun(isNewThread || isMock ? undefined : threadId, {
+    isStreamLoading: thread.isLoading,
+  });
+
   const handleAgentMessage = useCallback(
     (text: string) => {
       void sendMessage(threadId, { text, files: [] });
@@ -365,10 +374,10 @@ export default function ChatPage() {
                     autoFocus={isWelcomeMode}
                     initialValue={composerInitialValue}
                     status={
-                      thread.error
-                        ? "error"
-                        : thread.isLoading
-                          ? "streaming"
+                      thread.isLoading || activeRun
+                        ? "streaming"
+                        : thread.error
+                          ? "error"
                           : "ready"
                     }
                     context={settings.context}

@@ -96,4 +96,9 @@ PYTHONPATH=. exec uv run uvicorn app.gateway.app:app \
     --reload-include='.env' \
     --reload-exclude=/app/backend/sandbox \
     --reload-exclude="$DEER_FLOW_HOME" \
-    --reload-exclude=/app/backend/.deer-flow
+    --reload-exclude=/app/backend/.deer-flow \
+    --reload-exclude=/app/backend/tests \
+    --timeout-graceful-shutdown 10
+    # Without a graceful-shutdown bound, a reload waits forever for the UI's
+    # long-lived SSE connections to close — the old worker never exits and
+    # code changes silently never land (the "wedged reloader").

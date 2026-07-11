@@ -1,15 +1,13 @@
 {
-  "mcpInterceptors": [
-    "my_package.mcp.auth:build_auth_interceptor"
-  ],
+  "mcpInterceptors": [],
   "mcpServers": {
     "github": {
-      "enabled": true,
+      "enabled": false,
       "type": "stdio",
       "command": "npx",
       "args": [
         "-y",
-        "@github/github-mcp-server"
+        "@modelcontextprotocol/server-github"
       ],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PERSONAL_ACCESS_TOKEN}"
@@ -17,10 +15,10 @@
       "url": null,
       "headers": {},
       "oauth": null,
-      "description": "GitHub MCP server for repository operations (upgraded from deprecated @modelcontextprotocol/server-github)"
+      "description": "GitHub MCP server. Disabled: GITHUB_PERSONAL_ACCESS_TOKEN is not set in .env. (Previous package name @github/github-mcp-server does not exist on npm and 404'd on every run start.)"
     },
     "postgres": {
-      "enabled": true,
+      "enabled": false,
       "type": "stdio",
       "command": "npx",
       "args": [
@@ -32,7 +30,7 @@
       "url": null,
       "headers": {},
       "oauth": null,
-      "description": "PostgreSQL database access"
+      "description": "PostgreSQL database access. Disabled: connection string is a placeholder (postgresql://localhost/mydb) — set a real DATABASE_URL before enabling."
     }
   },
   "skills": {

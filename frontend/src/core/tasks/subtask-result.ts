@@ -138,14 +138,48 @@ export function hasSubtaskToolResult(
   );
 }
 
+/**
+ * Find the ToolMessage carrying the terminal result for a `task` tool call.
+ *
+ * Scans the FULL message list — message grouping can place the ToolMessage
+ * in a different render group than the AI message that issued the tool call
+ * (history merge after a rejoin, interleaved turns), and a group-scoped scan
+ * painted genuinely-completed subtasks as failed. Returns the LAST match so
+ * a duplicated message from an SSE replay overlap cannot shadow the final
+ * state with an earlier duplicate.
+ */
+export function findSubtaskResultMessage(
+  toolCallId: string | undefined,
+  messages: Message[],
+): Message | null {
+  if (!toolCallId) {
+    return null;
+  }
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.type === "tool" && message.tool_call_id === toolCallId) {
+      return message;
+    }
+  }
+  return null;
+}
+
 export function derivePendingSubtaskStatus(
   toolCallId: string | undefined,
   messages: Message[],
   isCurrentTurnLoading: boolean,
+  hasActiveRun = false,
 ): SubtaskStatus {
-  if (isCurrentTurnLoading || hasSubtaskToolResult(toolCallId, messages)) {
+  if (
+    isCurrentTurnLoading ||
+    hasActiveRun ||
+    hasSubtaskToolResult(toolCallId, messages)
+  ) {
     return "in_progress";
   }
+  // No tool result, no live stream, and the server reports no pending/running
+  // run for this thread: the run reached a terminal state without this task
+  // ever reporting back, so "failed" is now a fact rather than a guess.
   return "failed";
 }
 

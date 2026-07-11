@@ -320,41 +320,48 @@ async def list_sandbox_files(
 
     user_id = get_effective_user_id()
     paths = get_paths()
-    work_dir = paths.sandbox_work_dir(thread_id, user_id=user_id)
-
-    if not work_dir.exists():
-        return {"files": []}
+    # Agents write deliverables to outputs/ far more often than workspace/;
+    # listing only workspace/ made entire runs' output invisible in the UI.
+    roots = [
+        (paths.sandbox_work_dir(thread_id, user_id=user_id), "/mnt/user-data/workspace"),
+        (paths.sandbox_outputs_dir(thread_id, user_id=user_id), "/mnt/user-data/outputs"),
+        (paths.sandbox_uploads_dir(thread_id, user_id=user_id), "/mnt/user-data/uploads"),
+    ]
 
     files: list[dict] = []
     _SKIP = {"node_modules", ".git", "__pycache__", ".venv", ".cache"}
 
-    try:
-        for host_path in work_dir.rglob("*"):
-            if host_path.is_dir():
-                continue
-            # Skip hidden files and blacklisted directories
-            parts = host_path.relative_to(work_dir).parts
-            if any(p.startswith(".") or p in _SKIP for p in parts):
-                continue
-            try:
-                stat = host_path.stat()
-                rel = host_path.relative_to(work_dir)
-                virtual_path = f"/mnt/user-data/workspace/{rel.as_posix()}"
-                files.append(
-                    {
-                        "path": str(host_path),
-                        "virtual_path": virtual_path,
-                        "name": host_path.name,
-                        "size": stat.st_size,
-                        "modified": _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%H:%M:%S"),
-                    }
-                )
-            except OSError:
-                continue
-    except Exception:
-        pass
+    for root, virtual_prefix in roots:
+        if not root.exists():
+            continue
+        try:
+            for host_path in root.rglob("*"):
+                if host_path.is_dir():
+                    continue
+                # Skip hidden files and blacklisted directories
+                parts = host_path.relative_to(root).parts
+                if any(p.startswith(".") or p in _SKIP for p in parts):
+                    continue
+                try:
+                    stat = host_path.stat()
+                    rel = host_path.relative_to(root)
+                    files.append(
+                        {
+                            "path": str(host_path),
+                            "virtual_path": f"{virtual_prefix}/{rel.as_posix()}",
+                            "name": host_path.name,
+                            "size": stat.st_size,
+                            "mtime": stat.st_mtime,
+                            "modified": _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%H:%M:%S"),
+                        }
+                    )
+                except OSError:
+                    continue
+        except Exception:
+            continue
 
-    files.sort(key=lambda f: f["modified"], reverse=True)
+    # Numeric mtime, not the "%H:%M:%S" string — string sort breaks across midnight.
+    files.sort(key=lambda f: f["mtime"], reverse=True)
     return {"files": files}
 
 
@@ -377,23 +384,33 @@ async def download_sandbox_zip(
 
     user_id = get_effective_user_id()
     paths = get_paths()
-    work_dir = paths.sandbox_work_dir(thread_id, user_id=user_id)
+    # Workspace files sit at the archive root (legacy layout); outputs/ and
+    # uploads/ are prefixed with their mount folder — same visibility rule
+    # as /api/sandbox/files, otherwise agent deliverables export as an empty zip.
+    roots = [
+        (paths.sandbox_work_dir(thread_id, user_id=user_id), ""),
+        (paths.sandbox_outputs_dir(thread_id, user_id=user_id), "outputs"),
+        (paths.sandbox_uploads_dir(thread_id, user_id=user_id), "uploads"),
+    ]
 
     _SKIP = {"node_modules", ".git", "__pycache__", ".venv", ".cache", "dist", ".next", ".turbo"}
 
     def build_zip() -> bytes:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
-            if work_dir.exists():
-                for host_path in work_dir.rglob("*"):
+            for root, arc_prefix in roots:
+                if not root.exists():
+                    continue
+                for host_path in root.rglob("*"):
                     if host_path.is_dir():
                         continue
-                    parts = host_path.relative_to(work_dir).parts
+                    parts = host_path.relative_to(root).parts
                     if any(p.startswith(".") or p in _SKIP for p in parts):
                         continue
                     try:
-                        rel = host_path.relative_to(work_dir)
-                        zf.write(host_path, arcname=str(rel))
+                        rel = host_path.relative_to(root)
+                        arcname = f"{arc_prefix}/{rel.as_posix()}" if arc_prefix else str(rel)
+                        zf.write(host_path, arcname=arcname)
                     except (OSError, PermissionError):
                         continue
         return buf.getvalue()

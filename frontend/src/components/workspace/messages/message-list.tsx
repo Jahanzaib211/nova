@@ -33,9 +33,11 @@ import type { Subtask } from "@/core/tasks";
 import { useUpdateSubtask } from "@/core/tasks/context";
 import {
   derivePendingSubtaskStatus,
+  findSubtaskResultMessage,
   parseSubtaskResult,
 } from "@/core/tasks/subtask-result";
 import type { AgentThreadState } from "@/core/threads";
+import { useActiveRun } from "@/core/threads/hooks";
 import { cn } from "@/lib/utils";
 
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
@@ -213,21 +215,29 @@ export function MessageList({
   }, [thread.isLoading]);
   const messages = thread.messages;
   const groupedMessages = getMessageGroups(messages);
-  const hasActiveAssistantText = useMemo(() => {
-    let lastHumanIndex = -1;
+  const lastHumanGroupIndex = useMemo(() => {
     for (let i = groupedMessages.length - 1; i >= 0; i--) {
       if (groupedMessages[i]?.type === "human") {
-        lastHumanIndex = i;
-        break;
+        return i;
       }
     }
-    if (lastHumanIndex === -1) return false;
-    return groupedMessages
-      .slice(lastHumanIndex)
-      .some((g) => g.type === "assistant");
+    return -1;
   }, [groupedMessages]);
+  const hasActiveAssistantText = useMemo(() => {
+    if (lastHumanGroupIndex === -1) return false;
+    return groupedMessages
+      .slice(lastHumanGroupIndex)
+      .some((g) => g.type === "assistant");
+  }, [groupedMessages, lastHumanGroupIndex]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
+  // Server-truth liveness: a dropped stream must not paint still-running
+  // subtasks as failed. Shares the query (and its polling) with the rejoin
+  // logic in useThreadStream.
+  const activeRun = useActiveRun(threadId, {
+    isStreamLoading: thread.isLoading,
+  });
+  const hasActiveRun = activeRun !== null;
   const lastGroupIndex = groupedMessages.length - 1;
   const turnUsageMessagesByGroupIndex =
     getAssistantTurnUsageMessages(groupedMessages);
@@ -413,6 +423,13 @@ export function MessageList({
               </div>
             );
           } else if (group.type === "assistant:subagent") {
+            // A task's terminal state lives in its ToolMessage, which the
+            // grouping logic may place in a DIFFERENT group (history merge
+            // after rejoin). Always resolve status from the full message
+            // list; the pending path only applies when no result exists
+            // anywhere. `hasActiveRun` may only keep THIS turn's tasks alive
+            // — a later turn's active run says nothing about older orphans.
+            const groupIsCurrentTurn = groupIndex > lastHumanGroupIndex;
             const tasks = new Set<Subtask>();
             for (const message of group.messages) {
               if (message.type === "ai") {
@@ -422,22 +439,40 @@ export function MessageList({
                     if (!taskId) {
                       continue;
                     }
-                    const status = derivePendingSubtaskStatus(
+                    const resultMessage = findSubtaskResultMessage(
                       taskId,
-                      group.messages,
-                      groupIsLoading,
+                      messages,
                     );
+                    const parsed = resultMessage
+                      ? parseSubtaskResult(
+                          extractTextFromMessage(resultMessage),
+                          resultMessage.additional_kwargs,
+                        )
+                      : undefined;
+                    const status =
+                      parsed?.status ??
+                      derivePendingSubtaskStatus(
+                        taskId,
+                        messages,
+                        groupIsLoading,
+                        hasActiveRun && groupIsCurrentTurn,
+                      );
                     const task: Subtask = {
                       id: taskId,
                       subagent_type: toolCall.args.subagent_type,
                       description: toolCall.args.description,
                       prompt: toolCall.args.prompt,
                       status,
-                      ...(status === "failed"
-                        ? { error: t.subtasks.failed }
+                      ...(parsed?.result !== undefined
+                        ? { result: parsed.result }
                         : {}),
+                      ...(parsed?.error !== undefined
+                        ? { error: parsed.error }
+                        : status === "failed"
+                          ? { error: t.subtasks.failed }
+                          : {}),
                     };
-                    updateSubtask(task);
+                    updateSubtask(task, parsed ? "result" : "derived");
                     tasks.add(task);
                   }
                 }
@@ -448,7 +483,7 @@ export function MessageList({
                     extractTextFromMessage(message),
                     message.additional_kwargs,
                   );
-                  updateSubtask({ id: taskId, ...parsed });
+                  updateSubtask({ id: taskId, ...parsed }, "result");
                 }
               }
             }

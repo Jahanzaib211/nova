@@ -73,6 +73,27 @@ async def test_cleanup(bridge: MemoryStreamBridge):
 
 
 @pytest.mark.anyio
+async def test_has_run_tracks_retention(bridge: MemoryStreamBridge):
+    """has_run is True while events are retained and False after cleanup.
+
+    Join endpoints use this to avoid subscribing to a cleaned-up run, where
+    subscribe() would lazily create a fresh never-ending stream and heartbeat
+    forever instead of terminating.
+    """
+    run_id = "run-retention"
+    assert bridge.has_run(run_id) is False
+
+    await bridge.publish(run_id, "test", {})
+    assert bridge.has_run(run_id) is True
+
+    await bridge.publish_end(run_id)
+    assert bridge.has_run(run_id) is True
+
+    await bridge.cleanup(run_id)
+    assert bridge.has_run(run_id) is False
+
+
+@pytest.mark.anyio
 async def test_history_is_bounded():
     """Retained history should be bounded by queue_maxsize."""
     bridge = MemoryStreamBridge(queue_maxsize=1)

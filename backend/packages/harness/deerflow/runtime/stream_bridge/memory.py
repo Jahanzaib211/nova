@@ -65,6 +65,9 @@ class MemoryStreamBridge(StreamBridge):
 
     # -- StreamBridge API ------------------------------------------------------
 
+    def has_run(self, run_id: str) -> bool:
+        return run_id in self._streams
+
     async def publish(self, run_id: str, event: str, data: Any) -> None:
         stream = self._get_or_create_stream(run_id)
         entry = StreamEvent(id=self._next_id(run_id), event=event, data=data)

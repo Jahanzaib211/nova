@@ -478,6 +478,61 @@ def test_stream_run_completes_and_persists_runtime_state(isolated_app):
         assert any(row["content"]["content"] == "Lifecycle complete." for row in message_events if row["event_type"] == "llm.ai.response")
 
 
+def test_join_terminal_run_with_released_buffer_ends_immediately(isolated_app):
+    """Joining a finished run whose stream buffer was cleaned up returns ``end``.
+
+    The frontend's rejoin lifecycle joins runs it believes are active; when it
+    races a run that finished longer than the cleanup delay ago,
+    ``bridge.subscribe`` used to lazily recreate an empty stream and the
+    client would hang on heartbeats with no terminating event.
+    """
+    from starlette.testclient import TestClient
+
+    controller = _RunController()
+    factory = _make_agent_factory(
+        controller,
+        title="Join Terminal",
+        answer="Join terminal complete.",
+    )
+
+    with (
+        patch("app.gateway.services.resolve_agent_factory", return_value=factory),
+        TestClient(isolated_app) as client,
+    ):
+        csrf_token = _register_user(client)
+        thread_id = _create_thread(client, csrf_token)
+
+        with client.stream(
+            "POST",
+            f"/api/threads/{thread_id}/runs/stream",
+            json=_run_body(),
+            headers={"X-CSRF-Token": csrf_token},
+        ) as response:
+            assert response.status_code == 200, response.read().decode()
+            run_id = _run_id_from_response(response)
+            _drain_stream(response)
+
+        run = client.get(f"/api/threads/{thread_id}/runs/{run_id}")
+        assert run.status_code == 200, run.text
+        assert run.json()["status"] == "success"
+
+        # Simulate the retention window having elapsed (the worker schedules
+        # bridge cleanup with delay=60s after publish_end).
+        bridge = isolated_app.state.stream_bridge
+        asyncio.run(bridge.cleanup(run_id))
+        assert bridge.has_run(run_id) is False
+
+        with client.stream(
+            "GET",
+            f"/api/threads/{thread_id}/runs/{run_id}/stream",
+        ) as join:
+            assert join.status_code == 200
+            transcript = _drain_stream(join, timeout=5.0)
+
+        events = _parse_sse(transcript)
+        assert [event["event"] for event in events] == ["end"]
+
+
 def test_stream_run_executes_real_lead_agent_setup_agent_business_path(isolated_app, isolated_deer_flow_home: Path):
     """A runtime stream should execute real lead-agent business code and tools."""
     from starlette.testclient import TestClient

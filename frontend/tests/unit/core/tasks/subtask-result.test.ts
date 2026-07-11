@@ -8,6 +8,7 @@ import {
   SUBAGENT_ERROR_KEY,
   SUBAGENT_STATUS_KEY,
   derivePendingSubtaskStatus,
+  findSubtaskResultMessage,
   hasSubtaskToolResult,
   parseSubtaskResult,
 } from "@/core/tasks/subtask-result";
@@ -165,6 +166,50 @@ describe("hasSubtaskToolResult", () => {
   });
 });
 
+describe("findSubtaskResultMessage", () => {
+  it("finds the ToolMessage anywhere in the full message list", () => {
+    // Regression: message grouping can place the ToolMessage in a different
+    // render group than the AI message that issued the tool call; a
+    // group-scoped scan painted completed subtasks as failed.
+    const messages = [
+      { type: "ai" },
+      { type: "human" },
+      { type: "tool", tool_call_id: "call_task_1", content: "Task Succeeded. Result: done" },
+    ] as Message[];
+
+    expect(findSubtaskResultMessage("call_task_1", messages)).toBe(
+      messages[2],
+    );
+  });
+
+  it("returns the LAST duplicate so an SSE replay overlap cannot shadow the final state", () => {
+    const early = {
+      type: "tool",
+      tool_call_id: "call_task_1",
+      content: "partial",
+    } as Message;
+    const final = {
+      type: "tool",
+      tool_call_id: "call_task_1",
+      content: "Task Succeeded. Result: done",
+    } as Message;
+
+    expect(findSubtaskResultMessage("call_task_1", [early, final])).toBe(
+      final,
+    );
+  });
+
+  it("returns null when no ToolMessage exists for the call", () => {
+    const messages = [
+      { type: "ai" },
+      { type: "tool", tool_call_id: "call_other" },
+    ] as Message[];
+
+    expect(findSubtaskResultMessage("call_task_1", messages)).toBeNull();
+    expect(findSubtaskResultMessage(undefined, messages)).toBeNull();
+  });
+});
+
 describe("derivePendingSubtaskStatus", () => {
   it("keeps a task in progress while its own assistant turn is loading", () => {
     const messages = [{ type: "ai" }] as Message[];
@@ -191,6 +236,37 @@ describe("derivePendingSubtaskStatus", () => {
     expect(derivePendingSubtaskStatus("call_task_1", messages, false)).toBe(
       "in_progress",
     );
+  });
+
+  it("keeps a task in progress when the server reports an active run, even with no stream attached", () => {
+    // Regression: run 01984062 (2026-07-11) — a page refresh dropped the SSE
+    // stream while subagents kept executing, and the UI painted running
+    // subtasks as "Subtask failed". Server-side run liveness must win over
+    // the local stream state.
+    const messages = [{ type: "ai" }] as Message[];
+
+    expect(
+      derivePendingSubtaskStatus("call_task_1", messages, false, true),
+    ).toBe("in_progress");
+  });
+
+  it("fails a task with no result once the server reports no active run", () => {
+    const messages = [{ type: "ai" }] as Message[];
+
+    expect(
+      derivePendingSubtaskStatus("call_task_1", messages, false, false),
+    ).toBe("failed");
+  });
+
+  it("still resolves from the tool result when the run has ended", () => {
+    const messages = [
+      { type: "ai" },
+      { type: "tool", tool_call_id: "call_task_1" },
+    ] as Message[];
+
+    expect(
+      derivePendingSubtaskStatus("call_task_1", messages, false, false),
+    ).toBe("in_progress");
   });
 });
 

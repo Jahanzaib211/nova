@@ -1342,12 +1342,13 @@ type FileTreeNode = {
 };
 
 function buildFileTree(files: SandboxFile[]): FileTreeNode {
-  const root: FileTreeNode = { name: "workspace", children: {} };
+  const root: FileTreeNode = { name: "user-data", children: {} };
   for (const file of files) {
-    const rel = file.virtual_path.replace(
-      /^\/mnt\/user-data\/workspace\/?/,
-      "",
-    );
+    // Workspace files stay at the top level; outputs/ and uploads/ keep
+    // their mount folder so agent deliverables are visible in the tree.
+    const rel = file.virtual_path
+      .replace(/^\/mnt\/user-data\/workspace\/?/, "")
+      .replace(/^\/mnt\/user-data\/?/, "");
     const parts = rel.split("/").filter(Boolean);
     let node = root;
     for (let i = 0; i < parts.length; i++) {

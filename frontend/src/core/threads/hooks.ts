@@ -659,14 +659,26 @@ export function useThreadStream({
   const queryClient = useQueryClient();
   const updateSubtask = useUpdateSubtask();
 
+  // Explicit rejoin lifecycle state (see the joinStream effect below the
+  // useStream call). Declared here because onError needs it to classify
+  // join failures before the effect exists.
+  const rejoinStateRef = useRef({
+    runId: null as string | null,
+    attempts: 0,
+    inFlight: false,
+    exhausted: false,
+  });
+
   const thread = useStream<AgentThreadState>({
     client: getAPIClient(isMock),
     assistantId: "lead_agent",
     threadId: onStreamThreadId,
-    // Batch 2C.3: reconnectOnMount caused repeated ConnectionError storms on
-    // page refresh (the backend's per-request SSE stream is already torn
-    // down by the time the SDK tries to rejoin). Re-enable only when an
-    // explicit reconnect lifecycle is added. v7.2 audit Fix 17.
+    // Batch 2C.3 / v7.2 audit Fix 17: the SDK's reconnectOnMount caused
+    // ConnectionError storms because it rejoins blindly from sessionStorage
+    // even when the run is long gone. It stays off; the explicit rejoin
+    // effect below owns reconnection instead — it verifies via the runs API
+    // that a pending/running run actually exists before calling joinStream,
+    // and gives up cleanly on 404/409.
     reconnectOnMount: false,
     fetchStateHistory: { limit: 1 },
     onCreated(meta) {
@@ -962,6 +974,18 @@ export function useThreadStream({
       setOptimisticMessages([]);
       setOptimisticThreadId(null);
       setLiveMessagesThreadId(null);
+      // Rejoin race: the run reached a terminal state (or the gateway
+      // restarted and only has a store-only record) between the runs-API
+      // poll and the joinStream call. Not user-facing — mark the rejoin
+      // exhausted and let the active-run poll converge on the final state.
+      if (rejoinStateRef.current.inFlight) {
+        const status = getHttpStatus(error);
+        if (status === 404 || status === 409 || isReconnectNoise(error)) {
+          rejoinStateRef.current.exhausted = true;
+          console.debug("[useStream] rejoin: run no longer joinable", error);
+          return;
+        }
+      }
       // Batch 2C.3: ConnectionError (TypeError: Failed to fetch / NetworkError
       // when attempting to fetch resource) means the SSE stream was already
       // torn down by the backend before the SDK could rejoin it. This is
@@ -1003,6 +1027,65 @@ export function useThreadStream({
       }
     },
   });
+
+  // --- Live-run rejoin ------------------------------------------------------
+  // If the server reports a pending/running run while no stream is attached
+  // (page refresh, dropped SSE connection, run started from another client),
+  // rejoin its stream. joinStream sends Last-Event-ID "-1" so the gateway's
+  // stream bridge replays the full buffered event log before going live.
+  const activeRun = useActiveRun(onStreamThreadId ?? undefined, {
+    enabled: !isMock,
+    isStreamLoading: thread.isLoading,
+  });
+  const joinStreamRef = useRef(thread.joinStream);
+  joinStreamRef.current = thread.joinStream;
+  const isStreamLoadingRef = useRef(thread.isLoading);
+  isStreamLoadingRef.current = thread.isLoading;
+
+  useEffect(() => {
+    if (!activeRun || isMock || !onStreamThreadId) {
+      return;
+    }
+    if (isStreamLoadingRef.current) {
+      return;
+    }
+    const state = rejoinStateRef.current;
+    if (state.runId !== activeRun.run_id) {
+      // New run — fresh retry budget.
+      state.runId = activeRun.run_id;
+      state.attempts = 0;
+      state.exhausted = false;
+    }
+    if (
+      state.inFlight ||
+      state.exhausted ||
+      state.attempts >= MAX_REJOIN_ATTEMPTS
+    ) {
+      return;
+    }
+    state.inFlight = true;
+    state.attempts += 1;
+    const joinedAt = Date.now();
+    void joinStreamRef
+      .current(activeRun.run_id)
+      .catch((error: unknown) => {
+        console.debug("[useStream] rejoin attempt failed:", error);
+      })
+      .finally(() => {
+        state.inFlight = false;
+        // A join that streamed for a while was a healthy session that ended
+        // or dropped — restore the retry budget so a later disconnect on the
+        // same long run can still rejoin. Only immediate failures burn it.
+        if (Date.now() - joinedAt > REJOIN_HEALTHY_SESSION_MS) {
+          state.attempts = 0;
+        }
+        // Re-ask the server regardless of how the join ended so subtask
+        // pills and the composer converge on the run's true state.
+        void queryClient.invalidateQueries({
+          queryKey: activeRunQueryKey(onStreamThreadId),
+        });
+      });
+  }, [activeRun, isMock, onStreamThreadId, queryClient]);
 
   const hasVisibleStreamState =
     Boolean(threadId) || liveMessagesThreadId === currentViewThreadId;
@@ -1679,6 +1762,65 @@ export function useThreadRuns(
     enabled: enabled && Boolean(threadId),
     refetchOnWindowFocus: false,
   });
+}
+
+const ACTIVE_RUN_POLL_INTERVAL_MS = 4_000;
+
+// Rejoin retry budget per run: joins that fail immediately (join refused,
+// connection error) stop after this many tries; a join that streamed for at
+// least REJOIN_HEALTHY_SESSION_MS restores the budget so long runs survive
+// repeated disconnects (laptop sleep, network blips).
+const MAX_REJOIN_ATTEMPTS = 3;
+const REJOIN_HEALTHY_SESSION_MS = 30_000;
+
+export function activeRunQueryKey(threadId?: string | null) {
+  return ["thread", "active-run", threadId] as const;
+}
+
+function pickActiveRun(runs: Run[] | undefined): Run | null {
+  if (!runs?.length) {
+    return null;
+  }
+  return (
+    runs.find((r) => r.status === "pending" || r.status === "running") ?? null
+  );
+}
+
+/**
+ * Server-truth signal for "this thread has a run executing right now".
+ *
+ * The SSE stream is not a reliable liveness signal: the backend keeps
+ * executing after a refresh or dropped connection (runs are created with a
+ * resumable stream), so `thread.isLoading === false` only means *this client*
+ * is not attached. This hook asks the runs API instead and keeps polling
+ * while a pending/running run exists, stopping as soon as the run reaches a
+ * terminal state.
+ *
+ * `isStreamLoading` pauses polling while a live stream is attached — the
+ * stream itself is fresher than any poll could be.
+ */
+export function useActiveRun(
+  threadId?: string,
+  {
+    enabled = true,
+    isStreamLoading = false,
+  }: { enabled?: boolean; isStreamLoading?: boolean } = {},
+): Run | null {
+  const apiClient = getAPIClient();
+  const query = useQuery<Run[]>({
+    queryKey: activeRunQueryKey(threadId),
+    queryFn: async () => {
+      if (!threadId) {
+        return [];
+      }
+      return apiClient.runs.list(threadId);
+    },
+    enabled: enabled && Boolean(threadId) && !isStreamLoading,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      pickActiveRun(query.state.data) ? ACTIVE_RUN_POLL_INTERVAL_MS : false,
+  });
+  return useMemo(() => pickActiveRun(query.data), [query.data]);
 }
 
 export function useThreadMetadata(

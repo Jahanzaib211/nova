@@ -60,6 +60,17 @@ class StreamBridge(abc.ABC):
         the producer calls :meth:`publish_end`.
         """
 
+    def has_run(self, run_id: str) -> bool:
+        """Whether events for *run_id* are currently retained.
+
+        Consumers use this to avoid subscribing to a run whose buffer was
+        already released (``cleanup``): ``subscribe`` on such a run would
+        lazily create a fresh, never-ending stream and heartbeat forever.
+        Defaults to ``True`` so implementations without cheap retention
+        checks keep today's behaviour.
+        """
+        return True
+
     @abc.abstractmethod
     async def cleanup(self, run_id: str, *, delay: float = 0) -> None:
         """Release resources associated with *run_id*.

@@ -28,6 +28,7 @@ export type SandboxFile = {
   virtual_path: string;
   name: string;
   size: number;
+  mtime?: number;
   modified: string;
 };
 
