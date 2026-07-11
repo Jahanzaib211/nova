@@ -135,6 +135,7 @@ async def get_artifact(thread_id: str, path: str, request: Request, download: bo
         - Download file: `/api/threads/abc123/artifacts/mnt/user-data/outputs/data.csv?download=true`
         - Active web content such as `.html`, `.xhtml`, and `.svg` artifacts is always downloaded
     """
+    path = path.replace("\n", "").replace("\r", "")
     # Check if this is a request for a file inside a .skill archive (e.g., xxx.skill/SKILL.md)
     if ".skill/" in path:
         # Split the path at ".skill/" to get the ZIP file path and internal path
@@ -175,7 +176,7 @@ async def get_artifact(thread_id: str, path: str, request: Request, download: bo
 
     actual_path = resolve_thread_virtual_path(thread_id, path)
 
-    logger.info(f"Resolving artifact path: thread_id={thread_id}, requested_path={path}, actual_path={actual_path}")
+    logger.info(f"Resolving artifact path: thread_id={thread_id.replace(chr(10), '').replace(chr(13), '')}, requested_path={path.replace(chr(10), '').replace(chr(13), '')}, actual_path={actual_path}")
 
     if not actual_path.exists():
         raise HTTPException(status_code=404, detail=f"Artifact not found: {path}")

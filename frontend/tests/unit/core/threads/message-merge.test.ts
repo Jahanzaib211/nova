@@ -469,7 +469,6 @@ test("simulating auto-continue across empty runs skips empty contributions and l
     if (
       !shouldAutoContinueOnEmptyRun(pageMessages.length, consecutiveEmptyLoads)
     ) {
-      consecutiveEmptyLoads = 0;
       break;
     }
     consecutiveEmptyLoads += 1;

@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 def _reset_gateway_config():
     """Reset the cached gateway config so env changes take effect."""
-    import app.gateway.config as cfg
+    from app.gateway import config as cfg
 
     cfg._gateway_config = None
 

@@ -9,8 +9,6 @@ from __future__ import annotations
 import logging
 import mimetypes
 import posixpath
-from pathlib import Path
-from typing import Any
 
 from app.channels.message_bus import ResolvedAttachment
 
@@ -70,9 +68,7 @@ class ArtifactDelivery:
                 )
                 continue
             try:
-                actual = paths.resolve_virtual_path(
-                    thread_id, virtual_path, user_id=effective_user_id
-                )
+                actual = paths.resolve_virtual_path(thread_id, virtual_path, user_id=effective_user_id)
                 # Verify the resolved path is actually under the outputs directory
                 # (guards against path-traversal even after prefix check)
                 try:
@@ -140,19 +136,13 @@ class ArtifactDelivery:
 
         if unresolved:
             artifact_text = self.format_artifact_text(unresolved)
-            response_text = (
-                (response_text + "\n\n" + artifact_text) if response_text else artifact_text
-            )
+            response_text = (response_text + "\n\n" + artifact_text) if response_text else artifact_text
 
         # Always include resolved attachment filenames as a text fallback so files
         # remain discoverable even when the upload is skipped or fails.
         if attachments:
-            resolved_text = self.format_artifact_text(
-                [attachment.virtual_path for attachment in attachments]
-            )
-            response_text = (
-                (response_text + "\n\n" + resolved_text) if response_text else resolved_text
-            )
+            resolved_text = self.format_artifact_text([attachment.virtual_path for attachment in attachments])
+            response_text = (response_text + "\n\n" + resolved_text) if response_text else resolved_text
 
         return response_text, attachments
 

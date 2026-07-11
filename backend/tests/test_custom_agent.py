@@ -462,7 +462,7 @@ def _make_test_app(tmp_path: Path):
 @pytest.fixture()
 def agent_client(tmp_path):
     """TestClient with agents router, using tmp_path as base_dir."""
-    import app.gateway.routers.agents as agents_router
+    from app.gateway.routers import agents as agents_router
 
     paths_instance = _make_paths(tmp_path)
     previous_config = AgentsApiConfig(**get_agents_api_config().model_dump())
@@ -481,7 +481,7 @@ def agent_client(tmp_path):
 @pytest.fixture()
 def disabled_agent_client(tmp_path):
     """TestClient with agents router while the management API is disabled."""
-    import app.gateway.routers.agents as agents_router
+    from app.gateway.routers import agents as agents_router
 
     paths_instance = _make_paths(tmp_path)
     previous_config = AgentsApiConfig(**get_agents_api_config().model_dump())

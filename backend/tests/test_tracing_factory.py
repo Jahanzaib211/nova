@@ -58,7 +58,7 @@ def test_build_tracing_callbacks_creates_langsmith_and_langfuse(monkeypatch):
     monkeypatch.setattr(
         tracing_factory,
         "get_tracing_config",
-        lambda: type(
+        type(
             "Cfg",
             (),
             {
@@ -95,7 +95,7 @@ def test_build_tracing_callbacks_raises_when_enabled_provider_fails(monkeypatch)
     monkeypatch.setattr(
         tracing_factory,
         "get_tracing_config",
-        lambda: type(
+        type(
             "Cfg",
             (),
             {

@@ -24,9 +24,7 @@ def test_runtime_model_resolves_env_placeholder_in_api_key(tmp_path, monkeypatch
         config_path,
         {
             "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
-            "models": [
-                {"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}
-            ],
+            "models": [{"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}],
         },
     )
     # Runtime store is a sibling of config.yaml.
@@ -62,9 +60,7 @@ def test_runtime_model_with_unset_env_is_skipped_not_crashing(tmp_path, monkeypa
         config_path,
         {
             "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
-            "models": [
-                {"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}
-            ],
+            "models": [{"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}],
         },
     )
     _write(
@@ -96,9 +92,7 @@ def test_runtime_model_literal_api_key_unchanged(tmp_path):
         config_path,
         {
             "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
-            "models": [
-                {"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}
-            ],
+            "models": [{"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}],
         },
     )
     _write(

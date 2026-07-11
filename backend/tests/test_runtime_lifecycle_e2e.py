@@ -308,7 +308,7 @@ def _drain_stream(response, *, timeout: float = 10.0, max_bytes: int = 1024 * 10
                 chunks.put(chunk)
                 if b"event: end" in chunk:
                     break
-        except BaseException as exc:  # pragma: no cover - reported in the main test thread
+        except Exception as exc:  # pragma: no cover - reported in the main test thread
             chunks.put(exc)
         finally:
             chunks.put(sentinel)
@@ -415,7 +415,7 @@ async def _write_checkpoint(checkpointer: Any, *, thread_id: str, state: dict[st
 
     result = checkpointer.aput(config, checkpoint, metadata, {})
     if inspect.isawaitable(result):
-        await result
+        _ = await result
 
 
 def _stream_item_for_mode(stream_mode: Any, state: dict[str, Any]) -> Any:

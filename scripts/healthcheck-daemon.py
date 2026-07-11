@@ -151,16 +151,17 @@ class CycleReport:
 
 
 async def timed(coro_factory: Callable[[], Awaitable[ProbeResult]]) -> ProbeResult:
-    t0 = time.perf_counter()
-    try:
-        return await coro_factory()
-    finally:
-        elapsed_ms = (time.perf_counter() - t0) * 1000
-        # stamp latency on whatever the coro produced
-        # (caller is responsible for putting it on the result)
+    return await coro_factory()
 
 
-def _http_probe(name: str, url: str, *, expected_status: tuple[int, ...] = (200,), timeout: float = 3.0, body_validator: Optional[Callable[[dict], bool]] = None) -> ProbeResult:
+def _http_probe(
+    name: str,
+    url: str,
+    *,
+    expected_status: tuple[int, ...] = (200,),
+    timeout: float = 3.0,
+    body_validator: Optional[Callable[[dict], bool]] = None,
+) -> ProbeResult:
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
         try:
@@ -175,12 +176,29 @@ def _http_probe(name: str, url: str, *, expected_status: tuple[int, ...] = (200,
                 except Exception:
                     return ProbeResult(name, Status.RED, "non-JSON body", latency)
                 if not body_validator(payload):
-                    return ProbeResult(name, Status.RED, "body validator failed", latency)
+                    return ProbeResult(
+                        name, Status.RED, "body validator failed", latency
+                    )
             return ProbeResult(name, Status.GREEN, f"HTTP {res.status_code}", latency)
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.RequestError) as e:
-            return ProbeResult(name, Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+        except (
+            httpx.ConnectError,
+            httpx.ConnectTimeout,
+            httpx.ReadTimeout,
+            httpx.RequestError,
+        ) as e:
+            return ProbeResult(
+                name,
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
         except Exception as e:
-            return ProbeResult(name, Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                name,
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
 
     return asyncio.ensure_future(_do())
 
@@ -210,12 +228,24 @@ async def probe_gateway(port: int = 2026) -> ProbeResult:
             latency = (time.perf_counter() - t0) * 1000
             if res.status_code in (401, 403):
                 # Auth wall = gateway up, auth layer healthy
-                return ProbeResult("P2_gateway", Status.GREEN, f"auth-wall HTTP {res.status_code}", latency)
+                return ProbeResult(
+                    "P2_gateway",
+                    Status.GREEN,
+                    f"auth-wall HTTP {res.status_code}",
+                    latency,
+                )
             if res.status_code == 200:
                 return ProbeResult("P2_gateway", Status.GREEN, "HTTP 200", latency)
-            return ProbeResult("P2_gateway", Status.RED, f"unexpected HTTP {res.status_code}", latency)
+            return ProbeResult(
+                "P2_gateway", Status.RED, f"unexpected HTTP {res.status_code}", latency
+            )
         except Exception as e:
-            return ProbeResult("P2_gateway", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P2_gateway",
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
 
     return await _do()
 
@@ -227,11 +257,29 @@ async def probe_frontend(port: int = 2026) -> ProbeResult:
             async with httpx.AsyncClient(timeout=3.0) as client:
                 res = await client.get(f"http://localhost:{port}/")
             latency = (time.perf_counter() - t0) * 1000
-            if res.status_code == 200 and "html" in res.headers.get("content-type", "").lower():
-                return ProbeResult("P3_frontend", Status.GREEN, f"HTTP 200 html={len(res.text)}b", latency)
-            return ProbeResult("P3_frontend", Status.RED, f"HTTP {res.status_code} ct={res.headers.get('content-type','?')}", latency)
+            if (
+                res.status_code == 200
+                and "html" in res.headers.get("content-type", "").lower()
+            ):
+                return ProbeResult(
+                    "P3_frontend",
+                    Status.GREEN,
+                    f"HTTP 200 html={len(res.text)}b",
+                    latency,
+                )
+            return ProbeResult(
+                "P3_frontend",
+                Status.RED,
+                f"HTTP {res.status_code} ct={res.headers.get('content-type', '?')}",
+                latency,
+            )
         except Exception as e:
-            return ProbeResult("P3_frontend", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P3_frontend",
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
 
     return await _do()
 
@@ -244,28 +292,56 @@ async def probe_local_llm_gateway(port: int = 9000) -> ProbeResult:
                 res = await client.get(f"http://localhost:{port}/health")
             latency = (time.perf_counter() - t0) * 1000
             if res.status_code != 200:
-                return ProbeResult("P4_local_llm_gateway", Status.RED, f"HTTP {res.status_code}", latency)
+                return ProbeResult(
+                    "P4_local_llm_gateway",
+                    Status.RED,
+                    f"HTTP {res.status_code}",
+                    latency,
+                )
             payload = res.json()
             backend = payload.get("backend", "?")
             if backend == "healthy":
-                return ProbeResult("P4_local_llm_gateway", Status.GREEN, f"backend={backend}", latency)
+                return ProbeResult(
+                    "P4_local_llm_gateway", Status.GREEN, f"backend={backend}", latency
+                )
             if backend == "unreachable":
                 # llama-server cold or down — mask as yellow for 2 cycles
-                return ProbeResult("P4_local_llm_gateway", Status.YELLOW, f"backend={backend} (llama cold?)", latency)
-            return ProbeResult("P4_local_llm_gateway", Status.RED, f"backend={backend}", latency)
+                return ProbeResult(
+                    "P4_local_llm_gateway",
+                    Status.YELLOW,
+                    f"backend={backend} (llama cold?)",
+                    latency,
+                )
+            return ProbeResult(
+                "P4_local_llm_gateway", Status.RED, f"backend={backend}", latency
+            )
         except (httpx.ConnectError, httpx.ConnectTimeout):
-            return ProbeResult("P4_local_llm_gateway", Status.RED, "ECONNREFUSED", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P4_local_llm_gateway",
+                Status.RED,
+                "ECONNREFUSED",
+                (time.perf_counter() - t0) * 1000,
+            )
         except Exception as e:
-            return ProbeResult("P4_local_llm_gateway", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P4_local_llm_gateway",
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
 
     return await _do()
 
 
-async def probe_llama_loopback(host: str = "127.0.0.1", port: int = 8081) -> ProbeResult:
+async def probe_llama_loopback(
+    host: str = "127.0.0.1", port: int = 8081
+) -> ProbeResult:
     return await _http_probe(
         "P5_llama_loopback",
         f"http://{host}:{port}/v1/models",
-        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
+        body_validator=lambda d: (
+            isinstance(d.get("data"), list) and len(d["data"]) >= 1
+        ),
     )
 
 
@@ -281,7 +357,9 @@ async def probe_llama_bridge(host: str = "172.17.0.1", port: int = 8081) -> Prob
     return await _http_probe(
         "P9_bridge",
         f"http://{host}:{port}/v1/models",
-        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
+        body_validator=lambda d: (
+            isinstance(d.get("data"), list) and len(d["data"]) >= 1
+        ),
     )
 
 
@@ -293,7 +371,9 @@ async def probe_litellm(host: str = "172.17.0.1", port: int = 4000) -> ProbeResu
     return await _http_probe(
         "P10_litellm",
         f"http://{host}:{port}/v1/models",
-        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
+        body_validator=lambda d: (
+            isinstance(d.get("data"), list) and len(d["data"]) >= 1
+        ),
     )
 
 
@@ -309,7 +389,9 @@ async def probe_dify(host: str = "127.0.0.1", port: int = 8088) -> ProbeResult:
     )
 
 
-async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str = "") -> ProbeResult:
+async def probe_llama_vram(
+    host: str = "127.0.0.1", port: int = 8081, model: str = ""
+) -> ProbeResult:
     """Issue a 1-token chat completion to confirm VRAM is loaded.
 
     During the ~30s cold-load window after a restart, llama-server answers
@@ -322,10 +404,14 @@ async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str
                 res = await client.get(f"http://{host}:{port}/v1/models")
                 models = res.json().get("data", [])
                 if not models:
-                    return ProbeResult("P6_llama_vram", Status.YELLOW, "no model advertised")
+                    return ProbeResult(
+                        "P6_llama_vram", Status.YELLOW, "no model advertised"
+                    )
                 model = models[0]["id"]
             except Exception as e:
-                return ProbeResult("P6_llama_vram", Status.RED, f"models probe failed: {e}")
+                return ProbeResult(
+                    "P6_llama_vram", Status.RED, f"models probe failed: {e}"
+                )
 
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
@@ -341,19 +427,43 @@ async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str
                 )
             latency = (time.perf_counter() - t0) * 1000
             if res.status_code == 200:
-                return ProbeResult("P6_llama_vram", Status.GREEN, f"completion OK model={model}", latency)
+                return ProbeResult(
+                    "P6_llama_vram",
+                    Status.GREEN,
+                    f"completion OK model={model}",
+                    latency,
+                )
             if res.status_code in (503, 502, 500):
-                return ProbeResult("P6_llama_vram", Status.YELLOW, f"VRAM cold HTTP {res.status_code}", latency)
-            return ProbeResult("P6_llama_vram", Status.RED, f"HTTP {res.status_code}", latency)
+                return ProbeResult(
+                    "P6_llama_vram",
+                    Status.YELLOW,
+                    f"VRAM cold HTTP {res.status_code}",
+                    latency,
+                )
+            return ProbeResult(
+                "P6_llama_vram", Status.RED, f"HTTP {res.status_code}", latency
+            )
         except (httpx.ReadTimeout, httpx.ConnectTimeout):
-            return ProbeResult("P6_llama_vram", Status.YELLOW, "timeout (VRAM cold?)", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P6_llama_vram",
+                Status.YELLOW,
+                "timeout (VRAM cold?)",
+                (time.perf_counter() - t0) * 1000,
+            )
         except Exception as e:
-            return ProbeResult("P6_llama_vram", Status.RED, f"{type(e).__name__}: {e}", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P6_llama_vram",
+                Status.RED,
+                f"{type(e).__name__}: {e}",
+                (time.perf_counter() - t0) * 1000,
+            )
 
     return await _do()
 
 
-async def probe_containers(project: str = "deer-flow-dev", min_count: int = 3) -> ProbeResult:
+async def probe_containers(
+    project: str = "deer-flow-dev", min_count: int = 3
+) -> ProbeResult:
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
         try:
@@ -369,16 +479,41 @@ async def probe_containers(project: str = "deer-flow-dev", min_count: int = 3) -
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
         except FileNotFoundError:
-            return ProbeResult("P7_containers", Status.RED, "docker binary not found", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P7_containers",
+                Status.RED,
+                "docker binary not found",
+                (time.perf_counter() - t0) * 1000,
+            )
         except asyncio.TimeoutError:
-            return ProbeResult("P7_containers", Status.RED, "docker ps timeout", (time.perf_counter() - t0) * 1000)
+            return ProbeResult(
+                "P7_containers",
+                Status.RED,
+                "docker ps timeout",
+                (time.perf_counter() - t0) * 1000,
+            )
         latency = (time.perf_counter() - t0) * 1000
         if proc.returncode != 0:
-            return ProbeResult("P7_containers", Status.RED, f"docker exit {proc.returncode}: {stderr.decode()[:80]}", latency)
+            return ProbeResult(
+                "P7_containers",
+                Status.RED,
+                f"docker exit {proc.returncode}: {stderr.decode()[:80]}",
+                latency,
+            )
         names = [n for n in stdout.decode().splitlines() if n.strip()]
         if len(names) < min_count:
-            return ProbeResult("P7_containers", Status.RED, f"only {len(names)} containers (need ≥{min_count}): {names}", latency)
-        return ProbeResult("P7_containers", Status.GREEN, f"{len(names)} containers: {','.join(names)}", latency)
+            return ProbeResult(
+                "P7_containers",
+                Status.RED,
+                f"only {len(names)} containers (need ≥{min_count}): {names}",
+                latency,
+            )
+        return ProbeResult(
+            "P7_containers",
+            Status.GREEN,
+            f"{len(names)} containers: {','.join(names)}",
+            latency,
+        )
 
     return await _do()
 
@@ -437,12 +572,20 @@ async def probe_binary_attestation() -> ProbeResult:
             else:
                 mismatches.append(f"missing reference: {binary_hash_file.name}")
 
-            if constitution_path and constitution_hash_file and constitution_hash_file.exists():
+            if (
+                constitution_path
+                and constitution_hash_file
+                and constitution_hash_file.exists()
+            ):
                 expected_s = constitution_hash_file.read_text().strip()
                 if Path(constitution_path).exists():
-                    actual_s = hashlib.sha256(Path(constitution_path).read_bytes()).hexdigest()
+                    actual_s = hashlib.sha256(
+                        Path(constitution_path).read_bytes()
+                    ).hexdigest()
                     if expected_s and actual_s != expected_s:
-                        mismatches.append(f"constitution {actual_s[:8]}…≠{expected_s[:8]}…")
+                        mismatches.append(
+                            f"constitution {actual_s[:8]}…≠{expected_s[:8]}…"
+                        )
                 else:
                     mismatches.append(f"missing file: {constitution_path}")
 
@@ -570,17 +713,19 @@ def fix_binary_attestation() -> bool:
     restart_cmd = os.environ.get("WATCHDOG_ATTESTATION_RESTART_CMD")
     if restart_cmd:
         try:
-            subprocess.run(restart_cmd, shell=True, check=True, timeout=10, capture_output=True)
+            subprocess.run(
+                restart_cmd, shell=True, check=True, timeout=10, capture_output=True
+            )
             log.warning(f"auto-fix: restart command succeeded: {restart_cmd}")
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             log.error(f"auto-fix: restart command failed: {e}")
             return False
     log.warning(
-        f"auto-fix: attestation cleared. Set WATCHDOG_ATTESTATION_RESTART_CMD to\n"
-        f"    consume the new seal automatically, or restart the consumer manually.\n"
-        f"Until then, the running process is the previous binary and the next\n"
-        f"auto-fix cycle will re-clear (idempotent, harmless)."
+        "auto-fix: attestation cleared. Set WATCHDOG_ATTESTATION_RESTART_CMD to\n"
+        "    consume the new seal automatically, or restart the consumer manually.\n"
+        "Until then, the running process is the previous binary and the next\n"
+        "auto-fix cycle will re-clear (idempotent, harmless)."
     )
     return True
 
@@ -590,9 +735,15 @@ def fix_deerflow_containers() -> bool:
     or recreates missing containers."""
     log.warning("auto-fix: pm2 restart deerflow")
     try:
-        subprocess.run(["pm2", "restart", "deerflow"], check=True, timeout=30, capture_output=True)
+        subprocess.run(
+            ["pm2", "restart", "deerflow"], check=True, timeout=30, capture_output=True
+        )
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
         log.error("auto-fix: failed to pm2 restart deerflow: %s", e)
         return False
 
@@ -608,24 +759,52 @@ def fix_llama_bridge() -> bool:
          the wrong thing. In that case re-register from ecosystem.config.js,
          which is the source of truth for the script path, and persist.
     """
-    ecosystem = os.environ.get("NOVA_ECOSYSTEM_FILE", str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"))
+    ecosystem = os.environ.get(
+        "NOVA_ECOSYSTEM_FILE",
+        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
+    )
     try:
-        described = subprocess.run(["pm2", "describe", "llama-bridge"], timeout=15, capture_output=True, text=True)
+        described = subprocess.run(
+            ["pm2", "describe", "llama-bridge"],
+            timeout=15,
+            capture_output=True,
+            text=True,
+        )
         script_path = None
         for line in described.stdout.splitlines():
             if "script path" in line:
                 script_path = line.split("│")[-2].strip() if "│" in line else None
         drifted = script_path is not None and not Path(script_path).exists()
         if described.returncode != 0 or drifted:
-            log.warning("auto-fix: llama-bridge %s — re-registering from %s", "script path missing on disk" if drifted else "not registered", ecosystem)
-            subprocess.run(["pm2", "delete", "llama-bridge"], timeout=15, capture_output=True)
-            subprocess.run(["pm2", "start", ecosystem, "--only", "llama-bridge"], check=True, timeout=30, capture_output=True)
+            log.warning(
+                "auto-fix: llama-bridge %s — re-registering from %s",
+                "script path missing on disk" if drifted else "not registered",
+                ecosystem,
+            )
+            subprocess.run(
+                ["pm2", "delete", "llama-bridge"], timeout=15, capture_output=True
+            )
+            subprocess.run(
+                ["pm2", "start", ecosystem, "--only", "llama-bridge"],
+                check=True,
+                timeout=30,
+                capture_output=True,
+            )
             subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
         else:
             log.warning("auto-fix: pm2 restart llama-bridge")
-            subprocess.run(["pm2", "restart", "llama-bridge"], check=True, timeout=30, capture_output=True)
+            subprocess.run(
+                ["pm2", "restart", "llama-bridge"],
+                check=True,
+                timeout=30,
+                capture_output=True,
+            )
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
         log.error("auto-fix: failed to heal llama-bridge: %s", e)
         return False
 
@@ -634,18 +813,42 @@ def fix_litellm() -> bool:
     """Heal the nova-litellm PM2 app for a RED P10_litellm: restart, or
     re-register from ecosystem.config.js if the app is missing (same drift
     protection as fix_llama_bridge)."""
-    ecosystem = os.environ.get("NOVA_ECOSYSTEM_FILE", str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"))
+    ecosystem = os.environ.get(
+        "NOVA_ECOSYSTEM_FILE",
+        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
+    )
     try:
-        described = subprocess.run(["pm2", "describe", "nova-litellm"], timeout=15, capture_output=True, text=True)
+        described = subprocess.run(
+            ["pm2", "describe", "nova-litellm"],
+            timeout=15,
+            capture_output=True,
+            text=True,
+        )
         if described.returncode != 0:
-            log.warning("auto-fix: nova-litellm not registered — starting from %s", ecosystem)
-            subprocess.run(["pm2", "start", ecosystem, "--only", "nova-litellm"], check=True, timeout=30, capture_output=True)
+            log.warning(
+                "auto-fix: nova-litellm not registered — starting from %s", ecosystem
+            )
+            subprocess.run(
+                ["pm2", "start", ecosystem, "--only", "nova-litellm"],
+                check=True,
+                timeout=30,
+                capture_output=True,
+            )
             subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
         else:
             log.warning("auto-fix: pm2 restart nova-litellm")
-            subprocess.run(["pm2", "restart", "nova-litellm"], check=True, timeout=30, capture_output=True)
+            subprocess.run(
+                ["pm2", "restart", "nova-litellm"],
+                check=True,
+                timeout=30,
+                capture_output=True,
+            )
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
         log.error("auto-fix: failed to heal nova-litellm: %s", e)
         return False
 
@@ -656,18 +859,39 @@ def fix_dify() -> bool:
     `docker compose up` in the foreground, so a restart reconciles the whole
     Dify compose stack. Longer timeout than the other fixes — a full stack
     bring-up is not instant."""
-    ecosystem = os.environ.get("NOVA_ECOSYSTEM_FILE", str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"))
+    ecosystem = os.environ.get(
+        "NOVA_ECOSYSTEM_FILE",
+        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
+    )
     try:
-        described = subprocess.run(["pm2", "describe", "nova-dify"], timeout=15, capture_output=True, text=True)
+        described = subprocess.run(
+            ["pm2", "describe", "nova-dify"], timeout=15, capture_output=True, text=True
+        )
         if described.returncode != 0:
-            log.warning("auto-fix: nova-dify not registered — starting from %s", ecosystem)
-            subprocess.run(["pm2", "start", ecosystem, "--only", "nova-dify"], check=True, timeout=60, capture_output=True)
+            log.warning(
+                "auto-fix: nova-dify not registered — starting from %s", ecosystem
+            )
+            subprocess.run(
+                ["pm2", "start", ecosystem, "--only", "nova-dify"],
+                check=True,
+                timeout=60,
+                capture_output=True,
+            )
             subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
         else:
             log.warning("auto-fix: pm2 restart nova-dify")
-            subprocess.run(["pm2", "restart", "nova-dify"], check=True, timeout=60, capture_output=True)
+            subprocess.run(
+                ["pm2", "restart", "nova-dify"],
+                check=True,
+                timeout=60,
+                capture_output=True,
+            )
         return True
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
         log.error("auto-fix: failed to heal nova-dify: %s", e)
         return False
 
@@ -727,9 +951,13 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
     (logged but no fix)."""
     for probe in report.probes:
         if probe.status == Status.RED:
-            state.consecutive_red[probe.name] = state.consecutive_red.get(probe.name, 0) + 1
+            state.consecutive_red[probe.name] = (
+                state.consecutive_red.get(probe.name, 0) + 1
+            )
         elif probe.status == Status.YELLOW:
-            state.consecutive_yellow[probe.name] = state.consecutive_yellow.get(probe.name, 0) + 1
+            state.consecutive_yellow[probe.name] = (
+                state.consecutive_yellow.get(probe.name, 0) + 1
+            )
             state.consecutive_red[probe.name] = 0
         else:
             state.consecutive_red[probe.name] = 0
@@ -771,7 +999,11 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
             # regression sat in exactly that spam pattern for days, unread).
             streak = state.consecutive_red[probe.name]
             if streak == 2 or streak % 20 == 0:
-                log.warning("no auto-fix registered for %s — investigate (RED for %d cycles)", probe.name, streak)
+                log.warning(
+                    "no auto-fix registered for %s — investigate (RED for %d cycles)",
+                    probe.name,
+                    streak,
+                )
 
 
 async def run_cycle(state: WatchdogState) -> CycleReport:
@@ -781,27 +1013,41 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
 
     # (name, coroutine) pairs so we can label a probe correctly even if it
     # raises before producing its own ProbeResult.
-    probes: list[tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]] = [
+    probes: list[
+        tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]
+    ] = [
         ("P1_nginx", asyncio.ensure_future(probe_nginx())),
         ("P2_gateway", asyncio.ensure_future(probe_gateway())),
         ("P3_frontend", asyncio.ensure_future(probe_frontend())),
         (
             "P4_local_llm_gateway",
-            asyncio.ensure_future(probe_local_llm_gateway(port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000")))),
+            asyncio.ensure_future(
+                probe_local_llm_gateway(
+                    port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000"))
+                )
+            ),
         ),
         (
             "P5_llama_loopback",
-            asyncio.ensure_future(probe_llama_loopback(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))),
+            asyncio.ensure_future(
+                probe_llama_loopback(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))
+            ),
         ),
         (
             "P6_llama_vram",
-            asyncio.ensure_future(probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))),
+            asyncio.ensure_future(
+                probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))
+            ),
         ),
         ("P7_containers", asyncio.ensure_future(probe_containers())),
         ("P8_binary_attestation", asyncio.ensure_future(probe_binary_attestation())),
         (
             "P9_bridge",
-            asyncio.ensure_future(probe_llama_bridge(host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1"))),
+            asyncio.ensure_future(
+                probe_llama_bridge(
+                    host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1")
+                )
+            ),
         ),
         (
             "P10_litellm",
@@ -872,7 +1118,9 @@ async def main_loop(args: argparse.Namespace) -> int:
             # be able to stall the watchdog beyond CYCLE_DEADLINE_SEC. If we
             # exceed it, treat the cycle as RED and force a restart via exit 1
             # so PM2 reaps us and comes back fresh.
-            report = await asyncio.wait_for(run_cycle(state), timeout=CYCLE_DEADLINE_SEC)
+            report = await asyncio.wait_for(
+                run_cycle(state), timeout=CYCLE_DEADLINE_SEC
+            )
         except asyncio.TimeoutError:
             log.error(
                 "cycle exceeded %.0fs deadline — assuming hung; emitting RED report and exiting for PM2 restart",
@@ -905,7 +1153,11 @@ async def main_loop(args: argparse.Namespace) -> int:
             return report.exit_code
 
         # If a fix was applied, re-probe next cycle without waiting the full interval
-        wait = min(args.interval, 5) if any(p.fixed for p in report.probes) else args.interval
+        wait = (
+            min(args.interval, 5)
+            if any(p.fixed for p in report.probes)
+            else args.interval
+        )
         try:
             await asyncio.wait_for(stop.wait(), timeout=wait)
         except asyncio.TimeoutError:
@@ -916,12 +1168,20 @@ async def main_loop(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Nova local-dev-stack watchdog (generic)")
-    parser.add_argument("--interval", type=int, default=30, help="seconds between cycles")
-    parser.add_argument("--once", action="store_true", help="run a single cycle and exit")
+    parser = argparse.ArgumentParser(
+        description="Nova local-dev-stack watchdog (generic)"
+    )
+    parser.add_argument(
+        "--interval", type=int, default=30, help="seconds between cycles"
+    )
+    parser.add_argument(
+        "--once", action="store_true", help="run a single cycle and exit"
+    )
     args = parser.parse_args()
     if args.interval < 1:
-        parser.error(f"--interval must be >= 1 (got {args.interval}); tighter loops would saturate the probe targets")
+        parser.error(
+            f"--interval must be >= 1 (got {args.interval}); tighter loops would saturate the probe targets"
+        )
     if CYCLE_DEADLINE_SEC < args.interval:
         # The deadline must always exceed the cycle interval, otherwise the
         # watchdog would self-abort on every normal cycle.

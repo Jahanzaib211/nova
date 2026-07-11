@@ -62,7 +62,7 @@ REQUIRED_KEYWORDS = (
     "VNC",
     # Search discipline
     "ask_clarification",
-    "systematically" if False else "exhaustively",
+    "exhaustively",
 )
 
 # Every tool the agent must know exists. Auto-derived from BUILTIN_TOOLS +
@@ -344,6 +344,7 @@ def _collect_tools_with_boom(_boom):
         from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
 
         return sorted(_TOOL_PURPOSE_OVERRIDES.items())
+    return []
 
 
 def test_collect_tools_dedupes_against_overrides(monkeypatch):

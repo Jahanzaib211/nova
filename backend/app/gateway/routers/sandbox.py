@@ -171,7 +171,7 @@ async def get_sandbox_todo(
                 todos = _normalize_todos(raw_todos)
                 content = _format_todo_md(todos)
         except Exception:
-            logger.exception("Failed to read todos from checkpointer for thread %s", thread_id)
+            logger.exception("Failed to read todos from checkpointer for thread %s", thread_id.replace("\n", "").replace("\r", ""))
 
     return {"content": content, "todos": todos}
 
@@ -494,6 +494,7 @@ async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     missing, and starts the dev server on the published preview port. The frontend
     calls this (button + auto-trigger) so the preview "just works" instead of
     nudging the agent to do it. Container/AIO sandbox only (host preview ports)."""
+    label = label.replace("\n", "").replace("\r", "")
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -512,8 +513,8 @@ async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
         asyncio.create_task(run_preview_pipeline(thread_id, sandbox, label))
         return {"started": True, "label": label}
     except Exception as e:
-        logger.warning("dev-start failed for thread %s: %s", thread_id, e)
-        return {"started": False, "reason": str(e)}
+        logger.warning("dev-start failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
+        return {"started": False, "reason": "internal error"}
 
 
 @router.get("/dev-servers")
@@ -607,6 +608,8 @@ async def browser_check(thread_id: str, label: str = DEFAULT_LABEL, routes: str 
     Loads each route, captures console errors + render failures + a screenshot,
     and returns a structured result the Browser tab renders (and the self-improving
     loop consumes). Requires a running dev server + the container (AIO) sandbox."""
+    label = label.replace("\n", "").replace("\r", "")
+    routes = routes.replace("\n", "").replace("\r", "")
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -624,8 +627,8 @@ async def browser_check(thread_id: str, label: str = DEFAULT_LABEL, routes: str 
         check = await asyncio.to_thread(run_browser_check, thread_id, sandbox, label=label, routes=route_list, with_screenshot=True)
         return check.to_dict(include_screenshot=True)
     except Exception as e:
-        logger.warning("browser-check failed for thread %s: %s", thread_id, e)
-        return {"ok": False, "reason": str(e), "routes": []}
+        logger.warning("browser-check failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
+        return {"ok": False, "reason": "internal error", "routes": []}
 
 
 @router.get("/browser-check-last")
@@ -649,6 +652,8 @@ async def save_skill(thread_id: str, name: str, path: str = ""):
     Reads the skill dir (SKILL.md + supporting files), security-scans it, and writes
     it to ``skills/custom/<name>`` (host-mounted, survives container teardown). Custom
     skills default to enabled, so it appears in the ✨ launcher + as ``/<name>`` next chat."""
+    name = name.replace("\n", "").replace("\r", "")
+    path = path.replace("\n", "").replace("\r", "")
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -663,8 +668,8 @@ async def save_skill(thread_id: str, name: str, path: str = ""):
     try:
         return await promote_skill_to_global(name, source_dir, thread_id=thread_id)
     except Exception as e:
-        logger.warning("save-skill failed for thread %s: %s", thread_id, e)
-        return {"saved": False, "name": name, "files": [], "reason": str(e)}
+        logger.warning("save-skill failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
+        return {"saved": False, "name": name, "files": [], "reason": "internal error"}
 
 
 @router.get("/terminal-url")
@@ -705,8 +710,8 @@ async def terminal_url(thread_id: str):
         terminal = f"{host_base}/terminal" + (f"?{query}" if query else "")
         return {"terminal": terminal, "vnc": f"{host_base}/vnc/index.html", "port": port}
     except Exception as e:
-        logger.warning("terminal-url failed for thread %s: %s", thread_id, e)
-        return {"terminal": None, "vnc": None, "reason": str(e)}
+        logger.warning("terminal-url failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
+        return {"terminal": None, "vnc": None, "reason": "internal error"}
 
 
 # Batch 3.1: the absproxy implementation is registered as 7 separate
@@ -743,7 +748,8 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     except HTTPException:
         raise
     except Exception as e:
-        return Response(content=f"absproxy error: {e}", status_code=502)
+        logger.warning("absproxy setup failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
+        return Response(content="absproxy error", status_code=502)
 
     target = f"{base_url.rstrip('/')}/absproxy/{port}/{path}"
     if request.url.query:
@@ -758,7 +764,8 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     except httpx.ConnectError:
         return Response(content="<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>", media_type="text/html", status_code=503)
     except Exception as e:
-        return Response(content=f"Proxy error: {e}", status_code=502)
+        logger.warning("absproxy request failed for thread %s port %d: %s", thread_id, port, e)
+        return Response(content="Proxy error", status_code=502)
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
     location = resp_headers.get("location") or resp_headers.get("Location")
@@ -929,7 +936,8 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
             status_code=503,
         )
     except Exception as e:
-        return Response(content=f"Proxy error: {e}", status_code=502)
+        logger.warning("dev-proxy request failed for thread %s: %s", thread_id, e)
+        return Response(content="Proxy error", status_code=502)
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
 

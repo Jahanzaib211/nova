@@ -61,7 +61,7 @@ try:
                 cid = c.get('configuration').get('id', '')
                 if '${PREFIX}' in cid:
                     print(cid)
-except:
+except Exception:
     pass
 " 2>/dev/null || echo "")
 

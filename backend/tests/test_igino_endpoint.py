@@ -41,7 +41,7 @@ class TestIGINOEndpoints(unittest.TestCase):
         from app.gateway.routers.igino import router
 
         self.assertIsNotNone(router)
-        self.assertTrue(len(router.routes) > 0)
+        self.assertGreater(len(router.routes), 0)
 
     def test_status_response_shape(self):
         from app.gateway.routers import igino as igino_router
@@ -115,8 +115,6 @@ class TestAuthMiddleware(unittest.TestCase):
         self.assertNotIn("/api/igino", _PUBLIC_PATH_PREFIXES)
 
     def test_igino_status_returns_enabled_false_when_disabled(self):
-        import asyncio
-
         from app.gateway.routers.igino import get_status
 
         # ``DEERFLOW_IGINO_ENABLED`` is unset in the test env, so the

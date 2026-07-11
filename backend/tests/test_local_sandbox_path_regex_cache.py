@@ -27,9 +27,15 @@ def _make_sandbox(tmp_path: Path) -> LocalSandbox:
 def test_patterns_are_compiled_once_and_cached(tmp_path):
     sb = _make_sandbox(tmp_path)
     # Each cached_property returns the identical object across accesses.
-    assert sb._command_pattern is sb._command_pattern
-    assert sb._content_pattern is sb._content_pattern
-    assert sb._reverse_output_patterns is sb._reverse_output_patterns
+    cmd1 = sb._command_pattern
+    cmd2 = sb._command_pattern
+    assert cmd1 is cmd2
+    content1 = sb._content_pattern
+    content2 = sb._content_pattern
+    assert content1 is content2
+    reverse1 = sb._reverse_output_patterns
+    reverse2 = sb._reverse_output_patterns
+    assert reverse1 is reverse2
     # Two mappings -> two reverse-output patterns.
     assert len(sb._reverse_output_patterns) == 2
 
@@ -70,9 +76,15 @@ def test_reverse_resolve_output_maps_local_back_to_container(tmp_path):
 def test_resolved_paths_and_sorted_views_are_cached(tmp_path):
     sb = _make_sandbox(tmp_path)
     # Resolved-local map and sorted views are computed once and reused.
-    assert sb._resolved_local_paths is sb._resolved_local_paths
-    assert sb._mappings_by_container_specificity is sb._mappings_by_container_specificity
-    assert sb._mappings_by_local_specificity is sb._mappings_by_local_specificity
+    resolved1 = sb._resolved_local_paths
+    resolved2 = sb._resolved_local_paths
+    assert resolved1 is resolved2
+    container1 = sb._mappings_by_container_specificity
+    container2 = sb._mappings_by_container_specificity
+    assert container1 is container2
+    local1 = sb._mappings_by_local_specificity
+    local2 = sb._mappings_by_local_specificity
+    assert local1 is local2
     # Map covers every mapping with its filesystem-resolved local root.
     assert set(sb._resolved_local_paths.values()) == {
         str((tmp_path / "workspace").resolve()),

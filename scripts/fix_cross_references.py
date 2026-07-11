@@ -45,12 +45,14 @@ def _is_md(path: Path) -> bool:
 def _is_in_allow_list(rel: str) -> bool:
     sys.path.insert(0, str(REPO_ROOT / "backend/tests"))
     import test_no_cross_references as t
+
     return any(rel == allowed_path for allowed_path, _, _ in t.ALLOW_LIST)
 
 
 def _find_violations() -> list[tuple[Path, int, str, str]]:
     sys.path.insert(0, str(REPO_ROOT / "backend/tests"))
     import test_no_cross_references as t
+
     files = t._gather_files()
     out = []
     for path in files:
@@ -65,6 +67,7 @@ def _human_review_strings() -> set[str]:
     so there's a single source of truth."""
     sys.path.insert(0, str(REPO_ROOT / "backend/tests"))
     import test_no_cross_references as t
+
     return {f.lower() for f in t.FORBIDDEN}
 
 
@@ -82,7 +85,10 @@ def _plan_fix(path: Path, lineno: int, forbidden: str, line: str) -> ProposedFix
         if old in line:
             new_line = re.sub(re.escape(old), new, line, count=1)
             return ProposedFix(
-                path=path, line_no=lineno, before=line, after=new_line,
+                path=path,
+                line_no=lineno,
+                before=line,
+                after=new_line,
                 description=f"{desc} (renamed {old!r} → {new!r})",
             )
 
@@ -129,6 +135,7 @@ def _apply_fix(fix: ProposedFix) -> bool:
 def _verify_no_cross_refs() -> bool:
     """Run the cross-ref test to verify fixes didn't break anything."""
     import subprocess
+
     result = subprocess.run(
         ["python3", str(REPO_ROOT / "backend/tests/test_no_cross_references.py")],
         cwd=REPO_ROOT,
@@ -144,9 +151,15 @@ def _verify_no_cross_refs() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--dry-run", action="store_true", help="Preview only; don't write")
-    parser.add_argument("--path", type=Path, help="Limit fixes to this path (relative to repo root)")
-    parser.add_argument("--skip-verify", action="store_true", help="Skip post-fix verification")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview only; don't write"
+    )
+    parser.add_argument(
+        "--path", type=Path, help="Limit fixes to this path (relative to repo root)"
+    )
+    parser.add_argument(
+        "--skip-verify", action="store_true", help="Skip post-fix verification"
+    )
     args = parser.parse_args()
 
     print(f"Scanning {REPO_ROOT} for cross-project violations...")
@@ -216,7 +229,9 @@ def main() -> int:
         print("Post-fix cross-ref check: OK")
 
     if needs_human_review:
-        print(f"\nHuman review needed for {len(needs_human_review)} item(s) not auto-fixed:")
+        print(
+            f"\nHuman review needed for {len(needs_human_review)} item(s) not auto-fixed:"
+        )
         for path, lineno, forbidden, line in needs_human_review[:10]:
             rel = path.relative_to(REPO_ROOT)
             print(f"  {rel}:{lineno}  {forbidden}: {line.strip()[:80]}")

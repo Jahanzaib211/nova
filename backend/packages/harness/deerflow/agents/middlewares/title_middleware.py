@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, NotRequired, override
+from typing import Any, NotRequired, override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
@@ -12,10 +12,6 @@ from langgraph.runtime import Runtime
 from deerflow.agents.middlewares.dynamic_context_middleware import is_dynamic_context_reminder
 from deerflow.config.title_config import get_title_config
 from deerflow.models import create_chat_model
-
-if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
-    from deerflow.config.title_config import TitleConfig
 
 logger = logging.getLogger(__name__)
 

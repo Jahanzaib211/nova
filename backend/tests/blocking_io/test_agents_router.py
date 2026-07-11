@@ -51,7 +51,6 @@ async def test_delete_agent_does_not_block_event_loop(tmp_path: Path, monkeypatc
     load_agents_api_config_from_dict({"enabled": True})
     try:
         user_id = get_effective_user_id()
-        user_id = get_effective_user_id()
         # test-side seeding (resolution offloaded; not exercised on the loop)
         agent_dir = await asyncio.to_thread(get_paths().user_agent_dir, user_id, "loop-test-agent")
         await asyncio.to_thread(agent_dir.mkdir, parents=True, exist_ok=True)

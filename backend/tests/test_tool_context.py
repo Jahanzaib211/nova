@@ -1,8 +1,6 @@
 """Tests for ToolContext dependency injection."""
 
 import threading
-from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,7 +8,6 @@ import pytest
 from deerflow.sandbox.tool_context import (
     ToolContext,
     create_test_tool_context,
-    create_tool_context,
 )
 
 

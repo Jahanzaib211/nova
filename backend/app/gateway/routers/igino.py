@@ -82,7 +82,7 @@ async def get_status() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.error("iGIN0 status failed: %s", exc)
-        return {"enabled": True, "error": str(exc)}
+        return {"enabled": True, "error": "internal error"}
 
 
 @router.post("/toggle")
@@ -112,7 +112,7 @@ async def run_research(req: ResearchRequest, user: Any | None = Depends(get_opti
         return result
     except Exception as exc:
         logger.error("iGIN0 research failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="research failed")
 
 
 @router.get("/cache")
@@ -124,7 +124,7 @@ async def get_cache_stats() -> dict[str, Any]:
 
         return get_search_cache().stats
     except Exception as exc:
-        return {"error": str(exc)}
+        return {"error": "internal error"}
 
 
 @router.get("/audit")
@@ -136,16 +136,15 @@ async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_opt
         trail = get_audit_trail()
         return {"records": trail.get_records(limit=limit), "stats": trail.get_stats()}
     except Exception as exc:
-        return {"error": str(exc), "records": [], "stats": {}}
+        return {"error": "Failed to fetch audit records", "records": [], "stats": {}}
 
 
 # v7.3 (Nova rebrand): backward-compat aliases for tests that imported the
 # pre-rename function names. The functions were renamed to `get_status` /
 # `toggle_privacy` during security hardening (fd2eb27); tests still expect
-# the original module-level names (both `igino_status` and the mock target
-# `_igino_status`). Aliases keep both call sites working without renaming
-# the routes or rewriting the tests.
+# the original module-level names. Aliases keep both call sites working
+# without renaming the routes or rewriting the tests.
+# CodeQL: unused-global-variable false positive
 igino_status = get_status
+# CodeQL: unused-global-variable false positive
 igino_toggle = toggle_privacy
-_igino_status = get_status
-_igino_toggle = toggle_privacy

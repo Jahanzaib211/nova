@@ -39,7 +39,7 @@ const ShimmerComponent = ({
       className={cn(
         "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
         "[background-repeat:no-repeat,padding-box] [--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))]",
-        "will-change-[background-position] transform-gpu",
+        "transform-gpu will-change-[background-position]",
         className,
       )}
       initial={{ backgroundPosition: "100% center" }}

@@ -62,7 +62,7 @@ class ChannelRuntimeConfigStore:
                 self._path.chmod(0o600)
             except OSError:
                 logger.debug("Unable to chmod channel runtime config store at %s", self._path, exc_info=True)
-        except BaseException:
+        except Exception:
             fd.close()
             Path(fd.name).unlink(missing_ok=True)
             raise

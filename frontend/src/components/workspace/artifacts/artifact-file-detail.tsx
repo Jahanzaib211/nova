@@ -303,7 +303,7 @@ export function ArtifactFileDetail({
           (language === "markdown" || language === "html") && (
             <ArtifactFilePreview
               content={visibleContent}
-              language={language ?? "text"}
+              language={language}
               scrollKey={filepathFromProps}
               url={url}
             />

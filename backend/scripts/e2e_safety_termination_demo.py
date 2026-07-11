@@ -90,7 +90,7 @@ def main() -> int:
     # ``factory.create_chat_model`` doesn't propagate back into already-
     # imported names.
     import deerflow.agents.lead_agent.agent as lead_agent_module
-    import deerflow.client as client_module
+    from deerflow import client as client_module
 
     fake = _ContentFilteredFakeModel()
     originals = {

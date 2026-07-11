@@ -55,7 +55,7 @@ class SafetyTerminationDetector(Protocol):
         Implementations must be side-effect free and tolerant of missing or
         oddly-typed metadata — detectors run on every model response.
         """
-        ...
+        pass
 
 
 def _get_metadata_value(message: AIMessage, field_name: str) -> str | None:

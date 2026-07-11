@@ -443,9 +443,9 @@ async def create_sandbox(req: CreateSandboxRequest):
     If the sandbox already exists, returns the existing information
     (idempotent).
     """
-    sandbox_id = req.sandbox_id
-    thread_id = req.thread_id
-    user_id = req.user_id
+    sandbox_id = req.sandbox_id.replace("\n", "").replace("\r", "")
+    thread_id = req.thread_id.replace("\n", "").replace("\r", "")
+    user_id = req.user_id.replace("\n", "").replace("\r", "")
 
     logger.info(
         "Received request to create sandbox '%s' for thread '%s' user '%s'",
@@ -468,7 +468,7 @@ async def create_sandbox(req: CreateSandboxRequest):
         core_v1.create_namespaced_pod(
             K8S_NAMESPACE, _build_pod(sandbox_id, thread_id, user_id=user_id)
         )
-        logger.info(f"Created Pod {_pod_name(sandbox_id)}")
+        logger.info("Created Pod %s", _pod_name(sandbox_id))
     except ApiException as exc:
         if exc.status != 409:  # 409 = AlreadyExists
             raise HTTPException(
@@ -478,7 +478,7 @@ async def create_sandbox(req: CreateSandboxRequest):
     # ── Create Service ───────────────────────────────────────────────
     try:
         core_v1.create_namespaced_service(K8S_NAMESPACE, _build_service(sandbox_id))
-        logger.info(f"Created Service {_svc_name(sandbox_id)}")
+        logger.info("Created Service %s", _svc_name(sandbox_id))
     except ApiException as exc:
         if exc.status != 409:
             # Roll back the Pod on failure
@@ -518,7 +518,7 @@ async def destroy_sandbox(sandbox_id: str):
     # Delete Service
     try:
         core_v1.delete_namespaced_service(_svc_name(sandbox_id), K8S_NAMESPACE)
-        logger.info(f"Deleted Service {_svc_name(sandbox_id)}")
+        logger.info("Deleted Service %s", _svc_name(sandbox_id))
     except ApiException as exc:
         if exc.status != 404:
             errors.append(f"service: {exc.reason}")
@@ -526,7 +526,7 @@ async def destroy_sandbox(sandbox_id: str):
     # Delete Pod
     try:
         core_v1.delete_namespaced_pod(_pod_name(sandbox_id), K8S_NAMESPACE)
-        logger.info(f"Deleted Pod {_pod_name(sandbox_id)}")
+        logger.info("Deleted Pod %s", _pod_name(sandbox_id))
     except ApiException as exc:
         if exc.status != 404:
             errors.append(f"pod: {exc.reason}")

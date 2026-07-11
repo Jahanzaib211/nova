@@ -7,7 +7,6 @@ import httpx
 import pytest
 
 import deerflow.community.jina_ai.jina_client as jina_client_module
-from deerflow.community.jina_ai.jina_client import JinaClient
 from deerflow.community.jina_ai.tools import (
     _coerce_bool,
     _coerce_proxy,
@@ -18,7 +17,7 @@ from deerflow.community.jina_ai.tools import (
 
 @pytest.fixture
 def jina_client():
-    return JinaClient()
+    return jina_client_module.JinaClient()
 
 
 @pytest.mark.anyio
@@ -235,7 +234,7 @@ async def test_web_fetch_tool_returns_error_on_crawl_failure(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
     monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
-    monkeypatch.setattr(JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert result.startswith("Error:")
     assert "429" in result
@@ -251,7 +250,7 @@ async def test_web_fetch_tool_returns_markdown_on_success(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
     monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
-    monkeypatch.setattr(JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert "Hello world" in result
     assert not result.startswith("Error:")
@@ -275,7 +274,7 @@ async def test_web_fetch_tool_forwards_proxy_and_trust_env(monkeypatch):
     }
     mock_config.get_tool_config.return_value = mock_tool_config
     monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
-    monkeypatch.setattr(JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
 
     result = await web_fetch_tool.ainvoke("https://example.com")
 
@@ -302,7 +301,7 @@ async def test_web_fetch_tool_ignores_empty_proxy(monkeypatch):
     mock_tool_config.model_extra = {"proxy": "   ", "trust_env": True}
     mock_config.get_tool_config.return_value = mock_tool_config
     monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
-    monkeypatch.setattr(JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
 
     result = await web_fetch_tool.ainvoke("https://example.com")
 
@@ -322,7 +321,7 @@ async def test_web_fetch_tool_offloads_extraction_to_thread(monkeypatch):
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
     monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
-    monkeypatch.setattr(JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
 
     to_thread_called = False
     original_to_thread = asyncio.to_thread

@@ -25,6 +25,7 @@ _BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
 _DEFAULT_MAX_RESULTS = 5
 # Brave Search API caps the `count` parameter at 20 results per request.
 _BRAVE_MAX_COUNT = 20
+# CodeQL: unused-global-variable false positive
 _api_key_warned = False
 
 

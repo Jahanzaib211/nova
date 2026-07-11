@@ -199,7 +199,7 @@ class DeerFlowClient:
             json.dump(data, fd, indent=2)
             fd.close()
             Path(fd.name).replace(path)
-        except BaseException:
+        except Exception:
             fd.close()
             Path(fd.name).unlink(missing_ok=True)
             raise

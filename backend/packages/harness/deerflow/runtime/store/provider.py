@@ -159,8 +159,8 @@ def reset_store() -> None:
                 _store_ctx.__exit__(None, None, None)
             except Exception:
                 logger.warning("Error during store cleanup", exc_info=True)
-            _store_ctx = None
-        _store = None
+            _store_ctx = None  # CodeQL: unused-global-variable false positive — global reset
+        _store = None  # CodeQL: unused-global-variable false positive — global reset
 
 
 # ---------------------------------------------------------------------------
