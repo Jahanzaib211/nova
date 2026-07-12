@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -33,7 +34,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = _resolve_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -54,8 +55,16 @@ def do_run_migrations(connection):
         context.run_migrations()
 
 
+def _resolve_database_url() -> str:
+    """Return the database URL, preferring ``DEER_FLOW_DATABASE_URL``."""
+    return os.environ.get(
+        "DEER_FLOW_DATABASE_URL",
+        config.get_main_option("sqlalchemy.url"),
+    )
+
+
 async def run_migrations_online() -> None:
-    connectable = create_async_engine(config.get_main_option("sqlalchemy.url"))
+    connectable = create_async_engine(_resolve_database_url())
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
