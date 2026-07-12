@@ -45,9 +45,86 @@ const MAX_TRACKED_THREADS = 50;
 
 const THREAD_PATH = /\/threads\/([0-9a-fA-F-]{8,})\//;
 
+/**
+ * Phase C0 — per-thread correlation_id registry.
+ *
+ * The backend emits the run's correlation_id as the first SSE frame:
+ *   ``: correlation_id=<hex>\n\n``
+ * Standard EventSource implementations ignore the comment line, but our
+ * ``livenessFetch`` wrapper tees the first chunk through the decoder so
+ * the value can be captured here. Subsequent calls to ``getCorrelationId``
+ * return this same identifier for the rest of the session — every stream-trace
+ * record, watchdog decision, recovery action, and recovery log carries it.
+ */
+const correlationIds = new Map<string, string>();
+/**
+ * SSE comment matcher: ``: correlation_id=<hex>\n``.
+ * The hex is variable-length (UUIDv4 hex is 32 chars; with dashes, 36 chars).
+ * We accept any length >= 1 to stay forward-compatible and avoid picking up
+ * the literal string ``: correlation_id=`` in user payloads.
+ */
+const CORR_ID_COMMENT = /^: correlation_id=([a-zA-Z0-9_-]+)\s*$/m;
+
 export function extractThreadIdFromUrl(url: string): string | null {
   const match = THREAD_PATH.exec(url);
   return match?.[1] ?? null;
+}
+
+/**
+ * Read the correlation_id for the given thread, if one has been seen on the
+ * SSE stream. Returns ``null`` when the thread has not been seen, the backend
+ * did not emit a correlation_id (legacy runs), or the chunk hasn't been read
+ * yet. Consumers MUST fall back to ``run_id`` when this returns ``null``.
+ */
+export function getCorrelationId(threadId?: string | null): string | null {
+  if (!threadId) return null;
+  return correlationIds.get(threadId) ?? null;
+}
+
+/** Test-only: clear all tracked correlation_ids. */
+export function resetCorrelationIds(): void {
+  correlationIds.clear();
+}
+
+/**
+ * Inspect a chunk of bytes for the correlation_id comment and record it
+ * against the thread. Safe to call on every chunk — the regex is cheap and
+ * only the FIRST chunk typically contains the comment, so subsequent calls
+ * are no-ops.
+ *
+ * The decoder is decoded with ``stream: false`` so each chunk's text is
+ * fully visible regardless of where byte boundaries land in multi-byte
+ * UTF-8 sequences. The correlation_id is a hex string (ASCII-only), so
+ * any rare split-codepoint boundary in subsequent chunks does not affect
+ * capture.
+ *
+ * Exported under the ``_FOR_TESTING`` alias so unit tests can drive the
+ * capture path directly without going through the full fetch/stream pipeline.
+ */
+export function captureCorrelationIdFromChunk_FOR_TESTING(
+  threadId: string | null,
+  chunk: Uint8Array,
+  decoder: TextDecoder,
+): void {
+  if (!threadId) return;
+  if (correlationIds.has(threadId)) return;
+  // Decode the chunk as a standalone UTF-8 string (stream: false). For
+  // SSE comments (ASCII hex), this is correct and lets the regex see
+  // the full chunk content.
+  const text = decoder.decode(chunk);
+  const corr = CORR_ID_COMMENT.exec(text)?.[1];
+  if (corr) {
+    correlationIds.set(threadId, corr);
+  }
+}
+
+// Internal alias for production use inside wrapBody.
+function captureCorrelationIdFromChunk(
+  threadId: string | null,
+  chunk: Uint8Array,
+  decoder: TextDecoder,
+): void {
+  captureCorrelationIdFromChunk_FOR_TESTING(threadId, chunk, decoder);
 }
 
 function touch(threadId: string | null): void {
@@ -129,6 +206,11 @@ function wrapBody(
 ): ReadableStream<Uint8Array> {
   const reader = body.getReader();
   let closed = false;
+  // Phase C0 — a streaming TextDecoder so we can sniff the first chunk for
+  // the correlation_id comment without buffering the whole stream. { stream: true }
+  // means subsequent chunks concatenate to the same decoder.
+  const decoder =
+    typeof TextDecoder !== "undefined" ? new TextDecoder("utf-8") : null;
   const close = () => {
     if (closed) return;
     closed = true;
@@ -150,6 +232,9 @@ function wrapBody(
         return;
       }
       touch(threadId);
+      if (decoder) {
+        captureCorrelationIdFromChunk(threadId, result.value, decoder);
+      }
       controller.enqueue(result.value);
     },
     cancel(reason) {

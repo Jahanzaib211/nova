@@ -45,6 +45,12 @@ class RunRow(Base):
     # Follow-up association
     follow_up_to_run_id: Mapped[str | None] = mapped_column(String(64))
 
+    # Phase C0 — cross-process correlation identifier (UUIDv4 hex, 32 chars).
+    # Nullable for legacy rows; not indexed because the cross-process join
+    # happens at the application boundary (record() looks it up in the
+    # registry), not via SQL.
+    correlation_id: Mapped[str | None] = mapped_column(String(64))
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 

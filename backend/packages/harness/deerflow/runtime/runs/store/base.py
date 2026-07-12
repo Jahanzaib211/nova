@@ -30,6 +30,7 @@ class RunStore(abc.ABC):
         kwargs: dict[str, Any] | None = None,
         error: str | None = None,
         created_at: str | None = None,
+        correlation_id: str | None = None,
     ) -> None:
         pass
 

@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from deerflow.runtime.stream_bridge.diagnostics import register_correlation_id
 from deerflow.utils.time import now_iso as _now_iso
 
 from .schemas import DisconnectMode, RunStatus
@@ -104,6 +105,12 @@ class RunRecord:
     message_count: int = 0
     last_ai_message: str | None = None
     first_human_message: str | None = None
+    # Phase C0 — cross-process correlation identifier.
+    # Stable across backend → SSE → frontend → recovery logs. Generated
+    # exactly once per run at create() / create_or_reject() time. Defaults
+    # to "" for legacy rows hydrated from a store written before this field
+    # existed; consumers must treat "" as "unknown, fall back to run_id".
+    correlation_id: str = ""
 
 
 class RunManager:
@@ -175,6 +182,8 @@ class RunManager:
         }
         if record.user_id is not None:
             payload["user_id"] = record.user_id
+        if record.correlation_id:
+            payload["correlation_id"] = record.correlation_id
         return payload
 
     async def _call_store_with_retry(
@@ -297,6 +306,7 @@ class RunManager:
             message_count=row.get("message_count") or 0,
             last_ai_message=row.get("last_ai_message"),
             first_human_message=row.get("first_human_message"),
+            correlation_id=row.get("correlation_id") or "",
         )
 
     async def update_run_completion(self, run_id: str, **kwargs) -> None:
@@ -367,6 +377,7 @@ class RunManager:
     ) -> RunRecord:
         """Create a new pending run and register it."""
         run_id = str(uuid.uuid4())
+        correlation_id = uuid.uuid4().hex
         now = _now_iso()
         record = RunRecord(
             run_id=run_id,
@@ -380,10 +391,19 @@ class RunManager:
             user_id=user_id,
             created_at=now,
             updated_at=now,
+            correlation_id=correlation_id,
         )
         async with self._lock:
             self._runs[run_id] = record
             self._index_run_locked(record)
+            # Phase C0 — register the run's correlation_id so every
+            # subsequent diagnostics record stamped for this run or
+            # thread automatically carries the canonical identifier.
+            register_correlation_id(
+                run_id=run_id,
+                thread_id=thread_id,
+                correlation_id=correlation_id,
+            )
             persisted = False
             try:
                 await self._persist_new_run_to_store(record)
@@ -465,7 +485,20 @@ class RunManager:
             run_id = row.get("run_id")
             if run_id and run_id not in records_by_id:
                 try:
-                    records_by_id[run_id] = self._record_from_store(row)
+                    record = self._record_from_store(row)
+                    records_by_id[run_id] = record
+                    # Phase C0 — rehydrate the correlation registry for
+                    # store-only rows so subsequent diagnostics carry
+                    # the original identifier (e.g. after a worker
+                    # restart, the next request still gets correlation-
+                    # stamped records).
+                    cid = row.get("correlation_id")
+                    if cid:
+                        register_correlation_id(
+                            run_id=run_id,
+                            thread_id=row.get("thread_id"),
+                            correlation_id=cid,
+                        )
                 except Exception:
                     logger.warning("Failed to map store row for run %s", run_id, exc_info=True)
         return sorted(records_by_id.values(), key=lambda record: record.created_at, reverse=True)[:limit]
@@ -686,6 +719,7 @@ class RunManager:
         eliminating the TOCTOU race in separate ``has_inflight`` + ``create``.
         """
         run_id = str(uuid.uuid4())
+        correlation_id = uuid.uuid4().hex
         now = _now_iso()
 
         _supported_strategies = ("reject", "interrupt", "rollback")
@@ -737,9 +771,18 @@ class RunManager:
                 created_at=now,
                 updated_at=now,
                 model_name=model_name,
+                correlation_id=correlation_id,
             )
             self._runs[run_id] = record
             self._index_run_locked(record)
+            # Phase C0 — register the run's correlation_id so every
+            # subsequent diagnostics record stamped for this run or
+            # thread automatically carries the canonical identifier.
+            register_correlation_id(
+                run_id=run_id,
+                thread_id=thread_id,
+                correlation_id=correlation_id,
+            )
             persisted = False
             try:
                 await self._persist_new_run_to_store(record)

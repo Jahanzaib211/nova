@@ -29,9 +29,10 @@ class MemoryRunStore(RunStore):
         kwargs=None,
         error=None,
         created_at=None,
+        correlation_id=None,
     ):
         now = datetime.now(UTC).isoformat()
-        self._runs[run_id] = {
+        row = {
             "run_id": run_id,
             "thread_id": thread_id,
             "assistant_id": assistant_id,
@@ -45,6 +46,9 @@ class MemoryRunStore(RunStore):
             "created_at": created_at or now,
             "updated_at": now,
         }
+        if correlation_id:
+            row["correlation_id"] = correlation_id
+        self._runs[run_id] = row
 
     async def get(self, run_id, *, user_id=None):
         run = self._runs.get(run_id)

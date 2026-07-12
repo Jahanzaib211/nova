@@ -93,6 +93,7 @@ class RunRepository(RunStore):
         error=None,
         created_at=None,
         follow_up_to_run_id=None,
+        correlation_id: str | None = None,
     ):
         """Insert or update a run row.
 
@@ -116,6 +117,9 @@ class RunRepository(RunStore):
             "follow_up_to_run_id": follow_up_to_run_id,
             "updated_at": now,
         }
+        # Phase C0 — cross-process correlation_id; nullable for legacy rows.
+        if correlation_id:
+            values["correlation_id"] = correlation_id
         async with self._sf() as session:
             row = await session.get(RunRow, run_id)
             if row is None:

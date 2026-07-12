@@ -1,5 +1,7 @@
 "use client";
 
+import { getCorrelationId } from "../api/stream-liveness";
+
 /**
  * Streaming pipeline diagnostics for the browser side.
  *
@@ -35,6 +37,14 @@ export type DiagnosticsRecord = {
   wallIso: string;
   runId?: string;
   threadId?: string;
+  /**
+   * Phase C0 — cross-process correlation identifier emitted by the
+   * backend on every SSE stream. Set automatically from the threadId
+   * registry when ``record()`` is called; consumers MUST treat it as
+   * the canonical cross-process join key. When absent, fall back to
+   * ``runId`` for legacy / pre-Phase-C0 runs.
+   */
+  correlationId?: string;
   extra?: Record<string, unknown>;
 };
 
@@ -120,6 +130,14 @@ class StreamTrace {
       };
       if (fields.runId) record.runId = String(fields.runId);
       if (fields.threadId) record.threadId = String(fields.threadId);
+      // Phase C0 — surface the cross-process correlation_id. The
+      // stream-liveness module tees the backend's ``: correlation_id=``
+      // SSE comment into a per-thread registry; ``getCorrelationId``
+      // reads from it. We resolve once per record so the captured
+      // identifier is exactly what the backend saw at run start.
+      const threadKey = fields.threadId ?? null;
+      const corr = getCorrelationId(threadKey);
+      if (corr) record.correlationId = corr;
       if (fields.extra) {
         const safeExtra: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields.extra)) {

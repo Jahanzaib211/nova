@@ -108,6 +108,7 @@ class _Diagnostics:
         run_id: str | None = None,
         thread_id: str | None = None,
         event_id: str | None = None,
+        correlation_id: str | None = None,
         extra: dict[str, Any] | None = None,
     ) -> None:
         if not self._enabled or self._sink is None:
@@ -127,12 +128,20 @@ class _Diagnostics:
                 rid = _sanitize(run_id)
                 tid = _sanitize(thread_id)
                 eid = _sanitize(event_id)
+                # Phase C0 — explicit ``correlation_id`` wins; otherwise
+                # fall back to the registry populated by ``register_correlation_id``
+                # (which the RunManager writes on create/create_or_reject).
+                cid = _sanitize(correlation_id) or _resolve_correlation_id(
+                    run_id=run_id, thread_id=thread_id
+                )
                 if rid is not None:
                     payload["run_id"] = rid
                 if tid is not None:
                     payload["thread_id"] = tid
                 if eid is not None:
                     payload["event_id"] = eid
+                if cid is not None:
+                    payload["correlation_id"] = cid
                 if extra:
                     # JSON-coerce values so the line is always parseable.
                     safe_extra: dict[str, Any] = {}
@@ -157,6 +166,75 @@ class _Diagnostics:
 
 
 diagnostics = _Diagnostics()
+
+
+# ---------------------------------------------------------------------------
+# Phase C0 — cross-process correlation registry.
+#
+# The ``RunManager`` writes the run's ``correlation_id`` here as soon as a
+# run is created (see ``RunManager.create`` / ``create_or_reject``). When
+# ``record()`` fires for any boundary that already knows ``thread_id``, we
+# look up the matching correlation_id and stamp it on every record. This
+# avoids changing the public signature of every ``record_*`` helper
+# (``record_worker_publish`` etc.) while ensuring every diagnostic line
+# carries the canonical join key.
+# ---------------------------------------------------------------------------
+
+_correlation_by_thread: dict[str, str] = {}
+_correlation_by_run: dict[str, str] = {}
+
+
+def register_correlation_id(
+    *,
+    run_id: str | None = None,
+    thread_id: str | None = None,
+    correlation_id: str | None = None,
+) -> None:
+    """Record a (run_id, thread_id, correlation_id) mapping.
+
+    Safe to call multiple times for the same run / thread. Setting
+    ``correlation_id=None`` does nothing — the existing mapping is
+    preserved. Set an empty string to clear.
+    """
+    if not correlation_id:
+        return
+    cid = _sanitize(correlation_id)
+    if cid is None:
+        return
+    if thread_id:
+        _correlation_by_thread[thread_id] = cid
+    if run_id:
+        _correlation_by_run[run_id] = cid
+
+
+def lookup_correlation_id(
+    *,
+    run_id: str | None = None,
+    thread_id: str | None = None,
+) -> str | None:
+    """Return the correlation_id previously registered for this run/thread."""
+    if thread_id:
+        cid = _correlation_by_thread.get(thread_id)
+        if cid:
+            return cid
+    if run_id:
+        cid = _correlation_by_run.get(run_id)
+        if cid:
+            return cid
+    return None
+
+
+def _resolve_correlation_id(
+    *,
+    run_id: str | None = None,
+    thread_id: str | None = None,
+) -> str | None:
+    cid = lookup_correlation_id(run_id=run_id, thread_id=thread_id)
+    if cid:
+        return cid
+    # Fallback: derive a deterministic pseudo-id from run_id so legacy
+    # callers (no explicit register) still produce a joinable record.
+    return None
 
 
 # Public recording helpers ----------------------------------------------------

@@ -471,12 +471,29 @@ async def sse_consumer(
     The ``finally`` block implements ``on_disconnect`` semantics:
     - ``cancel``: abort the background task on client disconnect.
     - ``continue``: let the task run; events are discarded.
+
+    Phase C0 — emits the run's ``correlation_id`` as the first SSE frame
+    (an SSE comment, which standard EventSource implementations ignore).
+    The frontend's ``livenessFetch`` interceptor reads this comment and
+    exposes the value via ``getCorrelationId(threadId)`` so every
+    record emitted through ``stream-trace`` carries the same identifier
+    as the backend's ``record_worker_publish`` records.
     """
     last_event_id = request.headers.get("Last-Event-ID")
     thread_id = record.thread_id
     iteration = 0
     disconnect_kind: str | None = None
     try:
+        # Phase C0: emit the correlation_id as the first frame so the
+        # frontend can pin it before any event arrives. SSE comments
+        # (lines starting with ":") are ignored by the standard
+        # EventSource parser, so this is invisible to consumers that
+        # don't look for it explicitly. We skip emission when the
+        # request is already disconnected — there is no consumer to
+        # receive it.
+        if record.correlation_id and not await request.is_disconnected():
+            corr_frame = f": correlation_id={record.correlation_id}\n\n"
+            yield corr_frame
         async for entry in bridge.subscribe(record.run_id, last_event_id=last_event_id):
             iteration += 1
             disconnected = await request.is_disconnected()
