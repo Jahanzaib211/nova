@@ -19,11 +19,16 @@ from fastapi import HTTPException, Request
 from langchain_core.messages import BaseMessage
 from langchain_core.messages.utils import convert_to_messages
 
-from app.gateway.deps import get_run_context, get_run_manager, get_run_service, get_stream_bridge
+from app.gateway.deps import (
+    get_configuration_service,
+    get_run_context,
+    get_run_manager,
+    get_run_service,
+    get_stream_bridge,
+)
 from app.gateway.internal_auth import INTERNAL_SYSTEM_ROLE, get_trusted_internal_owner_user_id
 from app.gateway.utils import sanitize_log_param
-from deerflow.config.app_config import get_app_config
-from deerflow.services.protocols import RunService
+from deerflow.services.protocols import ConfigurationService, RunService
 from deerflow.runtime import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
@@ -349,7 +354,8 @@ async def start_run(
 
     # Validate model against the allowlist when a model_name is provided.
     if model_name:
-        app_config = get_app_config()
+        config_svc = get_configuration_service(request)
+        app_config = config_svc.get_config()
         resolved = app_config.get_model_config(model_name)
         if resolved is None:
             raise HTTPException(

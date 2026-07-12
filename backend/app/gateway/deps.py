@@ -32,6 +32,18 @@ from deerflow.runtime import RunContext, RunManager, StreamBridge
 from deerflow.runtime.events.store.base import RunEventStore
 from deerflow.runtime.runs.store.base import RunStore
 from deerflow.services.container import service_container
+from deerflow.services.protocols import (
+    ArtifactService,
+    BrowserService,
+    ConfigurationService,
+    DiagnosticsService,
+    HealthService,
+    RecoveryService,
+    RepositoryService,
+    RunService,
+    TerminalService,
+    WorkspaceService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -217,20 +229,39 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # The container provides typed service interfaces; RunManager becomes
         # an implementation detail behind RunService.
         from deerflow.services.implementations import (
+            ArtifactServiceImpl,
+            BrowserServiceImpl,
             ConfigurationServiceImpl,
             DiagnosticsServiceImpl,
+            HealthServiceImpl,
+            RecoveryServiceImpl,
+            RepositoryServiceImpl,
             RunServiceImpl,
+            TerminalServiceImpl,
+            WorkspaceServiceImpl,
         )
         from deerflow.services.protocols import RunService
 
         app.state.run_service: RunService = RunServiceImpl(app.state.run_manager)
+        app.state.configuration_service = ConfigurationServiceImpl()
+        app.state.diagnostics_service = DiagnosticsServiceImpl()
+        app.state.workspace_service = WorkspaceServiceImpl()
+        app.state.browser_service = BrowserServiceImpl()
+        app.state.terminal_service = TerminalServiceImpl()
+        app.state.artifact_service = ArtifactServiceImpl()
+        app.state.health_service = HealthServiceImpl()
+        app.state.recovery_service = RecoveryServiceImpl()
         service_container.override(
             run_service=app.state.run_service,
-            repository_service=__import__(
-                "deerflow.services.implementations", fromlist=["RepositoryServiceImpl"]
-            ).RepositoryServiceImpl(app.state.run_store),
-            configuration_service=ConfigurationServiceImpl(),
-            diagnostics_service=DiagnosticsServiceImpl(),
+            repository_service=RepositoryServiceImpl(app.state.run_store),
+            configuration_service=app.state.configuration_service,
+            diagnostics_service=app.state.diagnostics_service,
+            workspace_service=app.state.workspace_service,
+            browser_service=app.state.browser_service,
+            terminal_service=app.state.terminal_service,
+            artifact_service=app.state.artifact_service,
+            health_service=app.state.health_service,
+            recovery_service=app.state.recovery_service,
         )
         if getattr(config.database, "backend", None) == "sqlite":
             from deerflow.utils.time import now_iso
@@ -277,11 +308,22 @@ def _require(attr: str, label: str) -> Callable[[Request], T]:
 
 get_stream_bridge: Callable[[Request], StreamBridge] = _require("stream_bridge", "Stream bridge")
 get_run_manager: Callable[[Request], RunManager] = _require("run_manager", "Run manager")
-get_run_service = _require("run_service", "Run service")
+get_run_service: Callable[[Request], RunService] = _require("run_service", "Run service")
 get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "Checkpointer")
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
+
+# Typed service getters — gateway routers should use these instead of
+# importing from deerflow.* directly (Phase C6 platform decoupling).
+get_configuration_service: Callable[[Request], ConfigurationService] = _require("configuration_service", "Configuration service")
+get_diagnostics_service: Callable[[Request], DiagnosticsService] = _require("diagnostics_service", "Diagnostics service")
+get_workspace_service: Callable[[Request], WorkspaceService] = _require("workspace_service", "Workspace service")
+get_browser_service: Callable[[Request], BrowserService] = _require("browser_service", "Browser service")
+get_terminal_service: Callable[[Request], TerminalService] = _require("terminal_service", "Terminal service")
+get_artifact_service: Callable[[Request], ArtifactService] = _require("artifact_service", "Artifact service")
+get_health_service: Callable[[Request], HealthService] = _require("health_service", "Health service")
+get_recovery_service: Callable[[Request], RecoveryService] = _require("recovery_service", "Recovery service")
 
 
 def get_store(request: Request):
