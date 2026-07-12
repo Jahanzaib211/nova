@@ -527,13 +527,78 @@ structured telemetry, correlation ID preservation.
 
 ---
 
+## Phase C5 — Platform Convergence (in progress)
+
+**Objective.** Make every existing subsystem use the platform architecture.
+Replace remaining direct calls with service interfaces, lifecycle mutations
+with RunState, recovery logic with RecoveryEngine, diagnostics writes with
+EventBus. No new infrastructure, no API changes, no behavior changes.
+
+### Status: IN PROGRESS (2026-07-12)
+
+### C5.1 — Repository Audit (complete)
+
+- **Audit findings:**
+  - `get_app_config()`: 33 files, ~95 call sites (wrapper exists via `ConfigurationService`)
+  - `RunManager` direct imports: 7 files, ~23 call sites (gateway layer)
+  - `RunStatus` direct imports: 8 files, ~57 call sites (internal to runtime)
+  - `diagnostics.record`: 2 files, 9 call sites (module-internal)
+  - `RunRepository` direct imports: 3 files, 9 call sites (initialization only)
+
+### C5.2 — Service Migration: Gateway → RunService (complete)
+
+- **Files modified:**
+  - `backend/packages/harness/deerflow/services/protocols.py`
+    - Added `create_or_reject()` to `RunService` protocol
+  - `backend/packages/harness/deerflow/services/implementations.py`
+    - Added `create_or_reject()` to `RunServiceImpl`
+  - `backend/app/gateway/services.py`
+    - Added `RunService` import, `get_run_service` import
+  - `backend/app/gateway/routers/thread_runs.py`
+    - `list_runs()` migrated to `RunService.list_by_thread()`
+    - `get_run()` migrated to `RunService.get()`
+    - `cancel_run()` migrated to `RunService.cancel()` (RunManager retained for wait=True task await)
+    - Added `_service_to_response()` helper for RunDetail/RunSummary → RunResponse
+    - `_cancel_conflict_detail()` generalized to accept any object with `.status`
+  - `backend/tests/test_service_layer.py`
+    - Added `test_create_or_reject_delegates` test
+- **Tests:** 34 service layer tests pass (was 33).
+
+### C5.3 — Event-Driven Convergence: Worker Status Routing (complete)
+
+- **Problem:** `worker.py` called `RunManager.set_status()` directly,
+  bypassing `RunServiceImpl.set_status()` which publishes lifecycle events
+  to the EventBus. Status transitions (running → success/error/interrupted)
+  were not visible to event subscribers.
+- **Fix:** Added `_service_set_status()` helper in worker that routes through
+  `RunServiceImpl.set_status()` with fallback to `RunManager.set_status()`.
+  All 9 `run_manager.set_status()` calls replaced.
+- **Files modified:**
+  - `backend/packages/harness/deerflow/runtime/runs/worker.py`
+    - Added `_service_set_status()` function
+    - Replaced all 9 `run_manager.set_status()` calls
+- **Impact:** All run lifecycle transitions now emit domain events
+  (RunStarted, RunCompleted, RunFailed, RunCancelled, RunInterrupted)
+  through the EventBus, visible to DiagnosticsServiceImpl and any future
+  subscribers.
+
+### Validation summary for Phase C5
+
+| Step                         | Result   |
+| ---------------------------- | -------- |
+| Service layer tests (34)     | pass     |
+| Event bus tests (56)         | pass     |
+| Recovery engine tests (37)   | pass     |
+| Cross-ref check              | pass     |
+| Zero API changes             | verified |
+| Zero runtime regressions     | verified |
+
+---
+
 ## Next phases (preview)
 
 | Phase | Title                                                | Depends on  |
 | ----- | ---------------------------------------------------- | ----------- |
-| C3    | Unified lifecycle state machine                       | C2          |
-| C4    | Self-healing + RecoveryService                        | C2, C3      |
-| C5    | Tool protocol standardization                         | C2          |
 | C6    | Workspace/Repository abstraction                      | C2          |
 | C7    | Deployment, HA, production hardening                  | C3–C6       |
 | C8    | Performance optimization and scaling                  | C7          |

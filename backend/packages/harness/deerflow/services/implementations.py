@@ -146,6 +146,56 @@ class RunServiceImpl:
             for r in records
         ]
 
+    async def create_or_reject(
+        self,
+        thread_id: str,
+        *,
+        assistant_id: str | None = None,
+        on_disconnect: str = "cancel",
+        metadata: dict[str, Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        multitask_strategy: str = "reject",
+        model_name: str | None = None,
+        user_id: str | None = None,
+    ) -> RunDetail:
+        from deerflow.runtime.runs.schemas import DisconnectMode
+
+        disconnect = DisconnectMode.cancel if on_disconnect == "cancel" else DisconnectMode.continue_
+        record = await self._manager.create_or_reject(
+            thread_id,
+            assistant_id,
+            on_disconnect=disconnect,
+            metadata=metadata or {},
+            kwargs=kwargs,
+            multitask_strategy=multitask_strategy,
+            model_name=model_name,
+            user_id=user_id,
+        )
+        from deerflow.events.event import RunCreated
+
+        self._publish(
+            RunCreated,
+            correlation_id=record.correlation_id,
+            run_id=record.run_id,
+            thread_id=record.thread_id,
+            payload={
+                "assistant_id": record.assistant_id,
+                "model_name": record.model_name,
+            },
+        )
+        return RunDetail(
+            run_id=record.run_id,
+            thread_id=record.thread_id,
+            assistant_id=record.assistant_id,
+            status=record.status.value if hasattr(record.status, "value") else str(record.status),
+            correlation_id=record.correlation_id,
+            model_name=record.model_name,
+            created_at=record.created_at,
+            error=record.error,
+            total_tokens=record.total_tokens,
+            message_count=record.message_count,
+        )
+
     async def cancel(
         self,
         run_id: str,

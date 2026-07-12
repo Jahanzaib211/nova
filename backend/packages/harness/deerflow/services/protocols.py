@@ -84,6 +84,25 @@ class RunService(Protocol):
         """Return runs for a thread in insertion order (newest first)."""
         ...
 
+    async def create_or_reject(
+        self,
+        thread_id: str,
+        *,
+        assistant_id: str | None = None,
+        on_disconnect: str = "cancel",
+        metadata: dict[str, Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
+        multitask_strategy: str = "reject",
+        model_name: str | None = None,
+        user_id: str | None = None,
+    ) -> RunDetail:
+        """Atomically check for inflight runs and create a new one.
+
+        For ``reject`` strategy, raises on conflict.  For ``interrupt``/``rollback``,
+        cancels inflight runs before creating.
+        """
+        ...
+
     async def cancel(
         self,
         run_id: str,

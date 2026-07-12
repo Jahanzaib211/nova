@@ -219,6 +219,31 @@ class TestRunServiceImpl:
         result = asyncio.get_event_loop().run_until_complete(impl.cancel("r1"))
         assert result is True
 
+    def test_create_or_reject_delegates(self):
+        from deerflow.services.implementations import RunServiceImpl
+
+        mock_manager = MagicMock()
+        mock_record = MagicMock()
+        mock_record.run_id = "r2"
+        mock_record.thread_id = "t1"
+        mock_record.assistant_id = "lead-agent"
+        mock_record.status = "pending"
+        mock_record.correlation_id = "corr2"
+        mock_record.model_name = "gpt-4"
+        mock_record.created_at = "2026-07-12T00:00:00"
+        mock_record.error = None
+        mock_record.total_tokens = 0
+        mock_record.message_count = 0
+        mock_manager.create_or_reject = AsyncMock(return_value=mock_record)
+
+        impl = RunServiceImpl(mock_manager)
+        result = asyncio.get_event_loop().run_until_complete(
+            impl.create_or_reject("t1", model_name="gpt-4", multitask_strategy="reject")
+        )
+        assert result.run_id == "r2"
+        assert result.status == "pending"
+        mock_manager.create_or_reject.assert_called_once()
+
 
 # =====================================================================
 # WorkspaceServiceImpl tests

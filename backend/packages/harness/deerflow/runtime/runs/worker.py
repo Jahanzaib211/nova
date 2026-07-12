@@ -48,6 +48,28 @@ logger = logging.getLogger(__name__)
 _VALID_LG_MODES = {"values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"}
 
 
+async def _service_set_status(
+    run_manager: RunManager,
+    run_id: str,
+    status: RunStatus,
+    *,
+    error: str | None = None,
+) -> None:
+    """Route status updates through RunServiceImpl for EventBus emission.
+
+    Falls back to RunManager.set_status() if the service container is not
+    wired (e.g. embedded/test usage outside Gateway).
+    """
+    try:
+        from deerflow.services.container import service_container
+
+        run_svc = service_container.run_service()
+        await run_svc.set_status(run_id, status.value, error=error)
+    except Exception:
+        # Fallback: use RunManager directly (no event emission)
+        await run_manager.set_status(run_id, status, error=error)
+
+
 def _build_runtime_context(
     thread_id: str,
     run_id: str,
@@ -183,7 +205,7 @@ async def run_agent(
             )
 
         # 1. Mark running
-        await run_manager.set_status(run_id, RunStatus.running)
+        await _service_set_status(run_manager, run_id, RunStatus.running)
 
         # Snapshot the latest pre-run checkpoint so rollback can restore it.
         if checkpointer is not None:
@@ -357,7 +379,7 @@ async def run_agent(
         if record.abort_event.is_set():
             action = record.abort_action
             if action == "rollback":
-                await run_manager.set_status(run_id, RunStatus.error, error="Rolled back by user")
+                await _service_set_status(run_manager, run_id, RunStatus.error, error="Rolled back by user")
                 try:
                     await _rollback_to_pre_run_checkpoint(
                         checkpointer=checkpointer,
@@ -371,20 +393,20 @@ async def run_agent(
                 except Exception:
                     logger.warning("Failed to rollback checkpoint for run %s", run_id, exc_info=True)
             else:
-                await run_manager.set_status(run_id, RunStatus.interrupted)
+                await _service_set_status(run_manager, run_id, RunStatus.interrupted)
         elif llm_error_fallback_message or (journal is not None and journal.had_llm_error_fallback):
             error_msg = llm_error_fallback_message
             if error_msg is None and journal is not None:
                 error_msg = journal.llm_error_fallback_message
             error_msg = error_msg or "LLM provider failed after retries"
-            await run_manager.set_status(run_id, RunStatus.error, error=error_msg)
+            await _service_set_status(run_manager, run_id, RunStatus.error, error=error_msg)
         else:
-            await run_manager.set_status(run_id, RunStatus.success)
+            await _service_set_status(run_manager, run_id, RunStatus.success)
 
     except asyncio.CancelledError:
         action = record.abort_action
         if action == "rollback":
-            await run_manager.set_status(run_id, RunStatus.error, error="Rolled back by user")
+            await _service_set_status(run_manager, run_id, RunStatus.error, error="Rolled back by user")
             try:
                 await _rollback_to_pre_run_checkpoint(
                     checkpointer=checkpointer,
@@ -398,7 +420,7 @@ async def run_agent(
             except Exception:
                 logger.warning("Run %s cancellation rollback failed", run_id, exc_info=True)
         else:
-            await run_manager.set_status(run_id, RunStatus.interrupted)
+            await _service_set_status(run_manager, run_id, RunStatus.interrupted)
             logger.info("Run %s was cancelled", run_id)
 
     except GraphRecursionError as exc:
@@ -412,7 +434,7 @@ async def run_agent(
             "message (e.g. 'continue') to resume from where it stopped."
         )
         logger.warning("Run %s exhausted its recursion limit: %s", run_id, exc)
-        await run_manager.set_status(run_id, RunStatus.error, error=error_msg)
+        await _service_set_status(run_manager, run_id, RunStatus.error, error=error_msg)
         await bridge.publish(
             run_id,
             "error",
@@ -425,7 +447,7 @@ async def run_agent(
     except Exception as exc:
         error_msg = f"{exc}"
         logger.exception("Run %s failed: %s", run_id, error_msg)
-        await run_manager.set_status(run_id, RunStatus.error, error=error_msg)
+        await _service_set_status(run_manager, run_id, RunStatus.error, error=error_msg)
         await bridge.publish(
             run_id,
             "error",

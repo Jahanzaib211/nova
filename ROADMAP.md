@@ -6,17 +6,14 @@
 **Last Updated:** Phase C4 (2026-07-12)
 **Related:** [CONSOLIDATION.md](CONSOLIDATION.md), [NOVA_CHANGELOG.md](NOVA_CHANGELOG.md)
 
-## Current Phase: C4 — Recovery Engine + Unified Health Management
+## Current Phase: C5 — Platform Convergence
 
-**Status:** complete
+**Status:** in progress
 
-- `RecoveryEngine` — event-driven recovery orchestration
-- 10 declarative recovery policies with retry/backoff
-- 7 recovery events (Started, RetryScheduled, Succeeded, Failed, Escalated, Cancelled, Aborted)
-- HealthService publishes, RecoveryEngine subscribes
-- 9 default action handlers wrapping existing implementations
-- Recovery history, structured metrics, cancellation support
-- 37 unit tests, all pass
+- Gateway services migrated to `RunService` protocol
+- Worker status updates routed through service layer for EventBus emission
+- `create_or_reject()` added to `RunService` protocol and implementation
+- 127 consolidation tests pass
 
 ## Consolidation Phases
 
@@ -87,10 +84,13 @@
 - `ServiceContainer.recovery_engine()` singleton wired with EventBus
 - 37 unit tests, all pass
 
-### C5 — Tool Protocol Standardization (pending)
+### C5 — Platform Convergence (in progress)
 
-- Standardized tool interfaces
-- Tool schema consistency
+- Gateway `list_runs`, `get_run`, `cancel_run` migrated from `RunManager` to `RunService`
+- `RunService.create_or_reject()` added for multitask-aware run creation
+- Worker `_service_set_status()` routes all status transitions through service layer
+- EventBus now receives all lifecycle events (RunStarted, RunCompleted, RunFailed, etc.)
+- 127 consolidation tests, all pass
 
 ### C6 — Workspace/Repository Abstraction (pending)
 

@@ -20,7 +20,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
-from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_store, get_stream_bridge
+from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_service, get_run_store, get_stream_bridge
 from app.gateway.pagination import trim_run_message_page
 from app.gateway.services import format_sse, sse_consumer, start_run, wait_for_run_completion
 from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
@@ -132,10 +132,11 @@ class ThreadTokenUsageResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _cancel_conflict_detail(run_id: str, record: RunRecord) -> str:
-    if record.status in (RunStatus.pending, RunStatus.running):
+def _cancel_conflict_detail(run_id: str, detail: Any) -> str:
+    status = detail.status
+    if status in ("pending", "running"):
         return f"Run {run_id} is not active on this worker and cannot be cancelled"
-    return f"Run {run_id} is not cancellable (status: {record.status.value})"
+    return f"Run {run_id} is not cancellable (status: {status})"
 
 
 def _record_to_response(record: RunRecord) -> RunResponse:
@@ -157,6 +158,19 @@ def _record_to_response(record: RunRecord) -> RunResponse:
         subagent_tokens=record.subagent_tokens,
         middleware_tokens=record.middleware_tokens,
         message_count=record.message_count,
+    )
+
+
+def _service_to_response(detail: Any) -> RunResponse:
+    """Convert a service-layer RunDetail/RunSummary to the wire-format RunResponse."""
+    return RunResponse(
+        run_id=detail.run_id,
+        thread_id=detail.thread_id,
+        assistant_id=getattr(detail, "assistant_id", None),
+        status=detail.status,
+        total_tokens=getattr(detail, "total_tokens", 0),
+        message_count=getattr(detail, "message_count", 0),
+        created_at=getattr(detail, "created_at", "") or "",
     )
 
 
@@ -232,22 +246,22 @@ async def wait_run(thread_id: str, body: RunCreateRequest, request: Request) -> 
 @require_permission("runs", "read", owner_check=True)
 async def list_runs(thread_id: str, request: Request) -> list[RunResponse]:
     """List all runs for a thread."""
-    run_mgr = get_run_manager(request)
+    run_svc = get_run_service(request)
     user_id = await get_current_user(request)
-    records = await run_mgr.list_by_thread(thread_id, user_id=user_id)
-    return [_record_to_response(r) for r in records]
+    summaries = await run_svc.list_by_thread(thread_id, user_id=user_id)
+    return [_service_to_response(s) for s in summaries]
 
 
 @router.get("/{thread_id}/runs/{run_id}", response_model=RunResponse)
 @require_permission("runs", "read", owner_check=True)
 async def get_run(thread_id: str, run_id: str, request: Request) -> RunResponse:
     """Get details of a specific run."""
-    run_mgr = get_run_manager(request)
+    run_svc = get_run_service(request)
     user_id = await get_current_user(request)
-    record = await run_mgr.get(run_id, user_id=user_id)
-    if record is None or record.thread_id != thread_id:
+    detail = await run_svc.get(run_id, user_id=user_id)
+    if detail is None or detail.thread_id != thread_id:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-    return _record_to_response(record)
+    return _service_to_response(detail)
 
 
 @router.post("/{thread_id}/runs/{run_id}/cancel")
@@ -266,20 +280,25 @@ async def cancel_run(
     - wait=true: Block until the run fully stops, return 204
     - wait=false: Return immediately with 202
     """
-    run_mgr = get_run_manager(request)
-    record = await run_mgr.get(run_id)
-    if record is None or record.thread_id != thread_id:
+    run_svc = get_run_service(request)
+    detail = await run_svc.get(run_id)
+    if detail is None or detail.thread_id != thread_id:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
 
-    cancelled = await run_mgr.cancel(run_id, action=action)
+    cancelled = await run_svc.cancel(run_id, action=action)
     if not cancelled:
-        raise HTTPException(status_code=409, detail=_cancel_conflict_detail(run_id, record))
+        raise HTTPException(status_code=409, detail=_cancel_conflict_detail(run_id, detail))
 
-    if wait and record.task is not None:
-        try:
-            await record.task
-        except asyncio.CancelledError:
-            pass
+    if wait:
+        # Need RunManager for task-level await (wait=True blocks until the
+        # background asyncio.Task finishes).
+        run_mgr = get_run_manager(request)
+        record = await run_mgr.get(run_id)
+        if record is not None and record.task is not None:
+            try:
+                await record.task
+            except asyncio.CancelledError:
+                pass
         return Response(status_code=204)
 
     return Response(status_code=202)

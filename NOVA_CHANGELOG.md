@@ -168,6 +168,42 @@
 
 ---
 
+## v8.5 — Phase C5: platform convergence
+
+**Session pattern:** repository audit → service migration → event-driven convergence.
+
+### C5.1 — Repository Audit
+
+- Comprehensive audit of remaining direct calls across the codebase:
+  - `get_app_config()`: 33 files, ~95 call sites (wrapper exists via `ConfigurationService`)
+  - `RunManager` direct imports: 7 files, ~23 call sites (gateway layer)
+  - `RunStatus` direct imports: 8 files, ~57 call sites (internal to runtime)
+  - `diagnostics.record`: 2 files, 9 call sites (module-internal)
+
+### C5.2 — Service Migration: Gateway → RunService
+
+- Added `create_or_reject()` to `RunService` protocol and `RunServiceImpl` for multitask-aware run creation.
+- Migrated gateway endpoints to use `RunService`:
+  - `list_runs()` → `RunService.list_by_thread()`
+  - `get_run()` → `RunService.get()`
+  - `cancel_run()` → `RunService.cancel()` (RunManager retained for wait=True task await)
+- Added `_service_to_response()` helper for RunDetail/RunSummary → RunResponse conversion.
+- Added `test_create_or_reject_delegates` test (34 service layer tests, up from 33).
+
+### C5.3 — Event-Driven Convergence: Worker Status Routing
+
+- **Problem:** `worker.py` called `RunManager.set_status()` directly, bypassing `RunServiceImpl.set_status()` which publishes lifecycle events to the EventBus. Status transitions (running → success/error/interrupted) were invisible to event subscribers.
+- **Fix:** Added `_service_set_status()` helper that routes through `RunServiceImpl.set_status()` with fallback to `RunManager.set_status()`. All 9 `run_manager.set_status()` calls replaced.
+- **Impact:** All run lifecycle transitions now emit domain events (RunStarted, RunCompleted, RunFailed, RunCancelled, RunInterrupted) through the EventBus.
+
+### Tests
+
+- 127 consolidation tests pass (34 service + 56 event bus + 37 recovery engine).
+- Cross-ref check clean.
+- Zero API changes, zero runtime regressions.
+
+---
+
 ## v7.5 — live audit hardening + Ollama/LiteLLM free-model gateway
 
 **Session pattern:** full-stack live audit (act-as-user via Playwright) → every blocker turned into a production-grade fix with a regression test.
