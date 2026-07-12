@@ -1,22 +1,26 @@
 """Nova typed service layer.
 
-Phase C1 — architecture preparation only.
+Phase C2 — architecture + dependency injection.
 
-This package defines Protocol interfaces and typed return models for
-Nova's core services.  The interfaces enable dependency injection and
-make the architecture testable without changing any runtime behavior.
+This package defines Protocol interfaces, typed return models, a canonical
+RunState dataclass, and a service container for dependency injection.
 
 Usage::
 
-    from deerflow.services.protocols import RunService
-    from deerflow.services.types import RunDetail
+    from deerflow.services import service_container, RunState
 
-    async def handler(run_svc: RunService) -> None:
-        detail = await run_svc.get("run-123")
-        if detail is not None:
-            print(detail.status)
+    # Get services via container
+    run_svc = service_container.run_service()
+    detail = await run_svc.get("run-123")
+
+    # Or use RunState directly
+    state = RunState(run_id="abc", thread_id="t1", status="running")
+
+    # For testing — override with mocks:
+    service_container.override(run_service=my_mock_run_svc)
 """
 
+from deerflow.services.container import ServiceContainer, service_container
 from deerflow.services.protocols import (
     ArtifactService,
     BrowserService,
@@ -35,11 +39,15 @@ from deerflow.services.types import (
     ProbeResult,
     RecoveryAction,
     RunDetail,
+    RunState,
     RunSummary,
     WorkspacePaths,
 )
 
 __all__ = [
+    # Container
+    "service_container",
+    "ServiceContainer",
     # Protocols
     "RunService",
     "WorkspaceService",
@@ -52,6 +60,7 @@ __all__ = [
     "ConfigurationService",
     "DiagnosticsService",
     # Types
+    "RunState",
     "RunSummary",
     "RunDetail",
     "ProbeResult",

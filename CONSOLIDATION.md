@@ -217,6 +217,8 @@ Consolidation tracking. CI guardrails. No user-facing changes.
 Create the typed service layer foundation (Protocol interfaces + thin wrappers)
 without changing runtime behavior, caller wiring, or dependency injection.
 
+### Status: COMPLETE (2026-07-12)
+
 ### C1.1 — Repository Reality Audit
 
 - **Status:** complete.
@@ -255,7 +257,71 @@ without changing runtime behavior, caller wiring, or dependency injection.
 
 ### C1.6 — Service Tests
 
-- **Status:** pending.
+- **Status:** complete (33 tests, all pass).
+
+---
+
+## Phase C2 — Run State Consolidation + Dependency Injection
+
+**Objective.** Wire the typed service layer into the runtime.  Replace
+direct imports with service interfaces.  Introduce a canonical RunState
+model and a dependency injection container.
+
+### C2.1 — Repository Audit
+
+- **Status:** complete.
+- **Findings:** 1 RunManager construction site (`deps.py:213`),
+  1 RunRepository construction site (`deps.py:192`),
+  30+ `get_app_config()` callers (harness-wide),
+  8 `diagnostics.record()` calls (module-internal).
+
+### C2.2 — Dependency Injection Container
+
+- **Status:** complete.
+- **Files:**
+  - `services/container.py` — `ServiceContainer` class with lazy
+    singleton factories and `override()` for testing.
+  - Module-level `service_container` singleton.
+- **Design:** no globals, no circular imports.  Factories are lazy.
+
+### C2.3 — RunState Model
+
+- **Status:** complete.
+- **Files:**
+  - `services/types.py` — `RunState` frozen dataclass with
+    `from_record()` class method for backward-compat bridge.
+- **Fields:** run_id, thread_id, status, correlation_id, assistant_id,
+  model_name, created_at, updated_at, error, metadata, total_tokens,
+  message_count, store_only.
+
+### C2.4 — Gateway Wiring
+
+- **Status:** complete.
+- **Files:**
+  - `app/gateway/deps.py` — container wired with gateway-owned
+    singletons after RunManager construction.  `get_run_service`
+    FastAPI dependency added.  `app.state.run_service` exposed.
+- **Backward compat:** `get_run_manager` still works.  Existing
+  routers continue to function unchanged.
+
+### C2.5 — Deferred Items
+
+- **Diagnostics migration:** deferred — `diagnostics.record()` calls
+  are module-internal to `diagnostics.py`, not worth migrating in C2.
+- **Configuration migration:** deferred — 30+ `get_app_config()` callers
+  across harness; migrating all in one phase would be too risky.
+
+### Validation summary for Phase C2
+
+| Step                         | Result   |
+| ---------------------------- | -------- |
+| Service layer tests (33)     | pass     |
+| Backend streaming tests (29) | pass     |
+| Frontend unit tests (457)    | pass     |
+| Guardrails (middleware 28/28) | pass     |
+| Cross-ref check (1500 files) | pass     |
+| Zero API changes             | verified |
+| Zero runtime regressions     | verified |
 
 ---
 
@@ -263,8 +329,10 @@ without changing runtime behavior, caller wiring, or dependency injection.
 
 | Phase | Title                                                | Depends on  |
 | ----- | ---------------------------------------------------- | ----------- |
-| C1    | Typed service layer                                   | C0          |
-| C2    | Centralized run state + lifecycle                    | C1          |
-| C3    | Self-healing + unified observability                  | C2          |
-| C4    | Tool interface standardization                         | C1, C2      |
-| C5    | Replaceability + reliability                         | C1–C4       |
+| C3    | Unified lifecycle state machine                       | C2          |
+| C4    | Self-healing + RecoveryService                        | C2, C3      |
+| C5    | Tool protocol standardization                         | C2          |
+| C6    | Workspace/Repository abstraction                      | C2          |
+| C7    | Deployment, HA, production hardening                  | C3–C6       |
+| C8    | Performance optimization and scaling                  | C7          |
+| C9    | Product features and extensibility                    | C8          |

@@ -31,6 +31,7 @@ from deerflow.persistence.feedback import FeedbackRepository
 from deerflow.runtime import RunContext, RunManager, StreamBridge
 from deerflow.runtime.events.store.base import RunEventStore
 from deerflow.runtime.runs.store.base import RunStore
+from deerflow.services.container import service_container
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,26 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
 
         # RunManager with store backing for persistence
         app.state.run_manager = RunManager(store=app.state.run_store)
+
+        # Wire the service container with gateway-owned singletons (Phase C2).
+        # The container provides typed service interfaces; RunManager becomes
+        # an implementation detail behind RunService.
+        from deerflow.services.implementations import (
+            ConfigurationServiceImpl,
+            DiagnosticsServiceImpl,
+            RunServiceImpl,
+        )
+        from deerflow.services.protocols import RunService
+
+        app.state.run_service: RunService = RunServiceImpl(app.state.run_manager)
+        service_container.override(
+            run_service=app.state.run_service,
+            repository_service=__import__(
+                "deerflow.services.implementations", fromlist=["RepositoryServiceImpl"]
+            ).RepositoryServiceImpl(app.state.run_store),
+            configuration_service=ConfigurationServiceImpl(),
+            diagnostics_service=DiagnosticsServiceImpl(),
+        )
         if getattr(config.database, "backend", None) == "sqlite":
             from deerflow.utils.time import now_iso
 
@@ -256,6 +277,7 @@ def _require(attr: str, label: str) -> Callable[[Request], T]:
 
 get_stream_bridge: Callable[[Request], StreamBridge] = _require("stream_bridge", "Stream bridge")
 get_run_manager: Callable[[Request], RunManager] = _require("run_manager", "Run manager")
+get_run_service = _require("run_service", "Run service")
 get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "Checkpointer")
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
