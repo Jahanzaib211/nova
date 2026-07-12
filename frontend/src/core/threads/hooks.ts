@@ -1336,7 +1336,11 @@ export function useThreadStream({
             streamSubgraphs: true,
             streamResumable: true,
             config: {
-              recursion_limit: 1000,
+              // Graph SUPER-steps, not agent turns: the lead agent's ~15
+              // middlewares make each turn cost ~7-10 steps, so 1000 capped
+              // real orchestrations at ~100 turns (run 2ea08475 died
+              // mid-progress). 5000 ≈ 500 turns; still a runaway backstop.
+              recursion_limit: 5000,
             },
             context: {
               ...extraContext,

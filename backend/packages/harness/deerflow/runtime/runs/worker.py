@@ -25,6 +25,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from langgraph.checkpoint.base import empty_checkpoint
+from langgraph.errors import GraphRecursionError
 
 if TYPE_CHECKING:
     from langchain_core.messages import HumanMessage
@@ -383,6 +384,27 @@ async def run_agent(
         else:
             await run_manager.set_status(run_id, RunStatus.interrupted)
             logger.info("Run %s was cancelled", run_id)
+
+    except GraphRecursionError as exc:
+        # The graph step budget ran out mid-run — with the lead agent's
+        # middleware stack each turn costs several steps, so long legitimate
+        # orchestrations can exhaust it. The thread checkpoint survives, so
+        # the user can resume; surface that instead of a raw traceback.
+        error_msg = (
+            "Run hit its step budget before finishing "
+            f"({exc}). Progress up to this point is saved — send a follow-up "
+            "message (e.g. 'continue') to resume from where it stopped."
+        )
+        logger.warning("Run %s exhausted its recursion limit: %s", run_id, exc)
+        await run_manager.set_status(run_id, RunStatus.error, error=error_msg)
+        await bridge.publish(
+            run_id,
+            "error",
+            {
+                "message": error_msg,
+                "name": "GraphRecursionError",
+            },
+        )
 
     except Exception as exc:
         error_msg = f"{exc}"

@@ -522,11 +522,18 @@ class LoopDetectionMiddleware(AgentMiddleware[AgentState]):
             was detected, else ``None``. Warning is appended to the model's
             next call via the existing pending-warnings queue.
         """
-        # Collect ToolMessages from the recent history, bounded by
-        # _DEAD_END_SCAN_WINDOW to bound per-call cost.
+        # Collect ToolMessages from the CURRENT step only (newest messages
+        # up to the most recent AI message). Scanning a deep window re-counts
+        # the same ToolMessage on every subsequent call while it stays in the
+        # window, so a single ENOENT self-escalated to warn/hard-stop with no
+        # new evidence (false positives on run 2ea08475's verification loop).
+        # Still bounded by _DEAD_END_SCAN_WINDOW for pathological histories.
         tool_messages: list = []
         for msg in reversed(messages):
-            if getattr(msg, "type", None) == "tool":
+            msg_type = getattr(msg, "type", None)
+            if msg_type == "ai":
+                break
+            if msg_type == "tool":
                 tool_messages.append(msg)
                 if len(tool_messages) >= _DEAD_END_SCAN_WINDOW:
                     break

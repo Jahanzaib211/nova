@@ -71,7 +71,7 @@ function logSubtaskTransition(entry: {
   accepted: boolean;
 }) {
   if (!SUBTASK_DEBUG) return;
-  // eslint-disable-next-line no-console
+   
   console.debug("[subtask-fsm]", {
     ts: new Date().toISOString(),
     seq: ++subtaskEventSeq,

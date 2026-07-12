@@ -53,6 +53,43 @@ def _state_with_messages(*messages) -> dict:
     return {"messages": list(messages)}
 
 
+def test_dead_end_does_not_recount_stale_enoent_behind_ai_message():
+    """Regression (run 2ea08475): a single old ENOENT must not self-escalate.
+
+    The detector used to scan a deep window of ToolMessages, so ONE
+    ``ls: cannot access '08*'`` result was re-counted on every subsequent
+    agent step while it stayed in the window — warn fired after 5 steps and
+    the hard stop approached with zero new evidence. Only the current
+    step's tool results (newest messages up to the last AIMessage) may be
+    counted.
+    """
+    middleware = LoopDetectionMiddleware()
+
+    # Step 1: a genuine ENOENT — counted once.
+    state = _state_with_messages(
+        _make_tool_message(
+            "ls: cannot access '08-cicd-strategy.md': No such file or directory",
+            "tc-1",
+        ),
+    )
+    assert middleware._check_dead_end_search(state["messages"], "t-stale") is None
+
+    # Steps 2..N: the agent moved on; the old ENOENT sits behind newer
+    # AI messages and clean tool results. It must NOT be re-counted, so
+    # the warn threshold is never reached no matter how many steps pass.
+    history = [
+        _make_tool_message(
+            "ls: cannot access '08-cicd-strategy.md': No such file or directory",
+            "tc-1",
+        ),
+        _make_ai_message([{"name": "bash", "args": {}}]),
+        _make_tool_message("54843 09-security-architecture.md", "tc-2"),
+    ]
+    for _ in range(_DEAD_END_HARD_LIMIT + 2):
+        result = middleware._check_dead_end_search(list(history), "t-stale")
+        assert result is None, "stale ENOENT behind an AI message was re-counted"
+
+
 def test_dead_end_warning_fires_after_threshold_distinct_enoent():
     """When N distinct ENOENT results for the same basename accumulate, warn.
 

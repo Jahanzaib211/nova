@@ -78,9 +78,7 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
         const parsed = JSON.parse(raw) as SandboxEvent;
         if (parsed.type && parsed.ts !== undefined) {
           pendingRef.current.push(parsed);
-          if (rafRef.current === null) {
-            rafRef.current = requestAnimationFrame(flush);
-          }
+          rafRef.current ??= requestAnimationFrame(flush);
         }
       } catch {
         // Non-JSON line (old format or noise) — skip silently
