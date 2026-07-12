@@ -26,7 +26,13 @@ ERR_LOG="$LOG_DIR/nova-error.log"
 HEARTBEAT_LOG="$LOG_DIR/nova-heartbeat.log"
 
 # Lock to avoid double-tailing if PM2 ever restarts us quickly.
-LOCK="/var/run/cloudflared-nova-pm2.lock"
+# Phase C0.1 — use $XDG_RUNTIME_DIR or $TMPDIR instead of /var/run. The
+# previous path failed on systems where the user is not in the ``adm``
+# group (root owns /var/run), causing the wrapper to die immediately and
+# PM2 to enter an infinite restart loop. The PM2 log fills with
+# "Permission denied" lines and obscures real signals.
+LOCK_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+LOCK="$LOCK_DIR/cloudflared-nova-pm2.lock"
 exec 9>"$LOCK"
 if ! flock -n 9; then
     echo "[pm2-wrapper] another instance holds $LOCK — exiting" >&2
@@ -46,6 +52,27 @@ fi
 if ! systemctl is-active --quiet cloudflared-nova.service; then
     echo "[pm2-wrapper] starting cloudflared-nova.service via systemctl"
     sudo systemctl start cloudflared-nova.service || true
+fi
+
+# Phase C0.1 — wait for the local origin (Nova gateway on :2026) to be
+# reachable before emitting heartbeats. cloudflared itself doesn't need
+# the gateway (it can come up first and reconnect), but our heartbeats
+# feed P12_tunnel and P2_gateway probes that want consistent ordering:
+# the heartbeat should reflect an end-to-end-ready stack, not a tunnel
+# pointing at a 502. Bound to 90s so we don't block forever if nginx
+# is broken — PM2 will eventually kill us via max_restarts.
+ORIGIN_URL="${PUBLIC_URL:-http://127.0.0.1:2026/health}"
+echo "[pm2-wrapper] waiting for origin $ORIGIN_URL to be reachable (max 90s)"
+deadline=$((SECONDS + 90))
+while [ $SECONDS -lt $deadline ]; do
+    if curl -sf -m 3 "$ORIGIN_URL" >/dev/null 2>&1; then
+        echo "[pm2-wrapper] origin reachable"
+        break
+    fi
+    sleep 2
+done
+if [ $SECONDS -ge $deadline ]; then
+    echo "[pm2-wrapper] WARNING: origin not reachable after 90s — continuing anyway" >&2
 fi
 
 # Both stdout (journald) and stderr (journald) stream into our PM2 logs.

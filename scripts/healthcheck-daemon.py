@@ -899,21 +899,68 @@ def fix_dify() -> bool:
 def fix_tunnel() -> bool:
     """Heal cloudflared-nova.service for a RED P12_tunnel.
 
-    Two failure modes observed in production:
+    Failure modes observed in production (2026-07-12):
       1. systemd unit crashed/inactive — `systemctl restart` brings it back.
-         cloudflared's reconnect logic will then re-register with the edge.
-      2. cloudflared is up locally but the public URL isn't reachable —
-         that means DNS or the Cloudflare-side route broke; a local restart
-         won't fix that. We restart anyway because it's cheap and often
-         works (e.g. QUIC reconnect after edge-IP rotation), and surface the
-         detail to the operator.
+      2. systemd in ``start-limit-hit`` state — `restart` does NOT clear
+         this; you must run ``systemctl reset-failed`` first or the
+         restart will be rejected. Without this, the auto-fix silently
+         fails and the tunnel stays down (Error 1033 to end users).
+      3. cloudflared up locally but public URL not reachable — DNS or
+         Cloudflare-side route broke; we restart anyway because it's
+         cheap and often works (e.g. QUIC reconnect after edge-IP
+         rotation), and surface the detail to the operator.
 
-    Requires sudo for the systemctl call. The watchdog already runs as the
-    user who owns the PM2 process, so we delegate to sudo non-interactively
-    (the operator's sudoers should allow systemctl for this unit without a
-    password for the watchdog user — the boot script does this).
+    The reset-failed call requires ``sudo -n systemctl reset-failed
+    cloudflared-nova.service`` — see sudoers block in
+    ``install-cloudflared-nova.sh``. If the operator has not yet
+    applied that sudoers entry, we surface a clear alarm here so
+    Error 1033 doesn't recur silently.
     """
-    log.warning("auto-fix: systemctl restart cloudflared-nova.service")
+    # Step 0 — one-time check that the sudoers entry covers reset-failed.
+    # Without it, the watchdog cannot clear start-limit-hit and Error 1033
+    # recurs every time cloudflared quits cleanly. We don't block on this
+    # (we still try restart — it works for fresh failures) but we WARN so
+    # the operator sees it on every cycle.
+    try:
+        sudo_l = subprocess.run(
+            ["sudo", "-n", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if sudo_l.returncode == 0 and "reset-failed cloudflared-nova" not in sudo_l.stdout:
+            log.warning(
+                "auto-fix: sudoers is missing 'reset-failed cloudflared-nova' — "
+                "next start-limit-hit outage WILL NOT auto-recover. "
+                "Re-run scripts/install-cloudflared-nova.sh as a sudo-capable user."
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Step 1 — clear any start-limit-hit state. restart() alone will not.
+    log.warning("auto-fix: clearing start-limit-hit (if any) for cloudflared-nova")
+    try:
+        reset_proc = subprocess.run(
+            ["sudo", "-n", "systemctl", "reset-failed", "cloudflared-nova.service"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if reset_proc.returncode != 0:
+            # Not fatal — the unit may simply not be in failed state, OR
+            # sudoers may not permit reset-failed (Step 0 warning).
+            log.info(
+                "auto-fix: reset-failed returned %d (stderr=%s) — likely already clean "
+                "or sudoers missing",
+                reset_proc.returncode,
+                reset_proc.stderr.strip()[:200],
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        log.error("auto-fix: reset-failed preflight failed: %s", e)
+        return False
+
+    # Step 2 — restart (or start, depending on current state).
+    log.warning("auto-fix: restarting cloudflared-nova.service")
     try:
         subprocess.run(
             ["sudo", "-n", "systemctl", "restart", "cloudflared-nova.service"],
@@ -921,17 +968,41 @@ def fix_tunnel() -> bool:
             timeout=30,
             capture_output=True,
         )
-        return True
     except subprocess.CalledProcessError as e:
         log.error(
-            "auto-fix: systemctl restart failed (%s). If sudo requires a password, "
-            "run: sudo systemctl restart cloudflared-nova.service manually.",
+            "auto-fix: systemctl restart failed (%s). If sudo requires a "
+            "password, run: sudo systemctl restart cloudflared-nova.service "
+            "manually.",
             e,
         )
         return False
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         log.error("auto-fix: failed to restart tunnel: %s", e)
         return False
+
+    # Step 3 — verify the systemd unit actually came up. restart() exits
+    # 0 even if the unit subsequently crashes; we wait up to 10s for
+    # the service to be active before claiming success.
+    log.info("auto-fix: waiting for cloudflared-nova.service to become active")
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            if subprocess.run(
+                ["sudo", "-n", "systemctl", "is-active", "cloudflared-nova.service"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            ).stdout.strip() == "active":
+                log.info("auto-fix: cloudflared-nova.service is active")
+                return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        time.sleep(0.5)
+    log.error(
+        "auto-fix: cloudflared-nova.service did not become active within 10s of restart — "
+        "manual intervention required"
+    )
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -992,7 +1063,11 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
         elif probe.name == "P12_tunnel":
             if fix_tunnel():
                 probe.fixed = True
-                probe.detail += " [systemctl restart cloudflared-nova issued]"
+                probe.detail += " [systemctl reset-failed+restart issued, verified active]"
+            # If fix_tunnel() returned False, the next probe cycle will
+            # re-attempt. We do NOT mark the probe as fixed without
+            # verification, so the dashboard stays RED until the tunnel
+            # is genuinely reachable end-to-end.
         else:
             # Warn once when the probe first becomes fix-eligible, then every
             # 20th cycle while it stays RED — not every 30s forever (the P9

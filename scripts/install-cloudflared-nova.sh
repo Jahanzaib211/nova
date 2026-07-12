@@ -96,6 +96,16 @@ cat > "$TMP_SUDOERS" << 'EOF'
 # Allow nova-healthcheck watchdog to manage the nova tunnel systemd unit
 # without prompting for a password. The watchdog polls every 30s, so
 # password prompts would break the auto-fix path.
+#
+# Phase C0.1 — added ``reset-failed`` so the watchdog can clear
+# start-limit-hit before issuing restart. Without it, restart silently
+# fails when systemd has marked the unit failed after too many rapid
+# restarts — which is exactly what triggered the Error 1033 outage on
+# 2026-07-12 (cloudflared's QUIC connections to edge dropped, the
+# binary exited cleanly, systemd's Restart=always tripped 10x in 5 min,
+# hit StartLimitBurst, and ``systemctl restart`` from the watchdog
+# returned 0 without actually starting the unit).
+jahanzaib ALL=(root) NOPASSWD: /usr/bin/systemctl reset-failed cloudflared-nova.service
 jahanzaib ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared-nova.service
 jahanzaib ALL=(root) NOPASSWD: /usr/bin/systemctl start cloudflared-nova.service
 jahanzaib ALL=(root) NOPASSWD: /usr/bin/systemctl stop cloudflared-nova.service
