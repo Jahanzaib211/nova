@@ -51,5 +51,20 @@ ingress:
     service: http://127.0.0.1:2026
     originRequest:
       httpHostHeader: nova.alilabsx.com
+  # Grafana dashboard — loopback-only, Cloudflare Access policy gates access.
+  # To set up Access: Cloudflare Zero Trust dashboard → Access → Applications →
+  # Add an application → Self-hosted → Enter dash.alilabsx.com → Set policy
+  # to "Allow emails in <your-email.com>" → Save. The Access AUD tag goes
+  # in ~/.config/nova/monitoring.env as CLOUDFLARE_ACCESS_AUD.
+  - hostname: dash.alilabsx.com
+    service: http://127.0.0.1:3002
+    originRequest:
+      httpHostHeader: dash.alilabsx.com
+  # Uptime Kuma status page — public but informative (no secrets).
+  # Same Access policy as Grafana, or remove Access for a fully public status.
+  - hostname: status.alilabsx.com
+    service: http://127.0.0.1:3001
+    originRequest:
+      httpHostHeader: status.alilabsx.com
   # Required catch-all per cloudflared docs — without it, tunnel refuses to start.
   - service: http_status:404

@@ -171,6 +171,14 @@ def _transition(br: _BreakerState, new_state: CircuitState, reason: str) -> None
         new_state.value,
         reason,
     )
+    # Observability: emit a Prometheus counter increment on every transition.
+    # Uses late-bound import so this module stays usable without the registry
+    # already initialised (registry is process-wide singleton so it is by D1).
+    try:
+        from deerflow.sandbox.metrics import circuit_state_transitions_total
+        circuit_state_transitions_total.inc(br.state.value, new_state.value)
+    except Exception:  # never let observability errors break the breaker
+        logger.debug("circuit_state_transitions_total increment failed", exc_info=True)
     br.state = new_state
     if new_state == CircuitState.OPEN:
         br.opened_at = time.monotonic()

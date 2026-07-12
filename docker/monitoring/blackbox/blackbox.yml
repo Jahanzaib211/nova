@@ -1,0 +1,15 @@
+modules:
+  # HTTP probe for nginx loopback health endpoint.
+  # Returns status + request duration.
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      fail_if_ssl: false
+      preferred_ip_protocol: ip4
+
+  # TCP probe for nginx port. Faster than HTTP (no TLS negotiation).
+  tcp_connect:
+    prober: tcp
+    timeout: 5s

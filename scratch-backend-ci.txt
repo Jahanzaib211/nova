@@ -1,0 +1,146 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+...............ssssss...ss..ss....s..........................EEEEEEEEEEE [ 22%]
+EEEEEEEE................................................................ [ 24%]
+.............................sss........................................ [ 25%]
+........................................................................ [ 26%]
+.................................s...................................... [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................FF.............................. [ 37%]
+........................................................................ [ 38%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 46%]
+........................................................................ [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 54%]
+........................................................................ [ 56%]
+........................................................................ [ 57%]
+........................................................................ [ 58%]
+........................................................................ [ 60%]
+........................................................................ [ 61%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+......................................FF.FFFFFF.FFFFFFFFFFFFFFFFF....... [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+.........................F.............................................. [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+..............................................................           [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/langgraph/checkpoint/serde/encrypted.py:5
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/langgraph/checkpoint/serde/encrypted.py:5: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_auth_errors.py::test_decode_token_returns_token_error_on_bad_signature
+tests/test_auth_type_system.py::test_get_current_user_invalid_token_returns_token_invalid
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 12 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+    return self._jws.encode(
+
+tests/test_auth_middleware.py::test_auth_disabled_does_not_clobber_valid_session_cookie
+tests/test_initialize_admin.py::test_initialize_accessible_without_cookie
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/starlette/testclient.py:454: DeprecationWarning: Setting per-request cookies=<...> is being deprecated, because the expected behaviour on cookie persistence is ambiguous. Set cookies directly on the client instance instead.
+    return super().request(
+
+tests/test_auth_type_system.py::test_decode_token_invalid_sig_maps_to_token_invalid_code
+tests/test_auth_type_system.py::test_api_auth_me_invalid_sig_returns_structured_401
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/jwt/api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 9 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+    return self._jws.encode(
+
+tests/test_channels.py::TestFeishuChannel::test_streaming_reuses_single_running_card
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/lark_oapi/ws/pb/google/protobuf/internal/well_known_types.py:91: DeprecationWarning: datetime.datetime.utcfromtimestamp() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.fromtimestamp(timestamp, datetime.UTC).
+    _EPOCH_DATETIME_NAIVE = datetime.datetime.utcfromtimestamp(0)
+
+tests/test_channels.py::TestFeishuChannel::test_streaming_reuses_single_running_card
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/lark_oapi/ws/client.py:67: DeprecationWarning: websockets.InvalidStatusCode is deprecated
+    def _parse_ws_conn_exception(e: websockets.InvalidStatusCode):
+
+tests/test_channels.py::TestFeishuChannel::test_streaming_reuses_single_running_card
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+tests/test_channels.py::TestWeComChannel::test_on_outbound_sends_attachment_before_clearing_context
+  /home/jahanzaib/Desktop/nova/backend/.venv/lib/python3.12/site-packages/aibot/ws.py:28: DeprecationWarning: websockets.client.WebSocketClientProtocol is deprecated
+    from websockets.client import WebSocketClientProtocol
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_healthcheck_daemon.py::TestRunCycleSmoke::test_run_cycle_with_all_probes_mocked
+FAILED tests/test_healthcheck_daemon.py::TestRunCycleSmoke::test_run_cycle_survives_single_probe_exception
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_returns_error_for_unknown_subagent
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_rejects_bash_subagent_when_host_bash_disabled
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_emits_running_and_completed_events
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_propagates_tool_groups_to_subagent
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_uses_subagent_model_override_for_tool_loading
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_inherits_parent_skill_allowlist_for_default_subagent
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_intersects_parent_and_subagent_skill_allowlists
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_no_tool_groups_passes_none
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_returns_timed_out_message
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_polling_safety_timeout
+FAILED tests/test_task_tool_core_logic.py::test_cleanup_called_on_completed
+FAILED tests/test_task_tool_core_logic.py::test_cleanup_called_on_failed - Va...
+FAILED tests/test_task_tool_core_logic.py::test_cleanup_called_on_timed_out
+FAILED tests/test_task_tool_core_logic.py::test_cleanup_not_called_on_polling_safety_timeout
+FAILED tests/test_task_tool_core_logic.py::test_cleanup_scheduled_on_cancellation
+FAILED tests/test_task_tool_core_logic.py::test_cancelled_cleanup_stops_after_timeout
+FAILED tests/test_task_tool_core_logic.py::test_cancellation_wait_uses_subagent_polling_budget
+FAILED tests/test_task_tool_core_logic.py::test_cancellation_calls_request_cancel
+FAILED tests/test_task_tool_core_logic.py::test_task_tool_returns_cancelled_message
+FAILED tests/test_task_tool_core_logic.py::test_cancellation_reports_subagent_usage
+FAILED tests/test_task_tool_core_logic.py::test_terminal_events_include_usage[FakeSubagentStatus.COMPLETED-task_completed]
+FAILED tests/test_task_tool_core_logic.py::test_terminal_events_include_usage[FakeSubagentStatus.FAILED-task_failed]
+FAILED tests/test_task_tool_core_logic.py::test_terminal_events_include_usage[FakeSubagentStatus.CANCELLED-task_cancelled]
+FAILED tests/test_task_tool_core_logic.py::test_terminal_events_include_usage[FakeSubagentStatus.TIMED_OUT-task_timed_out]
+FAILED tests/test_task_tool_core_logic.py::test_terminal_event_usage_none_when_no_records
+FAILED tests/test_tool_context.py::TestToolContextInitialization::test_ensure_initialized_raises_without_thread_id
+28 failed, 5328 passed, 15 skipped, 12 warnings, 19 errors in 194.46s (0:03:14)

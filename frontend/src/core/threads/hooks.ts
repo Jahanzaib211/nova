@@ -27,6 +27,11 @@ import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
 import { fetchThreadTokenUsage } from "./api";
 import {
+  recordHookEvent,
+  recordManagerState,
+  recordRejoinAttempt,
+} from "./stream-trace";
+import {
   buildThreadsSearchQueryOptions,
   DEFAULT_THREAD_SEARCH_PARAMS,
   type ThreadSearchParams,
@@ -568,6 +573,11 @@ export function useThreadStream({
   const threadIdRef = useRef<string | null>(threadId ?? null);
   const startedRef = useRef(false);
   const pendingUsageBaselineMessageIdsRef = useRef<Set<string>>(new Set());
+  // Observability: monotonic timestamp of the last SDK event we received.
+  // Updated inside the onLangChainEvent callback. A null value means we
+  // have not received any event yet since this hook mounted.
+  const lastEventAtRef = useRef<number | null>(null);
+  const lastEventIdRef = useRef<string | null>(null);
   const listeners = useRef({
     onSend,
     onStart,
@@ -719,6 +729,26 @@ export function useThreadStream({
       }
     },
     onLangChainEvent(event) {
+      // Observability: every SDK event passes through this hook. Capture
+      // the timestamp + event id so downstream liveness signals (stall
+      // watchdog) can read them. NO production behaviour depends on this.
+      const now =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      lastEventAtRef.current = now;
+      const eventId =
+        (event as unknown as Record<string, unknown>).id as
+          | string
+          | undefined;
+      if (typeof eventId === "string" && eventId.length > 0) {
+        lastEventIdRef.current = eventId;
+      }
+      recordHookEvent(
+        threadIdRef.current,
+        null,
+        event.event,
+        eventId ?? null,
+      );
+
       if (event.event === "on_tool_start") {
         const raw = event.data as Record<string, unknown> | null | undefined;
         const input = (raw?.input ?? raw ?? {}) as Record<string, unknown>;
@@ -1028,6 +1058,14 @@ export function useThreadStream({
     },
   });
 
+  // Observability: record every isLoading transition. This effect runs only
+  // when the boolean flips, not on every render — a single-record-per-change
+  // signal that we can replay to see whether the SDK ever cleared the
+  // loading flag after the user reported a freeze.
+  useEffect(() => {
+    recordManagerState(onStreamThreadId, thread.isLoading, 0);
+  }, [onStreamThreadId, thread.isLoading]);
+
   // --- Live-run rejoin ------------------------------------------------------
   // If the server reports a pending/running run while no stream is attached
   // (page refresh, dropped SSE connection, run started from another client),
@@ -1047,6 +1085,13 @@ export function useThreadStream({
       return;
     }
     if (isStreamLoadingRef.current) {
+      recordRejoinAttempt(
+        onStreamThreadId,
+        activeRun.run_id,
+        rejoinStateRef.current.attempts,
+        "scheduled",
+        "skipped:isLoading",
+      );
       return;
     }
     const state = rejoinStateRef.current;
@@ -1061,10 +1106,26 @@ export function useThreadStream({
       state.exhausted ||
       state.attempts >= MAX_REJOIN_ATTEMPTS
     ) {
+      recordRejoinAttempt(
+        onStreamThreadId,
+        activeRun.run_id,
+        state.attempts,
+        state.runId !== activeRun.run_id ? "activeRun-changed" : "scheduled",
+        state.exhausted || state.attempts >= MAX_REJOIN_ATTEMPTS
+          ? "skipped:exhausted"
+          : "skipped:exhausted",
+      );
       return;
     }
     state.inFlight = true;
     state.attempts += 1;
+    recordRejoinAttempt(
+      onStreamThreadId,
+      activeRun.run_id,
+      state.attempts,
+      state.attempts === 1 ? "activeRun-changed" : "scheduled",
+      "started",
+    );
     const joinedAt = Date.now();
     void joinStreamRef
       .current(activeRun.run_id)

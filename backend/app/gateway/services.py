@@ -35,6 +35,11 @@ from deerflow.runtime import (
     UnsupportedStrategyError,
     run_agent,
 )
+from deerflow.runtime.stream_bridge.diagnostics import (
+    record_sse_consumer_disconnect,
+    record_sse_consumer_loop_iter,
+    record_sse_format,
+)
 from deerflow.runtime.runs.naming import resolve_root_run_name
 from deerflow.runtime.user_context import reset_current_user, set_current_user
 
@@ -60,6 +65,28 @@ def format_sse(event: str, data: Any, *, event_id: str | None = None) -> str:
     parts.append("")
     parts.append("")
     return "\n".join(parts)
+
+
+def format_sse_traced(
+    run_id: str,
+    event: str,
+    data: Any,
+    *,
+    event_id: str | None = None,
+    kind: str = "event",
+) -> str:
+    """``format_sse`` wrapper that records the byte count under
+    ``DEER_FLOW_STREAM_TRACE``. The recorder is disabled by default so
+    the cost is a single ``if`` check on every yielded frame.
+    """
+    frame = format_sse(event, data, event_id=event_id)
+    record_sse_format(
+        run_id=run_id,
+        kind=kind,
+        event_id=event_id,
+        byte_count=len(frame.encode("utf-8")),
+    )
+    return frame
 
 
 # ---------------------------------------------------------------------------
@@ -446,22 +473,70 @@ async def sse_consumer(
     - ``continue``: let the task run; events are discarded.
     """
     last_event_id = request.headers.get("Last-Event-ID")
+    thread_id = record.thread_id
+    iteration = 0
+    disconnect_kind: str | None = None
     try:
         async for entry in bridge.subscribe(record.run_id, last_event_id=last_event_id):
-            if await request.is_disconnected():
+            iteration += 1
+            disconnected = await request.is_disconnected()
+            record_sse_consumer_loop_iter(
+                run_id=record.run_id,
+                thread_id=thread_id,
+                iteration=iteration,
+                disconnected=disconnected,
+            )
+            if disconnected:
+                disconnect_kind = "request_disconnected"
                 break
 
             if entry is HEARTBEAT_SENTINEL:
-                yield ": heartbeat\n\n"
+                frame = ": heartbeat\n\n"
+                record_sse_format(
+                    run_id=record.run_id,
+                    kind="heartbeat",
+                    event_id=None,
+                    byte_count=len(frame.encode("utf-8")),
+                )
+                yield frame
                 continue
 
             if entry is END_SENTINEL:
-                yield format_sse("end", None, event_id=entry.id or None)
+                yield format_sse_traced(
+                    record.run_id,
+                    "end",
+                    None,
+                    event_id=entry.id or None,
+                    kind="end",
+                )
                 return
 
-            yield format_sse(entry.event, entry.data, event_id=entry.id or None)
+            yield format_sse_traced(
+                record.run_id,
+                entry.event,
+                entry.data,
+                event_id=entry.id or None,
+                kind="event",
+            )
 
     finally:
+        if disconnect_kind is None:
+            # No explicit disconnect was observed — capture cancellation as
+            # the most likely cause if the generator was torn down mid-stream.
+            import asyncio as _asyncio
+
+            try:
+                current = _asyncio.current_task()
+                if current is not None and current.cancelling() > 0:
+                    disconnect_kind = "task_cancelled"
+            except RuntimeError:
+                pass
+        if disconnect_kind is not None:
+            record_sse_consumer_disconnect(
+                run_id=record.run_id,
+                thread_id=thread_id,
+                kind=disconnect_kind,
+            )
         if record.status in (RunStatus.pending, RunStatus.running):
             if record.on_disconnect == DisconnectMode.cancel:
                 await run_mgr.cancel(record.run_id)

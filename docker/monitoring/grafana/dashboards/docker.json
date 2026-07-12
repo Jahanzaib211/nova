@@ -1,0 +1,161 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {"asDropdown": false, "icon": "external link", "includeVars": true, "keepTime": true, "tags": ["nova-ops"], "targetBlank": true, "title": "Nova Home", "to": "/d/nova-home/nova-home"}
+  ],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "title": "Container overview",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Number of running containers",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "count(running_container_count)", "instant": true, "legendFormat": "running", "refId": "A"}],
+      "title": "Running containers",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Container restart count in last hour",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 1}, {"color": "red", "value": 3}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["sum"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(increase(container_restart_count[1h]))", "instant": true, "legendFormat": "restarts / 1h", "refId": "A"}],
+      "title": "Container restarts / 1h",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Total container CPU usage %",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 60}, {"color": "red", "value": 85}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total[5m])) * 100", "instant": true, "legendFormat": "cpu %", "refId": "A"}],
+      "title": "Total container CPU %",
+      "type": "gauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Total container memory usage (bytes)",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+      "id": 5,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "sum(container_memory_usage_bytes)", "instant": true, "legendFormat": "mem bytes", "refId": "A"}],
+      "title": "Total container memory",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Total container network rx bytes/sec",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"axisBorderShow": false, "axisCenteredZero": false, "fillOpacity": 80, "gradientMode": "none", "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "lineWidth": 1, "scaleDistribution": {"type": "linear"}, "thresholdsStyle": {"mode": "off"}}}},
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 1},
+      "id": 6,
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi"}},
+      "targets": [{"expr": "sum by (interface) (rate(container_network_receive_bytes_total[5m]))", "legendFormat": "rx {{interface}}", "refId": "A"}, {"expr": "sum by (interface) (rate(container_network_transmit_bytes_total[5m]))", "legendFormat": "tx {{interface}}", "refId": "B"}],
+      "title": "Container network I/O",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 7,
+      "title": "Per-container CPU",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Top 10 containers by CPU usage",
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"align": "auto", "cellOptions": {"type": "auto"}, "inspect": false}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "id": 8,
+      "options": {"frameIndex": 0, "showHeader": true, "sortBy": [{"desc": true, "displayName": "cpu %"}]},
+      "targets": [{"expr": "topk(10, sum by (name) (rate(container_cpu_usage_seconds_total[5m])) * 100)", "legendFormat": "{{name}}", "refId": "A"}],
+      "title": "Top containers by CPU %",
+      "transformations": [{"id": "organize", "options": {"excludeByName": {}, "includeByName": {"Value": "CPU %", "name": "Container"}, "renameByName": {"Value": "CPU %", "name": "Container"}}}],
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Top 10 containers by memory usage",
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"align": "auto", "cellOptions": {"type": "auto"}, "inspect": false}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "id": 9,
+      "options": {"frameIndex": 0, "showHeader": true, "sortBy": [{"desc": true, "displayName": "mem bytes"}]},
+      "targets": [{"expr": "topk(10, sum by (name) (container_memory_usage_bytes))", "legendFormat": "{{name}}", "refId": "A"}],
+      "title": "Top containers by memory",
+      "transformations": [{"id": "organize", "options": {"excludeByName": {}, "includeByName": {"Value": "Memory", "name": "Container"}, "renameByName": {"Value": "Memory", "name": "Container"}}}],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 10,
+      "title": "Docker images",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Docker image count",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 15},
+      "id": 11,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "count(container_image_count)", "instant": true, "legendFormat": "images", "refId": "A"}],
+      "title": "Docker images",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Container network modes",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"fillOpacity": 80, "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "lineWidth": 1}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 9, "x": 6, "y": 15},
+      "id": 12,
+      "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": true}, "pieType": "pie", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "tooltip": {"mode": "single"}},
+      "targets": [{"expr": "sum by (network_mode) (container_network_addresses)", "legendFormat": "{{network_mode}}", "refId": "A"}],
+      "title": "Containers by network mode",
+      "type": "piechart"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Container states (running, paused, exited)",
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"fillOpacity": 80, "hideFrom": {"legend": false, "tooltip": false, "viz": false}, "lineWidth": 1}}, "overrides": []},
+      "gridPos": {"h": 4, "w": 9, "x": 15, "y": 15},
+      "id": 13,
+      "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": true}, "pieType": "pie", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "tooltip": {"mode": "single"}},
+      "targets": [{"expr": "container_last_seen_state", "legendFormat": "{{state}}", "refId": "A"}],
+      "title": "Containers by state",
+      "type": "piechart"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["nova-ops", "docker"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {"refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]},
+  "timezone": "browser",
+  "title": "Docker",
+  "uid": "docker",
+  "version": 1
+}

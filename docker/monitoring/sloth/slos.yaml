@@ -1,0 +1,85 @@
+# Nova SLO specs — sloth.dev generates Prometheus recording + alerting rules.
+# Run: docker run --rm -v $PWD/sloth:/out grafana/sloth:latest generate \
+#        -i sloth/slos.yaml -o /out/rules
+# Then: curl -X POST http://127.0.0.1:9090/-/reload
+# Or just: make sloth-generate (see Makefile).
+
+version: "1"
+service: "nova"
+labels:
+  owner: "nova-ops"
+  env: "hackathon"
+
+slos:
+  # ── Gateway availability ────────────────────────────────────────────────
+  - name: gateway-availability
+    objective: 99.5
+    description: |
+      Gateway serves non-5xx responses. Error budget: 3.6h/month.
+      Burn rate: 2%/1h (fast) or 5%/6h (slow) triggers page.
+    sli:
+      plugin:
+        id: prometheus/raw
+        options:
+          error_ratio_query: |
+            sum(rate(nova_gateway_requests_total{code=~"5.."}[{{.window}}]))
+            /
+            sum(rate(nova_gateway_requests_total[{{.window}}]))
+          total_query: |
+            sum(rate(nova_gateway_requests_total[{{.window}}]))
+    alerting:
+      name: NovaGatewayAvailability
+      labels:
+        severity: critical
+        runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/gateway-availability.md"
+      annotations:
+        summary: "Nova gateway availability SLO breached"
+        description: "{{ $value | humanizePercentage }} success rate over {{ .window }} (target: 99.5%)"
+
+  # ── Healthcheck puppies ────────────────────────────────────────────────
+  - name: healthcheck-green
+    objective: 99.0
+    description: |
+      All 12 healthcheck probes green per cycle.
+      Error budget: 7.2h/month.
+    sli:
+      plugin:
+        id: prometheus/raw
+        options:
+          error_ratio_query: |
+            sum(rate(nova_healthcheck_probes_total{status!="green"}[{{.window}}]))
+            /
+            sum(rate(nova_healthcheck_probes_total[{{.window}}]))
+          total_query: |
+            sum(rate(nova_healthcheck_probes_total[{{.window}}]))
+    alerting:
+      name: NovaHealthcheckDegraded
+      labels:
+        severity: warning
+        runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/healthcheck-degraded.md"
+      annotations:
+        summary: "Nova healthcheck has non-green probes"
+        description: "{{ $value | humanizePercentage }} of probes non-green over {{ .window }}"
+
+  # ── Tunnel up ─────────────────────────────────────────────────────────
+  - name: tunnel-up
+    objective: 99.0
+    description: |
+      Cloudflare tunnel connector is reachable.
+      Error budget: 7.2h/month.
+    sli:
+      plugin:
+        id: prometheus/raw
+        options:
+          error_ratio_query: |
+            1 - (sum(up{job="cloudflared"}) / count(up{job="cloudflared"}))
+          total_query: |
+            count(up{job="cloudflared"})
+    alerting:
+      name: NovaTunnelDown
+      labels:
+        severity: critical
+        runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/tunnel-down.md"
+      annotations:
+        summary: "Cloudflare tunnel connector is down"
+        description: "cloudflared up==0 for {{ .window }}. Auto-restart via systemd."

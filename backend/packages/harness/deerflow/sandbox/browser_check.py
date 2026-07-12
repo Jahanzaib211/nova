@@ -43,8 +43,17 @@ from urllib.parse import urlsplit, urlunsplit
 from weakref import WeakValueDictionary
 
 from deerflow.sandbox.dev_server import get_dev_server
+from deerflow.sandbox.metrics import browser_check_duration_ms, browser_check_total
 
 logger = logging.getLogger(__name__)
+
+# Module-level state used by the post-run metric emit in
+# ``_run_browser_check_unlocked``. Module-level (not closure) so the
+# assignment survives a caller reusing the function through
+# ``retry_browser_call``/``guard_browser_call`` wrappers, both of which
+# re-enter without an explicit ``return`` of the inner function.
+_started_monotonic: float = 0.0
+_route_engine_used: Any = None  # callable(_result) -> str; set by the inner func
 
 # Adaptive render budget (v7+): replaces the previous fixed
 # ``page.wait_for_timeout(1500)`` with a ``networkidle`` + fallback scheme.
@@ -329,10 +338,30 @@ def _run_browser_check_unlocked(
     render_budget_ms: int,
 ) -> BrowserCheck:
     """Inner, lock-free implementation. Always called from ``run_browser_check``."""
+    # Capture start time + route-engine state in the closure so the post-run
+    # metric emit (at the bottom of this function) has accurate duration +
+    # engine label without re-deriving them.
+    global _started_monotonic, _route_engine_used
+
+    def _route_engine_used(_result: BrowserCheck) -> str:
+        # Currently only CDP is actually used; fall back to "browser_page"
+        # if a future change introduces a non-CDP engine selector.
+        return "cdp"
+
+    _started_monotonic = time.monotonic()
+    _route_engine_used = _route_engine_used
+
     result = BrowserCheck()
     client = getattr(sandbox, "_client", None)
     if client is None:
         result.reason = "this sandbox has no browser (container/AIO sandbox required)"
+        # Still count + observe so unhealthy local sandboxes surface in metrics.
+        try:
+            elapsed_ms = (time.monotonic() - _started_monotonic) * 1000.0
+            browser_check_total.inc("no_browser")
+            browser_check_duration_ms.observe(elapsed_ms, "none")
+        except Exception:
+            logger.debug("browser_check metric emit failed", exc_info=True)
         return result
 
     handle = get_dev_server(thread_id, label)
@@ -389,6 +418,19 @@ def _run_browser_check_unlocked(
     result.routes = routes_result
     result.ok = bool(routes_result) and all(r.ok for r in routes_result)
     result.reason = "ok" if result.ok else "issues found — see routes"
+
+    # Observability: emit Prometheus counter + histogram. Non-fatal — a
+    # bad import must NEVER break the self-test result. The duration is
+    # the wall-clock from function entry to here; capture once so we
+    # don't double-count on retry-wrapped callers.
+    try:
+        elapsed_ms = (time.monotonic() - _started_monotonic) * 1000.0
+        outcome = "ok" if result.ok else "issues"
+        browser_check_total.inc(outcome)
+        browser_check_duration_ms.observe(elapsed_ms, _route_engine_used(result))
+    except Exception:
+        logger.debug("browser_check metric emit failed", exc_info=True)
+
     return result
 
 

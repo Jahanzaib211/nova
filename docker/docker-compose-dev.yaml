@@ -68,6 +68,9 @@ services:
       - "2026:2026"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+      # Durable visitor log store (survives container recreation). nginx
+      # writes access.jsonl here; scripts/nova-visitors.py reads/prunes it.
+      - ../logs/nova:/var/log/nova
     command:
       - sh
       - -c

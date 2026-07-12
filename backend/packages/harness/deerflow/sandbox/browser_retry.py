@@ -62,6 +62,7 @@ from deerflow.sandbox.browser_errors import (
     BrowserError,
     is_permanent,
 )
+from deerflow.sandbox.metrics import retry_attempts_total
 
 logger = logging.getLogger(__name__)
 
@@ -139,13 +140,25 @@ def retry_browser_call(
         # checking here saves the (small) cost of acquiring the lock + the
         # circuit lookup, and gives a cleaner log path.
         if get_circuit_state(thread_id).value == "open":
+            try:
+                retry_attempts_total.inc("circuit_open")
+            except Exception:
+                logger.debug("retry_attempts_total increment failed", exc_info=True)
             raise BrowserCircuitOpenError(
                 f"retry_browser_call short-circuited for thread_id={thread_id} during operation={op_label}",
                 cooldown_remaining_s=0.0,  # actual cooldown computed inside guard
             )
 
         try:
-            return guard_browser_call(thread_id, fn, *args, **kwargs)
+            result = guard_browser_call(thread_id, fn, *args, **kwargs)
+            # Success path. Emit once per successful call (not per attempt)
+            # so the counter is "calls that eventually succeeded", which
+            # matches the existing retry_attempts_total semantically.
+            try:
+                retry_attempts_total.inc("succeeded")
+            except Exception:
+                logger.debug("retry_attempts_total increment failed", exc_info=True)
+            return result
         except Exception as exc:
             last_exc = exc
 
@@ -156,6 +169,10 @@ def retry_browser_call(
                     op_label,
                     thread_id,
                 )
+                try:
+                    retry_attempts_total.inc("circuit_open")
+                except Exception:
+                    logger.debug("retry_attempts_total increment failed", exc_info=True)
                 raise
 
             # 2. Permanent error → fail fast, no retry.
@@ -166,6 +183,10 @@ def retry_browser_call(
                     thread_id,
                     exc,
                 )
+                try:
+                    retry_attempts_total.inc("permanent")
+                except Exception:
+                    logger.debug("retry_attempts_total increment failed", exc_info=True)
                 raise
 
             # 3. Non-browser unexpected exception → don't mask unknown bugs.
@@ -176,6 +197,10 @@ def retry_browser_call(
                     thread_id,
                     exc,
                 )
+                try:
+                    retry_attempts_total.inc("gave_up")
+                except Exception:
+                    logger.debug("retry_attempts_total increment failed", exc_info=True)
                 raise
 
             # 4. Transient browser error AND attempts remain → retry.
@@ -195,6 +220,13 @@ def retry_browser_call(
                     exc,
                     sleep_ms,
                 )
+                # Count each individual retry attempt (not just the
+                # final exhaustion): "transient_attempt" is a per-attempt
+                # signal that complements the terminal "exhausted" event.
+                try:
+                    retry_attempts_total.inc("transient_attempt")
+                except Exception:
+                    logger.debug("retry_attempts_total increment failed", exc_info=True)
                 if on_retry is not None:
                     try:
                         on_retry(attempt, sleep_ms, exc)
@@ -214,6 +246,10 @@ def retry_browser_call(
                 thread_id,
                 exc,
             )
+            try:
+                retry_attempts_total.inc("exhausted")
+            except Exception:
+                logger.debug("retry_attempts_total increment failed", exc_info=True)
             raise
 
     # Unreachable, but the type checker wants it.

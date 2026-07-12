@@ -48,8 +48,8 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import { useIGINOStatus } from "@/core/igino/hooks";
 import { useCapabilities, useOpenCircuitCount } from "@/core/runtime/hooks";
-import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { CapabilitiesResponse } from "@/core/runtime/types";
+import type { AgentActivityEvent } from "@/core/threads/hooks";
 import { cn } from "@/lib/utils";
 
 // Visual constants — fixed so the bar reads as one rhythm regardless
@@ -388,7 +388,7 @@ export function RuntimeCapabilitiesBar({
     if (!sandboxEvents?.length) return null;
     const last = sandboxEvents[sandboxEvents.length - 1];
     if (last?.status === "running" && INSTALLER_PATTERN.test(last.summary)) {
-      const match = last.summary.match(/(npm|yarn|pnpm|pip|bun)/);
+      const match = /(npm|yarn|pnpm|pip|bun)/.exec(last.summary);
       const _matched: string | undefined = match?.[1];
       const label = _matched ? (INSTALLER_LABELS[_matched] ?? _matched) : "Installing…";
       const elapsed = last.ts ? Math.floor((Date.now() - new Date(last.ts).getTime()) / 1000) : 0;

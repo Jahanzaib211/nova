@@ -1,0 +1,185 @@
+// Nova monitoring — Grafana Alloy log-shipping pipelines → Loki.
+//
+// Sources:
+//   1. logs/nova/access.jsonl      → job="nova-access"     (visitor/security log)
+//   2. pm2 nova-healthcheck JSON   → job="nova-healthcheck" (12-probe cycle status)
+//   3. all other pm2 app logs      → job="pm2"
+//   4. systemd journal             → job="journal"          (sshd/ufw/unit failures)
+//   5. docker container logs       → job="docker"
+//
+// Label discipline: only bounded-cardinality labels (job, status_class, probe,
+// overall, unit, level, container, filename). High-cardinality fields (ip,
+// path, ua, country) stay in the log line and are parsed at query time.
+
+loki.write "default" {
+  endpoint {
+    url = "http://127.0.0.1:3100/loki/api/v1/push"
+  }
+}
+
+// ── 1. Visitor/security log (nginx → access.jsonl) ──────────────────────
+
+local.file_match "nova_access" {
+  path_targets = [{"__path__" = "/host/logs/nova/access.jsonl"}]
+}
+
+loki.source.file "nova_access" {
+  targets    = local.file_match.nova_access.targets
+  forward_to = [loki.process.nova_access.receiver]
+}
+
+loki.process "nova_access" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.json {
+    expressions = {
+      ts     = "ts",
+      path   = "path",
+      status = "status",
+    }
+  }
+
+  stage.timestamp {
+    source = "ts"
+    format = "RFC3339"
+  }
+
+  // Scanner-probe flag — same signal set as PROBE_PATTERNS in
+  // scripts/nova-visitors.py. Bounded label (true/false) so the
+  // probe-spike alert is a cheap label-matcher query.
+  stage.template {
+    source   = "probe"
+    template = `{{ if regexMatch "(?i)(/\\.env|/\\.git|/wp-admin|/wp-login|/xmlrpc\\.php|/phpmyadmin|/\\.aws|/\\.ssh|/actuator|/vendor/|/config\\.(json|php|yaml)|/cgi-bin|/administrator|/solr|/boaform|/hudson|\\.php$)" .path }}true{{ else }}false{{ end }}`
+  }
+
+  stage.template {
+    source   = "status_class"
+    template = "{{ substr 0 1 .status }}xx"
+  }
+
+  stage.static_labels {
+    values = {
+      job = "nova-access",
+    }
+  }
+
+  stage.labels {
+    values = {
+      probe        = "",
+      status_class = "",
+    }
+  }
+}
+
+// ── 2. nova-healthcheck per-cycle JSON (via pm2 out log) ────────────────
+
+local.file_match "healthcheck" {
+  path_targets = [{"__path__" = "/host/pm2-logs/nova-healthcheck-out*.log"}]
+}
+
+loki.source.file "healthcheck" {
+  targets    = local.file_match.healthcheck.targets
+  forward_to = [loki.process.healthcheck.receiver]
+}
+
+loki.process "healthcheck" {
+  forward_to = [loki.write.default.receiver]
+
+  // pm2 prefixes `YYYY-MM-DD HH:mm:ss Z: ` — strip it, keep the JSON payload.
+  stage.regex {
+    expression = `^(?P<pm2ts>[0-9-]+ [0-9:]+ [+0-9:]+): (?P<payload>\{.*\})$`
+  }
+
+  stage.output {
+    source = "payload"
+  }
+
+  stage.json {
+    expressions = {
+      overall = "overall",
+    }
+  }
+
+  stage.static_labels {
+    values = {
+      job = "nova-healthcheck",
+    }
+  }
+
+  stage.labels {
+    values = {
+      overall = "",
+    }
+  }
+}
+
+// ── 3. Remaining pm2 app logs ───────────────────────────────────────────
+
+local.file_match "pm2" {
+  path_targets = [{
+    "__path__"         = "/host/pm2-logs/*.log",
+    "__path_exclude__" = "/host/pm2-logs/nova-healthcheck-out*.log",
+  }]
+}
+
+loki.source.file "pm2" {
+  targets    = local.file_match.pm2.targets
+  forward_to = [loki.process.pm2.receiver]
+}
+
+loki.process "pm2" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.static_labels {
+    values = {
+      job = "pm2",
+    }
+  }
+}
+
+// ── 4. systemd journal ──────────────────────────────────────────────────
+
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+}
+
+loki.source.journal "journal" {
+  forward_to    = [loki.write.default.receiver]
+  relabel_rules = loki.relabel.journal.rules
+  labels        = {job = "journal"}
+  max_age       = "12h"
+}
+
+// ── 5. docker container logs ────────────────────────────────────────────
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.containers.output
+  forward_to    = [loki.write.default.receiver]
+  labels        = {job = "docker"}
+  relabel_rules = discovery.relabel.containers.rules
+}

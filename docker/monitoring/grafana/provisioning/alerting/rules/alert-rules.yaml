@@ -1,0 +1,384 @@
+# Nova alerting — Grafana Unified Alerting rules.
+# Each rule group is provisioned into Grafana's unified alerting store.
+# See contact-points.yaml for routing.
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: nova.security
+    folder: Nova Alerts
+    interval: 30s
+    rules:
+      - uid: scanner-probe-spike
+        title: Scanner probe spike
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              expr: sum(count_over_time({job="nova-access", probe="true"}[10m]))
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [5]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: classic_conditions
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 1m
+        annotations:
+          summary: "Scanner probe spike detected — {{ $values.A }} hits in 10 minutes"
+          description: "IP is scanning for common vulnerability paths. See Visitors & Security dashboard."
+          runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/scanner-probe-spike.md"
+        labels:
+          severity: warning
+          team: nova-ops
+
+      - uid: 5xx-burst
+        title: HTTP 5xx error burst
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              expr: sum(rate({job="nova-access", status=~"5.."}[5m])))
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0.5]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: classic_conditions
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 2m
+        annotations:
+          summary: "HTTP 5xx burst — {{ $values.A }} errors/sec"
+          description: "Gateway or backend is returning 5xx errors. Check nova gateway logs."
+        labels:
+          severity: critical
+          team: nova-ops
+
+  - orgId: 1
+    name: nova.infrastructure
+    folder: Nova Alerts
+    interval: 30s
+    rules:
+      - uid: healthcheck-probe-red
+        title: Healthcheck probe non-green
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              expr: sum(count_over_time({job="nova-healthcheck"} | json | overall=~"red|yellow"[5m]))
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: threshold
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 2m
+        annotations:
+          summary: "Healthcheck has non-green probe — see Nova Home dashboard"
+          description: "nova-healthcheck cycle has non-green probes for 2+ cycles."
+          runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/healthcheck-degraded.md"
+        labels:
+          severity: warning
+          team: nova-ops
+
+      - uid: tunnel-down
+        title: Cloudflare tunnel down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job="cloudflared"}
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: threshold
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 1m
+        annotations:
+          summary: "Cloudflare tunnel connector is DOWN"
+          description: "cloudflared has crashed or the systemd unit is dead. Check `systemctl status cloudflared-nova`."
+          runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/tunnel-down.md"
+        labels:
+          severity: critical
+          team: nova-ops
+
+      - uid: blackbox-probe-down
+        title: Blackbox internal health probe down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: probe_success{job="blackbox"}
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: threshold
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 2m
+        annotations:
+          summary: "Internal nginx health probe failed"
+          description: "Blackbox cannot reach nginx at 127.0.0.1:2026/health."
+        labels:
+          severity: warning
+          team: nova-ops
+
+  - orgId: 1
+    name: nova.host
+    folder: Nova Alerts
+    interval: 30s
+    rules:
+      - uid: disk-90-percent
+        title: Disk >90% on any mount
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: |
+                (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: threshold
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 5m
+        annotations:
+          summary: "Disk usage >90% on mount"
+          description: "Filesystem {{ $labels.mountpoint }} is at {{ $value | humanize }}%."
+          runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/disk-full.md"
+        labels:
+          severity: critical
+          team: nova-ops
+
+      - uid: memory-95-percent
+        title: Memory >95%
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: threshold
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 5m
+        annotations:
+          summary: "Memory usage >95%"
+          description: "System memory is at {{ $value | humanize }}%."
+        labels:
+          severity: critical
+          team: nova-ops
+
+  - orgId: 1
+    name: nova.selfmonitor
+    folder: Nova Alerts
+    interval: 30s
+    rules:
+      - uid: prometheus-down
+        title: Prometheus is down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: up{job="prometheus"}
+              refId: A
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              refId: B
+              type: threshold
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              expression: B
+              refId: C
+              type: threshold
+        for: 1m
+        annotations:
+          summary: "Prometheus is DOWN — monitoring stack is blind"
+          description: "Prometheus container is not responding. Check `pm2 restart nova-monitoring`."
+          runbook_url: "file:///home/jahanzaib/Desktop/nova/docs/RUNBOOKS/prometheus-down.md"
+        labels:
+          severity: critical
+          team: nova-ops

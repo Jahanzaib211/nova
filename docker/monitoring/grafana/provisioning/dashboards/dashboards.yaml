@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: Nova Dashboards
+    uid: nova-dashboards
+    orgId: 1
+    type: file
+    disableResolution: 0
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

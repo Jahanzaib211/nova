@@ -20,6 +20,7 @@ import copy
 import inspect
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 from deerflow.config.app_config import AppConfig
 from deerflow.runtime.serialization import serialize
 from deerflow.runtime.stream_bridge import StreamBridge
+from deerflow.runtime.stream_bridge.diagnostics import record_worker_publish
 from deerflow.runtime.user_context import get_effective_user_id
 from deerflow.tracing import inject_langfuse_metadata
 
@@ -316,7 +318,14 @@ async def run_agent(
                     break
                 llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk)
                 sse_event = _lg_mode_to_sse_event(single_mode)
-                await bridge.publish(run_id, sse_event, serialize(chunk, mode=single_mode))
+                serialized = serialize(chunk, mode=single_mode)
+                record_worker_publish(
+                    run_id=str(run_id),
+                    event=sse_event,
+                    payload_bytes=len(serialized) if isinstance(serialized, (str, bytes)) else 0,
+                    monotonic_ns_at_astream=time.monotonic_ns(),
+                )
+                await bridge.publish(run_id, sse_event, serialized)
         else:
             # Multiple modes or subgraphs: astream yields tuples
             async for item in agent.astream(
@@ -335,7 +344,14 @@ async def run_agent(
 
                 llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk)
                 sse_event = _lg_mode_to_sse_event(mode)
-                await bridge.publish(run_id, sse_event, serialize(chunk, mode=mode))
+                serialized = serialize(chunk, mode=mode)
+                record_worker_publish(
+                    run_id=str(run_id),
+                    event=sse_event,
+                    payload_bytes=len(serialized) if isinstance(serialized, (str, bytes)) else 0,
+                    monotonic_ns_at_astream=time.monotonic_ns(),
+                )
+                await bridge.publish(run_id, sse_event, serialized)
 
         # 8. Final status
         if record.abort_event.is_set():

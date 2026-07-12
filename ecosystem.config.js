@@ -157,5 +157,30 @@ module.exports = {
       error_file: "/var/log/cloudflared/nova-error.log",
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
+    {
+      // Nova observability stack — Grafana + Prometheus + Loki + Alloy +
+      // blackbox + node_exporter + cadvisor + Uptime Kuma.
+      //
+      // Foreground docker compose so PM2 owns the lifecycle and reboots
+      // bring the whole stack back. All services loopback-only (127.0.0.1).
+      //
+      // To (re-)register after editing:
+      //   pm2 delete nova-monitoring && pm2 start ecosystem.config.js --only nova-monitoring && pm2 save
+      name: "nova-monitoring",
+      script: `${require("path").resolve(__dirname, "scripts/pm2-monitoring.sh")}`,
+      interpreter: "none",
+      cwd: __dirname,
+      env: {
+        DEER_FLOW_ROOT: __dirname,
+      },
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      exp_backoff_restart_delay: 60,
+      kill_timeout: 15000,
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-monitoring-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-monitoring-error.log")}`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
   ],
 };

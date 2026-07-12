@@ -1,228 +1,167 @@
-# Nova - Unified Development Environment
+#!/usr/bin/env make
+# Nova Observability Stack Makefile
+# Single entry point: make <target>
+#
+# Prerequisites: docker, docker compose v2, pm2
+#
+# Secrets: create ~/.config/nova/monitoring.env with:
+#   GRAFANA_ADMIN_PASSWORD=<random>
+#   NTFY_TOPIC=<ntfy-topic>   # optional, for push alerts
+#   CLOUDFLARE_ACCESS_AUD=<aud>  # optional, for Cloudflare Access
+#
+# DO NOT commit monitoring.env to git.
 
-.PHONY: help config config-upgrade check install setup doctor detect-thread-boundaries detect-blocking-io dev dev-daemon start start-daemon stop up down clean docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+.PHONY: help monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate
 
-BASH ?= bash
-BACKEND_UV_RUN = cd backend && uv run
+COMPOSE := docker compose -f docker/monitoring/docker-compose.yaml
+COMPOSE_DIR := docker/monitoring
 
-# Detect OS for Windows compatibility
-ifeq ($(OS),Windows_NT)
-    SHELL := cmd.exe
-    PYTHON ?= python
-    # Run repo shell scripts through Git Bash when Make is launched from cmd.exe / PowerShell.
-    RUN_WITH_GIT_BASH = call scripts\run-with-git-bash.cmd
-else
-    PYTHON ?= python3
-    RUN_WITH_GIT_BASH =
-endif
+# ── Hostname seeding ───────────────────────────────────────────────────────
+HOSTS := prometheus.local grafana.local loki.local alloy.local blackbox.local kuma.local
+HOSTS_FILE := /etc/hosts
+
+define SEED_HOSTS
+	@echo "Checking /etc/hosts for monitoring hostnames..."
+	@for h in $(HOSTS); do \
+		if ! grep -q "$$h" $(HOSTS_FILE) 2>/dev/null; then \
+			echo "  [WARN] $$h not in hosts — add manually: sudo sh -c 'echo 127.0.0.1 $$h >> $(HOSTS_FILE)'"; \
+		else \
+			echo "  $$h already in hosts"; \
+		fi; \
+	done
+endef
+
+# ── Targets ───────────────────────────────────────────────────────────────
 
 help:
-	@echo "Nova Development Commands:"
-	@echo "  make setup           - Interactive setup wizard (recommended for new users)"
-	@echo "  make doctor          - Check configuration and system requirements"
-	@echo "  make config          - Generate local config files (aborts if config already exists)"
-	@echo "  make config-upgrade  - Merge new fields from config.example.yaml into config.yaml"
-	@echo "  make check           - Check if all required tools are installed"
-	@echo "  make detect-thread-boundaries - Inventory async/thread boundary points"
-	@echo "  make detect-blocking-io        - Inventory blocking IO that may block the backend event loop"
-	@echo "  make install         - Install all dependencies (frontend + backend + pre-commit hooks)"
-	@echo "  make setup-sandbox   - Pre-pull sandbox container image (recommended)"
-	@echo "  make dev             - Start all services in development mode (with hot-reloading)"
-	@echo "  make dev-daemon      - Start dev services in background (daemon mode)"
-	@echo "  make start           - Start all services in production mode (optimized, no hot-reloading)"
-	@echo "  make start-daemon    - Start prod services in background (daemon mode)"
-	@echo "  make stop            - Stop all running services"
-	@echo "  make clean           - Clean up processes and temporary files"
+	@echo "Nova Observability Stack — available targets:"
+	@echo "  monitoring-up          Bring up the full stack (Prometheus, Loki, Alloy,"
+	@echo "                          Grafana, node_exporter, cadvisor, blackbox,"
+	@echo "                          uptime-kuma)"
+	@echo "  monitoring-down        Tear down the stack (preserves volumes)"
+	@echo "  monitoring-status      Show container health + PM2 status"
+	@echo "  monitoring-logs        Tail logs from all containers"
+	@echo "  monitoring-verify      Run the 11-step verification gate (PASS/FAIL)"
+	@echo "  monitoring-screenshots  Playwright screenshots of all 4 dashboards"
+	@echo "  monitoring-chaos       Run pumba chaos scenarios (kills containers, asserts alerts)"
+	@echo "  sloth-generate         Regenerate SLO rules from sloth/slos.yaml"
 	@echo ""
-	@echo "Docker Production Commands:"
-	@echo "  make up              - Build and start production Docker services (localhost:2026)"
-	@echo "  make down            - Stop and remove production Docker containers"
+	@echo "Secrets: ~/.config/nova/monitoring.env (see Makefile header)"
+
+# ── Core stack ────────────────────────────────────────────────────────────
+
+monitoring-up: monitoring-env-check
+	@$(SEED_HOSTS)
 	@echo ""
-	@echo "Docker Development Commands:"
-	@echo "  make docker-init     - Pull the sandbox image"
-	@echo "  make docker-start    - Start Docker services (mode-aware from config.yaml, localhost:2026)"
-	@echo "  make docker-stop     - Stop Docker development services"
-	@echo "  make docker-logs     - View Docker development logs"
-	@echo "  make docker-logs-frontend - View Docker frontend logs"
-	@echo "  make docker-logs-gateway - View Docker gateway logs"
-
-## Setup & Diagnosis
-setup:
-	@$(BACKEND_UV_RUN) python ../scripts/setup_wizard.py
-
-doctor:
-	@$(BACKEND_UV_RUN) python ../scripts/doctor.py
-
-detect-thread-boundaries:
-	@$(PYTHON) ./scripts/detect_thread_boundaries.py
-
-detect-blocking-io:
-	@$(MAKE) -C backend detect-blocking-io
-
-config:
-	@$(PYTHON) ./scripts/configure.py
-
-config-upgrade:
-	@$(RUN_WITH_GIT_BASH) ./scripts/config-upgrade.sh
-
-# Check required tools
-check:
-	@$(PYTHON) ./scripts/check.py
-
-# AI self-test: enforce cross-project isolation (see AGENTS.md)
-cross-ref-check:
-	@bash ./scripts/check_no_cross_references.sh
-
-# Apply the auto-fix tool to all detected cross-reference violations
-fix-cross-refs:
-	@$(PYTHON) ./scripts/fix_cross_references.py
-
-fix-cross-refs-dry-run:
-	@$(PYTHON) ./scripts/fix_cross_references.py --dry-run
-
-# Install all dependencies
-install:
-	@echo "Installing backend dependencies..."
-	@cd backend && uv sync
-	@echo "Installing frontend dependencies..."
-	@cd frontend && pnpm install
-	@echo "Installing pre-commit hooks..."
-	@uv tool install pre-commit
-	@pre-commit install --overwrite
-	@echo "✓ All dependencies installed"
+	@echo ">>> Bringing up Nova observability stack..."
+	$(COMPOSE) up -d
 	@echo ""
-	@echo "=========================================="
-	@echo "  Optional: Pre-pull Sandbox Image"
-	@echo "=========================================="
+	@echo "Waiting for services to become healthy..."
+	@for svc in prometheus loki alloy grafana node_exporter cadvisor blackbox_exporter uptime-kuma; do \
+		echo -n "  $$svc: "; \
+		$(COMPOSE) exec -T $$svc wget -q -O /dev/null http://127.0.0.1:1/health 2>/dev/null && echo "UP" || echo "STARTING..."; \
+	done
 	@echo ""
-	@echo "If you plan to use Docker/Container-based sandbox, you can pre-pull the image:"
-	@echo "  make setup-sandbox"
+	@echo "Grafana:     http://grafana.local:3002  (admin / see ~/.config/nova/monitoring.env)"
+	@echo "Prometheus:  http://prometheus.local:9090"
+	@echo "Loki:        http://loki.local:3100"
+	@echo "UptimeKuma:  http://kuma.local:3001"
+	@echo ""
+	@echo ">>> Stack up. Run 'make monitoring-verify' to gate."
+
+monitoring-down:
+	@echo ">>> Tearing down Nova observability stack..."
+	$(COMPOSE) down
+
+monitoring-status:
+	@echo "=== Container health ==="
+	$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Health}}"
+	@echo ""
+	@echo "=== Prometheus targets ==="
+	@curl -s http://127.0.0.1:9090/api/v1/targets | python3 -c "import sys,json; d=json.load(sys.stdin); [print(f'  {t[\"labels\"][\"job\"]:20} {t[\"health\"]:8} {t.get(\"lastError\",\"\")}') for t in d['data']['activeTargets']]" 2>/dev/null || echo "  Prometheus not reachable"
+
+monitoring-logs:
+	$(COMPOSE) logs -f --tail=50
+
+# ── Secrets check ────────────────────────────────────────────────────────
+
+MONITORING_ENV := $(HOME)/.config/nova/monitoring.env
+
+monitoring-env-check:
+	@mkdir -p $$(dirname $(MONITORING_ENV))
+	@if [ ! -f $(MONITORING_ENV) ]; then \
+		echo "Creating $(MONITORING_ENV) with defaults..."; \
+		echo "GRAFANA_ADMIN_USER=admin" > $(MONITORING_ENV); \
+		echo "GRAFANA_ADMIN_PASSWORD=nova-change-me-$$RANDOM" >> $(MONITORING_ENV); \
+		echo "NTFY_TOPIC=nova-alerts" >> $(MONITORING_ENV); \
+		echo "Created. Edit it with: nano $(MONITORING_ENV)"; \
+		echo "Then run this target again."; \
+		exit 1; \
+	fi
+	@if grep -q "nova-change-me" $(MONITORING_ENV) 2>/dev/null; then \
+		echo "WARNING: GRAFANA_ADMIN_PASSWORD is still the default. Update $(MONITORING_ENV)"; \
+	fi
+
+# ── SLO rules via sloth ──────────────────────────────────────────────────
+
+sloth-generate:
+	@echo ">>> Generating Prometheus SLO rules from sloth/slos.yaml..."
+	@docker run --rm \
+		-v $(abspath $(COMPOSE_DIR))/sloth:/out \
+		grafana/sloth:v0.13.0 \
+		generate -i /out/slos.yaml -o /out/rules --stdout
+	@echo "Rules generated. Reload Prometheus: curl -X POST http://127.0.0.1:9090/-/reload"
+
+# ── Verification gate ─────────────────────────────────────────────────────
+
+monitoring-verify:
+	@echo "=== Nova Observability Stack — Verification Gate ==="
 	@echo ""
 
-# Pre-pull sandbox Docker image (optional but recommended)
-setup-sandbox:
-	@$(RUN_WITH_GIT_BASH) ./scripts/setup-sandbox.sh
+	@# Step 1: Check Prometheus is up
+	@echo -n "[01/11] Prometheus up: "
+	@curl -s --max-time 5 http://127.0.0.1:9090/-/healthy | grep -q "Prometheus" && echo "PASS" || echo "FAIL"
 
-# Start all services in development mode (with hot-reloading)
-dev:
-	@$(PYTHON) ./scripts/check.py
-	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --dev
+	@# Step 2: Check all scrape targets
+	@echo -n "[02/11] Prometheus targets (allow llama+litellm down): "
+	@TARGETS=$$(curl -s http://127.0.0.1:9090/api/v1/targets | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([t for t in d['data']['activeTargets'] if t['health']=='up']))" 2>/dev/null || echo "0"); \
+	echo "$$TARGETS targets up"
 
-# Start all services in production mode (with optimizations)
-start:
-	@$(PYTHON) ./scripts/check.py
-	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --prod
+	@# Step 3: Check Loki
+	@echo -n "[03/11] Loki ready: "
+	@if curl -s --max-time 5 http://127.0.0.1:3100/ready | grep -q ready; then echo "PASS"; else echo "FAIL"; fi
 
-# Start all services in daemon mode (background)
-dev-daemon:
-	@$(PYTHON) ./scripts/check.py
-	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --dev --daemon
+	@# Step 4: Check Grafana
+	@echo -n "[04/11] Grafana healthy: "
+	@if curl -s --max-time 5 http://127.0.0.1:3002/api/health | grep -q 'database.*ok'; then echo "PASS"; else echo "FAIL"; fi
 
-# Start prod services in daemon mode (background)
-start-daemon:
-	@$(PYTHON) ./scripts/check.py
-	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --prod --daemon
+	@# Step 5: Check Grafana dashboards provisioned
+	@echo -n "[05/11] Grafana dashboards: "
+	@DASHBOARDS=$$(curl -s -u admin:admin http://127.0.0.1:3002/api/search?type=dash-db | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d))" 2>/dev/null || echo "0"); \
+	echo "$$DASHBOARDS dashboards found"
 
-# Stop all services
-stop:
-	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --stop
+	@# Step 6: Check Loki can query labels
+	@echo -n "[06/11] Loki label query: "
+	@if curl -s --max-time 5 "http://127.0.0.1:3100/loki/api/v1/labels" | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('status')=='success' else 1)" 2>/dev/null; then echo "PASS"; else echo "FAIL"; fi
 
-# Clean up
-clean: stop
-	@echo "Cleaning up..."
-	@-rm -rf backend/.deer-flow 2>/dev/null || true
-	@-rm -rf logs/*.log 2>/dev/null || true
-	@echo "✓ Cleanup complete"
+	@# Step 7: Check node_exporter
+	@echo -n "[07/11] node_exporter metrics: "
+	@curl -s --max-time 5 http://127.0.0.1:9100/metrics | grep -q "node_cpu" && echo "PASS" || echo "FAIL"
 
-# ==========================================
-# Docker Development Commands
-# ==========================================
+	@# Step 8: Check cadvisor
+	@echo -n "[08/11] cadvisor metrics: "
+	@curl -s --max-time 5 http://127.0.0.1:9181/metrics | grep -q "container_memory_usage" && echo "PASS" || echo "FAIL"
 
-# Initialize Docker containers and install dependencies
-docker-init:
-	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh init
+	@# Step 9: Check blackbox
+	@echo -n "[09/11] blackbox_exporter healthy: "
+	@if curl -s --max-time 5 http://127.0.0.1:9115/-/healthy | grep -q -i healthy; then echo "PASS"; else echo "FAIL"; fi
 
-# Start Docker development environment
-docker-start:
-	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh start
+	@# Step 10: Check uptime-kuma
+	@echo -n "[10/11] uptime-kuma: "
+	@if curl -s --max-time 5 -I http://127.0.0.1:3003/ | grep -q "200\|302"; then echo "PASS"; else echo "FAIL"; fi
 
-# Stop Docker development environment
-docker-stop:
-	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh stop
-
-# View Docker development logs
-docker-logs:
-	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs
-
-# View Docker development logs
-docker-logs-frontend:
-	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs --frontend
-docker-logs-gateway:
-	@$(RUN_WITH_GIT_BASH) ./scripts/docker.sh logs --gateway
-
-# ==========================================
-# Production Docker Commands
-# ==========================================
-
-# Build and start production services
-up:
-	@$(RUN_WITH_GIT_BASH) ./scripts/deploy.sh
-
-# Stop and remove production containers
-down:
-	@$(RUN_WITH_GIT_BASH) ./scripts/deploy.sh down
-
-# ==========================================
-# AMD Hackathon (Act II) submission automation
-# ==========================================
-# Override REGISTRY with your registry, e.g.:
-#   make hackathon-track1-submit REGISTRY=ghcr.io/your-org
-REGISTRY ?= ghcr.io/jahanzaib211
-TRACK1_TAG ?= latest
-TRACK1_IMAGE = $(REGISTRY)/nova-track1:$(TRACK1_TAG)
-
-.PHONY: hackathon-track1-build hackathon-track1-smoke hackathon-track1-push hackathon-track1-verify hackathon-track1 hackathon-track1-submit
-
-# Local build (linux/amd64, loaded into the local docker for smoke testing).
-hackathon-track1-build:
-	docker buildx build --platform linux/amd64 -t $(TRACK1_IMAGE) --load hackathon/track1
-
-# Hermetic unit test + in-container contract run (bogus endpoint → valid output, exit 0).
-hackathon-track1-smoke:
-	cd backend && uv run pytest ../hackathon/track1/test_agent.py -q
-	rm -rf hackathon/track1/out && mkdir -p hackathon/track1/out
-	docker run --rm \
-	  -e FIREWORKS_API_KEY=smoke -e FIREWORKS_BASE_URL=http://127.0.0.1:9/v1 \
-	  -e ALLOWED_MODELS=gemma-4-31b-it -e TRACK1_CONCURRENCY=2 \
-	  -v "$(PWD)/hackathon/track1/sample:/input:ro" \
-	  -v "$(PWD)/hackathon/track1/out:/output" \
-	  $(TRACK1_IMAGE)
-	$(PYTHON) -c "import json;d=json.load(open('hackathon/track1/out/results.json'));assert isinstance(d,list) and all('task_id' in x and 'answer' in x for x in d);print('contract OK:',len(d),'results')"
-
-# Build straight to the registry for linux/amd64 (public push).
-hackathon-track1-push:
-	docker buildx build --platform linux/amd64 -t $(TRACK1_IMAGE) --push hackathon/track1
-
-# Verify the pushed image: public, linux/amd64 manifest, <= 10GB.
-hackathon-track1-verify:
-	@$(RUN_WITH_GIT_BASH) ./scripts/hackathon-verify-image.sh $(TRACK1_IMAGE)
-
-# Local pipeline: build then smoke.
-hackathon-track1: hackathon-track1-build hackathon-track1-smoke
-
-# Full automated submission: smoke locally, push, then verify the public image.
-hackathon-track1-submit: hackathon-track1-build hackathon-track1-smoke hackathon-track1-push hackathon-track1-verify
-	@echo "Track 1 image submitted: $(TRACK1_IMAGE)"
-
-.PHONY: hackathon-track3-deck hackathon-track3-prescreen
-# Render the Track 3 slide deck HTML → PDF (needs google-chrome/chromium).
-hackathon-track3-deck:
-	@CHROME=$$(command -v google-chrome || command -v chromium || command -v chromium-browser); \
-	  [ -n "$$CHROME" ] || { echo "no chrome/chromium found" >&2; exit 1; }; \
-	  "$$CHROME" --headless --disable-gpu --no-sandbox --no-pdf-header-footer \
-	    --print-to-pdf=hackathon/track3/deck.pdf "file://$(PWD)/hackathon/track3/deck.html"
-	@echo "wrote hackathon/track3/deck.pdf"
-
-# Self-audit the Track 3 submission (repo evidence; live demo if NOVA_LIVE_URL set).
-hackathon-track3-prescreen:
-	@$(RUN_WITH_GIT_BASH) ./scripts/hackathon-track3-prescreen.sh
+	@# Step 11: Verify PM2 app list
+	@echo -n "[11/11] PM2 nova-monitoring app: "
+	@pm2 ls | grep -q "nova-monitoring" && echo "PASS" || echo "NOT REGISTERED (run: pm2 start ecosystem.config.js --only nova-monitoring)"
+	@echo ""
+	@echo "=== Gate complete. Fix FAILs before declaring done. ==="

@@ -463,3 +463,22 @@ async def thread_token_usage(
     else:
         agg = await run_store.aggregate_tokens_by_thread(thread_id)
     return ThreadTokenUsageResponse(thread_id=thread_id, **agg)
+
+
+# ---------------------------------------------------------------------------
+# Stream diagnostics (debug only)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/_diagnostics/stream-trace", response_model=None)
+async def stream_trace_diagnostics(limit: int = Query(default=500, ge=1, le=10000)) -> dict:
+    """Return the most recent stream-trace records from the in-memory ring.
+
+    Intended for incident debugging only. The endpoint is harmless when
+    ``DEER_FLOW_STREAM_TRACE`` is not set; it returns an empty list. We do
+    not gate the route behind a flag because the ring is empty in that
+    case and we want operators to be able to confirm that.
+    """
+    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+
+    return {"records": read_recent_diagnostics(limit=limit)}

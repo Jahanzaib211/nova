@@ -1,0 +1,44 @@
+# Nova alerting — Grafana Unified Alerting contact points + notification policy tree.
+# Grafana manages all alert routing. No separate Alertmanager needed.
+
+apiVersion: 1
+
+contactPoints:
+  - name: grafana-default
+    receivers:
+      - uid: grafana-curl-hook
+        type: webhook
+        settings:
+          url: http://127.0.0.1:3002/api/webhooks/generic
+          httpMethod: POST
+        disableResolveMessage: false
+
+  - name: ntfy-sh
+    receivers:
+      # ntfy.sh — free push to any device. Set NTFY_TOPIC in monitoring.env.
+      - uid: ntfy-push
+        type: webhook
+        settings:
+          url: https://ntfy.sh/${NTFY_TOPIC:-nova-alerts}
+          httpMethod: POST
+          contentType: text/plain
+        disableResolveMessage: false
+
+policies:
+  # Default policy: route everything to grafana-default.
+  - receiver: grafana-default
+    group_by: ['alertname', 'severity']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    matchers:
+      - severity != ~
+
+  # Critical severity → ntfy push (bypass repeat_interval, send immediately).
+  - receiver: ntfy-sh
+    group_by: ['alertname']
+    group_wait: 10s
+    group_interval: 1m
+    repeat_interval: 15m
+    matchers:
+      - severity = critical
