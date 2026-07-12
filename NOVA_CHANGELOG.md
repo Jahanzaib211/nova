@@ -11,6 +11,50 @@
 
 ---
 
+## v8.0 — Phase C0: foundation + streaming hardening
+
+**Session pattern:** forensic production investigation → targeted hardening → consolidation tracking.
+
+### Production incident (2026-07-12)
+
+- **HTTP 500 regression:** Phase C0 added `correlation_id` to `RunRow` ORM model but created no Alembic migration. SQLAlchemy's `Base.metadata.create_all()` only creates tables, not columns — live SQLite DB had 24 columns while ORM expected 25. Every new run creation failed with `OperationalError: no such column: runs.correlation_id`.
+- **Fix:** `ALTER TABLE runs ADD COLUMN correlation_id VARCHAR(64)` inside running gateway container + new idempotent Alembic migration `2026_07_12_phase_c0_correlation_id.py` + `env.py` updated with `DEER_FLOW_DATABASE_URL` env-var override.
+
+### Streaming hardening (Phases 1–6)
+
+- **Phase 1:** Watchdog with 12 probes (P1–P12) covering nginx, gateway, frontend, local LLM stack, containers, binary attestation, and Cloudflare tunnel.
+- **Phase 2:** Bounded Stop + Force Disconnect — stop is a state machine with configurable timeout.
+- **Phase 3:** Active-run polling — never fully disabled while a run exists.
+- **Phase 4:** Convergent teardown — deterministic cleanup on disconnect.
+- **Phase 5:** Backend store-only cancel — cancel persists through RunStore, startup reaper cleans stale runs.
+- **Phase 6:** Tunnel auto-recovery — `fix_tunnel()` calls `systemctl reset-failed` before restart, verifies `is-active` for up to 10s post-restart. PM2 lock path moved to `$XDG_RUNTIME_DIR`.
+
+### Cross-process correlation (Phase C0)
+
+- **Backend:** `RunRecord.correlation_id` field, SSE comment emission (`: correlation_id=<hex>`), `RunManager.create()` generates UUID hex.
+- **Frontend:** `stream-liveness.ts` captures correlation_id from SSE comments, `stream-trace.ts` propagates to `DiagnosticsRecord`.
+- **Diagnostics:** `register_correlation_id()` / `lookup_correlation_id()` thread-scope helpers, module-level registry.
+- **Tests:** 29 backend streaming/correlation tests, 13 frontend correlation capture + round-trip tests.
+
+### CI guardrails
+
+- `scripts/check_platform_guardrails.py` — middleware sprawl check (baseline: 28, allowed: 29) + duplicate-recovery detector (canonical site: `hooks.ts`).
+- Guardrails run on every commit via AGENTS.md self-test protocol.
+
+### Consolidation tracking
+
+- `CONSOLIDATION.md` established as single source of truth for platform consolidation program.
+- Directives 1–10 tracked with phases C0–C5.
+
+### Tests
+
+- 457 frontend unit tests (49 files).
+- 29 backend streaming/correlation tests.
+- 5 tunnel recovery tests.
+- Cross-ref check passes (1497 files).
+
+---
+
 ## v7.5 — live audit hardening + Ollama/LiteLLM free-model gateway
 
 **Session pattern:** full-stack live audit (act-as-user via Playwright) → every blocker turned into a production-grade fix with a regression test.

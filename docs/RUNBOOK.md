@@ -343,7 +343,46 @@ the gateway container. Production should keep auth disabled=0.
 
 ---
 
-## 8. First-Time Setup
+## 8. Alembic Database Migrations
+
+Nova uses Alembic for schema migrations. The migration infrastructure is at
+`backend/packages/harness/deerflow/persistence/migrations/`.
+
+### When a migration is needed
+
+Any ORM model change that affects the database schema (adding/removing columns,
+changing types) requires a migration. Never rely on `Base.metadata.create_all()`
+in production — it only creates tables, not columns.
+
+### Creating a migration
+
+1. Create `versions/YYYY_MM-DD_description.py` (idempotent):
+```python
+def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("runs")]
+    if "new_column" not in columns:
+        op.add_column("runs", sa.Column("new_column", sa.String(64), nullable=True))
+    op.execute("INSERT OR REPLACE INTO alembic_version (version_num) VALUES ('2026_07_12_description')")
+```
+
+2. For fresh deployments, stamp the alembic version in the migration file.
+
+### Verifying migration state
+
+```bash
+# Inside the running gateway container
+docker exec deer-flow-gateway python -c "
+import sqlite3; conn = sqlite3.connect('backend/data/deerflow.db');
+print([c[1] for c in conn.execute('PRAGMA table_info(runs)').fetchall()]);
+print(conn.execute('SELECT * FROM alembic_version').fetchall())
+"
+```
+
+---
+
+## 9. First-Time Setup
 
 A fresh Nova host needs:
 
@@ -361,7 +400,7 @@ for full onboarding.
 
 ---
 
-## 9. Contact / Escalation
+## 10. Contact / Escalation
 
 - Cloudflare status: https://www.cloudflarestatus.com
 - Tunnel documentation: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/

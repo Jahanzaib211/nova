@@ -336,6 +336,17 @@ Every pull request triggers the following CI workflows:
 - **Frontend (TypeScript)**: We use ESLint and Prettier. Run `pnpm format:write` before committing.
 - CI enforces formatting — PRs with unformatted code will fail the lint check.
 
+## Database Migrations
+
+Nova uses Alembic for schema migrations. Any ORM model change that adds,
+removes, or modifies database columns requires a migration file.
+
+**Quick reference:**
+- Migration infrastructure: `backend/packages/harness/deerflow/persistence/migrations/`
+- Always make migrations idempotent (check if column exists before adding)
+- Stamp the alembic version for fresh deployments
+- See `docs/RUNBOOK.md` §8 for full workflow
+
 ## Documentation
 
 - [Configuration Guide](backend/docs/CONFIGURATION.md) - Setup and configuration

@@ -11,7 +11,7 @@ Cloudflare tunnel + Access.
 ┌─────────────────────────────────────────────────────────────────┐
 │  nova.alilabsx.com   → Nova gateway (nginx :2026)              │
 │  dash.alilabsx.com   → Grafana :3002 (Cloudflare Access OTP)   │
-│  status.alilabsx.com → Uptime Kuma :3001 (Access or public)    │
+│  status.alilabsx.com → Uptime Kuma :3003 (Access or public)    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -21,12 +21,12 @@ Cloudflare tunnel + Access.
 |---|---|---|---|
 | **Grafana** | 3002 | grafana-oss:12.0.1 | Dashboards + alerting + provisioning |
 | **Prometheus** | 9090 | prometheus:v3.4.1 | Metrics scraper + TSDB (30d) |
-| **Loki** | 3100 | grafana/loki:3.5.0 | Log aggregation (30d) |
+| **Loki** | 3100 | grafana/loki:3.6.12 | Log aggregation (30d) |
 | **Alloy** | 12345 | grafana/alloy:v1.9.1 | Log shipper: access.jsonl + healthcheck + journal + docker |
 | **node_exporter** | 9100 | prom/node-exporter:v1.9.1 | Host CPU/mem/disk/net |
 | **cadvisor** | 9181 | gcr.io/cadvisor/cadvisor:v0.52.1 | Per-container CPU/mem |
 | **blackbox_exporter** | 9115 | prom/blackbox-exporter:v0.25.0 | Synthetic HTTP/TCP probes |
-| **Uptime Kuma** | 3001 | louislam/uptime-kuma:1.24.0 | Self-hosted status page + external probes |
+| **Uptime Kuma** | 3003 | louislam/uptime-kuma:1.24.0 | Self-hosted status page + external probes |
 
 ## Quick Start
 
@@ -56,7 +56,7 @@ open http://localhost:3002
 | Grafana | http://localhost:3002 | https://dash.alilabsx.com |
 | Prometheus | http://localhost:9090 | — (internal only) |
 | Loki | http://localhost:3100 | — (internal only) |
-| Uptime Kuma | http://localhost:3001 | https://status.alilabsx.com |
+| Uptime Kuma | http://localhost:3003 | https://status.alilabsx.com |
 
 ## Adding Public Access
 
@@ -76,7 +76,7 @@ open http://localhost:3002
 
 ### Uptime Kuma — Public Status Page
 
-1. Open Uptime Kuma at http://localhost:3001
+1. Open Uptime Kuma at http://localhost:3003
 2. Set a login password on first run
 3. Add monitors:
    - **HTTP Monitor**: `https://nova.alilabsx.com/health` (interval: 60s)

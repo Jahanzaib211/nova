@@ -29,10 +29,12 @@
 
 ---
 
-## Phase C0 — Foundation (in progress)
+## Phase C0 — Foundation (complete)
 
 **Objective.** Cross-process correlation. Integration test foundation.
 Consolidation tracking. CI guardrails. No user-facing changes.
+
+### Status: COMPLETE (2026-07-12)
 
 ### C0.1 — Backend `RunRecord.correlation_id`
 
@@ -206,6 +208,54 @@ Consolidation tracking. CI guardrails. No user-facing changes.
 - `stream-trace` records without correlation_id show the field absent
   (not empty string), so consumers can distinguish "no correlation yet"
   from "legacy run".
+
+---
+
+## Phase C1 — Documentation Sync + Typed Service Foundation
+
+**Objective.** Synchronize all documentation with actual implementation.
+Create the typed service layer foundation (Protocol interfaces + thin wrappers)
+without changing runtime behavior, caller wiring, or dependency injection.
+
+### C1.1 — Repository Reality Audit
+
+- **Status:** complete.
+- **Findings:** 127 markdown files audited. 12 documents stale. 3 missing.
+- **Key corrections:** README probe count (11→12), MONITORING Loki version
+  (3.5.0→3.6.12), MONITORING Uptime Kuma port (3001→3003).
+
+### C1.2 — Documentation Synchronization
+
+- **Status:** in progress.
+- **Files to update:** README.md, CONSOLIDATION.md, NOVA_CHANGELOG.md,
+  CHANGELOG.md, backend/CLAUDE.md, backend/docs/ARCHITECTURE.md,
+  docs/RUNBOOK.md, docs/MONITORING.md, CONTRIBUTING.md,
+  backend/CONTRIBUTING.md, frontend/CLAUDE.md.
+
+### C1.3 — New Documentation
+
+- **Status:** pending.
+- **Files to create:** DEPLOYMENT.md, DEVELOPMENT.md, ROADMAP.md.
+
+### C1.4 — Typed Service Foundation
+
+- **Status:** pending.
+- **Files to create:**
+  - `backend/packages/harness/deerflow/services/__init__.py`
+  - `backend/packages/harness/deerflow/services/protocols.py`
+  - `backend/packages/harness/deerflow/services/types.py`
+- **Constraint:** interfaces only. No runtime migration. No caller migration.
+  No behavior changes.
+
+### C1.5 — Default Implementations
+
+- **Status:** pending.
+- **Constraint:** thin wrappers delegating to existing implementations.
+  No new business logic.
+
+### C1.6 — Service Tests
+
+- **Status:** pending.
 
 ---
 

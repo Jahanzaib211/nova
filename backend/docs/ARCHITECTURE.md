@@ -102,17 +102,30 @@ The web conversation delete flow first deletes Gateway-managed thread state thro
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                            Middleware Chain                              │
+│                            Middleware Chain (19)                         │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │ 1. ThreadDataMiddleware  - Initialize workspace/uploads/outputs  │   │
-│  │ 2. UploadsMiddleware     - Process uploaded files               │   │
-│  │ 3. SandboxMiddleware     - Acquire sandbox environment          │   │
-│  │ 4. SummarizationMiddleware - Context reduction (if enabled)     │   │
-│  │ 5. TitleMiddleware       - Auto-generate titles                 │   │
-│  │ 6. TodoListMiddleware    - Task tracking (if plan_mode)         │   │
-│  │ 7. ViewImageMiddleware   - Vision model support                 │   │
-│  │ 8. ClarificationMiddleware - Handle clarifications              │   │
+│  │  1. ThreadDataMiddleware      - Per-thread workspace dirs        │   │
+│  │  2. UploadsMiddleware         - File upload tracking             │   │
+│  │  3. SandboxMiddleware         - Sandbox acquisition              │   │
+│  │  4. DanglingToolCallMiddleware - Fix incomplete tool calls       │   │
+│  │  5. LLMErrorHandlingMiddleware - Normalize LLM failures          │   │
+│  │  6. SandboxAuditMiddleware    - Security audit logging           │   │
+│  │  7. ToolErrorHandlingMiddleware - Convert tool exceptions         │   │
+│  │  8. SkillActivationMiddleware - /skill-name activation           │   │
+│  │  9. SummarizationMiddleware   - Context reduction (if enabled)   │   │
+│  │ 10. TodoListMiddleware        - Task tracking (if plan_mode)     │   │
+│  │ 11. TokenUsageMiddleware      - Token usage metrics              │   │
+│  │ 12. TitleMiddleware           - Auto-generate titles             │   │
+│  │ 13. MemoryMiddleware          - Async memory updates             │   │
+│  │ 14. ViewImageMiddleware       - Vision model support             │   │
+│  │ 15. DeferredToolFilterMiddleware - MCP tool filtering            │   │
+│  │ 16. SubagentLimitMiddleware   - Subagent concurrency limit       │   │
+│  │ 17. LoopDetectionMiddleware   - Detect repeated tool loops       │   │
+│  │ 18. ClarificationMiddleware   - Handle clarifications            │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
+│  Note: GuardrailMiddleware (pre-tool authorization) is injected        │
+│  dynamically after DanglingToolCall if guardrails.enabled in config.   │
+│  Total: 18 base + 1 conditional = 19 middleware components.           │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
                                      ▼

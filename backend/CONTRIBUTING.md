@@ -1,6 +1,6 @@
-# Contributing to DeerFlow Backend
+# Contributing to Nova Backend
 
-Thank you for your interest in contributing to DeerFlow! This document provides guidelines and instructions for contributing to the backend codebase.
+Thank you for your interest in contributing to Nova! This document provides guidelines and instructions for contributing to the backend codebase.
 
 ## Table of Contents
 
@@ -412,6 +412,60 @@ allowed-tools:
 Instructions for the agent when this skill is enabled...
 ```
 
+## Database Migrations (Alembic)
+
+Nova uses Alembic for database schema migrations. The migration infrastructure
+lives at `packages/harness/deerflow/persistence/migrations/`.
+
+### When to create a migration
+
+Any change to `RunRow` or other ORM models that affects the database schema
+requires a new Alembic migration. Never rely on `Base.metadata.create_all()`
+in production — it only creates tables, not adds columns.
+
+### Creating a migration
+
+1. Edit `packages/harness/deerflow/persistence/migrations/env.py` if needed
+   (it reads `DEER_FLOW_DATABASE_URL` env-var for production containers).
+
+2. Create a new migration file in `versions/`:
+   ```
+   versions/YYYY_MM_DD_<description>.py
+   ```
+
+3. Make it idempotent:
+   ```python
+   def upgrade() -> None:
+       conn = op.get_bind()
+       inspector = inspect(conn)
+       columns = [c["name"] for c in inspector.get_columns("runs")]
+       if "new_column" not in columns:
+           op.add_column("runs", sa.Column("new_column", sa.String(64), nullable=True))
+   ```
+
+4. For fresh deployments, stamp the alembic version:
+   ```python
+   def upgrade() -> None:
+       # ... schema changes ...
+       op.execute("INSERT OR REPLACE INTO alembic_version (version_num) VALUES ('<migration_id>')")
+   ```
+
+### Running migrations
+
+```bash
+# Inside the running gateway container
+docker exec deer-flow-gateway python -c "
+from packages.harness.deerflow.persistence.migrations.env import *
+"
+```
+
+### Testing
+
+Always verify:
+- Live DB schema matches ORM model column count
+- Alembic version is correct
+- Existing tests still pass
+
 ## Questions?
 
 If you have questions about contributing:
@@ -420,4 +474,4 @@ If you have questions about contributing:
 2. Look for similar issues or PRs on GitHub
 3. Open a discussion or issue on GitHub
 
-Thank you for contributing to DeerFlow!
+Thank you for contributing to Nova!

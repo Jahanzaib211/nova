@@ -28,7 +28,7 @@ Nova is a full-stack refactor of DeerFlow 2.0 — **+35,738 lines across 338 fil
 - **32 agent tools** — shell sessions, browser navigate/click/input/eval, screenshot, scaffold, dev-server lifecycle, dev_verify, code_review, skill saving, and more.
 - **iGIN0 privacy research** — hardened SearXNG client with retry, circuit breaker, caching, optional TOR routing, and a privacy audit trail.
 - **Runtime model management** — add/switch models through the API and settings UI without touching config files.
-- **Ops layer** — 11-probe self-healing watchdog, PM2-owned Docker lifecycle, reboot persistence.
+- **Ops layer** — 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery.
 - **Local + free models via LiteLLM** — an Ollama preset in settings and a PM2-managed LiteLLM proxy expose four free Ollama cloud models (MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B) alongside paid providers.
 - **8,112 lines of new tests** across 37 new backend test files.
 
