@@ -80,6 +80,8 @@ for _name in dir(_event_module):
             _category = "browser"
         elif "Health" in _name:
             _category = "health"
+        elif "Recovery" in _name:
+            _category = "recovery"
         elif "Tool" in _name:
             _category = "tool"
         elif "Artifact" in _name:

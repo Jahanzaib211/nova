@@ -152,8 +152,25 @@ class ServiceContainer:
         if "recovery_service" not in self._singletons:
             from deerflow.services.implementations import RecoveryServiceImpl
 
-            self._singletons["recovery_service"] = RecoveryServiceImpl()
+            engine = self.recovery_engine()
+            self._singletons["recovery_service"] = RecoveryServiceImpl(engine=engine)
         return self._singletons["recovery_service"]
+
+    def recovery_engine(self) -> Any:
+        """Return the RecoveryEngine singleton.
+
+        The engine subscribes to EventBus and orchestrates recovery.
+        """
+        if "recovery_engine" in self._overrides:
+            return self._overrides["recovery_engine"]
+        if "recovery_engine" not in self._singletons:
+            from deerflow.services.recovery_service import RecoveryEngine
+            from deerflow.events.bus import event_bus as _event_bus
+
+            engine = RecoveryEngine(event_bus=_event_bus)
+            engine.start()
+            self._singletons["recovery_engine"] = engine
+        return self._singletons["recovery_engine"]
 
     def configuration_service(self) -> ConfigurationService:
         """Return the ConfigurationService singleton."""

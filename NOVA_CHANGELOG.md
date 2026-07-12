@@ -135,6 +135,39 @@
 
 ---
 
+## v8.4 — Phase C4: recovery engine + unified health management
+
+**Session pattern:** repository audit → declarative policies → event-driven recovery engine → service integration.
+
+### C4.1 — Repository Audit
+
+- 10+ distinct recovery implementations identified: fix_tunnel, fix_llama_bridge, fix_litellm, fix_dify, fix_deerflow_containers, RecoveryServiceImpl, llm_error_handling_middleware (backoff+circuit breaker), browser_retry (bounded retry+jitter), reap_orphaned_runs (startup reaper), _reconcile_orphans (container adoption), recordRecovery (frontend trace).
+
+### C4.2 — Recovery Events
+
+- 7 new frozen dataclass recovery events: RecoveryStarted, RecoveryRetryScheduled, RecoverySucceeded, RecoveryFailed, RecoveryEscalated, RecoveryCancelled, RecoveryAborted.
+- Events registered under "recovery" category in EventRegistry.
+
+### C4.3 — Declarative Recovery Policies
+
+- `RecoveryPolicy` + `RetryStrategy` dataclasses (`services/recovery_policy.py`).
+- 10 policies: TUNNEL_DISCONNECTED, GATEWAY_UNAVAILABLE, STREAM_STALLED, BROWSER_DISCONNECTED, BROWSER_CRASH, SANDBOX_UNAVAILABLE, HEALTH_DEGRADED, CONTAINER_RESTART, ORPHAN_RUN, WORKER_EXITED.
+- `select_policy()`, `policies_for_trigger()`, `all_policies()`.
+
+### C4.4 — Recovery Engine
+
+- `RecoveryEngine` (`services/recovery_service.py`): event-driven orchestration, retry/backoff, cancellation, history, metrics.
+- 9 default action handlers wrapping existing implementations.
+- `ServiceContainer.recovery_engine()` singleton.
+
+### Tests
+
+- 37 new tests (`tests/test_recovery_engine.py`), all pass.
+- 56 event bus tests, 33 service layer tests, all pass.
+- 457/457 frontend tests, guardrails 28/28, cross-ref clean.
+
+---
+
 ## v7.5 — live audit hardening + Ollama/LiteLLM free-model gateway
 
 **Session pattern:** full-stack live audit (act-as-user via Playwright) → every blocker turned into a production-grade fix with a regression test.

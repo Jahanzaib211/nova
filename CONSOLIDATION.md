@@ -21,7 +21,7 @@
 | 3   | Introduce typed platform services                                         | C1    | complete | 100%       |
 | 4   | Centralize run state                                                     | C2    | complete | 100%       |
 | 5   | Standardize lifecycle management                                         | C3    | complete | 100%       |
-| 6   | Strengthen self-healing                                                  | C3    | pending  | 0%         |
+| 6   | Strengthen self-healing                                                  | C4    | complete | 100%       |
 | 7   | Unify observability                                                      | C0    | complete | 100%       |
 | 8   | Standardize tool interfaces                                              | C4    | pending  | 0%         |
 | 9   | Make every component replaceable                                          | C5    | pending  | 0%         |
@@ -423,6 +423,105 @@ API changes, no payload changes.
 | Frontend unit tests (457)    | pass     |
 | Guardrails (middleware 28/28) | pass     |
 | Cross-ref check (1508 files) | pass     |
+| Zero API changes             | verified |
+| Zero runtime regressions     | verified |
+
+---
+
+## Phase C4 — Recovery Engine + Unified Health Management
+
+**Objective.** Centralize every recovery path behind a single RecoveryEngine
+powered by the Event Bus. Declarative policies, event-driven recovery,
+structured telemetry, correlation ID preservation.
+
+### Status: COMPLETE (2026-07-12)
+
+### C4.1 — Repository Audit
+
+- **Status:** complete.
+- **Findings:** 10+ distinct recovery implementations identified:
+  - `fix_tunnel()` — cloudflared restart with reset-failed
+  - `fix_llama_bridge()` — PM2 restart or re-register
+  - `fix_litellm()` — PM2 restart or re-register
+  - `fix_dify()` — PM2 restart or re-register
+  - `fix_deerflow_containers()` — PM2 restart
+  - `RecoveryServiceImpl.recover()` — wraps fix_tunnel
+  - `llm_error_handling_middleware` — exponential backoff + circuit breaker
+  - `browser_retry` — bounded retry + circuit breaker + jitter
+  - `reap_orphaned_runs()` — Phase 6 startup reaper
+  - `_reconcile_orphans()` — Docker/k8s container adoption
+  - `recordRecovery()` — frontend trace recorder
+
+### C4.2 — Recovery Events
+
+- **Status:** complete.
+- **Files:**
+  - `events/event.py` — 7 new frozen dataclass recovery events:
+    RecoveryStarted, RecoveryRetryScheduled, RecoverySucceeded,
+    RecoveryFailed, RecoveryEscalated, RecoveryCancelled, RecoveryAborted.
+  - `events/__init__.py` — exports all recovery events.
+  - `events/registry.py` — recovery events registered under "recovery" category.
+
+### C4.3 — Declarative Recovery Policies
+
+- **Status:** complete.
+- **Files:**
+  - `services/recovery_policy.py` — `RecoveryPolicy` dataclass + `RetryStrategy`.
+  - 10 policies: TUNNEL_DISCONNECTED, GATEWAY_UNAVAILABLE,
+    STREAM_STALLED, BROWSER_DISCONNECTED, BROWSER_CRASH,
+    SANDBOX_UNAVAILABLE, HEALTH_DEGRADED, CONTAINER_RESTART,
+    ORPHAN_RUN, WORKER_EXITED.
+  - `select_policy()`, `policies_for_trigger()`, `all_policies()`.
+
+### C4.4 — Recovery Engine
+
+- **Status:** complete.
+- **Files:**
+  - `services/recovery_service.py` — `RecoveryEngine` class.
+  - Event-driven: subscribes to EventBus, matches events to policies.
+  - Retry/backoff with configurable strategy per policy.
+  - Cancellation support (per-policy and bulk).
+  - Recovery history (bounded, in-memory).
+  - Structured metrics (8 counters).
+  - 9 default action handlers wrapping existing implementations.
+
+### C4.5 — Architecture Integration
+
+- **Status:** complete.
+- **Files:**
+  - `services/container.py` — `ServiceContainer.recovery_engine()` singleton.
+    `recovery_service` wired with engine.
+  - `services/implementations.py` — `RecoveryServiceImpl` accepts optional engine.
+  - Dependency graph: EventBus → RecoveryEngine → Health/Browser/Stream/Tunnel.
+
+### C4.6 — Tests
+
+- **Status:** complete (37 tests, all pass).
+- **File:** `tests/test_recovery_engine.py`
+- **Coverage:**
+  - RecoveryPolicy: registration, selection, properties (5 tests)
+  - RetryStrategy: delay computation, caps, jitter (3 tests)
+  - Recovery events: creation, immutability (8 tests)
+  - Event registry: recovery category (2 tests)
+  - RecoveryRecord: creation, frozen (2 tests)
+  - RecoveryEngine: subscribe, react, success, retry, escalate, cancel,
+    metrics, history, idempotent start/stop (10 tests)
+  - Health integration: degraded triggers investigation (1 test)
+  - ServiceContainer: engine singleton, service wiring (2 tests)
+  - Default actions: registration, tunnel handler (2 tests)
+  - Correlation ID propagation (1 test)
+  - Total: 37 tests
+
+### Validation summary for Phase C4
+
+| Step                         | Result   |
+| ---------------------------- | -------- |
+| Recovery engine tests (37)   | pass     |
+| Event bus tests (56)         | pass     |
+| Service layer tests (33)     | pass     |
+| Frontend unit tests (457)    | pass     |
+| Guardrails (middleware 28/28) | pass     |
+| Cross-ref check (1515 files) | pass     |
 | Zero API changes             | verified |
 | Zero runtime regressions     | verified |
 

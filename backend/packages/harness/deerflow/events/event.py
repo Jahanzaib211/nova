@@ -177,3 +177,43 @@ class ToolExecuted(DomainEvent):
 @dataclass(frozen=True)
 class ArtifactCreated(DomainEvent):
     """Emitted when an artifact is created or updated."""
+
+
+# ---------------------------------------------------------------------------
+# Recovery events
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RecoveryStarted(DomainEvent):
+    """Emitted when a recovery attempt begins."""
+
+
+@dataclass(frozen=True)
+class RecoveryRetryScheduled(DomainEvent):
+    """Emitted when a recovery retry is scheduled."""
+
+
+@dataclass(frozen=True)
+class RecoverySucceeded(DomainEvent):
+    """Emitted when a recovery attempt succeeds."""
+
+
+@dataclass(frozen=True)
+class RecoveryFailed(DomainEvent):
+    """Emitted when a recovery attempt fails."""
+
+
+@dataclass(frozen=True)
+class RecoveryEscalated(DomainEvent):
+    """Emitted when a recovery is escalated (unrecoverable)."""
+
+
+@dataclass(frozen=True)
+class RecoveryCancelled(DomainEvent):
+    """Emitted when a recovery is cancelled."""
+
+
+@dataclass(frozen=True)
+class RecoveryAborted(DomainEvent):
+    """Emitted when a recovery is aborted (max retries exceeded)."""

@@ -1,6 +1,6 @@
 """Nova domain event system.
 
-Phase C3 — typed, synchronous event bus with domain events.
+Phase C3+C4 — typed, synchronous event bus with domain events.
 
 Usage::
 
@@ -32,6 +32,13 @@ from deerflow.events.event import (
     BrowserStopped,
     DomainEvent,
     HealthChanged,
+    RecoveryAborted,
+    RecoveryCancelled,
+    RecoveryEscalated,
+    RecoveryFailed,
+    RecoveryRetryScheduled,
+    RecoveryStarted,
+    RecoverySucceeded,
     RunCancelled,
     RunCheckpointCreated,
     RunCompleted,
@@ -88,4 +95,12 @@ __all__ = [
     "ToolExecuted",
     # Artifact events
     "ArtifactCreated",
+    # Recovery events (Phase C4)
+    "RecoveryStarted",
+    "RecoveryRetryScheduled",
+    "RecoverySucceeded",
+    "RecoveryFailed",
+    "RecoveryEscalated",
+    "RecoveryCancelled",
+    "RecoveryAborted",
 ]

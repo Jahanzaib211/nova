@@ -488,10 +488,15 @@ class HealthServiceImpl:
 # ---------------------------------------------------------------------------
 
 class RecoveryServiceImpl:
-    """Thin wrapper implementing RecoveryService protocol."""
+    """Thin wrapper implementing RecoveryService protocol.
 
-    def __init__(self) -> None:
-        pass
+    Phase C4 — wraps existing fix_tunnel, PM2 restart, and container
+    restart logic.  Optionally delegates to RecoveryEngine for
+    event-driven recovery orchestration.
+    """
+
+    def __init__(self, engine: Any | None = None) -> None:
+        self._engine = engine
 
     async def recover(
         self,
@@ -513,6 +518,11 @@ class RecoveryServiceImpl:
             success=False,
             message=f"No recovery handler for component: {component}",
         )
+
+    @property
+    def engine(self) -> Any:
+        """Return the RecoveryEngine if configured."""
+        return self._engine
 
 
 # ---------------------------------------------------------------------------

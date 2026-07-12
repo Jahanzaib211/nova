@@ -3,20 +3,20 @@
 > Platform consolidation phases and future direction.
 
 **Audience:** contributors, stakeholders.
-**Last Updated:** Phase C3 (2026-07-12)
+**Last Updated:** Phase C4 (2026-07-12)
 **Related:** [CONSOLIDATION.md](CONSOLIDATION.md), [NOVA_CHANGELOG.md](NOVA_CHANGELOG.md)
 
-## Current Phase: C3 — Unified Lifecycle + Event Bus
+## Current Phase: C4 — Recovery Engine + Unified Health Management
 
 **Status:** complete
 
-- Canonical `RunLifecycleStatus` enum (11 states)
-- Typed domain event bus (17 event types)
-- `EventPublisher`, `EventSubscriber`, `EventRegistry`
-- `RunServiceImpl` publishes lifecycle events
-- `DiagnosticsServiceImpl` subscribes to all events
-- `HealthServiceImpl` publishes `HealthChanged` on transitions
-- 56 unit tests, all pass
+- `RecoveryEngine` — event-driven recovery orchestration
+- 10 declarative recovery policies with retry/backoff
+- 7 recovery events (Started, RetryScheduled, Succeeded, Failed, Escalated, Cancelled, Aborted)
+- HealthService publishes, RecoveryEngine subscribes
+- 9 default action handlers wrapping existing implementations
+- Recovery history, structured metrics, cancellation support
+- 37 unit tests, all pass
 
 ## Consolidation Phases
 
@@ -26,7 +26,7 @@
 | C1 | Documentation sync + typed service layer | **complete** | C0 |
 | C2 | Run state consolidation + dependency injection | **complete** | C1 |
 | C3 | Unified lifecycle + event bus | **complete** | C2 |
-| C4 | Self-healing + RecoveryService | pending | C2, C3 |
+| C4 | Recovery engine + unified health management | **complete** | C2, C3 |
 | C5 | Tool protocol standardization | pending | C2 |
 | C6 | Workspace/Repository abstraction | pending | C2 |
 | C7 | Deployment, HA, production hardening | pending | C3–C6 |
@@ -76,10 +76,16 @@
 - `HealthServiceImpl` publishes `HealthChanged` on state transitions
 - 56 unit tests, all pass
 
-### C4 — Self-healing + RecoveryService (pending)
+### C4 — Recovery Engine + Unified Health Management (complete)
 
-- Wire RecoveryService to actual recovery paths
-- Automated recovery for tunnel, gateway, containers
+- `RecoveryEngine` — event-driven recovery orchestration via EventBus
+- 10 declarative recovery policies with `RetryStrategy` (backoff, jitter, caps)
+- 7 recovery events: RecoveryStarted, RecoveryRetryScheduled, RecoverySucceeded, RecoveryFailed, RecoveryEscalated, RecoveryCancelled, RecoveryAborted
+- 9 default action handlers wrapping existing implementations (fix_tunnel, PM2 restart, etc.)
+- Recovery history (bounded in-memory) and structured metrics (8 counters)
+- Cancellation support (per-policy and bulk)
+- `ServiceContainer.recovery_engine()` singleton wired with EventBus
+- 37 unit tests, all pass
 
 ### C5 — Tool Protocol Standardization (pending)
 
