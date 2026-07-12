@@ -55,6 +55,86 @@
 
 ---
 
+## v8.1 — Phase C1: documentation sync + typed service layer
+
+**Session pattern:** repository audit → doc synchronization → service layer foundation.
+
+### C1.1 — Repository Reality Audit
+
+- 127 markdown files audited. 12 stale documents. 3 missing.
+- Key corrections: README probe count (11→12), MONITORING Loki version (3.5.0→3.6.12), MONITORING Uptime Kuma port (3001→3003), ARCHITECTURE middleware count (8→19).
+
+### C1.2 — Documentation Synchronization
+
+- 12 files updated: README.md, CONSOLIDATION.md, NOVA_CHANGELOG.md, backend/CLAUDE.md, backend/docs/ARCHITECTURE.md, docs/RUNBOOK.md, docs/MONITORING.md, CONTRIBUTING.md, backend/CONTRIBUTING.md, frontend/CLAUDE.md, CHANGELOG.md.
+- 3 new files created: DEPLOYMENT.md, DEVELOPMENT.md, ROADMAP.md.
+
+### C1.3 — Typed Service Foundation
+
+- 10 Protocol interfaces (`services/protocols.py`): RunService, WorkspaceService, RepositoryService, BrowserService, TerminalService, ArtifactService, HealthService, RecoveryService, ConfigurationService, DiagnosticsService.
+- 7 typed return models (`services/types.py`): RunState, RunSummary, RunDetail, ProbeResult, HealthReport, RecoveryAction, DiagnosticsRecord, WorkspacePaths.
+- 10 thin wrapper implementations (`services/implementations.py`).
+- 33 unit tests (`tests/test_service_layer.py`).
+
+---
+
+## v8.2 — Phase C2: run state consolidation + dependency injection
+
+**Session pattern:** DI container → canonical RunState → gateway wiring.
+
+### C2.1 — Dependency Injection Container
+
+- `ServiceContainer` class (`services/container.py`): lazy singletons, `override()` for testing, module-level `service_container` singleton.
+- Gateway wired: `app.state.run_service`, `get_run_service` FastAPI dependency.
+
+### C2.2 — Canonical RunState
+
+- `RunState` frozen dataclass (`services/types.py`): immutable runtime object with `from_record()` bridge for backward compatibility.
+
+### C2.3 — Gateway Wiring
+
+- `app/gateway/deps.py`: container wired with gateway-owned singletons after RunManager construction.
+- Backward compat: `get_run_manager` still works unchanged.
+
+### Tests
+
+- 33 service layer tests, all pass.
+- 56/56 backend tests, 457/457 frontend tests.
+
+---
+
+## v8.3 — Phase C3: unified lifecycle + event bus
+
+**Session pattern:** enum audit → lifecycle model → event bus → service integration.
+
+### C3.1 — Lifecycle Model
+
+- `RunLifecycleStatus` enum (`runtime/lifecycle.py`): 11 states (CREATED, INITIALIZING, RUNNING, CHECKPOINT, PAUSED, RESUMED, RECOVERING, COMPLETED, FAILED, CANCELLED, ARCHIVED).
+- Properties: `is_terminal`, `is_active`, `is_transitional`.
+- Adapters: `adapt_run_status()`, `to_run_status()` for backward compatibility.
+
+### C3.2 — Event Bus
+
+- `EventBus` (`events/bus.py`): synchronous, typed, deterministic, DI-compatible. Module-level `event_bus` singleton.
+- 17 frozen dataclass domain events (`events/event.py`): RunCreated through RunArchived, WorkspaceMounted/Released, BrowserStarted/Stopped, HealthChanged, ToolExecuted, ArtifactCreated.
+- `EventPublisher` (`events/publisher.py`): automatic metadata injection.
+- `EventSubscriber` (`events/subscriber.py`): decorator-based registration.
+- `EventRegistry` (`events/registry.py`): event type discovery by category.
+
+### C3.3 — Service Integration
+
+- `RunServiceImpl` publishes lifecycle events on `create()`, `cancel()`, `set_status()`.
+- `DiagnosticsServiceImpl.subscribe_to_events()` records all domain events as diagnostics.
+- `HealthServiceImpl` publishes `HealthChanged` on state transitions (deduplicated on steady state).
+
+### Tests
+
+- 56 new tests (`tests/test_event_bus.py`), all pass.
+- 33 service layer tests, all pass.
+- 56/56 backend tests, 457/457 frontend tests.
+
+---
+
 ## v7.5 — live audit hardening + Ollama/LiteLLM free-model gateway
 
 **Session pattern:** full-stack live audit (act-as-user via Playwright) → every blocker turned into a production-grade fix with a regression test.

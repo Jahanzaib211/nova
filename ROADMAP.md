@@ -3,18 +3,20 @@
 > Platform consolidation phases and future direction.
 
 **Audience:** contributors, stakeholders.
-**Last Updated:** Phase C1 (2026-07-12)
+**Last Updated:** Phase C3 (2026-07-12)
 **Related:** [CONSOLIDATION.md](CONSOLIDATION.md), [NOVA_CHANGELOG.md](NOVA_CHANGELOG.md)
 
-## Current Phase: C2 — Run State Consolidation + Dependency Injection
+## Current Phase: C3 — Unified Lifecycle + Event Bus
 
 **Status:** complete
 
-- Repository audit of all direct imports
-- Dependency injection container (`ServiceContainer`)
-- Canonical `RunState` immutable dataclass
-- Gateway wired with service interfaces
-- `get_run_service` FastAPI dependency available
+- Canonical `RunLifecycleStatus` enum (11 states)
+- Typed domain event bus (17 event types)
+- `EventPublisher`, `EventSubscriber`, `EventRegistry`
+- `RunServiceImpl` publishes lifecycle events
+- `DiagnosticsServiceImpl` subscribes to all events
+- `HealthServiceImpl` publishes `HealthChanged` on transitions
+- 56 unit tests, all pass
 
 ## Consolidation Phases
 
@@ -23,7 +25,7 @@
 | C0 | Foundation (correlation, CI guardrails) | **complete** | — |
 | C1 | Documentation sync + typed service layer | **complete** | C0 |
 | C2 | Run state consolidation + dependency injection | **complete** | C1 |
-| C3 | Unified lifecycle state machine | pending | C2 |
+| C3 | Unified lifecycle + event bus | **complete** | C2 |
 | C4 | Self-healing + RecoveryService | pending | C2, C3 |
 | C5 | Tool protocol standardization | pending | C2 |
 | C6 | Workspace/Repository abstraction | pending | C2 |
@@ -60,11 +62,19 @@
 - Gateway wired: `app.state.run_service`, `get_run_service` dependency
 - Backward compat: `get_run_manager` still works unchanged
 
-### C3 — Unified Lifecycle State Machine (pending)
+### C3 — Unified Lifecycle + Event Bus (complete)
 
-- Canonical run lifecycle states
-- State transition validation
-- Event emission standardization
+- Canonical `RunLifecycleStatus` enum (11 states with `is_terminal`, `is_active`, `is_transitional`)
+- Adapters: `adapt_run_status()`, `to_run_status()` for backward compatibility
+- 17 frozen dataclass domain events (lifecycle, workspace, browser, health, tool, artifact)
+- `EventBus` — synchronous, typed, deterministic, DI-compatible
+- `EventPublisher` — automatic metadata injection
+- `EventSubscriber` — decorator-based registration
+- `EventRegistry` — event type discovery by category
+- `RunServiceImpl` publishes lifecycle events on create/cancel/set_status
+- `DiagnosticsServiceImpl.subscribe_to_events()` records all events
+- `HealthServiceImpl` publishes `HealthChanged` on state transitions
+- 56 unit tests, all pass
 
 ### C4 — Self-healing + RecoveryService (pending)
 

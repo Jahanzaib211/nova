@@ -44,10 +44,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class RunServiceImpl:
-    """Thin wrapper around RunManager implementing RunService protocol."""
+    """Thin wrapper around RunManager implementing RunService protocol.
 
-    def __init__(self, manager: Any) -> None:
+    Phase C3 — publishes lifecycle events on state transitions via EventBus.
+    """
+
+    def __init__(self, manager: Any, event_bus: Any | None = None) -> None:
         self._manager = manager
+        self._event_bus = event_bus
+
+    def _publish(self, event_class: type, **kwargs: Any) -> None:
+        """Publish a lifecycle event if an event bus is configured."""
+        if self._event_bus is not None:
+            from deerflow.events.event import DomainEvent
+
+            event = event_class(**kwargs)
+            self._event_bus.publish(event)
 
     async def create(
         self,
@@ -66,6 +78,18 @@ class RunServiceImpl:
             model_name=model_name,
             multitask_strategy=multitask_strategy,
             **(kwargs or {}),
+        )
+        from deerflow.events.event import RunCreated
+
+        self._publish(
+            RunCreated,
+            correlation_id=record.correlation_id,
+            run_id=record.run_id,
+            thread_id=record.thread_id,
+            payload={
+                "assistant_id": record.assistant_id,
+                "model_name": record.model_name,
+            },
         )
         return RunDetail(
             run_id=record.run_id,
@@ -128,7 +152,12 @@ class RunServiceImpl:
         *,
         action: str = "interrupt",
     ) -> bool:
-        return await self._manager.cancel(run_id, action=action)
+        result = await self._manager.cancel(run_id, action=action)
+        if result:
+            from deerflow.events.event import RunCancelled
+
+            self._publish(RunCancelled, run_id=run_id, payload={"action": action})
+        return result
 
     async def set_status(
         self,
@@ -137,10 +166,34 @@ class RunServiceImpl:
         *,
         error: str | None = None,
     ) -> None:
+        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
         from deerflow.runtime.runs.schemas import RunStatus
 
         run_status = RunStatus(status) if status in [s.value for s in RunStatus] else RunStatus.PENDING
         await self._manager.set_status(run_id, run_status, error=error)
+
+        lifecycle = adapt_run_status(status)
+        from deerflow.events import event as event_mod
+
+        event_map = {
+            RunLifecycleStatus.CREATED: event_mod.RunCreated,
+            RunLifecycleStatus.INITIALIZING: event_mod.RunInitialized,
+            RunLifecycleStatus.RUNNING: event_mod.RunStarted,
+            RunLifecycleStatus.CHECKPOINT: event_mod.RunCheckpointCreated,
+            RunLifecycleStatus.PAUSED: event_mod.RunPaused,
+            RunLifecycleStatus.RESUMED: event_mod.RunResumed,
+            RunLifecycleStatus.RECOVERING: event_mod.RunRecovering,
+            RunLifecycleStatus.COMPLETED: event_mod.RunCompleted,
+            RunLifecycleStatus.FAILED: event_mod.RunFailed,
+            RunLifecycleStatus.CANCELLED: event_mod.RunCancelled,
+            RunLifecycleStatus.ARCHIVED: event_mod.RunArchived,
+        }
+        event_class = event_map.get(lifecycle)
+        if event_class is not None:
+            payload: dict[str, Any] = {"status": status}
+            if error:
+                payload["error"] = error
+            self._publish(event_class, run_id=run_id, payload=payload)
 
 
 # ---------------------------------------------------------------------------
@@ -352,10 +405,15 @@ class ArtifactServiceImpl:
 # ---------------------------------------------------------------------------
 
 class HealthServiceImpl:
-    """Thin wrapper implementing HealthService protocol."""
+    """Thin wrapper implementing HealthService protocol.
 
-    def __init__(self, probes: dict[str, Any] | None = None) -> None:
+    Phase C3 — publishes HealthChanged events when probe state transitions.
+    """
+
+    def __init__(self, probes: dict[str, Any] | None = None, event_bus: Any | None = None) -> None:
         self._probes = probes or {}
+        self._event_bus = event_bus
+        self._last_healthy: bool | None = None
 
     async def check_all(self) -> HealthReport:
         import time
@@ -381,12 +439,25 @@ class HealthServiceImpl:
                     latency_ms=latency,
                 ))
         healthy_count = sum(1 for r in results if r.healthy)
-        return HealthReport(
+        report = HealthReport(
             healthy=healthy_count == len(results),
             probes=results,
             probe_count=len(results),
             healthy_count=healthy_count,
         )
+        # Publish HealthChanged if overall state transitioned
+        if self._event_bus is not None and self._last_healthy != report.healthy:
+            from deerflow.events.event import HealthChanged
+
+            self._event_bus.publish(HealthChanged(
+                payload={
+                    "healthy": report.healthy,
+                    "probe_count": report.probe_count,
+                    "healthy_count": report.healthy_count,
+                },
+            ))
+            self._last_healthy = report.healthy
+        return report
 
     async def check_single(
         self,
@@ -482,10 +553,29 @@ class ConfigurationServiceImpl:
 # ---------------------------------------------------------------------------
 
 class DiagnosticsServiceImpl:
-    """Thin wrapper implementing DiagnosticsService protocol."""
+    """Thin wrapper implementing DiagnosticsService protocol.
+
+    Phase C3 — can subscribe to EventBus and record all domain events
+    as diagnostics records.
+    """
 
     def __init__(self) -> None:
         pass
+
+    def subscribe_to_events(self, bus: Any) -> None:
+        """Subscribe to all DomainEvent subclasses and record them."""
+        from deerflow.events.event import DomainEvent
+
+        def _on_event(event: DomainEvent) -> None:
+            self.record(
+                f"event:{event.event_type}",
+                run_id=event.run_id,
+                thread_id=event.thread_id,
+                correlation_id=event.correlation_id,
+                extra={"event_id": event.event_id, **event.payload},
+            )
+
+        bus.subscribe(DomainEvent, _on_event)
 
     def record(
         self,

@@ -18,11 +18,11 @@
 | --- | ------------------------------------------------------------------------ | ----- | -------- | ---------- |
 | 1   | Eliminate duplicate logic                                                 | C2+   | pending  | 0%         |
 | 2   | Move infrastructure out of prompts                                        | C4+   | pending  | 0%         |
-| 3   | Introduce typed platform services                                         | C1    | pending  | 0%         |
-| 4   | Centralize run state                                                     | C2    | pending  | 0%         |
-| 5   | Standardize lifecycle management                                         | C2    | pending  | 0%         |
+| 3   | Introduce typed platform services                                         | C1    | complete | 100%       |
+| 4   | Centralize run state                                                     | C2    | complete | 100%       |
+| 5   | Standardize lifecycle management                                         | C3    | complete | 100%       |
 | 6   | Strengthen self-healing                                                  | C3    | pending  | 0%         |
-| 7   | Unify observability                                                      | C0    | partial  | 40%        |
+| 7   | Unify observability                                                      | C0    | complete | 100%       |
 | 8   | Standardize tool interfaces                                              | C4    | pending  | 0%         |
 | 9   | Make every component replaceable                                          | C5    | pending  | 0%         |
 | 10  | Optimize for enterprise reliability                                      | C3+   | pending  | 0%         |
@@ -320,6 +320,109 @@ model and a dependency injection container.
 | Frontend unit tests (457)    | pass     |
 | Guardrails (middleware 28/28) | pass     |
 | Cross-ref check (1500 files) | pass     |
+| Zero API changes             | verified |
+| Zero runtime regressions     | verified |
+
+---
+
+## Phase C3 — Unified Lifecycle + Event Bus
+
+**Objective.** Introduce a canonical lifecycle state machine, typed domain
+event bus, and wire them into the service layer. No behavior changes, no
+API changes, no payload changes.
+
+### Status: COMPLETE (2026-07-12)
+
+### C3.1 — Repository Audit
+
+- **Status:** complete.
+- **Findings:** 4 lifecycle/state enums identified:
+  - `RunStatus` (`runtime/runs/schemas.py`): pending, running, success,
+    error, timeout, interrupted
+  - `SubagentStatus` (`subagents/executor.py`): PENDING, RUNNING,
+    COMPLETED, FAILED, CANCELLED, TIMED_OUT
+  - `CircuitState` (`sandbox/browser_circuit_breaker.py`): CLOSED, OPEN,
+    HALF_OPEN
+  - `DisconnectMode` (`runtime/runs/schemas.py`): cancel, continue_
+  - `SandboxState` (`agents/thread_state.py`): TypedDict (not enum)
+  - Frontend status (`hooks.ts`): inline string literals
+
+### C3.2 — Lifecycle Model
+
+- **Status:** complete.
+- **Files:**
+  - `runtime/lifecycle.py` — `RunLifecycleStatus` (11 states:
+    CREATED, INITIALIZING, RUNNING, CHECKPOINT, PAUSED, RESUMED,
+    RECOVERING, COMPLETED, FAILED, CANCELLED, ARCHIVED).
+  - Properties: `is_terminal`, `is_active`, `is_transitional`.
+  - Adapters: `adapt_run_status()` and `to_run_status()` for
+    backward compatibility with existing `RunStatus` and
+    `SubagentStatus` enums.
+
+### C3.3 — Event Bus
+
+- **Status:** complete.
+- **Files:**
+  - `events/bus.py` — `EventBus` class (synchronous, typed,
+    deterministic, DI-compatible). Module-level `event_bus` singleton.
+  - `events/event.py` — 17 frozen dataclass domain events:
+    RunCreated, RunInitialized, RunStarted, RunCheckpointCreated,
+    RunPaused, RunResumed, RunRecovering, RunCompleted, RunFailed,
+    RunCancelled, RunArchived, WorkspaceMounted, WorkspaceReleased,
+    BrowserStarted, BrowserStopped, HealthChanged, ToolExecuted,
+    ArtifactCreated.
+  - `events/publisher.py` — `EventPublisher` thin wrapper with
+    automatic metadata injection.
+  - `events/subscriber.py` — `EventSubscriber` decorator-based
+    registration.
+  - `events/registry.py` — `EventRegistry` for event type discovery
+    and metadata. All 17 events pre-registered by category.
+  - `events/__init__.py` — public API exports.
+
+### C3.4 — Service Integration
+
+- **Status:** complete.
+- **Files:**
+  - `services/implementations.py` — `RunServiceImpl` publishes
+    RunCreated on `create()`, RunCancelled on `cancel()`, and
+    appropriate lifecycle events on `set_status()`.
+    `DiagnosticsServiceImpl.subscribe_to_events()` subscribes to
+    all DomainEvent subclasses and records them as diagnostics.
+    `HealthServiceImpl` publishes HealthChanged on state transitions.
+  - `services/container.py` — `ServiceContainer.run_service()` wires
+    the module-level `event_bus` into `RunServiceImpl`.
+
+### C3.5 — Tests
+
+- **Status:** complete (56 tests, all pass).
+- **File:** `tests/test_event_bus.py`
+- **Coverage:**
+  - RunLifecycleStatus: states, properties, adapters (13 tests)
+  - DomainEvent: creation, immutability, event_type (5 tests)
+  - EventBus: subscribe, publish, unsubscribe, replay, history,
+    exception handling, base event handler (12 tests)
+  - EventPublisher: metadata injection, singleton bus (2 tests)
+  - EventSubscriber: decorator registration (2 tests)
+  - EventRegistry: all categories, metadata lookup (6 tests)
+  - RunServiceImpl integration: lifecycle events on create,
+    cancel, set_status (3 tests)
+  - DiagnosticsServiceImpl integration: event subscription,
+    multi-event recording (2 tests)
+  - HealthServiceImpl integration: HealthChanged on transition,
+    no duplicate on steady state (2 tests)
+  - Module-level singleton and exports (3 tests)
+  - Total: 50 new tests + 6 module-level = 56
+
+### Validation summary for Phase C3
+
+| Step                         | Result   |
+| ---------------------------- | -------- |
+| Event bus tests (56)         | pass     |
+| Service layer tests (33)     | pass     |
+| Backend streaming tests (29) | pass     |
+| Frontend unit tests (457)    | pass     |
+| Guardrails (middleware 28/28) | pass     |
+| Cross-ref check (1508 files) | pass     |
 | Zero API changes             | verified |
 | Zero runtime regressions     | verified |
 

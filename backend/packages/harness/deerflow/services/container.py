@@ -79,7 +79,9 @@ class ServiceContainer:
             from deerflow.services.implementations import RunServiceImpl
 
             manager = self._get_run_manager()
-            self._singletons["run_service"] = RunServiceImpl(manager)
+            from deerflow.events.bus import event_bus as _event_bus
+
+            self._singletons["run_service"] = RunServiceImpl(manager, event_bus=_event_bus)
         return self._singletons["run_service"]
 
     def workspace_service(self) -> WorkspaceService:
