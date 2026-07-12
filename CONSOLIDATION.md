@@ -36,7 +36,7 @@ Consolidation tracking. CI guardrails. No user-facing changes.
 
 ### C0.1 — Backend `RunRecord.correlation_id`
 
-- **Status:** complete.
+- **Status:** complete (migration applied 2026-07-12).
 - **Files:**
   - `backend/packages/harness/deerflow/runtime/runs/manager.py`
     - `RunRecord.correlation_id: str = ""` (new field, backward-compat default)
@@ -50,8 +50,20 @@ Consolidation tracking. CI guardrails. No user-facing changes.
   - `backend/packages/harness/deerflow/runtime/runs/store/memory.py`
     - `MemoryRunStore.put` persists `correlation_id`
 - **Tests:** `backend/tests/test_correlation_id.py` (7 tests, all pass).
-- **Migration notes:** legacy rows hydrated with `correlation_id=""` —
-  consumers must fall back to `run_id` when the field is empty.
+- **Migration (2026-07-12 hotfix):** Phase C0 added `correlation_id` to
+  `RunRow` but created no Alembic migration. SQLAlchemy's
+  `Base.metadata.create_all()` only creates tables, not columns, so the
+  live SQLite DB had 24 columns while the ORM model expected 25. Every
+  new run creation failed with `OperationalError: no such column:
+  runs.correlation_id` (HTTP 500). Fixed by:
+  1. `ALTER TABLE runs ADD COLUMN correlation_id VARCHAR(64)` inside the
+     running gateway container (sqlite3 direct).
+  2. New Alembic migration `2026_07_12_phase_c0_correlation_id.py`
+     (idempotent, stamps `alembic_version` for fresh deployments).
+  3. `env.py` updated to read `DEER_FLOW_DATABASE_URL` env-var so
+     production containers can point Alembic at the correct DB path.
+- **Legacy rows** hydrated with `correlation_id=""` — consumers must
+  fall back to `run_id` when the field is empty.
 
 ### C0.2 — SSE comment emission
 
@@ -139,15 +151,35 @@ Consolidation tracking. CI guardrails. No user-facing changes.
     ``assistant.run_command`` / shell-tool calls in
     ``backend/.../agents/lead_agent/prompt.py`` (introduced in Phase C4).
 
-### Validation summary for Phase C0
+### Validation summary for Phase C0 (updated 2026-07-12)
 
 | Step                         | Result   |
 | ---------------------------- | -------- |
 | Frontend typecheck            | pass     |
-| Frontend unit tests (delta)   | +8 pass  |
-| Backend unit tests (delta)    | +18 pass |
-| Backend targeted streaming    | 29 pass  |
-| Cross-ref check               | pass     |
+| Frontend unit tests (457)     | pass     |
+| Backend streaming tests (29)  | pass     |
+| Backend healthcheck daemon    | 2 pre-existing failures (probe-count drift) |
+| Cross-ref check (1497 files)  | pass     |
+| Guardrails (middleware 28/28) | pass     |
+| Live DB schema                | 25 cols (correlation_id present) |
+| Alembic version               | 2026_07_12_phase_c0_correlation_id |
+
+---
+
+## Operational hardening (2026-07-12)
+
+### Tunnel auto-recovery (cloudflared)
+
+- **Problem:** cloudflared exits cleanly → PM2 restarts → systemd
+  `StartLimitBurst=10` exhausted → `start-limit-hit` → `Restart=always`
+  stops working → tunnel down, HTTP 1033.
+- **Root cause:** `fix_tunnel()` didn't call `systemctl reset-failed`
+  before restarting, and had no post-restart verification.
+- **Fix:** `healthcheck-daemon.py` `fix_tunnel()` now checks/resets
+  failed state, verifies `is-active` for up to 10s. PM2 lock path moved
+  to `$XDG_RUNTIME_DIR`. 5 new unit tests (`test_tunnel_recovery.py`).
+- **Runbook:** `docs/RUNBOOK.md` — operational procedures for tunnel,
+  nginx, PM2, deployment, common failures.
 
 ---
 
