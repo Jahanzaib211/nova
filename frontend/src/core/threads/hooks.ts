@@ -16,6 +16,7 @@ import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
 import { getAPIClient } from "../api";
 import { fetch } from "../api/fetcher";
+import { getStreamLiveness } from "../api/stream-liveness";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
 import { isHiddenFromUIMessage } from "../messages/utils";
@@ -27,9 +28,19 @@ import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
 import { fetchThreadTokenUsage } from "./api";
 import {
+  classifyVerifyOutcome,
+  evaluateWatchdog,
+  nextStopState,
+  recordCleanup,
+  recordCompletion,
   recordHookEvent,
   recordManagerState,
+  recordRecovery,
+  recordReconnect,
   recordRejoinAttempt,
+  recordStallWatchdog,
+  recordStateMerge,
+  shouldArmWatchdog,
 } from "./stream-trace";
 import {
   buildThreadsSearchQueryOptions,
@@ -43,6 +54,8 @@ import type {
   RunMessage,
   ThreadTokenUsageResponse,
 } from "./types";
+
+const TIMEOUT_SENTINEL: unique symbol = Symbol.for("nova.threads.stop.timeout");
 
 export type ToolEndEvent = {
   name: string;
@@ -578,6 +591,11 @@ export function useThreadStream({
   // have not received any event yet since this hook mounted.
   const lastEventAtRef = useRef<number | null>(null);
   const lastEventIdRef = useRef<string | null>(null);
+  // Captured from the SDK onCreated event so the watchdog has a stable run
+  // identity for tracing even when useActiveRun hasn't polled any data yet
+  // (the primary-path freeze window: stream wedges in the first 60s after
+  // a send, before the active-run poll has data).
+  const streamRunIdRef = useRef<string | null>(null);
   const listeners = useRef({
     onSend,
     onStart,
@@ -637,6 +655,7 @@ export function useThreadStream({
 
   const handleStreamStart = useCallback((_threadId: string, _runId: string) => {
     threadIdRef.current = _threadId;
+    streamRunIdRef.current = _runId;
     setOptimisticThreadId((currentOptimisticThreadId) => {
       const currentView = currentViewThreadIdRef.current;
       if (
@@ -735,19 +754,13 @@ export function useThreadStream({
       const now =
         typeof performance !== "undefined" ? performance.now() : Date.now();
       lastEventAtRef.current = now;
-      const eventId =
-        (event as unknown as Record<string, unknown>).id as
-          | string
-          | undefined;
+      const eventId = (event as unknown as Record<string, unknown>).id as
+        | string
+        | undefined;
       if (typeof eventId === "string" && eventId.length > 0) {
         lastEventIdRef.current = eventId;
       }
-      recordHookEvent(
-        threadIdRef.current,
-        null,
-        event.event,
-        eventId ?? null,
-      );
+      recordHookEvent(threadIdRef.current, null, event.event, eventId ?? null);
 
       if (event.event === "on_tool_start") {
         const raw = event.data as Record<string, unknown> | null | undefined;
@@ -1055,6 +1068,12 @@ export function useThreadStream({
           queryKey: threadTokenUsageQueryKey(threadIdRef.current),
         });
       }
+      recordCompletion(
+        threadIdRef.current,
+        null,
+        "success",
+        messagesRef.current.length,
+      );
     },
   });
 
@@ -1131,6 +1150,7 @@ export function useThreadStream({
       .current(activeRun.run_id)
       .catch((error: unknown) => {
         console.debug("[useStream] rejoin attempt failed:", error);
+        recordReconnect(onStreamThreadId, activeRun.run_id, "failed");
       })
       .finally(() => {
         state.inFlight = false;
@@ -1140,6 +1160,7 @@ export function useThreadStream({
         if (Date.now() - joinedAt > REJOIN_HEALTHY_SESSION_MS) {
           state.attempts = 0;
         }
+        recordReconnect(onStreamThreadId, activeRun.run_id, "joined");
         // Re-ask the server regardless of how the join ended so subtask
         // pills and the composer converge on the run's true state.
         void queryClient.invalidateQueries({
@@ -1147,6 +1168,203 @@ export function useThreadStream({
         });
       });
   }, [activeRun, isMock, onStreamThreadId, queryClient]);
+
+  // --- Stream stall watchdog -------------------------------------------------
+  // Detects when the SSE connection is supposedly open (isLoading=true) but
+  // no transport bytes or SDK events have arrived for longer than the stall
+  // threshold. When detected, the verify-then-act recovery runs: we ask the
+  // server what the run's true state is, and either teardown locally (if the
+  // run reached terminal state and the stream missed its end event) or
+  // force-stop the local reader and let the rejoin effect pick up recovery.
+  //
+  // Lifecycle invariants (Phase 2 rewire):
+  //   - Arms on ``thread.isLoading`` alone — no ``activeRun`` required. The
+  //     primary-path freeze (stream wedges in the first 60s before the
+  //     active-run poll has data) is what this fixes.
+  //   - Cooldown-based re-fire: a sustained stall can be recovered more than
+  //     once per run, but not in a tight loop.
+  //   - Single interval per mount; cleared on every state transition that
+  //     should disarm (stream closed, unmount, thread switch).
+  //   - Never calls joinStream directly; the existing rejoin effect owns
+  //     that path, so we cannot create duplicate reconnects.
+  const watchdogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const watchdogLastFireAtRef = useRef<number | null>(null);
+  const watchdogVerifyingRef = useRef<boolean>(false);
+  const stopStreamRef = useRef(thread.stop);
+  stopStreamRef.current = thread.stop;
+  const queryClientForWatchdogRef = useRef(queryClient);
+  queryClientForWatchdogRef.current = queryClient;
+  const threadIdForWatchdogRef = useRef(onStreamThreadId);
+  threadIdForWatchdogRef.current = onStreamThreadId;
+
+  // Reset streamRunIdRef when the user switches threads so the watchdog
+  // doesn't trace a previous run's identity onto the new view.
+  useEffect(() => {
+    return () => {
+      streamRunIdRef.current = null;
+      watchdogLastFireAtRef.current = null;
+    };
+  }, [onStreamThreadId]);
+
+  useEffect(() => {
+    const disarmed = () => {
+      if (watchdogIntervalRef.current !== null) {
+        clearInterval(watchdogIntervalRef.current);
+        watchdogIntervalRef.current = null;
+      }
+    };
+
+    const arm = shouldArmWatchdog({
+      isMock: Boolean(isMock),
+      threadId: threadIdForWatchdogRef.current ?? null,
+      isLoading: thread.isLoading,
+      intervalAlreadyArmed: Boolean(watchdogIntervalRef.current),
+    });
+    if (!arm.arm) {
+      if (
+        arm.reason === "not-loading" ||
+        arm.reason === "mock" ||
+        arm.reason === "no-thread"
+      ) {
+        // Disarm on transitions to a state where the watchdog is no longer
+        // applicable. Already-armed is fine — the interval is already
+        // running, nothing to do.
+        disarmed();
+      }
+      return;
+    }
+
+    const STALL_THRESHOLD_MS = 45_000;
+    const SDK_FALLBACK_THRESHOLD_MS = 120_000;
+    const CHECK_INTERVAL_MS = 5_000;
+    const COOLDOWN_MS = STALL_THRESHOLD_MS;
+
+    watchdogIntervalRef.current = setInterval(() => {
+      // Two activity signals feed the watchdog:
+      //   1. ``lastEventAtRef.current`` — SDK-level (onLangChainEvent fired).
+      //   2. ``getStreamLiveness(threadId).lastByteAt`` — transport-level
+      //      (any byte, including heartbeat comment frames the SDK drops).
+      // The transport signal is strictly stronger: a stream alive at the
+      // byte level must not be force-stopped just because no SDK event has
+      // fired yet (e.g. a long-running tool with no intermediate events).
+      const sdkLastAt = lastEventAtRef.current;
+      const transportLastAt = getStreamLiveness(
+        threadIdForWatchdogRef.current,
+      ).lastByteAt;
+      const now =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      const decision = evaluateWatchdog({
+        isLoading: thread.isLoading,
+        lastEventAtMs: sdkLastAt,
+        transportLastByteAtMs: transportLastAt,
+        nowMs: now,
+        thresholdMs: STALL_THRESHOLD_MS,
+        sdkFallbackThresholdMs: SDK_FALLBACK_THRESHOLD_MS,
+        lastFireAtMs: watchdogLastFireAtRef.current,
+        cooldownMs: COOLDOWN_MS,
+      });
+      if (!decision.fire) return;
+
+      // Cooldown elapsed → record fire and proceed.
+      const firedAt = now;
+      watchdogLastFireAtRef.current = firedAt;
+      recordStallWatchdog(
+        threadIdForWatchdogRef.current,
+        streamRunIdRef.current,
+        sdkLastAt ?? transportLastAt ?? 0,
+        now,
+        "force-stop",
+      );
+      // Verify-then-act: ask the server the run's true state before doing
+      // anything destructive. If the run already reached terminal state,
+      // the stream simply missed its end event — we just teardown locally.
+      // If the run is still running server-side, we force-stop the local
+      // reader and let the existing rejoin effect reattach.
+      void (async () => {
+        if (watchdogVerifyingRef.current) return;
+        watchdogVerifyingRef.current = true;
+        try {
+          const threadId = threadIdForWatchdogRef.current;
+          if (!threadId) return;
+          let runs: Array<{ run_id: string; status: string }> | null = null;
+          try {
+            const result = await getAPIClient().runs.list(threadId);
+            runs = (result ?? []) as Array<{
+              run_id: string;
+              status: string;
+            }>;
+          } catch {
+            runs = null;
+          }
+          const outcome = classifyVerifyOutcome({
+            runs,
+            expectedRunId: streamRunIdRef.current,
+          });
+          recordRecovery(
+            threadId,
+            streamRunIdRef.current ?? "",
+            "watchdog-force-stop",
+            rejoinStateRef.current.attempts,
+          );
+          if (
+            outcome.kind === "run-terminal" ||
+            outcome.kind === "run-missing"
+          ) {
+            // The stream missed its end event — local teardown only. Do NOT
+            // call thread.stop() (SDK will reject if the stream is already
+            // closed). Just clear optimistic state and let the next
+            // active-run poll converge to idle.
+            try {
+              void queryClientForWatchdogRef.current.invalidateQueries({
+                queryKey: activeRunQueryKey(threadId),
+              });
+              void queryClientForWatchdogRef.current.invalidateQueries({
+                queryKey: threadTokenUsageQueryKey(threadId),
+              });
+            } catch {
+              // best-effort
+            }
+          } else {
+            // Run is still running server-side: force-stop the local reader
+            // and let the rejoin effect reattach (with full replay).
+            try {
+              void stopStreamRef.current();
+            } catch {
+              // best-effort
+            }
+            try {
+              void queryClientForWatchdogRef.current.invalidateQueries({
+                queryKey: activeRunQueryKey(threadId),
+              });
+            } catch {
+              // best-effort
+            }
+          }
+        } finally {
+          watchdogVerifyingRef.current = false;
+        }
+      })();
+    }, CHECK_INTERVAL_MS);
+
+    return disarmed;
+  }, [isMock, thread.isLoading, onStreamThreadId]);
+
+  // Cleanup recorder: fires exactly once when the hook tears down.
+  useEffect(() => {
+    return () => {
+      recordCleanup(
+        onStreamThreadId,
+        "unmount",
+        watchdogIntervalRef.current !== null ? 1 : 0,
+      );
+      if (watchdogIntervalRef.current !== null) {
+        clearInterval(watchdogIntervalRef.current);
+        watchdogIntervalRef.current = null;
+      }
+    };
+  }, [onStreamThreadId]);
 
   const hasVisibleStreamState =
     Boolean(threadId) || liveMessagesThreadId === currentViewThreadId;
@@ -1475,6 +1693,12 @@ export function useThreadStream({
     persistedMessages,
     visibleOptimisticMessages,
   );
+  recordStateMerge(
+    threadId ?? null,
+    activeRun?.run_id ?? null,
+    mergedMessages.length,
+    mergedMessages[mergedMessages.length - 1]?.id ?? null,
+  );
   const pendingUsageMessages = thread.isLoading
     ? getMessagesAfterBaseline(
         persistedMessages,
@@ -1494,31 +1718,163 @@ export function useThreadStream({
   // created with ``onDisconnect: "cancel"`` so the backend run is cancelled too.
   // As a belt-and-suspenders guarantee that the agent actually halts when the
   // user asks (and isn't left running by a resumable-stream race), also issue an
-  // explicit cancel of the thread's active run. Non-fatal: any failure here is
-  // swallowed so Stop never throws.
-  const stopRun = useCallback(async () => {
-    try {
-      await thread.stop();
-    } finally {
-      if (threadId && !isMock) {
-        try {
-          const client = getAPIClient();
-          const runs = await client.runs.list(threadId);
-          await Promise.all(
-            runs
-              .filter((r) => r.status === "pending" || r.status === "running")
-              .map((r) =>
-                client.runs
-                  .cancel(threadId, r.run_id, false, "interrupt")
-                  .catch(() => undefined),
-              ),
-          );
-        } catch {
-          // best-effort — thread.stop() already disconnected the stream
-        }
-      }
+  // Stop is a state machine now (Phase 4). The previous implementation had no
+  // timeout — if the gateway hung, Stop silently blocked the UI. We bound
+  // every step with a 5s timeout; if any step fails or hangs, we fall
+  // through to forceDisconnect() so the user is never trapped.
+  const stopStartedAtRef = useRef<number | null>(null);
+  const [stopState, setStopState] = useState<
+    "idle" | "stopping" | "stopped" | "force-disconnected"
+  >("idle");
+  const [dismissedRunId, setDismissedRunId] = useState<string | null>(null);
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearStopTimeout = useCallback(() => {
+    if (stopTimeoutRef.current !== null) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
     }
-  }, [thread, threadId, isMock]);
+  }, []);
+
+  const escapeComposer = useCallback(() => {
+    // User has given up on a run (Stop timeout → Force Disconnect). Clear
+    // optimistic state and dismiss this run so the composer becomes usable
+    // again. The server may still be running the run; the next send will
+    // hit a 409 (handled by the existing "agent busy" toast).
+    clearStopTimeout();
+    setDismissedRunId((current) => current ?? streamRunIdRef.current);
+    setOptimisticMessages([]);
+    setOptimisticThreadId(null);
+    setLiveMessagesThreadId(null);
+    try {
+      void queryClient.invalidateQueries({
+        queryKey: activeRunQueryKey(threadIdRef.current),
+      });
+    } catch {
+      // best-effort
+    }
+    setStopState("idle");
+    recordRecovery(
+      threadIdRef.current,
+      streamRunIdRef.current ?? "",
+      "stop-timeout-forced",
+      rejoinStateRef.current.attempts,
+    );
+  }, [clearStopTimeout, queryClient, rejoinStateRef]);
+
+  const forceDisconnect = useCallback(() => {
+    // Purely local — server run is left running, but this client is no
+    // longer subscribed. Escape hatch for "the gateway is unreachable".
+    clearStopTimeout();
+    try {
+      void thread.stop();
+    } catch {
+      // best-effort
+    }
+    try {
+      queryClient.removeQueries({
+        queryKey: activeRunQueryKey(threadIdRef.current),
+      });
+    } catch {
+      // best-effort
+    }
+    setDismissedRunId((current) => current ?? streamRunIdRef.current);
+    setStopState("force-disconnected");
+    recordRecovery(
+      threadIdRef.current,
+      streamRunIdRef.current ?? "",
+      "force-disconnect",
+      rejoinStateRef.current.attempts,
+    );
+  }, [clearStopTimeout, queryClient, rejoinStateRef, thread]);
+
+  const stopRun = useCallback(async () => {
+    if (!thread.isLoading && !activeRun) {
+      return; // nothing to stop
+    }
+    stopStartedAtRef.current = Date.now();
+    setStopState("stopping");
+
+    const runWithTimeout = <T>(
+      p: Promise<T>,
+      ms: number,
+    ): Promise<T | typeof TIMEOUT_SENTINEL> =>
+      Promise.race<T | typeof TIMEOUT_SENTINEL>([
+        p,
+        new Promise<typeof TIMEOUT_SENTINEL>((resolve) => {
+          stopTimeoutRef.current = setTimeout(() => {
+            resolve(TIMEOUT_SENTINEL);
+          }, ms);
+        }),
+      ]);
+
+    let serverAcked = false;
+    try {
+      const stopResult = await runWithTimeout(thread.stop(), 5_000);
+      if (stopResult === TIMEOUT_SENTINEL) {
+        // thread.stop() hung — go to force disconnect.
+        forceDisconnect();
+        return;
+      }
+    } catch {
+      // SDK rejected the stop — still try to cancel server-side.
+    }
+    clearStopTimeout();
+
+    if (threadId && !isMock) {
+      try {
+        const client = getAPIClient();
+        const cancelResult = await runWithTimeout(
+          (async () => {
+            const runs = await client.runs.list(threadId);
+            await Promise.all(
+              runs
+                .filter((r) => r.status === "pending" || r.status === "running")
+                .map((r) =>
+                  client.runs
+                    .cancel(threadId, r.run_id, false, "interrupt")
+                    .catch(() => undefined),
+                ),
+            );
+            return true;
+          })(),
+          5_000,
+        );
+        serverAcked = cancelResult === true;
+      } catch {
+        serverAcked = false;
+      }
+    } else {
+      serverAcked = true; // mock mode — nothing server-side to ack
+    }
+
+    const transition = nextStopState(
+      stopState,
+      "tick",
+      stopStartedAtRef.current ? Date.now() - stopStartedAtRef.current : 0,
+      serverAcked,
+    );
+    setStopState(transition.next);
+    if (transition.outcome.kind === "force-disconnected") {
+      escapeComposer();
+    }
+  }, [
+    activeRun,
+    clearStopTimeout,
+    escapeComposer,
+    forceDisconnect,
+    isMock,
+    stopState,
+    thread,
+    threadId,
+  ]);
+
+  // Cleanup stop timeout on unmount.
+  useEffect(() => {
+    return () => {
+      clearStopTimeout();
+    };
+  }, [clearStopTimeout]);
 
   return {
     thread: mergedThread,
@@ -1529,6 +1885,10 @@ export function useThreadStream({
     hasMoreHistory,
     loadMoreHistory,
     stopRun,
+    forceDisconnect,
+    escapeComposer,
+    stopState,
+    dismissedRunId,
   } as const;
 }
 
@@ -1828,8 +2188,8 @@ export function useThreadRuns(
     refetchOnWindowFocus: false,
   });
 }
-
 const ACTIVE_RUN_POLL_INTERVAL_MS = 4_000;
+const ACTIVE_RUN_POLL_INTERVAL_WHILE_STREAMING_MS = 30_000;
 
 // Rejoin retry budget per run: joins that fail immediately (join refused,
 // connection error) stop after this many tries; a join that streamed for at
@@ -1852,18 +2212,44 @@ function pickActiveRun(runs: Run[] | undefined): Run | null {
 }
 
 /**
+ * Pure helper for the active-run poll cadence.
+ *
+ * Phase 3 rewire: the poll must never be fully absent while a run exists.
+ * The previous implementation disabled polling entirely while the SDK was
+ * loading (``enabled && !isStreamLoading``), which meant the watchdog had
+ * no ``activeRun`` data on the primary path (the first 60 s after a send).
+ * The fix keeps polling on at all times, but slows it down (30 s) while
+ * a stream is attached so it does not race with the live event stream.
+ *
+ * When no active run exists the poll is paused (false) — no need to ask
+ * the server when the answer is deterministically "no run".
+ */
+export function activeRunPollInterval(args: {
+  hasActiveRun: boolean;
+  isStreamLoading: boolean;
+}): number | false {
+  if (!args.hasActiveRun) return false;
+  return args.isStreamLoading
+    ? ACTIVE_RUN_POLL_INTERVAL_WHILE_STREAMING_MS
+    : ACTIVE_RUN_POLL_INTERVAL_MS;
+}
+
+/**
  * Server-truth signal for "this thread has a run executing right now".
  *
  * The SSE stream is not a reliable liveness signal: the backend keeps
  * executing after a refresh or dropped connection (runs are created with a
  * resumable stream), so `thread.isLoading === false` only means *this client*
  * is not attached. This hook asks the runs API instead and keeps polling
- * while a pending/running run exists, stopping as soon as the run reaches a
- * terminal state.
+ * while a pending/running run exists.
  *
- * `isStreamLoading` pauses polling while a live stream is attached — the
- * stream itself is fresher than any poll could be.
+ * Phase 3 rewire: polling is NEVER fully disabled while a run exists. While
+ * the SDK is loading, polling falls back to a slower 30 s cadence so the
+ * composer and watchdog have continuous server truth even when the SDK
+ * does not surface events. Refetch on visibilitychange→visible and online
+ * events is handled by the caller (see ``useActiveRunWithAwareness``).
  */
+
 export function useActiveRun(
   threadId?: string,
   {
@@ -1872,6 +2258,7 @@ export function useActiveRun(
   }: { enabled?: boolean; isStreamLoading?: boolean } = {},
 ): Run | null {
   const apiClient = getAPIClient();
+  const queryClient = useQueryClient();
   const query = useQuery<Run[]>({
     queryKey: activeRunQueryKey(threadId),
     queryFn: async () => {
@@ -1880,11 +2267,51 @@ export function useActiveRun(
       }
       return apiClient.runs.list(threadId);
     },
-    enabled: enabled && Boolean(threadId) && !isStreamLoading,
+    enabled: enabled && Boolean(threadId),
     refetchOnWindowFocus: true,
     refetchInterval: (query) =>
-      pickActiveRun(query.state.data) ? ACTIVE_RUN_POLL_INTERVAL_MS : false,
+      activeRunPollInterval({
+        hasActiveRun: Boolean(pickActiveRun(query.state.data)),
+        isStreamLoading,
+      }),
   });
+  // Refetch on visibility change + online/offline transitions. The
+  // hook is the single place to wire this so every consumer benefits.
+  useEffect(() => {
+    if (!enabled || !threadId) return;
+    const handleVisibilityChange = () => {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible"
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: activeRunQueryKey(threadId),
+        });
+      }
+    };
+    const handleOnline = () => {
+      void queryClient.invalidateQueries({
+        queryKey: activeRunQueryKey(threadId),
+      });
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+      }
+    };
+  }, [enabled, threadId, queryClient]);
   return useMemo(() => pickActiveRun(query.data), [query.data]);
 }
 

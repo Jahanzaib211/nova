@@ -47,6 +47,8 @@ import {
   useThreadStream,
   useThreadTokenUsage,
 } from "@/core/threads/hooks";
+import { recordComposer } from "@/core/threads/stream-trace";
+import { composerShouldStream } from "@/core/threads/stream-trace";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
@@ -118,6 +120,9 @@ export default function ChatPage() {
     hasMoreHistory,
     loadMoreHistory,
     stopRun,
+    forceDisconnect,
+    stopState,
+    dismissedRunId,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     displayThreadId: threadId,
@@ -373,13 +378,23 @@ export default function ChatPage() {
                     threadId={threadId}
                     autoFocus={isWelcomeMode}
                     initialValue={composerInitialValue}
-                    status={
-                      thread.isLoading || activeRun
-                        ? "streaming"
-                        : thread.error
-                          ? "error"
-                          : "ready"
-                    }
+                    status={(() => {
+                      const s: "streaming" | "ready" | "error" =
+                        composerShouldStream({
+                          threadIsLoading: thread.isLoading,
+                          hasActiveRun: activeRun !== null,
+                          activeRunId: activeRun?.run_id ?? null,
+                          dismissedRunId,
+                          threadError: thread.error,
+                        });
+                      recordComposer(
+                        isNewThread || isMock ? null : threadId,
+                        activeRun?.run_id ?? null,
+                        s,
+                        activeRun !== null,
+                      );
+                      return s;
+                    })()}
                     context={settings.context}
                     extraHeader={
                       isWelcomeMode && <Welcome mode={settings.context.mode} />
@@ -394,6 +409,8 @@ export default function ChatPage() {
                     }
                     onSubmit={handleSubmit}
                     onStop={handleStop}
+                    onForceDisconnect={forceDisconnect}
+                    stopState={stopState}
                   />
                 ) : (
                   <div

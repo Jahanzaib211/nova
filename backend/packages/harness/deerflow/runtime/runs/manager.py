@@ -521,24 +521,148 @@ class RunManager:
         interrupted (idempotent — a second cancel is a no-op success).
         Returns ``False`` only when the run is unknown to this worker or has
         reached a terminal state other than interrupted (completed, failed, etc.).
+
+        Phase 6: when the run is unknown in-memory but the store has a
+        non-terminal row (store-only hydration, e.g. after a worker
+        restart), persist ``interrupted`` through the store and return
+        ``True``. The user Stop button must always land, never 409
+        forever on a "not active on this worker" row.
         """
         async with self._lock:
             record = self._runs.get(run_id)
-            if record is None:
-                return False
-            if record.status == RunStatus.interrupted:
-                return True  # idempotent — already cancelled on this worker
-            if record.status not in (RunStatus.pending, RunStatus.running):
-                return False
-            record.abort_action = action
-            record.abort_event.set()
-            if record.task is not None and not record.task.done():
-                record.task.cancel()
-            record.status = RunStatus.interrupted
-            record.updated_at = _now_iso()
-        await self._persist_status(record, RunStatus.interrupted)
-        logger.info("Run %s cancelled (action=%s)", run_id, action)
+            if record is not None:
+                if record.status == RunStatus.interrupted:
+                    return True  # idempotent — already cancelled on this worker
+                if record.status not in (RunStatus.pending, RunStatus.running):
+                    return False
+                record.abort_action = action
+                record.abort_event.set()
+                if record.task is not None and not record.task.done():
+                    record.task.cancel()
+                record.status = RunStatus.interrupted
+                record.updated_at = _now_iso()
+            else:
+                # Store-only path: look up the row, decide.
+                record = None
+        if record is not None:
+            await self._persist_status(record, RunStatus.interrupted)
+            logger.info("Run %s cancelled (action=%s)", run_id, action)
+            return True
+
+        # No in-memory record. Consult the store.
+        if self._store is None:
+            return False
+        try:
+            row = await self._store.get(run_id)
+        except Exception:
+            logger.warning("Failed to read store row for cancel %s", run_id, exc_info=True)
+            return False
+        if row is None:
+            return False
+        status_value = row.get("status")
+        if status_value == RunStatus.interrupted.value:
+            return True  # idempotent
+        if status_value not in (RunStatus.pending.value, RunStatus.running.value):
+            return False
+        # Persist interrupted directly to the store. The in-memory record
+        # stays store_only; the next list_by_thread poll sees the new status.
+        try:
+            await self._call_store_with_retry(
+                "update_status",
+                run_id,
+                lambda: self._store.update_status(
+                    run_id,
+                    RunStatus.interrupted.value,
+                    error=f"cancelled via REST (action={action})",
+                ),
+            )
+        except Exception:
+            logger.warning("Failed to persist interrupted for store-only run %s", run_id, exc_info=True)
+            return False
+        logger.info(
+            "Store-only run %s marked interrupted (action=%s)",
+            run_id,
+            action,
+        )
         return True
+
+    async def reap_orphaned_runs(self) -> int:
+        """Phase 6 startup reaper.
+
+        On gateway boot the in-memory ``StreamBridge`` is empty: every run
+        created by a previous process lives only in the store. Any row
+        whose status is still ``pending`` or ``running`` is necessarily
+        orphaned (the bridge that was executing it died with the process).
+        Marking them ``interrupted`` converges the front-end polls to idle
+        and prevents 409-on-Stop forever.
+
+        Returns the number of rows reaped.
+        """
+        if self._store is None:
+            return 0
+        # We cannot enumerate every thread from here without a thread index,
+        # but ``list_by_thread`` is the only public method on the store
+        # interface. The bootstrap path is expected to call this once
+        # AFTER threads are known, with a thread iterator — see
+        # ``reap_orphaned_runs_for_threads``.
+        return 0
+
+    async def reap_orphaned_runs_for_threads(self, thread_ids: list[str]) -> int:
+        """Phase 6 startup reaper — reaps orphaned runs across the given threads.
+
+        Phase 6 fix: when the gateway boots, threads that were active on a
+        previous worker are rehydrated from the store. Their runs with
+        status ``pending`` or ``running`` are necessarily orphaned (the
+        bridge died with the previous process). Mark them ``interrupted``
+        so the front-end polls converge to idle and the user Stop button
+        does not 409 forever.
+        """
+        if self._store is None:
+            return 0
+        reaped = 0
+        active_statuses = {RunStatus.pending.value, RunStatus.running.value}
+        terminal_statuses = {
+            RunStatus.success.value,
+            RunStatus.error.value,
+            RunStatus.timeout.value,
+            RunStatus.interrupted.value,
+        }
+        for thread_id in thread_ids:
+            try:
+                rows = await self._store.list_by_thread(thread_id, limit=1000)
+            except Exception:
+                logger.warning(
+                    "Reaper: list_by_thread failed for %s",
+                    thread_id,
+                    exc_info=True,
+                )
+                continue
+            for row in rows:
+                run_id = row.get("run_id")
+                status_value = row.get("status")
+                if not run_id or status_value not in active_statuses:
+                    continue
+                try:
+                    await self._call_store_with_retry(
+                        "update_status",
+                        run_id,
+                        lambda: self._store.update_status(
+                            run_id,
+                            RunStatus.interrupted.value,
+                            error="orphaned by gateway restart",
+                        ),
+                    )
+                    reaped += 1
+                except Exception:
+                    logger.warning(
+                        "Reaper: update_status failed for %s",
+                        run_id,
+                        exc_info=True,
+                    )
+        # Sanity: import-free reference so the variable is used (the active/
+        # terminal sets are kept for readability / future extension).
+        _ = active_statuses, terminal_statuses
+        return reaped
 
     async def create_or_reject(
         self,

@@ -38,6 +38,10 @@ import {
 } from "@/core/tasks/subtask-result";
 import type { AgentThreadState } from "@/core/threads";
 import { useActiveRun } from "@/core/threads/hooks";
+import {
+  recordRender,
+  recordThinkingIndicator,
+} from "@/core/threads/stream-trace";
 import { cn } from "@/lib/utils";
 
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
@@ -238,6 +242,12 @@ export function MessageList({
     isStreamLoading: thread.isLoading,
   });
   const hasActiveRun = activeRun !== null;
+  recordRender(
+    threadId ?? null,
+    activeRun?.run_id ?? null,
+    "MessageList",
+    messages[messages.length - 1]?.id ?? null,
+  );
   const lastGroupIndex = groupedMessages.length - 1;
   const turnUsageMessagesByGroupIndex =
     getAssistantTurnUsageMessages(groupedMessages);
@@ -567,18 +577,29 @@ export function MessageList({
             </div>
           );
         })}
-        {thread.isLoading && !hasActiveAssistantText && (
-          <div
-            className="text-muted-foreground/70 flex w-full items-center gap-2 px-4 py-3"
-            data-testid="streaming-indicator"
-            aria-label="Agent is thinking"
-          >
-            <StreamingIndicator size="sm" />
-            <span className="font-mono text-xs">
-              {t.agentComputer.thinking}
-            </span>
-          </div>
-        )}
+        {(() => {
+          const indicatorVisible = thread.isLoading && !hasActiveAssistantText;
+          if (indicatorVisible) {
+            recordThinkingIndicator(
+              threadId ?? null,
+              activeRun?.run_id ?? null,
+              true,
+              thread.isLoading,
+            );
+          }
+          return indicatorVisible ? (
+            <div
+              className="text-muted-foreground/70 flex w-full items-center gap-2 px-4 py-3"
+              data-testid="streaming-indicator"
+              aria-label="Agent is thinking"
+            >
+              <StreamingIndicator size="sm" />
+              <span className="font-mono text-xs">
+                {t.agentComputer.thinking}
+              </span>
+            </div>
+          ) : null;
+        })()}
         <div style={{ height: `${paddingBottom}px` }} />
       </ConversationContent>
     </Conversation>

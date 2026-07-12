@@ -161,6 +161,8 @@ export function InputBox({
   onFollowupsVisibilityChange,
   onSubmit,
   onStop,
+  onForceDisconnect,
+  stopState,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
   assistantId?: string | null;
@@ -194,6 +196,8 @@ export function InputBox({
   onFollowupsVisibilityChange?: (visible: boolean) => void;
   onSubmit?: (message: PromptInputMessage) => void | Promise<void>;
   onStop?: () => void;
+  onForceDisconnect?: () => void;
+  stopState?: "idle" | "stopping" | "stopped" | "force-disconnected";
 }) {
   const { t } = useI18n();
   const searchParams = useSearchParams();
@@ -1076,6 +1080,22 @@ export function InputBox({
               variant="outline"
               status={status}
             />
+            {/* Phase 4: Force Disconnect escape hatch. Renders whenever a
+                stop is in flight (offers an immediate escape if the user
+                doesn't want to wait the 5s timeout) and after a forced
+                disconnect (so the user can re-engage). */}
+            {(stopState === "stopping" || stopState === "force-disconnected") &&
+              onForceDisconnect && (
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground rounded-full px-3 py-1 text-xs transition-colors"
+                  onClick={onForceDisconnect}
+                  aria-label="Force disconnect"
+                  data-testid="force-disconnect"
+                >
+                  Force disconnect
+                </button>
+              )}
           </PromptInputTools>
         </PromptInputFooter>
         {!isWelcomeMode && (

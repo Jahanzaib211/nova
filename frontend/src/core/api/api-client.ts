@@ -12,6 +12,7 @@ import {
 import type { AgentThreadState } from "../threads/types";
 
 import { isStateChangingMethod, readCsrfCookie } from "./fetcher";
+import { livenessFetch } from "./stream-liveness";
 import { sanitizeRunStreamOptions } from "./stream-mode";
 
 /**
@@ -94,6 +95,10 @@ function createCompatibleClient(isMock?: boolean): LangGraphClient {
   const client = new LangGraphClient({
     apiUrl,
     onRequest: injectCsrfHeader,
+    // livenessFetch timestamps every received SSE byte (including the
+    // gateway's `: heartbeat` comment frames, which the SDK parser drops)
+    // so the stall watchdog can tell a dead transport from a quiet agent.
+    callerOptions: { fetch: livenessFetch },
   });
 
   const originalRunStream = client.runs.stream.bind(client.runs);
