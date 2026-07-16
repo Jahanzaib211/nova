@@ -20,7 +20,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
-from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_service, get_run_store, get_stream_bridge
+from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_service, get_run_store, get_stream_bridge, require_admin_user
 from app.gateway.pagination import trim_run_message_page
 from app.gateway.services import format_sse, sse_consumer, start_run, wait_for_run_completion
 from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
@@ -490,14 +490,16 @@ async def thread_token_usage(
 
 
 @router.get("/_diagnostics/stream-trace", response_model=None)
-async def stream_trace_diagnostics(limit: int = Query(default=500, ge=1, le=10000)) -> dict:
+async def stream_trace_diagnostics(request: Request, limit: int = Query(default=500, ge=1, le=10000)) -> dict:
     """Return the most recent stream-trace records from the in-memory ring.
 
-    Intended for incident debugging only. The endpoint is harmless when
-    ``DEER_FLOW_STREAM_TRACE`` is not set; it returns an empty list. We do
-    not gate the route behind a flag because the ring is empty in that
-    case and we want operators to be able to confirm that.
+    Intended for incident debugging only. Admin-gated: even though the ring is
+    empty when ``DEER_FLOW_STREAM_TRACE`` is unset, the records can contain
+    thread/run identifiers and message metadata when the flag is on, so the
+    route is restricted to operators rather than mounted publicly.
     """
+    await require_admin_user(request, detail="Admin access required for stream diagnostics.")
+
     from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
 
     return {"records": read_recent_diagnostics(limit=limit)}

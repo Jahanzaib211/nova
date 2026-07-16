@@ -40,6 +40,21 @@ def _origin(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _safe_redirect(candidate: str | None, origin: str, default: str) -> str:
+    """Return ``candidate`` only when it is an absolute same-origin URL.
+
+    Stripe echoes ``success_url``/``cancel_url`` back as a post-payment browser
+    redirect, so a caller-supplied off-origin URL would be an open redirect.
+    Anything that is not exactly our origin (or a path beneath it) — including
+    off-origin, protocol-relative, or relative values — falls back to the
+    trusted default. Stripe requires absolute URLs, so relative inputs are
+    intentionally rejected rather than passed through.
+    """
+    if candidate and (candidate == origin or candidate.startswith(origin + "/")):
+        return candidate
+    return default
+
+
 @router.get("", response_model=BillingStatusResponse)
 async def billing_status(request: Request) -> BillingStatusResponse:
     """Report whether billing is configured and the caller's current plan."""
@@ -58,8 +73,8 @@ async def checkout(request: Request, body: CheckoutRequest) -> UrlResponse:
         url = await billing.create_checkout_session(
             user,
             get_local_provider(),
-            success_url=body.success_url or f"{origin}/workspace?upgraded=1",
-            cancel_url=body.cancel_url or f"{origin}/saas",
+            success_url=_safe_redirect(body.success_url, origin, f"{origin}/workspace?upgraded=1"),
+            cancel_url=_safe_redirect(body.cancel_url, origin, f"{origin}/saas"),
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc

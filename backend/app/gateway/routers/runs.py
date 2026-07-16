@@ -33,6 +33,7 @@ def _resolve_thread_id(body: RunCreateRequest) -> str:
 
 
 @router.post("/stream")
+@require_permission("runs", "create")
 async def stateless_stream(body: RunCreateRequest, request: Request) -> StreamingResponse:
     """Create a run and stream events via SSE.
 
@@ -58,6 +59,7 @@ async def stateless_stream(body: RunCreateRequest, request: Request) -> Streamin
 
 
 @router.post("/wait", response_model=dict)
+@require_permission("runs", "create")
 async def stateless_wait(body: RunCreateRequest, request: Request) -> dict:
     """Create a run and block until completion.
 
