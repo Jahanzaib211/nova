@@ -19,8 +19,8 @@ from deerflow.services.protocols import (
     ConfigurationService,
     DiagnosticsService,
     HealthService,
-    RepositoryService,
     RecoveryService,
+    RepositoryService,
     RunService,
     TerminalService,
     WorkspaceService,
@@ -34,7 +34,6 @@ from deerflow.services.types import (
     RunSummary,
     WorkspacePaths,
 )
-
 
 # =====================================================================
 # Protocol compliance — verify concrete implementations satisfy protocols
@@ -192,7 +191,7 @@ class TestRunServiceImpl:
         mock_manager.create = AsyncMock(return_value=mock_record)
 
         impl = RunServiceImpl(mock_manager)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             impl.create("t1", model_name="gpt-4")
         )
         assert result.run_id == "r1"
@@ -206,7 +205,7 @@ class TestRunServiceImpl:
         mock_manager.get = AsyncMock(return_value=None)
 
         impl = RunServiceImpl(mock_manager)
-        result = asyncio.get_event_loop().run_until_complete(impl.get("nonexistent"))
+        result = asyncio.run(impl.get("nonexistent"))
         assert result is None
 
     def test_cancel_delegates(self):
@@ -216,7 +215,7 @@ class TestRunServiceImpl:
         mock_manager.cancel = AsyncMock(return_value=True)
 
         impl = RunServiceImpl(mock_manager)
-        result = asyncio.get_event_loop().run_until_complete(impl.cancel("r1"))
+        result = asyncio.run(impl.cancel("r1"))
         assert result is True
 
     def test_create_or_reject_delegates(self):
@@ -237,7 +236,7 @@ class TestRunServiceImpl:
         mock_manager.create_or_reject = AsyncMock(return_value=mock_record)
 
         impl = RunServiceImpl(mock_manager)
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             impl.create_or_reject("t1", model_name="gpt-4", multitask_strategy="reject")
         )
         assert result.run_id == "r2"
@@ -290,7 +289,7 @@ class TestRepositoryServiceImpl:
         mock_store.put = AsyncMock()
 
         impl = RepositoryServiceImpl(mock_store)
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             impl.put("r1", thread_id="t1", status="running")
         )
         mock_store.put.assert_called_once()
@@ -302,7 +301,7 @@ class TestRepositoryServiceImpl:
         mock_store.get = AsyncMock(return_value={"run_id": "r1"})
 
         impl = RepositoryServiceImpl(mock_store)
-        result = asyncio.get_event_loop().run_until_complete(impl.get("r1"))
+        result = asyncio.run(impl.get("r1"))
         assert result == {"run_id": "r1"}
 
 
@@ -337,7 +336,7 @@ class TestHealthServiceImpl:
         from deerflow.services.implementations import HealthServiceImpl
 
         impl = HealthServiceImpl(probes={})
-        report = asyncio.get_event_loop().run_until_complete(impl.check_all())
+        report = asyncio.run(impl.check_all())
         assert report.healthy is True
         assert report.probe_count == 0
 
@@ -345,7 +344,7 @@ class TestHealthServiceImpl:
         from deerflow.services.implementations import HealthServiceImpl
 
         impl = HealthServiceImpl(probes={})
-        result = asyncio.get_event_loop().run_until_complete(impl.check_single("nonexistent"))
+        result = asyncio.run(impl.check_single("nonexistent"))
         assert result.healthy is False
         assert "Unknown" in result.message
 
@@ -391,8 +390,8 @@ class TestPackageExports:
             ConfigurationService,
             DiagnosticsService,
             HealthService,
-            RepositoryService,
             RecoveryService,
+            RepositoryService,
             RunService,
             TerminalService,
             WorkspaceService,

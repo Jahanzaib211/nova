@@ -64,6 +64,13 @@ async def _service_set_status(
         from deerflow.services.container import service_container
 
         run_svc = service_container.run_service()
+        # The container's RunService must be backed by THIS worker's
+        # RunManager. Outside the gateway (embedded/test usage) the lazy
+        # container factory builds a fresh RunManager that does not know
+        # this run — routing the update there silently drops the status
+        # transition (the run isn't found; nothing raises).
+        if getattr(run_svc, "_manager", None) is not run_manager:
+            raise LookupError("container RunService is not backed by this RunManager")
         await run_svc.set_status(run_id, status.value, error=error)
     except Exception:
         # Fallback: use RunManager directly (no event emission)

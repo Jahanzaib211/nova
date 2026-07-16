@@ -12,6 +12,7 @@ implementation.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from deerflow.services.protocols import (
@@ -20,8 +21,8 @@ from deerflow.services.protocols import (
     ConfigurationService,
     DiagnosticsService,
     HealthService,
-    RepositoryService,
     RecoveryService,
+    RepositoryService,
     RunService,
     TerminalService,
     WorkspaceService,
@@ -693,3 +694,322 @@ class DiagnosticsServiceImpl:
         from deerflow.runtime.stream_bridge.diagnostics import lookup_correlation_id
 
         return lookup_correlation_id(thread_id) or ""
+
+
+# ---------------------------------------------------------------------------
+# WorkspaceIntelligenceService (Phase C9)
+# ---------------------------------------------------------------------------
+
+
+class WorkspaceIntelligenceServiceImpl:
+    """Deterministic workspace understanding via typed graphs.
+
+    Wraps the WIK components: BoundedWalker, FingerprintDetector,
+    ProjectDetector, LanguageDetector, CommandDetector, PythonParser,
+    JSParser, WorkspaceGraph, SymbolIndex, DependencyGraph,
+    CommandRegistry, WorkspacePlanner, PlanValidator, RiskAnalyzer,
+    and WorkspaceCache.
+
+    Emits domain events and records metrics for all WIK operations.
+    """
+
+    def __init__(
+        self,
+        base_dir: str = ".deer-flow",
+        cache_ttl_seconds: float = 3600.0,
+    ) -> None:
+        self._base_dir = base_dir
+        self._cache_ttl = cache_ttl_seconds
+        self._snapshots: dict[str, WorkspaceSnapshot] = {}
+        self._metrics = self._make_metrics()
+        self._event_bus = None
+        self._scan_start_time: float = 0.0
+
+    def _get_event_bus(self):
+        if self._event_bus is None:
+            try:
+                from deerflow.events.bus import event_bus as _eb
+                self._event_bus = _eb
+            except Exception:
+                self._event_bus = None
+        return self._event_bus
+
+    def _make_metrics(self):
+        from deerflow.workspace.metrics import WIKMetrics
+        return WIKMetrics()
+
+    def _emit(self, event) -> None:
+        bus = self._get_event_bus()
+        if bus is not None:
+            try:
+                bus.publish(event)
+            except Exception:
+                pass
+
+    def _record_scan(self, file_count, project_count, symbol_count, duration_ms, language_distribution=None):
+        self._metrics.record_scan(file_count, project_count, symbol_count, duration_ms, language_distribution)
+        from deerflow.workspace.events import WorkspaceScanned
+        self._emit(WorkspaceScanned(
+            root_path=self._snapshots.keys().__iter__().__next__() if self._snapshots else "",
+            file_count=file_count,
+            project_count=project_count,
+            symbol_count=symbol_count,
+            command_count=len(next(iter(self._snapshots.values()), None).commands) if self._snapshots else 0,
+            scan_duration_ms=duration_ms,
+            language_distribution=language_distribution or {},
+        ))
+
+    def _record_plan_built(self, plan, symbols_found):
+        if plan:
+            self._metrics.record_plan_built(len(plan.steps), True)
+            from deerflow.workspace.events import PlanBuilt
+            self._emit(PlanBuilt(
+                root_path="",
+                plan_id=plan.plan_id,
+                plan_title=getattr(plan, "goal", "") or "",
+                step_count=len(plan.steps),
+                plan_valid=True,
+                risk_level=plan.risk_level.value if hasattr(plan.risk_level, "value") else str(plan.risk_level),
+                symbols_found=tuple(symbols_found),
+            ))
+
+    def _record_cache_hit(self):
+        self._metrics.record_cache_hit()
+        from deerflow.workspace.events import CacheHit
+        self._emit(CacheHit(root_path="", cache_key="", hit_count=self._metrics._cache_hits))
+
+    def _record_cache_miss(self):
+        self._metrics.record_cache_miss()
+        from deerflow.workspace.events import CacheMiss
+        self._emit(CacheMiss(root_path="", cache_key=""))
+
+    def scan(self, root_path: str) -> WorkspaceSnapshot:
+        """Scan a workspace root and return a complete snapshot."""
+        from pathlib import Path
+
+        from deerflow.workspace.detectors import (
+            CommandDetector,
+            FingerprintDetector,
+            LanguageDetector,
+            ProjectDetector,
+        )
+        from deerflow.workspace.graph import CommandRegistry, DependencyGraph, SymbolIndex, WorkspaceGraph
+        from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot
+        from deerflow.workspace.parsers import JSParser, PythonParser
+        from deerflow.workspace.scanners import BoundedWalker, TraversalLimit
+
+        root = Path(root_path)
+        limit = TraversalLimit(max_depth=6, max_files=50000, max_duration_seconds=15.0)
+
+        fp_detector = FingerprintDetector()
+        fp = fp_detector.detect(root)
+
+        proj_detector = ProjectDetector()
+        projects = proj_detector.find_all(root)
+
+        cmd_detector = CommandDetector()
+        commands = cmd_detector.build_registry(projects)
+
+        graph = WorkspaceGraph()
+        graph.build_from_projects(projects)
+
+        symbols = SymbolIndex()
+        deps = DependencyGraph()
+
+        py_parser = PythonParser()
+        js_parser = JSParser()
+
+        walker = BoundedWalker(root=root, limits=limit)
+        start_time = time.monotonic()
+        for entry in walker.walk():
+            for fname in entry.files:
+                fpath = Path(entry.root) / fname
+                suffix = fpath.suffix.lower()
+                if suffix in (".py",):
+                    syms = py_parser.parse_file(fpath)
+                    symbols.add_many(syms)
+                elif suffix in (".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx"):
+                    syms = js_parser.parse_file(fpath)
+                    symbols.add_many(syms)
+        duration_ms = (time.monotonic() - start_time) * 1000.0
+
+        cmd_reg = CommandRegistry()
+        cmd_reg.register_many(commands)
+
+        all_symbols = [s for syms in symbols._by_name.values() for s in syms]
+        snapshot = WorkspaceSnapshot(
+            thread_id=str(root),
+            fingerprint=fp,
+            projects=tuple(projects),
+            symbols=tuple(all_symbols),
+            commands=tuple(commands),
+            graph_nodes=tuple(graph._nodes_by_id.values()),
+            graph_edges=tuple(graph._edges),
+            traversal_count=walker.stats.files_visited,
+            duration_ms=duration_ms,
+        )
+
+        self._snapshots[str(root)] = snapshot
+        self._record_scan(
+            file_count=walker.stats.files_visited,
+            project_count=len(projects),
+            symbol_count=len(all_symbols),
+            duration_ms=duration_ms,
+        )
+        return snapshot
+
+    def plan_search(
+        self,
+        query: str,
+        project_id: str | None = None,
+        file_pattern: str | None = None,
+    ) -> PlannerResult:
+        """Build an execution plan for a search query."""
+        from deerflow.workspace.graph import CommandRegistry, DependencyGraph, SymbolIndex, WorkspaceGraph
+        from deerflow.workspace.planner import WorkspacePlanner
+
+        graph = WorkspaceGraph()
+        symbols = SymbolIndex()
+        deps = DependencyGraph()
+        cmd_reg = CommandRegistry()
+
+        for snap in self._snapshots.values():
+            for node in snap.graph_nodes:
+                graph.add_node(node)
+            for sym in snap.symbols:
+                symbols.add(sym)
+            for cmd in snap.commands:
+                cmd_reg.register(cmd)
+
+        planner = WorkspacePlanner(
+            graph=graph,
+            symbols=symbols,
+            deps=deps,
+            commands=cmd_reg,
+        )
+        result = planner.plan_search(query, project_id, file_pattern)
+        if result.plan:
+            self._record_plan_built(result.plan, result.symbols_found)
+        return result
+
+    def plan_edit(
+        self,
+        file_path: str,
+        old_string: str,
+        new_string: str,
+    ) -> PlannerResult:
+        """Build an execution plan for a file edit."""
+        from deerflow.workspace.graph import DependencyGraph, WorkspaceGraph
+        from deerflow.workspace.planner import WorkspacePlanner
+
+        deps = DependencyGraph()
+        graph = WorkspaceGraph()
+        for snap in self._snapshots.values():
+            for node in snap.graph_nodes:
+                graph.add_node(node)
+
+        planner = WorkspacePlanner(
+            graph=graph,
+            symbols=self._get_symbol_index(),
+            deps=deps,
+            commands=self._get_command_registry(),
+        )
+        result = planner.plan_edit_file(file_path, old_string, new_string)
+        if result.plan:
+            self._record_plan_built(result.plan, [])
+        return result
+
+    def plan_run(
+        self,
+        command_name: str,
+        project_id: str | None = None,
+    ) -> PlannerResult:
+        """Build an execution plan for a named command."""
+        from deerflow.workspace.graph import CommandRegistry, DependencyGraph, WorkspaceGraph
+        from deerflow.workspace.planner import WorkspacePlanner
+
+        cmd_reg = CommandRegistry()
+        for snap in self._snapshots.values():
+            for cmd in snap.commands:
+                cmd_reg.register(cmd)
+
+        planner = WorkspacePlanner(
+            graph=WorkspaceGraph(),
+            symbols=self._get_symbol_index(),
+            deps=DependencyGraph(),
+            commands=cmd_reg,
+        )
+        result = planner.plan_run_command(command_name, project_id)
+        if result.plan:
+            self._record_plan_built(result.plan, [])
+        return result
+
+    def _get_symbol_index(self) -> SymbolIndex:
+        from deerflow.workspace.graph import SymbolIndex
+        symbols = SymbolIndex()
+        for snap in self._snapshots.values():
+            for sym in snap.symbols:
+                symbols.add(sym)
+        return symbols
+
+    def _get_command_registry(self) -> CommandRegistry:
+        from deerflow.workspace.graph import CommandRegistry
+        cmd_reg = CommandRegistry()
+        for snap in self._snapshots.values():
+            for cmd in snap.commands:
+                cmd_reg.register(cmd)
+        return cmd_reg
+
+    def execute_plan(self, plan: ExecutionPlan) -> ExecutionResult:
+        """Execute a validated plan through the ExecutionKernel.
+
+        Converts WIK ExecutionSteps to ExecutionRequests and executes
+        them sequentially through the Phase C8 ExecutionKernel.
+        """
+        from deerflow.events.bus import event_bus
+        from deerflow.execution import ExecutionKernel
+        from deerflow.execution.models import ExecutionClass, ExecutionRequest, ResourceLimits
+
+        if not plan.steps:
+            from deerflow.execution.models import ExecutionResult
+            return ExecutionResult(
+                execution_id="",
+                status="succeeded",
+                exit_code=0,
+                stdout="",
+                stderr="",
+                duration_ms=0.0,
+            )
+
+        kernel = ExecutionKernel(event_bus=event_bus)
+        last_result = None
+        for step in plan.steps:
+            execution_class = self._step_kind_to_class(step.kind)
+            request = ExecutionRequest(
+                argv=step.argv,
+                execution_class=execution_class,
+                cwd=step.cwd or None,
+                limits=ResourceLimits(timeout_seconds=30.0),
+                intent=step.description,
+            )
+            last_result = kernel.execute_sync(request)
+        return last_result
+
+    def _step_kind_to_class(self, kind: StepKind) -> ExecutionClass:
+        from deerflow.execution.models import ExecutionClass
+        from deerflow.workspace.models.execution_plan import StepKind
+
+        mapping = {
+            StepKind.READ: ExecutionClass.READ,
+            StepKind.SEARCH: ExecutionClass.SHELL,
+            StepKind.SHELL: ExecutionClass.SHELL,
+            StepKind.EDIT: ExecutionClass.SHELL,
+            StepKind.DELETE: ExecutionClass.SHELL,
+            StepKind.RUN: ExecutionClass.SHELL,
+            StepKind.SUDO: ExecutionClass.SUDO,
+        }
+        return mapping.get(kind, ExecutionClass.SHELL)
+
+    def get_snapshot(self, root_path: str) -> WorkspaceSnapshot | None:
+        """Return the cached snapshot for a root path, or None if not yet scanned."""
+        return self._snapshots.get(root_path)

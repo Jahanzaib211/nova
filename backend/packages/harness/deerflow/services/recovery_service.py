@@ -77,27 +77,60 @@ RecoveryActionHandler = Callable[[RecoveryPolicy], Coroutine[Any, Any, bool]]
 
 
 async def _recover_tunnel(policy: RecoveryPolicy) -> bool:
-    """Wrap existing fix_tunnel() implementation."""
-    try:
-        from scripts.healthcheck_daemon import fix_tunnel
+    """Heal cloudflared-nova.service through the Execution Kernel (Phase C7).
 
-        return fix_tunnel()
+    Mirrors scripts/healthcheck-daemon.py::fix_tunnel — reset-failed first
+    (restart alone does not clear ``start-limit-hit``), then restart, then
+    verify the unit actually became active (restart exits 0 even if the
+    unit subsequently crashes).
+    """
+    try:
+        from deerflow.execution.adapters import SystemdAdapter
+        from deerflow.services.container import service_container
+
+        adapter = SystemdAdapter(service_container.execution_kernel())
+        unit = "cloudflared-nova.service"
+
+        def _fix() -> bool:
+            reset = adapter.reset_failed(unit, timeout=10)
+            if not reset.ok:
+                # Not fatal — the unit may not be in failed state, or sudoers
+                # may not permit reset-failed.
+                logger.warning(
+                    "Tunnel recovery: reset-failed returned %s (stderr=%s) — continuing",
+                    reset.exit_code,
+                    (reset.stderr or reset.error or "").strip(),
+                )
+            restart = adapter.restart(unit, timeout=20)
+            if not restart.ok:
+                logger.error(
+                    "Tunnel recovery: systemctl restart failed (%s)",
+                    (restart.stderr or restart.error or "").strip(),
+                )
+                return False
+            deadline = time.monotonic() + 10.0
+            while time.monotonic() < deadline:
+                if adapter.is_active(unit, timeout=3):
+                    return True
+                time.sleep(0.5)
+            logger.error("Tunnel recovery: %s did not become active within 10s", unit)
+            return False
+
+        return await asyncio.to_thread(_fix)
     except Exception:
         logger.exception("Tunnel recovery failed")
         return False
 
 
 async def _recover_gateway(policy: RecoveryPolicy) -> bool:
-    """Wrap existing gateway restart logic."""
+    """Restart the gateway via the Execution Kernel's PM2 adapter (Phase C7)."""
     try:
-        import subprocess
+        from deerflow.execution.adapters import Pm2Adapter
+        from deerflow.services.container import service_container
 
-        result = subprocess.run(
-            ["pm2", "restart", "deerflow"],
-            capture_output=True,
-            timeout=30,
-        )
-        return result.returncode == 0
+        adapter = Pm2Adapter(service_container.execution_kernel())
+        result = await asyncio.to_thread(adapter.restart, "deerflow", timeout=30)
+        return result.ok
     except Exception:
         logger.exception("Gateway recovery failed")
         return False
@@ -140,16 +173,14 @@ async def _recover_stream(policy: RecoveryPolicy) -> bool:
 
 
 async def _recover_container(policy: RecoveryPolicy) -> bool:
-    """Container recovery — PM2 restart."""
+    """Container recovery — PM2 restart through the Execution Kernel (Phase C7)."""
     try:
-        import subprocess
+        from deerflow.execution.adapters import Pm2Adapter
+        from deerflow.services.container import service_container
 
-        result = subprocess.run(
-            ["pm2", "restart", "deerflow"],
-            capture_output=True,
-            timeout=30,
-        )
-        return result.returncode == 0
+        adapter = Pm2Adapter(service_container.execution_kernel())
+        result = await asyncio.to_thread(adapter.restart, "deerflow", timeout=30)
+        return result.ok
     except Exception:
         logger.exception("Container recovery failed")
         return False
@@ -382,7 +413,7 @@ class RecoveryEngine:
                     handler(policy),
                     timeout=policy.timeout_ms / 1000.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 success = False
                 last_error = f"Action {policy.action} timed out after {policy.timeout_ms}ms"
                 logger.warning("Recovery %s timed out", policy.name)

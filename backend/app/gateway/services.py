@@ -28,7 +28,6 @@ from app.gateway.deps import (
 )
 from app.gateway.internal_auth import INTERNAL_SYSTEM_ROLE, get_trusted_internal_owner_user_id
 from app.gateway.utils import sanitize_log_param
-from deerflow.services.protocols import ConfigurationService, RunService
 from deerflow.runtime import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
@@ -41,13 +40,14 @@ from deerflow.runtime import (
     UnsupportedStrategyError,
     run_agent,
 )
+from deerflow.runtime.runs.naming import resolve_root_run_name
 from deerflow.runtime.stream_bridge.diagnostics import (
     record_sse_consumer_disconnect,
     record_sse_consumer_loop_iter,
     record_sse_format,
 )
-from deerflow.runtime.runs.naming import resolve_root_run_name
 from deerflow.runtime.user_context import reset_current_user, set_current_user
+from deerflow.services.protocols import ConfigurationService, RunService
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +386,61 @@ async def start_run(
             allowed = await run_ctx.thread_store.check_access(thread_id, owner_user_id)
         if not allowed:
             raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
+    # Credit wall: block new runs for end users who have exhausted today's
+    # token allowance. Admins (operators), internal channel workers, and
+    # auth-disabled mode (synthesized admin) are exempt. Users running on
+    # their own API key (BYOK) are also exempt because they don't consume
+    # Nova credits — their key is injected into the run task below.
+    #
+    # ENFORCEMENT IS OPT-IN: gated behind NOVA_CREDITS_ENFORCED=1. When unset
+    # (the default), usage is still tracked and visible in the ops console /
+    # credits API, but NO run is ever blocked — so deploying this code never
+    # changes production behavior until an operator explicitly turns the wall
+    # on. BYOK key injection still happens regardless so the escape hatch works
+    # the moment enforcement is enabled.
+    import os as _os
+
+    _credits_enforced = _os.environ.get("NOVA_CREDITS_ENFORCED", "").strip() == "1"
+    if user is not None and getattr(user, "system_role", None) == "user":
+        from app.gateway.byok import get_decrypted_key, has_active_key
+        from app.gateway.credits import get_balance
+
+        byok_active = await has_active_key(str(user.id))
+        if byok_active:
+            key = await get_decrypted_key(str(user.id))
+            if key:
+                # Set on this request task's context; asyncio.create_task
+                # (inside create_or_reject below) copies it into the run task,
+                # so the model factory uses the user's key for this run.
+                from deerflow.runtime.byok_context import set_byok_api_key
+
+                set_byok_api_key(key)
+        elif _credits_enforced:
+            balance = await get_balance(user)
+            if balance.exhausted:
+                # Enterprise "hybrid" wall: not a silent hard block. Tell the
+                # user clearly, give them a path to more (contact the operator /
+                # request an increase), and let the operator raise their limit
+                # from the ops console. Machine-readable code + human message.
+                contact = _os.environ.get("NOVA_SUPPORT_CONTACT", "alilabsx@gmail.com").strip()
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "code": "daily_limit_reached",
+                        "message": (
+                            f"You've reached today's usage limit ({balance.daily_limit:,} tokens). "
+                            f"It resets at midnight UTC. Need more today? Contact {contact} "
+                            f"or reply here to request an increase — we can raise your limit right away."
+                        ),
+                        "plan": balance.plan,
+                        "daily_limit": balance.daily_limit,
+                        "used": balance.used,
+                        "contact": contact,
+                        "resets": "daily_utc_midnight",
+                        "can_request_increase": True,
+                    },
+                )
 
     owner_context_token = set_current_user(SimpleNamespace(id=owner_user_id)) if owner_user_id else None
     try:

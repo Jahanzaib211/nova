@@ -26,10 +26,11 @@ from deerflow.services.protocols import (
     ConfigurationService,
     DiagnosticsService,
     HealthService,
-    RepositoryService,
     RecoveryService,
+    RepositoryService,
     RunService,
     TerminalService,
+    WorkspaceIntelligenceService,
     WorkspaceService,
 )
 
@@ -164,8 +165,8 @@ class ServiceContainer:
         if "recovery_engine" in self._overrides:
             return self._overrides["recovery_engine"]
         if "recovery_engine" not in self._singletons:
-            from deerflow.services.recovery_service import RecoveryEngine
             from deerflow.events.bus import event_bus as _event_bus
+            from deerflow.services.recovery_service import RecoveryEngine
 
             engine = RecoveryEngine(event_bus=_event_bus)
             engine.start()
@@ -191,6 +192,32 @@ class ServiceContainer:
 
             self._singletons["diagnostics_service"] = DiagnosticsServiceImpl()
         return self._singletons["diagnostics_service"]
+
+    def workspace_intelligence_service(self) -> WorkspaceIntelligenceService:
+        """Return the WorkspaceIntelligenceService singleton (Phase C9)."""
+        if "workspace_intelligence_service" in self._overrides:
+            return self._overrides["workspace_intelligence_service"]
+        if "workspace_intelligence_service" not in self._singletons:
+            from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+
+            self._singletons["workspace_intelligence_service"] = WorkspaceIntelligenceServiceImpl()
+        return self._singletons["workspace_intelligence_service"]
+
+    def execution_kernel(self) -> Any:
+        """Return the ExecutionKernel singleton (Phase C7).
+
+        Typed ``Any`` at the container boundary to keep the execution
+        package import lazy; the returned object satisfies
+        ``deerflow.execution.ExecutionKernelProtocol``.
+        """
+        if "execution_kernel" in self._overrides:
+            return self._overrides["execution_kernel"]
+        if "execution_kernel" not in self._singletons:
+            from deerflow.events.bus import event_bus as _event_bus
+            from deerflow.execution import ExecutionKernel
+
+            self._singletons["execution_kernel"] = ExecutionKernel(event_bus=_event_bus)
+        return self._singletons["execution_kernel"]
 
     # ------------------------------------------------------------------
     # Internal helpers — resolve runtime dependencies
@@ -223,13 +250,13 @@ class ServiceContainer:
 
 
 def _app_state_run_manager() -> Any:
-    """Extract RunManager from FastAPI app.state (gateway path)."""
-    # This is imported lazily to avoid circular imports with app.*
-    from app.gateway.deps import get_run_manager as _get_rm
+    """Extract RunManager from FastAPI app.state (gateway path).
 
-    # We can't call the FastAPI dependency without a request, so we
-    # access the app state directly.  This only works inside a running
-    # Gateway process.
+    The gateway injects its RunManager via ``service_container.override``
+    during lifespan startup; outside a running gateway there is nothing to
+    extract. (No import of app.* here — the harness layer must stay free of
+    app-layer dependencies.)
+    """
     raise RuntimeError("No app.state available — use gateway wiring")
 
 

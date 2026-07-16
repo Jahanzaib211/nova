@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
@@ -25,7 +26,21 @@ export function Footer({ className }: FooterProps) {
           &quot;Originated from Open Source, give back to Open Source.&quot;
         </p>
       </div>
-      <div className="text-muted-foreground container mb-8 flex flex-col items-center justify-center text-xs">
+      <div className="text-muted-foreground container mb-8 flex flex-col items-center justify-center gap-2 text-xs">
+        <nav className="flex items-center gap-4">
+          <Link href="/terms" className="hover:text-foreground transition-colors">
+            Terms
+          </Link>
+          <Link
+            href="/privacy"
+            className="hover:text-foreground transition-colors"
+          >
+            Privacy
+          </Link>
+          <Link href="/saas" className="hover:text-foreground transition-colors">
+            Pricing
+          </Link>
+        </nav>
         <p>{t.landing.footer.license}</p>
         <p>&copy; {year} Nova</p>
       </div>

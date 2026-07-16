@@ -114,6 +114,13 @@ class MCPSessionPool:
             if not ready.done():
                 ready.set_result(session)
             await close_evt.wait()
+        except asyncio.CancelledError:
+            # Cancelled by close_all/close_scope while blocked in initialize().
+            # ``ready`` must still be resolved, otherwise a caller awaiting
+            # ``shield(ready)`` in get_session Phase 3 blocks forever.
+            if not ready.done():
+                ready.cancel()
+            raise
         except Exception as e:
             if not ready.done():
                 ready.set_exception(e)
@@ -217,8 +224,9 @@ class MCPSessionPool:
         # Phase 3: wait for our owner task to publish the initialized session.
         try:
             session = await asyncio.shield(ready)
-        except Exception:
-            # Two distinct cases reach here:
+        except BaseException:
+            # Three distinct cases reach here (BaseException so CancelledError
+            # is included — it does not derive from Exception):
             #
             # 1. The owner task failed (e.g. connect/initialize error) and
             #    reported it via ready.set_exception(). It is *already* in its
@@ -229,6 +237,8 @@ class MCPSessionPool:
             #    shield, `ready` is still pending and the owner task is alive and
             #    blocked. We signal close and cancel it so it exits the cancel
             #    scope in its own task, then wait for it to finish.
+            # 3. The owner task was cancelled by close_all/close_scope and
+            #    resolved `ready` as cancelled; we only wait for its unwind.
             #
             # The session is never registered yet, so nobody else can close it;
             # waiting here guarantees we never leak a session or owner task.
@@ -238,7 +248,7 @@ class MCPSessionPool:
                 task.cancel()
             try:
                 await asyncio.shield(task)
-            except Exception:
+            except BaseException:
                 logger.debug("Owner task ended during get_session unwind", exc_info=True)
             with self._lock:
                 if self._inflight.get(key) == (current_loop, ready, task, close_evt):

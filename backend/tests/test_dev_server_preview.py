@@ -15,10 +15,26 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 # Import the agent graph first so deerflow.sandbox.tools loads in the same order
 # as production (avoids a tools-first circular import with deerflow.agents).
 from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
 from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
+from deerflow.execution.testing import FakeExecutionKernel
+from deerflow.services.container import service_container
+
+
+@pytest.fixture(autouse=True)
+def _isolated_service_container():
+    yield
+    service_container.reset()
+
+
+def _install_fake_kernel(handler) -> FakeExecutionKernel:
+    fake = FakeExecutionKernel(handler)
+    service_container.override(execution_kernel=fake)
+    return fake
 
 # ── SandboxInfo.preview_ports ────────────────────────────────────────────────
 
@@ -74,11 +90,11 @@ def test_start_container_publishes_preview_ports(monkeypatch):
 
     captured: list[str] = []
 
-    def fake_run(cmd, **kwargs):
-        captured.extend(cmd)
-        return SimpleNamespace(stdout="container-id\n", stderr="", returncode=0)
+    def fake_exec(request):
+        captured.extend(request.argv)
+        return (0, "container-id\n", "")
 
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(fake_exec)
 
     container_id, preview_ports = backend._start_container("sandbox-test", 18080)
 
@@ -116,10 +132,7 @@ def test_batch_inspect_extracts_preview_ports(monkeypatch):
         ]
     )
 
-    def fake_run(cmd, **kwargs):
-        return SimpleNamespace(stdout=inspect_payload, stderr="", returncode=0)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: (0, inspect_payload, ""))
     out = backend._batch_inspect(["deer-flow-sandbox-abc"])
     created_at, host_port, preview_ports = out["deer-flow-sandbox-abc"]
     assert host_port == 18080
@@ -137,11 +150,11 @@ def test_start_container_no_preview_ports_by_default(monkeypatch):
     monkeypatch.setattr(backend, "_runtime", "docker")
     captured: list[str] = []
 
-    def fake_run(cmd, **kwargs):
-        captured.extend(cmd)
-        return SimpleNamespace(stdout="cid\n", stderr="", returncode=0)
+    def fake_exec(request):
+        captured.extend(request.argv)
+        return (0, "cid\n", "")
 
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(fake_exec)
 
     container_id, preview_ports = backend._start_container("sandbox-test", 18080)
     assert preview_ports == {}

@@ -7,6 +7,7 @@ issues when unit-testing lightweight config/registry code in isolation.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +18,70 @@ import pytest
 # Make 'app' and 'deerflow' importable from any working directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+
+# Neutralize deployment-specific environment: the repo-root .env pins the
+# deployment paths to their in-container locations (/app/...), which do not
+# exist on the host. load_dotenv() (called at deerflow.config.app_config
+# import time) would inject them into every host-side test run, making
+# gateway config loading raise FileNotFoundError and every TestClient
+# request fail with 503 — and channel/paths code mkdir() under /app.
+# Pre-set the host-correct values *before* anything calls load_dotenv() —
+# python-dotenv never overrides variables that are already set, so these
+# win over the .env values. The container values are untouched (.env is
+# not modified) and an operator's explicit shell exports still win over
+# setdefault.
+_repo_root = Path(__file__).resolve().parents[2]
+_backend_root = Path(__file__).resolve().parents[1]
+_host_env_defaults = {
+    "DEER_FLOW_CONFIG_PATH": _repo_root / "config.yaml",
+    "DEER_FLOW_EXTENSIONS_CONFIG_PATH": _repo_root / "extensions_config.json",
+    "DEER_FLOW_REPO_ROOT": _repo_root,
+    "DEER_FLOW_HOME": _backend_root / ".deer-flow",
+}
+for _var, _path in _host_env_defaults.items():
+    if _path.exists():
+        os.environ.setdefault(_var, str(_path))
+
+# The .env also stamps DEER_FLOW_ENV=production (this box runs the live
+# gateway). Tests must not inherit the deployment's environment identity:
+# the auth-disabled safety veto would 401 every DEER_FLOW_AUTH_DISABLED
+# test. Empty string reads as "unset" for every consumer (auth veto,
+# telemetry env tags) and blocks load_dotenv from injecting the value;
+# tests that exercise specific environments set it explicitly.
+os.environ.setdefault("DEER_FLOW_ENV", "")
+
+
+@pytest.fixture(autouse=True)
+def _guard_process_managers_from_tests():
+    """Interlock: no test may reach real ``pm2``/``systemctl`` via the DI kernel.
+
+    Incident 2026-07-13: recovery-engine tests executed real
+    ``sudo systemctl restart cloudflared-nova.service`` and
+    ``pm2 restart deerflow`` on the production box (sudoers permits the
+    restart), tripping systemd's start-limit and taking the live tunnel +
+    gateway down mid-suite. The Execution Kernel (Phase C7) makes the
+    guard structural: every test gets a container kernel whose policy
+    denies the PM2 and SYSTEMD execution classes. Shell/git/docker/python
+    stay available (sandbox E2E tests use them intentionally); tests that
+    exercise pm2/systemd behavior must override ``execution_kernel`` with
+    a FakeExecutionKernel.
+    """
+    from deerflow.execution import ExecutionKernel, PolicyEngine
+    from deerflow.execution.models import ExecutionClass
+    from deerflow.execution.policy import _DEFAULT_POLICIES, ClassPolicy
+    from deerflow.services.container import service_container
+
+    policies = dict(_DEFAULT_POLICIES)
+    policies[ExecutionClass.PM2] = ClassPolicy(allowed_programs=("/pm2-denied-in-tests",))
+    policies[ExecutionClass.SYSTEMD] = ClassPolicy(allowed_programs=("/systemctl-denied-in-tests",), allow_sudo=False)
+    guarded = ExecutionKernel(policy_engine=PolicyEngine(policies=policies))
+    service_container.override(execution_kernel=guarded)
+    yield
+    # Only clean up our own override — tests may have replaced it (their
+    # fixtures own that lifecycle) or already reset the container.
+    if service_container._overrides.get("execution_kernel") is guarded:
+        service_container._overrides.pop("execution_kernel", None)
+        service_container._singletons.pop("execution_kernel", None)
 
 # Break the circular import chain that exists in production code:
 #   deerflow.subagents.__init__

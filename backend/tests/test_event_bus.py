@@ -180,12 +180,12 @@ class TestDomainEvent:
 
     def test_lifecycle_event_type_names(self):
         from deerflow.events.event import (
+            RunArchived,
             RunCancelled,
             RunCompleted,
             RunCreated,
             RunFailed,
             RunInitialized,
-            RunArchived,
             RunPaused,
             RunRecovering,
             RunResumed,
@@ -284,7 +284,7 @@ class TestEventBus:
         assert removed is False
 
     def test_publish_records_history(self):
-        from deerflow.events.event import RunCreated, RunCompleted
+        from deerflow.events.event import RunCompleted, RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.publish(RunCompleted(run_id="r1"))
@@ -292,7 +292,7 @@ class TestEventBus:
         assert self.bus.history_size == 2
 
     def test_replay_all(self):
-        from deerflow.events.event import RunCreated, RunCompleted
+        from deerflow.events.event import RunCompleted, RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.publish(RunCompleted(run_id="r1"))
@@ -301,7 +301,7 @@ class TestEventBus:
         assert len(history) == 2
 
     def test_replay_filtered(self):
-        from deerflow.events.event import RunCreated, RunCompleted
+        from deerflow.events.event import RunCompleted, RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.publish(RunCompleted(run_id="r1"))
@@ -347,7 +347,7 @@ class TestEventBus:
         assert self.bus.handler_count(RunCreated) == 2
 
     def test_base_domain_event_handler_gets_all_events(self):
-        from deerflow.events.event import DomainEvent, RunCreated, RunCompleted
+        from deerflow.events.event import DomainEvent, RunCompleted, RunCreated
 
         received = []
         self.bus.subscribe(DomainEvent, lambda e: received.append(e.event_type))
@@ -442,7 +442,7 @@ class TestEventSubscriber:
 
     def test_multiple_decorators(self):
         from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCreated, RunCompleted
+        from deerflow.events.event import RunCompleted, RunCreated
         from deerflow.events.subscriber import EventSubscriber
 
         bus = EventBus()
@@ -637,7 +637,7 @@ class TestDiagnosticsServiceEventBusIntegration:
     @patch("deerflow.services.implementations.DiagnosticsServiceImpl.record")
     def test_records_multiple_event_types(self, mock_record):
         from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCreated, RunCompleted
+        from deerflow.events.event import RunCompleted, RunCreated
         from deerflow.services.implementations import DiagnosticsServiceImpl
 
         bus = EventBus()
@@ -716,12 +716,12 @@ class TestModuleLevelEventBus:
 
     def test_events_init_exports(self):
         from deerflow.events import (
+            DomainEvent,
+            EventBus,
             EventPublisher,
             EventSubscriber,
-            EventBus,
-            DomainEvent,
-            RunCreated,
             RunCompleted,
+            RunCreated,
             event_bus,
             event_registry,
         )

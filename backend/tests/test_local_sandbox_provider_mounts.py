@@ -488,19 +488,27 @@ class TestMultipleMounts:
             ],
         )
 
-        # Mock subprocess to capture the resolved command
+        # Capture the argv the Execution Kernel receives (Phase C7) while
+        # still really executing so path resolution is verified end-to-end.
+        from deerflow.execution import ExecutionKernel
+        from deerflow.services.container import service_container
+
         captured = {}
-        original_run = __import__("subprocess").run
+        kernel = ExecutionKernel()
+        original_execute = kernel.execute_sync
 
-        def mock_run(*args, **kwargs):
-            if len(args) > 0:
-                captured["command"] = args[0]
-            return original_run(*args, **kwargs)
+        def capturing_execute(request):
+            captured["command"] = list(request.argv)
+            return original_execute(request)
 
-        monkeypatch.setattr("deerflow.sandbox.local.local_sandbox.subprocess.run", mock_run)
+        kernel.execute_sync = capturing_execute
+        service_container.override(execution_kernel=kernel)
         monkeypatch.setattr("deerflow.sandbox.local.local_sandbox.LocalSandbox._get_shell", lambda self: "/bin/sh")
 
-        sandbox.execute_command("cat /mnt/data/test.txt")
+        try:
+            sandbox.execute_command("cat /mnt/data/test.txt")
+        finally:
+            service_container.reset()
         # Verify the command received the resolved local path
         command = captured.get("command", [])
         assert isinstance(command, list) and len(command) >= 3

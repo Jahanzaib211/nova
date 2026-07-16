@@ -14,19 +14,25 @@ from app.gateway.config import get_gateway_config
 from app.gateway.csrf_middleware import CSRFMiddleware, get_configured_cors_origins
 from app.gateway.deps import langgraph_runtime
 from app.gateway.routers import (
+    admin,
     agents,
     artifacts,
     assistants_compat,
     auth,
+    billing,
     browser_health,
+    byok,
     capabilities,
     channel_connections,
     channels,
+    credits,
     feedback,
     igino,
+    legal,
     mcp,
     memory,
     models,
+    referral,
     runs,
     skills,
     suggestions,
@@ -250,6 +256,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             logger.exception("Failed to stop channel service")
 
+        # Reconcile every kernel-tracked process so nothing outlives the
+        # gateway (Phase C7 orphan reconciliation).
+        try:
+            kernel = getattr(app.state, "execution_kernel", None)
+            if kernel is not None:
+                reconciled = kernel.shutdown()
+                if reconciled:
+                    logger.warning("Execution kernel reconciled %d orphan process(es)", reconciled)
+        except Exception:
+            logger.exception("Execution kernel shutdown failed")
+
     logger.info("Shutting down API Gateway")
 
 
@@ -408,6 +425,24 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Auth API is mounted at /api/v1/auth
     app.include_router(auth.router)
+
+    # Admin API is mounted at /api/v1/admin (registration roster + stats)
+    app.include_router(admin.router)
+
+    # Legal API is mounted at /api/v1/legal (TOS version + consent recording)
+    app.include_router(legal.router)
+
+    # Credits API is mounted at /api/v1/credits (daily token balance)
+    app.include_router(credits.router)
+
+    # Referral API is mounted at /api/v1/referral (invite code + bonuses)
+    app.include_router(referral.router)
+
+    # BYOK API is mounted at /api/v1/byok (bring-your-own LLM key)
+    app.include_router(byok.router)
+
+    # Billing API is mounted at /api/v1/billing (Nova Plus / Stripe)
+    app.include_router(billing.router)
 
     # Feedback API is mounted at /api/threads/{thread_id}/runs/{run_id}/feedback
     app.include_router(feedback.router)

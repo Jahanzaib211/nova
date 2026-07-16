@@ -12,10 +12,10 @@ construct this after ``init_engine_from_config()`` has run.
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -46,6 +46,17 @@ class SQLiteUserRepository(UserRepository):
             oauth_id=row.oauth_id,
             needs_setup=row.needs_setup,
             token_version=row.token_version,
+            plan=row.plan,  # type: ignore[arg-type]
+            plan_status=row.plan_status,
+            plan_renews_at=(row.plan_renews_at.replace(tzinfo=UTC) if row.plan_renews_at and not row.plan_renews_at.tzinfo else row.plan_renews_at),
+            stripe_customer_id=row.stripe_customer_id,
+            stripe_subscription_id=row.stripe_subscription_id,
+            tos_accepted_version=row.tos_accepted_version,
+            tos_accepted_at=(row.tos_accepted_at.replace(tzinfo=UTC) if row.tos_accepted_at and not row.tos_accepted_at.tzinfo else row.tos_accepted_at),
+            referral_code=row.referral_code,
+            referred_by=row.referred_by,
+            daily_limit_override=row.daily_limit_override,
+            credit_usage_reset_at=(row.credit_usage_reset_at.replace(tzinfo=UTC) if row.credit_usage_reset_at and not row.credit_usage_reset_at.tzinfo else row.credit_usage_reset_at),
         )
 
     @staticmethod
@@ -60,6 +71,17 @@ class SQLiteUserRepository(UserRepository):
             oauth_id=user.oauth_id,
             needs_setup=user.needs_setup,
             token_version=user.token_version,
+            plan=user.plan,
+            plan_status=user.plan_status,
+            plan_renews_at=user.plan_renews_at,
+            stripe_customer_id=user.stripe_customer_id,
+            stripe_subscription_id=user.stripe_subscription_id,
+            tos_accepted_version=user.tos_accepted_version,
+            tos_accepted_at=user.tos_accepted_at,
+            referral_code=user.referral_code,
+            referred_by=user.referred_by,
+            daily_limit_override=user.daily_limit_override,
+            credit_usage_reset_at=user.credit_usage_reset_at,
         )
 
     # ── CRUD ──────────────────────────────────────────────────────────
@@ -106,6 +128,17 @@ class SQLiteUserRepository(UserRepository):
             row.oauth_id = user.oauth_id
             row.needs_setup = user.needs_setup
             row.token_version = user.token_version
+            row.plan = user.plan
+            row.plan_status = user.plan_status
+            row.plan_renews_at = user.plan_renews_at
+            row.stripe_customer_id = user.stripe_customer_id
+            row.stripe_subscription_id = user.stripe_subscription_id
+            row.tos_accepted_version = user.tos_accepted_version
+            row.tos_accepted_at = user.tos_accepted_at
+            row.referral_code = user.referral_code
+            row.referred_by = user.referred_by
+            row.daily_limit_override = user.daily_limit_override
+            row.credit_usage_reset_at = user.credit_usage_reset_at
             await session.commit()
         return user
 
@@ -118,6 +151,48 @@ class SQLiteUserRepository(UserRepository):
         stmt = select(func.count()).select_from(UserRow).where(UserRow.system_role == "admin")
         async with self._sf() as session:
             return await session.scalar(stmt) or 0
+
+    async def list_users(self, *, limit: int, offset: int) -> list[User]:
+        stmt = select(UserRow).order_by(UserRow.created_at.desc()).limit(limit).offset(offset)
+        async with self._sf() as session:
+            result = await session.execute(stmt)
+            return [self._row_to_user(row) for row in result.scalars().all()]
+
+    async def count_users_since(self, since: datetime) -> int:
+        stmt = select(func.count()).select_from(UserRow).where(UserRow.created_at >= since)
+        async with self._sf() as session:
+            return await session.scalar(stmt) or 0
+
+    async def count_users_by_plan(self) -> dict[str, int]:
+        stmt = select(UserRow.plan, func.count()).group_by(UserRow.plan)
+        async with self._sf() as session:
+            result = await session.execute(stmt)
+            return {plan: count for plan, count in result.all()}
+
+    async def get_user_by_referral_code(self, code: str) -> User | None:
+        stmt = select(UserRow).where(UserRow.referral_code == code)
+        async with self._sf() as session:
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return self._row_to_user(row) if row is not None else None
+
+    async def count_users_referred_by(self, code: str) -> int:
+        stmt = select(func.count()).select_from(UserRow).where(UserRow.referred_by == code)
+        async with self._sf() as session:
+            return await session.scalar(stmt) or 0
+
+    async def get_user_by_stripe_customer_id(self, customer_id: str) -> User | None:
+        stmt = select(UserRow).where(UserRow.stripe_customer_id == customer_id)
+        async with self._sf() as session:
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            return self._row_to_user(row) if row is not None else None
+
+    async def reset_all_usage(self, reset_at: datetime) -> int:
+        async with self._sf() as session:
+            result = await session.execute(update(UserRow).values(credit_usage_reset_at=reset_at))
+            await session.commit()
+            return result.rowcount or 0
 
     async def get_user_by_oauth(self, provider: str, oauth_id: str) -> User | None:
         stmt = select(UserRow).where(UserRow.oauth_provider == provider, UserRow.oauth_id == oauth_id)

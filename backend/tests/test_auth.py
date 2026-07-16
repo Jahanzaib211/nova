@@ -425,6 +425,73 @@ def test_sqlite_round_trip_new_fields():
     asyncio.run(_run())
 
 
+def test_sqlite_round_trip_plan_and_referral_fields():
+    """Nova Plus columns (plan/billing/consent/referral) survive round-trip.
+
+    Guards the foundation added in Phase C9.1: the ORM, Pydantic model, and
+    repository converters must all agree on the new columns, and a fresh
+    ``create_all`` DB must default ``plan`` to ``free``.
+    """
+    import asyncio
+    import tempfile
+    from datetime import UTC, datetime
+
+    from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+
+    async def _run() -> None:
+        from deerflow.persistence.engine import (
+            close_engine,
+            get_session_factory,
+            init_engine,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            url = f"sqlite+aiosqlite:///{tmpdir}/scratch.db"
+            await init_engine("sqlite", url=url, sqlite_dir=tmpdir)
+            try:
+                repo = SQLiteUserRepository(get_session_factory())
+
+                # Organic signup defaults to the free plan, no consent yet.
+                organic = await repo.create_user(User(email="free@test.com", password_hash="h", system_role="user"))
+                assert organic.plan == "free"
+                assert organic.plan_status is None
+                assert organic.tos_accepted_version is None
+
+                fetched = await repo.get_user_by_email("free@test.com")
+                assert fetched is not None
+                assert fetched.plan == "free"
+
+                # Upgrade path: set every new field and confirm it persists.
+                renews = datetime(2026, 8, 15, tzinfo=UTC)
+                accepted = datetime(2026, 7, 15, tzinfo=UTC)
+                fetched.plan = "plus"
+                fetched.plan_status = "active"
+                fetched.plan_renews_at = renews
+                fetched.stripe_customer_id = "cus_123"
+                fetched.stripe_subscription_id = "sub_123"
+                fetched.tos_accepted_version = "2026-07-15"
+                fetched.tos_accepted_at = accepted
+                fetched.referral_code = "NOVA1234"
+                fetched.referred_by = "FRIEND99"
+                await repo.update_user(fetched)
+
+                refetched = await repo.get_user_by_id(str(fetched.id))
+                assert refetched is not None
+                assert refetched.plan == "plus"
+                assert refetched.plan_status == "active"
+                assert refetched.plan_renews_at == renews
+                assert refetched.stripe_customer_id == "cus_123"
+                assert refetched.stripe_subscription_id == "sub_123"
+                assert refetched.tos_accepted_version == "2026-07-15"
+                assert refetched.tos_accepted_at == accepted
+                assert refetched.referral_code == "NOVA1234"
+                assert refetched.referred_by == "FRIEND99"
+            finally:
+                await close_engine()
+
+    asyncio.run(_run())
+
+
 def test_update_user_raises_when_row_concurrently_deleted(tmp_path):
     """Concurrent-delete during update_user must hard-fail, not silently no-op.
 

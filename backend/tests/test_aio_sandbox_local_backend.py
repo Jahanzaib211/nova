@@ -1,7 +1,5 @@
 import logging
 import os
-import subprocess
-from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +10,21 @@ from deerflow.community.aio_sandbox.local_backend import (
     _redact_container_command_for_log,
     _resolve_docker_bind_host,
 )
+from deerflow.execution.testing import FakeExecutionKernel, timeout_result
+from deerflow.services.container import service_container
+
+
+@pytest.fixture(autouse=True)
+def _isolated_service_container():
+    """Each test gets a clean container; kernel fakes never leak across tests."""
+    yield
+    service_container.reset()
+
+
+def _install_fake_kernel(handler) -> FakeExecutionKernel:
+    fake = FakeExecutionKernel(handler)
+    service_container.override(execution_kernel=fake)
+    return fake
 
 
 def test_format_container_mount_uses_mount_syntax_for_docker_windows_paths():
@@ -107,11 +120,11 @@ def test_start_container_logs_redacted_env_values(monkeypatch, caplog):
 
     captured_cmd: list[str] = []
 
-    def fake_run(cmd, **kwargs):
-        captured_cmd.extend(cmd)
-        return SimpleNamespace(stdout="container-id\n", stderr="", returncode=0)
+    def fake_exec(request):
+        captured_cmd.extend(request.argv)
+        return (0, "container-id\n", "")
 
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(fake_exec)
 
     with caplog.at_level(logging.INFO, logger="deerflow.community.aio_sandbox.local_backend"):
         backend._start_container("sandbox-test", 18080)
@@ -131,11 +144,11 @@ def _capture_start_container_command(monkeypatch, backend: LocalContainerBackend
     monkeypatch.setattr(backend, "_runtime", runtime)
     captured_cmd: list[str] = []
 
-    def fake_run(cmd, **kwargs):
-        captured_cmd.extend(cmd)
-        return SimpleNamespace(stdout="container-id\n", stderr="", returncode=0)
+    def fake_exec(request):
+        captured_cmd.extend(request.argv)
+        return (0, "container-id\n", "")
 
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(fake_exec)
     backend._start_container("sandbox-test", 18080)
     return captured_cmd
 
@@ -254,10 +267,7 @@ def _backend_for_inspect_tests() -> LocalContainerBackend:
 def test_is_container_running_false_when_container_missing(monkeypatch):
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        return SimpleNamespace(stdout="", stderr="Error: No such object: sandbox-missing", returncode=1)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: (1, "", "Error: No such object: sandbox-missing"))
 
     assert backend._is_container_running("sandbox-missing") is False
 
@@ -265,10 +275,7 @@ def test_is_container_running_false_when_container_missing(monkeypatch):
 def test_is_container_running_raises_on_runtime_error(monkeypatch):
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        return SimpleNamespace(stdout="", stderr="Cannot connect to the Docker daemon", returncode=1)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: (1, "", "Cannot connect to the Docker daemon"))
 
     with pytest.raises(RuntimeError, match="Failed to inspect container sandbox-busy"):
         backend._is_container_running("sandbox-busy")
@@ -277,10 +284,7 @@ def test_is_container_running_raises_on_runtime_error(monkeypatch):
 def test_is_container_running_raises_on_timeout(monkeypatch):
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs["timeout"])
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: timeout_result(request, timeout=5))
 
     with pytest.raises(RuntimeError, match="Timed out checking container sandbox-timeout"):
         backend._is_container_running("sandbox-timeout")
@@ -290,10 +294,7 @@ def test_discover_returns_none_when_runtime_check_fails(monkeypatch):
     """A transient daemon error during discovery must fall through to create, not fail acquire."""
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        return SimpleNamespace(stdout="", stderr="Cannot connect to the Docker daemon", returncode=1)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: (1, "", "Cannot connect to the Docker daemon"))
 
     assert backend.discover("sandbox-blip") is None
 
@@ -302,10 +303,7 @@ def test_discover_returns_none_when_runtime_check_times_out(monkeypatch):
     """An inspect timeout during discovery must not propagate out of discover()."""
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs["timeout"])
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: timeout_result(request, timeout=5))
 
     assert backend.discover("sandbox-timeout") is None
 
@@ -314,10 +312,7 @@ def test_is_container_running_false_on_apple_container_not_found(monkeypatch):
     """Apple Container's generic "not found" is trusted when it names the container."""
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        return SimpleNamespace(stdout="", stderr='Error: not found: "sandbox-apple"', returncode=1)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: (1, "", 'Error: not found: "sandbox-apple"'))
 
     assert backend._is_container_running("sandbox-apple") is False
 
@@ -326,10 +321,7 @@ def test_is_container_running_raises_on_unrelated_not_found_error(monkeypatch):
     """Transient errors whose text contains "not found" must not be misread as a dead container."""
     backend = _backend_for_inspect_tests()
 
-    def fake_run(cmd, **kwargs):
-        return SimpleNamespace(stdout="", stderr="Error: credential helper not found in $PATH", returncode=1)
-
-    monkeypatch.setattr("subprocess.run", fake_run)
+    _install_fake_kernel(lambda request: (1, "", "Error: credential helper not found in $PATH"))
 
     with pytest.raises(RuntimeError, match="Failed to inspect container sandbox-busy"):
         backend._is_container_running("sandbox-busy")

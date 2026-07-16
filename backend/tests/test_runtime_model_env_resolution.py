@@ -2,9 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from deerflow.config.app_config import AppConfig
+
+
+@pytest.fixture(autouse=True)
+def _sibling_runtime_models_resolution(monkeypatch):
+    """These tests write runtime_models.yaml as a sibling of their tmp
+    config.yaml and rely on the resolver's sibling fallback. Ambient
+    deployment env (DEER_FLOW_HOME / DEER_FLOW_RUNTIME_MODELS_PATH) would
+    redirect resolution to the live deployment's file instead."""
+    monkeypatch.delenv("DEER_FLOW_HOME", raising=False)
+    monkeypatch.delenv("DEER_FLOW_RUNTIME_MODELS_PATH", raising=False)
 
 
 def _write(path: Path, data: dict) -> None:

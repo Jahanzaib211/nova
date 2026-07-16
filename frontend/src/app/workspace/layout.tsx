@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { GatewayOfflineFallback } from "@/components/workspace/gateway-offline-fallback";
+import { TermsGate } from "@/components/workspace/terms-gate";
 import { AuthProvider } from "@/core/auth/AuthProvider";
 import { getServerSideUser } from "@/core/auth/server";
 import { assertNever } from "@/core/auth/types";
@@ -18,6 +19,7 @@ export default async function WorkspaceLayout({
     case "authenticated":
       return (
         <AuthProvider initialUser={result.user}>
+          <TermsGate />
           <WorkspaceContent>{children}</WorkspaceContent>
         </AuthProvider>
       );

@@ -27,6 +27,11 @@ def _make_app(event_store=None, run_manager=None):
         app.state.run_event_store = event_store
     if run_manager is not None:
         app.state.run_manager = run_manager
+        # Phase C6 migrated the run endpoints from RunManager to RunService;
+        # the test app must provide both, like the gateway lifespan does.
+        from deerflow.services.implementations import RunServiceImpl
+
+        app.state.run_service = RunServiceImpl(run_manager)
 
     return app
 
@@ -203,14 +208,18 @@ def test_get_run_hydrates_store_only_run():
     assert body["status"] == "running"
 
 
-def test_cancel_store_only_run_returns_409():
-    """Store-only runs are readable but not cancellable by this worker."""
-    app = _make_app(run_manager=_make_store_only_run_manager())
+def test_cancel_store_only_run_persists_interrupted():
+    """Store-only runs ARE cancellable: cancel persists ``interrupted``
+    through the RunStore and returns 202 (v8.0 Phase 6 — a worker restart
+    must not leave unkillable runs)."""
+    run_manager = _make_store_only_run_manager()
+    app = _make_app(run_manager=run_manager)
     with TestClient(app) as client:
         response = client.post("/api/threads/thread-store/runs/store-only-run/cancel")
 
-    assert response.status_code == 409
-    assert "not active on this worker" in response.json()["detail"]
+    assert response.status_code == 202
+    row = asyncio.run(run_manager._store.get("store-only-run"))
+    assert row["status"] == "interrupted"
 
 
 def test_join_store_only_run_returns_409():

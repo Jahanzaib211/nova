@@ -4,7 +4,6 @@ import ntpath
 import os
 import re
 import shutil
-import subprocess
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -332,6 +331,13 @@ class LocalSandbox(Sandbox):
         resolved_command = self._resolve_paths_in_command(command)
         shell = self._get_shell()
 
+        # All command execution flows through the Execution Kernel (Phase C7):
+        # policy-gated, resource-bounded, audited, supervised.
+        from deerflow.execution.adapters import ShellAdapter
+        from deerflow.services.container import service_container
+
+        adapter = ShellAdapter(service_container.execution_kernel())
+
         if os.name == "nt":
             env = None
             if self._is_powershell(shell):
@@ -347,28 +353,28 @@ class LocalSandbox(Sandbox):
                         "MSYS2_ARG_CONV_EXCL": "*",
                     }
 
-            result = subprocess.run(
+            result = adapter.run_argv(
                 args,
-                shell=False,
-                capture_output=True,
-                text=True,
-                timeout=600,
                 env=env,
+                timeout=600,
+                intent="local sandbox command",
             )
         else:
-            args = [shell, "-c", resolved_command]
-            result = subprocess.run(
-                args,
-                shell=False,
-                capture_output=True,
-                text=True,
+            result = adapter.run(
+                resolved_command,
+                shell_path=shell,
                 timeout=600,
+                intent="local sandbox command",
             )
         output = result.stdout
         if result.stderr:
             output += f"\nStd Error:\n{result.stderr}" if output else result.stderr
-        if result.returncode != 0:
-            output += f"\nExit Code: {result.returncode}"
+        if result.exit_code is None:
+            # Kernel-level failure (timeout, denial, missing shell) — surface
+            # the typed error the same way a non-zero exit was surfaced.
+            output += f"\nExecution Error: {result.error}" if output else f"Execution Error: {result.error}"
+        elif result.exit_code != 0:
+            output += f"\nExit Code: {result.exit_code}"
 
         final_output = output if output else "(no output)"
         # Reverse resolve local paths back to container paths in output

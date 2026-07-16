@@ -1364,7 +1364,7 @@ def test_cross_loop_preempting_blocked_in_flight_does_not_hang_owner():
     def run_get(name):
         try:
             results.append((name, asyncio.run(pool.get_session("s", "t1", conn))))
-        except Exception as e:  # noqa: BLE001 - capture for assertion
+        except BaseException as e:  # noqa: BLE001 - CancelledError is a BaseException; capture for assertion
             errors.append((name, e))
 
     with patch("langchain_mcp_adapters.sessions.create_session", side_effect=make_cm):

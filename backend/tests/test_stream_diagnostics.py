@@ -38,7 +38,6 @@ import sys
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Layer 1 — diagnostic recorder shape
 # ---------------------------------------------------------------------------
@@ -52,10 +51,16 @@ def _diagnostics_file(tmp_path, monkeypatch):
     package) from ``sys.modules`` so each test re-imports with the env
     vars already set. This avoids the trap where the bridge module
     captured a stale reference to the disabled recorder.
+
+    Teardown must RESTORE the original module objects rather than pop
+    again: popping forces later test modules to re-import fresh copies,
+    splitting sentinel identity — ``END_SENTINEL`` published by a bridge
+    created from the old module is no longer ``is``-equal to the one a
+    freshly imported ``app.gateway.services`` compares against, which
+    breaks ``wait_for_run_completion`` tests downstream.
     """
     trace_file = tmp_path / "stream-trace.ndjson"
-    # Drop everything that could hold a stale recorder reference.
-    for mod in [
+    mods = [
         "deerflow.runtime.stream_bridge.diagnostics",
         "deerflow.runtime.stream_bridge.memory",
         "deerflow.runtime.stream_bridge.base",
@@ -63,21 +68,36 @@ def _diagnostics_file(tmp_path, monkeypatch):
         "deerflow.runtime",
         "app.gateway.services",
         "app.gateway",
-    ]:
+    ]
+    saved = {mod: sys.modules.get(mod) for mod in mods}
+    # Drop everything that could hold a stale recorder reference.
+    for mod in mods:
         sys.modules.pop(mod, None)
     monkeypatch.setenv("DEER_FLOW_STREAM_TRACE", "1")
     monkeypatch.setenv("DEER_FLOW_STREAM_TRACE_FILE", str(trace_file))
     yield trace_file
-    for mod in [
-        "deerflow.runtime.stream_bridge.diagnostics",
-        "deerflow.runtime.stream_bridge.memory",
-        "deerflow.runtime.stream_bridge.base",
-        "deerflow.runtime.stream_bridge",
-        "deerflow.runtime",
-        "app.gateway.services",
-        "app.gateway",
-    ]:
+    for mod in mods:
         sys.modules.pop(mod, None)
+    for mod, original in saved.items():
+        if original is not None:
+            sys.modules[mod] = original
+    # Importing a submodule binds it as an attribute on whichever parent
+    # module object was live at import time. Re-bind in both directions:
+    # (1) every restored module onto ITS parent package (re-importing
+    # deerflow.runtime pointed `deerflow.runtime` at an orphan object on
+    # the top-level `deerflow` package), and (2) every surviving child
+    # submodule onto the restored parents — so attribute paths like
+    # ``deerflow.runtime.runs.worker`` stay resolvable for monkeypatch
+    # in later test modules.
+    for name in mods:
+        module = sys.modules.get(name)
+        parent_name, _, child = name.rpartition(".")
+        if module is not None and parent_name and parent_name in sys.modules:
+            setattr(sys.modules[parent_name], child, module)
+    for name, module in list(sys.modules.items()):
+        parent_name, _, child = name.rpartition(".")
+        if parent_name in mods and module is not None and parent_name in sys.modules:
+            setattr(sys.modules[parent_name], child, module)
 
 
 def _read_trace(path) -> list[dict]:
@@ -97,11 +117,11 @@ async def test_diagnostic_recorder_captures_publish_boundary(_diagnostics_file):
     sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
     sys.modules.pop("deerflow.runtime.stream_bridge", None)
     sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
     from deerflow.runtime.stream_bridge.diagnostics import (
         diagnostics,
         read_recent_diagnostics,
     )
+    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
 
     assert diagnostics.enabled is True, (
         "DEER_FLOW_STREAM_TRACE=1 must enable the recorder"
@@ -133,9 +153,9 @@ async def test_diagnostic_recorder_captures_subscribe_lifecycle(_diagnostics_fil
     sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
     sys.modules.pop("deerflow.runtime.stream_bridge", None)
     sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
     from deerflow.runtime.stream_bridge.base import END_SENTINEL
     from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
 
     bridge = MemoryStreamBridge(queue_maxsize=4)
     run_id = "trace-subscribe-test"
@@ -193,9 +213,9 @@ async def test_diagnostic_recorder_captures_cancellation_reason(_diagnostics_fil
     sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
     sys.modules.pop("deerflow.runtime.stream_bridge", None)
     sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
     from deerflow.runtime.stream_bridge.base import HEARTBEAT_SENTINEL
     from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
 
     bridge = MemoryStreamBridge(queue_maxsize=4)
     run_id = "trace-cancel-test"
@@ -254,8 +274,8 @@ async def test_bridge_drop_event_under_load(_diagnostics_file):
     sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
     sys.modules.pop("deerflow.runtime.stream_bridge", None)
     sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
     from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
 
     bridge = MemoryStreamBridge(queue_maxsize=3)
     run_id = "trace-overflow-test"
@@ -292,8 +312,8 @@ async def test_sse_consumer_loop_iter_records_disconnect_flag(_diagnostics_file,
     sys.modules.pop("app.gateway", None)
 
     from app.gateway.services import sse_consumer
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
     from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
 
     # Build a fake Request whose is_disconnected returns True on the
     # second call. This simulates a client that closes the TCP
@@ -322,6 +342,7 @@ async def test_sse_consumer_loop_iter_records_disconnect_flag(_diagnostics_file,
         thread_id = "thread-x"
         status = "running"
         on_disconnect = "continue"
+        correlation_id = ""
 
     class _FakeRunManager:
         async def cancel(self, *_, **__):

@@ -1,7 +1,29 @@
 import builtins
-from types import SimpleNamespace
+from types import SimpleNamespace  # noqa: F401 — kept for parity with sibling suites
+
+import pytest
 
 import deerflow.sandbox.local.local_sandbox as local_sandbox
+from deerflow.execution.testing import FakeExecutionKernel
+from deerflow.services.container import service_container
+
+
+@pytest.fixture(autouse=True)
+def _isolated_service_container():
+    yield
+    service_container.reset()
+
+
+def _install_capturing_kernel(calls: list) -> FakeExecutionKernel:
+    """Capture each ExecutionRequest as (argv, env, timeout) and return 'ok'."""
+
+    def handler(request):
+        calls.append((list(request.argv), request.env, request.limits.timeout))
+        return (0, "ok", "")
+
+    fake = FakeExecutionKernel(handler)
+    service_container.override(execution_kernel=fake)
+    return fake
 
 
 def _open(base, file, mode="r", *args, **kwargs):
@@ -78,15 +100,11 @@ def test_get_shell_uses_cmd_as_last_windows_fallback(monkeypatch):
 
 
 def test_execute_command_uses_powershell_command_mode_on_windows(monkeypatch):
-    calls: list[tuple[object, dict]] = []
-
-    def fake_run(*args, **kwargs):
-        calls.append((args[0], kwargs))
-        return SimpleNamespace(stdout="ok", stderr="", returncode=0)
+    calls: list = []
 
     monkeypatch.setattr(local_sandbox.os, "name", "nt")
     monkeypatch.setattr(local_sandbox.LocalSandbox, "_get_shell", staticmethod(lambda: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"))
-    monkeypatch.setattr(local_sandbox.subprocess, "run", fake_run)
+    _install_capturing_kernel(calls)
 
     output = local_sandbox.LocalSandbox("t").execute_command("Write-Output hello")
 
@@ -99,28 +117,19 @@ def test_execute_command_uses_powershell_command_mode_on_windows(monkeypatch):
                 "-Command",
                 "Write-Output hello",
             ],
-            {
-                "shell": False,
-                "capture_output": True,
-                "text": True,
-                "timeout": 600,
-                "env": None,
-            },
+            None,
+            600,
         )
     ]
 
 
 def test_execute_command_uses_posix_shell_command_mode_on_windows(monkeypatch):
-    calls: list[tuple[object, dict]] = []
-
-    def fake_run(*args, **kwargs):
-        calls.append((args[0], kwargs))
-        return SimpleNamespace(stdout="ok", stderr="", returncode=0)
+    calls: list = []
 
     monkeypatch.setattr(local_sandbox.os, "name", "nt")
     monkeypatch.setattr(local_sandbox.os, "environ", {"PATH": r"C:\Program Files\Git\bin"})
     monkeypatch.setattr(local_sandbox.LocalSandbox, "_get_shell", staticmethod(lambda: r"C:\Program Files\Git\bin\sh.exe"))
-    monkeypatch.setattr(local_sandbox.subprocess, "run", fake_run)
+    _install_capturing_kernel(calls)
 
     output = local_sandbox.LocalSandbox("t").execute_command("echo hello")
 
@@ -129,47 +138,34 @@ def test_execute_command_uses_posix_shell_command_mode_on_windows(monkeypatch):
         (
             [r"C:\Program Files\Git\bin\sh.exe", "-c", "echo hello"],
             {
-                "shell": False,
-                "capture_output": True,
-                "text": True,
-                "timeout": 600,
-                "env": {
-                    "PATH": r"C:\Program Files\Git\bin",
-                    "MSYS_NO_PATHCONV": "1",
-                    "MSYS2_ARG_CONV_EXCL": "*",
-                },
+                "PATH": r"C:\Program Files\Git\bin",
+                "MSYS_NO_PATHCONV": "1",
+                "MSYS2_ARG_CONV_EXCL": "*",
             },
+            600,
         )
     ]
 
 
 def test_execute_command_does_not_set_msys_env_for_non_msys_posix_shell_on_windows(monkeypatch):
-    calls: list[tuple[object, dict]] = []
-
-    def fake_run(*args, **kwargs):
-        calls.append((args[0], kwargs))
-        return SimpleNamespace(stdout="ok", stderr="", returncode=0)
+    calls: list = []
 
     monkeypatch.setattr(local_sandbox.os, "name", "nt")
     monkeypatch.setattr(local_sandbox.LocalSandbox, "_get_shell", staticmethod(lambda: r"C:\tools\busybox\sh.exe"))
-    monkeypatch.setattr(local_sandbox.subprocess, "run", fake_run)
+    _install_capturing_kernel(calls)
 
     output = local_sandbox.LocalSandbox("t").execute_command("echo /mnt/skills/demo")
 
     assert output == "ok"
-    assert calls[0][1]["env"] is None
+    assert calls[0][1] is None
 
 
 def test_execute_command_uses_cmd_command_mode_on_windows(monkeypatch):
-    calls: list[tuple[object, dict]] = []
-
-    def fake_run(*args, **kwargs):
-        calls.append((args[0], kwargs))
-        return SimpleNamespace(stdout="ok", stderr="", returncode=0)
+    calls: list = []
 
     monkeypatch.setattr(local_sandbox.os, "name", "nt")
     monkeypatch.setattr(local_sandbox.LocalSandbox, "_get_shell", staticmethod(lambda: r"C:\Windows\System32\cmd.exe"))
-    monkeypatch.setattr(local_sandbox.subprocess, "run", fake_run)
+    _install_capturing_kernel(calls)
 
     output = local_sandbox.LocalSandbox("t").execute_command("echo hello")
 
@@ -177,12 +173,7 @@ def test_execute_command_uses_cmd_command_mode_on_windows(monkeypatch):
     assert calls == [
         (
             [r"C:\Windows\System32\cmd.exe", "/c", "echo hello"],
-            {
-                "shell": False,
-                "capture_output": True,
-                "text": True,
-                "timeout": 600,
-                "env": None,
-            },
+            None,
+            600,
         )
     ]

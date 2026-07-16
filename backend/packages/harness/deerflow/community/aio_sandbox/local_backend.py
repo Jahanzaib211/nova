@@ -10,9 +10,9 @@ import json
 import logging
 import os
 import shlex
-import subprocess
 from datetime import datetime
 
+from deerflow.execution.models import ExecutionResult, ExecutionStatus
 from deerflow.utils.network import get_free_port, release_port
 
 from .backend import SandboxBackend, wait_for_sandbox_ready
@@ -123,7 +123,10 @@ def _redact_container_command_for_log(cmd: list[str]) -> list[str]:
 
 def _format_container_command_for_log(cmd: list[str]) -> str:
     if os.name == "nt":
-        return subprocess.list2cmdline(cmd)
+        # Formatting only — no execution (Phase C7: execution lives in the kernel).
+        from subprocess import list2cmdline
+
+        return list2cmdline(cmd)
     return shlex.join(cmd)
 
 
@@ -249,20 +252,29 @@ class LocalContainerBackend(SandboxBackend):
         import platform
 
         if platform.system() == "Darwin":
-            try:
-                result = subprocess.run(
-                    ["container", "--version"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=5,
-                )
+            from deerflow.execution.adapters import DockerAdapter
+            from deerflow.services.container import service_container
+
+            probe = DockerAdapter(service_container.execution_kernel(), runtime="container")
+            result = probe.version(timeout=5)
+            if result.ok:
                 logger.info(f"Detected Apple Container: {result.stdout.strip()}")
                 return "container"
-            except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                logger.info("Apple Container not available, falling back to Docker")
+            logger.info("Apple Container not available, falling back to Docker")
 
         return "docker"
+
+    def _cli(self, *args: str, timeout: float = 30.0, intent: str = "") -> ExecutionResult:
+        """Run a container-runtime CLI command through the Execution Kernel.
+
+        The adapter is rebuilt per call so ``self._runtime`` changes (tests,
+        late detection) always take effect.
+        """
+        from deerflow.execution.adapters import DockerAdapter
+        from deerflow.services.container import service_container
+
+        adapter = DockerAdapter(service_container.execution_kernel(), runtime=self._runtime)
+        return adapter.cli(*args, timeout=timeout, intent=intent)
 
     # ── SandboxBackend interface ──────────────────────────────────────────
 
@@ -418,33 +430,25 @@ class LocalContainerBackend(SandboxBackend):
         regardless of their port state.
         """
         # Step 1: enumerate container names via docker ps
-        try:
-            result = subprocess.run(
-                [
-                    self._runtime,
-                    "ps",
-                    "--filter",
-                    f"name={self._container_prefix}-",
-                    "--format",
-                    "{{.Names}}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=10,
+        result = self._cli(
+            "ps",
+            "--filter",
+            f"name={self._container_prefix}-",
+            "--format",
+            "{{.Names}}",
+            timeout=10,
+            intent="list running sandbox containers",
+        )
+        if not result.ok:
+            stderr = (result.stderr or result.error or "").strip()
+            logger.warning(
+                "Failed to list running containers with %s ps (exit_code=%s, stderr=%s)",
+                self._runtime,
+                result.exit_code,
+                stderr or "<empty>",
             )
-            if result.returncode != 0:
-                stderr = (result.stderr or "").strip()
-                logger.warning(
-                    "Failed to list running containers with %s ps (returncode=%s, stderr=%s)",
-                    self._runtime,
-                    result.returncode,
-                    stderr or "<empty>",
-                )
-                return []
-            if not result.stdout.strip():
-                return []
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-            logger.warning(f"Failed to list running containers: {e}")
+            return []
+        if not result.stdout.strip():
             return []
 
         # Filter to names matching our exact prefix (docker filter is substring-based)
@@ -489,23 +493,18 @@ class LocalContainerBackend(SandboxBackend):
         """
         if not container_names:
             return {}
-        try:
-            result = subprocess.run(
-                [self._runtime, "inspect", *container_names],
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-            logger.warning(f"Failed to batch-inspect containers: {e}")
-            return {}
-
-        if result.returncode != 0:
-            stderr = (result.stderr or "").strip()
+        result = self._cli(
+            "inspect",
+            *container_names,
+            timeout=15,
+            intent=f"batch-inspect {len(container_names)} sandbox containers",
+        )
+        if not result.ok:
+            stderr = (result.stderr or result.error or "").strip()
             logger.warning(
-                "Failed to batch-inspect containers with %s inspect (returncode=%s, stderr=%s)",
+                "Failed to batch-inspect containers with %s inspect (exit_code=%s, stderr=%s)",
                 self._runtime,
-                result.returncode,
+                result.exit_code,
                 stderr or "<empty>",
             )
             return {}
@@ -634,31 +633,38 @@ class LocalContainerBackend(SandboxBackend):
         log_cmd = _format_container_command_for_log(_redact_container_command_for_log(cmd))
         logger.info(f"Starting container using {self._runtime}: {log_cmd}")
 
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # cmd was built as [runtime, "run", ...]; _cli re-adds the runtime.
+        result = self._cli(
+            *cmd[1:],
+            timeout=300,
+            intent=f"start sandbox container {container_name}",
+        )
+        if result.ok:
             container_id = result.stdout.strip()
             logger.info(f"Started container {container_name} (ID: {container_id}) using {self._runtime}")
             return container_id, preview_ports
-        except subprocess.CalledProcessError as e:
-            # Release the preview host ports we reserved for this attempt so the
-            # create() retry loop can reallocate cleanly without leaking ports.
-            for host_preview_port in preview_ports.values():
-                release_port(host_preview_port)
-            logger.error(f"Failed to start container using {self._runtime}: {e.stderr}")
-            raise RuntimeError(f"Failed to start sandbox container: {e.stderr}")
+        # Release the preview host ports we reserved for this attempt so the
+        # create() retry loop can reallocate cleanly without leaking ports.
+        for host_preview_port in preview_ports.values():
+            release_port(host_preview_port)
+        stderr = result.stderr or result.error or ""
+        logger.error(f"Failed to start container using {self._runtime}: {stderr}")
+        raise RuntimeError(f"Failed to start sandbox container: {stderr}")
 
     def _stop_container(self, container_id: str) -> None:
         """Stop a container (--rm ensures automatic removal)."""
-        try:
-            subprocess.run(
-                [self._runtime, "stop", container_id],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
+        result = self._cli(
+            "stop",
+            container_id,
+            timeout=60,
+            intent=f"stop sandbox container {container_id}",
+        )
+        if result.ok:
             logger.info(f"Stopped container {container_id} using {self._runtime}")
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"Failed to stop container {container_id}: {e.stderr}")
+        else:
+            logger.warning(
+                f"Failed to stop container {container_id}: {result.stderr or result.error}"
+            )
 
     def _is_container_running(self, container_name: str) -> bool:
         """Check if a named container is currently running.
@@ -673,21 +679,24 @@ class LocalContainerBackend(SandboxBackend):
                 destroy healthy containers during transient Docker/Container
                 daemon failures.
         """
-        try:
-            result = subprocess.run(
-                [self._runtime, "inspect", "-f", "{{.State.Running}}", container_name],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"Timed out checking container {container_name}") from exc
+        result = self._cli(
+            "inspect",
+            "-f",
+            "{{.State.Running}}",
+            container_name,
+            timeout=5,
+            intent=f"check container {container_name} running",
+        )
+        if result.status is ExecutionStatus.TIMED_OUT:
+            raise RuntimeError(f"Timed out checking container {container_name}")
 
-        if result.returncode == 0:
+        if result.exit_code == 0:
             return result.stdout.strip().lower() == "true"
-        if _is_no_such_container_error(result.stderr, container_name):
+        if result.exit_code is not None and _is_no_such_container_error(result.stderr, container_name):
             return False
-        raise RuntimeError(f"Failed to inspect container {container_name}: {result.stderr.strip()}")
+        raise RuntimeError(
+            f"Failed to inspect container {container_name}: {(result.stderr or result.error or '').strip()}"
+        )
 
     def _get_container_port(self, container_name: str) -> int | None:
         """Get the host port of a running container.
@@ -698,19 +707,20 @@ class LocalContainerBackend(SandboxBackend):
         Returns:
             The host port mapped to container port 8080, or None if not found.
         """
-        try:
-            result = subprocess.run(
-                [self._runtime, "port", container_name, "8080"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                # Output format: "0.0.0.0:PORT" or ":::PORT"
+        result = self._cli(
+            "port",
+            container_name,
+            "8080",
+            timeout=5,
+            intent=f"resolve host port for {container_name}",
+        )
+        if result.ok and result.stdout.strip():
+            # Output format: "0.0.0.0:PORT" or ":::PORT"
+            try:
                 port_str = result.stdout.strip().split(":")[-1]
                 return int(port_str)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
-            pass
+            except ValueError:
+                pass
         return None
 
     def _get_container_preview_ports(self, container_name: str) -> dict[int, int]:
@@ -722,16 +732,17 @@ class LocalContainerBackend(SandboxBackend):
         """
         preview_ports: dict[int, int] = {}
         for container_preview_port in self._preview_container_ports:
-            try:
-                result = subprocess.run(
-                    [self._runtime, "port", container_name, str(container_preview_port)],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-                if result.returncode == 0 and result.stdout.strip():
+            result = self._cli(
+                "port",
+                container_name,
+                str(container_preview_port),
+                timeout=5,
+                intent=f"resolve preview port {container_preview_port} for {container_name}",
+            )
+            if result.ok and result.stdout.strip():
+                try:
                     port_str = result.stdout.strip().splitlines()[0].split(":")[-1]
                     preview_ports[container_preview_port] = int(port_str)
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
-                continue
+                except ValueError:
+                    continue
         return preview_ports

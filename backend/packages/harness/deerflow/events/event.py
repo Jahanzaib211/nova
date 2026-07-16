@@ -217,3 +217,132 @@ class RecoveryCancelled(DomainEvent):
 @dataclass(frozen=True)
 class RecoveryAborted(DomainEvent):
     """Emitted when a recovery is aborted (max retries exceeded)."""
+
+
+# ---------------------------------------------------------------------------
+# Execution kernel events (Phase C7)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ExecutionRequested(DomainEvent):
+    """Emitted when an execution request enters the kernel."""
+
+
+@dataclass(frozen=True)
+class ExecutionStarted(DomainEvent):
+    """Emitted when the kernel starts an OS process for a request."""
+
+
+@dataclass(frozen=True)
+class ExecutionCompleted(DomainEvent):
+    """Emitted when an execution finishes successfully."""
+
+
+@dataclass(frozen=True)
+class ExecutionFailed(DomainEvent):
+    """Emitted when an execution exits non-zero or crashes."""
+
+
+@dataclass(frozen=True)
+class ExecutionTimedOut(DomainEvent):
+    """Emitted when an execution exceeds its effective timeout."""
+
+
+@dataclass(frozen=True)
+class ExecutionCancelled(DomainEvent):
+    """Emitted when an execution is cancelled by id."""
+
+
+@dataclass(frozen=True)
+class ExecutionDenied(DomainEvent):
+    """Emitted when policy or resource admission rejects a request."""
+
+
+@dataclass(frozen=True)
+class ProcessSpawned(DomainEvent):
+    """Emitted when the kernel starts a supervised long-running process."""
+
+
+@dataclass(frozen=True)
+class ProcessExited(DomainEvent):
+    """Emitted when a supervised long-running process exits."""
+
+
+# ---------------------------------------------------------------------------
+# Execution kernel events (Phase C8)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProcessHeartbeat(DomainEvent):
+    """Emitted periodically by the kernel's heartbeat thread for a running execution.
+
+    Phase C8: enables zombie detection and process liveness monitoring.
+    """
+
+    def __post_init__(self) -> None:
+        # Payload keys: execution_id, pid, cpu_percent, memory_mb,
+        # stdin_alive, pty_alive, timestamp
+        object.__setattr__(self, "event_type", lambda: "ProcessHeartbeat")
+
+
+@dataclass(frozen=True)
+class ExecutionStateChanged(DomainEvent):
+    """Emitted when an execution transitions between lifecycle states.
+
+    Phase C8: enables frontend synchronization with kernel state machine.
+    """
+
+    def __post_init__(self) -> None:
+        # Payload keys: execution_id, from_state, to_state, reason
+        object.__setattr__(self, "event_type", lambda: "ExecutionStateChanged")
+
+
+@dataclass(frozen=True)
+class ZombieDetected(DomainEvent):
+    """Emitted when the supervisor detects a zombie execution.
+
+    Phase C8: process is alive but ownership is lost or heartbeat is stale.
+    """
+
+    def __post_init__(self) -> None:
+        # Payload keys: execution_id, pid, reason (no_heartbeat|orphan|disconnect)
+        object.__setattr__(self, "event_type", lambda: "ZombieDetected")
+
+
+@dataclass(frozen=True)
+class SessionCreated(DomainEvent):
+    """Emitted when an interactive shell session is allocated.
+
+    Phase C8: PTY session lifecycle tracking.
+    """
+
+    def __post_init__(self) -> None:
+        # Payload keys: session_id, execution_id, run_id, pid
+        object.__setattr__(self, "event_type", lambda: "SessionCreated")
+
+
+@dataclass(frozen=True)
+class SessionClosed(DomainEvent):
+    """Emitted when an interactive shell session is closed.
+
+    Phase C8: PTY session lifecycle tracking.
+    """
+
+    def __post_init__(self) -> None:
+        # Payload keys: session_id, execution_id, run_id, reason
+        object.__setattr__(self, "event_type", lambda: "SessionClosed")
+
+
+@dataclass(frozen=True)
+class SessionHeartbeat(DomainEvent):
+    """Emitted periodically for an active interactive shell session.
+
+    Phase C8: tracks session liveness and detects disconnected sessions.
+    """
+
+    def __post_init__(self) -> None:
+        # Payload keys: session_id, execution_id, pid, stdin_alive,
+        # pty_alive, cursor_row, cursor_col
+        object.__setattr__(self, "event_type", lambda: "SessionHeartbeat")

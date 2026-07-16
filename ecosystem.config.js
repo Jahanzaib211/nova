@@ -43,16 +43,12 @@ module.exports = {
       // `deerflow` so it's already accepting connections when the gateway
       // boots; ECONNREFUSED on first client is naturally retried by the
       // bridge's per-connection forward.
-      name: "llama-bridge",
-      // Path is operator-configured via LOCAL_LLM_BRIDGE_SCRIPT (default
-      // points at the standalone llama-bridge repo at ~/Desktop/llama-bridge/).
-      // This keeps ecosystem.config.js generic — the bridge source lives
-      // in its own repo, not here.
+      name: "llama-bridge-disabled",
       script: process.env.LOCAL_LLM_BRIDGE_SCRIPT || "/home/jahanzaib/Desktop/llama-bridge/llama_bridge.py",
       interpreter: "none",
-      autorestart: true,
-      max_restarts: 10,
-      restart_delay: 2000,
+      autorestart: false,
+      max_restarts: 3,
+      restart_delay: 5000,
       out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/llama-bridge-out.log")}`,
       error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/llama-bridge-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",

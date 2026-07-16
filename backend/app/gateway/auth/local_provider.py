@@ -1,6 +1,7 @@
 """Local email/password authentication provider."""
 
 import logging
+from datetime import datetime
 
 from app.gateway.auth.models import User
 from app.gateway.auth.password import hash_password_async, needs_rehash, verify_password_async
@@ -94,6 +95,34 @@ class LocalAuthProvider(AuthProvider):
     async def count_admin_users(self) -> int:
         """Return number of admin users."""
         return await self._repo.count_admin_users()
+
+    async def list_users(self, *, limit: int, offset: int) -> list[User]:
+        """Return a page of users, newest first."""
+        return await self._repo.list_users(limit=limit, offset=offset)
+
+    async def count_users_since(self, since: datetime) -> int:
+        """Return the number of users created at or after ``since``."""
+        return await self._repo.count_users_since(since)
+
+    async def count_users_by_plan(self) -> dict[str, int]:
+        """Return a mapping of plan name → user count."""
+        return await self._repo.count_users_by_plan()
+
+    async def get_user_by_referral_code(self, code: str) -> User | None:
+        """Return the user owning the given referral code, if any."""
+        return await self._repo.get_user_by_referral_code(code)
+
+    async def count_users_referred_by(self, code: str) -> int:
+        """Return how many users were referred by the given code."""
+        return await self._repo.count_users_referred_by(code)
+
+    async def get_user_by_stripe_customer_id(self, customer_id: str) -> User | None:
+        """Return the user linked to the given Stripe customer id, if any."""
+        return await self._repo.get_user_by_stripe_customer_id(customer_id)
+
+    async def reset_all_usage(self, reset_at: datetime) -> int:
+        """Stamp the usage-reset marker on every user; returns rows affected."""
+        return await self._repo.reset_all_usage(reset_at)
 
     async def update_user(self, user: User) -> User:
         """Update an existing user."""

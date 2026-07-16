@@ -4,8 +4,9 @@ Two execution modes share one registry so the gateway can HTTP-proxy a running
 dev server to the browser regardless of sandbox backend:
 
 - **Local sandbox** (``sandbox=None``): runs ``npm run dev`` as a non-blocking
-  background process inside the gateway host via ``asyncio.create_subprocess_shell``
-  so the server stays alive across agent turns. Reached at ``127.0.0.1:{port}``.
+  background process on the gateway host, spawned and supervised by the
+  Execution Kernel (Phase C7) so the server stays alive across agent turns
+  and is reconciled at shutdown. Reached at ``127.0.0.1:{port}``.
 - **AIO / container sandbox** (``sandbox=<AioSandbox>``): runs the dev server
   *inside* the per-thread container (backgrounded with ``nohup``), reached through
   the container's published preview port at ``{host.docker.internal}:{host_port}``.
@@ -25,6 +26,8 @@ import os
 import shlex
 from collections import deque
 from dataclasses import dataclass, field
+
+from deerflow.execution.supervisor import SpawnedProcess
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +53,7 @@ class DevServerHandle:
     label: str = DEFAULT_LABEL
     host: str = "127.0.0.1"  # gateway-reachable host (AIO: host.docker.internal)
     container_port: int = DEFAULT_CONTAINER_PORT  # in-container port (AIO only)
-    process: asyncio.subprocess.Process | None = None  # local mode only
+    process: SpawnedProcess | None = None  # local mode only (kernel-supervised)
     log_buffer: deque[str] = field(default_factory=lambda: deque(maxlen=_LOG_BUFFER_MAX))
     status: str = "starting"  # starting | ready | error | stopped
     compiles: int = 0  # increments on each recompile → frontend auto-reloads
@@ -405,12 +408,20 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
     handle.log_buffer.append(f"[deerflow] starting dev server on port {port} in {cwd}")
 
     try:
-        proc = await asyncio.create_subprocess_shell(
-            command,
-            cwd=cwd,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+        from deerflow.execution import ExecutionClass, ExecutionRequest, ResourceLimits
+        from deerflow.services.container import service_container
+
+        kernel = service_container.execution_kernel()
+        proc = await kernel.spawn(
+            ExecutionRequest(
+                argv=("/bin/sh", "-c", command),
+                execution_class=ExecutionClass.SHELL,
+                cwd=cwd,
+                env=env,
+                limits=ResourceLimits(grace_period=5.0),
+                intent=f"dev server {label} for thread {thread_id}",
+                thread_id=thread_id,
+            ),
             start_new_session=True,  # detach so it survives the tool call
         )
     except Exception as e:
@@ -532,14 +543,10 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
             await asyncio.to_thread(handle._sandbox.execute_command, kill_cmd)
         return True
 
-    # Local mode: terminate the host subprocess.
+    # Local mode: terminate the kernel-supervised host process (TERM →
+    # grace → KILL handled by the supervisor).
     proc = handle.process
     if proc is not None and proc.returncode is None:
-        with contextlib.suppress(ProcessLookupError):
-            proc.terminate()
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=5)
-        except TimeoutError:
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
+        with contextlib.suppress(Exception):
+            await proc.terminate_gracefully(5)
     return True

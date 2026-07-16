@@ -62,6 +62,7 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -114,6 +115,11 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
       return;
     }
 
+    if (!isLogin && !acceptedTerms) {
+      setError("Please accept the Terms and Privacy Policy to continue.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -122,7 +128,14 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
         : "/api/v1/auth/register";
       const body = isLogin
         ? `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`
-        : JSON.stringify({ email, password });
+        : JSON.stringify({
+            email,
+            password,
+            accepted_terms: acceptedTerms,
+            ...(searchParams.get("ref")
+              ? { referred_by: searchParams.get("ref") }
+              : {}),
+          });
 
       const headers: HeadersInit = isLogin
         ? { "Content-Type": "application/x-www-form-urlencoded" }
@@ -228,6 +241,41 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
                 minLength={8}
               />
             </div>
+          )}
+
+          {!isLogin && (
+            <label
+              htmlFor="accept-terms"
+              className="text-muted-foreground flex items-start gap-2 pt-1 text-xs"
+            >
+              <input
+                id="accept-terms"
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5 size-3.5 shrink-0 accent-violet-600"
+                required
+              />
+              <span>
+                I agree to the{" "}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  className="text-blue-500 hover:underline"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  className="text-blue-500 hover:underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            </label>
           )}
 
           {error && (

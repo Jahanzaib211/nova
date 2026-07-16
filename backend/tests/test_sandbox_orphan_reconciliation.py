@@ -19,6 +19,20 @@ from unittest.mock import MagicMock
 import pytest
 
 from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
+from deerflow.execution.testing import FakeExecutionKernel
+from deerflow.services.container import service_container
+
+
+@pytest.fixture(autouse=True)
+def _isolated_service_container():
+    yield
+    service_container.reset()
+
+
+def _install_fake_kernel(handler) -> FakeExecutionKernel:
+    fake = FakeExecutionKernel(handler)
+    service_container.override(execution_kernel=fake)
+    return fake
 
 # ── SandboxBackend.list_running() default ────────────────────────────────────
 
@@ -73,32 +87,19 @@ def _make_inspect_entry(name: str, created: str, host_port: str | None = None) -
 
 
 def _mock_ps_and_inspect(monkeypatch, ps_output: str, inspect_payload: list | None):
-    """Patch subprocess.run to serve fixed ps + inspect responses."""
-    import subprocess
+    """Route the Execution Kernel to fixed ps + inspect responses."""
 
-    def mock_run(cmd, **kwargs):
-        result = MagicMock()
-        if len(cmd) >= 2 and cmd[1] == "ps":
-            result.returncode = 0
-            result.stdout = ps_output
-            result.stderr = ""
-            return result
-        if len(cmd) >= 2 and cmd[1] == "inspect":
+    def handler(request):
+        argv = request.argv
+        if len(argv) >= 2 and argv[1] == "ps":
+            return (0, ps_output, "")
+        if len(argv) >= 2 and argv[1] == "inspect":
             if inspect_payload is None:
-                result.returncode = 1
-                result.stdout = ""
-                result.stderr = "inspect failed"
-                return result
-            result.returncode = 0
-            result.stdout = json.dumps(inspect_payload)
-            result.stderr = ""
-            return result
-        result.returncode = 1
-        result.stdout = ""
-        result.stderr = "unexpected command"
-        return result
+                return (1, "", "inspect failed")
+            return (0, json.dumps(inspect_payload), "")
+        return (1, "", "unexpected command")
 
-    monkeypatch.setattr(subprocess, "run", mock_run)
+    _install_fake_kernel(handler)
 
 
 # ── LocalContainerBackend.list_running() ─────────────────────────────────────
@@ -179,16 +180,7 @@ def test_list_running_handles_docker_failure(monkeypatch):
     backend = _make_local_backend()
     monkeypatch.setattr(backend, "_runtime", "docker")
 
-    import subprocess
-
-    def mock_run(cmd, **kwargs):
-        result = MagicMock()
-        result.returncode = 1
-        result.stdout = ""
-        result.stderr = "daemon not running"
-        return result
-
-    monkeypatch.setattr(subprocess, "run", mock_run)
+    _install_fake_kernel(lambda request: (1, "", "daemon not running"))
 
     assert backend.list_running() == []
 
@@ -212,21 +204,12 @@ def test_list_running_handles_malformed_inspect_json(monkeypatch):
     backend = _make_local_backend()
     monkeypatch.setattr(backend, "_runtime", "docker")
 
-    import subprocess
+    def handler(request):
+        if len(request.argv) >= 2 and request.argv[1] == "ps":
+            return (0, "deer-flow-sandbox-abc12345\n", "")
+        return (0, "this is not json", "")
 
-    def mock_run(cmd, **kwargs):
-        result = MagicMock()
-        if len(cmd) >= 2 and cmd[1] == "ps":
-            result.returncode = 0
-            result.stdout = "deer-flow-sandbox-abc12345\n"
-            result.stderr = ""
-        else:
-            result.returncode = 0
-            result.stdout = "this is not json"
-            result.stderr = ""
-        return result
-
-    monkeypatch.setattr(subprocess, "run", mock_run)
+    _install_fake_kernel(handler)
 
     assert backend.list_running() == []
 
@@ -238,34 +221,25 @@ def test_list_running_uses_single_batch_inspect_call(monkeypatch):
 
     inspect_call_count = {"count": 0}
 
-    import subprocess
-
-    def mock_run(cmd, **kwargs):
-        result = MagicMock()
-        if len(cmd) >= 2 and cmd[1] == "ps":
-            result.returncode = 0
-            result.stdout = "deer-flow-sandbox-a\ndeer-flow-sandbox-b\ndeer-flow-sandbox-c\n"
-            result.stderr = ""
-            return result
-        if len(cmd) >= 2 and cmd[1] == "inspect":
+    def handler(request):
+        argv = list(request.argv)
+        if len(argv) >= 2 and argv[1] == "ps":
+            return (0, "deer-flow-sandbox-a\ndeer-flow-sandbox-b\ndeer-flow-sandbox-c\n", "")
+        if len(argv) >= 2 and argv[1] == "inspect":
             inspect_call_count["count"] += 1
             # Expect all three names passed in a single call
-            assert cmd[2:] == ["deer-flow-sandbox-a", "deer-flow-sandbox-b", "deer-flow-sandbox-c"]
-            result.returncode = 0
-            result.stdout = json.dumps(
+            assert argv[2:] == ["deer-flow-sandbox-a", "deer-flow-sandbox-b", "deer-flow-sandbox-c"]
+            payload = json.dumps(
                 [
                     _make_inspect_entry("deer-flow-sandbox-a", "2026-04-08T01:22:50Z", "8081"),
                     _make_inspect_entry("deer-flow-sandbox-b", "2026-04-08T01:22:50Z", "8082"),
                     _make_inspect_entry("deer-flow-sandbox-c", "2026-04-08T01:22:50Z", "8083"),
                 ]
             )
-            result.stderr = ""
-            return result
-        result.returncode = 1
-        result.stdout = ""
-        return result
+            return (0, payload, "")
+        return (1, "", "")
 
-    monkeypatch.setattr(subprocess, "run", mock_run)
+    _install_fake_kernel(handler)
 
     infos = backend.list_running()
     assert len(infos) == 3

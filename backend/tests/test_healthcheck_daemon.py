@@ -213,13 +213,14 @@ class TestRunCycleSmoke:
             "probe_llama_bridge",
             "probe_litellm",
             "probe_dify",
+            "probe_tunnel",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
         state = healthcheck.WatchdogState()
         report = await healthcheck.run_cycle(state)
         assert report.overall == healthcheck.Status.GREEN
-        assert len(report.probes) == 11
+        assert len(report.probes) == 12
         assert all(p.status == healthcheck.Status.GREEN for p in report.probes)
 
     @pytest.mark.asyncio
@@ -245,6 +246,7 @@ class TestRunCycleSmoke:
             "probe_llama_bridge",
             "probe_litellm",
             "probe_dify",
+            "probe_tunnel",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
         monkeypatch.setattr(healthcheck, "probe_binary_attestation", fake_boom)
@@ -259,11 +261,11 @@ class TestRunCycleSmoke:
         assert "P8_binary_attestation" in by_name
         assert by_name["P8_binary_attestation"].status == healthcheck.Status.RED
         assert "RuntimeError" in by_name["P8_binary_attestation"].detail
-        # The other 9 should still be GREEN and the cycle should still report.
+        # The other 11 should still be GREEN and the cycle should still report.
         assert report.overall == healthcheck.Status.RED
         assert report.exit_code == 1
         green_count = sum(1 for p in report.probes if p.status == healthcheck.Status.GREEN)
-        assert green_count == 10
+        assert green_count == 11
 
 
 class TestLogRouting:

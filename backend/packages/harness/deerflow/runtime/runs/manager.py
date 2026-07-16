@@ -16,6 +16,7 @@ from deerflow.utils.time import now_iso as _now_iso
 from .schemas import DisconnectMode, RunStatus
 
 if TYPE_CHECKING:
+    from deerflow.execution.supervisor import Supervisor
     from deerflow.runtime.runs.store.base import RunStore
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,10 @@ class RunManager:
     All mutations are protected by an asyncio lock. When a ``store`` is
     provided, serializable metadata is also persisted to the store so
     that run history survives process restarts.
+
+    Phase C8: optionally accepts a Supervisor reference for two-phase
+    cancellation. When a run is cancelled, both the asyncio task AND
+    any running kernel processes are terminated.
     """
 
     def __init__(
@@ -126,6 +131,7 @@ class RunManager:
         store: RunStore | None = None,
         *,
         persistence_retry_policy: PersistenceRetryPolicy | None = None,
+        supervisor: "Supervisor | None" = None,
     ) -> None:
         self._runs: dict[str, RunRecord] = {}
         # Secondary index: thread_id -> insertion-ordered run_id set (a dict is
@@ -136,6 +142,8 @@ class RunManager:
         self._lock = asyncio.Lock()
         self._store = store
         self._persistence_retry_policy = persistence_retry_policy or PersistenceRetryPolicy()
+        # Phase C8: Supervisor for two-phase cancellation
+        self._supervisor = supervisor
 
     def _index_run_locked(self, record: RunRecord) -> None:
         """Register *record* in the thread index. Caller must hold ``self._lock``."""
@@ -549,7 +557,10 @@ class RunManager:
             run_id: The run ID to cancel.
             action: "interrupt" keeps checkpoint, "rollback" reverts to pre-run state.
 
-        Sets the abort event with the action reason and cancels the asyncio task.
+        Two-phase cancellation (Phase C8):
+        1. Phase 1: Sets abort event and cancels asyncio task (returns immediately).
+        2. Phase 2: Kernel cancels OS process via supervisor (async, fire-and-forget).
+
         Returns ``True`` if cancellation was initiated **or** the run was already
         interrupted (idempotent — a second cancel is a no-op success).
         Returns ``False`` only when the run is unknown to this worker or has
@@ -561,10 +572,12 @@ class RunManager:
         ``True``. The user Stop button must always land, never 409
         forever on a "not active on this worker" row.
         """
+        # Phase 1: Acquire lock and handle in-memory record
         async with self._lock:
             record = self._runs.get(run_id)
             if record is not None:
                 if record.status == RunStatus.interrupted:
+                    self._schedule_kernel_cancel(run_id)
                     return True  # idempotent — already cancelled on this worker
                 if record.status not in (RunStatus.pending, RunStatus.running):
                     return False
@@ -575,14 +588,16 @@ class RunManager:
                 record.status = RunStatus.interrupted
                 record.updated_at = _now_iso()
             else:
-                # Store-only path: look up the row, decide.
                 record = None
+
+        # Phase 1 continued: persist and return
         if record is not None:
             await self._persist_status(record, RunStatus.interrupted)
             logger.info("Run %s cancelled (action=%s)", run_id, action)
+            self._schedule_kernel_cancel(run_id)
             return True
 
-        # No in-memory record. Consult the store.
+        # Store-only path: run is not in memory, check store
         if self._store is None:
             return False
         try:
@@ -594,11 +609,10 @@ class RunManager:
             return False
         status_value = row.get("status")
         if status_value == RunStatus.interrupted.value:
+            self._schedule_kernel_cancel(run_id)
             return True  # idempotent
         if status_value not in (RunStatus.pending.value, RunStatus.running.value):
             return False
-        # Persist interrupted directly to the store. The in-memory record
-        # stays store_only; the next list_by_thread poll sees the new status.
         try:
             await self._call_store_with_retry(
                 "update_status",
@@ -612,12 +626,30 @@ class RunManager:
         except Exception:
             logger.warning("Failed to persist interrupted for store-only run %s", run_id, exc_info=True)
             return False
-        logger.info(
-            "Store-only run %s marked interrupted (action=%s)",
-            run_id,
-            action,
-        )
+        self._schedule_kernel_cancel(run_id)
+        logger.info("Store-only run %s marked interrupted (action=%s)", run_id, action)
         return True
+
+    def _schedule_kernel_cancel(self, run_id: str) -> None:
+        """Phase C8: schedule kernel cancel for a run if supervisor is wired.
+
+        This is fire-and-forget — the kernel cancels asynchronously.
+        """
+        if self._supervisor is None:
+            return
+        execution_id = self._supervisor.get_execution_id(run_id)
+        if not execution_id:
+            return
+        logger.info(
+            "Run %s cancellation: kernel.cancel(execution_id=%s)",
+            run_id,
+            execution_id,
+        )
+        try:
+            loop = asyncio.get_event_loop()
+            loop.call_soon(lambda: self._supervisor.cancel(execution_id, grace_period=5.0))
+        except Exception:
+            pass
 
     async def reap_orphaned_runs(self) -> int:
         """Phase 6 startup reaper.

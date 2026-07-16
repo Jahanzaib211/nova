@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # =====================================================================
 # RecoveryPolicy
 # =====================================================================
@@ -28,7 +27,7 @@ class TestRecoveryPolicy:
     """Verify declarative recovery policy data objects."""
 
     def test_all_policies_registered(self):
-        from deerflow.services.recovery_policy import all_policies, POLICIES
+        from deerflow.services.recovery_policy import POLICIES, all_policies
 
         assert len(POLICIES) == 10
         policies = all_policies()
@@ -310,8 +309,8 @@ class TestRecoveryEngine:
     @pytest.mark.asyncio
     async def test_recovery_failure_retries(self):
         from deerflow.events.event import HealthChanged, RecoveryRetryScheduled
-        from deerflow.services.recovery_service import RecoveryEngine
         from deerflow.services import recovery_policy
+        from deerflow.services.recovery_service import RecoveryEngine
 
         # Override policy to have minimal delays for fast test
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
@@ -356,11 +355,11 @@ class TestRecoveryEngine:
     @pytest.mark.asyncio
     async def test_max_retries_escalates(self):
         from deerflow.events.event import HealthChanged, RecoveryEscalated
-        from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
-        from deerflow.services.recovery_service import RecoveryEngine
 
         # Override policy to have very few retries for fast test
         from deerflow.services import recovery_policy
+        from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
+        from deerflow.services.recovery_service import RecoveryEngine
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
         recovery_policy.POLICIES["tunnel_disconnected"] = type(original)(
             name="tunnel_disconnected",
@@ -398,8 +397,8 @@ class TestRecoveryEngine:
     @pytest.mark.asyncio
     async def test_cancel_recovery(self):
         from deerflow.events.event import HealthChanged, RecoveryCancelled
-        from deerflow.services.recovery_service import RecoveryEngine
         from deerflow.services import recovery_policy
+        from deerflow.services.recovery_service import RecoveryEngine
 
         # Override policy to have minimal delays
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
@@ -559,18 +558,33 @@ class TestDefaultActions:
             assert name in DEFAULT_ACTIONS, f"Missing action: {name}"
 
     @pytest.mark.asyncio
-    async def test_tunnel_action_wraps_fix_tunnel(self):
-        from deerflow.services.recovery_service import _recover_tunnel
+    async def test_tunnel_action_runs_systemd_recovery_through_kernel(self):
+        """Tunnel recovery must flow through the Execution Kernel (Phase C7):
+        reset-failed → restart → verify is-active, all via ``sudo -n systemctl``.
+        A FakeExecutionKernel keeps the test hermetic — a previous version of
+        this action's test leaked real systemctl restarts to the host."""
+        from deerflow.execution.testing import FakeExecutionKernel
+        from deerflow.services.container import service_container
         from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
+        from deerflow.services.recovery_service import _recover_tunnel
 
-        # Mock the fix_tunnel import at the module level
-        import sys
-        mock_hd = MagicMock()
-        mock_hd.fix_tunnel = MagicMock(return_value=True)
-        with patch.dict(sys.modules, {"scripts": MagicMock(), "scripts.healthcheck_daemon": mock_hd}):
+        def handler(request):
+            if "is-active" in request.argv:
+                return (0, "active\n", "")
+            return (0, "", "")
+
+        fake = FakeExecutionKernel(handler)
+        service_container.override(execution_kernel=fake)
+        try:
             result = await _recover_tunnel(TUNNEL_DISCONNECTED)
-            assert result is True
-            mock_hd.fix_tunnel.assert_called_once()
+        finally:
+            service_container.reset()
+
+        assert result is True
+        commands = [" ".join(r.argv) for r in fake.requests]
+        assert commands[0] == "sudo -n systemctl reset-failed cloudflared-nova.service"
+        assert commands[1] == "sudo -n systemctl restart cloudflared-nova.service"
+        assert any("is-active cloudflared-nova.service" in c for c in commands[2:])
 
 
 # =====================================================================

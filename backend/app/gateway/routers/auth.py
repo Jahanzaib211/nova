@@ -109,6 +109,12 @@ class RegisterRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(..., min_length=8)
+    # Optional at the API layer so existing callers keep working; the signup
+    # UI sends True and the re-acceptance gate enforces consent server-side
+    # before the app is usable.
+    accepted_terms: bool = False
+    # Invite code of the referrer, captured from a ?ref= signup link.
+    referred_by: str | None = None
 
     _strong_password = field_validator("password")(classmethod(lambda cls, v: _validate_strong_password(v)))
 
@@ -127,6 +133,19 @@ class MessageResponse(BaseModel):
     """Generic message response."""
 
     message: str
+
+
+class UpdateEmailRequest(BaseModel):
+    """Request model for changing the current user's email address.
+
+    Distinct from ``ChangePasswordRequest`` on purpose: the account screen
+    needs to update the email *without* forcing a password change (the old
+    path only accepted ``new_email`` alongside a mandatory new password).
+    Requires the current password as a re-authentication step.
+    """
+
+    current_password: str
+    new_email: EmailStr
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -317,6 +336,42 @@ async def register(request: Request, response: Response, body: RegisterRequest):
             detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already registered").model_dump(),
         )
 
+    provider = get_local_provider()
+
+    # Resolve a valid referrer (if any) before mutating the new user, so a
+    # bogus ?ref= code is simply ignored rather than failing the signup.
+    referrer = None
+    if body.referred_by:
+        candidate = await provider.get_user_by_referral_code(body.referred_by)
+        if candidate is not None and str(candidate.id) != str(user.id):
+            referrer = candidate
+            user.referred_by = body.referred_by
+
+    # Give every new account its own invite code up front.
+    from app.gateway.referrals import apply_referral, generate_referral_code
+
+    for _ in range(5):
+        code = generate_referral_code()
+        if await provider.get_user_by_referral_code(code) is None:
+            user.referral_code = code
+            break
+
+    # Record TOS consent when the signup form acknowledged it. Otherwise the
+    # re-acceptance gate will prompt on first authenticated load.
+    if body.accepted_terms:
+        from datetime import UTC, datetime
+
+        from app.gateway.legal import TOS_VERSION
+
+        user.tos_accepted_version = TOS_VERSION
+        user.tos_accepted_at = datetime.now(UTC)
+
+    await provider.update_user(user)
+
+    # Award double-sided referral bonuses once the new user is persisted.
+    if referrer is not None:
+        await apply_referral(new_user=user, referrer=referrer)
+
     token = create_access_token(str(user.id), token_version=user.token_version)
     _set_session_cookie(response, token, request)
 
@@ -386,11 +441,84 @@ async def change_password(request: Request, response: Response, body: ChangePass
     return MessageResponse(message="Password changed successfully")
 
 
+@router.post("/update-email", response_model=UserResponse)
+async def update_email(request: Request, response: Response, body: UpdateEmailRequest):
+    """Change the current user's email address (email-only, no password change).
+
+    Re-authenticates with the current password, enforces email uniqueness,
+    bumps ``token_version`` to invalidate old sessions, and re-issues the
+    session cookie so the caller stays logged in.
+    """
+    from app.gateway.auth.password import verify_password_async
+    from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED
+
+    user = await get_current_user_from_request(request)
+
+    if getattr(request.state, "auth_source", None) == AUTH_SOURCE_AUTH_DISABLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(
+                code=AuthErrorCode.INVALID_CREDENTIALS,
+                message="Email changes are not available when DEER_FLOW_AUTH_DISABLED=1.",
+            ).model_dump(),
+        )
+
+    if user.password_hash is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(code=AuthErrorCode.INVALID_CREDENTIALS, message="OAuth users cannot change email here").model_dump(),
+        )
+
+    if not await verify_password_async(body.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(code=AuthErrorCode.INVALID_CREDENTIALS, message="Current password is incorrect").model_dump(),
+        )
+
+    provider = get_local_provider()
+
+    # No-op guard: changing to the same email still bumps the session for no
+    # reason and can trip the uniqueness check against the user's own row.
+    if body.new_email != user.email:
+        existing = await provider.get_user_by_email(body.new_email)
+        if existing and str(existing.id) != str(user.id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already in use").model_dump(),
+            )
+        user.email = body.new_email
+        user.token_version += 1
+        await provider.update_user(user)
+
+        token = create_access_token(str(user.id), token_version=user.token_version)
+        _set_session_cookie(response, token, request)
+
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        system_role=user.system_role,
+        needs_setup=user.needs_setup,
+        plan=user.plan,
+        plan_status=user.plan_status,
+        tos_accepted_version=user.tos_accepted_version,
+        referral_code=user.referral_code,
+    )
+
+
 @router.get("/me", response_model=UserResponse)
 async def get_me(request: Request):
     """Get current authenticated user info."""
     user = await get_current_user_from_request(request)
-    return UserResponse(id=str(user.id), email=user.email, system_role=user.system_role, needs_setup=user.needs_setup)
+    return UserResponse(
+        id=str(user.id),
+        email=user.email,
+        system_role=user.system_role,
+        needs_setup=user.needs_setup,
+        plan=user.plan,
+        plan_status=user.plan_status,
+        tos_accepted_version=user.tos_accepted_version,
+        referral_code=user.referral_code,
+    )
 
 
 # Per-IP cache: ip → (timestamp, result_dict).

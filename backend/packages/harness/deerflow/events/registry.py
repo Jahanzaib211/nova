@@ -82,6 +82,8 @@ for _name in dir(_event_module):
             _category = "health"
         elif "Recovery" in _name:
             _category = "recovery"
+        elif "Execution" in _name or "Process" in _name:
+            _category = "execution"
         elif "Tool" in _name:
             _category = "tool"
         elif "Artifact" in _name:

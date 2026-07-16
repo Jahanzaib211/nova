@@ -68,10 +68,18 @@ class DatabaseConfig(BaseModel):
 
     @property
     def _resolved_sqlite_dir(self) -> str:
-        """Resolve sqlite_dir to an absolute path (relative to CWD)."""
+        """Resolve sqlite_dir to an absolute path (relative to CWD).
+
+        ``DEER_FLOW_SQLITE_DIR`` overrides the configured directory when set.
+        This lets an isolated dev/E2E database (e.g. ``.deer-flow/dev-data``)
+        be selected for the whole stack + seeder via one env var, without
+        copying config.yaml or touching the production ``deerflow.db``.
+        """
         from pathlib import Path
 
-        return str(Path(self.sqlite_dir).resolve())
+        override = os.environ.get("DEER_FLOW_SQLITE_DIR", "").strip()
+        target = override or self.sqlite_dir
+        return str(Path(target).resolve())
 
     @property
     def sqlite_path(self) -> str:

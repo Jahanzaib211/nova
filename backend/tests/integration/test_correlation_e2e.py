@@ -54,8 +54,10 @@ async def test_create_run_assigns_correlation_id(_harness):
     if _harness is None:
         pytest.skip("runtime_lifecycle_harness unavailable")
     isolated_app = _harness
-    from tests._agent_e2e_helpers import _make_agent_factory  # type: ignore[import-not-found]
-    from tests._agent_e2e_helpers import FakeToolCallingModel  # type: ignore[import-not-found]
+    from tests._agent_e2e_helpers import (
+        FakeToolCallingModel,  # type: ignore[import-not-found]
+        _make_agent_factory,  # type: ignore[import-not-found]
+    )
 
     factory = _make_agent_factory(
         title="Corr Test",
@@ -70,9 +72,11 @@ async def test_create_run_assigns_correlation_id(_harness):
     ):
         csrf_token = "test-csrf"
         thread_id = "test-thread-corr"
-        from tests._agent_e2e_helpers import _register_user  # type: ignore[import-not-found]
-        from tests._agent_e2e_helpers import _create_thread  # type: ignore[import-not-found]
-        from tests._agent_e2e_helpers import _run_body  # type: ignore[import-not-found]
+        from tests._agent_e2e_helpers import (
+            _create_thread,  # type: ignore[import-not-found]
+            _register_user,  # type: ignore[import-not-found]
+            _run_body,  # type: ignore[import-not-found]
+        )
 
         _register_user(client)
         _create_thread(client, csrf_token, thread_id)

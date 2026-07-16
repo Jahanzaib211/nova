@@ -190,6 +190,16 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
     _apply_stream_chunk_timeout_default(model_config.use, model_settings_from_config)
     _apply_local_endpoint_api_key_default(model_config.use, model_settings_from_config)
 
+    # Bring-your-own-key override: when a run has a user-supplied API key in
+    # its task-local context, it replaces the configured key so usage bills to
+    # the user's own provider account. Null-safe — no-op when unset (the
+    # default for every non-BYOK run), so this cannot affect normal runs.
+    from deerflow.runtime.byok_context import get_byok_api_key
+
+    _byok_key = get_byok_api_key()
+    if _byok_key:
+        model_settings_from_config["api_key"] = _byok_key
+
     # For Codex Responses API models: map thinking mode to reasoning_effort
     from deerflow.models.openai_codex_provider import CodexChatModel
 

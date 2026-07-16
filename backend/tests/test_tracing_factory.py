@@ -55,26 +55,23 @@ def test_build_tracing_callbacks_creates_langsmith_and_langfuse(monkeypatch):
 
     monkeypatch.setattr(tracing_factory, "get_enabled_tracing_providers", lambda: ["langsmith", "langfuse"])
     monkeypatch.setattr(tracing_factory, "validate_enabled_tracing_providers", lambda: None)
-    monkeypatch.setattr(
-        tracing_factory,
-        "get_tracing_config",
-        type(
-            "Cfg",
-            (),
-            {
-                "langsmith": type("LangSmithCfg", (), {"project": "smith-project"})(),
-                "langfuse": type(
-                    "LangfuseCfg",
-                    (),
-                    {
-                        "secret_key": "sk-lf-test",
-                        "public_key": "pk-lf-test",
-                        "host": "https://langfuse.example.com",
-                    },
-                )(),
-            },
-        )(),
-    )
+    _cfg = type(
+        "Cfg",
+        (),
+        {
+            "langsmith": type("LangSmithCfg", (), {"project": "smith-project"})(),
+            "langfuse": type(
+                "LangfuseCfg",
+                (),
+                {
+                    "secret_key": "sk-lf-test",
+                    "public_key": "pk-lf-test",
+                    "host": "https://langfuse.example.com",
+                },
+            )(),
+        },
+    )()
+    monkeypatch.setattr(tracing_factory, "get_tracing_config", lambda: _cfg)
     monkeypatch.setattr(tracing_factory, "_create_langsmith_tracer", lambda cfg: FakeLangSmithTracer(project_name=cfg.project))
     monkeypatch.setattr(
         tracing_factory,
@@ -92,21 +89,18 @@ def test_build_tracing_callbacks_creates_langsmith_and_langfuse(monkeypatch):
 def test_build_tracing_callbacks_raises_when_enabled_provider_fails(monkeypatch):
     monkeypatch.setattr(tracing_factory, "get_enabled_tracing_providers", lambda: ["langfuse"])
     monkeypatch.setattr(tracing_factory, "validate_enabled_tracing_providers", lambda: None)
-    monkeypatch.setattr(
-        tracing_factory,
-        "get_tracing_config",
-        type(
-            "Cfg",
-            (),
-            {
-                "langfuse": type(
-                    "LangfuseCfg",
-                    (),
-                    {"secret_key": "sk-lf-test", "public_key": "pk-lf-test", "host": "https://langfuse.example.com"},
-                )(),
-            },
-        )(),
-    )
+    _cfg = type(
+        "Cfg",
+        (),
+        {
+            "langfuse": type(
+                "LangfuseCfg",
+                (),
+                {"secret_key": "sk-lf-test", "public_key": "pk-lf-test", "host": "https://langfuse.example.com"},
+            )(),
+        },
+    )()
+    monkeypatch.setattr(tracing_factory, "get_tracing_config", lambda: _cfg)
     monkeypatch.setattr(tracing_factory, "_create_langfuse_handler", lambda cfg: (_ for _ in ()).throw(RuntimeError("boom")))
 
     with pytest.raises(RuntimeError, match="Langfuse tracing initialization failed"):

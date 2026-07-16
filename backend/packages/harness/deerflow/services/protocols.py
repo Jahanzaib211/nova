@@ -30,7 +30,6 @@ from deerflow.services.types import (
     WorkspacePaths,
 )
 
-
 # ---------------------------------------------------------------------------
 # RunService
 # ---------------------------------------------------------------------------
@@ -452,4 +451,65 @@ class DiagnosticsService(Protocol):
         thread_id: str,
     ) -> str:
         """Look up the correlation_id for a thread."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# WorkspaceIntelligenceService (Phase C9)
+# ---------------------------------------------------------------------------
+
+
+class WorkspaceIntelligenceService(Protocol):
+    """Deterministic workspace understanding via typed graphs and symbol indexes.
+
+    Replaces filesystem-based grep/shell exploration with indexed queries
+    against the workspace graph, symbol index, and dependency graph.
+
+    Lifecycle expectations:
+        - ``scan`` builds or refreshes the workspace graph for a root path.
+        - ``plan_search`` builds an execution plan for a search query.
+        - ``plan_edit`` builds an execution plan for a file edit.
+        - ``plan_run`` builds an execution plan for a named command.
+        - ``execute_plan`` runs a validated plan through the ExecutionKernel.
+
+    Telemetry expectations:
+        - All operations emit structured logs with workspace correlation.
+    """
+
+    def scan(self, root_path: str) -> WorkspaceSnapshot:
+        """Scan a workspace root and return a complete snapshot."""
+        ...
+
+    def plan_search(
+        self,
+        query: str,
+        project_id: str | None = None,
+        file_pattern: str | None = None,
+    ) -> PlannerResult:
+        """Build an execution plan for a search query."""
+        ...
+
+    def plan_edit(
+        self,
+        file_path: str,
+        old_string: str,
+        new_string: str,
+    ) -> PlannerResult:
+        """Build an execution plan for a file edit."""
+        ...
+
+    def plan_run(
+        self,
+        command_name: str,
+        project_id: str | None = None,
+    ) -> PlannerResult:
+        """Build an execution plan for a named command."""
+        ...
+
+    def execute_plan(self, plan: ExecutionPlan) -> ExecutionResult:
+        """Execute a validated plan through the ExecutionKernel."""
+        ...
+
+    def get_snapshot(self, root_path: str) -> WorkspaceSnapshot | None:
+        """Return the cached snapshot for a root path, or None if not yet scanned."""
         ...

@@ -26,6 +26,7 @@ from app.gateway.auth_disabled import (
 )
 from app.gateway.authz import _ALL_PERMISSIONS, AuthContext
 from app.gateway.internal_auth import INTERNAL_AUTH_HEADER_NAME, get_internal_user, is_valid_internal_auth_token
+from app.gateway.ops_auth import OPS_AUTH_HEADER_NAME, get_ops_user, is_valid_ops_token
 from deerflow.runtime.user_context import reset_current_user, set_current_user
 
 # Paths that never require authentication.
@@ -47,6 +48,11 @@ _PUBLIC_EXACT_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/logout",
         "/api/v1/auth/setup-status",
         "/api/v1/auth/initialize",
+        # Current legal-document versions — read before/without a session so
+        # the signup form and re-acceptance gate can render.
+        "/api/v1/legal/terms",
+        # Stripe posts webhooks with no session; authenticity is the signature.
+        "/api/v1/billing/webhook",
     }
 )
 
@@ -89,12 +95,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if is_valid_internal_auth_token(request.headers.get(INTERNAL_AUTH_HEADER_NAME)):
             internal_user = get_internal_user()
 
+        # Ops console: a valid service token authenticates as a synthetic admin
+        # so the console can reach /api/v1/admin/* without a real user session.
+        # Disabled entirely when NOVA_OPS_TOKEN is unset.
+        ops_user = None
+        if internal_user is None and is_valid_ops_token(request.headers.get(OPS_AUTH_HEADER_NAME)):
+            ops_user = get_ops_user()
+
         auth_source = AUTH_SOURCE_SESSION
         access_token = request.cookies.get("access_token")
 
         # Non-public path: require session cookie
         if internal_user is not None:
             user = internal_user
+            auth_source = AUTH_SOURCE_INTERNAL
+        elif ops_user is not None:
+            user = ops_user
             auth_source = AUTH_SOURCE_INTERNAL
         elif access_token:
             # Strict JWT validation: reject junk/expired tokens with 401

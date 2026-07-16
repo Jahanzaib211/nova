@@ -14,26 +14,32 @@ its storage implementation lives in ``deerflow.runtime.events.store.db`` and
 there is no matching entity directory.
 """
 
+from deerflow.persistence.admin_audit.model import AdminAuditRow
 from deerflow.persistence.channel_connections.model import (
     ChannelConnectionRow,
     ChannelConversationRow,
     ChannelCredentialRow,
     ChannelOAuthStateRow,
 )
+from deerflow.persistence.credit_grant.model import CreditGrantRow
 from deerflow.persistence.feedback.model import FeedbackRow
 from deerflow.persistence.models.run_event import RunEventRow
 from deerflow.persistence.run.model import RunRow
 from deerflow.persistence.thread_meta.model import ThreadMetaRow
 from deerflow.persistence.user.model import UserRow
+from deerflow.persistence.user_api_key.model import UserApiKeyRow
 
 __all__ = [
+    "AdminAuditRow",
     "ChannelConnectionRow",
     "ChannelConversationRow",
     "ChannelCredentialRow",
     "ChannelOAuthStateRow",
+    "CreditGrantRow",
     "FeedbackRow",
     "RunEventRow",
     "RunRow",
     "ThreadMetaRow",
+    "UserApiKeyRow",
     "UserRow",
 ]

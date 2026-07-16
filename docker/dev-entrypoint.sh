@@ -71,7 +71,7 @@ fi
 # means `sandbox` must be created here too, not just `.deer-flow`.
 : "${DEER_FLOW_HOME:=/app/backend/.deer-flow}"
 export DEER_FLOW_HOME
-mkdir -p "$DEER_FLOW_HOME" /app/backend/.deer-flow /app/backend/sandbox
+mkdir -p "$DEER_FLOW_HOME" /app/backend/.deer-flow /app/backend/sandbox /app/backend/tests
 
 # ── Sync dependencies (with self-heal) ──────────────────────────────────────
 

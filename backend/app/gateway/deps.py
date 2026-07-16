@@ -21,7 +21,7 @@ import asyncio
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from fastapi import FastAPI, HTTPException, Request
 from langgraph.types import Checkpointer
@@ -251,6 +251,15 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.artifact_service = ArtifactServiceImpl()
         app.state.health_service = HealthServiceImpl()
         app.state.recovery_service = RecoveryServiceImpl()
+        # Execution kernel (Phase C7) — the single execution architecture.
+        # Resolved through the container so embedded/test callers share the
+        # same singleton the gateway uses.
+        app.state.execution_kernel = service_container.execution_kernel()
+
+        # Phase C8: Wire supervisor into RunManager for two-phase cancellation.
+        # RunManager.cancel() now kills kernel processes via supervisor.cancel().
+        app.state.run_manager._supervisor = app.state.execution_kernel.supervisor  # type: ignore[attr-defined]
+
         service_container.override(
             run_service=app.state.run_service,
             repository_service=RepositoryServiceImpl(app.state.run_store),
@@ -262,6 +271,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             artifact_service=app.state.artifact_service,
             health_service=app.state.health_service,
             recovery_service=app.state.recovery_service,
+            execution_kernel=app.state.execution_kernel,
         )
         if getattr(config.database, "backend", None) == "sqlite":
             from deerflow.utils.time import now_iso
@@ -324,6 +334,7 @@ get_terminal_service: Callable[[Request], TerminalService] = _require("terminal_
 get_artifact_service: Callable[[Request], ArtifactService] = _require("artifact_service", "Artifact service")
 get_health_service: Callable[[Request], HealthService] = _require("health_service", "Health service")
 get_recovery_service: Callable[[Request], RecoveryService] = _require("recovery_service", "Recovery service")
+get_execution_kernel: Callable[[Request], Any] = _require("execution_kernel", "Execution kernel")
 
 
 def get_store(request: Request):

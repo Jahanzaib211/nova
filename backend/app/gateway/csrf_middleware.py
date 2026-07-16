@@ -47,6 +47,9 @@ def should_check_csrf(request: Request) -> bool:
     # Exempt /api/v1/auth/me endpoint
     if path == "/api/v1/auth/me":
         return False
+    # Stripe webhook is authenticated by its signature, not a CSRF token.
+    if path == "/api/v1/billing/webhook":
+        return False
     return True
 
 

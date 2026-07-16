@@ -54,4 +54,10 @@ class RunRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
-    __table_args__ = (Index("ix_runs_thread_status", "thread_id", "status"),)
+    __table_args__ = (
+        Index("ix_runs_thread_status", "thread_id", "status"),
+        # Credit meter: per-request "tokens used today" filters (user_id, created_at).
+        Index("ix_runs_user_created", "user_id", "created_at"),
+        # Ops-console activity feed: newest runs across all users.
+        Index("ix_runs_created_at", "created_at"),
+    )

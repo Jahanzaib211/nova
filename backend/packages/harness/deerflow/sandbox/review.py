@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -90,16 +89,12 @@ class Review:
 
 
 def _git(work_dir: Path, *args: str, timeout: float = 8.0) -> tuple[int, str]:
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(work_dir), *args],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-    except Exception as e:
-        return 1, str(e)
+    # All git plumbing flows through the Execution Kernel (Phase C7).
+    from deerflow.execution.adapters import GitAdapter
+    from deerflow.services.container import service_container
+
+    adapter = GitAdapter(service_container.execution_kernel())
+    return adapter.run_capture(work_dir, *args, timeout=timeout)
 
 
 def _is_git_repo(work_dir: Path) -> bool:

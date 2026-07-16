@@ -31,6 +31,25 @@ class User(BaseModel):
     needs_setup: bool = Field(default=False, description="True when a reset account must complete setup")
     token_version: int = Field(default=0, description="Incremented on password change to invalidate old JWTs")
 
+    # Plan / billing
+    plan: Literal["free", "plus", "enterprise"] = Field(default="free", description="Entitlement tier")
+    plan_status: str | None = Field(None, description="Stripe subscription state: active|past_due|canceled")
+    plan_renews_at: datetime | None = Field(None, description="Current billing period end")
+    stripe_customer_id: str | None = Field(None, description="Stripe customer id")
+    stripe_subscription_id: str | None = Field(None, description="Stripe subscription id")
+
+    # Terms & Conditions consent
+    tos_accepted_version: str | None = Field(None, description="TOS version the user accepted")
+    tos_accepted_at: datetime | None = Field(None, description="When the user accepted the TOS")
+
+    # Referral flywheel
+    referral_code: str | None = Field(None, description="This user's own invite code (unique)")
+    referred_by: str | None = Field(None, description="Invite code of the referrer, if any")
+
+    # Operator controls (ops console)
+    daily_limit_override: int | None = Field(None, description="Custom daily token limit; overrides the plan allowance when set")
+    credit_usage_reset_at: datetime | None = Field(None, description="Operator usage-reset marker; usage counts only after this moment today")
+
 
 class UserResponse(BaseModel):
     """Response model for user info endpoint."""
@@ -39,3 +58,7 @@ class UserResponse(BaseModel):
     email: str
     system_role: Literal["admin", "user"]
     needs_setup: bool = False
+    plan: Literal["free", "plus", "enterprise"] = "free"
+    plan_status: str | None = None
+    tos_accepted_version: str | None = None
+    referral_code: str | None = None
