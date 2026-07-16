@@ -164,6 +164,22 @@ services:
     # this file readable and lets the script be linted (shellcheck-clean).
     # See PR #2767 / Issue #2754.
     command: ["sh", "/usr/local/bin/dev-entrypoint.sh"]
+    # Detect a hung-but-"Up" gateway (the failure mode behind the 2026-07-16
+    # outage: uvicorn dead, container still Up, nginx upstream timing out).
+    # Uses the in-image python (no curl/wget in this container). start_period
+    # covers the slow cold boot; autoheal label lets a sidecar restart it.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=4).status==200 else 1)"
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 150s
+    labels:
+      - autoheal=true
     volumes:
       # Mount the dev entrypoint as a read-only file so edits to the script
       # take effect on `make docker-restart` without requiring an image rebuild.
@@ -251,6 +267,24 @@ services:
   # TOR proxy removed: it crash-looped under the non-root hardening (setgid
   # EPERM) and is not needed for the default stack. Re-add a hardened Tor
   # service here if iGIN0 anonymized fetching is required.
+
+  # Autoheal: restarts any container marked `autoheal=true` (currently the
+  # gateway) when its Docker healthcheck reports unhealthy. This is the
+  # missing auto-recovery from the 2026-07-16 outage — a hung-but-Up gateway
+  # now self-heals within ~15s instead of taking the site down until a human
+  # notices. Watches the Docker socket read-only-ish (needs it to issue the
+  # restart); no ports, minimal footprint.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: deer-flow-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=15
+      - AUTOHEAL_START_PERIOD=60
+      - DOCKER_SOCK=/var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   # Persist .venv across container restarts so dependencies installed during

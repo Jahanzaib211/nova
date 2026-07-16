@@ -587,6 +587,13 @@ export const enUS: Translations = {
       creditsLeftToday: "left today",
       creditsUnlimited: "Unlimited",
       creditsResets: "Resets daily at midnight UTC.",
+      creditsUsedToday: "used today",
+      creditsRequestMore: "Request more",
+      creditsRequestReason: "Why do you need more? (optional)",
+      creditsRequestSend: "Send request",
+      creditsRequestPending: "Request pending — we'll review it shortly.",
+      creditsRequestApproved: "Your last request was approved.",
+      creditsRequestSent: "Request sent.",
       referralTitle: "Invite friends, earn credits",
       referralDescription:
         "Share your link. When a friend joins, you both get bonus tokens.",

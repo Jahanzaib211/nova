@@ -1038,6 +1038,16 @@ export function useThreadStream({
       // stays clean without losing observability.
       if (isReconnectNoise(error)) {
         console.debug("[useStream] reconnect noise (expected):", error);
+      } else if (getHttpStatus(error) === 402) {
+        // Credit wall (daily_limit_reached). Show the actionable, graceful
+        // message instead of a raw "Request failed" — point the user at the
+        // in-app request path (Settings → Usage) and the daily reset.
+        const serverMsg = getStreamErrorMessage(error);
+        const friendly =
+          serverMsg && serverMsg !== "Request failed." && /limit|credit|token/i.test(serverMsg)
+            ? serverMsg
+            : "You've reached today's usage limit. Open Settings → account to request more — it resets at midnight UTC.";
+        toast.error(friendly, { duration: 8000 });
       } else {
         toast.error(getStreamErrorMessage(error));
       }

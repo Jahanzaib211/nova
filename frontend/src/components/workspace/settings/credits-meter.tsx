@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { fetch } from "@/core/api/fetcher";
+import { Button } from "@/components/ui/button";
+import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsSection } from "./settings-section";
@@ -13,31 +14,56 @@ interface Credits {
   used: number;
   remaining: number;
   unlimited: boolean;
+  request_status: string | null;
 }
 
 export function CreditsMeter() {
   const { t } = useI18n();
   const [credits, setCredits] = useState<Credits | null>(null);
   const [error, setError] = useState(false);
+  const [reason, setReason] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const load = () =>
+    fetch("/api/v1/credits")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data: Credits) => {
+        setCredits(data);
+        setStatus(data.request_status);
+      })
+      .catch(() => setError(true));
 
   useEffect(() => {
-    const controller = new AbortController();
-    void fetch("/api/v1/credits", { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data: Credits) => setCredits(data))
-      .catch(() => {
-        if (!controller.signal.aborted) setError(true);
-      });
-    return () => controller.abort();
+    void load();
   }, []);
 
   if (error || !credits) return null;
 
-  const pct =
+  const usedPct =
     credits.daily_limit > 0
       ? Math.min(100, Math.round((credits.used / credits.daily_limit) * 100))
       : 0;
   const low = !credits.unlimited && credits.remaining <= credits.daily_limit * 0.1;
+
+  const sendRequest = async () => {
+    setSending(true);
+    try {
+      const res = await fetch("/api/v1/credits/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getCsrfHeaders() },
+        body: JSON.stringify({ reason: reason.trim() || null }),
+      });
+      if (res.ok) {
+        setStatus("pending");
+        setShowForm(false);
+        setReason("");
+      }
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <SettingsSection
@@ -49,14 +75,15 @@ export function CreditsMeter() {
           {t.settings.account.creditsUnlimited}
         </p>
       ) : (
-        <div className="max-w-sm space-y-2">
+        <div className="max-w-sm space-y-3">
+          {/* Usage-first: what you've used out of your limit today. */}
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-foreground font-medium tabular-nums">
-              {credits.remaining.toLocaleString()} /{" "}
+              {credits.used.toLocaleString()} /{" "}
               {credits.daily_limit.toLocaleString()}
             </span>
             <span className="text-muted-foreground text-xs">
-              {t.settings.account.creditsLeftToday}
+              {t.settings.account.creditsUsedToday}
             </span>
           </div>
           <div className="bg-muted h-2 overflow-hidden rounded-full">
@@ -66,12 +93,50 @@ export function CreditsMeter() {
                   ? "h-full rounded-full bg-red-500 transition-all"
                   : "h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 transition-all"
               }
-              style={{ width: `${100 - pct}%` }}
+              style={{ width: `${usedPct}%` }}
             />
           </div>
           <p className="text-muted-foreground text-xs">
+            {credits.remaining.toLocaleString()} left ·{" "}
             {t.settings.account.creditsResets}
           </p>
+
+          {/* Self-service request path (hybrid wall). */}
+          {status === "pending" ? (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              {t.settings.account.creditsRequestPending}
+            </p>
+          ) : showForm ? (
+            <div className="space-y-2">
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={t.settings.account.creditsRequestReason}
+                rows={2}
+                className="border-input bg-background w-full rounded-md border px-2 py-1.5 text-sm"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={sendRequest} disabled={sending}>
+                  {t.settings.account.creditsRequestSend}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowForm(false)}
+                >
+                  ×
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowForm(true)}
+            >
+              {t.settings.account.creditsRequestMore}
+            </Button>
+          )}
         </div>
       )}
     </SettingsSection>

@@ -485,6 +485,13 @@ export interface Translations {
       creditsLeftToday: string;
       creditsUnlimited: string;
       creditsResets: string;
+      creditsUsedToday: string;
+      creditsRequestMore: string;
+      creditsRequestReason: string;
+      creditsRequestSend: string;
+      creditsRequestPending: string;
+      creditsRequestApproved: string;
+      creditsRequestSent: string;
       referralTitle: string;
       referralDescription: string;
       referralYourLink: string;

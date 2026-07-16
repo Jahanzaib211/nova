@@ -317,3 +317,67 @@ async def audit(request: Request, limit: int = Query(50, ge=1, le=200), offset: 
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     rows, total = await admin_ops.list_audit(limit=limit, offset=offset)
     return AuditResponse(data=rows, total=total, limit=limit, offset=offset)
+
+
+# ── Self-service credit requests (operator inbox) ────────────────────────
+
+
+class CreditRequestsResponse(BaseModel):
+    data: list[dict]
+    total: int
+    pending: int
+
+
+@router.get("/credit-requests", response_model=CreditRequestsResponse)
+async def list_credit_requests(
+    request: Request,
+    status_filter: str = Query("pending", pattern="^(pending|approved|declined|all)$"),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> CreditRequestsResponse:
+    """List self-service credit requests for the operator inbox. Admin only."""
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    from app.gateway import credit_requests as cr
+
+    rows, total = await cr.list_requests(status=None if status_filter == "all" else status_filter, limit=limit, offset=offset)
+    pending = await cr.pending_count()
+    return CreditRequestsResponse(data=rows, total=total, pending=pending)
+
+
+class ResolveRequestBody(BaseModel):
+    approve: bool
+    # When approving, the bonus to grant (defaults applied if omitted).
+    daily_bonus_tokens: int = Field(250_000, gt=0, le=100_000_000)
+    days: int = Field(7, gt=0, le=365)
+
+
+@router.post("/credit-requests/{request_id}/resolve", response_model=MessageResponse)
+async def resolve_credit_request(request_id: str, body: ResolveRequestBody, request: Request) -> MessageResponse:
+    """Approve (grant credits) or decline a self-service request. Admin only."""
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    from app.gateway import credit_requests as cr
+
+    existing = await cr.get_request(request_id)
+    if existing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    if existing["status"] != "pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Request already resolved")
+
+    actor = _actor(request)
+    if body.approve:
+        await _add_grant(
+            existing["user_id"],
+            daily_bonus_tokens=body.daily_bonus_tokens,
+            days=body.days,
+            reason="credit_request_approved",
+            session_factory=None,
+            now=datetime.now(UTC),
+        )
+    await cr.resolve_request(request_id, approve=body.approve, resolved_by=actor)
+    await admin_ops.record_audit(
+        actor=actor,
+        action="resolve-credit-request",
+        target_user_id=existing["user_id"],
+        payload={"approve": body.approve, "daily_bonus_tokens": body.daily_bonus_tokens if body.approve else 0, "days": body.days if body.approve else 0},
+    )
+    return MessageResponse(message="Request approved" if body.approve else "Request declined")

@@ -22,6 +22,7 @@ from deerflow.persistence.channel_connections.model import (
     ChannelOAuthStateRow,
 )
 from deerflow.persistence.credit_grant.model import CreditGrantRow
+from deerflow.persistence.credit_request.model import CreditRequestRow
 from deerflow.persistence.feedback.model import FeedbackRow
 from deerflow.persistence.models.run_event import RunEventRow
 from deerflow.persistence.run.model import RunRow
@@ -36,6 +37,7 @@ __all__ = [
     "ChannelCredentialRow",
     "ChannelOAuthStateRow",
     "CreditGrantRow",
+    "CreditRequestRow",
     "FeedbackRow",
     "RunEventRow",
     "RunRow",
