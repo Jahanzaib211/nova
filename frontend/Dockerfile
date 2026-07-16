@@ -31,8 +31,11 @@ EXPOSE 3000
 # ── Builder: install + compile Next.js ───────────────────────────────────────
 FROM base AS builder
 RUN cd /app/frontend && pnpm install --frozen-lockfile
-# Skip env validation — runtime vars are injected by nginx/container
-RUN cd /app/frontend && SKIP_ENV_VALIDATION=1 pnpm build
+# Validate env at build (audit B7). The schema (src/env.js) marks all
+# NEXT_PUBLIC_* / server vars optional because runtime routing is handled by
+# nginx, so validation passes cleanly here while still catching an invalid
+# value or a future required var instead of silently baking a misconfig.
+RUN cd /app/frontend && pnpm build
 
 # ── Prod: minimal runtime with pre-built output ───────────────────────────────
 FROM node:22-alpine AS prod
