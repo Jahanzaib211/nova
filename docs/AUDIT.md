@@ -1,7 +1,8 @@
-# Nova Enterprise Audit & Pipeline (v6 + v7)
+# Nova Enterprise Audit & Pipeline (Consolidated)
 
-> **Purpose:** End-to-end audit of the Nova codebase as a production-grade agent platform. Covers architecture, data flow, control flow, test coverage, deployment topology, observability gaps, and a prioritized improvement plan.
-> **Generated:** post-v7 sprint (browser/computer hardening). 483 backend tests, 339 frontend tests, all green.
+> **Purpose:** Single-source-of-truth audit of the Nova platform — architecture, data flow, control flow, test coverage, deployment topology, observability gaps, frontend UI/UX, component tree, API surface, and a prioritized improvement plan.
+> **Generated:** post-v7 sprint (browser/computer hardening) + frontend UI audit (DeerFlow 2.0).
+> **Scope:** Read-only analysis. No files modified during audit.
 
 ---
 
@@ -10,11 +11,11 @@
 | Layer | Status | Risk |
 |---|---|---|
 | **Backend harness** | Production-grade (v7 hardening complete) | Low |
-| **Frontend UI** | Functional, missing observability + active feedback | Medium |
-| **Deployment** | Recoverable (docker-compose + pm2) | Medium (nginx single point of failure today) |
+| **Frontend UI** | Functional, missing observability + active feedback + component test coverage | Medium |
+| **Deployment** | Recoverable (docker-compose + pm2) | Medium (nginx single point of failure) |
 | **Observability** | Partial: structured logs ✅, Prometheus ✅, UI readback ❌ | Medium |
 | **Test coverage** | 822 tests across both layers, 100% green | Low |
-| **Documentation** | Per-sprint FORK_V{3..7}.md, no consolidated audit doc (this is it) | Low |
+| **Documentation** | Per-sprint FORK_V{3..7}.md, consolidated here | Low |
 
 ---
 
@@ -27,28 +28,28 @@
                           │       Browser (User @ :2026)          │
                           └────────────────┬─────────────────────┘
                                            │ HTTPS
-                                  ┌────────▼─────────┐
-                                  │   nginx :2026    │  ← reverse proxy (deer-flow-nginx container)
-                                  │   /api/*  → gw   │     restarts: unless-stopped
-                                  │   /*       → fe  │     memory: UNBOUND ⚠
-                                  └────┬────────┬────┘
-                          ┌────────────┘        └────────────┐
-                          ▼                                  ▼
-              ┌──────────────────────┐          ┌──────────────────────┐
-              │  gateway :8001       │          │  frontend :3000      │
-              │  FastAPI + LangGraph │          │  Next.js 16 + React  │
-              │  + langchain SDK     │          │  + TanStack Query    │
-              │  (in-proc runtime)    │          │  + shadcn/magic UI    │
-              └──────────┬───────────┘          └──────────────────────┘
-                         │ spawns / uses
-                         ▼
-              ┌──────────────────────┐
-              │  docker host          │
-              │  ├─ AIO per-thread    │  ← sandbox container (per-thread)
-              │  │  containers         │
-              │  ├─ local sandboxes   │  ← fallback sandbox (no browser)
-              │  └─ provisioner Pods  │  ← optional, K8s mode
-              └──────────────────────┘
+                                   ┌────────▼─────────┐
+                                   │   nginx :2026    │  ← reverse proxy (nova-nginx container)
+                                   │   /api/*  → gw   │     restarts: unless-stopped
+                                   │   /*       → fe  │     memory: UNBOUND ⚠
+                                   └────┬────────┬────┘
+                           ┌────────────┘        └────────────┐
+                           ▼                                  ▼
+               ┌──────────────────────┐          ┌──────────────────────┐
+               │  gateway :8001       │          │  frontend :3000      │
+               │  FastAPI + LangGraph │          │  Next.js 16 + React  │
+               │  + langchain SDK     │          │  + TanStack Query    │
+               │  (in-proc runtime)    │          │  + shadcn/magic UI    │
+               └──────────┬───────────┘          └──────────────────────┘
+                          │ spawns / uses
+                          ▼
+               ┌──────────────────────┐
+               │  docker host          │
+               │  ├─ AIO per-thread    │  ← sandbox container (per-thread)
+               │  │  containers         │
+               │  ├─ local sandboxes   │  ← fallback sandbox (no browser)
+               │  └─ provisioner Pods  │  ← optional, K8s mode
+               └──────────────────────┘
 ```
 
 ### 1.2 Backend (harness) modules
@@ -96,22 +97,25 @@ frontend/src/
 │   ├── agents/[name]/chats/[id]/
 │   └── workspace/agents/new/
 ├── components/
-│   ├── ui/                shadcn primitives
-│   ├── ai-elements/       Reasoning, artifact, tool-call building blocks
-│   └── workspace/
-│       ├── agent-computer/   1763 LOC, the "Computer" panel ← heaviest file
-│       ├── messages/          message-list, message-group, tool-call rendering
-│       ├── panels/            settings, citations, mode-hover-guide
-│       ├── artifacts/         present-files UI
-│       ├── settings/          skill-settings-page (admin)
-│       └── input-box.tsx       composer
-├── core/
-│   ├── skills/          useSkills hook + REST API
-│   ├── mcp/             useMcpTools hook + REST API
-│   ├── agents/          REST API
-│   ├── artifacts/       loader, manager
-│   └── threads/         hooks, infinite scroll, export
-└── hooks/, lib/, styles/
+│   ├── ui/                shadcn UI primitives
+│   ├── ai-elements/       Vercel AI SDK elements (auto-generated, ESLint-ignored)
+│   └── workspace/         Chat page components (messages, artifacts, settings)
+├── core/                  Business logic, the heart of the app:
+│   ├── threads/           Thread creation, streaming, state management (hooks + types)
+│   ├── api/               LangGraph client singleton
+│   ├── artifacts/         Artifact loading and caching
+│   ├── channels/          IM channel connections (provider catalog, connect/runtime-config API + hooks)
+│   ├── i18n/              Internationalization (en-US, zh-CN)
+│   ├── settings/          User preferences in localStorage
+│   ├── memory/            Persistent user memory system
+│   ├── skills/            Skills installation and management
+│   ├── messages/          Message processing and transformation
+│   ├── mcp/               Model Context Protocol integration
+│   └── models/            TypeScript types and data models
+├── hooks/                 Shared React hooks
+├── lib/                   Utilities (cn() from clsx + tailwind-merge)
+├── server/                Server-side code (better-auth, not yet active)
+└── styles/                Global CSS with Tailwind v4 @import syntax and CSS variables for theming
 ```
 
 ---
@@ -122,21 +126,21 @@ frontend/src/
 
 ```
 [1] User types in InputBox (frontend/src/components/workspace/input-box.tsx)
-        │
-        │ POST /api/threads/{id}/runs/stream
-        ▼
+         │
+         │ POST /api/threads/{id}/runs/stream
+         ▼
 [2] Gateway receives, validates session (AuthMiddleware)
-        │
-        │ Submits to RunManager.run_agent()
-        ▼
+         │
+         │ Submits to RunManager.run_agent()
+         ▼
 [3] RunManager invokes LangChain's create_agent() (lead_agent/agent.py)
-        │
-        │ LangChain streams events
-        ▼
+         │
+         │ LangChain streams events
+         ▼
 [4] LangChain calls LLM (models/factory.py)
-        │
-        │ LLM returns AIMessage with tool_calls[]
-        ▼
+         │
+         │ LLM returns AIMessage with tool_calls[]
+         ▼
 [5] AgentMiddleware chain fires (10 middlewares):
     - thread_data       ← injects manifest into state
     - observe_adjust    ← writes todo.md, emits task_progress
@@ -148,28 +152,28 @@ frontend/src/
     - loop_detection
     - subagent_limit
     - reflect_fix
-        │
-        │ Tool calls dispatched
-        ▼
+         │
+         │ Tool calls dispatched
+         ▼
 [6] Tool execution (tools/tools.py):
     - Local tools: 26 BUILTIN_TOOLS + dynamic config
     - MCP tools: from extensions_config.json
     - Skills: loaded via SkillStorage
     - Subagents: dispatched via SubagentExecutor
-        │
-        │ ToolMessage returned
-        ▼
+         │
+         │ ToolMessage returned
+         ▼
 [7] LangChain SDK formats StreamBridge events
-        │
-        │ SSE stream to frontend
-        ▼
+         │
+         │ SSE stream to frontend
+         ▼
 [8] Frontend hooks.ts receives events:
     - message stream → MessageList
     - verify_result → VerifyResultPill in Agent Computer panel
     - llm_error → LlmErrorBadge
     - task_progress → todo list
-        │
-        ▼
+         │
+         ▼
 [9] User sees:
     - ToolCall rendered in message-group.tsx (chain-of-thought)
     - Browser/screenshot/terminal updates in Agent Computer
@@ -272,15 +276,15 @@ v7 (NEW, 219 tests):
 
 ### 4.2 Frontend — 339 tests across 36 files
 
-Strongest coverage:
+**Strongest coverage:**
 - thread hooks (export, infinite scroll)
 - clipboard, uploads, file validation
 - agent API, channels API, settings
 - agent computer (helpers, panels)
 
-Lightest coverage:
-- message-group.tsx (the 1763-LOC beast) — only 0 direct tests
-- agent-computer-panel.tsx — only 0 direct tests
+**Lightest coverage:**
+- `message-group.tsx` (the 1763-LOC beast) — only 0 direct tests
+- `agent-computer-panel.tsx` — only 0 direct tests
 - Most "ai-elements" building blocks
 
 ### 4.3 Coverage gaps
@@ -386,7 +390,7 @@ The existing SkillLauncher is a trigger; the user wants a **status panel**.
 ### 8.1 Tier 1 — operational + user-asked (this sprint)
 
 1. **Skills/Tools/Hooks observability** (user-asked)
-   - Backend: new endpoint `/api/runtime/capabilities` returning {skills, tools, hooks, subagents, circuit_states}
+   - Backend: new endpoint `/api/runtime/capabilities` returning `{skills, tools, hooks, subagents, circuit_states}`
    - Frontend: `<RuntimeCapabilitiesBar />` showing real-time state
    - Side effect: zero (additive)
 
@@ -479,9 +483,239 @@ Tools → navigate_idempotency    ← 60s TTL cache
 
 ---
 
-## 11. Pipeline verification
+## 11. Frontend deep-dive (from DeerFlow 2.0 audit)
 
-### 11.1 What "works in cohesion" means here
+### 11.1 Component tree (parent → children)
+
+**App shell**
+```
+src/app/layout.tsx                       (RootLayout — html/body, fonts, Geist, JetBrains Mono)
+└── <ThemeProvider>                      (next-themes; src/components/theme-provider.tsx)
+    └── <QueryClientProvider>            (src/components/query-client-provider.tsx)
+        └── <I18nProvider>               (src/core/i18n/context.tsx)
+            └── children                 (each route)
+```
+
+**Routes**
+```
+src/app/
+├── layout.tsx                                  ← RootLayout (Theme + Query + I18n)
+├── page.tsx                                    (marketing/landing page; wraps <Landing/>)
+├── blog/page.tsx                               (static blog)
+├── (auth)/
+│   ├── login/page.tsx                          (form + setup-status probe)
+│   └── setup/page.tsx                          (admin first-run)
+├── api/
+│   └── memory/
+│       ├── route.ts                            (proxy GET, DELETE)
+│       └── [...path]/route.ts                  (proxy GET, POST, PATCH, DELETE)
+├── mock/api/threads/[thread_id]/
+│   ├── history/route.ts                        (static demo thread.json)
+│   └── artifacts/[[...artifact_path]]/route.ts (serves /public/demo/threads/<id>/)
+└── workspace/
+    ├── layout.tsx                              (server: getServerSideUser → AuthProvider,
+    │                                            GatewayOfflineFallback, QueryClient)
+    ├── page.tsx                                (redirect → /workspace/chats/new)
+    ├── workspace-content.tsx                   (SidebarProvider + SidebarInset + routes)
+    ├── chats/
+    │   ├── page.tsx                            (empty list view)
+    │   ├── new/page.tsx                        (mounted under chats/[thread_id] layout)
+    │   └── [thread_id]/
+    │       ├── layout.tsx                      (server: pre-warm query cache + providers tree)
+    │       ├── providers.tsx                   (SubtasksProvider > ArtifactsProvider > PromptInputProvider)
+    │       └── page.tsx                        (main chat surface; mount layout = ChatBox > main)
+    └── agents/
+        ├── page.tsx                            (→ <AgentGallery/>)
+        ├── new/page.tsx                        (two-step: name → chat; runs useThreadStream)
+        └── [agent_name]/chats/[thread_id]/
+            ├── layout.tsx                      (Providers tree, same as /chats/[thread_id]/layout)
+            └── page.tsx                        (per-agent variant of the chat page)
+```
+
+### 11.2 Layout structure and CSS grid
+
+**Top-level page chrome** (`workspace-container.tsx`):
+```
+WorkspaceContainer                div  flex h-screen w-full flex-col
+├── SidebarProvider wrapper       div  group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar
+│                                  flex min-h-svh w-full
+│   ├── WorkspaceSidebar          <Sidebar variant="sidebar" collapsible="icon">
+│   │   width: --sidebar-width = 16rem  | collapsed: --sidebar-width-icon = 3rem
+│   │   ├── SidebarHeader → WorkspaceHeader (logo + new-chat link)
+│   │   ├── SidebarContent
+│   │   │   ├── WorkspaceNavChatList
+│   │   │   ├── WorkspaceChannelsList
+│   │   │   └── RecentChatList
+│   │   ├── SidebarFooter → WorkspaceNavMenu
+│   │   └── SidebarRail (drag-handle rail)
+│   └── SidebarInset              (flex-1, ml=sidebar-width, transitions on collapse)
+│       └── WorkspaceHeader       h-16, group-has-data-[collapsible=icon]/sidebar-wrapper:h-12
+│           ├── Breadcrumb
+│           └── github icon
+│       └── WorkspaceBody
+│           main > div flex h-full w-full flex-col items-center
+│               └── [route content]
+```
+
+**The actual chat "canvas"** (`src/app/workspace/chats/[thread_id]/page.tsx`):
+The chat page is a **two-column flex inside `<ChatBox>`**:
+```jsx
+<div className="relative flex size-full min-h-0 justify-between">
+  <header className="absolute top-0 right-0 left-0 z-30 flex h-12 …">
+    <SidebarTrigger className="md:hidden" />
+    … agent badge (only on /agents/[agent_name]/…) …
+    <ThreadTitle />
+    <div className="flex shrink-0 items-center sm:mr-4">
+      <NewChatButton />
+      <TokenUsageIndicator />
+      <ExportTrigger />
+      <ArtifactTrigger />
+    </div>
+  </header>
+
+  <main className="flex min-h-0 max-w-full grow flex-col">
+    <div className="flex min-h-0 flex-1 justify-center">
+      <MessageList className="size-full …" />
+    </div>
+    <div className="right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4">
+      <div className="relative w-full max-w-(--container-width-md)">
+        {" "}
+        // = 204 * 0.25rem = 51rem ≈ 816px
+        <TodoList />
+        <InputBox />
+      </div>
+    </div>
+  </main>
+</div>
+```
+
+**The only real panel split** — `chat-box.tsx`:
+```tsx
+<ResizablePanelGroup
+  id={…}
+  orientation="horizontal"
+  defaultLayout={{ chat: 100, artifacts: 0 }}
+  groupRef={layoutRef}
+>
+  <ResizablePanel className="relative" defaultSize={100} id="chat">   {/* ← chat surface */}
+    {children}
+  </ResizablePanel>
+  <ResizableHandle … />
+  <ResizablePanel
+    className={cn("transition-all …", !artifactsOpen && "opacity-0")}
+    id="artifacts"                                                    {/* ← artifact surface */}
+  >
+    {/* ArtifactFileDetail or ArtifactFileList */}
+  </ResizablePanel>
+</ResizablePanelGroup>
+```
+Two presets:
+```ts
+const CLOSE_MODE = { chat: 100, artifacts: 0 };
+const OPEN_MODE = { chat: 60, artifacts: 40 };
+```
+
+### 11.3 WebSocket / SSE connections to backend
+
+- **No direct** `EventSource`, `WebSocket`, or `text/event-stream` consumers in the codebase. All real-time streaming goes through the LangGraph SDK.
+- **LangGraph SDK streaming** via `useStream` from `@langchain/langgraph-sdk/react`, configured once in `src/core/threads/hooks.ts`.
+- **Pollers / intervals** (also "long-lived"):
+  - `gateway-offline-banner.tsx` — every 10 s
+  - `AuthProvider.tsx` — `visibilitychange` → throttled to once/60s
+  - `connect-poll.ts` — every 2 s up to `expires_in` (default 600 s)
+  - `message-list.tsx` (LoadMoreHistoryIndicator) — IntersectionObserver, 1.2 s throttle
+  - `recent-chat-list.tsx` — sentinel IntersectionObserver
+  - `threads/hooks.ts` + `context.ts` — LangGraph SDK reconnects on mount
+
+### 11.4 API calls to FastAPI gateway and LangGraph
+
+**Transport conventions**
+- `getBackendBaseURL()` → `env.NEXT_PUBLIC_BACKEND_BASE_URL` (defaults to empty string; relative to `window.location.origin`)
+- `getLangGraphBaseURL()` → `env.NEXT_PUBLIC_LANGGRAPH_BASE_URL`, or `<origin>/api/langgraph` (default) / `<origin>/mock/api` (when `?mock=true`)
+- Wrapper `fetch()` in `src/core/api/fetcher.ts` adds:
+  - `credentials: "include"` (access_token cookie is HttpOnly)
+  - `X-CSRF-Token: <csrf_token cookie>` for `POST|PUT|DELETE|PATCH`
+  - Auto-redirect to `/login?...` on `401`
+- LangGraph SDK uses an `onRequest` hook in `api-client.ts` to mirror the CSRF contract on `client.runs.*`
+- `src/app/api/memory/**` is a server-side proxy to `process.env.NEXT_PUBLIC_BACKEND_BASE_URL` (default `http://127.0.0.1:8001`)
+
+**FastAPI gateway endpoints (and where they're called)**
+| Method | Path (relative to `getBackendBaseURL()`) | Caller(s) |
+|---|---|---|
+| GET | `/api/models` | `core/models/api.ts` → `useModels` |
+| GET | `/api/agents` | `core/agents/api.ts` → `useAgents` |
+| POST | `/api/agents` | `core/agents/api.ts` → `useCreateAgent` |
+| GET | `/api/agents/{name}` | `core/agents/api.ts` → `useAgent` |
+| PUT | `/api/agents/{name}` | `core/agents/api.ts` → `useUpdateAgent` |
+| DELETE | `/api/agents/{name}` | `core/agents/api.ts` → `useDeleteAgent` |
+| GET | `/api/skills` | `core/skills/api.ts` → `loadSkills` |
+| POST | `/api/skills/{name}` | `core/skills/api.ts` → `enableSkill` |
+| POST | `/api/skills/install` | `core/skills/api.ts` → `installSkill` |
+| GET | `/api/memory` | `core/memory/api.ts` → `loadMemory`; also proxied via `src/app/api/memory/route.ts` |
+| GET | `/api/mcp/config` | `core/mcp/api.ts` → `loadMCPConfig` |
+| PUT | `/api/mcp/config` | `core/mcp/api.ts` → `saveMCPConfig` |
+| GET | `/api/channels/providers` | `core/channels/api.ts` → `listChannelProviders` |
+| POST | `/api/channels/{provider}/connect` | `core/channels/api.ts` → `connectChannelProvider` |
+| GET | `/api/threads/{threadId}/token-usage` | `core/threads/api.ts` → `useThreadTokenUsage` |
+| POST | `/api/threads/{threadId}/runs/{runId}/feedback` | `core/api/feedback.ts` |
+
+**LangGraph SDK endpoints** (used by `useStream` + `api-client.ts`)
+| SDK method | Where |
+|---|---|
+| `client.runs.stream(threadId, "lead_agent", payload)` | `useStream({ assistantId: "lead_agent", … })` |
+| `client.runs.joinStream(threadId, runId)` | Reconnect logic in `api-client.ts` patch |
+| `client.threads.getState<AgentThreadState>(threadId)` | `recent-chat-list.tsx` (`handleExport`) |
+| `client.threads.update(threadId, { metadata })` | `useStream.onCreated` (writes `agent_name`) |
+| `client.threads.search(params, …)` | `useInfiniteThreads` / `useThreads` — uses `useInfiniteQuery` |
+| `client.threads.create({ … })` | Implicit via `client.runs.stream` with new threadId |
+| `client.threads.delete(threadId)` | `useDeleteThread` (via `core/threads/hooks.ts`) |
+
+### 11.5 Files that would need changing for a 4-panel layout
+
+**Core layout containers (must change):**
+- `src/components/workspace/chats/chat-box.tsx` — Replace 2-panel `ResizablePanelGroup` with 4-panel grid (or nested groups). Add new `OPEN_MODE`/`CLOSE_MODE` presets.
+- `src/app/workspace/chats/[thread_id]/providers.tsx` — Possibly introduce a fourth context (e.g. `AgentToolsProvider`).
+- `src/app/workspace/agents/[agent_name]/chats/[thread_id]/layout.tsx` — Mirror the providers change.
+- `src/app/workspace/chats/[thread_id]/page.tsx` — Wire new header triggers, pass `selectedTool` state into ChatBox.
+- `src/components/workspace/todo-list.tsx` — Currently renders as overlay over InputBox. For 4-panel grid, lift into bottom panel; remove absolute-positioning classes.
+
+**New panel content (new components to create):**
+- `src/components/workspace/agent-tools/agent-tools-panel.tsx` — Bottom panel shell
+- `src/components/workspace/agent-tools/agent-tools-tool-call-list.tsx` — Per-thread tool-call registry / status / debug console
+- `src/components/workspace/settings/tools-settings-section.tsx` — Toggle "Show agent tools panel", default size, start state
+
+**Components inside ChatBox needing container-query updates:**
+- `artifacts/context.tsx`, `artifact-trigger.tsx`, `artifact-file-list.tsx`, `artifact-file-detail.tsx` — Add `bottomPanelOpen` state
+- `input-box.tsx` — If InputBox becomes sibling of new panel rather than footer dock, move dock logic out of `page.tsx`
+- `message-list.tsx` — `MESSAGE_LIST_DEFAULT_PADDING_BOTTOM` may need new value if bottom panel collapsible
+- `todo-list.tsx` — Convert from absolute-positioned overlay to panel-resident component
+- `gateway-offline-banner.tsx` — Verify z-index above 4 panels
+
+**Hooks and contexts (state plumbing):**
+- `messages/context.ts` — Extend `ThreadContextType` only if new panel needs thread-scoped state
+- `artifacts/context.tsx` — Lift panel-state into a more general `PanelsContext` (artifacts + new panel)
+- `hooks/use-global-shortcuts.ts` / `command-palette.tsx` — Add shortcut for toggling new panel
+
+**I18N strings to add:**
+- `src/core/i18n/locales/en-US.ts` — New panel title, toggle, tool-call labels
+- `src/core/i18n/locales/zh-CN.ts` — Mirror in zh-CN
+- `src/core/i18n/locales/types.ts` — Update dictionary types
+
+**Settings dialog (if panel is toggleable):**
+- `settings/index.ts` — Register new section (e.g. `"agent-tools"`)
+- `settings/tools-settings-section.tsx` — Toggle "Show agent tools panel", default size, start state
+- `core/settings/local.ts` / `store.ts` / `index.ts` — Persist toggles in localStorage (per-thread if desired)
+
+**Backend / API surface (no strict requirement, but if new panel needs data):**
+- `GET /api/threads/{threadId}/subagents` (subtask registry)
+- `GET /api/threads/{threadId}/tool-calls`
+- `GET /api/threads/{threadId}/todos` (currently derived from `useStream.onUpdateEvent`; if persisted, expose them)
+
+---
+
+## 12. Pipeline verification
+
+### 12.1 What "works in cohesion" means here
 
 A user prompt → working code delivery requires:
 1. ✅ Prompt validated + auth checked
@@ -496,7 +730,7 @@ A user prompt → working code delivery requires:
 
 Steps 1-7 verified working. Steps 8-9 are the gaps this sprint addresses.
 
-### 11.2 Test order (dependency-ordered)
+### 12.2 Test order (dependency-ordered)
 
 ```
 1. backend pytest (smallest scope)
@@ -512,7 +746,7 @@ Steps 1-7 verified working. Steps 8-9 are the gaps this sprint addresses.
 
 ---
 
-## 12. Final state — single-page summary
+## 13. Final state — single-page summary
 
 | Metric | Value |
 |---|---|
@@ -537,7 +771,7 @@ Steps 1-7 verified working. Steps 8-9 are the gaps this sprint addresses.
 
 ---
 
-## 13. What's shipping in this round (v7.1)
+## 14. What's shipping in this round (v7.1)
 
 1. ✅ nginx recovered (this very minute)
 2. ⏳ Audit document (this file)

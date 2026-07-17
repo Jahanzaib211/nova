@@ -11,6 +11,38 @@
 
 ---
 
+## Current Platform Status (consolidated from CONSOLIDATION.md + ROADMAP.md)
+
+| Phase | Title | Status | Key Deliverables |
+|-------|-------|--------|------------------|
+| C0 | Foundation (correlation, CI guardrails) | ✅ **complete** (2026-07-12) | Cross-process correlation via `correlation_id`, SSE comment emission + frontend capture, streaming hardening (watchdog, bounded teardown, convergent cleanup), tunnel auto-recovery, CI guardrails (middleware sprawl, duplicate-recovery), `CONSOLIDATION.md` tracker |
+| C1 | Documentation sync + typed service layer | ✅ **complete** (2026-07-12) | Repository reality audit (127 files), 12 docs updated + 3 created, 10 Protocol interfaces, 7 typed return models, 10 thin wrapper implementations, 33 unit tests |
+| C2 | Run state consolidation + dependency injection | ✅ **complete** (2026-07-12) | `ServiceContainer` with lazy singletons + `override()`, `RunState` frozen dataclass with `from_record()` bridge, gateway wired: `app.state.run_service`, `get_run_service` dependency, backward compat maintained |
+| C3 | Unified lifecycle + event bus | ✅ **complete** (2026-07-12) | Canonical `RunLifecycleStatus` enum (11 states), 17 frozen dataclass domain events, `EventBus` (sync, typed, DI-compatible), `EventPublisher`/`Subscriber`/`Registry`, `RunServiceImpl` publishes lifecycle events, `DiagnosticsServiceImpl` subscribes, `HealthServiceImpl` publishes `HealthChanged`, 56 tests |
+| C4 | Recovery engine + unified health management | ✅ **complete** (2026-07-12) | `RecoveryEngine` (event-driven via EventBus), 10 declarative policies with `RetryStrategy`, 7 recovery events, 9 default action handlers, recovery history + metrics, cancellation support, 37 tests |
+| C5 | Platform Convergence | 🔄 **in progress** | Gateway `list_runs`/`get_run`/`cancel_run` → `RunService`, `create_or_reject()` for multitask-aware runs, worker `_service_set_status()` routes all status transitions through service layer → EventBus receives all lifecycle events, 127 consolidation tests pass |
+| C6 | Workspace/Repository abstraction | ⏳ pending | Depends on C2 |
+| C7 | Deployment, HA, production hardening | ⏳ pending | Depends on C3–C6 |
+| C8 | Performance optimization and scaling | ⏳ pending | Depends on C7 |
+| C9 | Product features and extensibility | ⏳ pending | Depends on C8 |
+
+**Design Principles:**
+1. Single coherent operating system — not a collection of AI features
+2. Reduce architectural complexity — every sprint should simplify
+3. Increase operational reliability — self-healing, observability, testing
+4. Strengthen foundation first — before expanding capabilities
+5. Implementation is source of truth — docs follow code, not vice versa
+
+**Constraints:**
+- No new user-facing features until consolidated
+- No references to the local LLM gateway service name in code
+- No references to the model name it wraps in code (allowed only as literal model identifiers in config)
+- `deerflow` namespace is allowed (historical)
+- TDD mandatory for all new features
+- All commits must pass self-test protocol
+
+---
+
 ## v9.0 — Phase C9: accounts, monetization & the referral flywheel
 
 **Session pattern:** greenfield product layer on top of the C-phase platform — accounts, usage credits, referrals, and paid billing. All additive; every account column backfills the 24 existing users.

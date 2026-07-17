@@ -1,0 +1,60 @@
+name: Frontend Build + Typecheck
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-build.yml'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-build.yml'
+
+concurrency:
+  group: frontend-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript typecheck
+        working-directory: frontend
+        run: pnpm typecheck
+
+      - name: Production build
+        working-directory: frontend
+        env:
+          # Validate env at build time (matches Dockerfile B7 fix)
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+        run: |
+          NODE_OPTIONS="--max-old-space-size=4096" pnpm build

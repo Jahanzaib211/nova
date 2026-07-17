@@ -1,6 +1,6 @@
-# DeerFlow Backend
+# Nova Backend
 
-DeerFlow is a LangGraph-based AI super agent with sandbox execution, persistent memory, and extensible tool integration. The backend enables AI agents to execute code, browse the web, manage files, delegate tasks to subagents, and retain context across conversations - all in isolated, per-thread environments.
+Nova is a LangGraph-based AI super agent with sandbox execution, persistent memory, and extensible tool integration. The backend enables AI agents to execute code, browse the web, manage files, delegate tasks to subagents, and retain context across conversations - all in isolated, per-thread environments.
 
 ---
 
@@ -122,14 +122,14 @@ FastAPI application providing REST endpoints for frontend integration:
 | `GET /api/memory/status` | Combined config + data |
 | `POST /api/threads/{id}/uploads` | Upload files (auto-converts PDF/PPT/Excel/Word to Markdown, rejects directory paths, auto-renames duplicate filenames in one request) |
 | `GET /api/threads/{id}/uploads/list` | List uploaded files |
-| `DELETE /api/threads/{id}` | Delete DeerFlow-managed local thread data after LangGraph thread deletion; unexpected failures are logged server-side and return a generic 500 detail |
+| `DELETE /api/threads/{id}` | Delete Nova-managed local thread data after LangGraph thread deletion; unexpected failures are logged server-side and return a generic 500 detail |
 | `GET /api/threads/{id}/artifacts/{path}` | Serve generated artifacts |
 
 ### IM Channels
 
 The IM bridge supports Feishu, Slack, and Telegram. Slack and Telegram still use the final `runs.wait()` response path, while Feishu now streams through `runs.stream(["messages-tuple", "values"])` and updates a single in-thread card in place.
 
-For Feishu card updates, DeerFlow stores the running card's `message_id` per inbound message and patches that same card until the run finishes, preserving the existing `OK` / `DONE` reaction flow.
+For Feishu card updates, Nova stores the running card's `message_id` per inbound message and patches that same card until the run finishes, preserving the existing `OK` / `DONE` reaction flow.
 
 ---
 
@@ -268,7 +268,7 @@ Key sections:
 
 Provider note:
 - `models[*].use` references provider classes by module path (for example `langchain_openai:ChatOpenAI`).
-- If a provider module is missing, DeerFlow now returns an actionable error with install guidance (for example `uv add langchain-google-genai`).
+- If a provider module is missing, Nova now returns an actionable error with install guidance (for example `uv add langchain-google-genai`).
 
 ### Extensions Configuration (`extensions_config.json`)
 
@@ -312,7 +312,7 @@ MCP servers and skill states in a single file:
 
 ### LangSmith Tracing
 
-DeerFlow has built-in [LangSmith](https://smith.langchain.com) integration for observability. When enabled, all LLM calls, agent runs, tool executions, and middleware processing are traced and visible in the LangSmith dashboard.
+Nova has built-in [LangSmith](https://smith.langchain.com) integration for observability. When enabled, all LLM calls, agent runs, tool executions, and middleware processing are traced and visible in the LangSmith dashboard.
 
 **Setup:**
 
@@ -330,7 +330,7 @@ LANGSMITH_PROJECT=xxx
 
 ### Langfuse Tracing
 
-DeerFlow also supports [Langfuse](https://langfuse.com) observability for LangChain-compatible runs.
+Nova also supports [Langfuse](https://langfuse.com) observability for LangChain-compatible runs.
 
 Add the following to your `.env` file:
 
@@ -345,9 +345,9 @@ If you are using a self-hosted Langfuse deployment, set `LANGFUSE_BASE_URL` to y
 
 ### Dual Provider Behavior
 
-If both LangSmith and Langfuse are enabled, DeerFlow initializes and attaches both callbacks so the same run data is reported to both systems.
+If both LangSmith and Langfuse are enabled, Nova initializes and attaches both callbacks so the same run data is reported to both systems.
 
-If a provider is explicitly enabled but required credentials are missing, or the provider callback cannot be initialized, DeerFlow raises an error when tracing is initialized during model creation instead of silently disabling tracing.
+If a provider is explicitly enabled but required credentials are missing, or the provider callback cannot be initialized, Nova raises an error when tracing is initialized during model creation instead of silently disabling tracing.
 
 **Docker:** In `docker-compose.yaml`, tracing is disabled by default (`LANGSMITH_TRACING=false`). Set `LANGSMITH_TRACING=true` and/or `LANGFUSE_TRACING=true` in your `.env`, together with the required credentials, to enable tracing in containerized deployments.
 
