@@ -45,9 +45,16 @@ class PortAllocator:
             return False
 
         # Bind to 0.0.0.0 (wildcard) rather than localhost so that the check
-        # mirrors exactly what Docker does.  Docker binds to 0.0.0.0:PORT;
-        # checking only 127.0.0.1 can falsely report a port as available even
-        # when Docker already occupies it on the wildcard address.
+        # mirrors what Docker does on the same network namespace. Docker binds
+        # 0.0.0.0:PORT; checking only 127.0.0.1 can falsely report a port as
+        # available when Docker occupies it on the wildcard address.
+        #
+        # LIMITATION (DooD): when this process runs inside a container and asks
+        # the HOST Docker daemon to publish ports, this bind test inspects the
+        # CONTAINER's namespace — host-side listeners are invisible and the
+        # check false-positives. Callers that publish host ports must treat
+        # Docker's own "address already in use" rejection as authoritative and
+        # quarantine the rejected port via reserve() before retrying.
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.bind(("0.0.0.0", port))
@@ -87,6 +94,18 @@ class PortAllocator:
         """
         with self._lock:
             self._reserved_ports.discard(port)
+
+    def reserve(self, port: int) -> None:
+        """Quarantine a port so allocate() never returns it.
+
+        Used when an external authority (the host Docker daemon in DooD
+        setups) rejects a port this process believed was free — the local
+        bind test cannot see host-side listeners, so the rejection is the
+        only reliable signal. The reservation lasts for the process
+        lifetime unless release() is called.
+        """
+        with self._lock:
+            self._reserved_ports.add(port)
 
     @contextmanager
     def allocate_context(self, start_port: int = 8080, max_range: int = 100):
@@ -137,3 +156,8 @@ def release_port(port: int) -> None:
         port: The port number to release.
     """
     _global_port_allocator.release(port)
+
+
+def reserve_port(port: int) -> None:
+    """Quarantine a port so get_free_port() never returns it (see PortAllocator.reserve)."""
+    _global_port_allocator.reserve(port)

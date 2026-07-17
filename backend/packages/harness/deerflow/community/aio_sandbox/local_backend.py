@@ -9,11 +9,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 from datetime import datetime
 
 from deerflow.execution.models import ExecutionResult, ExecutionStatus
-from deerflow.utils.network import get_free_port, release_port
+from deerflow.utils.network import get_free_port, release_port, reserve_port
 
 from .backend import SandboxBackend, wait_for_sandbox_ready
 from .sandbox_info import SandboxInfo
@@ -294,11 +295,26 @@ class LocalContainerBackend(SandboxBackend):
         """
         container_name = f"{self._container_prefix}-{sandbox_id}"
 
-        # Retry loop: if Docker rejects the port (e.g. a stale container still
-        # holds the binding after a process restart), skip that port and try the
-        # next one.  The socket-bind check in get_free_port mirrors Docker's
-        # 0.0.0.0 bind, but Docker's port-release can be slightly asynchronous,
-        # so a reactive fallback here ensures we always make progress.
+        def _rejected_host_port(error_text: str) -> int | None:
+            """Extract the host port Docker refused to bind, if named.
+
+            Matches both daemon error shapes:
+            - "failed to bind host port 0.0.0.0:4100/tcp: address already in use"
+            - "Bind for 0.0.0.0:4100 failed: port is already allocated"
+            """
+            match = re.search(r"bind (?:host port )?(?:for )?[\d.:\[\]]*:(\d+)(?:/tcp)?", error_text, re.IGNORECASE)
+            return int(match.group(1)) if match else None
+
+        # Retry loop: if Docker rejects a port, learn from the rejection and
+        # try again. Two distinct cases:
+        # - main API port rejected -> rotate to the next candidate.
+        # - a PREVIEW host port rejected -> quarantine it via reserve_port so
+        #   the next attempt allocates a different one. This is the only
+        #   reliable signal in DooD setups: the socket-bind check in
+        #   get_free_port inspects THIS process's network namespace, so a
+        #   host-side listener (e.g. another product on :4100) is invisible
+        #   to it and every naive retry would re-pick the same colliding port
+        #   (2026-07-18 sandbox outage).
         _next_start = self._base_port
         container_id: str | None = None
         port: int = 0
@@ -312,8 +328,20 @@ class LocalContainerBackend(SandboxBackend):
                 release_port(port)
                 err = str(exc)
                 err_lower = err.lower()
-                # Port already bound: skip this port and retry with the next one.
+                # Port already bound: learn which port Docker refused.
                 if "port is already allocated" in err or "address already in use" in err_lower:
+                    rejected = _rejected_host_port(err)
+                    if rejected is not None and rejected != port:
+                        # A preview host port collided with a host-side
+                        # listener this process cannot see. Quarantine it for
+                        # the process lifetime and retry; the main port was
+                        # fine, so don't rotate it.
+                        reserve_port(rejected)
+                        logger.warning(
+                            f"Preview host port {rejected} rejected by Docker (address already in use on the host); "
+                            f"quarantined for this process, retrying with a fresh port"
+                        )
+                        continue
                     logger.warning(f"Port {port} rejected by Docker (already allocated), retrying with next port")
                     _next_start = port + 1
                     continue
@@ -387,6 +415,16 @@ class LocalContainerBackend(SandboxBackend):
             hard-failing on a hiccup.
         """
         container_name = f"{self._container_prefix}-{sandbox_id}"
+
+        def _rejected_host_port(error_text: str) -> int | None:
+            """Extract the host port Docker refused to bind, if named.
+
+            Matches both daemon error shapes:
+            - "failed to bind host port 0.0.0.0:4100/tcp: address already in use"
+            - "Bind for 0.0.0.0:4100 failed: port is already allocated"
+            """
+            match = re.search(r"bind (?:host port )?(?:for )?[\d.:\[\]]*:(\d+)(?:/tcp)?", error_text, re.IGNORECASE)
+            return int(match.group(1)) if match else None
 
         try:
             running = self._is_container_running(container_name)

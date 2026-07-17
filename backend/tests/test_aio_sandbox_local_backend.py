@@ -325,3 +325,79 @@ def test_is_container_running_raises_on_unrelated_not_found_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Failed to inspect container sandbox-busy"):
         backend._is_container_running("sandbox-busy")
+
+
+class TestPreviewPortCollisionQuarantine:
+    """DooD preview-port collision (2026-07-18 incident).
+
+    The gateway runs inside a container, so get_free_port's socket-bind check
+    inspects the container's network namespace — a HOST process holding a
+    preview port (the ops console on 4100) is invisible to it. Every
+    `docker run` then failed with "failed to bind host port 0.0.0.0:4100/tcp:
+    address already in use", and the create() retry loop only rotated the main
+    port, reallocating 4100 forever. create() must learn from Docker's actual
+    rejection: quarantine the rejected host port and retry with the next one.
+    """
+
+    def test_create_survives_host_preview_port_collision(self, monkeypatch):
+        from deerflow.utils import network as network_module
+
+        allocator = network_module._global_port_allocator
+        reserved_before = set(allocator._reserved_ports)
+        # Simulate the container namespace: every port looks bindable locally,
+        # so only the reservation set (and Docker's rejections) can steer.
+        monkeypatch.setattr(
+            type(allocator), "_is_port_available", lambda self, port: port not in self._reserved_ports
+        )
+
+        backend = LocalContainerBackend(
+            image="sandbox:latest",
+            base_port=8080,
+            container_prefix="sandbox",
+            config_mounts=[],
+            environment={},
+            preview_container_ports=[4100, 4101, 4102],
+        )
+        monkeypatch.setattr(backend, "_runtime", "docker")
+
+        def published_host_ports(argv: list[str]) -> list[str]:
+            ports = []
+            for i, arg in enumerate(argv):
+                if arg == "-p" and i + 1 < len(argv):
+                    parts = argv[i + 1].split(":")
+                    if len(parts) >= 2:
+                        ports.append(parts[-2])
+            return ports
+
+        attempts: list[list[str]] = []
+
+        def fake_exec(request):
+            argv = list(request.argv)
+            if "run" in argv[:2]:
+                attempts.append(argv)
+                if "4100" in published_host_ports(argv):
+                    return (
+                        125,
+                        "",
+                        "docker: Error response from daemon: failed to set up container networking: "
+                        "driver failed programming external connectivity on endpoint sandbox-cafe1234 (deadbeef): "
+                        "failed to bind host port 0.0.0.0:4100/tcp: address already in use",
+                    )
+                return (0, "container-id\n", "")
+            return (0, "", "")
+
+        _install_fake_kernel(fake_exec)
+        try:
+            info = backend.create(thread_id="t1", sandbox_id="cafe1234")
+
+            assert info.container_id == "container-id"
+            # The collision was learned from Docker's rejection: exactly one
+            # failed attempt, then success with 4100 remapped elsewhere.
+            assert len(attempts) == 2
+            assert "4100" in published_host_ports(attempts[0])
+            assert "4100" not in published_host_ports(attempts[1])
+            assert info.preview_ports[4100] != 4100
+        finally:
+            # Drop any reservations this test introduced (quarantined 4100 +
+            # allocated ports) so the global allocator stays clean for others.
+            allocator._reserved_ports.intersection_update(reserved_before)
