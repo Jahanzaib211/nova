@@ -9,6 +9,12 @@ and calls the sync checkpointer's async methods, raising NotImplementedError.
 The subagent is a one-shot delegation — it rebuilds state, calls astream
 once, and extracts the last AIMessage. It never resumes, so persistence
 is unnecessary and inheriting the parent checkpointer is harmful.
+
+The executor's historical circular import is fixed in production code (pinned
+by tests/test_import_hygiene.py), so this file imports the real modules — no
+sys.modules mocking. The old machinery here left a stale executor module object
+dangling as the ``deerflow.subagents.executor`` package attribute, which made
+later executor tests patch the wrong module (order-dependent suite failures).
 """
 
 import sys
@@ -17,68 +23,25 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Module names mocked to break circular imports (same set as test_subagent_executor.py)
-_MOCKED_MODULE_NAMES = [
-    "deerflow.agents",
-    "deerflow.agents.thread_state",
-    "deerflow.agents.middlewares",
-    "deerflow.agents.middlewares.thread_data_middleware",
-    "deerflow.sandbox",
-    "deerflow.sandbox.middleware",
-    "deerflow.sandbox.security",
-    "deerflow.models",
-    "deerflow.skills.storage",
-]
-
 
 def _default_app_config():
     return SimpleNamespace(tool_search=SimpleNamespace(enabled=False))
 
 
-def _clear_stale_executor_package_attr() -> None:
-    subagents_pkg = sys.modules.get("deerflow.subagents")
-    if subagents_pkg is not None and hasattr(subagents_pkg, "executor"):
-        delattr(subagents_pkg, "executor")
-
-
 @pytest.fixture(autouse=True)
-def _setup_executor_module():
-    """Set up mocked modules and import the real executor (same pattern as test_subagent_executor.py)."""
-    original_modules = {name: sys.modules.get(name) for name in _MOCKED_MODULE_NAMES}
-    original_executor = sys.modules.get("deerflow.subagents.executor")
-
-    if "deerflow.subagents.executor" in sys.modules:
-        del sys.modules["deerflow.subagents.executor"]
-    _clear_stale_executor_package_attr()
-
-    for name in _MOCKED_MODULE_NAMES:
-        sys.modules[name] = MagicMock()
-    storage_module = ModuleType("deerflow.skills.storage")
-    storage_module.get_or_new_skill_storage = lambda **kwargs: SimpleNamespace(load_skills=lambda *, enabled_only: [])
-    sys.modules["deerflow.skills.storage"] = storage_module
-
+def _setup_executor_module(monkeypatch):
+    """Yield the real executor classes with a hermetic get_app_config seam."""
+    import deerflow.subagents.executor as executor_module
     from deerflow.subagents.config import SubagentConfig
     from deerflow.subagents.executor import SubagentExecutor
 
-    executor_module = sys.modules["deerflow.subagents.executor"]
-    executor_module.get_app_config = _default_app_config
+    monkeypatch.setattr(executor_module, "get_app_config", _default_app_config)
 
     yield {
         "SubagentConfig": SubagentConfig,
         "SubagentExecutor": SubagentExecutor,
         "executor_module": executor_module,
     }
-
-    for name in _MOCKED_MODULE_NAMES:
-        if original_modules[name] is not None:
-            sys.modules[name] = original_modules[name]
-        elif name in sys.modules:
-            del sys.modules[name]
-
-    if original_executor is not None:
-        sys.modules["deerflow.subagents.executor"] = original_executor
-    elif "deerflow.subagents.executor" in sys.modules:
-        del sys.modules["deerflow.subagents.executor"]
 
 
 class TestSubagentCheckpointerIsolation:

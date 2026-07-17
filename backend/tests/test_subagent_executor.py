@@ -8,9 +8,12 @@ Covers:
 - Async tool support (MCP tools)
 - Cooperative cancellation via cancel_event
 
-Note: Due to circular import issues in the main codebase, conftest.py mocks
-deerflow.subagents.executor. This test file uses delayed import via fixture to test
-the real implementation in isolation.
+The executor's historical circular import (executor -> agents.thread_state ->
+agents.__init__ -> ... -> executor) is fixed in production code and pinned by
+tests/test_import_hygiene.py, so this file imports and tests the real modules.
+Only two seams are patched for hermeticity: get_app_config (CI checkouts do not
+include the gitignored config.yaml) and the skills storage (subagent skill
+loading must not touch the filesystem).
 """
 
 import asyncio
@@ -26,19 +29,6 @@ import pytest
 
 from deerflow.skills.types import Skill
 
-# Module names that need to be mocked to break circular imports
-_MOCKED_MODULE_NAMES = [
-    "deerflow.agents",
-    "deerflow.agents.thread_state",
-    "deerflow.agents.middlewares",
-    "deerflow.agents.middlewares.thread_data_middleware",
-    "deerflow.sandbox",
-    "deerflow.sandbox.middleware",
-    "deerflow.sandbox.security",
-    "deerflow.models",
-    "deerflow.skills.storage",
-]
-
 
 def _default_app_config():
     return SimpleNamespace(tool_search=SimpleNamespace(enabled=False))
@@ -49,38 +39,13 @@ def _patch_default_get_app_config(executor_module):
     return executor_module
 
 
-def _clear_stale_executor_package_attr() -> None:
-    subagents_pkg = sys.modules.get("deerflow.subagents")
-    if subagents_pkg is not None and hasattr(subagents_pkg, "executor"):
-        delattr(subagents_pkg, "executor")
-
-
 @pytest.fixture(autouse=True)
-def _setup_executor_classes():
-    """Set up mocked modules and import real executor classes.
-
-    This fixture runs once per test and yields the executor classes.
-    It handles module cleanup to avoid affecting other test files.
-    """
-    # Save original modules
-    original_modules = {name: sys.modules.get(name) for name in _MOCKED_MODULE_NAMES}
-    original_executor = sys.modules.get("deerflow.subagents.executor")
-
-    # Remove mocked executor if exists (from conftest.py)
-    if "deerflow.subagents.executor" in sys.modules:
-        del sys.modules["deerflow.subagents.executor"]
-    _clear_stale_executor_package_attr()
-
-    # Set up mocks
-    for name in _MOCKED_MODULE_NAMES:
-        sys.modules[name] = MagicMock()
-    storage_module = ModuleType("deerflow.skills.storage")
-    storage_module.get_or_new_skill_storage = lambda **kwargs: SimpleNamespace(load_skills=lambda *, enabled_only: [])
-    sys.modules["deerflow.skills.storage"] = storage_module
-
-    # Import real classes inside fixture
+def _setup_executor_classes(monkeypatch):
+    """Yield the real executor classes with hermetic config/skills seams."""
     from langchain_core.messages import AIMessage, HumanMessage
 
+    import deerflow.skills.storage as skills_storage
+    import deerflow.subagents.executor as executor_module
     from deerflow.subagents.config import SubagentConfig
     from deerflow.subagents.executor import (
         SubagentExecutor,
@@ -88,16 +53,18 @@ def _setup_executor_classes():
         SubagentStatus,
     )
 
-    executor_module = sys.modules["deerflow.subagents.executor"]
-
     # Most tests in this module patch _create_agent and exercise executor
     # control flow only. Keep those tests hermetic: CI checkouts do not include
     # the gitignored config.yaml, and deferral-specific tests override this
     # default explicitly.
-    _patch_default_get_app_config(executor_module)
+    monkeypatch.setattr(executor_module, "get_app_config", _default_app_config)
+    monkeypatch.setattr(
+        skills_storage,
+        "get_or_new_skill_storage",
+        lambda **kwargs: SimpleNamespace(load_skills=lambda *, enabled_only: []),
+    )
 
-    # Store classes in a dict to yield
-    classes = {
+    yield {
         "AIMessage": AIMessage,
         "HumanMessage": HumanMessage,
         "SubagentConfig": SubagentConfig,
@@ -105,21 +72,6 @@ def _setup_executor_classes():
         "SubagentResult": SubagentResult,
         "SubagentStatus": SubagentStatus,
     }
-
-    yield classes
-
-    # Cleanup: Restore original modules
-    for name in _MOCKED_MODULE_NAMES:
-        if original_modules[name] is not None:
-            sys.modules[name] = original_modules[name]
-        elif name in sys.modules:
-            del sys.modules[name]
-
-    # Restore executor module (conftest.py mock)
-    if original_executor is not None:
-        sys.modules["deerflow.subagents.executor"] = original_executor
-    elif "deerflow.subagents.executor" in sys.modules:
-        del sys.modules["deerflow.subagents.executor"]
 
 
 # Helper classes that wrap real classes for testing

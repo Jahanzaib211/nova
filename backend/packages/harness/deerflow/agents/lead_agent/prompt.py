@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from deerflow.config.agents_config import load_agent_soul
 from deerflow.skills.storage import get_or_new_skill_storage
 from deerflow.skills.types import Skill, SkillCategory
-from deerflow.subagents import get_available_subagent_names
+from deerflow.subagents.registry import get_available_subagent_names
 from deerflow.tools.builtins.tool_search import get_deferred_tools_prompt_section
 
 if TYPE_CHECKING:

@@ -26,7 +26,7 @@ from deerflow.config.app_config import AppConfig
 from deerflow.models import create_chat_model
 from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
 from deerflow.skills.types import Skill
-from deerflow.subagents.config import SubagentConfig, resolve_subagent_model_name
+from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS, SubagentConfig, resolve_subagent_model_name
 from deerflow.subagents.token_collector import SubagentTokenCollector
 from deerflow.tracing import build_tracing_callbacks, inject_langfuse_metadata
 
@@ -853,9 +853,6 @@ class SubagentExecutor:
 
         _scheduler_pool.submit(run_task)
         return task_id
-
-
-MAX_CONCURRENT_SUBAGENTS = 3
 
 
 def request_cancel_background_task(task_id: str) -> None:

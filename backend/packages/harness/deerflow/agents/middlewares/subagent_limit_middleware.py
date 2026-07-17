@@ -8,7 +8,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langgraph.runtime import Runtime
 
 from deerflow.agents.middlewares.tool_call_metadata import clone_ai_message_with_tool_calls
-from deerflow.subagents.executor import MAX_CONCURRENT_SUBAGENTS
+from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS
 
 logger = logging.getLogger(__name__)
 

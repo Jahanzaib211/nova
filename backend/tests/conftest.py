@@ -83,26 +83,12 @@ def _guard_process_managers_from_tests():
         service_container._overrides.pop("execution_kernel", None)
         service_container._singletons.pop("execution_kernel", None)
 
-# Break the circular import chain that exists in production code:
-#   deerflow.subagents.__init__
-#     -> .executor (SubagentExecutor, SubagentResult)
-#       -> deerflow.agents.thread_state
-#         -> deerflow.agents.__init__
-#           -> lead_agent.agent
-#             -> subagent_limit_middleware
-#               -> deerflow.subagents.executor  <-- circular!
-#
-# By injecting a mock for deerflow.subagents.executor *before* any test module
-# triggers the import, __init__.py's "from .executor import ..." succeeds
-# immediately without running the real executor module.
-_executor_mock = MagicMock()
-_executor_mock.SubagentExecutor = MagicMock
-_executor_mock.SubagentResult = MagicMock
-_executor_mock.SubagentStatus = MagicMock
-_executor_mock.MAX_CONCURRENT_SUBAGENTS = 3
-_executor_mock.get_background_task_result = MagicMock()
-
-sys.modules["deerflow.subagents.executor"] = _executor_mock
+# The historical circular import chain (subagents.executor -> agents.thread_state
+# -> agents.__init__ -> lead_agent -> subagent_limit_middleware -> executor) was
+# fixed in production code: MAX_CONCURRENT_SUBAGENTS lives in subagents.config,
+# lead_agent/prompt.py imports the registry directly, and task_tool imports
+# executor symbols lazily. The real executor module now imports cleanly — the
+# former sys.modules mock here is gone. Pinned by tests/test_import_hygiene.py.
 
 
 @pytest.fixture()

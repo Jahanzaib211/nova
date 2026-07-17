@@ -41,9 +41,15 @@ security audit. Each claim below is tagged by how it was verified.
   sidecar noise is pre-existing, not Nova).
 - Backend suite: **5399 passed / 1 failed / 16 skipped** (328 live/network deselected).
   The 1 failure — `test_subagent_executor.py::TestSkillAllowedTools::test_empty_allowed_tools_contributes_no_tools`
-  — is a **pre-existing test-fixture bug** (fixture mocks `deerflow.sandbox` as a
-  non-package → `ModuleNotFoundError` on `import deerflow.sandbox.sandbox_provider`),
-  deterministic, not a product regression. **Ticket: fix the fixture.**
+  — was initially diagnosed as a test-fixture bug. **Root cause (found + fixed 2026-07-17):
+  a real production circular import** — `deerflow.subagents.executor` could not be imported
+  in a clean interpreter (`executor → agents.thread_state → agents/__init__ → lead_agent →
+  subagent_limit_middleware → executor`). Fixed by: `MAX_CONCURRENT_SUBAGENTS` moved to
+  `subagents/config.py` (leaf), lazy PEP 562 exports in `deerflow/agents/__init__.py`
+  (skills-cache priming moved to `lead_agent/__init__.py`), prompt.py imports the registry
+  directly. The conftest.py `sys.modules` executor mock and the test file's mocked-module
+  machinery are **removed** — executor tests now run against real modules. Pinned by
+  `tests/test_import_hygiene.py` (subprocess-based clean-import regression tests).
 - Frontend: `pnpm typecheck` exit 0; `pnpm test` 457/457. Validates source on disk, not
   the running prod image (see §5).
 - Nova v9 feature tests all green: credits 12, referrals 6, byok 10, billing 14,
@@ -122,7 +128,7 @@ incremental commit on `feat/nova-plus-ops-console`.
 | B4 | ✅ done + live | mcp 500 detail no longer echoes exception text (still logged with `exc_info`). |
 | B7 | ✅ done (source) | Removed `SKIP_ENV_VALIDATION=1` from `frontend/Dockerfile` — schema is all-optional so build still passes, validation re-enabled. Lands on rebuild. |
 | B2 | ⛔ **deferred — not a bug** | `test_channels_router::test_get_channels_status_remains_read_only` asserts non-admin **200**: read-only channel status is a deliberate design choice. Admin-gating would break that contract. Revisit only as a product decision. |
-| B3 | ⛔ **deferred — would break UX** | Frontend settings UI actively creates/updates/deletes models & agents (`core/models/api.ts`, `core/agents/api.ts`). Admin-gating breaks it for all 24 users. Real fix = per-user scoping of models/agents (architecture change), not a drop-in guard. |
+| B3 | 🔶 **decided 2026-07-17: per-user scoping** | Frontend settings UI actively creates/updates/deletes models & agents (`core/models/api.ts`, `core/agents/api.ts`). Admin-gating breaks it for all 24 users. Decision: per-user scoping of models/agents (owner column, nullable→backfill→enforce migration; reads = owner OR shared/system, writes = owner, admin manages all). Scheduled as Phase 3 in `~/.claude/plans/reconciliation-my-reads-vs-cosmic-zebra.md`. |
 | B5,B6 | ⛔ WIK-latent | Fix only when WIK is wired (§6). |
 | C2 | ⏳ deferred | Hard token/budget ceiling — substantial feature overlapping the credits system; not a drop-in. |
 | C4 | ⏳ deferred | Atomic `str_replace`/`write_file` (temp+rename). Real, but on the agent file-write **hot path** (`local_sandbox.py:433`); 🟢 low sev — needs a careful pass + blocking-IO gate + full sandbox suite (heavy). Do deliberately, not under live hot-reload. |

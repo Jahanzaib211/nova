@@ -46,6 +46,13 @@ from app.gateway.routers import (
 from deerflow.config import app_config as deerflow_app_config
 from deerflow.config.app_config import apply_logging_level
 
+# Warm the lead-agent stack (and its enabled-skills cache) at process start,
+# before the event loop exists. deerflow/agents/__init__.py exports the stack
+# lazily since the circular-import fix, so without this line the first run
+# request would pay the full module-import + skills filesystem scan on the
+# event loop inside resolve_agent_factory().
+import deerflow.agents.lead_agent  # noqa: F401, E402  isort: skip
+
 AppConfig = deerflow_app_config.AppConfig
 get_app_config = deerflow_app_config.get_app_config
 

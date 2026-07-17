@@ -568,7 +568,7 @@ Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` me
 - Run the full suite before and after your change: `make test`
 - Tests must pass before a feature is considered complete
 - For lightweight config/utility modules, prefer pure unit tests with no external dependencies
-- If a module causes circular import issues in tests, add a `sys.modules` mock in `tests/conftest.py` (see existing example for `deerflow.subagents.executor`)
+- If a module causes circular import issues in tests, fix the cycle in production code (move shared constants to a leaf module, use lazy PEP 562 package exports) rather than mocking modules in `sys.modules`. The historical `deerflow.subagents.executor` cycle was fixed this way and is pinned by `tests/test_import_hygiene.py` (subprocess-based clean-import regression tests) — add new cycle-sensitive modules there.
 
 ```bash
 # Run all tests

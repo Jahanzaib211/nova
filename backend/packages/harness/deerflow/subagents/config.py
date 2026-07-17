@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from deerflow.config.app_config import AppConfig
 
+# Lives here (a leaf module) rather than in executor.py so that agents-side
+# middleware can read it without importing the executor — that import re-enters
+# the executor's own import of agents.thread_state and breaks the module graph
+# (see tests/test_import_hygiene.py).
+MAX_CONCURRENT_SUBAGENTS = 3
+
 
 @dataclass
 class SubagentConfig:
