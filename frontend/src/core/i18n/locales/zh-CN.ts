@@ -649,6 +649,16 @@ export const zhCN: Translations = {
     files: {
       empty: "智能体创建的文件将显示在这里",
     },
+    workspace: {
+      title: "工作区",
+      index: "建立索引",
+      indexing: "索引中…",
+      reindex: "重新索引工作区",
+      monorepo: "单仓多包",
+      projects: "个项目",
+      symbols: "个符号",
+      commands: "条命令",
+    },
     status: {
       writing: (filename: string, lines?: string) =>
         `正在写入 ${filename}${lines ? ` (${lines})` : ""}`,

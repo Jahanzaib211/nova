@@ -7,8 +7,10 @@ import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
+import { useWorkspaceSnapshot } from "@/core/workspace/hooks";
 
 import { TERMINAL_TOOLS } from "./terminal-tab";
+import { WorkspaceCard } from "./workspace-card";
 
 function getFileIcon(name: string): React.ReactNode {
   const ext = name.split(".").at(-1)?.toLowerCase() ?? "";
@@ -56,6 +58,11 @@ function buildFileTree(files: SandboxFile[]): FileTreeNode {
 }
 
 // Folders first, then files — both alphabetical — so the tree reads like a real repo.
+function countFiles(node: FileTreeNode): number {
+  if (node.file) return 1;
+  return Object.values(node.children).reduce((sum, child) => sum + countFiles(child), 0);
+}
+
 function sortTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
   return [...nodes].sort((a, b) => {
     const aIsFolder = !a.file && Object.keys(a.children).length > 0 ? 0 : 1;
@@ -90,6 +97,9 @@ function FileTreeNode({
             <FolderIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
           )}
           <span className="font-medium">{node.name}/</span>
+          <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
+            {countFiles(node)}
+          </span>
         </button>
         {open &&
           sortTreeNodes(Object.values(node.children)).map((child) => (
@@ -142,6 +152,8 @@ export function FilesPanel({
   const { t } = useI18n();
   const tree = useMemo(() => buildFileTree(files), [files]);
   const runningCount = runningEvents.filter((e) => TERMINAL_TOOLS.has(e.type)).length;
+  // Workspace intelligence: renders nothing while the backend flag is off.
+  const workspaceState = useWorkspaceSnapshot(threadId);
 
   if (files.length === 0 && artifacts.length === 0) {
     return (
@@ -155,6 +167,7 @@ export function FilesPanel({
   }
   return (
     <div className="flex flex-col gap-2 p-2">
+      <WorkspaceCard state={workspaceState} />
       {/* Outputs (presented deliverables) */}
       {artifacts.length > 0 && (
         <div>

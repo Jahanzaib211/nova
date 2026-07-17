@@ -675,6 +675,16 @@ export const enUS: Translations = {
     files: {
       empty: "Files the agent creates will appear here",
     },
+    workspace: {
+      title: "Workspace",
+      index: "Index",
+      indexing: "Indexing…",
+      reindex: "Re-index workspace",
+      monorepo: "monorepo",
+      projects: "projects",
+      symbols: "symbols",
+      commands: "commands",
+    },
     status: {
       writing: (filename: string, lines?: string) =>
         `is writing ${filename}${lines ? ` (${lines})` : ""}`,

@@ -568,6 +568,16 @@ export interface Translations {
     files: {
       empty: string;
     };
+    workspace: {
+      title: string;
+      index: string;
+      indexing: string;
+      reindex: string;
+      monorepo: string;
+      projects: string;
+      symbols: string;
+      commands: string;
+    };
     status: {
       writing: (filename: string, lines?: string) => string;
       usingEditor: string;
