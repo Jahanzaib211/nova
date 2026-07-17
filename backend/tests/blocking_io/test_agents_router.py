@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,18 +29,26 @@ from deerflow.runtime.user_context import get_effective_user_id
 
 pytestmark = pytest.mark.asyncio
 
+DEFAULT_AGENT_USER_ID = "test-user-autouse"
+
+
+def _make_auth_stub() -> SimpleNamespace:
+    return SimpleNamespace(state=SimpleNamespace(state=SimpleNamespace()), cookies={}, _deerflow_test_bypass_auth=True)
+
 
 async def test_create_agent_does_not_block_event_loop(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
     monkeypatch.setattr("deerflow.config.paths._paths", None)
     load_agents_api_config_from_dict({"enabled": True})
     try:
-        response = await create_agent_endpoint(AgentCreateRequest(name="loop-make-agent", soul="You are a test agent."))
+        response = await create_agent_endpoint(
+            request=_make_auth_stub(),
+            body=AgentCreateRequest(name="loop-make-agent", soul="You are a test agent."),
+        )
         assert response is not None
 
-        user_id = get_effective_user_id()
-        # test-side check (resolution offloaded; not exercised on the loop)
-        agent_dir = await asyncio.to_thread(get_paths().user_agent_dir, user_id, "loop-make-agent")
+        # The bypass preserves the contextvar user (test-user-autouse from autouse fixture)
+        agent_dir = await asyncio.to_thread(get_paths().user_agent_dir, DEFAULT_AGENT_USER_ID, "loop-make-agent")
         assert await asyncio.to_thread((agent_dir / "config.yaml").exists)
     finally:
         load_agents_api_config_from_dict({})
@@ -50,13 +59,12 @@ async def test_delete_agent_does_not_block_event_loop(tmp_path: Path, monkeypatc
     monkeypatch.setattr("deerflow.config.paths._paths", None)
     load_agents_api_config_from_dict({"enabled": True})
     try:
-        user_id = get_effective_user_id()
-        # test-side seeding (resolution offloaded; not exercised on the loop)
-        agent_dir = await asyncio.to_thread(get_paths().user_agent_dir, user_id, "loop-test-agent")
+        # The bypass preserves the contextvar user (test-user-autouse from autouse fixture)
+        agent_dir = await asyncio.to_thread(get_paths().user_agent_dir, DEFAULT_AGENT_USER_ID, "loop-test-agent")
         await asyncio.to_thread(agent_dir.mkdir, parents=True, exist_ok=True)
         await asyncio.to_thread((agent_dir / "config.yaml").write_text, "name: loop-test-agent\n", encoding="utf-8")
 
-        await delete_agent("loop-test-agent")
+        await delete_agent("loop-test-agent", request=_make_auth_stub())
 
         assert not await asyncio.to_thread(agent_dir.exists)
     finally:

@@ -15,6 +15,7 @@ there is no matching entity directory.
 """
 
 from deerflow.persistence.admin_audit.model import AdminAuditRow
+from deerflow.persistence.models.agent_config_row import AgentConfigRow
 from deerflow.persistence.channel_connections.model import (
     ChannelConnectionRow,
     ChannelConversationRow,
@@ -24,6 +25,7 @@ from deerflow.persistence.channel_connections.model import (
 from deerflow.persistence.credit_grant.model import CreditGrantRow
 from deerflow.persistence.credit_request.model import CreditRequestRow
 from deerflow.persistence.feedback.model import FeedbackRow
+from deerflow.persistence.models.model_config_row import ModelConfigRow
 from deerflow.persistence.models.run_event import RunEventRow
 from deerflow.persistence.run.model import RunRow
 from deerflow.persistence.thread_meta.model import ThreadMetaRow
@@ -32,6 +34,7 @@ from deerflow.persistence.user_api_key.model import UserApiKeyRow
 
 __all__ = [
     "AdminAuditRow",
+    "AgentConfigRow",
     "ChannelConnectionRow",
     "ChannelConversationRow",
     "ChannelCredentialRow",
@@ -39,6 +42,7 @@ __all__ = [
     "CreditGrantRow",
     "CreditRequestRow",
     "FeedbackRow",
+    "ModelConfigRow",
     "RunEventRow",
     "RunRow",
     "ThreadMetaRow",

@@ -179,7 +179,27 @@ def require_auth[**P, T](func: Callable[P, T]) -> Callable[P, T]:
                 raise ValueError("require_auth decorator requires 'request' parameter")
             request = kwargs["request"]
 
-        if getattr(request, "_deerflow_test_bypass_auth", False):
+        _test_bypass = getattr(request, "_deerflow_test_bypass_auth", False)
+        from app.gateway.auth_disabled import is_auth_disabled as _is_auth_disabled
+
+        _env_bypass = _is_auth_disabled()
+
+        if _test_bypass or _env_bypass:
+            from deerflow.runtime.user_context import get_current_user
+
+            existing_user = get_current_user()
+            if existing_user is not None:
+                user = existing_user
+            else:
+                from app.gateway.auth_disabled import get_auth_disabled_user
+
+                user = get_auth_disabled_user()
+            auth_context = AuthContext(user=user, permissions=_ALL_PERMISSIONS)
+            request.state.auth = auth_context
+            request.state.user = user
+            from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED
+
+            request.state.auth_source = AUTH_SOURCE_AUTH_DISABLED
             return await func(*args, **kwargs)
 
         # Authenticate and set context

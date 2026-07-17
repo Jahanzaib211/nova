@@ -460,8 +460,42 @@ def _make_test_app(tmp_path: Path):
 
 
 @pytest.fixture()
-def agent_client(tmp_path):
+def agent_client(tmp_path, monkeypatch):
     """TestClient with agents router, using tmp_path as base_dir."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    from app.gateway.auth_disabled import get_auth_disabled_user
+    from app.gateway.authz import AuthContext, Permissions
+
+    _BYPASS_PERMISSIONS = [
+        Permissions.THREADS_READ,
+        Permissions.THREADS_WRITE,
+        Permissions.THREADS_DELETE,
+        Permissions.RUNS_CREATE,
+        Permissions.RUNS_READ,
+        Permissions.RUNS_CANCEL,
+    ]
+
+    class AuthBypassMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED
+            from deerflow.runtime.user_context import get_current_user, set_current_user
+
+            existing_user = get_current_user()
+            if existing_user is not None:
+                user = existing_user
+            else:
+                user = get_auth_disabled_user()
+            token = set_current_user(user)
+            request.state.user = user
+            request.state.auth = AuthContext(user=user, permissions=_BYPASS_PERMISSIONS)
+            request.state.auth_source = AUTH_SOURCE_AUTH_DISABLED
+            try:
+                return await call_next(request)
+            finally:
+                from deerflow.runtime.user_context import reset_current_user
+                reset_current_user(token)
+
     from app.gateway.routers import agents as agents_router
 
     paths_instance = _make_paths(tmp_path)
@@ -471,6 +505,7 @@ def agent_client(tmp_path):
         set_agents_api_config(AgentsApiConfig(enabled=True))
         try:
             app = _make_test_app(tmp_path)
+            app.add_middleware(AuthBypassMiddleware)
             with TestClient(app) as client:
                 client._tmp_path = tmp_path  # type: ignore[attr-defined]
                 yield client
@@ -479,8 +514,42 @@ def agent_client(tmp_path):
 
 
 @pytest.fixture()
-def disabled_agent_client(tmp_path):
+def disabled_agent_client(tmp_path, monkeypatch):
     """TestClient with agents router while the management API is disabled."""
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    from app.gateway.auth_disabled import get_auth_disabled_user
+    from app.gateway.authz import AuthContext, Permissions
+
+    _BYPASS_PERMISSIONS = [
+        Permissions.THREADS_READ,
+        Permissions.THREADS_WRITE,
+        Permissions.THREADS_DELETE,
+        Permissions.RUNS_CREATE,
+        Permissions.RUNS_READ,
+        Permissions.RUNS_CANCEL,
+    ]
+
+    class AuthBypassMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED
+            from deerflow.runtime.user_context import get_current_user, set_current_user
+
+            existing_user = get_current_user()
+            if existing_user is not None:
+                user = existing_user
+            else:
+                user = get_auth_disabled_user()
+            token = set_current_user(user)
+            request.state.user = user
+            request.state.auth = AuthContext(user=user, permissions=_BYPASS_PERMISSIONS)
+            request.state.auth_source = AUTH_SOURCE_AUTH_DISABLED
+            try:
+                return await call_next(request)
+            finally:
+                from deerflow.runtime.user_context import reset_current_user
+                reset_current_user(token)
+
     from app.gateway.routers import agents as agents_router
 
     paths_instance = _make_paths(tmp_path)
@@ -490,6 +559,7 @@ def disabled_agent_client(tmp_path):
         set_agents_api_config(AgentsApiConfig(enabled=False))
         try:
             app = _make_test_app(tmp_path)
+            app.add_middleware(AuthBypassMiddleware)
             with TestClient(app) as client:
                 yield client
         finally:
