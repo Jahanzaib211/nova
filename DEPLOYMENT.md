@@ -3,8 +3,10 @@
 > How Nova gets from code to production.
 
 **Audience:** operators, contributors deploying to the Nova host.
-**Last Updated:** Phase C1 (2026-07-12)
+**Last Updated:** Phase C9 (2026-07-17)
 **Related:** [docs/RUNBOOK.md](docs/RUNBOOK.md), [docs/MONITORING.md](docs/MONITORING.md), [backend/CLAUDE.md](backend/CLAUDE.md)
+
+---
 
 ## Deployment Model
 
@@ -21,6 +23,8 @@ nginx (Docker) → :2026
     ├─ /api/* → Gateway :8001 (Docker)
     └─ /*     → Frontend :3000 (Docker)
 ```
+
+---
 
 ## Deploy Steps
 
@@ -51,6 +55,8 @@ curl -s https://nova.alilabsx.com/health | python3 -m json.tool
 python3 scripts/check_platform_guardrails.py
 ```
 
+---
+
 ## Database Migrations
 
 If the pull includes a new Alembic migration:
@@ -68,6 +74,8 @@ Verify:
 
 See `docs/RUNBOOK.md` §8 for full migration workflow.
 
+---
+
 ## PM2 Processes
 
 | Process | Script | Purpose |
@@ -80,6 +88,16 @@ See `docs/RUNBOOK.md` §8 for full migration workflow.
 | nova-tunnel | ecosystem.config.js | Cloudflare tunnel wrapper |
 | nova-monitoring | ecosystem.config.js | Monitoring stack |
 
+Restart via:
+```bash
+export $(grep -v '^#' ~/.config/nova/monitoring.env | xargs) && \
+  pm2 restart nova-monitoring
+```
+
+The compose stack also requires the env file at `~/.config/nova/monitoring.env` (see §3).
+
+---
+
 ## Rollback
 
 If a deployment breaks production:
@@ -89,10 +107,30 @@ If a deployment breaks production:
 3. `git push origin main` (or force-push if needed)
 4. Follow deploy steps above
 
+---
+
 ## First-Time Host Setup
 
 See `docs/RUNBOOK.md` §9 for fresh host setup:
 - Docker + docker compose v2
-- PM2
-- cloudflared (systemd + sudoers)
-- Cloudflare dashboard DNS
+- PM2 (`npm install -g pm2`)
+- `make install` (root deps + frontend deps)
+- `scripts/install-cloudflared-nova.sh` (systemd unit + sudoers + logrotate + PM2 entry)
+- `pm2 start ecosystem.config.js` (or `pm2 reload` after editing)
+- `pm2 save` (persist PM2 state across reboots)
+- Cloudflare dashboard DNS: `nova.alilabsx.com` → tunnel CNAME
+- Verify: `curl https://nova.alilabsx.com/health`
+
+---
+
+## Key Operational Facts (don't relearn these the hard way)
+
+- **Frontend is prod-baked** (`next start` from the image, NOT hot-reload). UI changes
+  require `docker compose build frontend` + `--force-recreate --no-deps frontend`.
+  Never `rm -rf` the container's `.next`.
+- **Gateway hot-reloads** mounted `backend/` source (uvicorn `--reload`) — editing
+  routers auto-deploys to the live gateway serving 24 users. **Migrate the DB before
+  changing ORM models** (an unmigrated ADD COLUMN crash-looped prod once).
+- **Standing rule:** ask before killing/stopping/restarting ANY process or container.
+- Credit wall is opt-in (`NOVA_CREDITS_ENFORCED`), graceful 402 with `NOVA_SUPPORT_CONTACT`.
+- Full detail lives in `~/Desktop/nova/.opencode/plans/nova-consolidated-audit-2026-07.md`.

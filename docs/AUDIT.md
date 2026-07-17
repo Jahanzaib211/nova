@@ -1,7 +1,7 @@
 # Nova Enterprise Audit & Pipeline (Consolidated)
 
 > **Purpose:** Single-source-of-truth audit of the Nova platform — architecture, data flow, control flow, test coverage, deployment topology, observability gaps, frontend UI/UX, component tree, API surface, and a prioritized improvement plan.
-> **Generated:** post-v7 sprint (browser/computer hardening) + frontend UI audit (DeerFlow 2.0).
+> **Generated:** post-v7 sprint (browser/computer hardening) + frontend UI audit (Nova).
 > **Scope:** Read-only analysis. No files modified during audit.
 
 ---
@@ -483,7 +483,7 @@ Tools → navigate_idempotency    ← 60s TTL cache
 
 ---
 
-## 11. Frontend deep-dive (from DeerFlow 2.0 audit)
+## 11. Frontend deep-dive (from Nova audit)
 
 ### 11.1 Component tree (parent → children)
 

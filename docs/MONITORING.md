@@ -37,7 +37,7 @@ pm2 list   # shows app id 11 nova-monitoring online
   name: "nova-monitoring",
   script: "scripts/pm2-monitoring.sh",
   interpreter: "none",
-  env: { DEER_FLOW_ROOT: __dirname },
+  env: { NOVA_PROJECT_ROOT: __dirname },
 }
 ```
 

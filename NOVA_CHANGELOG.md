@@ -18,7 +18,7 @@
 | C0 | Foundation (correlation, CI guardrails) | ✅ **complete** (2026-07-12) | Cross-process correlation via `correlation_id`, SSE comment emission + frontend capture, streaming hardening (watchdog, bounded teardown, convergent cleanup), tunnel auto-recovery, CI guardrails (middleware sprawl, duplicate-recovery), `CONSOLIDATION.md` tracker |
 | C1 | Documentation sync + typed service layer | ✅ **complete** (2026-07-12) | Repository reality audit (127 files), 12 docs updated + 3 created, 10 Protocol interfaces, 7 typed return models, 10 thin wrapper implementations, 33 unit tests |
 | C2 | Run state consolidation + dependency injection | ✅ **complete** (2026-07-12) | `ServiceContainer` with lazy singletons + `override()`, `RunState` frozen dataclass with `from_record()` bridge, gateway wired: `app.state.run_service`, `get_run_service` dependency, backward compat maintained |
-| C3 | Unified lifecycle + event bus | ✅ **complete** (2026-07-12) | Canonical `RunLifecycleStatus` enum (11 states), 17 frozen dataclass domain events, `EventBus` (sync, typed, DI-compatible), `EventPublisher`/`Subscriber`/`Registry`, `RunServiceImpl` publishes lifecycle events, `DiagnosticsServiceImpl` subscribes, `HealthServiceImpl` publishes `HealthChanged`, 56 tests |
+| C3 | Unified lifecycle + event bus | ✅ **complete** (2026-07-12) | Canonical `RunLifecycleStatus` enum (11 states), 17 frozen dataclass domain events, `EventBus` (sync, typed, DI-compatible), `EventPublisher`/`Subscriber`/`Registry`, `RunServiceImpl` publishes lifecycle events on create/cancel/set_status, `DiagnosticsServiceImpl` subscribes, `HealthServiceImpl` publishes `HealthChanged` on state transitions, 56 tests |
 | C4 | Recovery engine + unified health management | ✅ **complete** (2026-07-12) | `RecoveryEngine` (event-driven via EventBus), 10 declarative policies with `RetryStrategy`, 7 recovery events, 9 default action handlers, recovery history + metrics, cancellation support, 37 tests |
 | C5 | Platform Convergence | 🔄 **in progress** | Gateway `list_runs`/`get_run`/`cancel_run` → `RunService`, `create_or_reject()` for multitask-aware runs, worker `_service_set_status()` routes all status transitions through service layer → EventBus receives all lifecycle events, 127 consolidation tests pass |
 | C6 | Workspace/Repository abstraction | ⏳ pending | Depends on C2 |
@@ -49,7 +49,7 @@
 
 ### Data model (migrations)
 
-- **`2026_07_15_nova_plus_user_columns`** — adds to `users`: `plan` (free|plus|enterprise, default free), `plan_status`, `plan_renews_at`, `stripe_customer_id`, `stripe_subscription_id`, `tos_accepted_version`, `tos_accepted_at`, `referral_code` (unique), `referred_by`.
+- **`2026_07_15_nova_plus_user_columns`** — adds to `users`: `plan` (free\|plus\|enterprise, default free), `plan_status`, `plan_renews_at`, `stripe_customer_id`, `stripe_subscription_id`, `tos_accepted_version`, `tos_accepted_at`, `referral_code` (unique), `referred_by`.
 - **`2026_07_15_credit_grants`** — `credit_grants` table (time-limited daily token bonuses; backs referral boosts).
 - **`2026_07_15_user_api_keys`** — `user_api_keys` table (Fernet-encrypted BYOK keys).
 - All idempotent; verified against a copy of the live DB (24 users → all `plan=free`, no data loss).
@@ -157,13 +157,14 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 ### C2.3 — Gateway Wiring
 
-- `app/gateway/deps.py`: container wired with gateway-owned singletons after RunManager construction.
+- `app/gateway/deps.py`: container wired with gateway-owned singletons after RunManager construction. `get_run_service` FastAPI dependency added. `app.state.run_service` exposed.
 - Backward compat: `get_run_manager` still works unchanged.
 
 ### Tests
 
 - 33 service layer tests, all pass.
 - 56/56 backend tests, 457/457 frontend tests.
+- Guardrails 28/28, cross-ref clean.
 
 ---
 
@@ -187,7 +188,7 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 ### C3.3 — Service Integration
 
-- `RunServiceImpl` publishes lifecycle events on `create()`, `cancel()`, `set_status()`.
+- `RunServiceImpl` publishes lifecycle events on `create()`, `cancel()`, and `set_status()`.
 - `DiagnosticsServiceImpl.subscribe_to_events()` records all domain events as diagnostics.
 - `HealthServiceImpl` publishes `HealthChanged` on state transitions (deduplicated on steady state).
 
@@ -196,6 +197,7 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 - 56 new tests (`tests/test_event_bus.py`), all pass.
 - 33 service layer tests, all pass.
 - 56/56 backend tests, 457/457 frontend tests.
+- Guardrails 28/28, cross-ref clean.
 
 ---
 
@@ -205,7 +207,18 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 ### C4.1 — Repository Audit
 
-- 10+ distinct recovery implementations identified: fix_tunnel, fix_llama_bridge, fix_litellm, fix_dify, fix_deerflow_containers, RecoveryServiceImpl, llm_error_handling_middleware (backoff+circuit breaker), browser_retry (bounded retry+jitter), reap_orphaned_runs (startup reaper), _reconcile_orphans (container adoption), recordRecovery (frontend trace).
+- 10+ distinct recovery implementations identified:
+  - `fix_tunnel()` — cloudflared restart with reset-failed
+  - `fix_llama_bridge()` — PM2 restart or re-register
+  - `fix_litellm()` — PM2 restart or re-register
+  - `fix_dify()` — PM2 restart or re-register
+  - `fix_deerflow_containers()` — PM2 restart
+  - `RecoveryServiceImpl.recover()` — wraps fix_tunnel
+  - `llm_error_handling_middleware` — exponential backoff + circuit breaker
+  - `browser_retry` — bounded retry + circuit breaker + jitter
+  - `reap_orphaned_runs()` — Phase 6 startup reaper
+  - `_reconcile_orphans()` — Docker/k8s container adoption
+  - `recordRecovery()` — frontend trace recorder
 
 ### C4.2 — Recovery Events
 
@@ -236,15 +249,16 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 **Session pattern:** repository audit → service migration → event-driven convergence.
 
-### C5.1 — Repository Audit
+### C5.1 — Repository Audit (complete)
 
 - Comprehensive audit of remaining direct calls across the codebase:
   - `get_app_config()`: 33 files, ~95 call sites (wrapper exists via `ConfigurationService`)
   - `RunManager` direct imports: 7 files, ~23 call sites (gateway layer)
   - `RunStatus` direct imports: 8 files, ~57 call sites (internal to runtime)
   - `diagnostics.record`: 2 files, 9 call sites (module-internal)
+  - `RunRepository` direct imports: 3 files, 9 call sites (initialization only)
 
-### C5.2 — Service Migration: Gateway → RunService
+### C5.2 — Service Migration: Gateway → RunService (complete)
 
 - Added `create_or_reject()` to `RunService` protocol and `RunServiceImpl` for multitask-aware run creation.
 - Migrated gateway endpoints to use `RunService`:
@@ -254,11 +268,11 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 - Added `_service_to_response()` helper for RunDetail/RunSummary → RunResponse conversion.
 - Added `test_create_or_reject_delegates` test (34 service layer tests, up from 33).
 
-### C5.3 — Event-Driven Convergence: Worker Status Routing
+### C5.3 — Event-Driven Convergence: Worker Status Routing (complete)
 
 - **Problem:** `worker.py` called `RunManager.set_status()` directly, bypassing `RunServiceImpl.set_status()` which publishes lifecycle events to the EventBus. Status transitions (running → success/error/interrupted) were invisible to event subscribers.
-- **Fix:** Added `_service_set_status()` helper that routes through `RunServiceImpl.set_status()` with fallback to `RunManager.set_status()`. All 9 `run_manager.set_status()` calls replaced.
-- **Impact:** All run lifecycle transitions now emit domain events (RunStarted, RunCompleted, RunFailed, RunCancelled, RunInterrupted) through the EventBus.
+- **Fix:** Added `_service_set_status()` helper in worker that routes through `RunServiceImpl.set_status()` with fallback to `RunManager.set_status()`. All 9 `run_manager.set_status()` calls replaced.
+- **Impact:** All run lifecycle transitions now emit domain events (RunStarted, RunCompleted, RunFailed, RunCancelled, RunInterrupted) through the EventBus, visible to DiagnosticsServiceImpl and any future subscribers.
 
 ### Tests
 
@@ -304,7 +318,7 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 ### Known debt (Phase C8 candidates)
 
-- `scripts/healthcheck-daemon.py` stays out-of-process by design (watchdog of last resort under pm2) and keeps its own subprocess calls.
+- `scripts/healthcheck-daemon.py` stays out-of-process by design (watchdog of last resort under pm2) and keeps its own subprocess calls. The in-gateway recovery paths that used to import from it now go through the kernel's PM2/Systemd adapters.
 - `aio_sandbox_provider.py` signal handlers (cleanup registration) not yet owned by the supervisor.
 - Playwright CDP connect sites in `workspace_tools.py` / `browser_check.py` can adopt `BrowserAdapter.session()`.
 - Audit trail is in-memory (10k ring); persistence to the diagnostics store not yet wired.
@@ -316,18 +330,8 @@ The full backend suite had been hanging at ~47% and carrying 41 pre-existing fai
 - **Deadlock (suite hang):** `mcp/session_pool.py::_run_session` reflected only `Exception` into the `ready` future — when `close_all()` **cancelled** an in-flight owner task (`CancelledError` is a `BaseException`), `ready` stayed pending forever and the caller blocked on `await asyncio.shield(ready)` (`ep_poll` forever). Fix: cancelled owners now cancel `ready`; get_session Phase 3 unwind catches `BaseException` so caller-cancellation cleanup (documented "case 2", previously dead code) actually runs. Fixes `test_close_all_during_in_flight_creation_does_not_resurrect_session` (the hang), `test_get_session_cancelled_while_initializing_does_not_leak`, and `test_cross_loop_preempting_blocked_in_flight_does_not_hang_owner` (its worker also caught only `Exception` — could never observe the CancelledError it asserts).
 - **Environment leakage (36 failures):** repo-root `.env` is shared with the Docker deployment and pins `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` / `DEER_FLOW_REPO_ROOT` / `DEER_FLOW_HOME` to in-container `/app/...` paths plus `DEER_FLOW_ENV=production`. `load_dotenv()` injected these into host pytest runs: gateway config load raised FileNotFoundError → every TestClient request 503'd (amd, channels, internal_auth, config_freshness, langgraph_auth, client_e2e), and the auth-disabled safety veto 401'd all `DEER_FLOW_AUTH_DISABLED` tests. Fix: `tests/conftest.py` pre-sets host-correct values before any `load_dotenv()` (dotenv never overrides existing vars); production `.env` untouched.
 - **Phase C6 drift:** `test_cancel_run_idempotent` stubbed only `app.state.run_manager`; the C6-migrated endpoints resolve `run_service` → 503. Test app now provides `RunServiceImpl(mgr)` like the gateway lifespan.
-- **Watchdog drift:** `test_healthcheck_daemon` run-cycle tests mocked 11 probes; the daemon runs 12 since P12 (tunnel). The unmocked `probe_tunnel` fired a real network request during tests. Probe list + counts updated.
-
-### C7.6 — Production incident (2026-07-13, ~04:54 PKT) + structural interlock
-
-- **What happened:** running the full suite executed the Phase C4 recovery actions for real. The stale test `test_tunnel_action_wraps_fix_tunnel` mocked the OLD `scripts.healthcheck_daemon` import; the C7-migrated `_recover_tunnel`/`_recover_gateway` bypassed that mock and issued real `sudo -n systemctl restart cloudflared-nova.service` (sudoers permits restart passwordless — but NOT `reset-failed`) and `pm2 restart deerflow`. Ten restarts in <5 min tripped systemd's start-limit → tunnel down (Cloudflare 530, 0 replicas). A concurrent interrupted `compose up` left the gateway container renamed+dead and `deer-flow-frontend` name-conflicted → deerflow pm2 crash-loop (1000+ restarts) → origin 502.
-- **Recovery:** waited out the 5-min start-limit window → `systemctl restart` → tunnel active; removed the wedged containers (`docker rm -f` on the renamed gateway + stale-labeled frontend) → compose reconciled; rebuilt the frontend prod image (current tag had no `next build`) → public site 200 end-to-end.
-- **Interlock (conftest autouse):** every test now receives a DI kernel whose policy **denies the PM2 and SYSTEMD execution classes** — a test can no longer restart production services, period. Tests that exercise pm2/systemd override with `FakeExecutionKernel`. This guard is only possible because C7 gives execution a single policy choke point.
-- **Known operational gap (needs interactive sudo):** sudoers lacks `reset-failed cloudflared-nova` — the watchdog cannot clear `start-limit-hit` on its own (documented Step 0 warning fires every cycle). Re-run `scripts/install-cloudflared-nova.sh` as a sudo-capable user.
-
-### C7.7 — Second forensics round (post-hang tail of the suite, all root-caused)
-
-- `test_service_layer.py` + `test_wait_disconnect_handling.py` used deprecated `asyncio.get_event_loop().run_until_complete()` — breaks after any earlier `asyncio.run()` in the main thread (Python 3.12). Migrated to `asyncio.run()`.
+- **Watchdog drift:** `test_healthcheck_daemon` run-cycle tests mocked 11 probes; the daemon runs 12 since P12 (tunnel). Probe list + counts updated.
+- **Phase C6 drift:** `test_service_layer.py` + `test_wait_disconnect_handling.py` used deprecated `asyncio.get_event_loop().run_until_complete()` — breaks after any earlier `asyncio.run()` in the main thread (Python 3.12). Migrated to `asyncio.run()`.
 - **Real C5 bug in `worker._service_set_status`:** outside the gateway, the lazy container factory builds a *fresh* `RunManager`; status updates routed there are silently dropped (run not found, nothing raises, fallback never fires). Now verifies the container RunService is backed by the worker's own RunManager before routing; falls back otherwise. Fixes `test_run_worker_rollback` / `test_run_worker_recursion_limit`.
 - `test_stream_diagnostics` fixture popped `deerflow.runtime` / `app.gateway.services` from `sys.modules` at teardown, splitting sentinel identity (`END_SENTINEL` `is`-checks failed downstream) and orphaning package attributes (`deerflow.runtime` lost `runs` for monkeypatch walks). Teardown now restores original module objects and re-binds parent/child module attributes in both directions.
 - `test_tracing_factory` monkeypatched `get_tracing_config` with a config *instance* instead of a callable (`'Cfg' object is not callable`). Wrapped in lambdas.
@@ -376,61 +380,6 @@ The full backend suite had been hanging at ~47% and carrying 41 pre-existing fai
 
 ---
 
-**Sprint window:** 5 days. **Pattern:** Sequential Pipeline + De-Sloppify + per-day CI gate.
-**Loop pattern (per Autonomous Loops skill):** daily `claude -p` chain, context bridge via `SHARED_TASK_NOTES.md`, magic-phrase completion signals.
-
-### Opencode ecosystem integration (Matt Pocock fork)
-
-The user's fork at `Jahanzaib211/skills` (forked from `mattpocock/skills`) provides workflow + discipline skills. Three integration layers:
-
-- **Layer 1 (zero code change):** opencode commands wrapping Matt Pocock's user-invoked skills (`/grill-me`, `/to-prd`, `/triage`, `/improve-codebase-architecture`, `/setup-matt-pocock-skills`)
-- **Layer 2 (one-line code change):** `extensions_config.json` registry update for Matt Pocock's model-invoked discipline skills (`tdd`, `diagnosing-bugs`, `codebase-design`, `domain-modeling`); modify `skill_storage.py:_iter_skill_files` to walk `~/.claude/skills/mattpocock/`
-- **Layer 3 (no code change):** orchestration loop — user runs `/grill-with-docs` → skill outputs PRD → agent executes with TDD discipline → receipts + watchdogs + self-improvement closes the loop
-
-### Day-by-day plan
-
-| Day | Task | Magic phrase | Layer additions |
-|---|---|---|---|
-| D1 | opencode overlay + 8 nova skills | `NOVA_V74_D1_COMPLETE` | Layer 1 (5 opencode commands) + Layer 2 (registry) |
-| D2 | hooks surface (resurrect `record_middleware`, wire 5 middlewares) | `NOVA_V74_D2_COMPLETE` | Layer 2 (skill_storage.py path) |
-| D3 | receipts + watchdogs + cronjobs | `NOVA_V74_D3_COMPLETE` | — |
-| D4 | nova CLI + Receipts/Improvements tabs + Self-improving loop | `NOVA_V74_D4_COMPLETE` | — |
-| D5 | coverage + lint cleanup + release | `NOVA_V74_SPRINT_COMPLETE` | — |
-
-### Opencode custom skills (8) created in D1
-
-Each skill references real file paths in this repo (no hallucination):
-
-- `nova-replay-verify` — prove the thesis via replay-golden
-- `nova-hooks-author` — the keystone primitive (`runtime/journal.py:529`)
-- `nova-receipts-author` — structured post-run artifacts
-- `nova-subagent-router` — 40-60% token savings
-- `nova-loop-detect` — debug stuck agents (`loop_detection_middleware.py:837`)
-- `nova-sandbox-debug` — local vs AIO triage
-- `nova-deploy-local` — canonical `make dev` path
-- `nova-prompt-author` — lead-agent system prompt discipline
-
-### Sprint verification matrix (per day, exit gate)
-
-- `cd backend && uv run pytest tests/test_replay_golden.py tests/test_capabilities_endpoint.py tests/test_igino_endpoint.py tests/test_openapi_operation_ids.py -q` — keystone
-- `cd backend && uv run ruff check` — clean
-- `cd frontend && pnpm format && pnpm lint && pnpm typecheck` — clean
-- Manual 2-minute Loom path works (per the demo flow)
-
-### Anti-slop invariants (from the AI-First Engineering skill)
-
-- Every layer reuses existing primitives (`record_middleware`, `BUILTIN_TOOLS`, `RunEventStore`, `subagents/executor.py`, `scripts/serve.sh`, `sandbox/browser_circuit_breaker.py`)
-- No parallel implementations
-- `deerflow.*` never imports `app.*` (enforced by `tests/test_harness_boundary.py`)
-- Operational IDs preserved: `deer-flow` folder, `deer-flow-dev` compose project, `deer-flow-*` containers, `deerflow.*` Python package, `DEER_FLOW_*` env vars, `backend/.deer-flow/` data dir
-- Non-fatal: every new code path is wrapped so a failure can never break a run
-
-### Rollback
-
-`git tag pre-hackathon-sprint-rollback-20260629` (pre-D0) is the instant-revert anchor. Per-day revert: `git revert <D[n-1]-sha>..<D[n]-sha> -- <paths>` for the specific files touched in that day.
-
----
-
 ## v8.8 — Phase C8: execution runtime kernel
 
 **Session pattern:** production forensic → execution hardening → test coverage.
@@ -467,7 +416,7 @@ Each skill references real file paths in this repo (no hallucination):
 
 - `tests/test_execution_pty.py`: 23 tests covering PTYManager, TerminalSize, SessionRegistry, heartbeat, two-phase cancellation, ExecutionStatus state machine.
 - `tests/test_execution_guardrails.py`: guardrail updated to whitelist `interactive_shell.py` as sanctioned Popen site.
-- All 5570 backend tests pass; 457 frontend tests pass; cross-ref check clean.
+- All 5656 backend tests pass; 457 frontend tests pass; cross-ref check clean.
 
 ### Known debt
 
