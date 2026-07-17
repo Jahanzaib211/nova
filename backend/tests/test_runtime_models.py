@@ -59,7 +59,11 @@ def config_env(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(config_env):
-    app = FastAPI()
+    # Write endpoints are @require_auth-gated (B3 Gate 5); stamp a stub
+    # authenticated user the same way production AuthMiddleware does.
+    from _router_auth_helpers import make_authed_test_app
+
+    app = make_authed_test_app()
     app.include_router(models_router)
     return TestClient(app)
 

@@ -77,6 +77,11 @@ class _StubAuthMiddleware(BaseHTTPMiddleware):
         user = self._user_factory()
         request.state.user = user
         request.state.auth = AuthContext(user=user, permissions=list(_STUB_PERMISSIONS))
+        # get_current_user_from_request only trusts state.user when auth_source
+        # is a recognized value — mirror production AuthMiddleware's stamp.
+        from app.gateway.auth_disabled import AUTH_SOURCE_SESSION
+
+        request.state.auth_source = AUTH_SOURCE_SESSION
         return await call_next(request)
 
 

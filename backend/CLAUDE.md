@@ -265,7 +265,7 @@ CORS is same-origin by default when requests enter through nginx on port 2026. S
 
 | Router | Endpoints |
 |--------|-----------|
-| **Models** (`/api/models`) | `GET /` - list models; `GET /{name}` - model details |
+| **Models** (`/api/models`) | `GET /` - list models; `GET /{name}` - model details. B3 per-user scoping (Gate 5): runtime-model writes (`POST /models`, `PUT/DELETE /models/{name}`) are `@require_auth`-gated; ownership metadata in `model_configs` — rows owned by another user are 403 for non-admins, NULL-owner (legacy/backfilled) rows stay editable by any authenticated user, admins manage all; editing a shared row never claims it. `runtime_models.yaml` remains the authoritative store; repo metadata is memory-mode safe |
 | **MCP** (`/api/mcp`) | `GET /config` - get config; `PUT /config` - update config (saves to extensions_config.json) |
 | **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` - details; `PUT /{name}` - update enabled; `POST /install` - install from .skill archive (accepts standard optional frontmatter like `version`, `author`, `compatibility`) |
 | **Memory** (`/api/memory`) | `GET /` - memory data; `POST /reload` - force reload; `GET /config` - config; `GET /status` - config + data |

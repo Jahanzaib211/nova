@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from _router_auth_helpers import make_authed_test_app
 from _run_message_pagination_helpers import assert_run_message_page
 from fastapi.testclient import TestClient
 
+from app.gateway.auth.models import User
 from app.gateway.routers import thread_runs
 from deerflow.runtime import RunManager
 from deerflow.runtime.runs.store.memory import MemoryRunStore
@@ -18,9 +20,16 @@ from deerflow.runtime.runs.store.memory import MemoryRunStore
 # ---------------------------------------------------------------------------
 
 
+# Stable identity shared between the stub-auth user and stored run rows.
+# The stub middleware now authenticates fully (auth_source stamped), so
+# run hydration applies real owner filtering — store rows must belong to
+# the requesting user, exactly as in production.
+_TEST_USER = User(email="pagination@example.com", password_hash="x", system_role="user", id=uuid4())
+
+
 def _make_app(event_store=None, run_manager=None):
     """Build a test FastAPI app with stub auth and mocked state."""
-    app = make_authed_test_app()
+    app = make_authed_test_app(user_factory=lambda: _TEST_USER)
     app.include_router(thread_runs.router)
 
     if event_store is not None:
@@ -54,6 +63,7 @@ def _make_store_only_run_manager() -> RunManager:
             "store-only-run",
             thread_id="thread-store",
             assistant_id="lead_agent",
+            user_id=str(_TEST_USER.id),
             status="running",
             multitask_strategy="reject",
             metadata={},

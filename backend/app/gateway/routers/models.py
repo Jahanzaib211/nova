@@ -2,10 +2,12 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.gateway.deps import get_config
+from app.gateway.authz import require_auth
+from app.gateway.deps import get_config, get_current_user_from_request
+from app.gateway.repositories.model_repository import get_model_repo
 from deerflow.config.app_config import AppConfig, reload_app_config
 from deerflow.config.model_config import ModelConfig
 from deerflow.config.runtime_models import (
@@ -216,6 +218,34 @@ async def get_model(model_name: str, config: AppConfig = Depends(get_config)) ->
     return _to_response(model, runtime_model_names())
 
 
+async def _resolve_writer(request: Request) -> tuple[str, bool]:
+    """Resolve the authenticated writer: (user_id, is_admin)."""
+    user = await get_current_user_from_request(request)
+    return str(user.id), getattr(user, "system_role", None) == "admin"
+
+
+def _get_repo_or_none():
+    """Model ownership repo, or None in memory-mode (B3 metadata is best-effort)."""
+    try:
+        return get_model_repo()
+    except RuntimeError as e:
+        logger.warning("Model ownership metadata unavailable: %s", e)
+        return None
+
+
+async def _enforce_model_ownership(repo, model_name: str, user_id: str, is_admin: bool):
+    """403 unless the row is unowned (legacy/shared), owned by the caller, or caller is admin.
+
+    Returns the ownership row (or None) so callers can preserve owner semantics.
+    """
+    if repo is None:
+        return None
+    row = await repo.get_by_name(model_name)
+    if row is not None and row.owner_id and row.owner_id != user_id and not is_admin:
+        raise HTTPException(status_code=403, detail=f"Model '{model_name}' belongs to another user")
+    return row
+
+
 @router.post(
     "/models",
     response_model=ModelWriteResponse,
@@ -223,11 +253,13 @@ async def get_model(model_name: str, config: AppConfig = Depends(get_config)) ->
     summary="Add Runtime Model",
     description="Add a model entry to the runtime store. The entry becomes available immediately (config hot-reload).",
 )
-async def create_model(request: ModelWriteRequest, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
-    if config.get_model_config(request.name) is not None:
-        raise HTTPException(status_code=409, detail=f"Model '{request.name}' already exists")
+@require_auth
+async def create_model(request: Request, body: ModelWriteRequest, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    user_id, _is_admin = await _resolve_writer(request)
+    if config.get_model_config(body.name) is not None:
+        raise HTTPException(status_code=409, detail=f"Model '{body.name}' already exists")
     try:
-        entry = _request_to_entry(request)
+        entry = _request_to_entry(body)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Invalid model entry: {e}") from e
 
@@ -236,8 +268,12 @@ async def create_model(request: ModelWriteRequest, config: AppConfig = Depends(g
     save_runtime_model_dicts(entries)
     fresh = reload_app_config()
 
-    model = fresh.get_model_config(request.name)
-    logger.info("Runtime model %r created", request.name.replace("\n", "").replace("\r", ""))
+    repo = _get_repo_or_none()
+    if repo is not None:
+        await repo.upsert_owner(owner_id=user_id, name=body.name, model=body.model, model_use=body.use)
+
+    model = fresh.get_model_config(body.name)
+    logger.info("Runtime model %r created", body.name.replace("\n", "").replace("\r", ""))
     return ModelWriteResponse(ok=True, model=_to_response(model, runtime_model_names()) if model else None)
 
 
@@ -247,31 +283,44 @@ async def create_model(request: ModelWriteRequest, config: AppConfig = Depends(g
     summary="Update Runtime Model",
     description="Update a runtime-managed model entry. Models defined in config.yaml are read-only via the API.",
 )
-async def update_model(model_name: str, request: ModelWriteRequest, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+@require_auth
+async def update_model(model_name: str, request: Request, body: ModelWriteRequest, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    user_id, is_admin = await _resolve_writer(request)
     model_name = model_name.replace("\n", "").replace("\r", "")
+    repo = _get_repo_or_none()
+    row = await _enforce_model_ownership(repo, model_name, user_id, is_admin)
+
     entries = load_runtime_model_dicts()
     idx = next((i for i, m in enumerate(entries) if m.get("name") == model_name), None)
     if idx is None:
         if config.get_model_config(model_name) is not None:
             raise HTTPException(status_code=403, detail=f"Model '{model_name}' is defined in config.yaml and cannot be edited via the API")
         raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found")
-    if request.name != model_name and config.get_model_config(request.name) is not None:
-        raise HTTPException(status_code=409, detail=f"Model '{request.name}' already exists")
+    if body.name != model_name and config.get_model_config(body.name) is not None:
+        raise HTTPException(status_code=409, detail=f"Model '{body.name}' already exists")
 
     try:
-        entry = _request_to_entry(request)
+        entry = _request_to_entry(body)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Invalid model entry: {e}") from e
 
     # Omitted api_key on update keeps the previously stored key.
-    if request.api_key is None and "api_key" in entries[idx]:
+    if body.api_key is None and "api_key" in entries[idx]:
         entry["api_key"] = entries[idx]["api_key"]
 
     entries[idx] = entry
     save_runtime_model_dicts(entries)
     fresh = reload_app_config()
 
-    model = fresh.get_model_config(request.name)
+    if repo is not None:
+        # Preserve owner semantics: an owned row keeps its owner; a legacy
+        # row (NULL owner or no row yet) stays shared — editing never claims it.
+        preserved_owner = row.owner_id if row is not None else None
+        if body.name != model_name:
+            await repo.delete_by_name(model_name)
+        await repo.upsert_owner(owner_id=preserved_owner, name=body.name, model=body.model, model_use=body.use)
+
+    model = fresh.get_model_config(body.name)
     logger.info("Runtime model %r updated", model_name.replace("\n", "").replace("\r", ""))
     return ModelWriteResponse(ok=True, model=_to_response(model, runtime_model_names()) if model else None)
 
@@ -282,8 +331,13 @@ async def update_model(model_name: str, request: ModelWriteRequest, config: AppC
     summary="Delete Runtime Model",
     description="Remove a runtime-managed model entry. Models defined in config.yaml are read-only via the API.",
 )
-async def delete_model(model_name: str, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+@require_auth
+async def delete_model(model_name: str, request: Request, config: AppConfig = Depends(get_config)) -> ModelWriteResponse:
+    user_id, is_admin = await _resolve_writer(request)
     model_name = model_name.replace("\n", "").replace("\r", "")
+    repo = _get_repo_or_none()
+    await _enforce_model_ownership(repo, model_name, user_id, is_admin)
+
     entries = load_runtime_model_dicts()
     remaining = [m for m in entries if m.get("name") != model_name]
     if len(remaining) == len(entries):
@@ -293,6 +347,8 @@ async def delete_model(model_name: str, config: AppConfig = Depends(get_config))
 
     save_runtime_model_dicts(remaining)
     reload_app_config()
+    if repo is not None:
+        await repo.delete_by_name(model_name)
     logger.info("Runtime model %r deleted", model_name.replace("\n", "").replace("\r", ""))
     return ModelWriteResponse(ok=True)
 

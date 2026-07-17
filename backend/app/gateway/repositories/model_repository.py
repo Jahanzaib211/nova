@@ -136,6 +136,46 @@ class ModelRepository:
                 row.amd_compute = amd_compute
                 return row
 
+    async def get_by_name(self, name: str) -> ModelConfigRow | None:
+        """Get a model row by name regardless of owner (for ownership checks)."""
+        async with self._sf() as session:
+            stmt = select(ModelConfigRow).where(ModelConfigRow.name == name)
+            result = await session.execute(stmt)
+            return result.scalars().first()
+
+    async def upsert_owner(self, owner_id: str | None, name: str, model: str = "", model_use: str = "") -> ModelConfigRow:
+        """Create or update the ownership row for a runtime model.
+
+        Minimal metadata write used by the router after a successful
+        runtime_models.yaml write; ``owner_id=None`` marks a shared/legacy row.
+        """
+        async with self._sf() as session:
+            async with session.begin():
+                stmt = select(ModelConfigRow).where(ModelConfigRow.name == name)
+                result = await session.execute(stmt)
+                existing = result.scalars().first()
+                if existing is not None:
+                    existing.owner_id = owner_id
+                    if model:
+                        existing.model = model
+                    if model_use:
+                        existing.model_use = model_use
+                    await session.flush()
+                    await session.refresh(existing)
+                    return existing
+                row = ModelConfigRow(owner_id=owner_id, name=name, model=model or name, model_use=model_use or "langchain_openai:ChatOpenAI")
+                session.add(row)
+                await session.flush()
+                await session.refresh(row)
+                return row
+
+    async def delete_by_name(self, name: str) -> bool:
+        """Delete the ownership row for a model name. True if a row was removed."""
+        async with self._sf() as session:
+            async with session.begin():
+                result = await session.execute(delete(ModelConfigRow).where(ModelConfigRow.name == name))
+                return result.rowcount > 0
+
     async def delete(self, owner_id: str, name: str) -> bool:
         """Delete a model config row. Returns True if deleted, False if not found."""
         async with self._sf() as session:
