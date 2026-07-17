@@ -13,6 +13,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { AgentComputerPanel } from "@/components/workspace/agent-computer/agent-computer-panel";
+import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/workspace-state";
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
@@ -38,8 +39,6 @@ const ChatBox: React.FC<{
   const {
     thread,
     currentTool,
-    taskProgress,
-    verifyResult,
     activityEvents,
     activeWriteFilePath,
     onAgentMessage,
@@ -261,20 +260,21 @@ const ChatBox: React.FC<{
                   so its internal scroll areas and footer are not clipped. */}
               <RuntimeCapabilitiesBar className="shrink-0" sandboxEvents={activityEvents} />
               <div className="min-h-0 flex-1">
-                <AgentComputerPanel
+                <WorkspaceStateProvider
                   threadId={threadId}
-                  currentTool={currentTool}
-                  isLoading={thread.isLoading}
                   todos={thread.values.todos ?? []}
-                  taskProgress={taskProgress}
-                  verifyResult={verifyResult}
-                  messages={thread.messages}
-                  activityEvents={activityEvents}
-                  activeWriteFilePath={activeWriteFilePath}
-                  artifacts={thread.values.artifacts ?? []}
-                  onClose={() => setAgentComputerOpen(false)}
-                  onAgentMessage={onAgentMessage}
-                />
+                >
+                  <AgentComputerPanel
+                    threadId={threadId}
+                    currentTool={currentTool}
+                    isLoading={thread.isLoading}
+                    messages={thread.messages}
+                    activeWriteFilePath={activeWriteFilePath}
+                    artifacts={thread.values.artifacts ?? []}
+                    onClose={() => setAgentComputerOpen(false)}
+                    onAgentMessage={onAgentMessage}
+                  />
+                </WorkspaceStateProvider>
               </div>
             </div>
           </div>

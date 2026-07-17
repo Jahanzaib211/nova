@@ -44,7 +44,7 @@ describe("long-session frontend freeze — reproduction shape", () => {
   it("DEBUG: process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE is readable at test time", () => {
     process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE = "1";
     expect(process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE).toBe("1");
-    expect(process.env["NEXT_PUBLIC_NOVA_STREAM_TRACE"]).toBe("1");
+    expect(process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE).toBe("1");
     delete process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE;
   });
 
@@ -75,7 +75,7 @@ describe("long-session frontend freeze — reproduction shape", () => {
       // Monotonic sequence numbers must be strictly increasing.
       const seqs = recent.map((r) => r.seq);
       for (let i = 1; i < seqs.length; i++) {
-        expect(seqs[i]).toBeGreaterThan(seqs[i - 1]!);
+        expect(seqs[i]).toBeGreaterThan(seqs[i - 1]);
       }
 
       // Each record carries the wall-clock + monotonic timestamps the
