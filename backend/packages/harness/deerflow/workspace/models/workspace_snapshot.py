@@ -59,3 +59,47 @@ class WorkspaceSnapshot:
     @property
     def edge_count(self) -> int:
         return len(self.graph_edges)
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-safe dict form (str-enum members serialize as their values)."""
+        from dataclasses import asdict
+
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> WorkspaceSnapshot:
+        """Rebuild a snapshot from :meth:`to_dict` output.
+
+        JSON round-trips turn tuples into lists; each nested model's own
+        ``__post_init__`` re-coerces enum strings.
+        """
+        from dataclasses import fields as dc_fields
+
+        from deerflow.workspace.models.symbol import SymbolLocation
+
+        def build(item_cls, payload: dict[str, Any]):
+            names = {f.name for f in dc_fields(item_cls)}
+            kwargs = {k: (tuple(v) if isinstance(v, list) else v) for k, v in payload.items() if k in names}
+            return item_cls(**kwargs)
+
+        def build_symbol(payload: dict[str, Any]) -> Symbol:
+            locations = tuple(build(SymbolLocation, loc) for loc in payload.get("locations") or ())
+            return build(Symbol, {**payload, "locations": locations})
+
+        return cls(
+            thread_id=data.get("thread_id", ""),
+            fingerprint=build(RepositoryFingerprint, data.get("fingerprint") or {}),
+            projects=tuple(build(Project, p) for p in data.get("projects") or ()),
+            packages=tuple(build(Package, p) for p in data.get("packages") or ()),
+            modules=tuple(build(Module, m) for m in data.get("modules") or ()),
+            symbols=tuple(build_symbol(s) for s in data.get("symbols") or ()),
+            commands=tuple(build(Command, c) for c in data.get("commands") or ()),
+            dependencies=tuple(build(Dependency, d) for d in data.get("dependencies") or ()),
+            graph_nodes=tuple(build(Node, n) for n in data.get("graph_nodes") or ()),
+            graph_edges=tuple(build(Edge, e) for e in data.get("graph_edges") or ()),
+            indexed_at=data.get("indexed_at", ""),
+            cache_key=data.get("cache_key", ""),
+            traversal_count=data.get("traversal_count", 0),
+            duration_ms=data.get("duration_ms", 0.0),
+            metadata=data.get("metadata") or {},
+        )

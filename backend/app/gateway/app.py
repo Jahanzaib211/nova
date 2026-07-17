@@ -39,6 +39,7 @@ from app.gateway.routers import (
     thread_runs,
     threads,
     uploads,
+    workspace,
 )
 from app.gateway.routers import (
     sandbox as sandbox_router,
@@ -468,6 +469,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Runtime capabilities: skills, tools, hooks, subagents, circuit states (v7.1)
     app.include_router(capabilities.router)
+
+    # Workspace intelligence (feature-flagged: workspace.intelligence_enabled)
+    app.include_router(workspace.router)
 
     # iGIN0: privacy search endpoints
     app.include_router(igino.router)

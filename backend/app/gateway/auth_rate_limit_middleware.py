@@ -35,6 +35,12 @@ _AUTH_MAX_ATTEMPTS = 10
 # paths end with these suffixes, so one match covers both.
 _COST_SUFFIXES = ("/runs/stream", "/runs/wait", "/research", "/suggestions")
 
+# Workspace indexing walks + AST-parses the whole thread workspace — CPU/IO
+# heavy, so it shares the cost tier. Prefix+suffix matched (the generic
+# "/index" suffix alone could collide with unrelated endpoints).
+_WORKSPACE_SCAN_PREFIX = "/api/workspace/"
+_WORKSPACE_SCAN_SUFFIX = "/index"
+
 
 def _int_env(name: str, default: int) -> int:
     """Read a positive int from env; fall back to ``default`` on absent/invalid."""
@@ -68,6 +74,8 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
         if any(path.endswith(suffix) for suffix in _AUTH_SUFFIXES):
             return ("auth", _AUTH_WINDOW_SECONDS, _AUTH_MAX_ATTEMPTS)
         if any(path.endswith(suffix) for suffix in _COST_SUFFIXES):
+            return ("cost", _COST_WINDOW_SECONDS, _COST_MAX_ATTEMPTS)
+        if path.startswith(_WORKSPACE_SCAN_PREFIX) and path.endswith(_WORKSPACE_SCAN_SUFFIX):
             return ("cost", _COST_WINDOW_SECONDS, _COST_MAX_ATTEMPTS)
         return None
 

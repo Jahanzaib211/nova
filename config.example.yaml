@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 14
+config_version: 15
 
 # ============================================================================
 # Logging
@@ -1441,3 +1441,12 @@ run_events:
 #   failure_threshold: 5
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
+
+# ============================================================
+# Workspace Intelligence (Phase C9/C10)
+# ============================================================
+# When enabled, the gateway exposes /api/workspace/* endpoints backed by
+# the workspace intelligence kernel (indexed projects, symbols, commands).
+# Disabled by default — the kernel stays dormant until you opt in.
+# workspace:
+#   intelligence_enabled: true

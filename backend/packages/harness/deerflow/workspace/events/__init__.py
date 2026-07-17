@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from deerflow.events.event import DomainEvent
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -34,8 +36,14 @@ def _now_iso() -> str:
 
 
 @dataclass(frozen=True)
-class WorkspaceEvent:
-    """Base class for all WIK events."""
+class WorkspaceEvent(DomainEvent):
+    """Base class for all WIK events.
+
+    Subclasses DomainEvent (2026-07 audit C6): the EventBus notifies
+    subscribers registered for the DomainEvent base class, so workspace
+    events that were plain dataclasses never reached them — every
+    bus-level diagnostic/audit consumer silently missed WIK activity.
+    """
 
     root_path: str = ""
     occurred_at: str = field(default_factory=_now_iso)

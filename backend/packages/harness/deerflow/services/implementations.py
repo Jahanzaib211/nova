@@ -12,6 +12,7 @@ implementation.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -721,6 +722,10 @@ class WorkspaceIntelligenceServiceImpl:
         self._base_dir = base_dir
         self._cache_ttl = cache_ttl_seconds
         self._snapshots: dict[str, WorkspaceSnapshot] = {}
+        self._snapshot_times: dict[str, float] = {}
+        # scan_async runs scan() on worker threads (asyncio.to_thread), so the
+        # snapshot maps need a lock (2026-07 audit C1/B6).
+        self._snapshots_lock = threading.RLock()
         self._metrics = self._make_metrics()
         self._event_bus = None
         self._scan_start_time: float = 0.0
@@ -746,15 +751,15 @@ class WorkspaceIntelligenceServiceImpl:
             except Exception:
                 pass
 
-    def _record_scan(self, file_count, project_count, symbol_count, duration_ms, language_distribution=None):
+    def _record_scan(self, root_path, file_count, project_count, symbol_count, command_count, duration_ms, language_distribution=None):
         self._metrics.record_scan(file_count, project_count, symbol_count, duration_ms, language_distribution)
         from deerflow.workspace.events import WorkspaceScanned
         self._emit(WorkspaceScanned(
-            root_path=self._snapshots.keys().__iter__().__next__() if self._snapshots else "",
+            root_path=root_path,
             file_count=file_count,
             project_count=project_count,
             symbol_count=symbol_count,
-            command_count=len(next(iter(self._snapshots.values()), None).commands) if self._snapshots else 0,
+            command_count=command_count,
             scan_duration_ms=duration_ms,
             language_distribution=language_distribution or {},
         ))
@@ -773,18 +778,24 @@ class WorkspaceIntelligenceServiceImpl:
                 symbols_found=tuple(symbols_found),
             ))
 
-    def _record_cache_hit(self):
+    def _record_cache_hit(self, root_path: str = ""):
         self._metrics.record_cache_hit()
         from deerflow.workspace.events import CacheHit
-        self._emit(CacheHit(root_path="", cache_key="", hit_count=self._metrics._cache_hits))
+        self._emit(CacheHit(root_path=root_path, cache_key="", hit_count=self._metrics._cache_hits))
 
-    def _record_cache_miss(self):
+    def _record_cache_miss(self, root_path: str = ""):
         self._metrics.record_cache_miss()
         from deerflow.workspace.events import CacheMiss
-        self._emit(CacheMiss(root_path="", cache_key=""))
+        self._emit(CacheMiss(root_path=root_path, cache_key=""))
 
-    def scan(self, root_path: str) -> WorkspaceSnapshot:
-        """Scan a workspace root and return a complete snapshot."""
+    def scan(self, root_path: str, force_refresh: bool = False) -> WorkspaceSnapshot:
+        """Scan a workspace root and return a complete snapshot.
+
+        Blocking (filesystem walk + AST parsing) — async callers must use
+        :meth:`scan_async`, which offloads via ``asyncio.to_thread``.
+        A snapshot younger than ``cache_ttl_seconds`` is returned as-is
+        unless ``force_refresh`` is set.
+        """
         from pathlib import Path
 
         from deerflow.workspace.detectors import (
@@ -799,6 +810,16 @@ class WorkspaceIntelligenceServiceImpl:
         from deerflow.workspace.scanners import BoundedWalker, TraversalLimit
 
         root = Path(root_path)
+
+        with self._snapshots_lock:
+            cached = self._snapshots.get(str(root))
+            cached_at = self._snapshot_times.get(str(root), 0.0)
+        if cached is not None and not force_refresh and (time.monotonic() - cached_at) < self._cache_ttl:
+            self._record_cache_hit(str(root))
+            return cached
+        if cached is not None:
+            self._record_cache_miss(str(root))
+
         limit = TraversalLimit(max_depth=6, max_files=50000, max_duration_seconds=15.0)
 
         fp_detector = FingerprintDetector()
@@ -849,14 +870,24 @@ class WorkspaceIntelligenceServiceImpl:
             duration_ms=duration_ms,
         )
 
-        self._snapshots[str(root)] = snapshot
+        with self._snapshots_lock:
+            self._snapshots[str(root)] = snapshot
+            self._snapshot_times[str(root)] = time.monotonic()
         self._record_scan(
+            root_path=str(root),
             file_count=walker.stats.files_visited,
             project_count=len(projects),
             symbol_count=len(all_symbols),
+            command_count=len(commands),
             duration_ms=duration_ms,
         )
         return snapshot
+
+    async def scan_async(self, root_path: str, force_refresh: bool = False) -> WorkspaceSnapshot:
+        """Async entry point: run the blocking scan off the event loop."""
+        import asyncio
+
+        return await asyncio.to_thread(self.scan, root_path, force_refresh=force_refresh)
 
     def plan_search(
         self,
@@ -960,8 +991,13 @@ class WorkspaceIntelligenceServiceImpl:
                 cmd_reg.register(cmd)
         return cmd_reg
 
-    def execute_plan(self, plan: ExecutionPlan) -> ExecutionResult:
+    def execute_plan(self, plan: ExecutionPlan, approved: bool = False) -> ExecutionResult:
         """Execute a validated plan through the ExecutionKernel.
+
+        Gate order (2026-07 audit B5):
+        1. PlanValidator — structural errors raise ValueError.
+        2. RiskAnalyzer — CRITICAL plans are always refused; HIGH plans are
+           refused unless the caller passes ``approved=True``.
 
         Converts WIK ExecutionSteps to ExecutionRequests and executes
         them sequentially through the Phase C8 ExecutionKernel.
@@ -969,6 +1005,19 @@ class WorkspaceIntelligenceServiceImpl:
         from deerflow.events.bus import event_bus
         from deerflow.execution import ExecutionKernel
         from deerflow.execution.models import ExecutionClass, ExecutionRequest, ResourceLimits
+        from deerflow.workspace.models.execution_plan import RiskLevel, StepKind
+        from deerflow.workspace.planner.plan_validator import PlanValidator
+        from deerflow.workspace.planner.risk_analyzer import RiskAnalyzer
+
+        validation = PlanValidator().validate(plan)
+        if not validation.is_valid:
+            raise ValueError(f"Plan failed validation: {'; '.join(validation.errors)}")
+
+        risk = RiskAnalyzer().analyze_plan(plan)
+        if risk == RiskLevel.CRITICAL:
+            raise PermissionError(f"Plan '{plan.plan_id}' is CRITICAL risk and cannot be executed")
+        if risk.order >= RiskLevel.HIGH.order and not approved:
+            raise PermissionError(f"Plan '{plan.plan_id}' is {risk.value} risk and requires explicit approval")
 
         if not plan.steps:
             from deerflow.execution.models import ExecutionResult
@@ -981,10 +1030,13 @@ class WorkspaceIntelligenceServiceImpl:
                 duration_ms=0.0,
             )
 
+        interactive_kinds = {StepKind.CONFIRM, StepKind.ASK_USER}
         kernel = ExecutionKernel(event_bus=event_bus)
         last_result = None
         for step in plan.steps:
-            execution_class = self._step_kind_to_class(step.kind)
+            if step.kind in interactive_kinds:
+                continue
+            execution_class = self._step_kind_to_class(step.kind, argv=step.argv)
             request = ExecutionRequest(
                 argv=step.argv,
                 execution_class=execution_class,
@@ -995,21 +1047,49 @@ class WorkspaceIntelligenceServiceImpl:
             last_result = kernel.execute_sync(request)
         return last_result
 
-    def _step_kind_to_class(self, kind: StepKind) -> ExecutionClass:
+    def _step_kind_to_class(self, kind: StepKind, argv: tuple[str, ...] = ()) -> ExecutionClass:
         from deerflow.execution.models import ExecutionClass
-        from deerflow.workspace.models.execution_plan import StepKind
 
-        mapping = {
-            StepKind.READ: ExecutionClass.READ,
-            StepKind.SEARCH: ExecutionClass.SHELL,
-            StepKind.SHELL: ExecutionClass.SHELL,
-            StepKind.EDIT: ExecutionClass.SHELL,
-            StepKind.DELETE: ExecutionClass.SHELL,
-            StepKind.RUN: ExecutionClass.SHELL,
-            StepKind.SUDO: ExecutionClass.SUDO,
-        }
-        return mapping.get(kind, ExecutionClass.SHELL)
+        program = str(argv[0]).rsplit("/", 1)[-1] if argv else ""
+        if program == "git":
+            return ExecutionClass.GIT
+        if program.startswith("python"):
+            return ExecutionClass.PYTHON
+        if program == "docker":
+            return ExecutionClass.DOCKER
+        return ExecutionClass.SHELL
 
     def get_snapshot(self, root_path: str) -> WorkspaceSnapshot | None:
         """Return the cached snapshot for a root path, or None if not yet scanned."""
-        return self._snapshots.get(root_path)
+        with self._snapshots_lock:
+            return self._snapshots.get(root_path)
+
+    def analyze_impact(self, root_path: str, files: list[str]) -> dict[str, Any]:
+        """Return what a change to ``files`` touches, from the cached snapshot.
+
+        Snapshot-derived (no filesystem access): symbols defined in the files,
+        projects containing them, and the commands of those projects.
+        Returns ``{"scanned": False}`` when no snapshot exists yet.
+        """
+        snapshot = self.get_snapshot(root_path)
+        if snapshot is None:
+            return {"scanned": False, "files": list(files), "symbols": [], "projects": [], "commands": []}
+
+        normalized = {f.rstrip("/") for f in files}
+
+        def matches(path: str) -> bool:
+            # exact file match, or the changed entry is a directory prefix
+            return path in normalized or any(path.startswith(f + "/") for f in normalized)
+
+        touched_symbols = [s for s in snapshot.symbols if matches(s.file_path)]
+        touched_project_ids = {s.project_id for s in touched_symbols if s.project_id}
+        touched_project_ids |= {p.project_id for p in snapshot.projects if any(f.startswith(p.root_path.rstrip("/") + "/") or f == p.root_path for f in normalized)}
+        touched_commands = [c for c in snapshot.commands if c.project_id in touched_project_ids]
+
+        return {
+            "scanned": True,
+            "files": list(files),
+            "symbols": [{"name": s.name, "kind": s.kind.value, "file_path": s.file_path, "fqn": s.fqn} for s in touched_symbols],
+            "projects": sorted(touched_project_ids),
+            "commands": [{"name": c.name, "kind": c.kind.value, "project_id": c.project_id} for c in touched_commands],
+        }

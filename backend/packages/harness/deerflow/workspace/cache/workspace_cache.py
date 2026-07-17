@@ -8,6 +8,7 @@ changes.  Uses a 10k entry ring buffer (LRU) for in-memory index.
 from __future__ import annotations
 
 import json
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -45,6 +46,10 @@ class WorkspaceCache:
     _max_entries: int = 10000
 
     def __post_init__(self) -> None:
+        # Guards _memory_index and CacheEntry mutation (2026-07 audit B6):
+        # get() bumps last_accessed/hit_count and set()/evict rewrite the
+        # index, so unsynchronized concurrent access corrupts entries.
+        self._lock = threading.RLock()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._memory_index = {}
         self._load_index()
@@ -69,16 +74,17 @@ class WorkspaceCache:
 
     def get(self, key: str) -> WorkspaceSnapshot | None:
         """Retrieve a cached snapshot by key."""
-        if key not in self._memory_index:
-            return None
+        with self._lock:
+            entry = self._memory_index.get(key)
+            if entry is None:
+                return None
 
-        path = self._cache_file_path(key)
-        if not path.exists():
-            return None
+            path = self._cache_file_path(key)
+            if not path.exists():
+                return None
 
-        entry = self._memory_index[key]
-        entry.last_accessed = time.time()
-        entry.hit_count += 1
+            entry.last_accessed = time.time()
+            entry.hit_count += 1
 
         try:
             data = json.loads(path.read_text())
@@ -88,21 +94,22 @@ class WorkspaceCache:
 
     def set(self, key: str, snapshot: WorkspaceSnapshot) -> None:
         """Store a snapshot in the cache."""
-        if len(self._memory_index) >= self._max_entries:
-            self._evict_lru()
+        with self._lock:
+            if len(self._memory_index) >= self._max_entries:
+                self._evict_lru()
 
-        path = self._cache_file_path(key)
-        path.write_text(json.dumps(snapshot.to_dict(), sort_keys=True))
+            path = self._cache_file_path(key)
+            path.write_text(json.dumps(snapshot.to_dict(), sort_keys=True))
 
-        entry = CacheEntry(
-            key=key,
-            created_at=time.time(),
-            last_accessed=time.time(),
-            hit_count=0,
-            snapshot_json="",
-        )
-        self._memory_index[key] = entry
-        self._save_index()
+            entry = CacheEntry(
+                key=key,
+                created_at=time.time(),
+                last_accessed=time.time(),
+                hit_count=0,
+                snapshot_json="",
+            )
+            self._memory_index[key] = entry
+            self._save_index()
 
     def _evict_lru(self) -> None:
         if not self._memory_index:
@@ -114,16 +121,18 @@ class WorkspaceCache:
 
     def invalidate(self, key: str) -> None:
         """Remove a specific cache entry."""
-        self._memory_index.pop(key, None)
-        self._cache_file_path(key).unlink(missing_ok=True)
-        self._save_index()
+        with self._lock:
+            self._memory_index.pop(key, None)
+            self._cache_file_path(key).unlink(missing_ok=True)
+            self._save_index()
 
     def invalidate_all(self) -> None:
         """Clear the entire cache."""
-        for key in list(self._memory_index.keys()):
-            self._cache_file_path(key).unlink(missing_ok=True)
-        self._memory_index.clear()
-        self._save_index()
+        with self._lock:
+            for key in list(self._memory_index.keys()):
+                self._cache_file_path(key).unlink(missing_ok=True)
+            self._memory_index.clear()
+            self._save_index()
 
     def build_key(
         self,
@@ -140,13 +149,15 @@ class WorkspaceCache:
 
     def size(self) -> int:
         """Number of entries in cache."""
-        return len(self._memory_index)
+        with self._lock:
+            return len(self._memory_index)
 
     def stats(self) -> dict:
         """Return cache statistics."""
-        if not self._memory_index:
-            return {"entries": 0, "total_hits": 0}
-        return {
-            "entries": len(self._memory_index),
-            "total_hits": sum(e.hit_count for e in self._memory_index.values()),
-        }
+        with self._lock:
+            if not self._memory_index:
+                return {"entries": 0, "total_hits": 0}
+            return {
+                "entries": len(self._memory_index),
+                "total_hits": sum(e.hit_count for e in self._memory_index.values()),
+            }

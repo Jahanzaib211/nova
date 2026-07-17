@@ -16,7 +16,8 @@ from pathlib import Path
 class CacheKeyBuilder:
     """Build deterministic cache keys for workspace states.
 
-    Key is a SHA-256 of the canonical JSON representation of the
+    Key is a full (untruncated — 2026-07 audit B6) SHA-256 of the
+    canonical JSON representation of the
     workspace fingerprint (repo kind, languages, project count,
     file count).  File-level content hashing is available as a
     separate method for deep invalidation.
@@ -41,12 +42,12 @@ class CacheKeyBuilder:
             },
             sort_keys=True,
         )
-        return f"wik:{hashlib.sha256(payload.encode()).hexdigest()[:16]}"
+        return f"wik:{hashlib.sha256(payload.encode()).hexdigest()}"
 
     def build_file_hash_key(self, file_path: str, content_hash: str) -> str:
         """Build a cache key for a single file's content hash."""
-        return f"wik:file:{hashlib.sha256(f"{file_path}:{content_hash}".encode()).hexdigest()[:16]}"
+        return f"wik:file:{hashlib.sha256(f"{file_path}:{content_hash}".encode()).hexdigest()}"
 
     def build_symbol_key(self, project_id: str, symbol_name: str) -> str:
         """Build a cache key for a symbol lookup result."""
-        return f"wik:sym:{hashlib.sha256(f"{project_id}:{symbol_name}".encode()).hexdigest()[:16]}"
+        return f"wik:sym:{hashlib.sha256(f"{project_id}:{symbol_name}".encode()).hexdigest()}"

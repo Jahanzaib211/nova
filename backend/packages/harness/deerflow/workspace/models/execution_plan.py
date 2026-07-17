@@ -70,6 +70,7 @@ class ExecutionStep:
     cwd: str = ""
     env: dict[str, str] = field(default_factory=dict)
     affected_files: tuple[str, ...] = field(default_factory=tuple)
+    depends_on: tuple[str, ...] = field(default_factory=tuple)
     rollback_step_id: str = ""
     risk_level: RiskLevel = RiskLevel.LOW
     reasoning: str = ""

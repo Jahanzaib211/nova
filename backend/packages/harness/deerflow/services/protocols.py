@@ -476,8 +476,16 @@ class WorkspaceIntelligenceService(Protocol):
         - All operations emit structured logs with workspace correlation.
     """
 
-    def scan(self, root_path: str) -> WorkspaceSnapshot:
-        """Scan a workspace root and return a complete snapshot."""
+    def scan(self, root_path: str, force_refresh: bool = False) -> WorkspaceSnapshot:
+        """Scan a workspace root and return a complete snapshot.
+
+        Blocking — async callers must use :meth:`scan_async`. A snapshot
+        younger than the cache TTL is returned as-is unless ``force_refresh``.
+        """
+        ...
+
+    async def scan_async(self, root_path: str, force_refresh: bool = False) -> WorkspaceSnapshot:
+        """Run the blocking scan off the event loop (asyncio.to_thread)."""
         ...
 
     def plan_search(
@@ -506,8 +514,12 @@ class WorkspaceIntelligenceService(Protocol):
         """Build an execution plan for a named command."""
         ...
 
-    def execute_plan(self, plan: ExecutionPlan) -> ExecutionResult:
-        """Execute a validated plan through the ExecutionKernel."""
+    def execute_plan(self, plan: ExecutionPlan, approved: bool = False) -> ExecutionResult:
+        """Execute a validated plan through the ExecutionKernel.
+
+        Raises ValueError on validation errors. Raises PermissionError for
+        CRITICAL plans (always) and HIGH plans without ``approved=True``.
+        """
         ...
 
     def get_snapshot(self, root_path: str) -> WorkspaceSnapshot | None:
