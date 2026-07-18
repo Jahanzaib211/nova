@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import { useFileSymbols, useWorkspaceCommands, useWorkspaceSnapshot } from "@/core/workspace/hooks";
+import { useFileImpact, useFileSymbols, useWorkspaceCommands, useWorkspaceSnapshot } from "@/core/workspace/hooks";
 
 import { TERMINAL_TOOLS } from "./terminal-tab";
 import { WorkspaceCard } from "./workspace-card";
@@ -96,7 +96,9 @@ function FileSymbolOutline({
   depth: number;
 }) {
   const symbols = useFileSymbols(threadId, filePath);
+  const impact = useFileImpact(threadId, filePath);
   if (symbols.length === 0) return null;
+  const impactedCommands = impact?.scanned ? impact.commands.length : 0;
   return (
     <div>
       {symbols.map((s) => (
@@ -110,6 +112,16 @@ function FileSymbolOutline({
           <span className="text-muted-foreground/40 ml-auto shrink-0">{s.kind}</span>
         </div>
       ))}
+      {impactedCommands > 0 && (
+        <div
+          className="text-muted-foreground/50 flex items-center gap-1 px-1 py-0.5 text-[10px] italic"
+          style={{ paddingLeft: `${depth * 10 + 18}px` }}
+        >
+          <PlayIcon className="h-2.5 w-2.5 shrink-0" aria-hidden />
+          changes here affect {impactedCommands}{" "}
+          {impactedCommands === 1 ? "command" : "commands"}
+        </div>
+      )}
     </div>
   );
 }

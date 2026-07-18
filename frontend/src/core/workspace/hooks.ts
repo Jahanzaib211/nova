@@ -4,12 +4,16 @@ import { useCallback, useState } from "react";
 import {
   fetchFileSymbols,
   fetchWorkspaceCommands,
+  fetchWorkspaceImpact,
+  fetchWorkspaceMetrics,
   fetchWorkspaceSnapshot,
   indexWorkspace,
   WorkspaceDisabledError,
   WorkspaceUnindexedError,
   type WorkspaceAvailability,
   type WorkspaceCommand,
+  type WorkspaceImpact,
+  type WorkspaceMetrics,
   type WorkspaceSnapshotSummary,
   type WorkspaceSymbol,
 } from "@/core/workspace/api";
@@ -115,4 +119,35 @@ export function useWorkspaceCommands(
     retry: false,
   });
   return query.data ?? [];
+}
+
+/** Kernel metrics for the Privacy tab. Null while the flag is off. */
+export function useWorkspaceMetrics(
+  threadId: string | null,
+  enabled = true,
+): WorkspaceMetrics | null {
+  const query = useQuery<WorkspaceMetrics | null>({
+    queryKey: ["workspace", "metrics", threadId],
+    queryFn: () => fetchWorkspaceMetrics(threadId!),
+    enabled: Boolean(threadId) && enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return query.data ?? null;
+}
+
+/** Impact preview for one file (C10 item 9). Null while unavailable. */
+export function useFileImpact(
+  threadId: string | null,
+  filePath: string | null,
+  enabled = true,
+): WorkspaceImpact | null {
+  const query = useQuery<WorkspaceImpact | null>({
+    queryKey: ["workspace", "impact", threadId, filePath],
+    queryFn: () => fetchWorkspaceImpact(threadId!, [filePath!]),
+    enabled: Boolean(threadId && filePath) && enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return query.data ?? null;
 }

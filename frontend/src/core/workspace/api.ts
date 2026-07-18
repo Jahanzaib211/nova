@@ -94,3 +94,38 @@ export async function fetchWorkspaceCommands(threadId: string): Promise<Workspac
   const body = (await res.json()) as { commands: WorkspaceCommand[] };
   return body.commands ?? [];
 }
+
+export interface WorkspaceMetrics {
+  scan: { count: number; avg_duration_ms: number };
+  cache: { hits: number; misses: number; hit_rate: number };
+  symbol_search: { count: number; avg_duration_ms: number };
+}
+
+/** Kernel metrics for the Privacy/status tab. Null on 403/404/error. */
+export async function fetchWorkspaceMetrics(threadId: string): Promise<WorkspaceMetrics | null> {
+  const res = await fetch(workspaceUrl(threadId, "/metrics"), {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { metrics: WorkspaceMetrics };
+  return body.metrics ?? null;
+}
+
+export interface WorkspaceImpact {
+  scanned: boolean;
+  symbols: WorkspaceSymbol[];
+  projects: { project_id: string; name: string }[];
+  commands: WorkspaceCommand[];
+}
+
+/** Blast radius of changing the given files. Null on 403/404/error. */
+export async function fetchWorkspaceImpact(threadId: string, files: string[]): Promise<WorkspaceImpact | null> {
+  const res = await fetch(workspaceUrl(threadId, "/impact"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ files }),
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as WorkspaceImpact;
+}

@@ -561,7 +561,7 @@ export function AgentComputerPanel({
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Privacy">
-          {activeTab === "privacy" ? <PrivacyPanel /> : null}
+          {activeTab === "privacy" ? <PrivacyPanel threadId={threadId} /> : null}
         </AgentComputerErrorBoundary>
       </div>
 

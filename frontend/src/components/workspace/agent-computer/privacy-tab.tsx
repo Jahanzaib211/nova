@@ -6,12 +6,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/core/i18n/hooks";
 import { useIGINOStatus, useToggleIGINO } from "@/core/igino/hooks";
+import { useWorkspaceMetrics } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
-export function PrivacyPanel() {
+export function PrivacyPanel({ threadId }: { threadId?: string }) {
   const { t } = useI18n();
   const { data: status, isLoading } = useIGINOStatus();
   const toggleMutation = useToggleIGINO();
+  // Workspace kernel metrics (C10 item 10); null while the flag is off.
+  const workspaceMetrics = useWorkspaceMetrics(threadId ?? null);
 
   if (isLoading) {
     return (
@@ -117,6 +120,26 @@ export function PrivacyPanel() {
             />
           </div>
         </div>
+
+        {/* Workspace kernel (C10) — hidden until the backend flag is on */}
+        {workspaceMetrics && (
+          <div className="space-y-2">
+            <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+              Workspace kernel
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              <MetricCard label="Scans" value={workspaceMetrics.scan.count} />
+              <MetricCard
+                label="Avg scan"
+                value={`${workspaceMetrics.scan.avg_duration_ms.toFixed(0)}ms`}
+              />
+              <MetricCard
+                label="Cache hits"
+                value={`${(workspaceMetrics.cache.hit_rate * 100).toFixed(0)}%`}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Error */}
         {status.error && (
