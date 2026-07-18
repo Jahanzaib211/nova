@@ -577,6 +577,12 @@ export interface Translations {
       projects: string;
       symbols: string;
       commands: string;
+      impactFooter: (count: number) => string;
+      indexedBanner: (symbols: number, projects: number, commands: number, language: string) => string;
+      kernelTitle: string;
+      kernelScans: string;
+      kernelAvgScan: string;
+      kernelCacheHits: string;
     };
     status: {
       writing: (filename: string, lines?: string) => string;

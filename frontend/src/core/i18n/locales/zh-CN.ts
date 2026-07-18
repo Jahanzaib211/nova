@@ -658,6 +658,13 @@ export const zhCN: Translations = {
       projects: "个项目",
       symbols: "个符号",
       commands: "条命令",
+      impactFooter: (count: number) => `此处的更改会影响 ${count} 条命令`,
+      indexedBanner: (symbols: number, projects: number, commands: number, language: string) =>
+        `工作区已索引 — ${projects} 个项目共 ${symbols} 个符号 · ${commands} 条命令 · ${language}`,
+      kernelTitle: "工作区内核",
+      kernelScans: "扫描次数",
+      kernelAvgScan: "平均扫描",
+      kernelCacheHits: "缓存命中率",
     },
     status: {
       writing: (filename: string, lines?: string) =>

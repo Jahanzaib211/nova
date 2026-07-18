@@ -115,7 +115,8 @@ export async function fetchWorkspaceMetrics(threadId: string): Promise<Workspace
 export interface WorkspaceImpact {
   scanned: boolean;
   symbols: WorkspaceSymbol[];
-  projects: { project_id: string; name: string }[];
+  /** Affected project ids (server sends ids, not objects). */
+  projects: string[];
   commands: WorkspaceCommand[];
 }
 

@@ -237,9 +237,12 @@ export function ActivityPanel({
             <div className="border-border/30 bg-muted/10 text-muted-foreground/70 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]">
               <DatabaseIcon className="h-3 w-3 shrink-0 text-emerald-400" />
               <span className="truncate">
-                Workspace indexed — {snapshot.symbol_count} symbols across {snapshot.project_count}{" "}
-                {snapshot.project_count === 1 ? "project" : "projects"} · {snapshot.command_count} commands ·{" "}
-                {snapshot.primary_language}
+                {t.agentComputer.workspace.indexedBanner(
+                  snapshot.symbol_count,
+                  snapshot.project_count,
+                  snapshot.command_count,
+                  snapshot.primary_language,
+                )}
               </span>
             </div>
           )}

@@ -64,7 +64,7 @@ def _workspace_root(thread_id: str) -> str:
 
 
 def _service():
-    return service_container.workspace_intelligence_service
+    return service_container.workspace_intelligence_service()
 
 
 class IndexRequest(BaseModel):

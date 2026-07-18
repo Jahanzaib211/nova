@@ -1075,15 +1075,28 @@ class WorkspaceIntelligenceServiceImpl:
         if snapshot is None:
             return {"scanned": False, "files": list(files), "symbols": [], "projects": [], "commands": []}
 
-        normalized = {f.rstrip("/") for f in files}
+        # Callers (file tree, diff tooling) send workspace-relative paths;
+        # snapshot symbols carry scanner-produced paths that may be absolute.
+        # Normalize both sides to relative-under-root before matching.
+        root_prefix = str(root_path).rstrip("/") + "/"
+
+        def _rel(path: str) -> str:
+            if path.rstrip("/") == str(root_path).rstrip("/"):
+                return ""
+            if path.startswith(root_prefix):
+                return path[len(root_prefix):]
+            return path.lstrip("./")
+
+        normalized = {_rel(f.rstrip("/")) for f in files}
 
         def matches(path: str) -> bool:
+            rel = _rel(path)
             # exact file match, or the changed entry is a directory prefix
-            return path in normalized or any(path.startswith(f + "/") for f in normalized)
+            return rel in normalized or any(rel.startswith(f + "/") for f in normalized)
 
         touched_symbols = [s for s in snapshot.symbols if matches(s.file_path)]
         touched_project_ids = {s.project_id for s in touched_symbols if s.project_id}
-        touched_project_ids |= {p.project_id for p in snapshot.projects if any(f.startswith(p.root_path.rstrip("/") + "/") or f == p.root_path for f in normalized)}
+        touched_project_ids |= {p.project_id for p in snapshot.projects if any(f.startswith(_rel(p.root_path).rstrip("/") + "/") or f == _rel(p.root_path) or _rel(p.root_path) == "" for f in normalized)}
         touched_commands = [c for c in snapshot.commands if c.project_id in touched_project_ids]
 
         return {

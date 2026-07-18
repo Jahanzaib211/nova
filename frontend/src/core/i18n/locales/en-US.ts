@@ -684,6 +684,13 @@ export const enUS: Translations = {
       projects: "projects",
       symbols: "symbols",
       commands: "commands",
+      impactFooter: (count: number) => `changes here affect ${count} ${count === 1 ? "command" : "commands"}`,
+      indexedBanner: (symbols: number, projects: number, commands: number, language: string) =>
+        `Workspace indexed — ${symbols} symbols across ${projects} ${projects === 1 ? "project" : "projects"} · ${commands} commands · ${language}`,
+      kernelTitle: "Workspace kernel",
+      kernelScans: "Scans",
+      kernelAvgScan: "Avg scan",
+      kernelCacheHits: "Cache hits",
     },
     status: {
       writing: (filename: string, lines?: string) =>

@@ -149,10 +149,14 @@ class TestCommandDetector:
             name="test",
             kind=ProjectKind.PYTHON_PROJECT,
             root_path=str(tmp_path),
+            has_tests=True,
         )
         detector = CommandDetector()
         commands = detector.build_registry([project])
-        assert len(commands) >= 1
+        names = {c.name for c in commands}
+        assert "test" in names
+        # migrate must NOT be fabricated for projects without alembic
+        assert "migrate" not in names
 
 
 # =====================================================================

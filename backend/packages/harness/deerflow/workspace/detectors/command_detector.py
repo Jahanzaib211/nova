@@ -6,11 +6,16 @@ is inferred from project configuration and indexed.
 
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 
 from deerflow.workspace.models.command import Command, CommandKind
 from deerflow.workspace.models.project import Project, ProjectKind
+
+# Literal make target at line start: `name:` or `name: deps`, not `name := value`
+# (assignment) and not indented recipe lines.
+_MAKE_TARGET_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.\-/]*)\s*:(?!=)")
 
 SCRIPT_TO_KIND: dict[str, CommandKind] = {
     "dev": CommandKind.DEV_SERVER,
@@ -52,10 +57,17 @@ class CommandDetector:
     """
 
     def build_registry(self, projects: list[Project]) -> list[Command]:
-        """Build the complete command registry from a list of projects."""
+        """Build the complete command registry from a list of projects.
+
+        Makefile targets take precedence over same-named generic fallbacks
+        (a repo's ``make test`` encodes the project's real test invocation).
+        """
         commands: list[Command] = []
         for project in projects:
-            commands.extend(self._commands_from_project(project))
+            makefile_commands = self._commands_from_makefile(project)
+            makefile_names = {c.name for c in makefile_commands}
+            commands.extend(makefile_commands)
+            commands.extend(c for c in self._commands_from_project(project) if c.name not in makefile_names)
         return commands
 
     def _commands_from_project(self, project: Project) -> list[Command]:
@@ -117,18 +129,84 @@ class CommandDetector:
                     is_destructive=False,
                 )
             )
-        commands.append(
-            Command(
-                command_id=uuid.uuid4().hex,
-                name="migrate",
-                kind=CommandKind.MIGRATE,
-                project_id=project.project_id,
-                argv=("alembic", "upgrade", "head") if project.root_path else (),
-                cwd=project.root_path,
-                description="Run database migrations",
-                is_destructive=False,
+        if self._uses_alembic(project):
+            commands.append(
+                Command(
+                    command_id=uuid.uuid4().hex,
+                    name="migrate",
+                    kind=CommandKind.MIGRATE,
+                    project_id=project.project_id,
+                    argv=("alembic", "upgrade", "head") if project.root_path else (),
+                    cwd=project.root_path,
+                    description="Run database migrations",
+                    is_destructive=False,
+                )
             )
+        return commands
+
+    def _uses_alembic(self, project: Project) -> bool:
+        """True only when the project actually carries alembic artifacts."""
+        if not project.root_path:
+            return False
+        root = Path(project.root_path)
+        if (root / "alembic.ini").is_file() or (root / "alembic").is_dir():
+            return True
+        pyproject = root / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                return "alembic" in pyproject.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                return False
+        return False
+
+    # Targets that are make-internal, not user-runnable commands.
+    _MAKE_SPECIAL_PREFIXES = (".", "$")
+
+    def _commands_from_makefile(self, project: Project) -> list[Command]:
+        """Parse explicit Makefile targets into commands.
+
+        Only simple literal targets (``name:``) are taken — pattern rules
+        (``%.o:``), variable targets (``$(X):``), and special targets
+        (``.PHONY:``) are skipped.
+        """
+        if not project.root_path:
+            return []
+        makefile = next(
+            (p for name in ("Makefile", "makefile", "GNUmakefile") if (p := Path(project.root_path) / name).is_file()),
+            None,
         )
+        if makefile is None:
+            return []
+        try:
+            text = makefile.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return []
+
+        commands: list[Command] = []
+        seen: set[str] = set()
+        for line in text.splitlines():
+            match = _MAKE_TARGET_RE.match(line)
+            if not match:
+                continue
+            name = match.group(1)
+            if name in seen or name.startswith(self._MAKE_SPECIAL_PREFIXES) or "%" in name or "$" in name:
+                continue
+            seen.add(name)
+            kind = SCRIPT_TO_KIND.get(name, CommandKind.CUSTOM)
+            commands.append(
+                Command(
+                    command_id=uuid.uuid4().hex,
+                    name=name,
+                    kind=kind,
+                    project_id=project.project_id,
+                    argv=("make", name),
+                    cwd=project.root_path,
+                    description=f"Makefile target: {name}",
+                    is_background=name in {"dev", "develop", "start", "serve", "run", "worker"},
+                    is_destructive=False,
+                    metadata={"source": "makefile"},
+                )
+            )
         return commands
 
     def _commands_from_docker_project(self, project: Project) -> list[Command]:

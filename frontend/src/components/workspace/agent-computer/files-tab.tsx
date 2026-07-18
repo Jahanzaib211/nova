@@ -95,6 +95,7 @@ function FileSymbolOutline({
   filePath: string;
   depth: number;
 }) {
+  const { t } = useI18n();
   const symbols = useFileSymbols(threadId, filePath);
   const impact = useFileImpact(threadId, filePath);
   if (symbols.length === 0) return null;
@@ -118,8 +119,7 @@ function FileSymbolOutline({
           style={{ paddingLeft: `${depth * 10 + 18}px` }}
         >
           <PlayIcon className="h-2.5 w-2.5 shrink-0" aria-hidden />
-          changes here affect {impactedCommands}{" "}
-          {impactedCommands === 1 ? "command" : "commands"}
+          {t.agentComputer.workspace.impactFooter(impactedCommands)}
         </div>
       )}
     </div>
