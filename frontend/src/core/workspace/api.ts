@@ -56,3 +56,41 @@ export async function indexWorkspace(threadId: string, forceRefresh = false): Pr
   });
   return parseSnapshotResponse(res);
 }
+
+export interface WorkspaceSymbol {
+  name: string;
+  kind: string;
+  fqn: string;
+  file_path: string;
+  language: string;
+}
+
+export interface WorkspaceCommand {
+  name: string;
+  kind: string;
+  project_id: string;
+  argv: string[];
+  description: string;
+}
+
+/** Symbols defined in one file (Files-tab outline). Empty on 403/404. */
+export async function fetchFileSymbols(threadId: string, filePath: string): Promise<WorkspaceSymbol[]> {
+  const res = await fetch(
+    workspaceUrl(threadId, `/symbols?file=${encodeURIComponent(filePath)}`),
+    { method: "GET", headers: { "Content-Type": "application/json" } },
+  );
+  if (!res.ok) return [];
+  const body = (await res.json()) as { symbols: WorkspaceSymbol[] };
+  return body.symbols ?? [];
+}
+
+/** Commands detected in the workspace (dev/test/lint...). Empty on 403/404. */
+export async function fetchWorkspaceCommands(threadId: string): Promise<WorkspaceCommand[]> {
+  const res = await fetch(workspaceUrl(threadId, "/commands"), {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { commands: WorkspaceCommand[] };
+  return body.commands ?? [];
+}

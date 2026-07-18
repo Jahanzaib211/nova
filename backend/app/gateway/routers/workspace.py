@@ -201,8 +201,14 @@ async def search_symbols(
     thread_id: str,
     request: Request,
     q: str = Query(default="", max_length=200),
+    file: str = Query(default="", max_length=500),
 ) -> dict[str, Any]:
-    """Prefix-search symbols in the thread workspace snapshot."""
+    """Prefix-search symbols in the thread workspace snapshot.
+
+    ``q`` filters by name prefix; ``file`` narrows to symbols whose
+    ``file_path`` matches (exact, suffix, or basename) — used by the
+    Files-tab per-file symbol outline.
+    """
     _require_enabled()
     root = _workspace_root(thread_id)
     snapshot = _service().get_snapshot(root)
@@ -211,6 +217,14 @@ async def search_symbols(
 
     needle = q.lower()
     matches = [s for s in snapshot.symbols if not needle or s.name.lower().startswith(needle)]
+    if file:
+        wanted = file.lstrip("./")
+        matches = [
+            s for s in matches
+            if s.file_path == file
+            or s.file_path.endswith("/" + wanted)
+            or s.file_path == wanted
+        ]
     return {
         "query": q,
         "total": len(matches),

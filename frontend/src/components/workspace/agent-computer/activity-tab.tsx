@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2Icon, CircleIcon, DownloadIcon, FileSearchIcon, FileTextIcon, FolderOpenIcon, AlertTriangleIcon, LoaderCircleIcon, PencilIcon, SquareTerminalIcon, TerminalIcon } from "lucide-react";
+import { CheckCircle2Icon, CircleIcon, DownloadIcon, FileSearchIcon, FileTextIcon, FolderOpenIcon, AlertTriangleIcon, LoaderCircleIcon, PencilIcon, SquareTerminalIcon, TerminalIcon, DatabaseIcon,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -15,7 +16,9 @@ import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { Todo } from "@/core/todos";
+import { useWorkspaceSnapshot } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
+
 
 import { TERMINAL_TOOLS } from "./terminal-tab";
 
@@ -205,6 +208,8 @@ export function ActivityPanel({
     () => events.filter((e) => !TERMINAL_TOOLS.has(e.type)),
     [events],
   );
+  // Workspace-indexed banner (C10 item 7); null while the flag is off.
+  const { snapshot } = useWorkspaceSnapshot(threadId);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -228,6 +233,16 @@ export function ActivityPanel({
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-1 p-2">
+          {snapshot && (
+            <div className="border-border/30 bg-muted/10 text-muted-foreground/70 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]">
+              <DatabaseIcon className="h-3 w-3 shrink-0 text-emerald-400" />
+              <span className="truncate">
+                Workspace indexed — {snapshot.symbol_count} symbols across {snapshot.project_count}{" "}
+                {snapshot.project_count === 1 ? "project" : "projects"} · {snapshot.command_count} commands ·{" "}
+                {snapshot.primary_language}
+              </span>
+            </div>
+          )}
           {timeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
               <FileTextIcon className="text-muted-foreground/30 h-5 w-5" />

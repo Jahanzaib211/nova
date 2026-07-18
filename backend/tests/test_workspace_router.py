@@ -107,6 +107,17 @@ class TestEndpointContract:
         names = [s["name"] for s in symbols.json()["symbols"]]
         assert "hello" in names
 
+        # file= narrows results to symbols defined in that file
+        by_file = client.get(f"/api/workspace/{THREAD_ID}/symbols", params={"file": "main.py"})
+        assert by_file.status_code == 200
+        file_symbols = by_file.json()["symbols"]
+        assert file_symbols, "expected symbols for main.py"
+        assert all(s["file_path"].endswith("main.py") for s in file_symbols)
+
+        by_wrong_file = client.get(f"/api/workspace/{THREAD_ID}/symbols", params={"file": "missing.py"})
+        assert by_wrong_file.status_code == 200
+        assert by_wrong_file.json()["symbols"] == []
+
         commands = client.get(f"/api/workspace/{THREAD_ID}/commands")
         assert commands.status_code == 200
 

@@ -2,12 +2,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 
 import {
+  fetchFileSymbols,
+  fetchWorkspaceCommands,
   fetchWorkspaceSnapshot,
   indexWorkspace,
   WorkspaceDisabledError,
   WorkspaceUnindexedError,
   type WorkspaceAvailability,
+  type WorkspaceCommand,
   type WorkspaceSnapshotSummary,
+  type WorkspaceSymbol,
 } from "@/core/workspace/api";
 
 export interface WorkspaceSnapshotState {
@@ -76,4 +80,39 @@ export function useWorkspaceSnapshot(
     isIndexing,
     refresh,
   };
+}
+
+/**
+ * Symbols defined in one file — fetched lazily when a code-file row is
+ * expanded in the Files tab. Cached per (thread, file); 403/404 resolve to
+ * an empty list so the tree renders identically pre-flag.
+ */
+export function useFileSymbols(
+  threadId: string | null,
+  filePath: string | null,
+  enabled = true,
+): WorkspaceSymbol[] {
+  const query = useQuery<WorkspaceSymbol[]>({
+    queryKey: ["workspace", "symbols", threadId, filePath],
+    queryFn: () => fetchFileSymbols(threadId!, filePath!),
+    enabled: Boolean(threadId && filePath) && enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+  return query.data ?? [];
+}
+
+/** Commands detected in the workspace (dev/test/lint...). Empty pre-flag. */
+export function useWorkspaceCommands(
+  threadId: string | null,
+  enabled = true,
+): WorkspaceCommand[] {
+  const query = useQuery<WorkspaceCommand[]>({
+    queryKey: ["workspace", "commands", threadId],
+    queryFn: () => fetchWorkspaceCommands(threadId!),
+    enabled: Boolean(threadId) && enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+  return query.data ?? [];
 }
