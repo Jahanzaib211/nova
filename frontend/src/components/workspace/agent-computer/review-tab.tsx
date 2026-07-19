@@ -1,10 +1,12 @@
 "use client";
 
 import { DownloadIcon, LoaderCircleIcon } from "lucide-react";
+import { useMemo } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
 import { sandboxReviewDownloadUrl, type SandboxReview } from "@/core/sandbox/hooks";
+import { useWorkspaceEvents } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
 // Tab: Review — deterministic dual-audience code review (non-coder + developer)
@@ -13,6 +15,15 @@ function riskColor(level: string): string {
   if (level === "high") return "text-red-400";
   if (level === "med") return "text-orange-400";
   return "text-yellow-400";
+}
+
+// WIK risk levels (deerflow.workspace.models.execution_plan.RiskLevel) use a
+// different vocabulary than the sandbox-review risks above.
+function kernelRiskColor(level: string): string {
+  if (level === "critical") return "text-red-400";
+  if (level === "high") return "text-orange-400";
+  if (level === "medium") return "text-yellow-400";
+  return "text-emerald-400";
 }
 
 export function ReviewPanel({
@@ -30,6 +41,14 @@ export function ReviewPanel({
   const risks = review?.risks ?? [];
   const high = risks.filter((r) => r.level === "high").length;
   const med = risks.filter((r) => r.level === "med").length;
+  // Latest WIK plan-built verdict (bus -> SSE bridge); undefined pre-flag
+  // or before any plan has been built for this thread.
+  const liveEvents = useWorkspaceEvents(threadId);
+  const latestPlan = useMemo(
+    () =>
+      [...liveEvents].reverse().find((e): e is Extract<typeof e, { type: "PlanBuilt" }> => e.type === "PlanBuilt"),
+    [liveEvents],
+  );
   const verdict = !review
     ? { text: t.agentComputer.review.generating, cls: "text-muted-foreground" }
     : high > 0
@@ -85,6 +104,28 @@ export function ReviewPanel({
               </div>
             )}
           </div>
+
+          {/* WIK plan verdict (live, bus -> SSE) */}
+          {latestPlan && (
+            <div className="border-border/30 bg-muted/10 rounded-lg border p-3">
+              <div className="text-muted-foreground/70 mb-1 font-medium">
+                {t.agentComputer.review.kernelVerdictTitle}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={cn("font-mono text-[10px] uppercase", kernelRiskColor(latestPlan.data.risk_level))}>
+                  {latestPlan.data.risk_level}
+                </span>
+                <span className="text-muted-foreground/90">
+                  {latestPlan.data.plan_valid
+                    ? t.agentComputer.review.kernelVerdictValid
+                    : t.agentComputer.review.kernelVerdictInvalid}
+                </span>
+                <span className="text-muted-foreground/50">
+                  · {t.agentComputer.review.kernelVerdictSteps(latestPlan.data.step_count)}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Risks */}
           {risks.length > 0 && (

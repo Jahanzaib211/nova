@@ -22,7 +22,9 @@ test.describe("Agent Computer panel", () => {
 
   test("landing page renders with Get Started CTA", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /get started/i })).toBeVisible({
+    // Both the nav-bar and hero CTA share the accessible name — assert the
+    // first is visible rather than an ambiguous strict-mode match.
+    await expect(page.getByRole("link", { name: /get started/i }).first()).toBeVisible({
       timeout: 15_000,
     });
   });

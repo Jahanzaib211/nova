@@ -671,6 +671,10 @@ export interface Translations {
       changedFiles: string;
       detectedChecks: string;
       noChanges: string;
+      kernelVerdictTitle: string;
+      kernelVerdictValid: string;
+      kernelVerdictInvalid: string;
+      kernelVerdictSteps: (count: number) => string;
     };
     privacy: {
       title: string;

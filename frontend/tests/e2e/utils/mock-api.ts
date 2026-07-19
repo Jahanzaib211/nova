@@ -512,6 +512,120 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
 }
 
 // ---------------------------------------------------------------------------
+// mockWorkspaceAPI — Workspace Intelligence Kernel endpoints (C10)
+// ---------------------------------------------------------------------------
+
+const MOCK_SNAPSHOT = {
+  thread_workspace: "/mnt/user-data/workspace",
+  repo_kind: "backend",
+  primary_language: "python",
+  is_monorepo: false,
+  project_count: 2,
+  symbol_count: 1234,
+  command_count: 3,
+  node_count: 10,
+  edge_count: 4,
+  traversal_count: 42,
+  duration_ms: 87.5,
+  projects: [
+    { project_id: "p1", name: "backend", kind: "python_project", root_path: "/mnt/user-data/workspace" },
+  ],
+};
+
+const MOCK_COMMANDS = [
+  { name: "test", kind: "test", project_id: "p1", argv: ["pytest"], description: "Run tests" },
+  { name: "lint", kind: "lint", project_id: "p1", argv: ["ruff", "check"], description: "Lint" },
+];
+
+const MOCK_SYMBOLS = [
+  { name: "main", kind: "function", fqn: "app.main", file_path: "app/main.py", language: "python" },
+];
+
+/**
+ * Mocks the /api/workspace/{thread_id}/* endpoints (feature-flagged WIK
+ * surface) so E2E specs can drive the real Files/Activity/Review tab
+ * workspace-aware rendering without a live backend or the flag enabled.
+ */
+export function mockWorkspaceAPI(page: Page) {
+  void page.route("**/api/workspace/*/snapshot", (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", snapshot: MOCK_SNAPSHOT }),
+    });
+  });
+
+  void page.route("**/api/workspace/*/index", (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", snapshot: MOCK_SNAPSHOT }),
+    });
+  });
+
+  void page.route("**/api/workspace/*/commands", (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ commands: MOCK_COMMANDS }),
+    });
+  });
+
+  void page.route("**/api/workspace/*/symbols*", (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ symbols: MOCK_SYMBOLS }),
+    });
+  });
+
+  void page.route("**/api/workspace/*/impact", (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ scanned: true, symbols: MOCK_SYMBOLS, projects: ["p1"], commands: MOCK_COMMANDS }),
+    });
+  });
+
+  void page.route("**/api/workspace/*/metrics", (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        metrics: {
+          scan: { count: 3, avg_duration_ms: 90 },
+          cache: { hits: 5, misses: 1, hit_rate: 0.83 },
+          symbol_search: { count: 2, avg_duration_ms: 4 },
+        },
+      }),
+    });
+  });
+
+  // A single named SSE frame, then held open — EventSource parses it
+  // immediately; the browser tears down the connection on navigation/unmount.
+  void page.route("**/api/workspace/*/events", (route) => {
+    const frame =
+      "event: WorkspaceScanned\n" +
+      `data: ${JSON.stringify({
+        root_path: "/mnt/user-data/workspace",
+        occurred_at: new Date().toISOString(),
+        scan_id: "s1",
+        file_count: 42,
+        project_count: 2,
+        symbol_count: 1234,
+        command_count: 3,
+        scan_duration_ms: 87.5,
+        language_distribution: { python: 1 },
+      })}\n\n`;
+    return route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: frame,
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // handleRunStream
 // ---------------------------------------------------------------------------
 

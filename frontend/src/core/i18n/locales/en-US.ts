@@ -783,6 +783,10 @@ export const enUS: Translations = {
       changedFiles: "Changed files",
       detectedChecks: "Detected checks",
       noChanges: "No changes to review yet.",
+      kernelVerdictTitle: "Workspace kernel verdict",
+      kernelVerdictValid: "Plan valid",
+      kernelVerdictInvalid: "Plan invalid",
+      kernelVerdictSteps: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
     },
     privacy: {
       title: "iGIN0 Privacy Search",

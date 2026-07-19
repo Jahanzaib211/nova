@@ -755,6 +755,10 @@ export const zhCN: Translations = {
       changedFiles: "已修改文件",
       detectedChecks: "检测到的检查项",
       noChanges: "暂无变更可审查。",
+      kernelVerdictTitle: "工作区内核判定",
+      kernelVerdictValid: "计划有效",
+      kernelVerdictInvalid: "计划无效",
+      kernelVerdictSteps: (count: number) => `${count} 个步骤`,
     },
     privacy: {
       title: "iGIN0 隐私搜索",

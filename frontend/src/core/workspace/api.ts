@@ -1,3 +1,4 @@
+import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
 /** Snapshot summary returned by GET/POST /api/workspace/{thread_id}/... */
