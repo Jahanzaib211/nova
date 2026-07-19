@@ -18,6 +18,7 @@ from deerflow.config.agents_api_config import get_agents_api_config
 from deerflow.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id
+from deerflow.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
@@ -249,8 +250,7 @@ async def create_agent_endpoint(request: Request, body: AgentCreateRequest) -> A
                 config_data["skills"] = body.skills
 
             config_file = agent_dir / "config.yaml"
-            with open(config_file, "w", encoding="utf-8") as f:
-                yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            atomic_write_text(config_file, yaml.dump(config_data, default_flow_style=False, allow_unicode=True))
 
             # Write SOUL.md
             soul_file = agent_dir / "SOUL.md"
@@ -353,8 +353,7 @@ async def update_agent(name: str, request: Request, body: AgentUpdateRequest) ->
                 updated["skills"] = new_skills
 
             config_file = agent_dir / "config.yaml"
-            with open(config_file, "w", encoding="utf-8") as f:
-                yaml.dump(updated, f, default_flow_style=False, allow_unicode=True)
+            atomic_write_text(config_file, yaml.dump(updated, default_flow_style=False, allow_unicode=True))
 
         # Update SOUL.md if provided
         if body.soul is not None:

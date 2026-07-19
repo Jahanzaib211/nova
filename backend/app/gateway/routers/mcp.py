@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.gateway.deps import require_admin_user
 from deerflow.config.extensions_config import ExtensionsConfig, get_extensions_config, reload_extensions_config
 from deerflow.mcp.cache import reset_mcp_tools_cache
+from deerflow.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["mcp"])
@@ -364,9 +365,11 @@ async def update_mcp_configuration(request: Request, body: McpConfigUpdateReques
         config_data["mcpServers"] = {name: server.model_dump() for name, server in merged_servers.items()}
         config_data["skills"] = {name: {"enabled": skill.enabled} for name, skill in current_config.skills.items()}
 
-        # Write the configuration to file
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config_data, f, indent=2)
+        # Write the configuration atomically (temp file + replace).
+        # extensions_config.json is read on every agent run (MCP tool
+        # loading); a truncating open() left the file empty/corrupt for
+        # every subsequent request if the write ever failed partway.
+        atomic_write_text(config_path, json.dumps(config_data, indent=2))
 
         logger.info(f"MCP configuration updated and saved to: {config_path}")
 

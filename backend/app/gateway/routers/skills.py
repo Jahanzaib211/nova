@@ -15,6 +15,7 @@ from deerflow.skills.installer import SkillAlreadyExistsError
 from deerflow.skills.security_scanner import scan_skill_content
 from deerflow.skills.storage import get_or_new_skill_storage
 from deerflow.skills.types import SKILL_MD_FILE, SkillCategory
+from deerflow.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -329,8 +330,11 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest, config: App
             "skills": {name: {"enabled": skill_config.enabled} for name, skill_config in extensions_config.skills.items()},
         }
 
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config_data, f, indent=2)
+        # Atomic write (temp file + replace) — extensions_config.json is
+        # read on every agent run; a truncating open() left it empty/
+        # corrupt for every subsequent request if the write ever failed
+        # partway (2026-07 audit C4).
+        atomic_write_text(config_path, json.dumps(config_data, indent=2))
 
         logger.info("Skills configuration updated and saved to: %s", config_path)
         reload_extensions_config()

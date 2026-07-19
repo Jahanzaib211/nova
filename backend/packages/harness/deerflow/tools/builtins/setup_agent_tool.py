@@ -9,6 +9,7 @@ from deerflow.config.agents_config import validate_agent_name
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import resolve_runtime_user_id
 from deerflow.tools.types import Runtime
+from deerflow.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,7 @@ def setup_agent(
                 config_data["skills"] = skills
 
             config_file = agent_dir / "config.yaml"
-            with open(config_file, "w", encoding="utf-8") as f:
-                yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            atomic_write_text(config_file, yaml.dump(config_data, default_flow_style=False, allow_unicode=True))
 
         soul_file = agent_dir / "SOUL.md"
         soul_file.write_text(soul, encoding="utf-8")

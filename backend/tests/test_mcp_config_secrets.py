@@ -408,6 +408,56 @@ async def test_update_mcp_configuration_resets_tools_cache(monkeypatch, tmp_path
     assert list(response.mcp_servers) == ["github"]
 
 
+# ---------------------------------------------------------------------------
+# 2026-07 audit (C4): extensions_config.json is read on every agent run
+# (MCP tool loading, skills). update_mcp_configuration() previously wrote it
+# via a plain `open(path, "w")` + json.dump — a crash or exception mid-write
+# truncates the file in place, and every subsequent request that reads it
+# (mtime-cache-invalidated, so the very next agent run) sees an empty/corrupt
+# file instead of the config that was there a moment ago. The write must use
+# the same temp-file + os.replace() pattern already used by every other
+# JSON-file store in this codebase (ChannelStore, ChannelRuntimeConfigStore,
+# DeerFlowClient._atomic_write_json, MemoryStorage, WeChatChannel).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_update_mcp_configuration_never_truncates_on_write_failure(monkeypatch, tmp_path):
+    """A mid-write crash must leave the original file untouched, not empty."""
+    config_path = tmp_path / "extensions_config.json"
+    original_content = '{"mcpServers": {"existing": {"type": "stdio", "command": "echo"}}, "skills": {}}'
+    config_path.write_text(original_content, encoding="utf-8")
+
+    current_config = SimpleNamespace(skills={}, mcp_servers={})
+    reloaded_config = SimpleNamespace(mcp_servers={})
+
+    monkeypatch.setattr(mcp_router.ExtensionsConfig, "resolve_config_path", lambda: config_path)
+    monkeypatch.setattr(mcp_router, "get_extensions_config", lambda: current_config)
+    monkeypatch.setattr(mcp_router, "reload_extensions_config", lambda: reloaded_config)
+    monkeypatch.setattr(mcp_router, "reset_mcp_tools_cache", lambda: None)
+
+    # Simulate a crash partway through serialization — after any truncating
+    # open() would already have destroyed the original content, but before
+    # an atomic temp-file write would ever touch the real path.
+    def exploding_dumps(*args, **kwargs):
+        raise RuntimeError("simulated crash mid-write")
+
+    monkeypatch.setattr(mcp_router.json, "dumps", exploding_dumps)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await update_mcp_configuration(
+            _request_with_role("admin"),
+            McpConfigUpdateRequest(mcp_servers={}),
+        )
+    assert exc_info.value.status_code == 500
+
+    # The original file must be fully intact — not truncated, not corrupt.
+    assert config_path.read_text(encoding="utf-8") == original_content
+    # No stray temp file left behind in the config directory.
+    leftover = [p for p in tmp_path.iterdir() if p.name != config_path.name]
+    assert leftover == [], f"temp file(s) left behind: {leftover}"
+
+
 def test_validate_mcp_update_allows_default_npx_stdio_command(monkeypatch):
     monkeypatch.delenv(_MCP_STDIO_COMMAND_ALLOWLIST_ENV, raising=False)
     request = McpConfigUpdateRequest(
