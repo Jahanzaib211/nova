@@ -665,6 +665,10 @@ export const zhCN: Translations = {
       kernelScans: "扫描次数",
       kernelAvgScan: "平均扫描",
       kernelCacheHits: "缓存命中率",
+      liveScanned: (symbols: number, ms: number) => `实时扫描 — ${symbols} 个符号，用时 ${Math.round(ms)}ms`,
+      livePlan: (steps: number, risk: string) => `计划已生成 — ${steps} 个步骤 · 风险等级 ${risk}`,
+      liveCacheHit: "已从缓存返回",
+      liveCacheMiss: "缓存未命中 — 正在重新扫描",
     },
     status: {
       writing: (filename: string, lines?: string) =>

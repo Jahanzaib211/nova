@@ -26,8 +26,16 @@ security audit. Each claim below is tagged by how it was verified.
 - The per-tool ✅/⚠️/❌ status is unreliable: internal contradictions (same tools marked
   both "untried" and "fails"; Files summary says "4 broken" but lists 6; screenshot
   "known to lie"). An agent that had actually probed wouldn't contradict its own counts.
-- "Sandbox DOWN (Docker port exhaustion)" is plausibly real (matches machine's Docker/mem
-  pressure) but the specific pass/fail breakdown is confabulated confidence.
+- "Sandbox DOWN (Docker port exhaustion)" — **CONFIRMED REAL 2026-07-18, root-caused and
+  fixed (`46901115`)**: not port exhaustion — a DooD port collision. Sandbox containers
+  publish preview ports starting at 4100; the ops console (next-server on :4100, up since
+  Jul 16) holds that host port, and the gateway's in-container bind check cannot see
+  host-side listeners, so every `docker run` failed and the retry loop re-picked 4100
+  forever. Fixed by quarantining Docker-rejected ports (`reserve_port`); verified live
+  from inside the gateway container (create → 4100 rejected → quarantined → created on
+  4101 → destroyed). NOTE: while the ops console stays on :4100, each fresh gateway
+  process pays one rejected `docker run` before quarantine kicks in — consider moving the
+  console out of the 4100-4499 preview allocation range.
 
 **Takeaway:** trust *what tools exist*, not the self-reported *what-works-now* column.
 

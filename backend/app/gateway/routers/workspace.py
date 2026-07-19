@@ -10,6 +10,7 @@ panels (Files→Workspace card, symbol tree, command discovery, Activity):
   GET  /api/workspace/{thread_id}/symbols   — symbol search (?q= prefix)
   POST /api/workspace/{thread_id}/impact    — blast radius of changed files
   GET  /api/workspace/{thread_id}/metrics   — kernel metrics snapshot
+  GET  /api/workspace/{thread_id}/events    — live kernel events (SSE)
 
 Security posture:
 - Feature-flagged: 403 unless ``workspace.intelligence_enabled`` in
@@ -25,10 +26,14 @@ Security posture:
 
 from __future__ import annotations
 
+import asyncio
+import dataclasses
+import json
 import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
@@ -43,6 +48,7 @@ router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
 _MAX_SYMBOL_RESULTS = 200
 _MAX_IMPACT_FILES = 100
+_EVENTS_HEARTBEAT_SECONDS = 15.0
 
 
 def _require_enabled() -> None:
@@ -259,3 +265,51 @@ async def get_metrics(thread_id: str, request: Request) -> dict[str, Any]:
     metrics = _service()._metrics
     snapshot_fn = getattr(metrics, "snapshot", None)
     return {"metrics": snapshot_fn() if callable(snapshot_fn) else {}}
+
+
+def _serialize_event(event: Any) -> str:
+    payload = dataclasses.asdict(event)
+    name = type(event).__name__
+    return f"event: {name}\ndata: {json.dumps(payload)}\n\n"
+
+
+@router.get("/{thread_id}/events")
+@require_permission("threads", "read", owner_check=True)
+async def stream_workspace_events(thread_id: str, request: Request) -> StreamingResponse:
+    """SSE stream of live WIK events (scans, plans, cache activity) for this thread.
+
+    Independent of any agent run — a manually triggered ``/index`` call
+    produces events here too. A ``: heartbeat`` comment is emitted every
+    ``_EVENTS_HEARTBEAT_SECONDS`` so reverse proxies don't close the
+    connection while idle.
+    """
+    _require_enabled()
+    root = _workspace_root(thread_id)
+
+    from deerflow.workspace.events.bridge import get_workspace_event_bridge
+
+    bridge = get_workspace_event_bridge()
+    sub_id, queue = bridge.subscribe(root)
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=_EVENTS_HEARTBEAT_SECONDS)
+                except TimeoutError:
+                    yield ": heartbeat\n\n"
+                    continue
+                yield _serialize_event(event)
+        finally:
+            bridge.unsubscribe(sub_id)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )

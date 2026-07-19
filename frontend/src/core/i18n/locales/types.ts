@@ -583,6 +583,10 @@ export interface Translations {
       kernelScans: string;
       kernelAvgScan: string;
       kernelCacheHits: string;
+      liveScanned: (symbols: number, ms: number) => string;
+      livePlan: (steps: number, risk: string) => string;
+      liveCacheHit: string;
+      liveCacheMiss: string;
     };
     status: {
       writing: (filename: string, lines?: string) => string;

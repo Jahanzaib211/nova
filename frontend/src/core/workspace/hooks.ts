@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { getBackendBaseURL } from "@/core/config";
 import {
   fetchFileSymbols,
   fetchWorkspaceCommands,
@@ -150,4 +151,113 @@ export function useFileImpact(
     retry: false,
   });
   return query.data ?? null;
+}
+
+// ── useWorkspaceEvents ──────────────────────────────────────
+// Live SSE feed of WIK activity (scans, plans, cache hits/misses).
+// Same EventSource pattern as useSandboxLogs (core/sandbox/hooks.ts),
+// but the backend emits named event types rather than default `message`
+// frames, so each type needs its own addEventListener.
+
+export type WorkspaceEventType = "WorkspaceScanned" | "PlanBuilt" | "CacheHit" | "CacheMiss";
+
+export interface WorkspaceScannedPayload {
+  root_path: string;
+  occurred_at: string;
+  scan_id: string;
+  file_count: number;
+  project_count: number;
+  symbol_count: number;
+  command_count: number;
+  scan_duration_ms: number;
+  language_distribution: Record<string, number>;
+}
+
+export interface PlanBuiltPayload {
+  root_path: string;
+  occurred_at: string;
+  plan_id: string;
+  plan_title: string;
+  step_count: number;
+  plan_valid: boolean;
+  risk_level: string;
+  symbols_found: string[];
+}
+
+export interface CacheHitPayload {
+  root_path: string;
+  occurred_at: string;
+  cache_key: string;
+  hit_count: number;
+}
+
+export interface CacheMissPayload {
+  root_path: string;
+  occurred_at: string;
+  cache_key: string;
+}
+
+export type WorkspaceLiveEvent =
+  | { type: "WorkspaceScanned"; data: WorkspaceScannedPayload }
+  | { type: "PlanBuilt"; data: PlanBuiltPayload }
+  | { type: "CacheHit"; data: CacheHitPayload }
+  | { type: "CacheMiss"; data: CacheMissPayload };
+
+const MAX_WORKSPACE_EVENTS = 100;
+const WORKSPACE_EVENT_TYPES: WorkspaceEventType[] = ["WorkspaceScanned", "PlanBuilt", "CacheHit", "CacheMiss"];
+
+/**
+ * Live WIK event feed for a thread (bus -> SSE bridge, real-time). Returns
+ * a bounded, newest-last list; empty (never an error state) while the
+ * workspace flag is off or the thread has no live connection yet — callers
+ * degrade the same way the other workspace hooks do pre-flag.
+ */
+export function useWorkspaceEvents(threadId: string | null, enabled = true): WorkspaceLiveEvent[] {
+  const [events, setEvents] = useState<WorkspaceLiveEvent[]>([]);
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    setEvents([]);
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!threadId || !enabled || typeof EventSource === "undefined") return;
+
+    esRef.current?.close();
+
+    const url = `${getBackendBaseURL()}/api/workspace/${encodeURIComponent(threadId)}/events`;
+    const es = new EventSource(url, { withCredentials: true });
+    esRef.current = es;
+
+    const append = (type: WorkspaceEventType) => (event: MessageEvent<string>) => {
+      try {
+        const data = JSON.parse(event.data);
+        setEvents((prev) => {
+          const next = [...prev, { type, data } as WorkspaceLiveEvent];
+          return next.length > MAX_WORKSPACE_EVENTS ? next.slice(next.length - MAX_WORKSPACE_EVENTS) : next;
+        });
+      } catch {
+        // malformed frame — skip silently, same tolerance as useSandboxLogs
+      }
+    };
+
+    const listeners = WORKSPACE_EVENT_TYPES.map((type) => {
+      const handler = append(type);
+      es.addEventListener(type, handler);
+      return { type, handler };
+    });
+
+    es.onerror = () => {
+      // 403 (flag off) or transient network drop — EventSource retries on
+      // its own; a persistently-disabled workspace just never delivers.
+    };
+
+    return () => {
+      for (const { type, handler } of listeners) es.removeEventListener(type, handler);
+      es.close();
+      esRef.current = null;
+    };
+  }, [threadId, enabled]);
+
+  return events;
 }

@@ -16,8 +16,12 @@ Covers, over the real wire:
 """
 
 import asyncio
+import json
 import textwrap
+import threading
+import time
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -248,3 +252,144 @@ class TestWorkspaceCrossTenant:
         _register(intruder, "intruder@example.com")
         resp = intruder.get("/api/workspace/owned-thread/snapshot")
         assert resp.status_code == 404
+
+
+class TestWorkspaceEventsSSE:
+    """Real bus -> real SSE bridge -> real HTTP stream, no mocks.
+
+    A genuinely infinite SSE generator (heartbeats every 15s, otherwise
+    idle) cannot be observed through Starlette's ``TestClient`` or
+    ``httpx.ASGITransport``: both buffer the ASGI app's response until its
+    ``__call__`` coroutine returns, which never happens for an endpoint
+    that never terminates. Verified directly — the identical hang
+    reproduces with a bare two-line ``StreamingResponse`` generator, no
+    app code, no middleware, no auth. So this class runs a real
+    ``uvicorn`` server on a real TCP socket (the ``live_server`` fixture)
+    and reads the stream with a real ``httpx.Client``, exactly like a
+    browser would — the only way to observe true incremental delivery.
+    """
+
+    @pytest.fixture()
+    def live_server(self, client):
+        """Serve the already-configured app (same engine, same event bus) over a real socket."""
+        import socket
+        import threading
+
+        import uvicorn
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        sock.close()
+
+        config = uvicorn.Config(client.app, host="127.0.0.1", port=port, log_level="warning")
+        server = uvicorn.Server(config)
+        thread = threading.Thread(target=server.run, daemon=True)
+        thread.start()
+
+        deadline = time.monotonic() + 10.0
+        while not server.started and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert server.started, "uvicorn did not start within 10s"
+
+        try:
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            server.should_exit = True
+            thread.join(timeout=5.0)
+
+    def test_real_scan_produces_a_real_sse_event(self, client, live_server):
+        user_id = _register(client, "sse@example.com")
+        _create_real_project(user_id, thread_id="e2e-sse-thread")
+        headers = _csrf(client)
+        cookies = dict(client.cookies)
+
+        frames: list[str] = []
+        stop_event = threading.Event()
+        reader_error: list[BaseException] = []
+
+        def read_stream():
+            try:
+                with httpx.Client(cookies=cookies, timeout=None) as sse_client:
+                    with sse_client.stream("GET", f"{live_server}/api/workspace/e2e-sse-thread/events") as response:
+                        response.raise_for_status()
+                        buffer = ""
+                        for chunk in response.iter_text():
+                            if stop_event.is_set():
+                                return
+                            buffer += chunk
+                            while "\n\n" in buffer:
+                                frame, buffer = buffer.split("\n\n", 1)
+                                frames.append(frame)
+                                if "event: WorkspaceScanned" in frame:
+                                    return
+            except BaseException as exc:  # pragma: no cover - surfaced in main thread
+                reader_error.append(exc)
+
+        reader = threading.Thread(target=read_stream, daemon=True)
+        reader.start()
+
+        # Give the reader time to actually subscribe before the scan fires
+        # — otherwise the event may publish before anyone is listening.
+        time.sleep(0.5)
+
+        resp = client.post(
+            "/api/workspace/e2e-sse-thread/index",
+            json={"force_refresh": True},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        reader.join(timeout=10.0)
+        stop_event.set()
+
+        if reader_error:
+            raise reader_error[0]
+        scanned_frame = next((f for f in frames if "event: WorkspaceScanned" in f), None)
+        assert scanned_frame is not None, f"no WorkspaceScanned SSE frame received; got: {frames}"
+
+        data_line = next(line for line in scanned_frame.splitlines() if line.startswith("data: "))
+        payload = json.loads(data_line.removeprefix("data: "))
+        assert payload["symbol_count"] >= 3
+        assert payload["command_count"] >= 1
+        assert "e2e-sse-thread" in payload["root_path"]
+
+    def test_unrelated_thread_does_not_receive_this_threads_events(self, client, live_server):
+        user_id = _register(client, "sse-scope@example.com")
+        _create_real_project(user_id, thread_id="e2e-sse-thread-a")
+        _create_real_project(user_id, thread_id="e2e-sse-thread-b")
+        headers = _csrf(client)
+        cookies = dict(client.cookies)
+
+        frames: list[str] = []
+        stop_event = threading.Event()
+
+        def read_stream():
+            try:
+                with httpx.Client(cookies=cookies, timeout=None) as sse_client:
+                    with sse_client.stream("GET", f"{live_server}/api/workspace/e2e-sse-thread-b/events") as response:
+                        for chunk in response.iter_text():
+                            if stop_event.is_set():
+                                return
+                            frames.append(chunk)
+            except BaseException:
+                pass
+
+        reader = threading.Thread(target=read_stream, daemon=True)
+        reader.start()
+        time.sleep(0.5)
+
+        resp = client.post(
+            "/api/workspace/e2e-sse-thread-a/index",
+            json={"force_refresh": True},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        # thread-b's stream must stay quiet — no cross-thread leakage.
+        time.sleep(1.5)
+        stop_event.set()
+        reader.join(timeout=2.0)
+
+        collected = "".join(frames)
+        assert "WorkspaceScanned" not in collected

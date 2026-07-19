@@ -16,7 +16,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { Todo } from "@/core/todos";
-import { useWorkspaceSnapshot } from "@/core/workspace/hooks";
+import { useWorkspaceEvents, useWorkspaceSnapshot } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
 
@@ -210,6 +210,9 @@ export function ActivityPanel({
   );
   // Workspace-indexed banner (C10 item 7); null while the flag is off.
   const { snapshot } = useWorkspaceSnapshot(threadId);
+  // Live WIK activity — bus -> SSE bridge; empty while the flag is off.
+  const liveEvents = useWorkspaceEvents(threadId);
+  const recentLiveEvents = useMemo(() => liveEvents.slice(-5), [liveEvents]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -246,6 +249,23 @@ export function ActivityPanel({
               </span>
             </div>
           )}
+          {recentLiveEvents.map((event, i) => (
+            <div
+              key={`${event.type}-${event.data.occurred_at}-${i}`}
+              className="border-border/20 bg-muted/5 text-muted-foreground/60 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]"
+            >
+              <DatabaseIcon className="h-3 w-3 shrink-0 text-sky-400" />
+              <span className="truncate">
+                {event.type === "WorkspaceScanned"
+                  ? t.agentComputer.workspace.liveScanned(event.data.symbol_count, event.data.scan_duration_ms)
+                  : event.type === "PlanBuilt"
+                    ? t.agentComputer.workspace.livePlan(event.data.step_count, event.data.risk_level)
+                    : event.type === "CacheHit"
+                      ? t.agentComputer.workspace.liveCacheHit
+                      : t.agentComputer.workspace.liveCacheMiss}
+              </span>
+            </div>
+          ))}
           {timeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
               <FileTextIcon className="text-muted-foreground/30 h-5 w-5" />

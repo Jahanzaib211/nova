@@ -691,6 +691,10 @@ export const enUS: Translations = {
       kernelScans: "Scans",
       kernelAvgScan: "Avg scan",
       kernelCacheHits: "Cache hits",
+      liveScanned: (symbols: number, ms: number) => `Live scan — ${symbols} symbols in ${Math.round(ms)}ms`,
+      livePlan: (steps: number, risk: string) => `Plan built — ${steps} ${steps === 1 ? "step" : "steps"} · ${risk} risk`,
+      liveCacheHit: "Served from cache",
+      liveCacheMiss: "Cache miss — rescanning",
     },
     status: {
       writing: (filename: string, lines?: string) =>
