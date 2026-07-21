@@ -146,9 +146,12 @@ def _console_entries_to_errors(entries: Any) -> list[str]:
 
 
 # Ports the sandbox itself listens on — never treat these as the app.
-_SANDBOX_PORTS = {8080, 8079, 9222, 5900, 6080, 8088}
+# 8888 is jupyter-lab (the AIO sandbox's shell UI): inside this sandbox a user
+# app can never own it, and probing it produced spurious 404 verdicts on
+# healthy apps that were serving on another port.
+_SANDBOX_PORTS = {8080, 8079, 9222, 5900, 6080, 8088, 8888}
 # Common dev-server ports, preferred when several app ports are listening.
-_COMMON_DEV_PORTS = [3000, 5173, 4321, 8000, 8080, 4000, 3001, 5000, 8888, 4100, 4101, 4102]
+_COMMON_DEV_PORTS = [3000, 5173, 4321, 8000, 8080, 4000, 3001, 5000, 4100, 4101, 4102]
 
 
 def _detect_app_port(sandbox: Any, *, prefer: int) -> int:

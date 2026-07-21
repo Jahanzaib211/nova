@@ -135,6 +135,22 @@ class TestDetectAppPort:
         sandbox.execute_command.return_value = ""
         assert _detect_app_port(sandbox, prefer=4100) == 4100
 
+    def test_jupyter_port_8888_never_wins_over_real_app(self) -> None:
+        # AIO sandbox runs jupyter-lab on 8888 (its own shell UI). When the
+        # assigned port is stale and both jupyter and the real app are
+        # listening, the verifier must pick the app — probing jupyter
+        # produced spurious 404 verdicts on healthy apps (live incident
+        # 2026-07-19, thread 53ecf178).
+        sandbox = MagicMock()
+        sandbox.execute_command.return_value = "LISTEN 0 128 *:8888 *:*\nLISTEN 0 128 *:4101 *:*"
+        assert _detect_app_port(sandbox, prefer=3000) == 4101
+
+    def test_jupyter_port_8888_alone_falls_back_to_prefer(self) -> None:
+        # Only jupyter listening -> no app candidates at all; keep prefer.
+        sandbox = MagicMock()
+        sandbox.execute_command.return_value = "LISTEN 0 128 *:8888 *:*"
+        assert _detect_app_port(sandbox, prefer=4100) == 4100
+
 
 # ============================================================
 # _rewrite_cdp_netloc

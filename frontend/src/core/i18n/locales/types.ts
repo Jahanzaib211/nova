@@ -567,6 +567,8 @@ export interface Translations {
     };
     files: {
       empty: string;
+      repository: string;
+      running: (count: number) => string;
     };
     workspace: {
       title: string;
@@ -722,6 +724,7 @@ export interface Translations {
       toolsDetail: string;
       subagents: string;
       subagentsDetail: string;
+      subagentsConcurrency: (n: number) => string;
       hooks: string;
       hooksDetail: string;
     };

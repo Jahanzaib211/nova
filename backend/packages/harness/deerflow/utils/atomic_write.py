@@ -20,6 +20,7 @@ try/except/cleanup boilerplate.
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -50,6 +51,12 @@ def atomic_write_text(path: Path | str, content: str, *, mode: int | None = None
         if mode is not None:
             Path(fd.name).chmod(mode)
         fd.write(content)
+        # fsync before rename: os.replace() is atomic for the *name*, but
+        # some filesystems (ext4 data=ordered) may commit the rename before
+        # the data blocks — power loss then yields a zero-length file even
+        # though the rename "succeeded". fsync forces data before name.
+        fd.flush()
+        os.fsync(fd.fileno())
         fd.close()
         Path(fd.name).replace(path)
     except Exception:

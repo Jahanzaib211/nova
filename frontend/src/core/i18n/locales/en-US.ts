@@ -674,6 +674,8 @@ export const enUS: Translations = {
     },
     files: {
       empty: "Files the agent creates will appear here",
+      repository: "Repository",
+      running: (count: number) => `${count} running`,
     },
     workspace: {
       title: "Workspace",
@@ -837,7 +839,8 @@ export const enUS: Translations = {
       tools: "tools",
       toolsDetail: "Builtin tools available to the lead agent.",
       subagents: "subagents",
-      subagentsDetail: "Delegated worker agents the lead can spawn.",
+      subagentsDetail: "Agent types the lead can delegate to — not a count of running tasks.",
+      subagentsConcurrency: (n: number) => `Up to ${n} delegated task runs execute concurrently.`,
       hooks: "hooks",
       hooksDetail: "Active middlewares on the LangChain agent chain.",
     },

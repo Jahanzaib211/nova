@@ -648,6 +648,8 @@ export const zhCN: Translations = {
     },
     files: {
       empty: "智能体创建的文件将显示在这里",
+      repository: "代码仓库",
+      running: (count: number) => `${count} 个运行中`,
     },
     workspace: {
       title: "工作区",
@@ -806,7 +808,8 @@ export const zhCN: Translations = {
       tools: "工具",
       toolsDetail: "主导智能体可用的内置工具。",
       subagents: "子智能体",
-      subagentsDetail: "主导智能体可生成的委托工作智能体。",
+      subagentsDetail: "主导智能体可委托的智能体类型 — 并非正在运行的任务数。",
+      subagentsConcurrency: (n: number) => `最多 ${n} 个委托任务可同时运行。`,
       hooks: "钩子",
       hooksDetail: "LangChain 代理链上的活跃中间件。",
     },

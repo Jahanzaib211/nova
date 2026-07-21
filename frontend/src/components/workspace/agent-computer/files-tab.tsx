@@ -314,7 +314,7 @@ export function FilesPanel({
       <div>
         <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
           <FolderIcon className="h-3 w-3 text-yellow-400" />
-          <span className="text-muted-foreground/70">Repository</span>
+          <span className="text-muted-foreground/70">{t.agentComputer.files.repository}</span>
           <span className="bg-muted rounded px-1 text-[10px]">
             {files.length}
           </span>
@@ -322,7 +322,7 @@ export function FilesPanel({
             <div className="ml-auto flex items-center gap-1.5">
               <LoaderCircleIcon className="text-muted-foreground/60 h-2.5 w-2.5 animate-spin" aria-hidden />
               <span className="text-muted-foreground/60 text-[10px]">
-                {runningCount} running
+                {t.agentComputer.files.running(runningCount)}
               </span>
             </div>
           )}

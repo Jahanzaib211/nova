@@ -477,7 +477,11 @@ export function RuntimeCapabilitiesBar({
           label={t.runtimeBar.metrics.subagents}
           count={subagents.length}
           testId="runtime-subagents-pill"
-          detail={t.runtimeBar.metrics.subagentsDetail}
+          detail={
+            capabilities.server?.max_concurrent_subagents
+              ? `${t.runtimeBar.metrics.subagentsDetail} ${t.runtimeBar.metrics.subagentsConcurrency(capabilities.server.max_concurrent_subagents)}`
+              : t.runtimeBar.metrics.subagentsDetail
+          }
         />
         <MetricCounter
           icon={CogIcon}

@@ -35,6 +35,8 @@ export interface ServerInfo {
   process: string;
   version: string;
   pid: number;
+  /** How many subagent task runs may execute concurrently (server constant). */
+  max_concurrent_subagents?: number;
 }
 
 export interface CapabilitiesResponse {

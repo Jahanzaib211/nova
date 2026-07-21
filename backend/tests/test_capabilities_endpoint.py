@@ -92,23 +92,38 @@ class TestToolsInventory:
 
 class TestHooksInventory:
     def test_known_middlewares_listed(self) -> None:
+        # This module's config is a MagicMock (hermetic CI), so the chain
+        # build fails inside _safe_hooks and the endpoint serves the static
+        # fallback — this test pins that fallback contract over HTTP.
         client = _make_test_client()
         resp = client.get("/api/runtime/capabilities")
         names = {h["name"] for h in resp.json()["hooks"]}
-        # The 11 known middlewares from lead_agent/agent.py.
-        for expected in (
-            "thread_data",
-            "uploads",
-            "title",
-            "observe_adjust",
-            "llm_error_handling",
-            "preflight_quota",
-            "strip_error_fallback",
-            "loop_detection",
-            "subagent_limit",
-            "reflect_fix",
-        ):
+        for expected in cap._FALLBACK_HOOK_NAMES:
             assert expected in names, f"missing middleware hook: {expected}"
+
+    def test_hooks_reflect_real_middleware_chain(self) -> None:
+        """Drift pin: _safe_hooks derives names from the REAL lead-agent chain.
+
+        The endpoint previously served a hardcoded 11-name list while the
+        real chain assembled ~21 middlewares — the UI pill showed fiction.
+        Build the chain directly with the same real config _safe_hooks gets
+        and require exact name-set equality, so any middleware added or
+        removed in build_middlewares changes /api/runtime/capabilities or
+        fails here.
+        """
+        from deerflow.agents.lead_agent.agent import build_middlewares
+        from deerflow.config.app_config import AppConfig
+        from deerflow.config.sandbox_config import SandboxConfig
+
+        real_config = AppConfig(sandbox=SandboxConfig(use="deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"))
+
+        chain = build_middlewares({"configurable": {}}, None, app_config=real_config)
+        expected = {cap._middleware_hook_name(type(m).__name__) for m in chain}
+
+        served = {h.name for h in cap._safe_hooks(real_config)}
+        assert served == expected
+        # Sanity: materially bigger than the old stub's 11 names.
+        assert len(served) >= 14
 
     def test_hook_kind_is_middleware(self) -> None:
         client = _make_test_client()

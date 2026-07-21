@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -143,35 +144,51 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
         return []
 
 
+def _middleware_hook_name(cls_name: str) -> str:
+    """``ThreadDataMiddleware`` -> ``thread_data``."""
+    base = cls_name.removesuffix("Middleware")
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", base).lower()
+
+
+# Served only if building the real chain fails (e.g. config half-loaded).
+_FALLBACK_HOOK_NAMES = (
+    "thread_data",
+    "uploads",
+    "title",
+    "observe_adjust",
+    "llm_error_handling",
+    "preflight_quota",
+    "strip_error_fallback",
+    "loop_detection",
+    "subagent_limit",
+    "reflect_fix_budget",
+    "skill_activation",
+)
+
+
 def _safe_hooks(config: AppConfig) -> list[HookSummary]:
-    """List active middlewares (hooks) — best-effort enumeration.
+    """List active middlewares by building the real lead-agent chain.
 
-    The agent middleware chain is constructed in
-    deerflow/agents/lead_agent/agent.py at agent-build time. We can't
-    introspect an already-built chain reliably, so we surface the
-    *registered* hook names from the AppConfig + manifest as a proxy.
-
-    This list is intentionally conservative — UI shows what's "known to
-    be active" rather than introspecting live state, which is fragile
-    across LangChain SDK versions.
+    Previously a hardcoded 11-name list that silently drifted from the
+    actual chain (~19 middlewares) — the UI showed fiction. Constructors
+    are cheap (`lazy_init=True` path); heavy resources initialize on first
+    agent run, not here. Pinned against the real chain by
+    ``test_hooks_reflect_real_middleware_chain``.
     """
-    hooks: list[HookSummary] = []
-    # The known middleware names from lead_agent/agent.py.
-    for name in (
-        "thread_data",
-        "uploads",
-        "title",
-        "observe_adjust",
-        "llm_error_handling",
-        "preflight_quota",
-        "strip_error_fallback",
-        "loop_detection",
-        "subagent_limit",
-        "reflect_fix",
-        "skill_activation",
-    ):
-        hooks.append(HookSummary(name=name, kind="middleware"))
-    return hooks
+    try:
+        from deerflow.agents.lead_agent.agent import build_middlewares
+
+        chain = build_middlewares({"configurable": {}}, None, app_config=config)
+        names: list[str] = []
+        for m in chain:
+            name = _middleware_hook_name(type(m).__name__)
+            if name not in names:
+                names.append(name)
+        if names:
+            return [HookSummary(name=n, kind="middleware") for n in names]
+    except Exception as e:
+        logger.debug("capabilities: middleware chain build failed, serving static fallback: %s", e)
+    return [HookSummary(name=n, kind="middleware") for n in _FALLBACK_HOOK_NAMES]
 
 
 def _safe_subagents(config: AppConfig) -> list[SubagentSummary]:
@@ -219,6 +236,14 @@ def _safe_server_info() -> dict[str, Any]:
         "version": os.environ.get("DEERFLOW_VERSION", "dev"),
         "pid": os.getpid(),
     }
+    try:
+        from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS
+
+        # The subagents pill shows "N types"; the tooltip needs the run
+        # concurrency too, or users read "2" as the number of running tasks.
+        info["max_concurrent_subagents"] = MAX_CONCURRENT_SUBAGENTS
+    except Exception:  # pragma: no cover - constant import cannot realistically fail
+        pass
     return info
 
 
