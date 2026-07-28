@@ -134,6 +134,29 @@ def _scan_file(path: Path) -> list[tuple[int, str, str]]:
     return violations
 
 
+def test_no_cross_references() -> None:
+    """Pytest entry point — see module docstring. Mirrors main()'s scan/report
+    logic but raises via assert so pytest reports it as a real failure
+    instead of `main()`'s exit-code-only contract (which pytest can't collect:
+    no `test_*` function meant this file silently collected zero tests)."""
+    files = _gather_files()
+    files_with_violations: dict[Path, list[tuple[int, str, str]]] = {}
+    for path in files:
+        violations = _scan_file(path)
+        if violations:
+            files_with_violations[path] = violations
+
+    if not files_with_violations:
+        return
+
+    lines = [f"{len(files_with_violations)} file(s) with cross-project references:"]
+    for path, violations in files_with_violations.items():
+        rel = path.relative_to(REPO_ROOT)
+        for lineno, forbidden, line in violations:
+            lines.append(f"  {rel}:{lineno}: {forbidden}: {line.strip()[:100]}")
+    assert not files_with_violations, "\n".join(lines)
+
+
 def main() -> int:
     print(f"Scanning {REPO_ROOT} for cross-project references...")
     print()

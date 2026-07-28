@@ -58,3 +58,9 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+          # Code scanning (the Security-tab SARIF upload) needs GitHub
+          # Advanced Security, which isn't enabled on this private repo yet
+          # (see the header note above) — the upload step 400s otherwise
+          # even though the analysis itself succeeds. Still runs the real
+          # scan locally every push; flip this back on once that's enabled.
+          upload: false
