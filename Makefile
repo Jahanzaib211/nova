@@ -1,8 +1,8 @@
 #!/usr/bin/env make
-# Nova Observability Stack Makefile
+# Nova Makefile
 # Single entry point: make <target>
 #
-# Prerequisites: docker, docker compose v2, pm2
+# Prerequisites: docker, docker compose v2, pm2, uv, pnpm, python3
 #
 # Secrets: create ~/.config/nova/monitoring.env with:
 #   GRAFANA_ADMIN_PASSWORD=<random>
@@ -11,7 +11,10 @@
 #
 # DO NOT commit monitoring.env to git.
 
-.PHONY: help monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate
+.PHONY: help setup doctor config config-upgrade check install setup-sandbox \
+	dev dev-daemon start start-daemon stop \
+	docker-init docker-start docker-stop docker-logs up down \
+	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate
 
 COMPOSE := docker compose -f docker/monitoring/docker-compose.yaml
 COMPOSE_DIR := docker/monitoring
@@ -34,7 +37,31 @@ endef
 # ── Targets ───────────────────────────────────────────────────────────────
 
 help:
-	@echo "Nova Observability Stack — available targets:"
+	@echo "Nova — available targets:"
+	@echo ""
+	@echo "Setup:"
+	@echo "  setup                  Interactive wizard: LLM provider, search, sandbox/safety (~2 min)"
+	@echo "  config                 Copy config.example.yaml/.env.example as-is (advanced/manual)"
+	@echo "  config-upgrade         Migrate an existing config.yaml to the current schema version"
+	@echo "  doctor                 Verify setup end-to-end, actionable fix hints"
+	@echo "  check                  Verify required tooling is installed (node, pnpm, uv, nginx)"
+	@echo "  install                Install backend (uv) + frontend (pnpm) dependencies"
+	@echo "  setup-sandbox          Pull the AIO sandbox image (only if sandbox.use isn't 'local')"
+	@echo ""
+	@echo "Run (local, non-Docker):"
+	@echo "  dev / dev-daemon       Foreground / daemonized dev server (./scripts/serve.sh --dev)"
+	@echo "  start / start-daemon   Foreground / daemonized prod server (./scripts/serve.sh --prod)"
+	@echo "  stop                   Stop the local server"
+	@echo ""
+	@echo "Run (Docker):"
+	@echo "  docker-init            Pull sandbox image (only once or when image updates)"
+	@echo "  docker-start           Start the dev stack (auto-detects sandbox mode from config.yaml)"
+	@echo "  docker-stop            Stop the dev stack"
+	@echo "  docker-logs [ARGS=...] Tail dev stack logs (ARGS passed to scripts/docker.sh logs)"
+	@echo "  up                     Build + start the production stack (./scripts/deploy.sh)"
+	@echo "  down                   Tear down the production stack"
+	@echo ""
+	@echo "Observability:"
 	@echo "  monitoring-up          Bring up the full stack (Prometheus, Loki, Alloy,"
 	@echo "                          Grafana, node_exporter, cadvisor, blackbox,"
 	@echo "                          uptime-kuma)"
@@ -47,6 +74,65 @@ help:
 	@echo "  sloth-generate         Regenerate SLO rules from sloth/slos.yaml"
 	@echo ""
 	@echo "Secrets: ~/.config/nova/monitoring.env (see Makefile header)"
+
+# ── Setup & local dev ─────────────────────────────────────────────────────
+
+setup:
+	@python3 scripts/setup_wizard.py
+
+config:
+	@python3 scripts/configure.py
+
+config-upgrade:
+	@bash scripts/config-upgrade.sh
+
+doctor:
+	@python3 scripts/doctor.py
+
+check:
+	@bash scripts/check.sh
+
+install:
+	@cd backend && uv sync
+	@cd frontend && pnpm install
+
+setup-sandbox:
+	@./scripts/docker.sh init
+
+dev:
+	@./scripts/serve.sh --dev
+
+dev-daemon:
+	@./scripts/serve.sh --dev --daemon
+
+start:
+	@./scripts/serve.sh --prod
+
+start-daemon:
+	@./scripts/serve.sh --prod --daemon
+
+stop:
+	@./scripts/serve.sh --stop
+
+# ── Docker ────────────────────────────────────────────────────────────────
+
+docker-init:
+	@./scripts/docker.sh init
+
+docker-start:
+	@./scripts/docker.sh start
+
+docker-stop:
+	@./scripts/docker.sh stop
+
+docker-logs:
+	@./scripts/docker.sh logs $(ARGS)
+
+up:
+	@./scripts/deploy.sh
+
+down:
+	@./scripts/deploy.sh down
 
 # ── Core stack ────────────────────────────────────────────────────────────
 
