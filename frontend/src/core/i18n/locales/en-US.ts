@@ -922,6 +922,7 @@ export const enUS: Translations = {
     editSkills: "Edit skills",
     skillsFor: (agentName: string) => `Skills for ${agentName}`,
     chat: "Chat",
+    panels: "Panels",
     artifacts: "Artifacts",
     todos: "To-dos",
     tor: "TOR",

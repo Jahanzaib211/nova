@@ -295,7 +295,10 @@ const ChatBox: React.FC<{
     return (
       <div className="flex h-full w-full flex-col overflow-hidden">
         {showMobileTabs && (
-          <nav className="border-border/60 flex shrink-0 border-b">
+          <nav
+            aria-label={t.a11y.panels}
+            className="border-border/60 flex shrink-0 border-b"
+          >
             <MobileTabBtn
               active={activeMobilePanel === "chat"}
               onClick={() => setMobilePanel("chat")}

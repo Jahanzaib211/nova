@@ -309,6 +309,11 @@ export default function ChatPage() {
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => setAgentComputerOpen(!agentComputerOpen)}
+                  // Icon-only, and the tooltip never fires on touch — without a
+                  // name this is the sole way back to the panel on a phone and
+                  // is unreachable to assistive tech.
+                  aria-label={t.agentComputer.header}
+                  aria-pressed={agentComputerOpen}
                   className={cn(
                     agentComputerOpen && "bg-accent text-accent-foreground",
                   )}

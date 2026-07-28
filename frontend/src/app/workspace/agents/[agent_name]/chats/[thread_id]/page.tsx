@@ -296,6 +296,10 @@ export default function AgentChatPage() {
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => setAgentComputerOpen(!agentComputerOpen)}
+                  // Icon-only, and the tooltip never fires on touch — see the
+                  // chats page for why this needs a real name.
+                  aria-label={t.agentComputer.header}
+                  aria-pressed={agentComputerOpen}
                   className={cn(
                     agentComputerOpen && "bg-accent text-accent-foreground",
                   )}

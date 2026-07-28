@@ -889,6 +889,7 @@ export const zhCN: Translations = {
     editSkills: "编辑技能",
     skillsFor: (agentName: string) => `${agentName} 的技能`,
     chat: "对话",
+    panels: "面板",
     artifacts: "产物",
     todos: "待办事项",
     tor: "TOR",

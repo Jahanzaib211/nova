@@ -51,6 +51,8 @@ function TabBtn({
   return (
     <button
       onClick={onClick}
+      role="tab"
+      aria-selected={active}
       className={cn(
         "relative flex shrink-0 items-center gap-1 px-2.5 py-3 text-[11px] font-medium transition-colors md:py-1.5",
         active
@@ -426,7 +428,11 @@ export function AgentComputerPanel({
       />
 
       {/* ── Tab bar ── */}
-      <div className="border-border/50 scrollbar-none flex shrink-0 overflow-x-auto border-b">
+      <div
+        role="tablist"
+        aria-label={t.agentComputer.header}
+        className="border-border/50 scrollbar-none flex shrink-0 overflow-x-auto border-b"
+      >
         <TabBtn
           active={activeTab === "files"}
           onClick={() => setActiveTab("files")}

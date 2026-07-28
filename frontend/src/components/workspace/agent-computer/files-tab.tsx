@@ -248,19 +248,19 @@ export function FilesPanel({
   const workspaceAvailable = workspaceState.availability === "available" && workspaceState.snapshot !== null;
   const commands = useWorkspaceCommands(threadId, workspaceAvailable);
 
-  if (files.length === 0 && artifacts.length === 0) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <FolderIcon className="text-muted-foreground/30 h-6 w-6" />
-        <span className="text-muted-foreground/50 text-xs">
-          {t.agentComputer.files.empty}
-        </span>
-      </div>
-    );
-  }
+  const hasSandboxContent = files.length > 0 || artifacts.length > 0;
+
   return (
     <div className="flex flex-col gap-2 p-2">
       <WorkspaceCard state={workspaceState} />
+      {!hasSandboxContent && (
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+          <FolderIcon className="text-muted-foreground/30 h-6 w-6" />
+          <span className="text-muted-foreground/50 text-xs">
+            {t.agentComputer.files.empty}
+          </span>
+        </div>
+      )}
       {/* Commands discovered by the workspace indexer (dev/test/lint...) */}
       {commands.length > 0 && (
         <div>
@@ -311,42 +311,44 @@ export function FilesPanel({
         </div>
       )}
       {/* Repository tree */}
-      <div>
-        <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
-          <FolderIcon className="h-3 w-3 text-yellow-400" />
-          <span className="text-muted-foreground/70">{t.agentComputer.files.repository}</span>
-          <span className="bg-muted rounded px-1 text-[10px]">
-            {files.length}
-          </span>
+      {(files.length > 0 || runningCount > 0) && (
+        <div>
+          <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
+            <FolderIcon className="h-3 w-3 text-yellow-400" />
+            <span className="text-muted-foreground/70">{t.agentComputer.files.repository}</span>
+            <span className="bg-muted rounded px-1 text-[10px]">
+              {files.length}
+            </span>
+            {runningCount > 0 && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <LoaderCircleIcon className="text-muted-foreground/60 h-2.5 w-2.5 animate-spin" aria-hidden />
+                <span className="text-muted-foreground/60 text-[10px]">
+                  {t.agentComputer.files.running(runningCount)}
+                </span>
+              </div>
+            )}
+          </div>
           {runningCount > 0 && (
-            <div className="ml-auto flex items-center gap-1.5">
-              <LoaderCircleIcon className="text-muted-foreground/60 h-2.5 w-2.5 animate-spin" aria-hidden />
-              <span className="text-muted-foreground/60 text-[10px]">
-                {t.agentComputer.files.running(runningCount)}
-              </span>
-            </div>
-          )}
-        </div>
-        {runningCount > 0 && (
-          <Progress
-            value={0}
-            className="mb-1 h-0.5"
-            aria-label="Agent is working"
-          />
-        )}
-        <div className="border-border/20 bg-muted/10 rounded border p-1">
-          {sortTreeNodes(Object.values(tree.children)).map((child) => (
-            <FileTreeNode
-              key={child.name}
-              node={child}
-              depth={0}
-              onSelect={onSelectFile}
-              threadId={threadId}
-              outlineEnabled={workspaceAvailable}
+            <Progress
+              value={0}
+              className="mb-1 h-0.5"
+              aria-label="Agent is working"
             />
-          ))}
+          )}
+          <div className="border-border/20 bg-muted/10 rounded border p-1">
+            {sortTreeNodes(Object.values(tree.children)).map((child) => (
+              <FileTreeNode
+                key={child.name}
+                node={child}
+                depth={0}
+                onSelect={onSelectFile}
+                threadId={threadId}
+                outlineEnabled={workspaceAvailable}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

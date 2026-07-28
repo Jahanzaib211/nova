@@ -102,11 +102,22 @@ test.describe("workspace on mobile", () => {
     await page.goto("/workspace/chats/00000000-0000-0000-0000-0000000031aa");
 
     // Panel auto-opens, so the switcher appears with a Computer tab.
-    // Anchored: the close button's label also contains the panel name.
-    const computerTab = page.getByRole("button", {
+    // Scoped to the mobile switcher: the page header's toggle and the panel's
+    // close button carry the same name.
+    const switcher = page.getByRole("navigation", { name: /panels|面板/i });
+    const computerTab = switcher.getByRole("button", {
       name: /^(agent's computer|智能体电脑)$/i,
     });
-    await expect(computerTab.first()).toBeVisible({ timeout: 15_000 });
+    await expect(computerTab).toBeVisible({ timeout: 15_000 });
+
+    // Switching back to Chat, and then to the panel again, must work without a
+    // reload — the panel takes the whole screen, so the switcher is the only
+    // way back.
+    const chatTab = switcher.getByRole("button", { name: /^(chat|对话)$/i });
+    await chatTab.click();
+    await expect(page.getByRole("textbox").first()).toBeVisible();
+
+    await computerTab.click();
 
     // Closing must actually dismiss it — and take its tab with it.
     const close = page.getByRole("button", {
@@ -116,6 +127,14 @@ test.describe("workspace on mobile", () => {
     await close.first().click();
 
     await expect(computerTab).toHaveCount(0);
+
+    // …and the page-header toggle must still be there to re-open it, without
+    // a reload. It is icon-only, so this also pins its accessible name.
+    const reopen = page.getByRole("button", {
+      name: /^(agent's computer|智能体电脑)$/i,
+    });
+    await expect(reopen).toBeVisible();
+
     await expectNoHorizontalOverflow(page);
   });
 

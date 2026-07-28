@@ -33,7 +33,7 @@ test.describe("Workspace-aware panel tabs", () => {
   test("Files tab renders the workspace card from a mocked snapshot", async ({ page }) => {
     if (!(await openPanel(page))) return;
 
-    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await page.getByRole("tab", { name: "Files", exact: true }).click();
     // WorkspaceCard renders project_count/symbol_count/command_count from
     // the mocked /snapshot response — this is real fetch + real render,
     // not a synthetic prop.
@@ -44,7 +44,7 @@ test.describe("Workspace-aware panel tabs", () => {
   test("Activity tab shows the live-indexed banner and a live scan event", async ({ page }) => {
     if (!(await openPanel(page))) return;
 
-    await page.getByRole("button", { name: "Activity", exact: true }).click();
+    await page.getByRole("tab", { name: "Activity", exact: true }).click();
     // Static banner from useWorkspaceSnapshot (mocked /snapshot).
     await expect(page.getByText(/workspace indexed/i)).toBeVisible({ timeout: 10_000 });
     // Live strip from useWorkspaceEvents (mocked /events SSE frame).
@@ -54,7 +54,7 @@ test.describe("Workspace-aware panel tabs", () => {
   test("Review tab surfaces no kernel verdict before any plan is built", async ({ page }) => {
     if (!(await openPanel(page))) return;
 
-    await page.getByRole("button", { name: "Review", exact: true }).click();
+    await page.getByRole("tab", { name: "Review", exact: true }).click();
     // The mocked /events stream only emits WorkspaceScanned, never
     // PlanBuilt — the kernel-verdict card must stay absent, not error.
     await expect(page.getByText(/workspace kernel verdict/i)).toHaveCount(0);

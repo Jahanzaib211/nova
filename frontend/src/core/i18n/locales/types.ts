@@ -806,6 +806,7 @@ export interface Translations {
     editSkills: string;
     skillsFor: (agentName: string) => string;
     chat: string;
+    panels: string;
     artifacts: string;
     todos: string;
     tor: string;
