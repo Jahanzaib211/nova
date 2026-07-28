@@ -52,11 +52,7 @@ def test_fix_tunnel_resets_failed_before_restart():
         if cmd[:3] == ["sudo", "-n", "-l"]:
             return _completed_proc(
                 0,
-                stdout=(
-                    "User jahanzaib may run the following commands:\n"
-                    "    (root) NOPASSWD: /usr/bin/systemctl reset-failed "
-                    "cloudflared-nova.service\n"
-                ),
+                stdout=("User jahanzaib may run the following commands:\n    (root) NOPASSWD: /usr/bin/systemctl reset-failed cloudflared-nova.service\n"),
             )
         if cmd[:3] == ["sudo", "-n", "systemctl"] and cmd[3] == "reset-failed":
             return _completed_proc(0)
@@ -83,6 +79,7 @@ def test_fix_tunnel_resets_failed_before_restart():
 def test_fix_tunnel_returns_false_when_restart_fails():
     """If restart exits non-zero, fix_tunnel returns False so the next
     cycle retries (instead of falsely claiming a fix)."""
+
     def fake_run(cmd, **kwargs):
         if cmd[:3] == ["sudo", "-n", "-l"]:
             return _completed_proc(0, stdout="(root) NOPASSWD: reset-failed")
@@ -102,6 +99,7 @@ def test_fix_tunnel_returns_false_when_post_restart_verification_times_out():
     """If the systemd unit doesn't come up within 10s (e.g. cloudflared
     immediately crashes again), fix_tunnel returns False so the next
     cycle retries — and the dashboard stays RED."""
+
     def fake_run(cmd, **kwargs):
         if cmd[:3] == ["sudo", "-n", "-l"]:
             return _completed_proc(0, stdout="(root) NOPASSWD: reset-failed")
@@ -129,6 +127,7 @@ def test_fix_tunnel_returns_false_when_post_restart_verification_times_out():
                 # Advance the clock past the deadline so the polling loop exits.
                 def fake_sleep(_seconds):
                     clock.now += 100.0
+
                 with patch.object(hd.time, "sleep", fake_sleep):
                     result = hd.fix_tunnel()
     assert result is False
@@ -137,6 +136,7 @@ def test_fix_tunnel_returns_false_when_post_restart_verification_times_out():
 def test_fix_tunnel_treats_reset_failed_nonzero_as_nonfatal():
     """If reset-failed returns non-zero (e.g. unit not in failed state),
     fix_tunnel must continue with the restart rather than abort early."""
+
     def fake_run(cmd, **kwargs):
         if cmd[:3] == ["sudo", "-n", "-l"]:
             return _completed_proc(0, stdout="(root) NOPASSWD: reset-failed")
@@ -158,18 +158,13 @@ def test_fix_tunnel_warns_when_sudoers_missing_reset_failed(caplog):
     """When the sudoers entry for reset-failed is missing, fix_tunnel
     must emit a clear warning so the operator can apply the install
     script. Without this, start-limit-hit outages silently fail."""
+
     def fake_run(cmd, **kwargs):
         # sudo -n -l returns the user's NOPASSWD list — omit reset-failed.
         if cmd[:2] == ["sudo", "-n"] and cmd[2] == "-l":
             return _completed_proc(
                 0,
-                stdout=(
-                    "User jahanzaib may run the following commands:\n"
-                    "    (root) NOPASSWD: /usr/bin/systemctl restart "
-                    "cloudflared-nova.service\n"
-                    "    (root) NOPASSWD: /usr/bin/systemctl start "
-                    "cloudflared-nova.service\n"
-                ),
+                stdout=("User jahanzaib may run the following commands:\n    (root) NOPASSWD: /usr/bin/systemctl restart cloudflared-nova.service\n    (root) NOPASSWD: /usr/bin/systemctl start cloudflared-nova.service\n"),
             )
         if cmd[3] == "reset-failed":
             return _completed_proc(0)
@@ -187,8 +182,4 @@ def test_fix_tunnel_warns_when_sudoers_missing_reset_failed(caplog):
             result = hd.fix_tunnel()
 
     assert result is True
-    assert any(
-        "reset-failed cloudflared-nova" in rec.message
-        and "next start-limit-hit" in rec.message
-        for rec in caplog.records
-    ), caplog.records
+    assert any("reset-failed cloudflared-nova" in rec.message and "next start-limit-hit" in rec.message for rec in caplog.records), caplog.records

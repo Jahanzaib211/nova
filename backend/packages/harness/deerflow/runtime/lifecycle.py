@@ -87,6 +87,7 @@ class RunLifecycleStatus(str, Enum):
 # Adapters from existing enums
 # ---------------------------------------------------------------------------
 
+
 def adapt_run_status(status: str | Enum) -> RunLifecycleStatus:
     """Adapt an existing RunStatus or string to RunLifecycleStatus.
 

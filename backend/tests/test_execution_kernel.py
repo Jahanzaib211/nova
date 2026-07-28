@@ -39,9 +39,7 @@ from deerflow.execution.policy import ClassPolicy
 
 def test_execute_sync_success():
     kernel = ExecutionKernel()
-    result = kernel.execute_sync(
-        ExecutionRequest(argv=("echo", "hello"), execution_class=ExecutionClass.SHELL)
-    )
+    result = kernel.execute_sync(ExecutionRequest(argv=("echo", "hello"), execution_class=ExecutionClass.SHELL))
     assert result.status is ExecutionStatus.SUCCEEDED
     assert result.ok
     assert result.exit_code == 0
@@ -51,9 +49,7 @@ def test_execute_sync_success():
 
 def test_execute_sync_nonzero_exit_is_failed_not_raised():
     kernel = ExecutionKernel()
-    result = kernel.execute_sync(
-        ExecutionRequest(argv=("/bin/sh", "-c", "exit 3"), execution_class=ExecutionClass.SHELL)
-    )
+    result = kernel.execute_sync(ExecutionRequest(argv=("/bin/sh", "-c", "exit 3"), execution_class=ExecutionClass.SHELL))
     assert result.status is ExecutionStatus.FAILED
     assert result.exit_code == 3
     assert "exit code 3" in (result.error or "")
@@ -61,9 +57,7 @@ def test_execute_sync_nonzero_exit_is_failed_not_raised():
 
 def test_execute_sync_missing_program_is_failed():
     kernel = ExecutionKernel()
-    result = kernel.execute_sync(
-        ExecutionRequest(argv=("nova-no-such-binary-xyz",), execution_class=ExecutionClass.SHELL)
-    )
+    result = kernel.execute_sync(ExecutionRequest(argv=("nova-no-such-binary-xyz",), execution_class=ExecutionClass.SHELL))
     assert result.status is ExecutionStatus.FAILED
     assert "not found" in (result.error or "")
 
@@ -86,9 +80,7 @@ def test_execute_sync_timeout_escalates_and_reports():
 
 def test_execute_sync_stdin_piped():
     kernel = ExecutionKernel()
-    result = kernel.execute_sync(
-        ExecutionRequest(argv=("cat",), execution_class=ExecutionClass.SHELL, stdin="from-stdin")
-    )
+    result = kernel.execute_sync(ExecutionRequest(argv=("cat",), execution_class=ExecutionClass.SHELL, stdin="from-stdin"))
     assert result.ok
     assert result.stdout == "from-stdin"
 
@@ -111,9 +103,7 @@ def test_execute_async_facade():
     kernel = ExecutionKernel()
 
     async def go():
-        return await kernel.execute(
-            ExecutionRequest(argv=("echo", "async"), execution_class=ExecutionClass.SHELL)
-        )
+        return await kernel.execute(ExecutionRequest(argv=("echo", "async"), execution_class=ExecutionClass.SHELL))
 
     result = asyncio.run(go())
     assert result.ok
@@ -132,18 +122,14 @@ def test_empty_argv_denied():
 
 def test_policy_denies_program_outside_allowlist():
     kernel = ExecutionKernel()
-    result = kernel.execute_sync(
-        ExecutionRequest(argv=("rm", "-rf", "/tmp/x"), execution_class=ExecutionClass.GIT)
-    )
+    result = kernel.execute_sync(ExecutionRequest(argv=("rm", "-rf", "/tmp/x"), execution_class=ExecutionClass.GIT))
     assert result.status is ExecutionStatus.DENIED
     assert "not allowed" in (result.error or "")
 
 
 def test_policy_denies_sudo_for_non_systemd_classes():
     kernel = ExecutionKernel()
-    result = kernel.execute_sync(
-        ExecutionRequest(argv=("sudo", "rm", "-rf", "/"), execution_class=ExecutionClass.SHELL)
-    )
+    result = kernel.execute_sync(ExecutionRequest(argv=("sudo", "rm", "-rf", "/"), execution_class=ExecutionClass.SHELL))
     assert result.status is ExecutionStatus.DENIED
     assert "sudo" in (result.error or "")
 
@@ -183,9 +169,7 @@ def test_policy_clamps_timeout():
 
 
 def test_resource_saturation_denies():
-    kernel = ExecutionKernel(
-        resource_manager=ResourceManager(slots={ExecutionClass.SHELL: 1})
-    )
+    kernel = ExecutionKernel(resource_manager=ResourceManager(slots={ExecutionClass.SHELL: 1}))
     # Hold the single slot open with a background execution.
     import threading
 
@@ -217,9 +201,7 @@ def test_resource_slot_released_after_execution():
     manager = ResourceManager(slots={ExecutionClass.SHELL: 2})
     kernel = ExecutionKernel(resource_manager=manager)
     for _ in range(5):
-        assert kernel.execute_sync(
-            ExecutionRequest(argv=("true",), execution_class=ExecutionClass.SHELL)
-        ).ok
+        assert kernel.execute_sync(ExecutionRequest(argv=("true",), execution_class=ExecutionClass.SHELL)).ok
     assert manager.in_flight(ExecutionClass.SHELL) == 0
 
 
@@ -229,9 +211,7 @@ def test_resource_slot_released_after_execution():
 def test_audit_records_every_execution_with_valid_chain():
     kernel = ExecutionKernel()
     for i in range(3):
-        kernel.execute_sync(
-            ExecutionRequest(argv=("echo", str(i)), execution_class=ExecutionClass.SHELL)
-        )
+        kernel.execute_sync(ExecutionRequest(argv=("echo", str(i)), execution_class=ExecutionClass.SHELL))
     assert kernel.audit_engine.size == 3
     assert kernel.audit_engine.verify_chain()
     records = kernel.audit_engine.read_recent()
@@ -274,9 +254,7 @@ def test_lifecycle_events_emitted_in_order():
 def test_denied_event_emitted():
     bus = EventBus()
     kernel = ExecutionKernel(event_bus=bus)
-    kernel.execute_sync(
-        ExecutionRequest(argv=("rm", "x"), execution_class=ExecutionClass.GIT)
-    )
+    kernel.execute_sync(ExecutionRequest(argv=("rm", "x"), execution_class=ExecutionClass.GIT))
     names = [e.event_type for e in bus.replay()]
     assert names[-1] == "ExecutionDenied"
 
@@ -302,9 +280,7 @@ def test_metrics_aggregate_by_class_and_status():
 def test_replay_reexecutes_audited_run():
     kernel = ExecutionKernel()
     replay = ReplayEngine(kernel, kernel.audit_engine)
-    original = kernel.execute_sync(
-        ExecutionRequest(argv=("echo", "replay-me"), execution_class=ExecutionClass.SHELL)
-    )
+    original = kernel.execute_sync(ExecutionRequest(argv=("echo", "replay-me"), execution_class=ExecutionClass.SHELL))
     dry = replay.dry_run(original.execution_id)
     assert dry is not None
     assert dry["argv"] == ["echo", "replay-me"]
@@ -386,9 +362,7 @@ def test_spawn_denied_by_policy_raises():
     async def go():
         kernel = ExecutionKernel()
         with pytest.raises(ExecutionDeniedError):
-            await kernel.spawn(
-                ExecutionRequest(argv=("rm", "x"), execution_class=ExecutionClass.GIT)
-            )
+            await kernel.spawn(ExecutionRequest(argv=("rm", "x"), execution_class=ExecutionClass.GIT))
 
     asyncio.run(go())
 
@@ -485,9 +459,7 @@ def test_container_kernel_publishes_to_global_event_bus():
     try:
         kernel = service_container.execution_kernel()
         before = event_bus.history_size
-        kernel.execute_sync(
-            ExecutionRequest(argv=("true",), execution_class=ExecutionClass.SHELL)
-        )
+        kernel.execute_sync(ExecutionRequest(argv=("true",), execution_class=ExecutionClass.SHELL))
         assert event_bus.history_size > before
     finally:
         service_container.reset()

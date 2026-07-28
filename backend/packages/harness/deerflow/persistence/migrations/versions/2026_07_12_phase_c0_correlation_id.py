@@ -33,6 +33,7 @@ Why this is base, not a follow-up:
 ``down_revision`` is ``None``; future migrations should set theirs to
 ``2026_07_12_phase_c0_correlation_id``.
 """
+
 from __future__ import annotations
 
 import logging

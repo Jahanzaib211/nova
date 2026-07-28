@@ -357,29 +357,33 @@ class RecoveryEngine:
         self._metrics.recoveries_total += 1
 
         # Emit RecoveryStarted
-        self._emit(RecoveryStarted(
-            correlation_id=trigger.correlation_id,
-            run_id=trigger.run_id,
-            thread_id=trigger.thread_id,
-            payload={
-                "policy": policy.name,
-                "component": policy.component,
-                "action": policy.action,
-                "trigger": trigger.event_type,
-            },
-        ))
+        self._emit(
+            RecoveryStarted(
+                correlation_id=trigger.correlation_id,
+                run_id=trigger.run_id,
+                thread_id=trigger.thread_id,
+                payload={
+                    "policy": policy.name,
+                    "component": policy.component,
+                    "action": policy.action,
+                    "trigger": trigger.event_type,
+                },
+            )
+        )
 
         last_error = ""
         for attempt in range(1, policy.max_retries + 1):
             if state.cancelled:
                 self._record_history(policy, trigger, "cancelled", attempt, state)
                 self._metrics.recoveries_cancelled += 1
-                self._emit(RecoveryCancelled(
-                    correlation_id=trigger.correlation_id,
-                    run_id=trigger.run_id,
-                    thread_id=trigger.thread_id,
-                    payload={"policy": policy.name, "attempt": attempt},
-                ))
+                self._emit(
+                    RecoveryCancelled(
+                        correlation_id=trigger.correlation_id,
+                        run_id=trigger.run_id,
+                        thread_id=trigger.thread_id,
+                        payload={"policy": policy.name, "attempt": attempt},
+                    )
+                )
                 break
 
             state.attempt = attempt
@@ -388,16 +392,18 @@ class RecoveryEngine:
             # Wait before retry (skip delay on first attempt)
             if attempt > 1:
                 self._metrics.recovery_retry_total += 1
-                self._emit(RecoveryRetryScheduled(
-                    correlation_id=trigger.correlation_id,
-                    run_id=trigger.run_id,
-                    thread_id=trigger.thread_id,
-                    payload={
-                        "policy": policy.name,
-                        "attempt": attempt,
-                        "delay_ms": delay,
-                    },
-                ))
+                self._emit(
+                    RecoveryRetryScheduled(
+                        correlation_id=trigger.correlation_id,
+                        run_id=trigger.run_id,
+                        thread_id=trigger.thread_id,
+                        payload={
+                            "policy": policy.name,
+                            "attempt": attempt,
+                            "delay_ms": delay,
+                        },
+                    )
+                )
                 await asyncio.sleep(delay / 1000.0)
 
             # Execute action
@@ -428,38 +434,45 @@ class RecoveryEngine:
                 self._metrics.recoveries_successful += 1
                 self._metrics.recovery_duration_seconds += duration_ms / 1000.0
                 self._record_history(policy, trigger, "success", attempt, state)
-                self._emit(RecoverySucceeded(
-                    correlation_id=trigger.correlation_id,
-                    run_id=trigger.run_id,
-                    thread_id=trigger.thread_id,
-                    payload={
-                        "policy": policy.name,
-                        "attempt": attempt,
-                        "duration_ms": duration_ms,
-                    },
-                ))
+                self._emit(
+                    RecoverySucceeded(
+                        correlation_id=trigger.correlation_id,
+                        run_id=trigger.run_id,
+                        thread_id=trigger.thread_id,
+                        payload={
+                            "policy": policy.name,
+                            "attempt": attempt,
+                            "duration_ms": duration_ms,
+                        },
+                    )
+                )
                 break
             else:
                 last_error = last_error or f"Action {policy.action} returned False"
                 logger.warning(
                     "Recovery %s attempt %d/%d failed: %s",
-                    policy.name, attempt, policy.max_retries, last_error,
+                    policy.name,
+                    attempt,
+                    policy.max_retries,
+                    last_error,
                 )
         else:
             # All retries exhausted — escalate
             self._metrics.recoveries_escalated += 1
             self._metrics.recoveries_failed += 1
             self._record_history(policy, trigger, "escalated", policy.max_retries, state)
-            self._emit(RecoveryEscalated(
-                correlation_id=trigger.correlation_id,
-                run_id=trigger.run_id,
-                thread_id=trigger.thread_id,
-                payload={
-                    "policy": policy.name,
-                    "attempts": policy.max_retries,
-                    "last_error": last_error,
-                },
-            ))
+            self._emit(
+                RecoveryEscalated(
+                    correlation_id=trigger.correlation_id,
+                    run_id=trigger.run_id,
+                    thread_id=trigger.thread_id,
+                    payload={
+                        "policy": policy.name,
+                        "attempts": policy.max_retries,
+                        "last_error": last_error,
+                    },
+                )
+            )
 
         # Cleanup
         self._active.pop(key, None)

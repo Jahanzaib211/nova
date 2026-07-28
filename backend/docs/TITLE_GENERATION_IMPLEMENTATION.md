@@ -5,15 +5,18 @@
 ### 1. 核心实现文件
 
 #### [`packages/harness/deerflow/agents/thread_state.py`](../packages/harness/deerflow/agents/thread_state.py)
+
 - ✅ 添加 `title: str | None = None` 字段到 `ThreadState`
 
 #### [`packages/harness/deerflow/config/title_config.py`](../packages/harness/deerflow/config/title_config.py) (新建)
+
 - ✅ 创建 `TitleConfig` 配置类
 - ✅ 支持配置：enabled, max_words, max_chars, model_name, prompt_template
 - ✅ 提供 `get_title_config()` 和 `set_title_config()` 函数
 - ✅ 提供 `load_title_config_from_dict()` 从配置文件加载
 
 #### [`packages/harness/deerflow/agents/middlewares/title_middleware.py`](../packages/harness/deerflow/agents/middlewares/title_middleware.py) (新建)
+
 - ✅ 创建 `TitleMiddleware` 类
 - ✅ 实现 `_should_generate_title()` 检查是否需要生成
 - ✅ 实现 `_generate_title()` 调用 LLM 生成标题
@@ -21,17 +24,21 @@
 - ✅ 包含 fallback 策略（LLM 失败时使用用户消息前几个词）
 
 #### [`packages/harness/deerflow/config/app_config.py`](../packages/harness/deerflow/config/app_config.py)
+
 - ✅ 导入 `load_title_config_from_dict`
 - ✅ 在 `from_file()` 中加载 title 配置
 
 #### [`packages/harness/deerflow/agents/lead_agent/agent.py`](../packages/harness/deerflow/agents/lead_agent/agent.py)
+
 - ✅ 导入 `TitleMiddleware`
 - ✅ 注册到 `middleware` 列表：`[SandboxMiddleware(), TitleMiddleware()]`
 
 ### 2. 配置文件
 
 #### [`config.yaml`](../../config.example.yaml)
+
 - ✅ 添加 title 配置段：
+
 ```yaml
 title:
   enabled: true
@@ -43,6 +50,7 @@ title:
 ### 3. 文档
 
 #### [`docs/AUTO_TITLE_GENERATION.md`](../docs/AUTO_TITLE_GENERATION.md) (新建)
+
 - ✅ 完整的功能说明文档
 - ✅ 实现方式和架构设计
 - ✅ 配置说明
@@ -52,11 +60,13 @@ title:
 - ✅ State vs Metadata 对比
 
 #### [`TODO.md`](TODO.md)
+
 - ✅ 添加功能完成记录
 
 ### 4. 测试
 
 #### [`tests/test_title_generation.py`](../tests/test_title_generation.py) (新建)
+
 - ✅ 配置类测试
 - ✅ Middleware 初始化测试
 - ✅ TODO: 集成测试（需要 mock Runtime）
@@ -101,6 +111,7 @@ Checkpointer 自动持久化（如果配置了）
 ### 后端配置
 
 1. **启用/禁用功能**
+
 ```yaml
 # config.yaml
 title:
@@ -108,6 +119,7 @@ title:
 ```
 
 2. **自定义配置**
+
 ```yaml
 title:
   enabled: true

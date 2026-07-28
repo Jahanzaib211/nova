@@ -82,4 +82,3 @@ async def request_more_credits(request: Request, body: CreditRequestBody) -> Cre
     )
     created = result.get("created_at")
     return CreditRequestResponse(status=result["status"], created_at=created.isoformat() if created else None)
-

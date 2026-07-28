@@ -23,35 +23,48 @@ test.describe("Workspace-aware panel tabs", () => {
     await page.goto("/workspace/chats/new");
     const trigger = page.getByRole("button", { name: /agent's computer/i });
     if ((await trigger.count()) === 0) {
-      test.skip(true, "agent computer trigger not visible (sign-in gate or auth-disabled off)");
+      test.skip(
+        true,
+        "agent computer trigger not visible (sign-in gate or auth-disabled off)",
+      );
       return false;
     }
     await trigger.first().click();
     return true;
   }
 
-  test("Files tab renders the workspace card from a mocked snapshot", async ({ page }) => {
+  test("Files tab renders the workspace card from a mocked snapshot", async ({
+    page,
+  }) => {
     if (!(await openPanel(page))) return;
 
     await page.getByRole("tab", { name: "Files", exact: true }).click();
     // WorkspaceCard renders project_count/symbol_count/command_count from
     // the mocked /snapshot response — this is real fetch + real render,
     // not a synthetic prop.
-    await expect(page.getByText("2", { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("2", { exact: true }).first()).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.getByText(/1,234|1234/)).toBeVisible();
   });
 
-  test("Activity tab shows the live-indexed banner and a live scan event", async ({ page }) => {
+  test("Activity tab shows the live-indexed banner and a live scan event", async ({
+    page,
+  }) => {
     if (!(await openPanel(page))) return;
 
     await page.getByRole("tab", { name: "Activity", exact: true }).click();
     // Static banner from useWorkspaceSnapshot (mocked /snapshot).
-    await expect(page.getByText(/workspace indexed/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/workspace indexed/i)).toBeVisible({
+      timeout: 10_000,
+    });
     // Live strip from useWorkspaceEvents (mocked /events SSE frame).
     await expect(page.getByText(/live scan/i)).toBeVisible({ timeout: 10_000 });
   });
 
-  test("Review tab surfaces no kernel verdict before any plan is built", async ({ page }) => {
+  test("Review tab surfaces no kernel verdict before any plan is built", async ({
+    page,
+  }) => {
     if (!(await openPanel(page))) return;
 
     await page.getByRole("tab", { name: "Review", exact: true }).click();

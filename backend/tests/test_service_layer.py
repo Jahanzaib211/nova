@@ -191,9 +191,7 @@ class TestRunServiceImpl:
         mock_manager.create = AsyncMock(return_value=mock_record)
 
         impl = RunServiceImpl(mock_manager)
-        result = asyncio.run(
-            impl.create("t1", model_name="gpt-4")
-        )
+        result = asyncio.run(impl.create("t1", model_name="gpt-4"))
         assert result.run_id == "r1"
         assert result.status == "running"
         mock_manager.create.assert_called_once()
@@ -236,9 +234,7 @@ class TestRunServiceImpl:
         mock_manager.create_or_reject = AsyncMock(return_value=mock_record)
 
         impl = RunServiceImpl(mock_manager)
-        result = asyncio.run(
-            impl.create_or_reject("t1", model_name="gpt-4", multitask_strategy="reject")
-        )
+        result = asyncio.run(impl.create_or_reject("t1", model_name="gpt-4", multitask_strategy="reject"))
         assert result.run_id == "r2"
         assert result.status == "pending"
         mock_manager.create_or_reject.assert_called_once()
@@ -271,6 +267,7 @@ class TestWorkspaceServiceImpl:
         impl = WorkspaceServiceImpl(base_dir=str(tmp_path / "df"))
         paths = impl.ensure_directories("t1")
         import os
+
         assert os.path.isdir(paths.workspace)
         assert os.path.isdir(paths.uploads)
         assert os.path.isdir(paths.outputs)
@@ -289,9 +286,7 @@ class TestRepositoryServiceImpl:
         mock_store.put = AsyncMock()
 
         impl = RepositoryServiceImpl(mock_store)
-        asyncio.run(
-            impl.put("r1", thread_id="t1", status="running")
-        )
+        asyncio.run(impl.put("r1", thread_id="t1", status="running"))
         mock_store.put.assert_called_once()
 
     def test_get_delegates(self):
@@ -384,7 +379,10 @@ class TestConfigurationServiceImpl:
 
 class TestPackageExports:
     def test_all_protocols_exported(self):
-        from deerflow.services import (
+        # Re-imports the same names from the package root to verify the
+        # public __init__ re-export works, not just the submodule import
+        # already covered above.
+        from deerflow.services import (  # noqa: F811
             ArtifactService,
             BrowserService,
             ConfigurationService,
@@ -397,11 +395,21 @@ class TestPackageExports:
             WorkspaceService,
         )
 
-        assert all(cls is not None for cls in [
-            RunService, WorkspaceService, RepositoryService, BrowserService,
-            TerminalService, ArtifactService, HealthService, RecoveryService,
-            ConfigurationService, DiagnosticsService,
-        ])
+        assert all(
+            cls is not None
+            for cls in [
+                RunService,
+                WorkspaceService,
+                RepositoryService,
+                BrowserService,
+                TerminalService,
+                ArtifactService,
+                HealthService,
+                RecoveryService,
+                ConfigurationService,
+                DiagnosticsService,
+            ]
+        )
 
     def test_all_types_exported(self):
         from deerflow.services import (
@@ -414,7 +422,15 @@ class TestPackageExports:
             WorkspacePaths,
         )
 
-        assert all(cls is not None for cls in [
-            RunSummary, RunDetail, ProbeResult, HealthReport,
-            RecoveryAction, DiagnosticsRecord, WorkspacePaths,
-        ])
+        assert all(
+            cls is not None
+            for cls in [
+                RunSummary,
+                RunDetail,
+                ProbeResult,
+                HealthReport,
+                RecoveryAction,
+                DiagnosticsRecord,
+                WorkspacePaths,
+            ]
+        )

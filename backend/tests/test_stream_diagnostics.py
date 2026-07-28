@@ -123,9 +123,7 @@ async def test_diagnostic_recorder_captures_publish_boundary(_diagnostics_file):
     )
     from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
 
-    assert diagnostics.enabled is True, (
-        "DEER_FLOW_STREAM_TRACE=1 must enable the recorder"
-    )
+    assert diagnostics.enabled is True, "DEER_FLOW_STREAM_TRACE=1 must enable the recorder"
 
     bridge = MemoryStreamBridge(queue_maxsize=4)
     run_id = "trace-publish-test"
@@ -134,9 +132,7 @@ async def test_diagnostic_recorder_captures_publish_boundary(_diagnostics_file):
 
     records = read_recent_diagnostics()
     publish_records = [r for r in records if r["stage"] == "bridge.publish"]
-    assert len(publish_records) == 3, (
-        f"expected exactly 3 bridge.publish records, got {len(publish_records)}: {publish_records}"
-    )
+    assert len(publish_records) == 3, f"expected exactly 3 bridge.publish records, got {len(publish_records)}: {publish_records}"
     for record in publish_records:
         assert record["run_id"] == run_id
         assert "monotonic_ns" in record
@@ -185,13 +181,9 @@ async def test_diagnostic_recorder_captures_subscribe_lifecycle(_diagnostics_fil
     stages = [r["stage"] for r in records]
 
     # Resolve happens once at the start of subscribe.
-    assert "bridge.subscribe.resolve" in stages, (
-        f"expected bridge.subscribe.resolve, got {stages}"
-    )
+    assert "bridge.subscribe.resolve" in stages, f"expected bridge.subscribe.resolve, got {stages}"
     # Each entry yields.
-    assert stages.count("bridge.subscribe.yield") == len(received), (
-        f"yield count mismatch: stages={stages}, received={[type(r).__name__ for r in received]}"
-    )
+    assert stages.count("bridge.subscribe.yield") == len(received), f"yield count mismatch: stages={stages}, received={[type(r).__name__ for r in received]}"
     # Close fires after the consumer breaks the loop. The close reason is
     # "generator_exit" because the consumer's `break` triggers Python's
     # async-generator finalization. We care that the close fired and has a
@@ -199,9 +191,7 @@ async def test_diagnostic_recorder_captures_subscribe_lifecycle(_diagnostics_fil
     # is done at the sse_consumer level, not here.
     close_records = [r for r in records if r["stage"] == "bridge.subscribe.close"]
     assert close_records, f"expected bridge.subscribe.close, got {stages}"
-    assert close_records[-1]["extra"]["reason"] in {"generator_exit", "end_sentinel"}, (
-        f"expected generator_exit or end_sentinel, got {close_records[-1]['extra']['reason']}"
-    )
+    assert close_records[-1]["extra"]["reason"] in {"generator_exit", "end_sentinel"}, f"expected generator_exit or end_sentinel, got {close_records[-1]['extra']['reason']}"
 
 
 @pytest.mark.anyio
@@ -245,15 +235,14 @@ async def test_diagnostic_recorder_captures_cancellation_reason(_diagnostics_fil
     # Python runtime contract. (The ``cancelled`` branch is reachable
     # only via an explicit ``task.cancel()`` *outside* an active
     # ``async for``, which doesn't happen in our call sites.)
-    assert close_records[-1]["extra"]["reason"] in {"cancelled", "generator_exit"}, (
-        f"expected cancelled or generator_exit, got {close_records[-1]['extra']['reason']}"
-    )
+    assert close_records[-1]["extra"]["reason"] in {"cancelled", "generator_exit"}, f"expected cancelled or generator_exit, got {close_records[-1]['extra']['reason']}"
 
 
 async def _drain_until_heartbeat(bridge, run_id):
     # Import inside the helper so the fixture-driven reimport dance is
     # honoured on every call.
     from deerflow.runtime.stream_bridge.base import HEARTBEAT_SENTINEL
+
     async for entry in bridge.subscribe(run_id, heartbeat_interval=0.05):
         if entry is HEARTBEAT_SENTINEL:
             break
@@ -285,13 +274,9 @@ async def test_bridge_drop_event_under_load(_diagnostics_file):
     records = read_recent_diagnostics()
     publish_records = [r for r in records if r["stage"] == "bridge.publish"]
     dropped = [r for r in publish_records if r["extra"]["dropped_count"] > 0]
-    assert len(dropped) >= 7, (
-        f"expected >=7 publishes with dropped_count>0 (10 publishes, maxsize=3 → 7 overflows), got {len(dropped)}"
-    )
+    assert len(dropped) >= 7, f"expected >=7 publishes with dropped_count>0 (10 publishes, maxsize=3 → 7 overflows), got {len(dropped)}"
     final_buffer_size = publish_records[-1]["extra"]["buffer_size"]
-    assert final_buffer_size == 3, (
-        f"buffer_size should converge to maxsize=3, got {final_buffer_size}"
-    )
+    assert final_buffer_size == 3, f"buffer_size should converge to maxsize=3, got {final_buffer_size}"
 
 
 # ---------------------------------------------------------------------------
@@ -365,18 +350,12 @@ async def test_sse_consumer_loop_iter_records_disconnect_flag(_diagnostics_file,
     await asyncio.sleep(0)
     records = read_recent_diagnostics()
     iter_records = [r for r in records if r["stage"] == "sse.consumer.iter"]
-    assert len(iter_records) >= 2, (
-        f"expected at least 2 loop iterations, got {len(iter_records)}"
-    )
+    assert len(iter_records) >= 2, f"expected at least 2 loop iterations, got {len(iter_records)}"
     # The second (or later) iteration must record disconnected=True.
-    assert any(r["extra"]["disconnected"] for r in iter_records), (
-        f"expected at least one iter with disconnected=True, got {[r['extra'] for r in iter_records]}"
-    )
+    assert any(r["extra"]["disconnected"] for r in iter_records), f"expected at least one iter with disconnected=True, got {[r['extra'] for r in iter_records]}"
     # After the loop exits we expect a sse.consumer.disconnect record.
     disconnect_records = [r for r in records if r["stage"] == "sse.consumer.disconnect"]
-    assert disconnect_records, (
-        "expected sse.consumer.disconnect record after disconnect was detected"
-    )
+    assert disconnect_records, "expected sse.consumer.disconnect record after disconnect was detected"
     assert disconnect_records[-1]["extra"]["kind"] == "request_disconnected"
 
 

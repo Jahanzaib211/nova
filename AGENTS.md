@@ -41,6 +41,7 @@ standard pytest suite. It fails on any forbidden string. CI
 (`.github/workflows/cross-ref.yml`) runs the same test on every push/PR.
 
 Run it locally:
+
 ```bash
 python3 backend/tests/test_no_cross_references.py
 # or via pytest:
@@ -49,6 +50,7 @@ cd backend && PYTHONPATH=../scripts uv run pytest tests/test_no_cross_references
 
 The auto-fix tool (`scripts/fix_cross_references.py`) handles common
 patterns automatically:
+
 ```bash
 python3 scripts/fix_cross_references.py --dry-run   # preview
 python3 scripts/fix_cross_references.py             # apply

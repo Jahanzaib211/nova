@@ -26,6 +26,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 ### Added
 
 #### Agents & runtime
+
 - **agent:** Custom-agent self-updates with user isolation — agents can persist
   edits to their own `SOUL.md` / `config.yaml` from inside a normal chat.
   ([#2713])
@@ -42,6 +43,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 - **suggest:** Make AI follow-up question suggestions optional. ([#3591])
 
 #### Models & integrations
+
 - **models:** Add StepFun reasoning model adapter. ([#3461])
 - **community:** Add Brave Search web search tool. ([#3528])
 - **channels:** Enhance Discord with mention-only mode, thread routing, and
@@ -58,6 +60,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
   message in place. ([#3534])
 
 #### Observability
+
 - **trace:** Set the LangGraph trace name to `lead_agent` (or the custom
   agent's `agent_name`) for cleaner Langfuse/LangSmith traces. ([#3101])
 - **frontend:** Refine token usage display modes. ([#2329])
@@ -67,6 +70,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
   ([#3611])
 
 #### Skills
+
 - **skill:** Add `blocking-io-guard` skill for blocking-IO triage and runtime
   anchors. ([#3503])
 - **skill:** Add maintainer issue and PR workflow skill. ([#3554])
@@ -100,6 +104,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 ### Fixed
 
 #### Runtime, gateway & persistence
+
 - **runtime:** Rollback restore checkpoint now supersedes newer checkpoints.
   ([#2582])
 - **runtime:** Persist run message summaries. ([#2850])
@@ -131,6 +136,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 - **gateway:** Attribute token usage to the actual models. ([#3658])
 
 #### Agents, subagents & middleware
+
 - **subagents:** Make subagent timeout terminal state atomic. ([#2583])
 - **subagents:** Use model override for tools and middleware. ([#2641])
 - **subagents:** Consolidate `system_prompt` and skills into a single
@@ -166,6 +172,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
   30 min. ([#3610])
 
 #### Memory & tracing
+
 - **memory:** Replace short-lived `asyncio.run()` with a persistent event
   loop. ([#2627])
 - **memory:** Isolate queued memory updates by agent. ([#2941])
@@ -176,6 +183,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
   ([#3104])
 
 #### Tools, sandbox & MCP
+
 - **mcp:** Fix env resolution in MCP config lists. ([#2556])
 - **models:** Record Codex token usage in `usage_metadata`. ([#2585])
 - **sandbox:** Supplement `list_running` in `RemoteSandboxBackend`. ([#2716])
@@ -212,6 +220,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 - **uploads:** Fix the upload file size contract. ([#3408])
 
 #### Skills & channels
+
 - **skills:** Enforce `allowed-tools` metadata. ([#2626])
 - **skills:** Harden slash skill activation across chat channels. ([#3466])
 - **skills:** Fix custom skill install permissions. ([#3241])
@@ -234,6 +243,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 - **channels:** Unsubscribe channel listeners by equality. ([#3608])
 
 #### Auth
+
 - **auth:** Replace setup-status 429 rate limit with a cached response.
   ([#2915])
 - **auth:** Persist auto-generated JWT secret so it survives restarts.
@@ -241,6 +251,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 - **auth:** Align auth-disabled mode with mock history loading. ([#3471])
 
 #### Frontend
+
 - **frontend:** Restore `localhost` fallback for `getGatewayConfig` in prod
   mode. ([#2718])
 - **chat:** Prevent the first user message from being swallowed in new
@@ -280,6 +291,7 @@ with **180 merged pull requests** since the first 2.0 milestone tag.
 - **frontend:** Render full content for multi-part AI messages. ([#3649])
 
 #### Build, deploy, scripts & config
+
 - **packaging:** Add `postgres` extra for store/checkpointer support; clarify
   install guidance. ([#2584])
 - **harness:** Resolve runtime paths from the project root. ([#2642])

@@ -43,7 +43,7 @@ Nova fournit son inférence sur des **GPU AMD Instinct**, et en fait un choix de
 ## Table des matières
 
 - [Nova — L'Ordinateur de l'Agent](#nova--lordinateur-de-lagent)
-  - [Table des matières](#table-des-matinées)
+  - [Table des matières](#table-des-matières)
   - [Configuration Agent en une ligne](#configuration-agent-en-une-ligne)
   - [Démarrage rapide](#démarrage-rapide)
     - [Configuration](#configuration)
@@ -133,32 +133,36 @@ make up     # Construire les images et démarrer tous les services
 make down   # Arrêter et supprimer les conteneurs
 ```
 
-Accès : http://localhost:2026
+Accès : <http://localhost:2026>
 
 #### Option 2 : Développement local
 
 1. **Vérifier les prérequis** :
+
    ```bash
    make check  # Vérifie Node.js 22+, pnpm, uv, nginx
    ```
 
 2. **Installer les dépendances** :
+
    ```bash
    make install  # Installe les dépendances backend + frontend + hooks pre-commit
    ```
 
 3. **Démarrer les services** :
+
    ```bash
    make dev
    ```
 
-4. **Accès** : http://localhost:2026
+4. **Accès** : <http://localhost:2026>
 
 ### Avancé
 
 #### Mode sandbox
 
 Nova supporte plusieurs modes d'exécution sandbox :
+
 - **Exécution locale** (code exécuté directement sur l'hôte)
 - **Exécution Docker** (code exécuté dans des conteneurs Docker isolés)
 - **Docker + Kubernetes** (code exécuté dans des Pods via le service provisioner)

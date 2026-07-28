@@ -91,7 +91,7 @@ class PlanValidator:
         def resolve(step_id: str, chain: list[str]) -> int:
             known = depth.get(step_id)
             if known == UNRESOLVED:
-                cycle = " -> ".join([*chain[chain.index(step_id):], step_id])
+                cycle = " -> ".join([*chain[chain.index(step_id) :], step_id])
                 errors.append(f"Dependency cycle detected: {cycle}")
                 return 0
             if known is not None:

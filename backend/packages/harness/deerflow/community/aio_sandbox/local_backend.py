@@ -337,10 +337,7 @@ class LocalContainerBackend(SandboxBackend):
                         # the process lifetime and retry; the main port was
                         # fine, so don't rotate it.
                         reserve_port(rejected)
-                        logger.warning(
-                            f"Preview host port {rejected} rejected by Docker (address already in use on the host); "
-                            f"quarantined for this process, retrying with a fresh port"
-                        )
+                        logger.warning(f"Preview host port {rejected} rejected by Docker (address already in use on the host); quarantined for this process, retrying with a fresh port")
                         continue
                     logger.warning(f"Port {port} rejected by Docker (already allocated), retrying with next port")
                     _next_start = port + 1
@@ -700,9 +697,7 @@ class LocalContainerBackend(SandboxBackend):
         if result.ok:
             logger.info(f"Stopped container {container_id} using {self._runtime}")
         else:
-            logger.warning(
-                f"Failed to stop container {container_id}: {result.stderr or result.error}"
-            )
+            logger.warning(f"Failed to stop container {container_id}: {result.stderr or result.error}")
 
     def _is_container_running(self, container_name: str) -> bool:
         """Check if a named container is currently running.
@@ -732,9 +727,7 @@ class LocalContainerBackend(SandboxBackend):
             return result.stdout.strip().lower() == "true"
         if result.exit_code is not None and _is_no_such_container_error(result.stderr, container_name):
             return False
-        raise RuntimeError(
-            f"Failed to inspect container {container_name}: {(result.stderr or result.error or '').strip()}"
-        )
+        raise RuntimeError(f"Failed to inspect container {container_name}: {(result.stderr or result.error or '').strip()}")
 
     def _get_container_port(self, container_name: str) -> int | None:
         """Get the host port of a running container.

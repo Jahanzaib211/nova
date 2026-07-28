@@ -5,11 +5,12 @@ DeerFlow supports configurable MCP servers and skills to extend its capabilities
 ## Setup
 
 1. Copy `extensions_config.example.json` to `extensions_config.json` in the project root directory.
+
    ```bash
    # Copy example configuration
    cp extensions_config.example.json extensions_config.json
    ```
-   
+
 2. Enable the desired MCP servers or skills by setting `"enabled": true`.
 3. Configure each server’s command, arguments, and environment variables as needed.
 4. Restart the application to load and register MCP tools.
@@ -81,11 +82,13 @@ Example interceptor that injects auth headers from LangGraph metadata:
 def build_auth_interceptor():
     async def interceptor(request, handler):
         from langgraph.config import get_config
+
         metadata = get_config().get("metadata", {})
         headers = dict(request.headers or {})
         if token := metadata.get("auth_token"):
             headers["X-Auth-Token"] = token
         return await handler(request.override(headers=headers))
+
     return interceptor
 ```
 
@@ -109,4 +112,4 @@ MCP servers can provide access to:
 ## Learn More
 
 For detailed documentation about the Model Context Protocol, visit:  
-https://modelcontextprotocol.io
+<https://modelcontextprotocol.io>

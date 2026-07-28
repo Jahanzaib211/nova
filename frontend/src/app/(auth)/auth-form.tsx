@@ -158,10 +158,7 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
       // Both login and register set a cookie — redirect to workspace.
       // The Toaster lives in the workspace, so leave a flag for it to show
       // the success toast on arrival; the inline message covers the gap.
-      sessionStorage.setItem(
-        "nova:auth-success",
-        isLogin ? "login" : "signup",
-      );
+      sessionStorage.setItem("nova:auth-success", isLogin ? "login" : "signup");
       setSuccess(true);
       router.push(redirectPath);
     } catch {
@@ -291,7 +288,11 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={loading || success}>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={loading || success}
+          >
             {success
               ? "Redirecting…"
               : loading

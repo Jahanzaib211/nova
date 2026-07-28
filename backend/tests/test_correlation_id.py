@@ -53,9 +53,7 @@ async def test_correlation_id_is_independent_of_run_id():
     """
     mgr = RunManager()
     record = await mgr.create("thread-a")
-    assert record.run_id != record.correlation_id, (
-        "correlation_id must be a distinct identifier, not equal to run_id"
-    )
+    assert record.run_id != record.correlation_id, "correlation_id must be a distinct identifier, not equal to run_id"
 
 
 @pytest.mark.anyio

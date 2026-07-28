@@ -47,7 +47,9 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
     setEvents((prev) => {
       const next = prev.concat(pendingRef.current);
       pendingRef.current = [];
-      return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next;
+      return next.length > MAX_EVENTS
+        ? next.slice(next.length - MAX_EVENTS)
+        : next;
     });
     rafRef.current = null;
   };

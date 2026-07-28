@@ -18,6 +18,7 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
 #### Setup Steps
 
 1. **Configure the application**:
+
    ```bash
    # Copy example configuration
    cp config.example.yaml config.yaml
@@ -28,9 +29,11 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
    ```
 
 2. **Initialize Docker environment** (first time only):
+
    ```bash
    make docker-init
    ```
+
    This will:
    - Build Docker images
    - Install frontend dependencies (pnpm)
@@ -38,9 +41,11 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
    - Share pnpm cache with host for faster builds
 
 3. **Start development services**:
+
    ```bash
    make docker-start
    ```
+
    `make docker-start` reads `config.yaml` and starts `provisioner` only for provisioner/Kubernetes sandbox mode.
 
    All services will start with hot-reload enabled:
@@ -49,9 +54,9 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
    - Gateway-hosted LangGraph-compatible runtime supports hot-reload
 
 4. **Access the application**:
-   - Web Interface: http://localhost:2026
-   - API Gateway: http://localhost:2026/api/*
-   - LangGraph-compatible API: http://localhost:2026/api/langgraph/*
+   - Web Interface: <http://localhost:2026>
+   - API Gateway: <http://localhost:2026/api/>*
+   - LangGraph-compatible API: <http://localhost:2026/api/langgraph/>*
 
 #### Docker Commands
 
@@ -100,22 +105,31 @@ unable to get image 'nova-gateway': permission denied while trying to connect to
 Recommended fix: add your current user to the `docker` group so Docker commands work without `sudo`.
 
 1. Confirm the `docker` group exists:
+
    ```bash
    getent group docker
    ```
+
 2. Add your current user to the `docker` group:
+
    ```bash
    sudo usermod -aG docker $USER
    ```
+
 3. Apply the new group membership. The most reliable option is to log out completely and then log back in. If you want to refresh the current shell session instead, run:
+
    ```bash
    newgrp docker
    ```
+
 4. Verify Docker access:
+
    ```bash
    docker ps
    ```
+
 5. Retry the Nova command:
+
    ```bash
    make docker-stop
    make docker-start
@@ -140,6 +154,7 @@ Docker Compose (deer-flow-dev)
 ```
 
 **Benefits of Docker Development**:
+
 - ✅ Consistent environment across different machines
 - ✅ No need to install Node.js, Python, or nginx locally
 - ✅ Isolated dependencies and services
@@ -160,6 +175,7 @@ make check
 ```
 
 Required tools:
+
 - Node.js 22+
 - pnpm
 - uv (Python package manager)
@@ -170,17 +186,19 @@ Required tools:
 1. **Configure the application** (same as Docker setup above)
 
 2. **Install dependencies** (this also sets up pre-commit hooks):
+
    ```bash
    make install
    ```
 
 3. **Run development server** (starts all services with nginx):
+
    ```bash
    make dev
    ```
 
 4. **Access the application**:
-   - Web Interface: http://localhost:2026
+   - Web Interface: <http://localhost:2026>
    - All API requests are automatically proxied through nginx
 
 #### Manual Service Control
@@ -188,6 +206,7 @@ Required tools:
 If you need to start services individually:
 
 1. **Start backend service**:
+
    ```bash
    # Terminal 1: Start Gateway API + embedded agent runtime (port 8001)
    cd backend
@@ -199,17 +218,19 @@ If you need to start services individually:
    ```
 
 2. **Start nginx**:
+
    ```bash
    make nginx
    # or directly: nginx -c $(pwd)/docker/nginx/nginx.local.conf -g 'daemon off;'
    ```
 
 3. **Access the application**:
-   - Web Interface: http://localhost:2026
+   - Web Interface: <http://localhost:2026>
 
 #### Nginx Configuration
 
 The nginx configuration provides:
+
 - Unified entry point on port 2026
 - Rewrites `/api/langgraph/*` to Gateway's LangGraph-compatible API (8001)
 - Routes other `/api/*` endpoints to Gateway API (8001)
@@ -261,6 +282,7 @@ Nginx (port 2026) ← Unified entry point
 ## Development Workflow
 
 1. **Create a feature branch**:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -268,6 +290,7 @@ Nginx (port 2026) ← Unified entry point
 2. **Make your changes** with hot-reload enabled
 
 3. **Format and lint your code** (CI will reject unformatted code):
+
    ```bash
    # Backend
    cd backend
@@ -281,12 +304,14 @@ Nginx (port 2026) ← Unified entry point
 4. **Test your changes** thoroughly
 
 5. **Commit your changes**:
+
    ```bash
    git add .
    git commit -m "feat: description of your changes"
    ```
 
 6. **Push and create a Pull Request**:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -342,6 +367,7 @@ Nova uses Alembic for schema migrations. Any ORM model change that adds,
 removes, or modifies database columns requires a migration file.
 
 **Quick reference:**
+
 - Migration infrastructure: `backend/packages/harness/deerflow/persistence/migrations/`
 - Always make migrations idempotent (check if column exists before adding)
 - Stamp the alembic version for fresh deployments

@@ -7,13 +7,17 @@ the scoring order: **accuracy gate first, then token efficiency**.
 ## Contract
 
 - Reads tasks from `/input/tasks.json`:
+
   ```json
   [ { "task_id": "t1", "prompt": "..." } ]
   ```
+
 - Writes answers to `/output/results.json`:
+
   ```json
   [ { "task_id": "t1", "answer": "..." } ]
   ```
+
 - Exit 0 on success. One task failing never aborts the batch (empty answer).
 
 ## Environment (injected by the harness — nothing hardcoded)
@@ -40,6 +44,7 @@ the scoring order: **accuracy gate first, then token efficiency**.
 docker buildx build --platform linux/amd64 \
   -t ghcr.io/<org>/nova-track1:latest --push .
 ```
+
 Or via the repo root: `make hackathon-track1 REGISTRY=ghcr.io/<org>`.
 
 ## Test locally

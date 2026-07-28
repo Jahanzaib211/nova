@@ -42,9 +42,11 @@ class EventSubscriber:
             def handle(event: RunCreated) -> None:
                 ...
         """
+
         def decorator(fn: Callable[[E], None]) -> Callable[[E], None]:
             self._handlers.append((event_type, fn))  # type: ignore[arg-type]
             return fn
+
         return decorator
 
     def register(self, bus: EventBus | None = None) -> None:

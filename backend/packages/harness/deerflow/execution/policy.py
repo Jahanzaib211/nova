@@ -87,9 +87,7 @@ class PolicyEngine:
     deployment-specific hardening.
     """
 
-    policies: dict[ExecutionClass, ClassPolicy] = field(
-        default_factory=lambda: dict(_DEFAULT_POLICIES)
-    )
+    policies: dict[ExecutionClass, ClassPolicy] = field(default_factory=lambda: dict(_DEFAULT_POLICIES))
 
     def evaluate(self, request: ExecutionRequest) -> PolicyDecision:
         if not request.argv:
@@ -121,10 +119,7 @@ class PolicyEngine:
         elif policy.allowed_programs and program not in policy.allowed_programs:
             return PolicyDecision(
                 allowed=False,
-                reason=(
-                    f"program {program!r} not allowed for class "
-                    f"{request.execution_class.value}"
-                ),
+                reason=(f"program {program!r} not allowed for class {request.execution_class.value}"),
             )
 
         effective_timeout = min(request.limits.timeout, policy.max_timeout)

@@ -59,10 +59,7 @@ def test_no_direct_execution_outside_kernel():
                 continue
             if FORBIDDEN.search(line):
                 violations.append(f"{rel}:{lineno}: {stripped[:120]}")
-    assert not violations, (
-        "Direct process execution found outside the Execution Kernel "
-        "(route it through deerflow.execution instead):\n" + "\n".join(violations)
-    )
+    assert not violations, "Direct process execution found outside the Execution Kernel (route it through deerflow.execution instead):\n" + "\n".join(violations)
 
 
 def test_kernel_package_is_the_only_popen_site():

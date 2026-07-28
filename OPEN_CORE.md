@@ -38,6 +38,7 @@ Everything that originated from or is a direct contribution to the upstream Deer
 - All upstream tests and CI configurations
 
 **Nova-specific MIT contributions** (additions on top of DeerFlow that we release under MIT):
+
 - Hardened browser subsystem (circuit breaker, retry, tracing, metrics, shutdown)
 - Execution kernel (PTY manager, session registry, two-phase cancellation, budgets)
 - Recovery engine + declarative policies

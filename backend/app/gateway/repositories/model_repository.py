@@ -43,19 +43,14 @@ class ModelRepository:
     async def get_by_owner_and_name(self, owner_id: str, name: str) -> ModelConfigRow | None:
         """Get a specific model by owner + name, or None if not found / not accessible."""
         async with self._sf() as session:
-            stmt = select(ModelConfigRow).where(
-                (ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name)
-            )
+            stmt = select(ModelConfigRow).where((ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name))
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
     async def name_exists_for_owner(self, owner_id: str | None, name: str) -> bool:
         """Check if a name is already taken by a non-NULL-owner row (shared/system excluded)."""
         async with self._sf() as session:
-            stmt = select(ModelConfigRow.id).where(
-                (ModelConfigRow.owner_id == owner_id)
-                & (ModelConfigRow.name == name)
-            )
+            stmt = select(ModelConfigRow.id).where((ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name))
             result = await session.execute(stmt)
             return result.scalar_one_or_none() is not None
 
@@ -117,9 +112,7 @@ class ModelRepository:
         """Update an existing model config row. Returns the updated row or None."""
         async with self._sf() as session:
             async with session.begin():
-                stmt = select(ModelConfigRow).where(
-                    (ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name)
-                )
+                stmt = select(ModelConfigRow).where((ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name))
                 result = await session.execute(stmt)
                 row = result.scalar_one_or_none()
                 if row is None:
@@ -180,9 +173,7 @@ class ModelRepository:
         """Delete a model config row. Returns True if deleted, False if not found."""
         async with self._sf() as session:
             async with session.begin():
-                stmt = delete(ModelConfigRow).where(
-                    (ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name)
-                )
+                stmt = delete(ModelConfigRow).where((ModelConfigRow.owner_id == owner_id) & (ModelConfigRow.name == name))
                 result = await session.execute(stmt)
                 return result.rowcount > 0
 

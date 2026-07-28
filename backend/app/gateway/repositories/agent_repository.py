@@ -30,9 +30,7 @@ class AgentRepository:
 
     async def get_by_owner_and_name(self, owner_id: str, name: str) -> AgentConfigRow | None:
         async with self._sf() as session:
-            stmt = select(AgentConfigRow).where(
-                (AgentConfigRow.owner_id == owner_id) & (AgentConfigRow.name == name)
-            )
+            stmt = select(AgentConfigRow).where((AgentConfigRow.owner_id == owner_id) & (AgentConfigRow.name == name))
             result = await session.execute(stmt)
             return result.scalar_one_or_none()
 
@@ -43,9 +41,7 @@ class AgentRepository:
     async def upsert(self, owner_id: str | None, name: str, is_shared: bool = False, is_system: bool = False) -> AgentConfigRow:
         async with self._sf() as session:
             async with session.begin():
-                stmt = select(AgentConfigRow).where(
-                    (AgentConfigRow.owner_id == owner_id) & (AgentConfigRow.name == name)
-                )
+                stmt = select(AgentConfigRow).where((AgentConfigRow.owner_id == owner_id) & (AgentConfigRow.name == name))
                 result = await session.execute(stmt)
                 existing = result.scalar_one_or_none()
                 if existing:
@@ -63,9 +59,7 @@ class AgentRepository:
     async def delete(self, owner_id: str, name: str) -> bool:
         async with self._sf() as session:
             async with session.begin():
-                stmt = delete(AgentConfigRow).where(
-                    (AgentConfigRow.owner_id == owner_id) & (AgentConfigRow.name == name)
-                )
+                stmt = delete(AgentConfigRow).where((AgentConfigRow.owner_id == owner_id) & (AgentConfigRow.name == name))
                 result = await session.execute(stmt)
                 return result.rowcount > 0
 

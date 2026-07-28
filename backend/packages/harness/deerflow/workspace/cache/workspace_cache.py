@@ -143,9 +143,7 @@ class WorkspaceCache:
         file_count: int,
     ) -> str:
         """Build a cache key from workspace metadata."""
-        return self._key_builder.build_snapshot_key(
-            root_path, repo_kind, primary_language, project_count, file_count
-        )
+        return self._key_builder.build_snapshot_key(root_path, repo_kind, primary_language, project_count, file_count)
 
     def size(self) -> int:
         """Number of entries in cache."""

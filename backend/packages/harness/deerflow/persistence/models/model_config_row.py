@@ -28,15 +28,11 @@ class ModelConfigRow(Base):
     amd_compute: Mapped[str | None] = mapped_column(String(256), nullable=True)
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
 
-    __table_args__ = (
-        Index("uq_model_config_owner_name", "owner_id", "name", unique=True),
-    )
+    __table_args__ = (Index("uq_model_config_owner_name", "owner_id", "name", unique=True),)

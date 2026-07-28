@@ -294,7 +294,7 @@ class TestLogRouting:
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
-            cwd="/home/jahanzaib/Desktop/nova",
+            cwd=SCRIPT_PATH.parents[1],
         )
         assert "test_log_routing_marker" in result.stderr, f"expected marker in stderr, got stdout={result.stdout!r} stderr={result.stderr!r}"
         assert "test_log_routing_marker" not in result.stdout, f"marker leaked to stdout: {result.stdout!r}"

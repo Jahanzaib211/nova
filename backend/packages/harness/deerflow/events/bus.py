@@ -104,7 +104,7 @@ class EventBus:
         # Record in history
         self._history.append(event)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
         event_type = type(event)
         handlers = self._handlers.get(event_type, [])

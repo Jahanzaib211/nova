@@ -126,7 +126,7 @@ export function StatusLine({
           >
             <span className="truncate">{label}</span>
             {elapsed > 0 && (
-              <span className="shrink-0 text-[10px] text-muted-foreground/60">
+              <span className="text-muted-foreground/60 shrink-0 text-[10px]">
                 · {elapsed}s
               </span>
             )}
@@ -136,4 +136,3 @@ export function StatusLine({
     </div>
   );
 }
-

@@ -48,9 +48,7 @@ class ExecutionMetrics:
             for cls, entry in classes.items():
                 completed = self._completed.get(cls, 0)
                 entry["completed"] = completed
-                entry["latency_avg_ms"] = (
-                    self._latency_sum_ms.get(cls, 0.0) / completed if completed else 0.0
-                )
+                entry["latency_avg_ms"] = self._latency_sum_ms.get(cls, 0.0) / completed if completed else 0.0
                 entry["latency_max_ms"] = self._latency_max_ms.get(cls, 0.0)
             total = sum(self._counts.values())
         return {"total": total, "classes": classes}

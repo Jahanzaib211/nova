@@ -16,6 +16,7 @@ streams, Tailwind. 180 `.tsx` + 149 `.ts` files. No client-state library (no zus
 jotai / redux) — deliberate or not, all cross-cutting state lives in component trees.
 
 **Structure:**
+
 - `src/app/` — routes: `workspace`, `saas`, `blog`, `terms`, `privacy`, `(auth)`, `api`,
   `[lang]` i18n segments. Clean separation of marketing vs product surfaces.
 - `src/core/` — 30+ feature modules (threads, sandbox, models, agents, credits, memory,
@@ -50,6 +51,7 @@ not (each tab loads, errors, and refreshes independently, visibly).
 one-way boundary (harness never imports app — CI-enforced by `test_harness_boundary`).
 
 **Strong, recently-hardened foundations (all verified green this session):**
+
 - **Service layer:** `ServiceContainer` with 10+ DI services (protocols →
   implementations → container), including the now-live
   `WorkspaceIntelligenceService`.
@@ -65,6 +67,7 @@ one-way boundary (harness never imports app — CI-enforced by `test_harness_bou
   agents Gate 4, models Gate 5), rate-limit tiers (auth/cost), CSRF, credits/billing.
 
 **Duplicated logic / missing abstractions (the honest list):**
+
 - Per-tab observation endpoints (`/api/sandbox/logs|todo|status`, browser-health,
   capabilities, workspace) each invent their own polling contract — four ways to ask
   "what is the thread doing." There is no single "workspace state" read model; the
@@ -86,6 +89,7 @@ conversation; WorkspacePlanner in WIK for structured execution plans — not yet
 connected to each other).
 
 **Where friction actually is:**
+
 - **Agents rediscover the workspace every turn.** Nothing injects WIK's snapshot into
   the agent context; the model runs `ls`/`grep`/`cat` through sandbox tools for facts
   the SymbolIndex already holds. The `WorkspaceMiddleware` interception layer designed
@@ -127,6 +131,7 @@ for unification now exists (this week's work); nothing consumes it yet.
 ## Part 3 — Roadmap (Part 12 of the brief; what to build, in order)
 
 ### Covered by C10 (approved, next up — Phase 4 of the master plan)
+
 - **Batch 0 (foundation, do first):** `WorkspaceStateProvider` in the frontend — one
   provider owning thread workspace state (snapshot, activity, todos, verification,
   dev-server), fed by the existing hooks consolidated + `/api/workspace/*`. Kills the
@@ -139,6 +144,7 @@ for unification now exists (this week's work); nothing consumes it yet.
   when Batch 1 ships.
 
 ### Not covered by C10 — the post-C10 arc, prioritized by impact
+
 1. **WorkspaceMiddleware (agent awareness — highest leverage).** Inject a compact
    snapshot summary (projects, key symbols, commands, dev-server state) into the agent
    context when fresh; route `grep_files`/`search_files` through SymbolIndex with
@@ -162,6 +168,7 @@ for unification now exists (this week's work); nothing consumes it yet.
    plan templates. Only after the planner bridge exists. *Effort: L.*
 
 ### Breaking changes & risks
+
 - None of 1–4 requires breaking changes; all ship behind `workspace.intelligence_enabled`.
 - Frontend rebuild required to land any UI batch (prod-baked image — one rebuild per
   batch group, not per item).

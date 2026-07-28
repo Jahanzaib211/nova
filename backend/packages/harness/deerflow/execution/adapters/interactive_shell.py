@@ -142,6 +142,7 @@ class InteractiveShellAdapter:
 
         # Make master non-blocking for async read/write
         import fcntl
+
         flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
         fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 

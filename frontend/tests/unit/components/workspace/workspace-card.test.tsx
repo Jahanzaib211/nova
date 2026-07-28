@@ -34,8 +34,18 @@ const SNAPSHOT: WorkspaceSnapshotSummary = {
   traversal_count: 100,
   duration_ms: 42,
   projects: [
-    { project_id: "p1", name: "backend", kind: "python", root_path: "/w/backend" },
-    { project_id: "p2", name: "frontend", kind: "node", root_path: "/w/frontend" },
+    {
+      project_id: "p1",
+      name: "backend",
+      kind: "python",
+      root_path: "/w/backend",
+    },
+    {
+      project_id: "p2",
+      name: "frontend",
+      kind: "node",
+      root_path: "/w/frontend",
+    },
   ],
 };
 
@@ -45,21 +55,33 @@ afterEach(() => {
 
 describe("workspace api client", () => {
   test("403 raises WorkspaceDisabledError", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 403 })));
-    await expect(fetchWorkspaceSnapshot("t1")).rejects.toBeInstanceOf(WorkspaceDisabledError);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("", { status: 403 })),
+    );
+    await expect(fetchWorkspaceSnapshot("t1")).rejects.toBeInstanceOf(
+      WorkspaceDisabledError,
+    );
   });
 
   test("404 raises WorkspaceUnindexedError", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 404 })));
-    await expect(fetchWorkspaceSnapshot("t1")).rejects.toBeInstanceOf(WorkspaceUnindexedError);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("", { status: 404 })),
+    );
+    await expect(fetchWorkspaceSnapshot("t1")).rejects.toBeInstanceOf(
+      WorkspaceUnindexedError,
+    );
   });
 
   test("200 returns the snapshot summary", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ snapshot: SNAPSHOT }), { status: 200 }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ snapshot: SNAPSHOT }), { status: 200 }),
+        ),
     );
     const snapshot = await fetchWorkspaceSnapshot("t1");
     expect(snapshot.symbol_count).toBe(1234);
@@ -84,18 +106,33 @@ describe("WorkspaceCard", () => {
   const noop = () => undefined;
 
   test("renders nothing when the kernel is disabled", () => {
-    const html = renderCard({ availability: "disabled", snapshot: null, isIndexing: false, refresh: noop });
+    const html = renderCard({
+      availability: "disabled",
+      snapshot: null,
+      isIndexing: false,
+      refresh: noop,
+    });
     expect(html).toBe("");
   });
 
   test("offers indexing when unindexed", () => {
-    const html = renderCard({ availability: "unindexed", snapshot: null, isIndexing: false, refresh: noop });
+    const html = renderCard({
+      availability: "unindexed",
+      snapshot: null,
+      isIndexing: false,
+      refresh: noop,
+    });
     expect(html).toContain("Workspace");
     expect(html).toContain("Index");
   });
 
   test("shows language, kind, counts, and project chips with a snapshot", () => {
-    const html = renderCard({ availability: "available", snapshot: SNAPSHOT, isIndexing: false, refresh: noop });
+    const html = renderCard({
+      availability: "available",
+      snapshot: SNAPSHOT,
+      isIndexing: false,
+      refresh: noop,
+    });
     expect(html).toContain("python");
     expect(html).toContain("backend");
     expect(html).toContain("1,234");

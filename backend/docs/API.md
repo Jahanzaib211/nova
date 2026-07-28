@@ -27,6 +27,7 @@ Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "metadata": {}
@@ -34,6 +35,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "thread_id": "abc123",
@@ -49,6 +51,7 @@ GET /api/langgraph/threads/{thread_id}/state
 ```
 
 **Response:**
+
 ```json
 {
   "values": {
@@ -75,6 +78,7 @@ Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "input": {
@@ -98,6 +102,7 @@ Content-Type: application/json
 ```
 
 **Stream Mode Compatibility:**
+
 - Use: `values`, `messages-tuple`, `custom`, `updates`, `events`, `debug`, `tasks`, `checkpoints`
 - Do not use: `tools` (deprecated/invalid in current `langgraph-api` and will trigger schema validation errors)
 
@@ -111,6 +116,7 @@ starting point for plan-mode or subagent-heavy runs. Clients can still set
 nested subagent graphs.
 
 **Configurable Options:**
+
 - `model_name` (string): Override the default model
 - `thinking_enabled` (boolean): Enable extended thinking for supported models
 - `is_plan_mode` (boolean): Enable TodoList middleware for task tracking
@@ -135,6 +141,7 @@ GET /api/langgraph/threads/{thread_id}/runs
 ```
 
 **Response:**
+
 ```json
 {
   "runs": [
@@ -175,6 +182,7 @@ GET /api/models
 ```
 
 **Response:**
+
 ```json
 {
   "models": [
@@ -207,6 +215,7 @@ GET /api/models/{model_name}
 ```
 
 **Response:**
+
 ```json
 {
   "name": "gpt-4",
@@ -232,6 +241,7 @@ Requires an authenticated admin session. Sensitive env/header/OAuth secret
 values are masked in the response.
 
 **Response:**
+
 ```json
 {
   "mcp_servers": {
@@ -264,6 +274,7 @@ only use allowed executable names for `command` (default: `npx`, `uvx`). Set
 deployment needs additional trusted launchers.
 
 **Request Body:**
+
 ```json
 {
   "mcp_servers": {
@@ -282,6 +293,7 @@ deployment needs additional trusted launchers.
 ```
 
 **Response:**
+
 ```json
 {
   "mcp_servers": {
@@ -312,6 +324,7 @@ POST /api/mcp/cache/reset
 Requires an authenticated admin session.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -330,6 +343,7 @@ GET /api/skills
 ```
 
 **Response:**
+
 ```json
 {
   "skills": [
@@ -360,6 +374,7 @@ GET /api/skills/{skill_name}
 ```
 
 **Response:**
+
 ```json
 {
   "name": "pdf-processing",
@@ -380,6 +395,7 @@ POST /api/skills/{skill_name}/enable
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -394,6 +410,7 @@ POST /api/skills/{skill_name}/disable
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -411,9 +428,11 @@ Content-Type: multipart/form-data
 ```
 
 **Request Body:**
+
 - `file`: The `.skill` file to install
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -438,9 +457,11 @@ Content-Type: multipart/form-data
 ```
 
 **Request Body:**
+
 - `files`: One or more files to upload
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -462,6 +483,7 @@ Content-Type: multipart/form-data
 ```
 
 **Supported Document Formats** (auto-converted to Markdown):
+
 - PDF (`.pdf`)
 - PowerPoint (`.ppt`, `.pptx`)
 - Excel (`.xls`, `.xlsx`)
@@ -474,6 +496,7 @@ GET /api/threads/{thread_id}/uploads/list
 ```
 
 **Response:**
+
 ```json
 {
   "files": [
@@ -498,6 +521,7 @@ DELETE /api/threads/{thread_id}/uploads/{filename}
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -514,6 +538,7 @@ DELETE /api/threads/{thread_id}
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -522,6 +547,7 @@ DELETE /api/threads/{thread_id}
 ```
 
 **Error behavior:**
+
 - `422` for invalid thread IDs
 - `500` returns a generic `{"detail": "Failed to delete local thread data."}` response while full exception details stay in server logs
 
@@ -536,10 +562,12 @@ GET /api/threads/{thread_id}/artifacts/{path}
 ```
 
 **Path Examples:**
+
 - `/api/threads/abc123/artifacts/mnt/user-data/outputs/result.txt`
 - `/api/threads/abc123/artifacts/mnt/user-data/uploads/document.pdf`
 
 **Query Parameters:**
+
 - `download` (boolean): If `true`, force download with Content-Disposition header
 
 **Response:** File content with appropriate Content-Type
@@ -557,6 +585,7 @@ All APIs return errors in a consistent format:
 ```
 
 **HTTP Status Codes:**
+
 - `400` - Bad Request: Invalid input
 - `404` - Not Found: Resource not found
 - `422` - Validation Error: Request validation failed

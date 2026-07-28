@@ -130,32 +130,36 @@ make up     # イメージをビルドし、すべての本番サービスを起
 make down   # サービスを停止し、コンテナを削除
 ```
 
-アクセス：http://localhost:2026
+アクセス：<http://localhost:2026>
 
 #### 方法2：ローカル開発
 
 1. **前提条件を確認**：
+
    ```bash
    make check  # Node.js 22+, pnpm, uv, nginx を検証
    ```
 
 2. **依存関係をインストール**：
+
    ```bash
    make install  # バックエンド + フロントエンドの依存関係をインストール
    ```
 
 3. **サービスを起動**：
+
    ```bash
    make dev
    ```
 
-4. **アクセス**：http://localhost:2026
+4. **アクセス**：<http://localhost:2026>
 
 ### 高度な設定
 
 #### サンドボックスモード
 
 Nova は複数のサンドボックス実行モードをサポート：
+
 - **ローカル実行**（ホスト上で直接コードを実行）
 - **Docker実行**（分離されたDockerコンテナで実行）
 - **Docker + Kubernetes実行**（provisionerサービス経由でK8s Podで実行）

@@ -44,8 +44,8 @@ message events — and deliberately **no checkpoint**, which is the #3352
 precondition: it forces the frontend's per-run reload path to be the sole source
 of truth so the ordering bug becomes observable. The seeder writes through the
 gateway's own run/event stores using the request's auth context, so the real
-`list_by_thread` → `/runs/{id}/messages` → prepend path runs live. Reverting the
-#3354 frontend fix turns this spec red.
+`list_by_thread` → `/runs/{id}/messages` → prepend path runs live. Reverting
+the #3354 frontend fix turns this spec red.
 
 ## How replay works
 

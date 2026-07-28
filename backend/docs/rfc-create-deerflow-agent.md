@@ -91,17 +91,15 @@ client = DeerFlowClient(
         "summarization": {"enabled": True, "trigger": [{"type": "tokens", "value": 10000}]},
         "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
     },
-
     # 2. features — 替换内置 middleware 实现
     features=RuntimeFeatures(
         memory=MyMemoryMiddleware(),
         auto_title=MyTitleMiddleware(),
     ),
-
     # 3. extra_middleware — 新增用户 middleware
     extra_middleware=[
-        MyAuditMiddleware(),       # @Next(SandboxMiddleware)
-        MyFilterMiddleware(),      # @Prev(ClarificationMiddleware)
+        MyAuditMiddleware(),  # @Next(SandboxMiddleware)
+        MyFilterMiddleware(),  # @Prev(ClarificationMiddleware)
     ],
 )
 ```
@@ -144,8 +142,7 @@ def create_deerflow_agent(
     state_schema: type | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
     name: str = "default",
-) -> CompiledStateGraph:
-    ...
+) -> CompiledStateGraph: ...
 ```
 
 `DeerFlowClient` 内部调用此函数。
@@ -197,6 +194,7 @@ def _resolve(spec, default_cls):
     if isinstance(spec, AgentMiddleware):
         return spec
     return default_cls()
+
 
 def _assemble_from_features(feat: RuntimeFeatures, config: AppConfig) -> tuple[list, list]:
     chain = []
@@ -252,17 +250,19 @@ def _assemble_from_features(feat: RuntimeFeatures, config: AppConfig) -> tuple[l
 ```python
 from deerflow.agents import Next, Prev
 
+
 @Next(SandboxMiddleware)
 class MyAuditMiddleware(AgentMiddleware):
     """排在 SandboxMiddleware 后面"""
-    def before_agent(self, state, runtime):
-        ...
+
+    def before_agent(self, state, runtime): ...
+
 
 @Prev(ClarificationMiddleware)
 class MyFilterMiddleware(AgentMiddleware):
     """排在 ClarificationMiddleware 前面"""
-    def after_model(self, state, runtime):
-        ...
+
+    def after_model(self, state, runtime): ...
 ```
 
 实现：
@@ -270,16 +270,21 @@ class MyFilterMiddleware(AgentMiddleware):
 ```python
 def Next(anchor: type[AgentMiddleware]):
     """装饰器：声明本 middleware 排在 anchor 的下一个位置。"""
+
     def decorator(cls: type[AgentMiddleware]) -> type[AgentMiddleware]:
         cls._next_anchor = anchor
         return cls
+
     return decorator
+
 
 def Prev(anchor: type[AgentMiddleware]):
     """装饰器：声明本 middleware 排在 anchor 的前一个位置。"""
+
     def decorator(cls: type[AgentMiddleware]) -> type[AgentMiddleware]:
         cls._prev_anchor = anchor
         return cls
+
     return decorator
 ```
 
@@ -309,6 +314,7 @@ after_agent 反序 ←   [N] → [N-1] → ... → [0]
 **不是洋葱，是管道。** 11 个 middleware 中只有 SandboxMiddleware 有 before/after 对称（获取/释放），其余只用一个钩子。
 
 硬依赖只有 2 处：
+
 1. **ThreadData 在 Sandbox 之前** — sandbox 需要线程目录
 2. **Clarification 在列表最后** — after_model 反序时最先执行，第一个拦截 `ask_clarification`
 
@@ -328,25 +334,29 @@ response = client.chat("Hello")
 ### 5.2 覆盖配置参数
 
 ```python
-client = DeerFlowClient(config={
-    "memory": {"max_facts": 50},
-    "title": {"enabled": False},
-    "summarization": {"trigger": [{"type": "tokens", "value": 10000}]},
-})
+client = DeerFlowClient(
+    config={
+        "memory": {"max_facts": 50},
+        "title": {"enabled": False},
+        "summarization": {"trigger": [{"type": "tokens", "value": 10000}]},
+    }
+)
 ```
 
 ### 5.3 纯 SDK（无 config.yaml）
 
 ```python
-client = DeerFlowClient(config={
-    "models": [{"name": "gpt-4o", "use": "langchain_openai:ChatOpenAI", "model": "gpt-4o", "api_key": "sk-..."}],
-    "tools": [
-        {"name": "bash", "group": "bash", "use": "deerflow.sandbox.tools:bash_tool"},
-        {"name": "web_search", "group": "web", "use": "deerflow.community.tavily.tools:web_search_tool"},
-    ],
-    "memory": {"enabled": True, "max_facts": 50},
-    "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
-})
+client = DeerFlowClient(
+    config={
+        "models": [{"name": "gpt-4o", "use": "langchain_openai:ChatOpenAI", "model": "gpt-4o", "api_key": "sk-..."}],
+        "tools": [
+            {"name": "bash", "group": "bash", "use": "deerflow.sandbox.tools:bash_tool"},
+            {"name": "web_search", "group": "web", "use": "deerflow.community.tavily.tools:web_search_tool"},
+        ],
+        "memory": {"enabled": True, "max_facts": 50},
+        "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+    }
+)
 ```
 
 ### 5.4 替换内置 middleware
@@ -356,9 +366,9 @@ from deerflow.agents.features import RuntimeFeatures
 
 client = DeerFlowClient(
     features=RuntimeFeatures(
-        memory=MyMemoryMiddleware(),       # 替换
-        auto_title=MyTitleMiddleware(),    # 替换
-        vision=False,                      # 关闭
+        memory=MyMemoryMiddleware(),  # 替换
+        auto_title=MyTitleMiddleware(),  # 替换
+        vision=False,  # 关闭
     ),
 )
 ```
@@ -370,15 +380,18 @@ from deerflow.agents import Next, Prev
 from deerflow.sandbox.middleware import SandboxMiddleware
 from deerflow.agents.middlewares.clarification_middleware import ClarificationMiddleware
 
+
 @Next(SandboxMiddleware)
 class MyAuditMiddleware(AgentMiddleware):
     def before_agent(self, state, runtime):
         log_sandbox_acquired(state)
 
+
 @Prev(ClarificationMiddleware)
 class MyFilterMiddleware(AgentMiddleware):
     def after_model(self, state, runtime):
         filter_sensitive_output(state)
+
 
 client = DeerFlowClient(
     extra_middleware=[MyAuditMiddleware(), MyFilterMiddleware()],
@@ -473,6 +486,7 @@ graph TB
 ```
 
 硬依赖：
+
 - ThreadData → Uploads → Sandbox（before_agent 阶段）
 - Clarification 必须在列表最后（after_model 反序时最先执行）
 
@@ -498,6 +512,7 @@ graph TB
 | ClarificationMiddleware | ✓ | ✗ | |
 
 **设计原则**：
+
 - `RuntimeFeatures`、`@Next/@Prev`、排序机制只作用于**主 agent**
 - Subagent 链短且固定（4 个），不需要动态组装
 - `extra_middleware` 当前只影响主 agent，不传递给 subagent

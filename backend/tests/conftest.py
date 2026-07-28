@@ -83,6 +83,7 @@ def _guard_process_managers_from_tests():
         service_container._overrides.pop("execution_kernel", None)
         service_container._singletons.pop("execution_kernel", None)
 
+
 # The historical circular import chain (subagents.executor -> agents.thread_state
 # -> agents.__init__ -> lead_agent -> subagent_limit_middleware -> executor) was
 # fixed in production code: MAX_CONCURRENT_SUBAGENTS lives in subagents.config,

@@ -69,6 +69,7 @@ from packages.harness.deerflow.persistence.migrations.env import *
 ```
 
 Verify:
+
 - Live DB schema matches ORM model column count
 - Alembic version is correct
 
@@ -89,6 +90,7 @@ See `docs/RUNBOOK.md` §8 for full migration workflow.
 | nova-monitoring | ecosystem.config.js | Monitoring stack |
 
 Restart via:
+
 ```bash
 export $(grep -v '^#' ~/.config/nova/monitoring.env | xargs) && \
   pm2 restart nova-monitoring
@@ -112,6 +114,7 @@ If a deployment breaks production:
 ## First-Time Host Setup
 
 See `docs/RUNBOOK.md` §9 for fresh host setup:
+
 - Docker + docker compose v2
 - PM2 (`npm install -g pm2`)
 - `make install` (root deps + frontend deps)

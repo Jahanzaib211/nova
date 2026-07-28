@@ -20,6 +20,7 @@ Revision ID: 2026_07_15_nova_plus_user_columns
 Revises: 2026_07_12_phase_c0_correlation_id
 Create Date: 2026-07-15
 """
+
 from __future__ import annotations
 
 import logging

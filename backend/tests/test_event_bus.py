@@ -31,9 +31,17 @@ class TestRunLifecycleStatus:
         from deerflow.runtime.lifecycle import RunLifecycleStatus
 
         expected = {
-            "created", "initializing", "running", "checkpoint",
-            "paused", "resumed", "recovering", "completed",
-            "failed", "cancelled", "archived",
+            "created",
+            "initializing",
+            "running",
+            "checkpoint",
+            "paused",
+            "resumed",
+            "recovering",
+            "completed",
+            "failed",
+            "cancelled",
+            "archived",
         }
         actual = {s.value for s in RunLifecycleStatus}
         assert actual == expected

@@ -182,9 +182,7 @@ class ExecutionKernel:
             _stop_heartbeat = _stop_heartbeat_local
 
             try:
-                stdout, stderr = proc.communicate(
-                    input=request.stdin, timeout=admission.effective_timeout
-                )
+                stdout, stderr = proc.communicate(input=request.stdin, timeout=admission.effective_timeout)
                 exit_code = proc.returncode
                 if self.supervisor.was_cancelled(request.execution_id):
                     status = ExecutionStatus.CANCELLED
@@ -352,9 +350,7 @@ class ExecutionKernel:
         )
         self.audit_engine.record(request, result)
         self.metrics.observe(request.execution_class, status, duration_ms)
-        self._emit_lifecycle(
-            "ProcessExited", request, extra={"exit_code": exit_code, "pid": handle.pid}
-        )
+        self._emit_lifecycle("ProcessExited", request, extra={"exit_code": exit_code, "pid": handle.pid})
 
     # ------------------------------------------------------------------
     # Cancellation / shutdown

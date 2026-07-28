@@ -98,8 +98,7 @@ def glob_tool(
     path: str,
     include_dirs: bool = False,
     max_results: int = 200,
-) -> str:
-    ...
+) -> str: ...
 ```
 
 参数语义：
@@ -138,8 +137,7 @@ def grep_tool(
     literal: bool = False,
     case_sensitive: bool = False,
     max_results: int = 100,
-) -> str:
-    ...
+) -> str: ...
 ```
 
 参数语义：
@@ -272,8 +270,7 @@ Found more than 100 matches, showing first 100. Narrow the path or add a glob fi
 
 ```python
 class Sandbox(ABC):
-    def glob(self, path: str, pattern: str, include_dirs: bool = False, max_results: int = 200) -> list[str]:
-        ...
+    def glob(self, path: str, pattern: str, include_dirs: bool = False, max_results: int = 200) -> list[str]: ...
 
     def grep(
         self,
@@ -284,8 +281,7 @@ class Sandbox(ABC):
         literal: bool = False,
         case_sensitive: bool = False,
         max_results: int = 100,
-    ) -> list[GrepMatch]:
-        ...
+    ) -> list[GrepMatch]: ...
 ```
 
 优点：

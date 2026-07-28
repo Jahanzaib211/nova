@@ -40,9 +40,7 @@ class SystemdAdapter(BaseAdapter):
         timeout: float = 30.0,
         correlation_id: str = "",
     ) -> ExecutionResult:
-        return self._systemctl(
-            "restart", unit, use_sudo=use_sudo, timeout=timeout, correlation_id=correlation_id
-        )
+        return self._systemctl("restart", unit, use_sudo=use_sudo, timeout=timeout, correlation_id=correlation_id)
 
     def reset_failed(
         self,
@@ -52,9 +50,7 @@ class SystemdAdapter(BaseAdapter):
         timeout: float = 15.0,
         correlation_id: str = "",
     ) -> ExecutionResult:
-        return self._systemctl(
-            "reset-failed", unit, use_sudo=use_sudo, timeout=timeout, correlation_id=correlation_id
-        )
+        return self._systemctl("reset-failed", unit, use_sudo=use_sudo, timeout=timeout, correlation_id=correlation_id)
 
     def is_active(
         self,
@@ -64,7 +60,5 @@ class SystemdAdapter(BaseAdapter):
         timeout: float = 10.0,
         correlation_id: str = "",
     ) -> bool:
-        result = self._systemctl(
-            "is-active", unit, use_sudo=use_sudo, timeout=timeout, correlation_id=correlation_id
-        )
+        result = self._systemctl("is-active", unit, use_sudo=use_sudo, timeout=timeout, correlation_id=correlation_id)
         return result.ok and result.stdout.strip() == "active"

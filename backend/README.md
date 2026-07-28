@@ -30,6 +30,7 @@ Nova is a LangGraph-based AI super agent with sandbox execution, persistent memo
 ```
 
 **Request Routing** (via Nginx):
+
 - `/api/langgraph/*` → Gateway LangGraph-compatible API - agent interactions, threads, streaming
 - `/api/*` (other) → Gateway API - models, MCP, skills, memory, artifacts, uploads, thread-local cleanup
 - `/` (non-API) → Frontend - Next.js web interface
@@ -192,7 +193,7 @@ export OPENAI_API_KEY="your-api-key-here"
 make dev  # Starts Gateway + Frontend + Nginx
 ```
 
-Access at: http://localhost:2026
+Access at: <http://localhost:2026>
 
 **Backend Only** (from backend directory):
 
@@ -201,7 +202,7 @@ Access at: http://localhost:2026
 make dev
 ```
 
-Direct access: Gateway at http://localhost:8001
+Direct access: Gateway at <http://localhost:8001>
 
 ---
 
@@ -256,6 +257,7 @@ tooling, Studio, or direct LangGraph Server compatibility.
 Place in project root. Config values starting with `$` resolve as environment variables.
 
 Key sections:
+
 - `models` - LLM configurations with class paths, API keys, thinking/vision flags
 - `tools` - Tool definitions with module paths and groups
 - `tool_groups` - Logical tool groupings
@@ -267,6 +269,7 @@ Key sections:
 - `memory` - Memory system settings (enabled, storage, debounce, facts limits)
 
 Provider note:
+
 - `models[*].use` references provider classes by module path (for example `langchain_openai:ChatOpenAI`).
 - If a provider module is missing, Nova now returns an actionable error with install guidance (for example `uv add langchain-google-genai`).
 

@@ -50,9 +50,7 @@ def test_original_file_untouched_when_write_raises(tmp_path, monkeypatch):
     def fake_named_temp_file(*_args, **_kwargs):
         # Create a real temp file on disk (so the cleanup path has
         # something real to unlink) but make .write() explode.
-        real = real_named_temp_file(
-            mode="w", dir=tmp_path, suffix=".tmp", delete=False, encoding="utf-8"
-        )
+        real = real_named_temp_file(mode="w", dir=tmp_path, suffix=".tmp", delete=False, encoding="utf-8")
         real.write = ExplodingFile.write.__get__(real)
         return real
 

@@ -24,7 +24,9 @@ test.describe("Agent Computer panel", () => {
     await page.goto("/");
     // Both the nav-bar and hero CTA share the accessible name — assert the
     // first is visible rather than an ambiguous strict-mode match.
-    await expect(page.getByRole("link", { name: /get started/i }).first()).toBeVisible({
+    await expect(
+      page.getByRole("link", { name: /get started/i }).first(),
+    ).toBeVisible({
       timeout: 15_000,
     });
   });

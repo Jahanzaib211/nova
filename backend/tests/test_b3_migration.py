@@ -140,9 +140,7 @@ class TestB3Migration:
         """Re-running upgrade leaves existing data intact."""
         home = Path(tempfile.mkdtemp()) / ".deer-flow"
         home.mkdir()
-        (home / "runtime_models.yaml").write_text(
-            yaml.safe_dump({"models": [{"name": "m1", "model": "gpt-4o"}]})
-        )
+        (home / "runtime_models.yaml").write_text(yaml.safe_dump({"models": [{"name": "m1", "model": "gpt-4o"}]}))
         try:
             self._run_upgrade(engine, home)
             with engine.connect() as conn:

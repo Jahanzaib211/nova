@@ -225,12 +225,7 @@ async def search_symbols(
     matches = [s for s in snapshot.symbols if not needle or s.name.lower().startswith(needle)]
     if file:
         wanted = file.lstrip("./")
-        matches = [
-            s for s in matches
-            if s.file_path == file
-            or s.file_path.endswith("/" + wanted)
-            or s.file_path == wanted
-        ]
+        matches = [s for s in matches if s.file_path == file or s.file_path.endswith("/" + wanted) or s.file_path == wanted]
     return {
         "query": q,
         "total": len(matches),

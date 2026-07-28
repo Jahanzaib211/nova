@@ -11,6 +11,7 @@ Revision ID: 2026_07_15_user_api_keys
 Revises: 2026_07_15_credit_grants
 Create Date: 2026-07-15
 """
+
 from __future__ import annotations
 
 import logging

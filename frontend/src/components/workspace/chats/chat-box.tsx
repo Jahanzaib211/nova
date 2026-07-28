@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  FilesIcon,
-  LaptopIcon,
-  MessageSquareIcon,
-  XIcon,
-} from "lucide-react";
+import { FilesIcon, LaptopIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";

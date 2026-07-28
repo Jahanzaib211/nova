@@ -55,7 +55,7 @@ import sys
 import threading
 import time
 from collections import deque
-from typing import Any, Deque
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class _Diagnostics:
         self._enabled = os.environ.get("DEER_FLOW_STREAM_TRACE") == "1"
         self._file_path = os.environ.get("DEER_FLOW_STREAM_TRACE_FILE") or None
         self._ring_size = int(os.environ.get("DEER_FLOW_STREAM_TRACE_RING", "10000"))
-        self._ring: Deque[dict[str, Any]] = deque(maxlen=self._ring_size)
+        self._ring: deque[dict[str, Any]] = deque(maxlen=self._ring_size)
         self._lock = threading.Lock()
         self._seq = 0
         self._sink = self._build_sink()
@@ -131,9 +131,7 @@ class _Diagnostics:
                 # Phase C0 — explicit ``correlation_id`` wins; otherwise
                 # fall back to the registry populated by ``register_correlation_id``
                 # (which the RunManager writes on create/create_or_reject).
-                cid = _sanitize(correlation_id) or _resolve_correlation_id(
-                    run_id=run_id, thread_id=thread_id
-                )
+                cid = _sanitize(correlation_id) or _resolve_correlation_id(run_id=run_id, thread_id=thread_id)
                 if rid is not None:
                     payload["run_id"] = rid
                 if tid is not None:

@@ -128,7 +128,10 @@ export function PrivacyPanel({ threadId }: { threadId?: string }) {
               {t.agentComputer.workspace.kernelTitle}
             </h3>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <MetricCard label={t.agentComputer.workspace.kernelScans} value={workspaceMetrics.scan.count} />
+              <MetricCard
+                label={t.agentComputer.workspace.kernelScans}
+                value={workspaceMetrics.scan.count}
+              />
               <MetricCard
                 label={t.agentComputer.workspace.kernelAvgScan}
                 value={`${workspaceMetrics.scan.avg_duration_ms.toFixed(0)}ms`}

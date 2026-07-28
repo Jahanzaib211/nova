@@ -103,11 +103,7 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
 
         retry_after = self._rate_limited(key, now, window_seconds, max_attempts)
         if retry_after is not None:
-            message = (
-                "Too many attempts. Please wait and try again."
-                if tier == "auth"
-                else "You're sending requests too quickly. Please wait a moment and try again."
-            )
+            message = "Too many attempts. Please wait and try again." if tier == "auth" else "You're sending requests too quickly. Please wait a moment and try again."
             return JSONResponse(
                 status_code=429,
                 content={"detail": {"code": "rate_limited", "message": message}},

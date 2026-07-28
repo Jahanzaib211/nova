@@ -3,9 +3,9 @@
 Nova runs its inference on **AMD Instinct** GPUs. This document is both the setup
 recipe and the AMD-compute writeup for the AMD Developer Hackathon (Act II).
 
-Nova treats every model provider as a config entry (`use` + `model` + `base_url`
-+ `api_key`), so wiring AMD compute is configuration, not code. Two AMD-backed
-paths ship as one-click presets under **Settings → Models**:
+Nova treats every model provider as a config entry (`use` + `model` +
+`base_url` + `api_key`), so wiring AMD compute is configuration, not code.
+Two AMD-backed paths ship as one-click presets under **Settings → Models**:
 
 | Preset button | Path | AMD compute |
 |---|---|---|
@@ -22,9 +22,11 @@ Fireworks hosts models on AMD Instinct MI300X. Nova calls it like any
 OpenAI-compatible endpoint.
 
 1. Get a key ($50 hackathon credits) and export it:
+
    ```bash
    export FIREWORKS_API_KEY=fw-...
    ```
+
 2. Settings → Models → **Add Fireworks model (AMD MI300X)**. The preset fills
    `base_url=https://api.fireworks.ai/inference/v1` and
    `api_key=$FIREWORKS_API_KEY` (resolved from the environment — never persisted
@@ -40,12 +42,14 @@ for the Gemma side prize.
 Nova serves its own inference on an AMD Instinct GPU. This is the strongest
 "Use of AMD Platforms" signal because the compute is ours, end to end.
 
-1. Get an AMD Developer Cloud instance: https://notebooks.amd.com/hackathon
+1. Get an AMD Developer Cloud instance: <https://notebooks.amd.com/hackathon>
 2. On the instance, serve a model with vLLM on ROCm:
+
    ```bash
    export VLLM_API_KEY=choose-a-strong-key
    AMD_MODEL=google/gemma-3-27b-it ./scripts/amd-serve-vllm.sh
    ```
+
    The script confirms ROCm hardware (`rocm-smi`), then runs the official
    `rocm/vllm` image with the `/dev/kfd` + `/dev/dri` passthroughs and exposes an
    OpenAI-compatible API on `:8000`. **Lock port 8000 to your IP** in the cloud
@@ -60,6 +64,7 @@ Nova serves its own inference on an AMD Instinct GPU. This is the strongest
 ```bash
 curl -s http://localhost:8001/api/models/amd-usage | jq
 ```
+
 ```json
 {
   "amd_backed": true,

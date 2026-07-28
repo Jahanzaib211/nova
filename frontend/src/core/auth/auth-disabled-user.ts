@@ -5,6 +5,10 @@ export const AUTH_DISABLED_USER: User = {
   email: "default@test.local",
   system_role: "admin",
   needs_setup: false,
+  plan: "free",
+  plan_status: null,
+  tos_accepted_version: null,
+  referral_code: null,
 };
 
 const PRODUCTION_ENV_VALUES = new Set(["prod", "production"]);

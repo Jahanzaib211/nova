@@ -5,7 +5,10 @@ import { useMemo } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
-import { sandboxReviewDownloadUrl, type SandboxReview } from "@/core/sandbox/hooks";
+import {
+  sandboxReviewDownloadUrl,
+  type SandboxReview,
+} from "@/core/sandbox/hooks";
 import { useWorkspaceEvents } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +49,12 @@ export function ReviewPanel({
   const liveEvents = useWorkspaceEvents(threadId);
   const latestPlan = useMemo(
     () =>
-      [...liveEvents].reverse().find((e): e is Extract<typeof e, { type: "PlanBuilt" }> => e.type === "PlanBuilt"),
+      [...liveEvents]
+        .reverse()
+        .find(
+          (e): e is Extract<typeof e, { type: "PlanBuilt" }> =>
+            e.type === "PlanBuilt",
+        ),
     [liveEvents],
   );
   const verdict = !review
@@ -112,7 +120,12 @@ export function ReviewPanel({
                 {t.agentComputer.review.kernelVerdictTitle}
               </div>
               <div className="flex items-center gap-2">
-                <span className={cn("font-mono text-[10px] uppercase", kernelRiskColor(latestPlan.data.risk_level))}>
+                <span
+                  className={cn(
+                    "font-mono text-[10px] uppercase",
+                    kernelRiskColor(latestPlan.data.risk_level),
+                  )}
+                >
                   {latestPlan.data.risk_level}
                 </span>
                 <span className="text-muted-foreground/90">
@@ -121,7 +134,10 @@ export function ReviewPanel({
                     : t.agentComputer.review.kernelVerdictInvalid}
                 </span>
                 <span className="text-muted-foreground/50">
-                  · {t.agentComputer.review.kernelVerdictSteps(latestPlan.data.step_count)}
+                  ·{" "}
+                  {t.agentComputer.review.kernelVerdictSteps(
+                    latestPlan.data.step_count,
+                  )}
                 </span>
               </div>
             </div>

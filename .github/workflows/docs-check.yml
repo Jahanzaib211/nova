@@ -45,7 +45,7 @@ jobs:
 
       - name: Lint markdown files
         run: |
-          markdownlint-cli \
+          markdownlint \
             --config .markdownlint.jsonc \
             --ignore ".git/**" \
             --ignore "node_modules/**" \
@@ -53,6 +53,8 @@ jobs:
             --ignore ".deer-flow/**" \
             --ignore ".next/**" \
             --ignore "backend/.venv/**" \
+            --ignore "skills/**" \
+            --ignore "frontend/public/demo/**" \
             "**/*.md"
 
       - name: Check for broken internal links

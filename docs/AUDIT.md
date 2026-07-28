@@ -277,12 +277,14 @@ v7 (NEW, 219 tests):
 ### 4.2 Frontend — 339 tests across 36 files
 
 **Strongest coverage:**
+
 - thread hooks (export, infinite scroll)
 - clipboard, uploads, file validation
 - agent API, channels API, settings
 - agent computer (helpers, panels)
 
 **Lightest coverage:**
+
 - `message-group.tsx` (the 1763-LOC beast) — only 0 direct tests
 - `agent-computer-panel.tsx` — only 0 direct tests
 - Most "ai-elements" building blocks
@@ -333,6 +335,7 @@ v7 (NEW, 219 tests):
 | OS-level systemd | host-managed | Boot resilience |
 
 **Gap:** nginx is a single point of failure. Should add:
+
 - `mem_limit: 256m` + `mem_reservation: 128m` to bound memory
 - `healthcheck:` block in compose so docker daemon notices when it dies
 - Liveness probe on port 2026 for docker auto-restart on hang
@@ -360,6 +363,7 @@ v7 (NEW, 219 tests):
 > "check how it can show us what skills tools or hooks it woriking with in ui"
 
 This is a **NEW feature**: a UI surface showing:
+
 - Loaded skills (currently visible in SkillLauncher dropdown only)
 - Available tools (26 BUILTIN_TOOLS — never shown)
 - Hooks active (none today, but plan-ready)
@@ -443,17 +447,20 @@ The existing SkillLauncher is a trigger; the user wants a **status panel**.
 **Yes, with caveats.**
 
 The current state can handle:
+
 - 10-100 concurrent threads (per-thread sandbox overhead)
 - Single-region deployment
 - Moderate load (~1k tool calls/hour)
 
 It cannot handle:
+
 - Multi-region (no session affinity, no shared state store for cross-region)
 - High load (>10k tool calls/hour) — gateway becomes bottleneck
 - Strict SLA (no automated failover for nginx single point of failure)
 - Audit/compliance (LangSmith tracing off by default; no SOC2-style access logs)
 
 For enterprise SLA, needs:
+
 1. nginx HA (2+ replicas behind load balancer)
 2. Postgres instead of SQLite checkpointer
 3. LangSmith or OpenTelemetry tracing ON in production
@@ -488,6 +495,7 @@ Tools → navigate_idempotency    ← 60s TTL cache
 ### 11.1 Component tree (parent → children)
 
 **App shell**
+
 ```
 src/app/layout.tsx                       (RootLayout — html/body, fonts, Geist, JetBrains Mono)
 └── <ThemeProvider>                      (next-themes; src/components/theme-provider.tsx)
@@ -497,6 +505,7 @@ src/app/layout.tsx                       (RootLayout — html/body, fonts, Geist
 ```
 
 **Routes**
+
 ```
 src/app/
 ├── layout.tsx                                  ← RootLayout (Theme + Query + I18n)
@@ -535,6 +544,7 @@ src/app/
 ### 11.2 Layout structure and CSS grid
 
 **Top-level page chrome** (`workspace-container.tsx`):
+
 ```
 WorkspaceContainer                div  flex h-screen w-full flex-col
 ├── SidebarProvider wrapper       div  group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar
@@ -559,6 +569,7 @@ WorkspaceContainer                div  flex h-screen w-full flex-col
 
 **The actual chat "canvas"** (`src/app/workspace/chats/[thread_id]/page.tsx`):
 The chat page is a **two-column flex inside `<ChatBox>`**:
+
 ```jsx
 <div className="relative flex size-full min-h-0 justify-between">
   <header className="absolute top-0 right-0 left-0 z-30 flex h-12 …">
@@ -590,6 +601,7 @@ The chat page is a **two-column flex inside `<ChatBox>`**:
 ```
 
 **The only real panel split** — `chat-box.tsx`:
+
 ```tsx
 <ResizablePanelGroup
   id={…}
@@ -609,7 +621,9 @@ The chat page is a **two-column flex inside `<ChatBox>`**:
   </ResizablePanel>
 </ResizablePanelGroup>
 ```
+
 Two presets:
+
 ```ts
 const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
@@ -630,6 +644,7 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 ### 11.4 API calls to FastAPI gateway and LangGraph
 
 **Transport conventions**
+
 - `getBackendBaseURL()` → `env.NEXT_PUBLIC_BACKEND_BASE_URL` (defaults to empty string; relative to `window.location.origin`)
 - `getLangGraphBaseURL()` → `env.NEXT_PUBLIC_LANGGRAPH_BASE_URL`, or `<origin>/api/langgraph` (default) / `<origin>/mock/api` (when `?mock=true`)
 - Wrapper `fetch()` in `src/core/api/fetcher.ts` adds:
@@ -640,6 +655,7 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 - `src/app/api/memory/**` is a server-side proxy to `process.env.NEXT_PUBLIC_BACKEND_BASE_URL` (default `http://127.0.0.1:8001`)
 
 **FastAPI gateway endpoints (and where they're called)**
+
 | Method | Path (relative to `getBackendBaseURL()`) | Caller(s) |
 |---|---|---|
 | GET | `/api/models` | `core/models/api.ts` → `useModels` |
@@ -660,6 +676,7 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 | POST | `/api/threads/{threadId}/runs/{runId}/feedback` | `core/api/feedback.ts` |
 
 **LangGraph SDK endpoints** (used by `useStream` + `api-client.ts`)
+
 | SDK method | Where |
 |---|---|
 | `client.runs.stream(threadId, "lead_agent", payload)` | `useStream({ assistantId: "lead_agent", … })` |
@@ -673,6 +690,7 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 ### 11.5 Files that would need changing for a 4-panel layout
 
 **Core layout containers (must change):**
+
 - `src/components/workspace/chats/chat-box.tsx` — Replace 2-panel `ResizablePanelGroup` with 4-panel grid (or nested groups). Add new `OPEN_MODE`/`CLOSE_MODE` presets.
 - `src/app/workspace/chats/[thread_id]/providers.tsx` — Possibly introduce a fourth context (e.g. `AgentToolsProvider`).
 - `src/app/workspace/agents/[agent_name]/chats/[thread_id]/layout.tsx` — Mirror the providers change.
@@ -680,11 +698,13 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 - `src/components/workspace/todo-list.tsx` — Currently renders as overlay over InputBox. For 4-panel grid, lift into bottom panel; remove absolute-positioning classes.
 
 **New panel content (new components to create):**
+
 - `src/components/workspace/agent-tools/agent-tools-panel.tsx` — Bottom panel shell
 - `src/components/workspace/agent-tools/agent-tools-tool-call-list.tsx` — Per-thread tool-call registry / status / debug console
 - `src/components/workspace/settings/tools-settings-section.tsx` — Toggle "Show agent tools panel", default size, start state
 
 **Components inside ChatBox needing container-query updates:**
+
 - `artifacts/context.tsx`, `artifact-trigger.tsx`, `artifact-file-list.tsx`, `artifact-file-detail.tsx` — Add `bottomPanelOpen` state
 - `input-box.tsx` — If InputBox becomes sibling of new panel rather than footer dock, move dock logic out of `page.tsx`
 - `message-list.tsx` — `MESSAGE_LIST_DEFAULT_PADDING_BOTTOM` may need new value if bottom panel collapsible
@@ -692,21 +712,25 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 - `gateway-offline-banner.tsx` — Verify z-index above 4 panels
 
 **Hooks and contexts (state plumbing):**
+
 - `messages/context.ts` — Extend `ThreadContextType` only if new panel needs thread-scoped state
 - `artifacts/context.tsx` — Lift panel-state into a more general `PanelsContext` (artifacts + new panel)
 - `hooks/use-global-shortcuts.ts` / `command-palette.tsx` — Add shortcut for toggling new panel
 
 **I18N strings to add:**
+
 - `src/core/i18n/locales/en-US.ts` — New panel title, toggle, tool-call labels
 - `src/core/i18n/locales/zh-CN.ts` — Mirror in zh-CN
 - `src/core/i18n/locales/types.ts` — Update dictionary types
 
 **Settings dialog (if panel is toggleable):**
+
 - `settings/index.ts` — Register new section (e.g. `"agent-tools"`)
 - `settings/tools-settings-section.tsx` — Toggle "Show agent tools panel", default size, start state
 - `core/settings/local.ts` / `store.ts` / `index.ts` — Persist toggles in localStorage (per-thread if desired)
 
 **Backend / API surface (no strict requirement, but if new panel needs data):**
+
 - `GET /api/threads/{threadId}/subagents` (subtask registry)
 - `GET /api/threads/{threadId}/tool-calls`
 - `GET /api/threads/{threadId}/todos` (currently derived from `useStream.onUpdateEvent`; if persisted, expose them)
@@ -718,6 +742,7 @@ const OPEN_MODE = { chat: 60, artifacts: 40 };
 ### 12.1 What "works in cohesion" means here
 
 A user prompt → working code delivery requires:
+
 1. ✅ Prompt validated + auth checked
 2. ✅ LLM responds with plan
 3. ✅ Tool calls execute in correct thread sandbox

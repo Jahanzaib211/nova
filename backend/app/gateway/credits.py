@@ -65,11 +65,7 @@ async def tokens_used_today(
     if reset_at is not None:
         marker = reset_at if reset_at.tzinfo else reset_at.replace(tzinfo=UTC)
         start = max(start, marker)
-    stmt = (
-        select(func.coalesce(func.sum(RunRow.total_tokens), 0))
-        .where(RunRow.user_id == user_id)
-        .where(RunRow.created_at >= start)
-    )
+    stmt = select(func.coalesce(func.sum(RunRow.total_tokens), 0)).where(RunRow.user_id == user_id).where(RunRow.created_at >= start)
     async with sf() as session:
         return int(await session.scalar(stmt) or 0)
 
@@ -85,11 +81,7 @@ async def active_bonus_tokens(
     if sf is None:
         return 0
     moment = now or datetime.now(UTC)
-    stmt = (
-        select(func.coalesce(func.sum(CreditGrantRow.daily_bonus_tokens), 0))
-        .where(CreditGrantRow.user_id == user_id)
-        .where(CreditGrantRow.expires_at > moment)
-    )
+    stmt = select(func.coalesce(func.sum(CreditGrantRow.daily_bonus_tokens), 0)).where(CreditGrantRow.user_id == user_id).where(CreditGrantRow.expires_at > moment)
     async with sf() as session:
         return int(await session.scalar(stmt) or 0)
 

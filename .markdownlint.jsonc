@@ -3,13 +3,32 @@
   "MD003": { "style": "atx" },
   "MD004": { "style": "dash" },
   "MD007": { "indent": 2 },
-  "MD013": { "line_length": 120, "code_blocks": false, "tables": false },
+  // Docs here are written prose-wrapped-by-editor, not hard-wrapped at a
+  // column — enforcing line_length would mean rewrapping the entire existing
+  // corpus by hand with real risk of mangling links/tables/inline code.
+  "MD013": false,
   "MD022": true,
-  "MD024": { "allow_different_nesting": true },
+  // siblings_only: repeated section names are expected across independent
+  // top-level entries (changelog entries all have their own "Tests"
+  // subheading; SETUP.md repeats "Configuration" per provider) — only flag
+  // true duplicates within the same parent.
+  "MD024": { "siblings_only": true },
   "MD025": { "front_matter": false },
+  // Numbered steps that embed an unindented fenced code block between items
+  // (very common in these docs — "1. do X:\n```\ncode\n```\n2. do Y") read as
+  // two separate lists to the parser even though the numbering is correct;
+  // reflowing every such code block's indentation isn't worth the risk.
+  "MD029": false,
   "MD033": false,
+  // Bold inline labels (channel-setup subsections, video-script timestamps)
+  // are used deliberately as run-in labels, not as a TOC-visible heading.
+  "MD036": false,
   "MD040": false,
   "MD041": false,
   "MD046": { "style": "fenced" },
-  "MD050": { "style": "asterisk" }
+  "MD050": { "style": "asterisk" },
+  // markdownlint's slugger disagrees with GitHub's for headings with accented
+  // Latin/Cyrillic + punctuation (verified false positive: "Option 1 : Docker
+  // (Recommandé)" already links to the anchor GitHub actually generates).
+  "MD051": false
 }

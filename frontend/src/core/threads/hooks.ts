@@ -1044,7 +1044,9 @@ export function useThreadStream({
         // in-app request path (Settings → Usage) and the daily reset.
         const serverMsg = getStreamErrorMessage(error);
         const friendly =
-          serverMsg && serverMsg !== "Request failed." && /limit|credit|token/i.test(serverMsg)
+          serverMsg &&
+          serverMsg !== "Request failed." &&
+          /limit|credit|token/i.test(serverMsg)
             ? serverMsg
             : "You've reached today's usage limit. Open Settings → account to request more — it resets at midnight UTC.";
         toast.error(friendly, { duration: 8000 });

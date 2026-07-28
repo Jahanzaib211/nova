@@ -78,12 +78,7 @@ async def get_my_latest(
     if sf is None:
         return None
     async with sf() as session:
-        stmt = (
-            select(CreditRequestRow)
-            .where(CreditRequestRow.user_id == str(user_id))
-            .order_by(CreditRequestRow.created_at.desc())
-            .limit(1)
-        )
+        stmt = select(CreditRequestRow).where(CreditRequestRow.user_id == str(user_id)).order_by(CreditRequestRow.created_at.desc()).limit(1)
         row = (await session.execute(stmt)).scalar_one_or_none()
         return _row_to_dict(row) if row is not None else None
 
@@ -107,9 +102,7 @@ async def list_requests(
             base = base.where(CreditRequestRow.status == status)
             count_q = count_q.where(CreditRequestRow.status == status)
         total = int(await session.scalar(count_q) or 0)
-        rows = (
-            await session.execute(base.order_by(CreditRequestRow.created_at.desc()).limit(limit).offset(offset))
-        ).scalars().all()
+        rows = (await session.execute(base.order_by(CreditRequestRow.created_at.desc()).limit(limit).offset(offset))).scalars().all()
         return [_row_to_dict(r) for r in rows], total
 
 

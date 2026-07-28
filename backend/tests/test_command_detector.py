@@ -71,9 +71,7 @@ class TestMakefileCommands:
         assert by_name["test"].argv == ("make", "test")
 
     def test_special_and_pattern_targets_are_skipped(self, tmp_path):
-        (tmp_path / "Makefile").write_text(
-            ".PHONY: all\n.DEFAULT_GOAL := all\n\n%.o: %.c\n\tcc -c $<\n\n$(BINDIR)/app:\n\tcc -o $@\n\nall:\n\techo ok\n"
-        )
+        (tmp_path / "Makefile").write_text(".PHONY: all\n.DEFAULT_GOAL := all\n\n%.o: %.c\n\tcc -c $<\n\n$(BINDIR)/app:\n\tcc -o $@\n\nall:\n\techo ok\n")
         commands = CommandDetector().build_registry([_python_project(tmp_path)])
         names = {c.name for c in commands}
         assert "all" in names

@@ -24,11 +24,17 @@ import { I18nProvider } from "@/core/i18n/context";
 
 const THREAD_ID = "smoke-thread-1";
 
-function makeThreadContext(overrides: Partial<ThreadContextType> = {}): ThreadContextType {
+function makeThreadContext(
+  overrides: Partial<ThreadContextType> = {},
+): ThreadContextType {
   return {
     // The panel only touches thread.isLoading/messages/values via props in
     // this render; the context object itself needs the stream-shaped slot.
-    thread: { isLoading: false, messages: [], values: {} } as unknown as ThreadContextType["thread"],
+    thread: {
+      isLoading: false,
+      messages: [],
+      values: {},
+    } as unknown as ThreadContextType["thread"],
     currentTool: null,
     taskProgress: null,
     verifyResult: null,
@@ -39,7 +45,13 @@ function makeThreadContext(overrides: Partial<ThreadContextType> = {}): ThreadCo
   };
 }
 
-function renderPanel(threadContext: ThreadContextType, todos: { content?: string; status?: "pending" | "in_progress" | "completed" }[] = []) {
+function renderPanel(
+  threadContext: ThreadContextType,
+  todos: {
+    content?: string;
+    status?: "pending" | "in_progress" | "completed";
+  }[] = [],
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, enabled: false } },
   });
@@ -67,7 +79,15 @@ function renderPanel(threadContext: ThreadContextType, todos: { content?: string
 describe("AgentComputerPanel smoke", () => {
   test("renders the panel chrome with all seven tabs", () => {
     const html = renderPanel(makeThreadContext());
-    for (const tab of ["Files", "Terminal", "Editor", "Browser", "Activity", "Review", "Privacy"]) {
+    for (const tab of [
+      "Files",
+      "Terminal",
+      "Editor",
+      "Browser",
+      "Activity",
+      "Review",
+      "Privacy",
+    ]) {
       expect(html).toContain(tab);
     }
   });
@@ -96,7 +116,15 @@ describe("AgentComputerPanel smoke", () => {
           <ThreadContext.Provider
             value={makeThreadContext({
               activityEvents: [
-                { id: "e1", ts: "1", type: "bash", path: null, summary: "npm test", output: "", status: "running" },
+                {
+                  id: "e1",
+                  ts: "1",
+                  type: "bash",
+                  path: null,
+                  summary: "npm test",
+                  output: "",
+                  status: "running",
+                },
               ],
             })}
           >

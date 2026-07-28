@@ -162,8 +162,13 @@ class TestRecoveryEvents:
         )
 
         for cls in [
-            RecoveryStarted, RecoveryRetryScheduled, RecoverySucceeded,
-            RecoveryFailed, RecoveryEscalated, RecoveryCancelled, RecoveryAborted,
+            RecoveryStarted,
+            RecoveryRetryScheduled,
+            RecoverySucceeded,
+            RecoveryFailed,
+            RecoveryEscalated,
+            RecoveryCancelled,
+            RecoveryAborted,
         ]:
             e = cls()
             with pytest.raises(AttributeError):
@@ -226,8 +231,13 @@ class TestRecoveryRecord:
         from deerflow.services.recovery_service import RecoveryRecord
 
         r = RecoveryRecord(
-            policy_name="test", component="x", action="y",
-            trigger_event="z", outcome="success", attempt=1, duration_ms=0,
+            policy_name="test",
+            component="x",
+            action="y",
+            trigger_event="z",
+            outcome="success",
+            attempt=1,
+            duration_ms=0,
         )
         with pytest.raises(AttributeError):
             r.outcome = "failed"  # type: ignore[misc]
@@ -269,10 +279,12 @@ class TestRecoveryEngine:
         engine.start()
 
         # Publish a HealthChanged event that should trigger tunnel recovery
-        self.bus.publish(HealthChanged(
-            thread_id="t1",
-            payload={"healthy": False},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                thread_id="t1",
+                payload={"healthy": False},
+            )
+        )
 
         # Give async tasks time to complete
         await asyncio.sleep(0.1)
@@ -297,10 +309,12 @@ class TestRecoveryEngine:
         self.bus.subscribe(RecoveryStarted, lambda e: received.append("started"))
         self.bus.subscribe(RecoverySucceeded, lambda e: received.append("succeeded"))
 
-        self.bus.publish(HealthChanged(
-            thread_id="t1",
-            payload={"healthy": False},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                thread_id="t1",
+                payload={"healthy": False},
+            )
+        )
 
         await asyncio.sleep(0.2)
         assert "started" in received
@@ -339,10 +353,12 @@ class TestRecoveryEngine:
         retry_received = []
         self.bus.subscribe(RecoveryRetryScheduled, lambda e: retry_received.append(e))
 
-        self.bus.publish(HealthChanged(
-            thread_id="t1",
-            payload={"healthy": False},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                thread_id="t1",
+                payload={"healthy": False},
+            )
+        )
 
         await asyncio.sleep(0.3)
         assert call_count >= 2
@@ -360,6 +376,7 @@ class TestRecoveryEngine:
         from deerflow.services import recovery_policy
         from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
         from deerflow.services.recovery_service import RecoveryEngine
+
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
         recovery_policy.POLICIES["tunnel_disconnected"] = type(original)(
             name="tunnel_disconnected",
@@ -380,10 +397,12 @@ class TestRecoveryEngine:
         escalated = []
         self.bus.subscribe(RecoveryEscalated, lambda e: escalated.append(e))
 
-        self.bus.publish(HealthChanged(
-            thread_id="t1",
-            payload={"healthy": False},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                thread_id="t1",
+                payload={"healthy": False},
+            )
+        )
 
         await asyncio.sleep(0.3)
         assert len(escalated) >= 1
@@ -421,10 +440,12 @@ class TestRecoveryEngine:
         )
         engine.start()
 
-        self.bus.publish(HealthChanged(
-            thread_id="t1",
-            payload={"healthy": False},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                thread_id="t1",
+                payload={"healthy": False},
+            )
+        )
 
         await asyncio.sleep(0.05)
 
@@ -500,10 +521,12 @@ class TestHealthRecoveryIntegration:
         started = []
         self.bus.subscribe(RecoveryStarted, lambda e: started.append(e))
 
-        self.bus.publish(HealthChanged(
-            thread_id="t1",
-            payload={"healthy": False, "probe_count": 12, "healthy_count": 10},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                thread_id="t1",
+                payload={"healthy": False, "probe_count": 12, "healthy_count": 10},
+            )
+        )
 
         await asyncio.sleep(0.1)
         assert len(started) >= 1
@@ -550,9 +573,15 @@ class TestDefaultActions:
         from deerflow.services.recovery_service import DEFAULT_ACTIONS
 
         expected = [
-            "restart_tunnel", "restart_gateway", "restart_browser",
-            "restart_sandbox", "reap_orphan", "restart_worker",
-            "investigate", "reconnect_stream", "restart_container",
+            "restart_tunnel",
+            "restart_gateway",
+            "restart_browser",
+            "restart_sandbox",
+            "reap_orphan",
+            "restart_worker",
+            "investigate",
+            "reconnect_stream",
+            "restart_container",
         ]
         for name in expected:
             assert name in DEFAULT_ACTIONS, f"Missing action: {name}"
@@ -615,12 +644,14 @@ class TestCorrelationIdPropagation:
         started_events = []
         self.bus.subscribe(RecoveryStarted, lambda e: started_events.append(e))
 
-        self.bus.publish(HealthChanged(
-            correlation_id="my-corr-123",
-            run_id="run-abc",
-            thread_id="thread-xyz",
-            payload={"healthy": False},
-        ))
+        self.bus.publish(
+            HealthChanged(
+                correlation_id="my-corr-123",
+                run_id="run-abc",
+                thread_id="thread-xyz",
+                payload={"healthy": False},
+            )
+        )
 
         await asyncio.sleep(0.1)
         if started_events:

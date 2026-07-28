@@ -81,9 +81,7 @@ async def test_sse_consumer_omits_correlation_id_when_empty():
             break
 
     # First frame should NOT be a correlation_id comment.
-    assert not out[0].startswith(": correlation_id="), (
-        f"empty correlation_id must not emit a comment frame, got {out[0]!r}"
-    )
+    assert not out[0].startswith(": correlation_id="), f"empty correlation_id must not emit a comment frame, got {out[0]!r}"
 
 
 @pytest.mark.anyio

@@ -64,7 +64,10 @@ export function useWorkspaceSnapshot(
       setIsIndexing(true);
       void indexWorkspace(threadId, force)
         .then((snapshot) => {
-          queryClient.setQueryData(["workspace", "snapshot", threadId], snapshot);
+          queryClient.setQueryData(
+            ["workspace", "snapshot", threadId],
+            snapshot,
+          );
         })
         .catch(() => {
           // disabled/unavailable: the snapshot query state already reflects it
@@ -76,7 +79,8 @@ export function useWorkspaceSnapshot(
 
   let availability: WorkspaceAvailability = "available";
   if (query.error instanceof WorkspaceDisabledError) availability = "disabled";
-  else if (query.error instanceof WorkspaceUnindexedError) availability = "unindexed";
+  else if (query.error instanceof WorkspaceUnindexedError)
+    availability = "unindexed";
   else if (query.isError) availability = "disabled";
 
   return {
@@ -159,7 +163,11 @@ export function useFileImpact(
 // but the backend emits named event types rather than default `message`
 // frames, so each type needs its own addEventListener.
 
-export type WorkspaceEventType = "WorkspaceScanned" | "PlanBuilt" | "CacheHit" | "CacheMiss";
+export type WorkspaceEventType =
+  | "WorkspaceScanned"
+  | "PlanBuilt"
+  | "CacheHit"
+  | "CacheMiss";
 
 export interface WorkspaceScannedPayload {
   root_path: string;
@@ -204,7 +212,12 @@ export type WorkspaceLiveEvent =
   | { type: "CacheMiss"; data: CacheMissPayload };
 
 const MAX_WORKSPACE_EVENTS = 100;
-const WORKSPACE_EVENT_TYPES: WorkspaceEventType[] = ["WorkspaceScanned", "PlanBuilt", "CacheHit", "CacheMiss"];
+const WORKSPACE_EVENT_TYPES: WorkspaceEventType[] = [
+  "WorkspaceScanned",
+  "PlanBuilt",
+  "CacheHit",
+  "CacheMiss",
+];
 
 /**
  * Live WIK event feed for a thread (bus -> SSE bridge, real-time). Returns
@@ -212,7 +225,10 @@ const WORKSPACE_EVENT_TYPES: WorkspaceEventType[] = ["WorkspaceScanned", "PlanBu
  * workspace flag is off or the thread has no live connection yet — callers
  * degrade the same way the other workspace hooks do pre-flag.
  */
-export function useWorkspaceEvents(threadId: string | null, enabled = true): WorkspaceLiveEvent[] {
+export function useWorkspaceEvents(
+  threadId: string | null,
+  enabled = true,
+): WorkspaceLiveEvent[] {
   const [events, setEvents] = useState<WorkspaceLiveEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
 
@@ -229,17 +245,20 @@ export function useWorkspaceEvents(threadId: string | null, enabled = true): Wor
     const es = new EventSource(url, { withCredentials: true });
     esRef.current = es;
 
-    const append = (type: WorkspaceEventType) => (event: MessageEvent<string>) => {
-      try {
-        const data = JSON.parse(event.data);
-        setEvents((prev) => {
-          const next = [...prev, { type, data } as WorkspaceLiveEvent];
-          return next.length > MAX_WORKSPACE_EVENTS ? next.slice(next.length - MAX_WORKSPACE_EVENTS) : next;
-        });
-      } catch {
-        // malformed frame — skip silently, same tolerance as useSandboxLogs
-      }
-    };
+    const append =
+      (type: WorkspaceEventType) => (event: MessageEvent<string>) => {
+        try {
+          const data = JSON.parse(event.data);
+          setEvents((prev) => {
+            const next = [...prev, { type, data } as WorkspaceLiveEvent];
+            return next.length > MAX_WORKSPACE_EVENTS
+              ? next.slice(next.length - MAX_WORKSPACE_EVENTS)
+              : next;
+          });
+        } catch {
+          // malformed frame — skip silently, same tolerance as useSandboxLogs
+        }
+      };
 
     const listeners = WORKSPACE_EVENT_TYPES.map((type) => {
       const handler = append(type);
@@ -253,7 +272,8 @@ export function useWorkspaceEvents(threadId: string | null, enabled = true): Wor
     };
 
     return () => {
-      for (const { type, handler } of listeners) es.removeEventListener(type, handler);
+      for (const { type, handler } of listeners)
+        es.removeEventListener(type, handler);
       es.close();
       esRef.current = null;
     };

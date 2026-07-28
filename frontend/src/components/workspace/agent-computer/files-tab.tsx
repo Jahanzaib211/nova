@@ -1,19 +1,46 @@
 "use client";
 
-import { BracesIcon, ChevronDownIcon, ChevronRightIcon, CodeIcon, FileIcon, FileTextIcon, FolderIcon, FolderOpenIcon, GlobeIcon, LoaderCircleIcon, PaletteIcon, PlayIcon } from "lucide-react";
+import {
+  BracesIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CodeIcon,
+  FileIcon,
+  FileTextIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  GlobeIcon,
+  LoaderCircleIcon,
+  PaletteIcon,
+  PlayIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import { useFileImpact, useFileSymbols, useWorkspaceCommands, useWorkspaceSnapshot } from "@/core/workspace/hooks";
+import {
+  useFileImpact,
+  useFileSymbols,
+  useWorkspaceCommands,
+  useWorkspaceSnapshot,
+} from "@/core/workspace/hooks";
 
 import { TERMINAL_TOOLS } from "./terminal-tab";
 import { WorkspaceCard } from "./workspace-card";
 
 /** Languages the workspace indexer extracts symbols from. */
-const OUTLINE_EXTENSIONS = new Set(["py", "js", "ts", "jsx", "tsx", "go", "rs", "java"]);
+const OUTLINE_EXTENSIONS = new Set([
+  "py",
+  "js",
+  "ts",
+  "jsx",
+  "tsx",
+  "go",
+  "rs",
+  "java",
+]);
 
 function fileExtension(name: string): string {
   return name.split(".").at(-1)?.toLowerCase() ?? "";
@@ -67,7 +94,10 @@ function buildFileTree(files: SandboxFile[]): FileTreeNode {
 // Folders first, then files — both alphabetical — so the tree reads like a real repo.
 function countFiles(node: FileTreeNode): number {
   if (node.file) return 1;
-  return Object.values(node.children).reduce((sum, child) => sum + countFiles(child), 0);
+  return Object.values(node.children).reduce(
+    (sum, child) => sum + countFiles(child),
+    0,
+  );
 }
 
 function sortTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
@@ -110,7 +140,9 @@ function FileSymbolOutline({
         >
           {symbolKindIcon(s.kind)}
           <span className="truncate font-mono">{s.name}</span>
-          <span className="text-muted-foreground/40 ml-auto shrink-0">{s.kind}</span>
+          <span className="text-muted-foreground/40 ml-auto shrink-0">
+            {s.kind}
+          </span>
         </div>
       ))}
       {impactedCommands > 0 && (
@@ -180,7 +212,9 @@ function FileTreeNode({
   }
   if (node.file) {
     const canOutline = Boolean(
-      outlineEnabled && threadId && OUTLINE_EXTENSIONS.has(fileExtension(node.name)),
+      outlineEnabled &&
+      threadId &&
+      OUTLINE_EXTENSIONS.has(fileExtension(node.name)),
     );
     return (
       <div>
@@ -207,14 +241,20 @@ function FileTreeNode({
             className="flex min-w-0 flex-1 items-center gap-1"
           >
             {getFileIcon(node.name)}
-            <span className="text-foreground truncate font-mono">{node.name}</span>
+            <span className="text-foreground truncate font-mono">
+              {node.name}
+            </span>
             <span className="text-muted-foreground/40 ml-auto shrink-0">
               {formatBytes(node.file.size)}
             </span>
           </button>
         </div>
         {canOutline && outlineOpen && (
-          <FileSymbolOutline threadId={threadId!} filePath={nodePath} depth={depth + 1} />
+          <FileSymbolOutline
+            threadId={threadId!}
+            filePath={nodePath}
+            depth={depth + 1}
+          />
         )}
       </div>
     );
@@ -242,10 +282,14 @@ export function FilesPanel({
 }) {
   const { t } = useI18n();
   const tree = useMemo(() => buildFileTree(files), [files]);
-  const runningCount = runningEvents.filter((e) => TERMINAL_TOOLS.has(e.type)).length;
+  const runningCount = runningEvents.filter((e) =>
+    TERMINAL_TOOLS.has(e.type),
+  ).length;
   // Workspace intelligence: renders nothing while the backend flag is off.
   const workspaceState = useWorkspaceSnapshot(threadId);
-  const workspaceAvailable = workspaceState.availability === "available" && workspaceState.snapshot !== null;
+  const workspaceAvailable =
+    workspaceState.availability === "available" &&
+    workspaceState.snapshot !== null;
   const commands = useWorkspaceCommands(threadId, workspaceAvailable);
 
   const hasSandboxContent = files.length > 0 || artifacts.length > 0;
@@ -267,7 +311,9 @@ export function FilesPanel({
           <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
             <PlayIcon className="h-3 w-3 text-sky-400" />
             Commands
-            <span className="bg-muted rounded px-1 text-[10px]">{commands.length}</span>
+            <span className="bg-muted rounded px-1 text-[10px]">
+              {commands.length}
+            </span>
           </div>
           <div className="flex flex-wrap gap-1 px-1">
             {commands.map((c) => (
@@ -315,13 +361,18 @@ export function FilesPanel({
         <div>
           <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
             <FolderIcon className="h-3 w-3 text-yellow-400" />
-            <span className="text-muted-foreground/70">{t.agentComputer.files.repository}</span>
+            <span className="text-muted-foreground/70">
+              {t.agentComputer.files.repository}
+            </span>
             <span className="bg-muted rounded px-1 text-[10px]">
               {files.length}
             </span>
             {runningCount > 0 && (
               <div className="ml-auto flex items-center gap-1.5">
-                <LoaderCircleIcon className="text-muted-foreground/60 h-2.5 w-2.5 animate-spin" aria-hidden />
+                <LoaderCircleIcon
+                  className="text-muted-foreground/60 h-2.5 w-2.5 animate-spin"
+                  aria-hidden
+                />
                 <span className="text-muted-foreground/60 text-[10px]">
                   {t.agentComputer.files.running(runningCount)}
                 </span>
@@ -352,4 +403,3 @@ export function FilesPanel({
     </div>
   );
 }
-

@@ -43,11 +43,7 @@ def test_module_imports_cleanly_in_fresh_interpreter(module_name):
 
 def test_constant_stays_importable_from_both_homes():
     """MAX_CONCURRENT_SUBAGENTS lives in subagents.config; executor re-exports it."""
-    code = (
-        "from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS as a; "
-        "from deerflow.subagents.executor import MAX_CONCURRENT_SUBAGENTS as b; "
-        "assert a is b and a == 3"
-    )
+    code = "from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS as a; from deerflow.subagents.executor import MAX_CONCURRENT_SUBAGENTS as b; assert a is b and a == 3"
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,

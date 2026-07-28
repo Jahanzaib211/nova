@@ -435,11 +435,7 @@ async def run_agent(
         # middleware stack each turn costs several steps, so long legitimate
         # orchestrations can exhaust it. The thread checkpoint survives, so
         # the user can resume; surface that instead of a raw traceback.
-        error_msg = (
-            "Run hit its step budget before finishing "
-            f"({exc}). Progress up to this point is saved — send a follow-up "
-            "message (e.g. 'continue') to resume from where it stopped."
-        )
+        error_msg = f"Run hit its step budget before finishing ({exc}). Progress up to this point is saved — send a follow-up message (e.g. 'continue') to resume from where it stopped."
         logger.warning("Run %s exhausted its recursion limit: %s", run_id, exc)
         await _service_set_status(run_manager, run_id, RunStatus.error, error=error_msg)
         await bridge.publish(

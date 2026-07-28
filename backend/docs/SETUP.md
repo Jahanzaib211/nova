@@ -9,16 +9,19 @@ Nova uses a YAML configuration file that should be placed in the **project root 
 ### Steps
 
 1. **Navigate to project root**:
+
    ```bash
    cd /path/to/nova
    ```
 
 2. **Copy example configuration**:
+
    ```bash
    cp config.example.yaml config.yaml
    ```
 
 3. **Edit configuration**:
+
    ```bash
    # Option A: Set environment variables (recommended)
    export OPENAI_API_KEY="your-key-here"
@@ -31,6 +34,7 @@ Nova uses a YAML configuration file that should be placed in the **project root 
    ```
 
 4. **Set your API keys**:
+
    ```bash
    export OPENAI_API_KEY="your-api-key-here"
    ```
@@ -60,6 +64,7 @@ models:
 ```
 
 **Provider note**:
+
 - `models[*].use` references provider classes by module path (for example `langchain_openai:ChatOpenAI`).
 - If a provider module is missing, Nova now returns an actionable error with install guidance (for example `uv add langchain-google-genai`).
 
@@ -206,7 +211,7 @@ export OPENAI_API_KEY="your-api-key-here"
 make dev  # Starts Gateway + Frontend + Nginx
 ```
 
-Access at: http://localhost:2026
+Access at: <http://localhost:2026>
 
 **Backend Only** (from backend directory):
 
@@ -215,7 +220,7 @@ Access at: http://localhost:2026
 make dev
 ```
 
-Direct access: Gateway at http://localhost:8001
+Direct access: Gateway at <http://localhost:8001>
 
 ---
 
@@ -282,6 +287,7 @@ tooling, Studio, or direct LangGraph Server compatibility.
 Place in project root. Config values starting with `$` resolve as environment variables.
 
 Key sections:
+
 - `models` - LLM configurations with class paths, API keys, thinking/vision flags
 - `tools` - Tool definitions with module paths and groups
 - `tool_groups` - Logical groupings for tools
@@ -293,6 +299,7 @@ Key sections:
 - `memory` - Memory system (enabled, storage_path, debounce_seconds, model_name, max_facts, fact_confidence_threshold, injection_enabled, max_injection_tokens)
 
 Provider note:
+
 - `models[*].use` references provider classes by module path (for example `langchain_openai:ChatOpenAI`).
 - If a provider module is missing, Nova now returns an actionable error with install guidance (for example `uv add langchain-google-genai`).
 
@@ -432,6 +439,7 @@ deterministic scope step before routing each candidate to a fix and/or a
 ## Running the Full Application
 
 From the **project root** directory:
+
 ```bash
 make dev
 ```
@@ -451,6 +459,7 @@ This starts all services and makes the application available at `http://localhos
 | **Restart** | `./scripts/serve.sh --restart [flags]` | `./scripts/docker.sh restart` | — |
 
 **Nginx routing**:
+
 - `/api/langgraph/*` → Gateway embedded runtime (8001), rewritten to `/api/*`
 - `/api/*` (other) → Gateway API (8001)
 - `/` (non-API) → Frontend (3000)
@@ -467,6 +476,7 @@ make gateway
 ```
 
 Direct access (without nginx):
+
 - Gateway: `http://localhost:8001`
 
 ---
@@ -474,6 +484,7 @@ Direct access (without nginx):
 ## Frontend Configuration
 
 The frontend uses environment variables to connect to backend services:
+
 - `NEXT_PUBLIC_LANGGRAPH_BASE_URL` - Defaults to `/api/langgraph` (through nginx)
 - `NEXT_PUBLIC_BACKEND_BASE_URL` - Defaults to empty string (through nginx)
 
@@ -486,6 +497,7 @@ When using `make dev` from root, the frontend automatically connects through ngi
 ### File Upload
 
 Multi-file upload with automatic document conversion:
+
 - Endpoint: `POST /api/threads/{thread_id}/uploads`
 - Supports: PDF, PPT, Excel, Word documents (converted via `markitdown`)
 - Rejects directory inputs before copying so uploads stay all-or-nothing
@@ -499,6 +511,7 @@ See [docs/FILE_UPLOAD.md](docs/FILE_UPLOAD.md) for details.
 ### Plan Mode
 
 TodoList middleware for complex multi-step tasks:
+
 - Controlled via runtime config: `config.configurable.is_plan_mode = True`
 - Provides `write_todos` tool for task tracking
 - One task in_progress at a time, real-time updates
@@ -508,6 +521,7 @@ See [docs/plan_mode_usage.md](docs/plan_mode_usage.md) for details.
 ### Context Summarization
 
 Automatic conversation summarization when approaching token limits:
+
 - Configured in `config.yaml` under `summarization` key
 - Trigger types: tokens, messages, or fraction of max input
 - Keeps recent messages while summarizing older ones
@@ -517,6 +531,7 @@ See [docs/summarization.md](docs/summarization.md) for details.
 ### Vision Support
 
 For models with `supports_vision: true`:
+
 - `ViewImageMiddleware` processes images in conversation
 - `view_image_tool` added to agent's toolset
 - Images automatically converted to base64 and injected into state
@@ -535,6 +550,7 @@ For models with `supports_vision: true`:
 ## Documentation
 
 See `docs/` directory for detailed documentation:
+
 - [CONFIGURATION.md](docs/CONFIGURATION.md) - Configuration options
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture details
 - [API.md](docs/API.md) - API reference
@@ -548,7 +564,7 @@ See `docs/` directory for detailed documentation:
 
 ## License
 
-See the [LICENSE](../LICENSE) file in the project root.
+See the [LICENSE](../../LICENSE) file in the project root.
 
 ---
 
@@ -557,6 +573,7 @@ See the [LICENSE](../LICENSE) file in the project root.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 **Quick start:**
+
 1. Fork the repo and create a feature branch
 2. Run `make setup` (Docker) or `make install` (local)
 3. Make changes with hot-reload enabled

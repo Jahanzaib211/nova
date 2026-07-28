@@ -161,6 +161,10 @@ def test_app_config_coerces_commented_out_list_sections(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
+    # Isolate from any real runtime_models.yaml (e.g. DEER_FLOW_HOME on a
+    # machine that has actually run the app) — this test only cares about
+    # config.yaml's own `models:` coercion.
+    monkeypatch.setenv("DEER_FLOW_RUNTIME_MODELS_PATH", str(tmp_path / "runtime_models.yaml"))
 
     config = app_config_module.AppConfig.from_file(str(config_path))
 
@@ -183,6 +187,10 @@ def test_app_config_warns_when_no_models_configured(tmp_path, monkeypatch, caplo
         encoding="utf-8",
     )
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(extensions_path))
+    # Isolate from any real runtime_models.yaml (e.g. DEER_FLOW_HOME on a
+    # machine that has actually run the app) — this test only cares about
+    # config.yaml's own `models:` coercion.
+    monkeypatch.setenv("DEER_FLOW_RUNTIME_MODELS_PATH", str(tmp_path / "runtime_models.yaml"))
 
     with caplog.at_level("WARNING", logger="deerflow.config.app_config"):
         app_config_module.AppConfig.from_file(str(config_path))

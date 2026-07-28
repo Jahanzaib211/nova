@@ -100,7 +100,8 @@ def _walk_agent_dirs(home: Path) -> list[tuple[str | None, str]]:
 
 def _create_tables(bind) -> None:
     with bind.begin() as conn:
-        conn.execute(sa.text("""
+        conn.execute(
+            sa.text("""
             CREATE TABLE IF NOT EXISTS model_configs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 owner_id VARCHAR(64),
@@ -120,11 +121,13 @@ def _create_tables(bind) -> None:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
             )
-        """))
+        """)
+        )
         conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_model_configs_owner_id ON model_configs (owner_id)"))
         conn.execute(sa.text("CREATE UNIQUE INDEX IF NOT EXISTS uq_model_config_owner_name ON model_configs (owner_id, name)"))
 
-        conn.execute(sa.text("""
+        conn.execute(
+            sa.text("""
             CREATE TABLE IF NOT EXISTS agent_configs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 owner_id VARCHAR(64),
@@ -134,7 +137,8 @@ def _create_tables(bind) -> None:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
             )
-        """))
+        """)
+        )
         conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_agent_configs_owner_id ON agent_configs (owner_id)"))
         conn.execute(sa.text("CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_config_owner_name ON agent_configs (owner_id, name)"))
 
@@ -230,9 +234,7 @@ def _upgrade_with_bind(bind) -> None:
         with bind.begin() as conn:
             for owner_id, name in agents:
                 conn.execute(
-                    sa.text(
-                        "INSERT INTO agent_configs (owner_id, name, is_shared, is_system) VALUES (:owner_id, :name, 0, 0)"
-                    ),
+                    sa.text("INSERT INTO agent_configs (owner_id, name, is_shared, is_system) VALUES (:owner_id, :name, 0, 0)"),
                     {"owner_id": owner_id, "name": name},
                 )
         logger.info("Backfilled %d agent entries from disk", len(agents))

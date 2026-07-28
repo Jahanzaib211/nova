@@ -112,7 +112,15 @@ export function WorkspaceStateProvider({
       verifyResult,
       llmError,
     }),
-    [threadId, activityEvents, mergedEvents, todos, taskProgress, verifyResult, llmError],
+    [
+      threadId,
+      activityEvents,
+      mergedEvents,
+      todos,
+      taskProgress,
+      verifyResult,
+      llmError,
+    ],
   );
 
   return (

@@ -34,6 +34,7 @@ from deerflow.services.types import (
 # RunService
 # ---------------------------------------------------------------------------
 
+
 class RunService(Protocol):
     """Lifecycle management for agent runs.
 
@@ -126,6 +127,7 @@ class RunService(Protocol):
 # WorkspaceService
 # ---------------------------------------------------------------------------
 
+
 class WorkspaceService(Protocol):
     """Per-thread workspace directory management.
 
@@ -161,6 +163,7 @@ class WorkspaceService(Protocol):
 # ---------------------------------------------------------------------------
 # RepositoryService
 # ---------------------------------------------------------------------------
+
 
 class RepositoryService(Protocol):
     """Persistent run metadata storage.
@@ -209,6 +212,7 @@ class RepositoryService(Protocol):
 # BrowserService
 # ---------------------------------------------------------------------------
 
+
 class BrowserService(Protocol):
     """Browser health checking and preview verification.
 
@@ -239,6 +243,7 @@ class BrowserService(Protocol):
 # ---------------------------------------------------------------------------
 # TerminalService
 # ---------------------------------------------------------------------------
+
 
 class TerminalService(Protocol):
     """Sandbox command execution.
@@ -274,6 +279,7 @@ class TerminalService(Protocol):
 # ArtifactService
 # ---------------------------------------------------------------------------
 
+
 class ArtifactService(Protocol):
     """Artifact storage and retrieval.
 
@@ -307,6 +313,7 @@ class ArtifactService(Protocol):
 # HealthService
 # ---------------------------------------------------------------------------
 
+
 class HealthService(Protocol):
     """Health probe orchestration.
 
@@ -336,6 +343,7 @@ class HealthService(Protocol):
 # ---------------------------------------------------------------------------
 # RecoveryService
 # ---------------------------------------------------------------------------
+
 
 class RecoveryService(Protocol):
     """Auto-recovery for known infrastructure failures.
@@ -373,6 +381,7 @@ class RecoveryService(Protocol):
 # ConfigurationService
 # ---------------------------------------------------------------------------
 
+
 class ConfigurationService(Protocol):
     """Application configuration access.
 
@@ -402,6 +411,7 @@ class ConfigurationService(Protocol):
 # ---------------------------------------------------------------------------
 # DiagnosticsService
 # ---------------------------------------------------------------------------
+
 
 class DiagnosticsService(Protocol):
     """Streaming pipeline diagnostics.

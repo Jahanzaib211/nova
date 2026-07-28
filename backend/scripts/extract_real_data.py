@@ -33,12 +33,8 @@ async def main() -> None:
 
     # Read the real production DB immutably (never written to).
     real = sqlite3.connect("file:.deer-flow/data/deerflow.db?immutable=1", uri=True)
-    users = real.execute(
-        "SELECT id, email, password_hash, system_role, created_at, oauth_provider, oauth_id, needs_setup, token_version FROM users"
-    ).fetchall()
-    runs = real.execute(
-        "SELECT run_id, thread_id, user_id, status, model_name, total_input_tokens, total_output_tokens, total_tokens, created_at FROM runs"
-    ).fetchall()
+    users = real.execute("SELECT id, email, password_hash, system_role, created_at, oauth_provider, oauth_id, needs_setup, token_version FROM users").fetchall()
+    runs = real.execute("SELECT run_id, thread_id, user_id, status, model_name, total_input_tokens, total_output_tokens, total_tokens, created_at FROM runs").fetchall()
     real.close()
 
     config = get_app_config()

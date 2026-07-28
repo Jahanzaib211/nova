@@ -429,9 +429,7 @@ async def start_run(
                     detail={
                         "code": "daily_limit_reached",
                         "message": (
-                            f"You've reached today's usage limit ({balance.daily_limit:,} tokens). "
-                            f"It resets at midnight UTC. Need more today? Contact {contact} "
-                            f"or reply here to request an increase — we can raise your limit right away."
+                            f"You've reached today's usage limit ({balance.daily_limit:,} tokens). It resets at midnight UTC. Need more today? Contact {contact} or reply here to request an increase — we can raise your limit right away."
                         ),
                         "plan": balance.plan,
                         "daily_limit": balance.daily_limit,

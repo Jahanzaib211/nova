@@ -356,6 +356,7 @@ in production — it only creates tables, not columns.
 ### Creating a migration
 
 1. Create `versions/YYYY_MM-DD_description.py` (idempotent):
+
 ```python
 def upgrade() -> None:
     conn = op.get_bind()
@@ -401,6 +402,6 @@ for full onboarding.
 
 ## 10. Contact / Escalation
 
-- Cloudflare status: https://www.cloudflarestatus.com
-- Tunnel documentation: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
-- Nova issue tracker: https://github.com/Jahanzaib211/nova/issues
+- Cloudflare status: <https://www.cloudflarestatus.com>
+- Tunnel documentation: <https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/>
+- Nova issue tracker: <https://github.com/Jahanzaib211/nova/issues>

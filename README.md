@@ -79,7 +79,7 @@ Nova serves its inference on **AMD Instinct** GPUs, and makes that a first-class
   - [Contributing](#contributing)
   - [License](#license)
   - [Acknowledgments](#acknowledgments)
-    - [Key Contributors](#key-contributors)
+    - [Key Contributors](#key-contributors-upstream-deerflow)
   - [Star History](#star-history)
 
 ## One-Line Agent Setup
@@ -242,7 +242,7 @@ make up     # Build images and start all production services
 make down   # Stop and remove containers
 ```
 
-Access: http://localhost:2026
+Access: <http://localhost:2026>
 
 The unified nginx endpoint is same-origin by default and does not emit browser CORS headers. If you run a split-origin or port-forwarded browser client, set `GATEWAY_CORS_ORIGINS` to comma-separated exact origins such as `http://localhost:3000`; the Gateway then applies the CORS allowlist and matching CSRF origin checks.
 
@@ -259,34 +259,40 @@ Prerequisite: complete the "Configuration" steps above first (`make setup`). `ma
 On Windows, run the local development flow from Git Bash. Native `cmd.exe` and PowerShell shells are not supported for the bash-based service scripts, and WSL is not guaranteed because some scripts rely on Git for Windows utilities such as `cygpath`.
 
 1. **Check prerequisites**:
+
    ```bash
    make check  # Verifies Node.js 22+, pnpm, uv, nginx
    ```
 
 2. **Install dependencies**:
+
    ```bash
    make install  # Install backend + frontend dependencies + pre-commit hooks
    ```
 
 3. **(Optional) Pre-pull sandbox image**:
+
    ```bash
    # Recommended if using Docker/Container-based sandbox
    make setup-sandbox
    ```
 
 4. **(Optional) Load sample memory data for local review**:
+
    ```bash
    python scripts/load_memory_sample.py
    ```
+
    This copies the sample fixture into the default local runtime memory file so reviewers can immediately test `Settings > Memory`.
    See [backend/docs/MEMORY_SETTINGS_REVIEW.md](backend/docs/MEMORY_SETTINGS_REVIEW.md) for the shortest review flow.
 
 5. **Start services**:
+
    ```bash
    make dev
    ```
 
-6. **Access**: http://localhost:2026
+6. **Access**: <http://localhost:2026>
 
 #### Startup Modes
 
@@ -321,9 +327,11 @@ deploy.sh down
 ```
 
 ### Advanced
+
 #### Sandbox Mode
 
 Nova supports multiple sandbox execution modes:
+
 - **Local Execution** (runs sandbox code directly on the host machine)
 - **Docker Execution** (runs sandbox code in isolated Docker containers)
 - **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service)
@@ -431,6 +439,7 @@ channels:
 ```
 
 Notes:
+
 - `assistant_id: lead_agent` calls the default LangGraph assistant directly.
 - If `assistant_id` is set to a custom agent name, Nova still routes through `lead_agent` and injects that value as `agent_name`, so the custom agent's SOUL/config takes effect for IM channels.
 - IM channel workers call Gateway's LangGraph-compatible API internally and automatically attach process-local internal auth plus the CSRF cookie/header pair required for thread and run creation.
@@ -504,7 +513,6 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 2. Set the message receiving mode to **Stream Mode** in the robot configuration page.
 3. Copy the `Client ID` and `Client Secret`, set `DINGTALK_CLIENT_ID` and `DINGTALK_CLIENT_SECRET` in `.env`, and enable the channel in `config.yaml`.
 4. *(Optional)* To enable streaming AI Card replies (typewriter effect), create an **AI Card** template on the [DingTalk Card Platform](https://open.dingtalk.com/document/dingstart/typewriter-effect-streaming-ai-card), then set `card_template_id` in `config.yaml` to the template ID. You also need to apply for the `Card.Streaming.Write` and `Card.Instance.Write` permissions.
-
 
 When Nova runs in Docker Compose, IM channels execute inside the `gateway` container. In that case, do not point `channels.langgraph_url` or `channels.gateway_url` at `localhost`; use container service names such as `http://gateway:8001/api` and `http://gateway:8001`, or set `DEER_FLOW_CHANNELS_LANGGRAPH_URL` and `DEER_FLOW_CHANNELS_GATEWAY_URL`.
 
@@ -623,6 +631,7 @@ npx skills add https://github.com/bytedance/deer-flow --skill claude-to-deerflow
 Then make sure Nova is running (default at `http://localhost:2026`) and use the `/claude-to-deerflow` command in Claude Code.
 
 **What you can do**:
+
 - Send messages to Nova and get streaming responses
 - Choose execution modes: flash (fast), standard, pro (planning), ultra (sub-agents)
 - Check Nova health, list models/skills/agents
@@ -746,6 +755,7 @@ Nova has key high-privilege capabilities including **system command execution, r
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, workflow, and guidelines.
 
 **Quick start:**
+
 1. Fork the repo and create a feature branch
 2. Run `make setup` (Docker) or `make install` (local)
 3. Make changes with hot-reload enabled

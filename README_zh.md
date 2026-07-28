@@ -139,32 +139,36 @@ make up     # 构建镜像并启动所有生产服务
 make down   # 停止并移除容器
 ```
 
-访问：http://localhost:2026
+访问：<http://localhost:2026>
 
 #### 方式二：本地开发
 
 1. **检查先决条件**：
+
    ```bash
    make check  # 验证 Node.js 22+, pnpm, uv, nginx
    ```
 
 2. **安装依赖**：
+
    ```bash
    make install  # 安装后端 + 前端依赖 + 预提交钩子
    ```
 
 3. **启动服务**：
+
    ```bash
    make dev
    ```
 
-4. **访问**：http://localhost:2026
+4. **访问**：<http://localhost:2026>
 
 ### 高级
 
 #### 沙箱模式
 
 Nova 支持多种沙箱执行模式：
+
 - **本地执行**（在主机上直接运行沙箱代码）
 - **Docker 执行**（在隔离的 Docker 容器中运行）
 - **Docker + Kubernetes 执行**（通过 provisioner 服务在 K8s Pod 中运行）

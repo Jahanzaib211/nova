@@ -687,15 +687,23 @@ export const enUS: Translations = {
       projects: "projects",
       symbols: "symbols",
       commands: "commands",
-      impactFooter: (count: number) => `changes here affect ${count} ${count === 1 ? "command" : "commands"}`,
-      indexedBanner: (symbols: number, projects: number, commands: number, language: string) =>
+      impactFooter: (count: number) =>
+        `changes here affect ${count} ${count === 1 ? "command" : "commands"}`,
+      indexedBanner: (
+        symbols: number,
+        projects: number,
+        commands: number,
+        language: string,
+      ) =>
         `Workspace indexed — ${symbols} symbols across ${projects} ${projects === 1 ? "project" : "projects"} · ${commands} commands · ${language}`,
       kernelTitle: "Workspace kernel",
       kernelScans: "Scans",
       kernelAvgScan: "Avg scan",
       kernelCacheHits: "Cache hits",
-      liveScanned: (symbols: number, ms: number) => `Live scan — ${symbols} symbols in ${Math.round(ms)}ms`,
-      livePlan: (steps: number, risk: string) => `Plan built — ${steps} ${steps === 1 ? "step" : "steps"} · ${risk} risk`,
+      liveScanned: (symbols: number, ms: number) =>
+        `Live scan — ${symbols} symbols in ${Math.round(ms)}ms`,
+      livePlan: (steps: number, risk: string) =>
+        `Plan built — ${steps} ${steps === 1 ? "step" : "steps"} · ${risk} risk`,
       liveCacheHit: "Served from cache",
       liveCacheMiss: "Cache miss — rescanning",
     },
@@ -789,7 +797,8 @@ export const enUS: Translations = {
       kernelVerdictTitle: "Workspace kernel verdict",
       kernelVerdictValid: "Plan valid",
       kernelVerdictInvalid: "Plan invalid",
-      kernelVerdictSteps: (count: number) => `${count} ${count === 1 ? "step" : "steps"}`,
+      kernelVerdictSteps: (count: number) =>
+        `${count} ${count === 1 ? "step" : "steps"}`,
     },
     privacy: {
       title: "iGIN0 Privacy Search",
@@ -840,8 +849,10 @@ export const enUS: Translations = {
       tools: "tools",
       toolsDetail: "Builtin tools available to the lead agent.",
       subagents: "subagents",
-      subagentsDetail: "Agent types the lead can delegate to — not a count of running tasks.",
-      subagentsConcurrency: (n: number) => `Up to ${n} delegated task runs execute concurrently.`,
+      subagentsDetail:
+        "Agent types the lead can delegate to — not a count of running tasks.",
+      subagentsConcurrency: (n: number) =>
+        `Up to ${n} delegated task runs execute concurrently.`,
       hooks: "hooks",
       hooksDetail: "Active middlewares on the LangChain agent chain.",
     },

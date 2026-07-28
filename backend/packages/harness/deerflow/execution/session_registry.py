@@ -37,20 +37,21 @@ def _now_iso() -> str:
 
 def _new_session_id() -> str:
     import uuid
+
     return uuid.uuid4().hex
 
 
 class SessionState(str, Enum):
     """Lifecycle states of an interactive shell session."""
 
-    ALLOCATED = "allocated"    # PTY allocated, not yet spawned
-    STARTING = "starting"      # Process starting
-    RUNNING = "running"       # Active, accepting I/O
-    WAITING = "waiting"        # Waiting for input
-    STOPPING = "stopping"     # Graceful shutdown in progress
-    STOPPED = "stopped"       # Confirmed stopped
-    ZOMBIE = "zombie"          # Process alive, session orphaned
-    ERROR = "error"           # Error state
+    ALLOCATED = "allocated"  # PTY allocated, not yet spawned
+    STARTING = "starting"  # Process starting
+    RUNNING = "running"  # Active, accepting I/O
+    WAITING = "waiting"  # Waiting for input
+    STOPPING = "stopping"  # Graceful shutdown in progress
+    STOPPED = "stopped"  # Confirmed stopped
+    ZOMBIE = "zombie"  # Process alive, session orphaned
+    ERROR = "error"  # Error state
 
 
 @dataclass(frozen=True)

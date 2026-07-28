@@ -71,10 +71,9 @@ export default function PrivacyPage() {
               3. How we use your data
             </h2>
             <p>
-              We use your data to provide and operate the Service, enforce
-              usage limits, process payments, keep the Service secure, and
-              communicate with you about your account. We do not sell your
-              personal data.
+              We use your data to provide and operate the Service, enforce usage
+              limits, process payments, keep the Service secure, and communicate
+              with you about your account. We do not sell your personal data.
             </p>
           </section>
 

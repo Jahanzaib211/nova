@@ -36,6 +36,7 @@ def _install_fake_kernel(handler) -> FakeExecutionKernel:
     service_container.override(execution_kernel=fake)
     return fake
 
+
 # ── SandboxInfo.preview_ports ────────────────────────────────────────────────
 
 

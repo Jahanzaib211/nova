@@ -7,6 +7,7 @@
 ## 实现方式
 
 使用 `TitleMiddleware` 在 `after_model` 钩子中：
+
 1. 检测是否是首次对话（1个用户消息 + 1个助手回复）
 2. 检查 state 是否已有 title
 3. 调用 LLM 生成简洁的标题（默认最多6个词）
@@ -42,9 +43,7 @@ class ThreadState(AgentState):
 # 在 langgraph.json 同级目录创建 checkpointer.py
 from langgraph.checkpoint.postgres import PostgresSaver
 
-checkpointer = PostgresSaver.from_conn_string(
-    "postgresql://user:pass@localhost/dbname"
-)
+checkpointer = PostgresSaver.from_conn_string("postgresql://user:pass@localhost/dbname")
 ```
 
 然后在 `langgraph.json` 中引用：
@@ -75,11 +74,13 @@ title:
 ```python
 from deerflow.config.title_config import TitleConfig, set_title_config
 
-set_title_config(TitleConfig(
-    enabled=True,
-    max_words=8,
-    max_chars=80,
-))
+set_title_config(
+    TitleConfig(
+        enabled=True,
+        max_words=8,
+        max_chars=80,
+    )
+)
 ```
 
 ## 客户端使用
@@ -188,6 +189,7 @@ sequenceDiagram
 # 测试 title 生成
 import pytest
 from deerflow.agents.title_middleware import TitleMiddleware
+
 
 def test_title_generation():
     # TODO: 添加单元测试

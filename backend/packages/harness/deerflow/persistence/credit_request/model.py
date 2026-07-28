@@ -29,9 +29,7 @@ class CreditRequestRow(Base):
     # "pending" | "approved" | "declined"
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
 

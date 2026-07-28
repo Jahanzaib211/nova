@@ -63,28 +63,28 @@ class ExecutionStatus(str, Enum):
     # Pre-execution
     PENDING = "pending"
     ALLOCATED = "allocated"  # Admitted, slot acquired
-    PREPARING = "preparing"   # Pre-exec setup (cwd, env, PTY)
+    PREPARING = "preparing"  # Pre-exec setup (cwd, env, PTY)
 
     # Active execution
-    RUNNING = "running"           # Process executing
+    RUNNING = "running"  # Process executing
     WAITING_INPUT = "waiting_input"  # Interactive session waiting for input
-    STREAMING = "streaming"          # Output being streamed
+    STREAMING = "streaming"  # Output being streamed
 
     # Cancellation in progress
     CANCELLING = "cancelling"  # Cancellation in progress
-    STOPPING = "stopping"      # Graceful shutdown in progress
+    STOPPING = "stopping"  # Graceful shutdown in progress
 
     # Terminal states
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     TIMED_OUT = "timed_out"
     CANCELLED = "cancelled"
-    STOPPED = "stopped"           # Confirmed stopped by kernel
-    DENIED = "denied"             # Policy/resource rejected
+    STOPPED = "stopped"  # Confirmed stopped by kernel
+    DENIED = "denied"  # Policy/resource rejected
 
     # Zombie states (Phase C8)
     ZOMBIE_DETECTED = "zombie_detected"  # Process alive, owner missing
-    REAPED = "reaped"                    # Zombie has been reaped
+    REAPED = "reaped"  # Zombie has been reaped
 
     @property
     def is_terminal(self) -> bool:
@@ -139,9 +139,9 @@ class ResourceLimits:
     grace_period: float = 5.0
 
     # Phase C8: execution budget
-    max_depth: int = 10        # Max command chain depth (prevents infinite recursion)
-    max_children: int = 100    # Max child processes per parent
-    max_recursion: int = 5     # Max nested execution levels
+    max_depth: int = 10  # Max command chain depth (prevents infinite recursion)
+    max_children: int = 100  # Max child processes per parent
+    max_recursion: int = 5  # Max nested execution levels
     heartbeat_interval: float = 5.0  # Seconds between heartbeat emissions
 
 
@@ -168,7 +168,7 @@ class ExecutionRequest:
     run_id: str = ""
     thread_id: str = ""
     parent_execution_id: str = ""  # Phase C8: parent execution in the tree
-    session_id: str = ""            # Phase C8: associated shell session
+    session_id: str = ""  # Phase C8: associated shell session
     intent: str = ""  # human-readable purpose, recorded in the audit trail
     labels: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=_now_iso)
@@ -178,9 +178,7 @@ class ExecutionRequest:
             object.__setattr__(self, "argv", tuple(self.argv))
         # Phase C8: also support parent_execution_id via labels for backward compat
         if self.parent_execution_id:
-            object.__setattr__(
-                self, "labels", {**self.labels, "parent_execution_id": self.parent_execution_id}
-            )
+            object.__setattr__(self, "labels", {**self.labels, "parent_execution_id": self.parent_execution_id})
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@ Thank you for your interest in contributing to Nova! This document provides guid
 
 1. Fork the repository on GitHub
 2. Clone your fork locally:
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/deer-flow.git
    cd deer-flow
@@ -191,6 +192,7 @@ feat: add support for Claude 3.5 model
 ```
 
 Prefix types:
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation
@@ -226,10 +228,12 @@ Example test:
 import pytest
 from deerflow.models.factory import create_chat_model
 
+
 def test_create_chat_model_with_valid_name():
     """Test that a valid model name creates a model instance."""
     model = create_chat_model("gpt-4")
     assert model is not None
+
 
 def test_create_chat_model_with_invalid_name():
     """Test that an invalid model name raises ValueError."""
@@ -272,6 +276,7 @@ Include in your PR description:
 # packages/harness/deerflow/tools/builtins/my_tool.py
 from langchain_core.tools import tool
 
+
 @tool
 def my_tool(param: str) -> str:
     """Tool description for the agent.
@@ -302,6 +307,7 @@ tools:
 # packages/harness/deerflow/agents/middlewares/my_middleware.py
 from langchain.agents.middleware import BaseMiddleware
 from langchain_core.runnables import RunnableConfig
+
 
 class MyMiddleware(BaseMiddleware):
     """Middleware description."""
@@ -334,10 +340,12 @@ from fastapi import APIRouter
 
 router = APIRouter(prefix="/my-endpoint", tags=["my-endpoint"])
 
+
 @router.get("/")
 async def get_items():
     """Get all items."""
     return {"items": []}
+
 
 @router.post("/")
 async def create_item(data: dict):
@@ -429,11 +437,13 @@ in production — it only creates tables, not adds columns.
    (it reads `DEER_FLOW_DATABASE_URL` env-var for production containers).
 
 2. Create a new migration file in `versions/`:
+
    ```
    versions/YYYY_MM_DD_<description>.py
    ```
 
 3. Make it idempotent:
+
    ```python
    def upgrade() -> None:
        conn = op.get_bind()
@@ -444,6 +454,7 @@ in production — it only creates tables, not adds columns.
    ```
 
 4. For fresh deployments, stamp the alembic version:
+
    ```python
    def upgrade() -> None:
        # ... schema changes ...
@@ -462,6 +473,7 @@ from packages.harness.deerflow.persistence.migrations.env import *
 ### Testing
 
 Always verify:
+
 - Live DB schema matches ORM model column count
 - Alembic version is correct
 - Existing tests still pass

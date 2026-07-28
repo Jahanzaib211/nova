@@ -31,11 +31,11 @@ def test_safe_redirect_accepts_same_origin_absolute_urls():
 
 def test_safe_redirect_falls_back_for_unsafe_inputs():
     for bad in (
-        "https://evil.com/phish",              # off-origin
-        "http://nova.example.com/x",           # scheme mismatch
-        "//evil.com",                          # protocol-relative
-        "/workspace",                          # relative (Stripe needs absolute)
-        "https://nova.example.com.evil.com/x", # suffix-confusion host
+        "https://evil.com/phish",  # off-origin
+        "http://nova.example.com/x",  # scheme mismatch
+        "//evil.com",  # protocol-relative
+        "/workspace",  # relative (Stripe needs absolute)
+        "https://nova.example.com.evil.com/x",  # suffix-confusion host
         None,
         "",
     ):

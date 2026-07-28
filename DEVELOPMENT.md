@@ -25,7 +25,7 @@ export OPENAI_API_KEY="your-key-here"
 make dev              # starts Gateway + Frontend + Nginx
 ```
 
-Open http://localhost:2026
+Open <http://localhost:2026>
 
 ---
 
@@ -165,10 +165,12 @@ deterministic scope step before routing each candidate to a fix and/or a
 `tests/blocking_io/` runtime anchor.
 
 Regression tests related to Docker/provisioner behavior:
+
 - `tests/test_docker_sandbox_mode_detection.py` (mode detection from `config.yaml`)
 - `tests/test_provisioner_kubeconfig.py` (kubeconfig file/directory handling)
 
 Blocking-IO runtime gate (`tests/blocking_io/`):
+
 - Wraps every item under `tests/blocking_io/` with a strict Blockbuster
   context scoped to `app.*` and `deerflow.*` (see
   `tests/support/detectors/blocking_io_runtime.py`). Any sync blocking IO
@@ -192,6 +194,7 @@ Blocking-IO runtime gate (`tests/blocking_io/`):
   hard-fail.
 
 Boundary check (harness → app import firewall):
+
 - `tests/test_harness_boundary.py` — ensures `packages/harness/deerflow/` never imports from `app.*`
 
 CI runs these regression tests for every pull request via `.github/workflows/backend-unit-tests.yml`.
@@ -210,6 +213,7 @@ The backend is split into two layers with a strict dependency direction:
 **Dependency rule**: App imports deerflow, but deerflow never imports app. This boundary is enforced by `tests/test_harness_boundary.py` which runs in CI.
 
 **Import conventions**:
+
 ```python
 # Harness internal
 from deerflow.agents import make_lead_agent
@@ -243,6 +247,7 @@ Setup: Copy `config.example.yaml` to `config.yaml` in the **project root** direc
 Infrastructure fields are **restart-required**. The authoritative list lives in `packages/harness/deerflow/config/reload_boundary.py::STARTUP_ONLY_FIELDS` and is mirrored by the standardised `"startup-only:"` prefix on the corresponding `Field(description=...)` in `AppConfig`, so IDE hover on those fields surfaces the reason inline (no need to context-switch into this table). Currently registered: `database`, `checkpointer`, `run_events`, `stream_bridge`, `sandbox`, `log_level`, `channels`, `channel_connections`. Adding a new restart-required field requires updating the registry; drift is pinned by `tests/test_reload_boundary.py`.
 
 Configuration priority:
+
 1. Explicit `config_path` argument
 2. `DEER_FLOW_CONFIG_PATH` environment variable
 3. `config.yaml` in current directory (backend/)
@@ -256,6 +261,7 @@ Config values starting with `$` are resolved as environment variables (e.g., `$O
 MCP servers and skills are configured together in `extensions_config.json` in project root:
 
 Configuration priority:
+
 1. Explicit `config_path` argument
 2. `DEER_FLOW_EXTENSIONS_CONFIG_PATH` environment variable
 3. `extensions_config.json` in current directory (backend/)
@@ -316,6 +322,7 @@ deterministic scope step before routing each candidate to a fix and/or a
 ## Running the Full Application
 
 From the **project root** directory:
+
 ```bash
 make dev
 ```
@@ -335,6 +342,7 @@ This starts all services and makes the application available at `http://localhos
 | **Restart** | `./scripts/serve.sh --restart [flags]` | `./scripts/docker.sh restart` | — |
 
 **Nginx routing**:
+
 - `/api/langgraph/*` → Gateway embedded runtime (8001), rewritten to `/api/*`
 - `/api/*` (other) → Gateway API (8001)
 - `/` (non-API) → Frontend (3000)
@@ -351,6 +359,7 @@ make gateway
 ```
 
 Direct access (without nginx):
+
 - Gateway: `http://localhost:8001`
 
 ---
@@ -358,6 +367,7 @@ Direct access (without nginx):
 ## Frontend Configuration
 
 The frontend uses environment variables to connect to backend services:
+
 - `NEXT_PUBLIC_LANGGRAPH_BASE_URL` - Defaults to `/api/langgraph` (through nginx)
 - `NEXT_PUBLIC_BACKEND_BASE_URL` - Defaults to empty string (through nginx)
 
@@ -370,6 +380,7 @@ When using `make dev` from root, the frontend automatically connects through ngi
 ### File Upload
 
 Multi-file upload with automatic document conversion:
+
 - Endpoint: `POST /api/threads/{thread_id}/uploads`
 - Supports: PDF, PPT, Excel, Word documents (converted via `markitdown`)
 - Rejects directory inputs before copying so uploads stay all-or-nothing
@@ -383,6 +394,7 @@ See [docs/FILE_UPLOAD.md](docs/FILE_UPLOAD.md) for details.
 ### Plan Mode
 
 TodoList middleware for complex multi-step tasks:
+
 - Controlled via runtime config: `config.configurable.is_plan_mode = True`
 - Provides `write_todos` tool for task tracking
 - One task in_progress at a time, real-time updates
@@ -392,6 +404,7 @@ See [docs/plan_mode_usage.md](docs/plan_mode_usage.md) for details.
 ### Context Summarization
 
 Automatic conversation summarization when approaching token limits:
+
 - Configured in `config.yaml` under `summarization` key
 - Trigger types: tokens, messages, or fraction of max input
 - Keeps recent messages while summarizing older ones
@@ -401,6 +414,7 @@ See [docs/summarization.md](docs/summarization.md) for details.
 ### Vision Support
 
 For models with `supports_vision: true`:
+
 - `ViewImageMiddleware` processes images in conversation
 - `view_image_tool` added to agent's toolset
 - Images automatically converted to base64 and injected into state
@@ -419,6 +433,7 @@ For models with `supports_vision: true`:
 ## Documentation
 
 See `docs/` directory for detailed documentation:
+
 - [CONFIGURATION.md](docs/CONFIGURATION.md) - Configuration options
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture details
 - [API.md](docs/API.md) - API reference
@@ -432,7 +447,7 @@ See `docs/` directory for detailed documentation:
 
 ## License
 
-See the [LICENSE](../LICENSE) file in the project root.
+See the [LICENSE](./LICENSE) file in the project root.
 
 ---
 
@@ -441,6 +456,7 @@ See the [LICENSE](../LICENSE) file in the project root.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 **Quick start:**
+
 1. Fork the repo and create a feature branch
 2. Run `make setup` (Docker) or `make install` (local)
 3. Make changes with hot-reload enabled

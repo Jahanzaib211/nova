@@ -1,11 +1,25 @@
 "use client";
 
-import { CodeIcon, DownloadIcon, ExternalLinkIcon, EyeIcon, GlobeIcon, LoaderCircleIcon, MonitorIcon, XIcon } from "lucide-react";
+import {
+  CodeIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  EyeIcon,
+  GlobeIcon,
+  LoaderCircleIcon,
+  MonitorIcon,
+  XIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
-import { useBrowserCheck, useLastBrowserCheck, useSandboxFile, useSandboxTerminalUrl } from "@/core/sandbox/hooks";
+import {
+  useBrowserCheck,
+  useLastBrowserCheck,
+  useSandboxFile,
+  useSandboxTerminalUrl,
+} from "@/core/sandbox/hooks";
 import { cn } from "@/lib/utils";
 
 // Tab 3: Browser — rendered HTML preview
@@ -615,4 +629,3 @@ export function Browser({
     </div>
   );
 }
-

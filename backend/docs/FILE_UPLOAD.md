@@ -15,16 +15,19 @@ DeerFlow 后端提供了完整的文件上传功能，支持多文件上传，�
 ## API 端点
 
 ### 1. 上传文件
+
 ```
 POST /api/threads/{thread_id}/uploads
 ```
 
 **请求体：** `multipart/form-data`
+
 - `files`: 一个或多个文件
 
 网关会在应用层限制上传规模，默认最多 10 个文件、单文件 50 MiB、单次请求总计 100 MiB。可通过 `config.yaml` 的 `uploads.max_files`、`uploads.max_file_size`、`uploads.max_total_size` 调整；前端会读取同一组限制并在选择文件时提示，超过限制时后端返回 `413 Payload Too Large`。
 
 **响应：**
+
 ```json
 {
   "success": true,
@@ -46,11 +49,13 @@ POST /api/threads/{thread_id}/uploads
 ```
 
 **路径说明：**
+
 - `path`: 实际文件系统路径（相对于 `backend/` 目录）
 - `virtual_path`: Agent 在沙箱中使用的虚拟路径
 - `artifact_url`: 前端通过 HTTP 访问文件的 URL
 
 ### 2. 查询上传限制
+
 ```
 GET /api/threads/{thread_id}/uploads/limits
 ```
@@ -58,6 +63,7 @@ GET /api/threads/{thread_id}/uploads/limits
 返回网关当前生效的上传限制，供前端在用户选择文件前提示和拦截。
 
 **响应：**
+
 ```json
 {
   "max_files": 10,
@@ -67,11 +73,13 @@ GET /api/threads/{thread_id}/uploads/limits
 ```
 
 ### 3. 列出已上传文件
+
 ```
 GET /api/threads/{thread_id}/uploads/list
 ```
 
 **响应：**
+
 ```json
 {
   "files": [
@@ -90,11 +98,13 @@ GET /api/threads/{thread_id}/uploads/list
 ```
 
 ### 4. 删除文件
+
 ```
 DELETE /api/threads/{thread_id}/uploads/{filename}
 ```
 
 **响应：**
+
 ```json
 {
   "success": true,
@@ -105,6 +115,7 @@ DELETE /api/threads/{thread_id}/uploads/{filename}
 ## 支持的文档格式
 
 以下格式在显式启用 `uploads.auto_convert_documents: true` 时会自动转换为 Markdown：
+
 - PDF (`.pdf`)
 - PowerPoint (`.ppt`, `.pptx`)
 - Excel (`.xls`, `.xlsx`)
@@ -147,11 +158,13 @@ read_file(path="/mnt/user-data/uploads/document.md")
 ```
 
 **路径映射关系：**
+
 - Agent 使用：`/mnt/user-data/uploads/document.pdf`（虚拟路径）
 - 实际存储：`backend/.deer-flow/threads/{thread_id}/user-data/uploads/document.pdf`
 - 前端访问：`/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/document.pdf`（HTTP URL）
 
 上传流程采用“线程目录优先”策略：
+
 - 先写入 `backend/.deer-flow/threads/{thread_id}/user-data/uploads/` 作为权威存储
 - 本地沙箱（`sandbox_id=local`）直接使用线程目录内容
 - 非本地沙箱会额外同步到 `/mnt/user-data/uploads/*`，确保运行时可见
@@ -191,10 +204,7 @@ files = [
     ("files", open("document.pdf", "rb")),
     ("files", open("presentation.pptx", "rb")),
 ]
-response = requests.post(
-    f"{base_url}/api/threads/{thread_id}/uploads",
-    files=files
-)
+response = requests.post(f"{base_url}/api/threads/{thread_id}/uploads", files=files)
 print(response.json())
 
 # 列出文件
@@ -202,9 +212,7 @@ response = requests.get(f"{base_url}/api/threads/{thread_id}/uploads/list")
 print(response.json())
 
 # 删除文件
-response = requests.delete(
-    f"{base_url}/api/threads/{thread_id}/uploads/document.pdf"
-)
+response = requests.delete(f"{base_url}/api/threads/{thread_id}/uploads/document.pdf")
 print(response.json())
 ```
 

@@ -12,6 +12,7 @@ Revision ID: 2026_07_16_credit_requests
 Revises: 2026_07_16_ops_controls
 Create Date: 2026-07-16
 """
+
 from __future__ import annotations
 
 import logging

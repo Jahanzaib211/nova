@@ -1,7 +1,19 @@
 "use client";
 
 import type { Message } from "@langchain/langgraph-sdk";
-import { CheckCircle2Icon, DownloadIcon, FileTextIcon, FolderIcon, FolderOpenIcon, GithubIcon, GlobeIcon, PencilIcon, SquareTerminalIcon, ShieldIcon, XIcon } from "lucide-react";
+import {
+  CheckCircle2Icon,
+  DownloadIcon,
+  FileTextIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  GithubIcon,
+  GlobeIcon,
+  PencilIcon,
+  SquareTerminalIcon,
+  ShieldIcon,
+  XIcon,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,7 +25,15 @@ import { AgentComputerErrorBoundary } from "@/components/workspace/agent-compute
 import { Tooltip } from "@/components/workspace/tooltip";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
-import { useDevServers, useDevServerStatus, useLiveFileContent, useSandboxFiles, useSandboxReview, useStartPreview, type SandboxFile } from "@/core/sandbox/hooks";
+import {
+  useDevServers,
+  useDevServerStatus,
+  useLiveFileContent,
+  useSandboxFiles,
+  useSandboxReview,
+  useStartPreview,
+  type SandboxFile,
+} from "@/core/sandbox/hooks";
 import { cn } from "@/lib/utils";
 
 import { ActivityPanel, LlmErrorBadge, TaskChecklist } from "./activity-tab";
@@ -337,7 +357,9 @@ export function AgentComputerPanel({
                 <span className="bg-primary relative inline-flex h-1.5 w-1.5 rounded-full" />
               </span>
               {reducedMotion ? (
-                <span className="text-[10px] font-medium">{t.agentComputer.live}</span>
+                <span className="text-[10px] font-medium">
+                  {t.agentComputer.live}
+                </span>
               ) : (
                 <AuroraText
                   colors={["#8b5cf6", "#a78bfa", "#06b6d4", "#8b5cf6"]}
@@ -572,7 +594,9 @@ export function AgentComputerPanel({
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Privacy">
-          {activeTab === "privacy" ? <PrivacyPanel threadId={threadId} /> : null}
+          {activeTab === "privacy" ? (
+            <PrivacyPanel threadId={threadId} />
+          ) : null}
         </AgentComputerErrorBoundary>
       </div>
 

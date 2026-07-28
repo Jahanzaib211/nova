@@ -11,14 +11,17 @@ DeerFlow 的文件上传系统返回三种不同的路径，每种路径用于�
 ```
 
 **用途：**
+
 - 文件在服务器文件系统中的实际位置
 - 相对于 `backend/` 目录
 - 用于直接文件系统访问、备份、调试等
 
 **示例：**
+
 ```python
 # Python 代码中直接访问
 from pathlib import Path
+
 file_path = Path("backend/.deer-flow/threads/abc123/user-data/uploads/document.pdf")
 content = file_path.read_bytes()
 ```
@@ -30,12 +33,14 @@ content = file_path.read_bytes()
 ```
 
 **用途：**
+
 - Agent 在沙箱环境中使用的路径
 - 沙箱系统会自动映射到实际路径
 - Agent 的所有文件操作工具都使用这个路径
 
 **示例：**
 Agent 在对话中使用：
+
 ```python
 # Agent 使用 read_file 工具
 read_file(path="/mnt/user-data/uploads/document.pdf")
@@ -51,11 +56,13 @@ bash(command="cat /mnt/user-data/uploads/document.pdf")
 ```
 
 **用途：**
+
 - 前端通过 HTTP 访问文件
 - 用于下载、预览文件
 - 可以直接在浏览器中打开
 
 **示例：**
+
 ```typescript
 // 前端 TypeScript/JavaScript 代码
 const threadId = 'abc123';
@@ -146,13 +153,14 @@ async function uploadAndProcess(threadId: string, file: File) {
 from pathlib import Path
 from deerflow.agents.middlewares.thread_data_middleware import THREAD_DATA_BASE_DIR
 
+
 def process_uploaded_file(thread_id: str, filename: str):
     # 使用实际路径
     base_dir = Path.cwd() / THREAD_DATA_BASE_DIR / thread_id / "user-data" / "uploads"
     file_path = base_dir / filename
 
     # 直接读取
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         content = f.read()
 
     return content

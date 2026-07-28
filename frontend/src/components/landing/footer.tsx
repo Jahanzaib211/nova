@@ -28,7 +28,10 @@ export function Footer({ className }: FooterProps) {
       </div>
       <div className="text-muted-foreground container mb-8 flex flex-col items-center justify-center gap-2 text-xs">
         <nav className="flex items-center gap-4">
-          <Link href="/terms" className="hover:text-foreground transition-colors">
+          <Link
+            href="/terms"
+            className="hover:text-foreground transition-colors"
+          >
             Terms
           </Link>
           <Link
@@ -37,7 +40,10 @@ export function Footer({ className }: FooterProps) {
           >
             Privacy
           </Link>
-          <Link href="/saas" className="hover:text-foreground transition-colors">
+          <Link
+            href="/saas"
+            className="hover:text-foreground transition-colors"
+          >
             Pricing
           </Link>
         </nav>

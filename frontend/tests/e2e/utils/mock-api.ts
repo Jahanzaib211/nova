@@ -528,17 +528,40 @@ const MOCK_SNAPSHOT = {
   traversal_count: 42,
   duration_ms: 87.5,
   projects: [
-    { project_id: "p1", name: "backend", kind: "python_project", root_path: "/mnt/user-data/workspace" },
+    {
+      project_id: "p1",
+      name: "backend",
+      kind: "python_project",
+      root_path: "/mnt/user-data/workspace",
+    },
   ],
 };
 
 const MOCK_COMMANDS = [
-  { name: "test", kind: "test", project_id: "p1", argv: ["pytest"], description: "Run tests" },
-  { name: "lint", kind: "lint", project_id: "p1", argv: ["ruff", "check"], description: "Lint" },
+  {
+    name: "test",
+    kind: "test",
+    project_id: "p1",
+    argv: ["pytest"],
+    description: "Run tests",
+  },
+  {
+    name: "lint",
+    kind: "lint",
+    project_id: "p1",
+    argv: ["ruff", "check"],
+    description: "Lint",
+  },
 ];
 
 const MOCK_SYMBOLS = [
-  { name: "main", kind: "function", fqn: "app.main", file_path: "app/main.py", language: "python" },
+  {
+    name: "main",
+    kind: "function",
+    fqn: "app.main",
+    file_path: "app/main.py",
+    language: "python",
+  },
 ];
 
 /**
@@ -583,7 +606,12 @@ export function mockWorkspaceAPI(page: Page) {
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ scanned: true, symbols: MOCK_SYMBOLS, projects: ["p1"], commands: MOCK_COMMANDS }),
+      body: JSON.stringify({
+        scanned: true,
+        symbols: MOCK_SYMBOLS,
+        projects: ["p1"],
+        commands: MOCK_COMMANDS,
+      }),
     });
   });
 

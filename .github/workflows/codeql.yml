@@ -20,6 +20,10 @@ permissions:
   contents: read
   # Required for GitHub to surface results in the Security tab.
   security-events: write
+  # Required by github/codeql-action/analyze's post-analysis telemetry call
+  # (GET .../actions/runs/{run_id}) — without it the step hard-fails with
+  # "Resource not accessible by integration" even though analysis succeeded.
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -38,9 +38,7 @@ def test_sigterm_chains_to_previous_handler(fresh_hooks, monkeypatch):
     signal.signal(signal.SIGTERM, uvicorn_like_handler)
 
     ran_shutdown: list[bool] = []
-    monkeypatch.setattr(
-        shutdown_mod, "_safe_shutdown", lambda: ran_shutdown.append(True)
-    )
+    monkeypatch.setattr(shutdown_mod, "_safe_shutdown", lambda: ran_shutdown.append(True))
 
     assert shutdown_mod.install_shutdown_hooks() is True
 
@@ -51,10 +49,7 @@ def test_sigterm_chains_to_previous_handler(fresh_hooks, monkeypatch):
     installed(signal.SIGTERM, None)
 
     assert ran_shutdown == [True], "sandbox cleanup must still run"
-    assert chained == [(signal.SIGTERM, None)], (
-        "previous (uvicorn) handler must be invoked after cleanup — "
-        "otherwise the server never sees the signal and reloads wedge"
-    )
+    assert chained == [(signal.SIGTERM, None)], "previous (uvicorn) handler must be invoked after cleanup — otherwise the server never sees the signal and reloads wedge"
 
 
 def test_sigint_chains_to_previous_handler(fresh_hooks, monkeypatch):

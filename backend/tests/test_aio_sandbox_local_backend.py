@@ -346,9 +346,7 @@ class TestPreviewPortCollisionQuarantine:
         reserved_before = set(allocator._reserved_ports)
         # Simulate the container namespace: every port looks bindable locally,
         # so only the reservation set (and Docker's rejections) can steer.
-        monkeypatch.setattr(
-            type(allocator), "_is_port_available", lambda self, port: port not in self._reserved_ports
-        )
+        monkeypatch.setattr(type(allocator), "_is_port_available", lambda self, port: port not in self._reserved_ports)
 
         backend = LocalContainerBackend(
             image="sandbox:latest",

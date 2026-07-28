@@ -33,6 +33,7 @@ models:
 ```
 
 **Supported Providers**:
+
 - OpenAI (`langchain_openai:ChatOpenAI`)
 - Anthropic (`langchain_anthropic:ChatAnthropic`)
 - DeepSeek (`langchain_deepseek:ChatDeepSeek`)
@@ -61,6 +62,7 @@ models:
 ```
 
 **Auth behavior for CLI-backed providers**:
+
 - `CodexChatModel` loads Codex CLI auth from `~/.codex/auth.json`
 - The Codex Responses endpoint currently rejects `max_tokens` and `max_output_tokens`, so `CodexChatModel` does not expose a request-level token cap
 - `ClaudeChatModel` accepts `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`, `CLAUDE_CODE_CREDENTIALS_PATH`, or plaintext `~/.claude/.credentials.json`
@@ -147,6 +149,7 @@ tools:
 ```
 
 **Built-in Tools**:
+
 - `web_search` - Search the web (DuckDuckGo, Tavily, Brave, Exa, InfoQuest, Firecrawl)
 - `web_fetch` - Fetch web pages (Jina AI, Exa, InfoQuest, Firecrawl)
 - `image_search` - Search for reference images (DuckDuckGo, InfoQuest, Serper)
@@ -160,6 +163,7 @@ tools:
 Nova supports multiple sandbox execution modes. Configure your preferred mode in `config.yaml`:
 
 **Local Execution** (runs sandbox code directly on the host machine):
+
 ```yaml
 sandbox:
    use: deerflow.sandbox.local:LocalSandboxProvider # Local execution
@@ -167,6 +171,7 @@ sandbox:
 ```
 
 **Docker Execution** (runs sandbox code in isolated Docker containers):
+
 ```yaml
 sandbox:
    use: deerflow.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
@@ -207,6 +212,7 @@ skills:
 ```
 
 **How Skills Work**:
+
 - Skills are stored in `deer-flow/skills/{public,custom}/`
 - Each skill has a `SKILL.md` file with metadata
 - Skills are automatically discovered and loaded
@@ -214,6 +220,7 @@ skills:
 
 **Per-Agent Skill Filtering**:
 Custom agents can restrict which skills they load by defining a `skills` field in their `config.yaml` (located at `workspace/agents/<agent_name>/config.yaml`):
+
 - **Omitted or `null`**: Loads all globally enabled skills (default fallback).
 - **`[]` (empty list)**: Disables all skills for this specific agent.
 - **`["skill-name"]`**: Loads only the explicitly specified skills.
@@ -235,6 +242,7 @@ title:
 The default GitHub API rate limits are quite restrictive. For frequent project research, we recommend configuring a personal access token (PAT) with read-only permissions.
 
 **Configuration Steps**:
+
 1. Uncomment the `GITHUB_TOKEN` line in the `.env` file and add your personal access token
 2. Restart the DeerFlow service to apply changes
 
@@ -297,11 +305,12 @@ DeerFlow searches for configuration in this order:
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
 
-### Extensions Configuration (`extensions_config.json`):
+### Extensions Configuration (`extensions_config.json`)
 
 MCP servers and skill states in a single file:
 
 Configuration priority:
+
 1. Explicit `config_path` argument
 2. `NOVA_EXTENSIONS_CONFIG_PATH` environment variable
 3. `extensions_config.json` in current directory (backend/)
@@ -395,20 +404,24 @@ genuinely reads the full CLI config directory.
 ## Troubleshooting
 
 ### "Config file not found"
+
 - Ensure `config.yaml` exists in the **project root** directory (`nova/config.yaml`)
 - If the runtime starts outside the project root, set `NOVA_PROJECT_ROOT`
 - Alternatively, set `NOVA_CONFIG_PATH` environment variable to point at a specific file
 
 ### "Invalid API key"
+
 - Verify environment variables are set correctly
 - Check that `$` prefix is used for env var references
 
 ### "Skills not loading"
+
 - Check that `deer-flow/skills/` directory exists
 - Verify skills have valid `SKILL.md` files
 - Check `skills.path` or `NOVA_SKILLS_PATH` if using a custom path
 
 ### "Docker sandbox fails to start"
+
 - Ensure Docker is running
 - Check port 8080 (or configured port) is available
 - Verify Docker image is accessible

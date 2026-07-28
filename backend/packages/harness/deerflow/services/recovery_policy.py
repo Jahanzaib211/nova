@@ -199,7 +199,8 @@ WORKER_EXITED = RecoveryPolicy(
 # ---------------------------------------------------------------------------
 
 POLICIES: dict[str, RecoveryPolicy] = {
-    p.name: p for p in [
+    p.name: p
+    for p in [
         TUNNEL_DISCONNECTED,
         GATEWAY_UNAVAILABLE,
         STREAM_STALLED,

@@ -27,6 +27,7 @@
 | C9 | Product features and extensibility | ⏳ pending | Depends on C8 |
 
 **Design Principles:**
+
 1. Single coherent operating system — not a collection of AI features
 2. Reduce architectural complexity — every sprint should simplify
 3. Increase operational reliability — self-healing, observability, testing
@@ -34,6 +35,7 @@
 5. Implementation is source of truth — docs follow code, not vice versa
 
 **Constraints:**
+
 - No new user-facing features until consolidated
 - No references to the local LLM gateway service name in code
 - No references to the model name it wraps in code (allowed only as literal model identifiers in config)

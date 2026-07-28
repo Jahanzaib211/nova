@@ -25,7 +25,9 @@ export function ReferralCard() {
   useEffect(() => {
     const controller = new AbortController();
     void fetch("/api/v1/referral", { signal: controller.signal })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
+      )
       .then((data: Referral) => {
         setReferral(data);
         setLink(`${window.location.origin}/signup?ref=${data.code}`);

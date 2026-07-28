@@ -35,6 +35,9 @@ jobs:
         working-directory: backend
         run: uv sync --group dev
 
+      - name: Provide config.yaml (per-repo setup, never committed)
+        run: cp config.example.yaml config.yaml
+
       - name: Run unit tests of backend
         working-directory: backend
         run: make test

@@ -229,9 +229,7 @@ async def test_start_run_byok_bypasses_wall_and_sets_key(monkeypatch):
 
     monkeypatch.setattr(services, "set_current_user", _stop)
 
-    request = SimpleNamespace(
-        state=SimpleNamespace(user=SimpleNamespace(id="u1", system_role="user", plan="free"))
-    )
+    request = SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="u1", system_role="user", plan="free")))
     body = SimpleNamespace(
         on_disconnect="continue",
         context={},

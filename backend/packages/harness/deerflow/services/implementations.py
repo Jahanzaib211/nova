@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # RunService — wraps RunManager
 # ---------------------------------------------------------------------------
 
+
 class RunServiceImpl:
     """Thin wrapper around RunManager implementing RunService protocol.
 
@@ -252,6 +253,7 @@ class RunServiceImpl:
 # WorkspaceService — wraps ThreadDataMiddleware paths
 # ---------------------------------------------------------------------------
 
+
 class WorkspaceServiceImpl:
     """Thin wrapper implementing WorkspaceService protocol."""
 
@@ -293,6 +295,7 @@ class WorkspaceServiceImpl:
 # RepositoryService — wraps RunStore
 # ---------------------------------------------------------------------------
 
+
 class RepositoryServiceImpl:
     """Thin wrapper implementing RepositoryService protocol."""
 
@@ -328,6 +331,7 @@ class RepositoryServiceImpl:
 # ---------------------------------------------------------------------------
 # BrowserService — wraps browser_check + circuit breaker
 # ---------------------------------------------------------------------------
+
 
 class BrowserServiceImpl:
     """Thin wrapper implementing BrowserService protocol."""
@@ -378,6 +382,7 @@ class BrowserServiceImpl:
 # TerminalService — wraps sandbox.execute_command
 # ---------------------------------------------------------------------------
 
+
 class TerminalServiceImpl:
     """Thin wrapper implementing TerminalService protocol."""
 
@@ -405,6 +410,7 @@ class TerminalServiceImpl:
 # ---------------------------------------------------------------------------
 # ArtifactService — wraps artifact router logic
 # ---------------------------------------------------------------------------
+
 
 class ArtifactServiceImpl:
     """Thin wrapper implementing ArtifactService protocol."""
@@ -456,6 +462,7 @@ class ArtifactServiceImpl:
 # HealthService — wraps 12-probe watchdog
 # ---------------------------------------------------------------------------
 
+
 class HealthServiceImpl:
     """Thin wrapper implementing HealthService protocol.
 
@@ -476,20 +483,24 @@ class HealthServiceImpl:
             try:
                 result = await probe_fn()
                 latency = (time.monotonic() - start) * 1000
-                results.append(ProbeResult(
-                    name=name,
-                    healthy=getattr(result, "healthy", True),
-                    message=getattr(result, "message", ""),
-                    latency_ms=latency,
-                ))
+                results.append(
+                    ProbeResult(
+                        name=name,
+                        healthy=getattr(result, "healthy", True),
+                        message=getattr(result, "message", ""),
+                        latency_ms=latency,
+                    )
+                )
             except Exception as exc:
                 latency = (time.monotonic() - start) * 1000
-                results.append(ProbeResult(
-                    name=name,
-                    healthy=False,
-                    message=str(exc),
-                    latency_ms=latency,
-                ))
+                results.append(
+                    ProbeResult(
+                        name=name,
+                        healthy=False,
+                        message=str(exc),
+                        latency_ms=latency,
+                    )
+                )
         healthy_count = sum(1 for r in results if r.healthy)
         report = HealthReport(
             healthy=healthy_count == len(results),
@@ -501,13 +512,15 @@ class HealthServiceImpl:
         if self._event_bus is not None and self._last_healthy != report.healthy:
             from deerflow.events.event import HealthChanged
 
-            self._event_bus.publish(HealthChanged(
-                payload={
-                    "healthy": report.healthy,
-                    "probe_count": report.probe_count,
-                    "healthy_count": report.healthy_count,
-                },
-            ))
+            self._event_bus.publish(
+                HealthChanged(
+                    payload={
+                        "healthy": report.healthy,
+                        "probe_count": report.probe_count,
+                        "healthy_count": report.healthy_count,
+                    },
+                )
+            )
             self._last_healthy = report.healthy
         return report
 
@@ -538,6 +551,7 @@ class HealthServiceImpl:
 # ---------------------------------------------------------------------------
 # RecoveryService — wraps fix_tunnel, container restart
 # ---------------------------------------------------------------------------
+
 
 class RecoveryServiceImpl:
     """Thin wrapper implementing RecoveryService protocol.
@@ -581,6 +595,7 @@ class RecoveryServiceImpl:
 # ConfigurationService — wraps get_app_config
 # ---------------------------------------------------------------------------
 
+
 class ConfigurationServiceImpl:
     """Thin wrapper implementing ConfigurationService protocol."""
 
@@ -613,6 +628,7 @@ class ConfigurationServiceImpl:
 # ---------------------------------------------------------------------------
 # DiagnosticsService — wraps diagnostics module
 # ---------------------------------------------------------------------------
+
 
 class DiagnosticsServiceImpl:
     """Thin wrapper implementing DiagnosticsService protocol.
@@ -734,6 +750,7 @@ class WorkspaceIntelligenceServiceImpl:
         if self._event_bus is None:
             try:
                 from deerflow.events.bus import event_bus as _eb
+
                 self._event_bus = _eb
             except Exception:
                 self._event_bus = None
@@ -741,6 +758,7 @@ class WorkspaceIntelligenceServiceImpl:
 
     def _make_metrics(self):
         from deerflow.workspace.metrics import WIKMetrics
+
         return WIKMetrics()
 
     def _emit(self, event) -> None:
@@ -754,38 +772,46 @@ class WorkspaceIntelligenceServiceImpl:
     def _record_scan(self, root_path, file_count, project_count, symbol_count, command_count, duration_ms, language_distribution=None):
         self._metrics.record_scan(file_count, project_count, symbol_count, duration_ms, language_distribution)
         from deerflow.workspace.events import WorkspaceScanned
-        self._emit(WorkspaceScanned(
-            root_path=root_path,
-            file_count=file_count,
-            project_count=project_count,
-            symbol_count=symbol_count,
-            command_count=command_count,
-            scan_duration_ms=duration_ms,
-            language_distribution=language_distribution or {},
-        ))
+
+        self._emit(
+            WorkspaceScanned(
+                root_path=root_path,
+                file_count=file_count,
+                project_count=project_count,
+                symbol_count=symbol_count,
+                command_count=command_count,
+                scan_duration_ms=duration_ms,
+                language_distribution=language_distribution or {},
+            )
+        )
 
     def _record_plan_built(self, plan, symbols_found):
         if plan:
             self._metrics.record_plan_built(len(plan.steps), True)
             from deerflow.workspace.events import PlanBuilt
-            self._emit(PlanBuilt(
-                root_path="",
-                plan_id=plan.plan_id,
-                plan_title=getattr(plan, "goal", "") or "",
-                step_count=len(plan.steps),
-                plan_valid=True,
-                risk_level=plan.risk_level.value if hasattr(plan.risk_level, "value") else str(plan.risk_level),
-                symbols_found=tuple(symbols_found),
-            ))
+
+            self._emit(
+                PlanBuilt(
+                    root_path="",
+                    plan_id=plan.plan_id,
+                    plan_title=getattr(plan, "goal", "") or "",
+                    step_count=len(plan.steps),
+                    plan_valid=True,
+                    risk_level=plan.risk_level.value if hasattr(plan.risk_level, "value") else str(plan.risk_level),
+                    symbols_found=tuple(symbols_found),
+                )
+            )
 
     def _record_cache_hit(self, root_path: str = ""):
         self._metrics.record_cache_hit()
         from deerflow.workspace.events import CacheHit
+
         self._emit(CacheHit(root_path=root_path, cache_key="", hit_count=self._metrics._cache_hits))
 
     def _record_cache_miss(self, root_path: str = ""):
         self._metrics.record_cache_miss()
         from deerflow.workspace.events import CacheMiss
+
         self._emit(CacheMiss(root_path=root_path, cache_key=""))
 
     def scan(self, root_path: str, force_refresh: bool = False) -> WorkspaceSnapshot:
@@ -977,6 +1003,7 @@ class WorkspaceIntelligenceServiceImpl:
 
     def _get_symbol_index(self) -> SymbolIndex:
         from deerflow.workspace.graph import SymbolIndex
+
         symbols = SymbolIndex()
         for snap in self._snapshots.values():
             for sym in snap.symbols:
@@ -985,6 +1012,7 @@ class WorkspaceIntelligenceServiceImpl:
 
     def _get_command_registry(self) -> CommandRegistry:
         from deerflow.workspace.graph import CommandRegistry
+
         cmd_reg = CommandRegistry()
         for snap in self._snapshots.values():
             for cmd in snap.commands:
@@ -1021,6 +1049,7 @@ class WorkspaceIntelligenceServiceImpl:
 
         if not plan.steps:
             from deerflow.execution.models import ExecutionResult
+
             return ExecutionResult(
                 execution_id="",
                 status="succeeded",
@@ -1084,7 +1113,7 @@ class WorkspaceIntelligenceServiceImpl:
             if path.rstrip("/") == str(root_path).rstrip("/"):
                 return ""
             if path.startswith(root_prefix):
-                return path[len(root_prefix):]
+                return path[len(root_prefix) :]
             return path.lstrip("./")
 
         normalized = {_rel(f.rstrip("/")) for f in files}

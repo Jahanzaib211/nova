@@ -120,11 +120,13 @@ enrich_file_listing(result, thread_id) -> dict     # Adds URLs, stringifies size
 ### 4.1 Gateway Slimming
 
 **`app/gateway/routers/skills.py`**:
+
 - Remove `_is_unsafe_zip_member`, `_is_symlink_member`, `_safe_extract_skill_archive`, `_should_ignore_archive_entry`, `_resolve_skill_dir_from_archive_root` (~80 lines)
 - `install_skill` route becomes a single call to `install_skill_from_archive(path)`
 - Exception mapping: `SkillAlreadyExistsError → 409`, `ValueError → 400`, `FileNotFoundError → 404`
 
 **`app/gateway/routers/uploads.py`**:
+
 - Remove inline `get_uploads_dir` (replaced by `ensure_uploads_dir`/`get_uploads_dir`)
 - `upload_files` uses `normalize_filename()` instead of inline safety checks
 - `list_uploaded_files` uses `list_files_in_dir()` + enrichment
@@ -133,6 +135,7 @@ enrich_file_listing(result, thread_id) -> dict     # Adds URLs, stringifies size
 ### 4.2 Client Slimming
 
 **`deerflow/client.py`**:
+
 - Remove `_get_uploads_dir` static method
 - Remove ~50 lines of inline zip handling in `install_skill`
 - `install_skill` delegates to `install_skill_from_archive()`

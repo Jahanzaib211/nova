@@ -360,7 +360,8 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
   );
 }
 
-const INSTALLER_PATTERN = /(npm (i|install|run|yarn|pnpm|yarn)|pip install|bun install|pipenv|poetry install)/;
+const INSTALLER_PATTERN =
+  /(npm (i|install|run|yarn|pnpm|yarn)|pip install|bun install|pipenv|poetry install)/;
 const INSTALLER_LABELS: Record<string, string> = {
   npm: "npm",
   yarn: "Yarn",
@@ -390,8 +391,12 @@ export function RuntimeCapabilitiesBar({
     if (last?.status === "running" && INSTALLER_PATTERN.test(last.summary)) {
       const match = /(npm|yarn|pnpm|pip|bun)/.exec(last.summary);
       const _matched: string | undefined = match?.[1];
-      const label = _matched ? (INSTALLER_LABELS[_matched] ?? _matched) : "Installing…";
-      const elapsed = last.ts ? Math.floor((Date.now() - new Date(last.ts).getTime()) / 1000) : 0;
+      const label = _matched
+        ? (INSTALLER_LABELS[_matched] ?? _matched)
+        : "Installing…";
+      const elapsed = last.ts
+        ? Math.floor((Date.now() - new Date(last.ts).getTime()) / 1000)
+        : 0;
       return { label, elapsed, running: true };
     }
     return null;
@@ -533,7 +538,7 @@ export function RuntimeCapabilitiesBar({
 
         {installState && (
           <span
-            className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] font-medium"
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 font-mono text-[11px] font-medium text-amber-600 dark:text-amber-400"
             data-testid="runtime-installing-pill"
           >
             <Loader2Icon className="size-3 animate-spin" aria-hidden />

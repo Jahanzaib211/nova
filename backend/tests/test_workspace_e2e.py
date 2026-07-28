@@ -179,9 +179,7 @@ class TestWorkspaceSevenEndpointLoop:
         names = [s["name"].lower() for s in resp.json()["symbols"]]
         assert any("calculator" in n for n in names)
 
-        resp = client.get(
-            f"/api/workspace/{_THREAD_ID}/symbols", params={"file": "src/calculator.py"}
-        )
+        resp = client.get(f"/api/workspace/{_THREAD_ID}/symbols", params={"file": "src/calculator.py"})
         assert resp.status_code == 200
         file_symbols = resp.json()["symbols"]
         assert file_symbols, "file= filter must return the module's symbols"

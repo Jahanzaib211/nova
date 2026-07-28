@@ -33,15 +33,21 @@ function workspaceUrl(threadId: string, path: string): string {
   return `${getBackendBaseURL()}/api/workspace/${encodeURIComponent(threadId)}${path}`;
 }
 
-async function parseSnapshotResponse(res: Response): Promise<WorkspaceSnapshotSummary> {
-  if (res.status === 403) throw new WorkspaceDisabledError("workspace intelligence disabled");
-  if (res.status === 404) throw new WorkspaceUnindexedError("workspace not indexed");
+async function parseSnapshotResponse(
+  res: Response,
+): Promise<WorkspaceSnapshotSummary> {
+  if (res.status === 403)
+    throw new WorkspaceDisabledError("workspace intelligence disabled");
+  if (res.status === 404)
+    throw new WorkspaceUnindexedError("workspace not indexed");
   if (!res.ok) throw new Error(`workspace request failed: ${res.status}`);
   const body = (await res.json()) as { snapshot: WorkspaceSnapshotSummary };
   return body.snapshot;
 }
 
-export async function fetchWorkspaceSnapshot(threadId: string): Promise<WorkspaceSnapshotSummary> {
+export async function fetchWorkspaceSnapshot(
+  threadId: string,
+): Promise<WorkspaceSnapshotSummary> {
   const res = await fetch(workspaceUrl(threadId, "/snapshot"), {
     method: "GET",
     headers: { "Content-Type": "application/json" },
@@ -49,7 +55,10 @@ export async function fetchWorkspaceSnapshot(threadId: string): Promise<Workspac
   return parseSnapshotResponse(res);
 }
 
-export async function indexWorkspace(threadId: string, forceRefresh = false): Promise<WorkspaceSnapshotSummary> {
+export async function indexWorkspace(
+  threadId: string,
+  forceRefresh = false,
+): Promise<WorkspaceSnapshotSummary> {
   const res = await fetch(workspaceUrl(threadId, "/index"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -75,7 +84,10 @@ export interface WorkspaceCommand {
 }
 
 /** Symbols defined in one file (Files-tab outline). Empty on 403/404. */
-export async function fetchFileSymbols(threadId: string, filePath: string): Promise<WorkspaceSymbol[]> {
+export async function fetchFileSymbols(
+  threadId: string,
+  filePath: string,
+): Promise<WorkspaceSymbol[]> {
   const res = await fetch(
     workspaceUrl(threadId, `/symbols?file=${encodeURIComponent(filePath)}`),
     { method: "GET", headers: { "Content-Type": "application/json" } },
@@ -86,7 +98,9 @@ export async function fetchFileSymbols(threadId: string, filePath: string): Prom
 }
 
 /** Commands detected in the workspace (dev/test/lint...). Empty on 403/404. */
-export async function fetchWorkspaceCommands(threadId: string): Promise<WorkspaceCommand[]> {
+export async function fetchWorkspaceCommands(
+  threadId: string,
+): Promise<WorkspaceCommand[]> {
   const res = await fetch(workspaceUrl(threadId, "/commands"), {
     method: "GET",
     headers: { "Content-Type": "application/json" },
@@ -103,7 +117,9 @@ export interface WorkspaceMetrics {
 }
 
 /** Kernel metrics for the Privacy/status tab. Null on 403/404/error. */
-export async function fetchWorkspaceMetrics(threadId: string): Promise<WorkspaceMetrics | null> {
+export async function fetchWorkspaceMetrics(
+  threadId: string,
+): Promise<WorkspaceMetrics | null> {
   const res = await fetch(workspaceUrl(threadId, "/metrics"), {
     method: "GET",
     headers: { "Content-Type": "application/json" },
@@ -122,7 +138,10 @@ export interface WorkspaceImpact {
 }
 
 /** Blast radius of changing the given files. Null on 403/404/error. */
-export async function fetchWorkspaceImpact(threadId: string, files: string[]): Promise<WorkspaceImpact | null> {
+export async function fetchWorkspaceImpact(
+  threadId: string,
+  files: string[],
+): Promise<WorkspaceImpact | null> {
   const res = await fetch(workspaceUrl(threadId, "/impact"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },

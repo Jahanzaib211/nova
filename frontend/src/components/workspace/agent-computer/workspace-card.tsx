@@ -44,7 +44,9 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
           ) : (
             <RefreshCwIcon className="h-3 w-3" aria-hidden />
           )}
-          {isIndexing ? t.agentComputer.workspace.indexing : t.agentComputer.workspace.index}
+          {isIndexing
+            ? t.agentComputer.workspace.indexing
+            : t.agentComputer.workspace.index}
         </button>
       </div>
     );
@@ -57,7 +59,9 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[11px] font-medium">
           <FolderGit2Icon className="h-3 w-3 text-sky-400" />
-          <span className="text-foreground">{t.agentComputer.workspace.title}</span>
+          <span className="text-foreground">
+            {t.agentComputer.workspace.title}
+          </span>
           {snapshot.primary_language ? (
             <span className="bg-muted rounded px-1 text-[10px] capitalize">
               {snapshot.primary_language}
@@ -65,7 +69,9 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
           ) : null}
           <span className="text-muted-foreground/60 text-[10px] capitalize">
             {snapshot.repo_kind}
-            {snapshot.is_monorepo ? ` · ${t.agentComputer.workspace.monorepo}` : ""}
+            {snapshot.is_monorepo
+              ? ` · ${t.agentComputer.workspace.monorepo}`
+              : ""}
           </span>
         </div>
         <Tooltip content={t.agentComputer.workspace.reindex}>
@@ -90,7 +96,8 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
         </span>
         <span className="flex items-center gap-1">
           <BracesIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.symbol_count.toLocaleString()} {t.agentComputer.workspace.symbols}
+          {snapshot.symbol_count.toLocaleString()}{" "}
+          {t.agentComputer.workspace.symbols}
         </span>
         <span className="flex items-center gap-1">
           <SquareTerminalIcon className="h-2.5 w-2.5" aria-hidden />

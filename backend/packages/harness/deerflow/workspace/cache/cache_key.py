@@ -46,8 +46,8 @@ class CacheKeyBuilder:
 
     def build_file_hash_key(self, file_path: str, content_hash: str) -> str:
         """Build a cache key for a single file's content hash."""
-        return f"wik:file:{hashlib.sha256(f"{file_path}:{content_hash}".encode()).hexdigest()}"
+        return f"wik:file:{hashlib.sha256(f'{file_path}:{content_hash}'.encode()).hexdigest()}"
 
     def build_symbol_key(self, project_id: str, symbol_name: str) -> str:
         """Build a cache key for a symbol lookup result."""
-        return f"wik:sym:{hashlib.sha256(f"{project_id}:{symbol_name}".encode()).hexdigest()}"
+        return f"wik:sym:{hashlib.sha256(f'{project_id}:{symbol_name}'.encode()).hexdigest()}"

@@ -53,4 +53,8 @@ def get_auth_disabled_user():
         system_role="admin",
         needs_setup=False,
         token_version=0,
+        plan="free",
+        plan_status=None,
+        tos_accepted_version=None,
+        referral_code=None,
     )

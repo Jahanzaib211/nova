@@ -46,7 +46,6 @@ from deerflow.workspace.parsers import JSParser, PythonParser
 from deerflow.workspace.planner import PlanValidator, RiskAnalyzer, WorkspacePlanner
 from deerflow.workspace.scanners import BoundedWalker, TraversalLimit
 
-
 # =====================================================================
 # Models
 # =====================================================================
@@ -141,9 +140,7 @@ class TestLanguageDetector:
 
 class TestCommandDetector:
     def test_commands_from_pyproject(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text(
-            "[project.scripts]\ntest = 'pytest'"
-        )
+        (tmp_path / "pyproject.toml").write_text("[project.scripts]\ntest = 'pytest'")
         project = Project(
             project_id="p1",
             name="test",
@@ -233,30 +230,34 @@ class TestSymbolIndex:
     def test_find_prefix(self):
         idx = SymbolIndex()
         for name in ["foo_bar", "foo_baz", "qux"]:
-            idx.add(Symbol(
-                symbol_id=name,
-                project_id="p1",
-                name=name,
-                kind=SymbolKind.FUNCTION,
-                fqn=f"m.{name}",
-                file_path="/src/m.py",
-                language="python",
-            ))
+            idx.add(
+                Symbol(
+                    symbol_id=name,
+                    project_id="p1",
+                    name=name,
+                    kind=SymbolKind.FUNCTION,
+                    fqn=f"m.{name}",
+                    file_path="/src/m.py",
+                    language="python",
+                )
+            )
         results = idx.find_prefix("foo_")
         assert len(results) == 2
 
     def test_count(self):
         idx = SymbolIndex()
         assert idx.count() == 0
-        idx.add(Symbol(
-            symbol_id="s1",
-            project_id="p1",
-            name="foo",
-            kind=SymbolKind.FUNCTION,
-            fqn="m.foo",
-            file_path="/src/m.py",
-            language="python",
-        ))
+        idx.add(
+            Symbol(
+                symbol_id="s1",
+                project_id="p1",
+                name="foo",
+                kind=SymbolKind.FUNCTION,
+                fqn="m.foo",
+                file_path="/src/m.py",
+                language="python",
+            )
+        )
         assert idx.count() == 1
 
 
@@ -308,14 +309,26 @@ class TestCommandRegistry:
 
     def test_find_by_kind(self):
         reg = CommandRegistry()
-        reg.register(Command(
-            command_id="c1", name="test", kind=CommandKind.TEST,
-            project_id="p1", argv=("pytest",), cwd="/src",
-        ))
-        reg.register(Command(
-            command_id="c2", name="build", kind=CommandKind.BUILD,
-            project_id="p1", argv=("build",), cwd="/src",
-        ))
+        reg.register(
+            Command(
+                command_id="c1",
+                name="test",
+                kind=CommandKind.TEST,
+                project_id="p1",
+                argv=("pytest",),
+                cwd="/src",
+            )
+        )
+        reg.register(
+            Command(
+                command_id="c2",
+                name="build",
+                kind=CommandKind.BUILD,
+                project_id="p1",
+                argv=("build",),
+                cwd="/src",
+            )
+        )
         test_cmds = reg.find_by_kind(CommandKind.TEST)
         assert len(test_cmds) == 1
 
@@ -385,8 +398,10 @@ class TestRiskAnalyzer:
             goal="Read files",
             steps=(
                 ExecutionStep(
-                    step_id="s1", kind=StepKind.READ,
-                    description="Read", risk_level=RiskLevel.LOW,
+                    step_id="s1",
+                    kind=StepKind.READ,
+                    description="Read",
+                    risk_level=RiskLevel.LOW,
                 ),
             ),
         )
@@ -401,8 +416,10 @@ class TestPlanValidator:
             goal="Read files",
             steps=(
                 ExecutionStep(
-                    step_id="s1", kind=StepKind.READ,
-                    description="Read file", risk_level=RiskLevel.LOW,
+                    step_id="s1",
+                    kind=StepKind.READ,
+                    description="Read file",
+                    risk_level=RiskLevel.LOW,
                 ),
             ),
         )
@@ -499,6 +516,7 @@ class TestWIKMetrics:
 class TestWIKEvents:
     def test_workspace_scanned_event(self):
         from deerflow.workspace.events import WorkspaceScanned
+
         e = WorkspaceScanned(
             root_path="/src",
             file_count=100,
@@ -511,6 +529,7 @@ class TestWIKEvents:
 
     def test_plan_built_event(self):
         from deerflow.workspace.events import PlanBuilt
+
         e = PlanBuilt(
             root_path="/src",
             plan_id="p1",
@@ -524,6 +543,7 @@ class TestWIKEvents:
 
     def test_cache_events(self):
         from deerflow.workspace.events import CacheHit, CacheMiss
+
         hit = CacheHit(root_path="/src", cache_key="abc", hit_count=5)
         miss = CacheMiss(root_path="/src", cache_key="xyz")
         assert hit.hit_count == 5
@@ -538,6 +558,7 @@ class TestWIKEvents:
 class TestWorkspaceIntelligenceServiceImpl:
     def test_service_has_required_methods(self):
         from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+
         svc = WorkspaceIntelligenceServiceImpl()
         assert hasattr(svc, "scan")
         assert hasattr(svc, "plan_search")
@@ -549,6 +570,7 @@ class TestWorkspaceIntelligenceServiceImpl:
     def test_scan_increments_metrics(self, tmp_path):
         (tmp_path / "test.py").write_text("def foo(): pass\n")
         from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+
         svc = WorkspaceIntelligenceServiceImpl()
         snap = svc.scan(str(tmp_path))
         assert snap.traversal_count >= 1
@@ -558,6 +580,7 @@ class TestWorkspaceIntelligenceServiceImpl:
     def test_get_snapshot_after_scan(self, tmp_path):
         (tmp_path / "main.py").write_text("x = 1\n")
         from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+
         svc = WorkspaceIntelligenceServiceImpl()
         svc.scan(str(tmp_path))
         snap = svc.get_snapshot(str(tmp_path))
@@ -567,6 +590,7 @@ class TestWorkspaceIntelligenceServiceImpl:
     def test_plan_search_records_metric(self, tmp_path):
         (tmp_path / "a.py").write_text("def foo(): pass\n")
         from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+
         svc = WorkspaceIntelligenceServiceImpl()
         svc.scan(str(tmp_path))
         result = svc.plan_search("def foo")
@@ -577,6 +601,7 @@ class TestWorkspaceIntelligenceServiceImpl:
     def test_plan_edit_valid(self, tmp_path):
         (tmp_path / "edit_me.py").write_text("x = 1\n")
         from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+
         svc = WorkspaceIntelligenceServiceImpl()
         svc.scan(str(tmp_path))
         result = svc.plan_edit(

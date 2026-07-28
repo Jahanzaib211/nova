@@ -195,9 +195,7 @@ class TestInteractiveShellAdapter:
 class TestHeartbeat:
     def test_heartbeat_thread_started_on_execute(self):
         kernel = ExecutionKernel()
-        result = kernel.execute_sync(
-            ExecutionRequest(argv=("sleep", "10"), execution_class=ExecutionClass.SHELL)
-        )
+        result = kernel.execute_sync(ExecutionRequest(argv=("sleep", "10"), execution_class=ExecutionClass.SHELL))
         assert result.status in (ExecutionStatus.SUCCEEDED, ExecutionStatus.TIMED_OUT, ExecutionStatus.CANCELLED)
 
     def test_heartbeat_updates_on_long_process(self):

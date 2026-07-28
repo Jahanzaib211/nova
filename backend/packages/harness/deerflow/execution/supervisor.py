@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ProcessHeartbeat:
     """Latest heartbeat from a supervised process."""
+
     execution_id: str
     pid: int
     timestamp: float = field(default_factory=time.monotonic)
@@ -480,10 +481,7 @@ class Supervisor:
                     }
                     for eid, hb in self._heartbeats.items()
                 },
-                "child_trees": {
-                    parent: list(children)
-                    for parent, children in self._children.items()
-                },
+                "child_trees": {parent: list(children) for parent, children in self._children.items()},
                 "cancelled": list(self._cancelled),
                 "spawned": [
                     {

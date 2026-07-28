@@ -32,9 +32,7 @@ export function TermsGate() {
   }, []);
 
   const needsAccept =
-    !!user &&
-    !!currentVersion &&
-    user.tos_accepted_version !== currentVersion;
+    !!user && !!currentVersion && user.tos_accepted_version !== currentVersion;
 
   if (!needsAccept) return null;
 
@@ -91,11 +89,7 @@ export function TermsGate() {
           </p>
         )}
 
-        <Button
-          className="w-full"
-          onClick={handleAccept}
-          disabled={submitting}
-        >
+        <Button className="w-full" onClick={handleAccept} disabled={submitting}>
           {submitting ? "Saving…" : "I agree — continue"}
         </Button>
       </div>

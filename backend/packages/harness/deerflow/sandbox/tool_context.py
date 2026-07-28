@@ -66,6 +66,12 @@ class ToolContext:
             if self._initialized and self.sandbox is not None:
                 return
 
+            # Fail fast before touching config-dependent provider construction:
+            # with neither an existing sandbox_id nor a thread_id there is
+            # nothing this call could possibly do.
+            if not self.sandbox_id and not self.thread_id:
+                raise ValueError("Thread ID not available in tool context")
+
             if self.sandbox_provider is None:
                 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 

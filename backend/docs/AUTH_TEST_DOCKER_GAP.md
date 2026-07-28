@@ -17,6 +17,7 @@ $ ssh sg_dev "which docker; docker --version"
 ```
 
 All other test plan sections were executed against either:
+
 - The local dev box (Mac, all services running locally), or
 - The deployed sg_dev instance (gateway + frontend + nginx via SSH tunnel)
 

@@ -26,6 +26,7 @@
 ## 执行流程
 
 LangChain `create_agent` 的规则：
+
 - **`before_*` 正序执行**（列表位置 0 → N）
 - **`after_*` 反序执行**（列表位置 N → 0）
 

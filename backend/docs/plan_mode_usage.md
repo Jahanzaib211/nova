@@ -5,6 +5,7 @@ This document describes how to enable and use the Plan Mode feature with TodoLis
 ## Overview
 
 Plan Mode adds a TodoList middleware to the agent, which provides a `write_todos` tool that helps the agent:
+
 - Break down complex tasks into smaller, manageable steps
 - Track progress as work progresses
 - Provide visibility to users about what's being done
@@ -48,6 +49,7 @@ When plan mode is enabled with default settings, the agent will have access to a
 ### When to Use TodoList
 
 The agent will use the todo list for:
+
 1. Complex multi-step tasks (3+ distinct steps)
 2. Non-trivial tasks requiring careful planning
 3. When user explicitly requests a todo list
@@ -56,6 +58,7 @@ The agent will use the todo list for:
 ### When NOT to Use TodoList
 
 The agent will skip using the todo list for:
+
 1. Single, straightforward tasks
 2. Trivial tasks (< 3 steps)
 3. Purely conversational or informational requests
@@ -103,6 +106,7 @@ You can enable/disable plan mode dynamically for different conversations or task
 from langchain_core.runnables import RunnableConfig
 from deerflow.agents.lead_agent.agent import make_lead_agent
 
+
 def create_agent_for_task(task_complexity: str):
     """Create agent with plan mode based on task complexity."""
     is_complex = task_complexity in ["high", "very_high"]
@@ -116,6 +120,7 @@ def create_agent_for_task(task_complexity: str):
     )
 
     return make_lead_agent(config)
+
 
 # Simple task - no TodoList needed
 simple_agent = create_agent_for_task("low")
@@ -154,13 +159,16 @@ make_lead_agent(config)
 ## Implementation Details
 
 ### Agent Module
+
 - **Location**: `packages/harness/deerflow/agents/lead_agent/agent.py`
 - **Function**: `_create_todo_list_middleware(is_plan_mode: bool)` - Creates TodoListMiddleware if plan mode is enabled
 - **Function**: `build_middlewares(config: RunnableConfig)` - Builds middleware chain based on runtime config
 - **Function**: `make_lead_agent(config: RunnableConfig)` - Creates agent with appropriate middlewares
 
 ### Runtime Configuration
+
 Plan mode is controlled via the `is_plan_mode` parameter in `RunnableConfig.configurable`:
+
 ```python
 config = RunnableConfig(
     configurable={
@@ -182,12 +190,14 @@ config = RunnableConfig(
 DeerFlow uses custom `system_prompt` and `tool_description` for the TodoListMiddleware that match the overall DeerFlow prompt style:
 
 ### System Prompt Features
+
 - Uses XML tags (`<todo_list_system>`) for structure consistency with DeerFlow's main prompt
 - Emphasizes CRITICAL rules and best practices
 - Clear "When to Use" vs "When NOT to Use" guidelines
 - Focuses on real-time updates and immediate task completion
 
 ### Tool Description Features
+
 - Detailed usage scenarios with examples
 - Strong emphasis on NOT using for simple tasks
 - Clear task state definitions (pending, in_progress, completed)

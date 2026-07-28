@@ -1,6 +1,18 @@
 "use client";
 
-import { CheckCircle2Icon, CircleIcon, DownloadIcon, FileSearchIcon, FileTextIcon, FolderOpenIcon, AlertTriangleIcon, LoaderCircleIcon, PencilIcon, SquareTerminalIcon, TerminalIcon, DatabaseIcon,
+import {
+  CheckCircle2Icon,
+  CircleIcon,
+  DownloadIcon,
+  FileSearchIcon,
+  FileTextIcon,
+  FolderOpenIcon,
+  AlertTriangleIcon,
+  LoaderCircleIcon,
+  PencilIcon,
+  SquareTerminalIcon,
+  TerminalIcon,
+  DatabaseIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
@@ -16,9 +28,11 @@ import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { Todo } from "@/core/todos";
-import { useWorkspaceEvents, useWorkspaceSnapshot } from "@/core/workspace/hooks";
+import {
+  useWorkspaceEvents,
+  useWorkspaceSnapshot,
+} from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
-
 
 import { TERMINAL_TOOLS } from "./terminal-tab";
 
@@ -257,9 +271,15 @@ export function ActivityPanel({
               <DatabaseIcon className="h-3 w-3 shrink-0 text-sky-400" />
               <span className="truncate">
                 {event.type === "WorkspaceScanned"
-                  ? t.agentComputer.workspace.liveScanned(event.data.symbol_count, event.data.scan_duration_ms)
+                  ? t.agentComputer.workspace.liveScanned(
+                      event.data.symbol_count,
+                      event.data.scan_duration_ms,
+                    )
                   : event.type === "PlanBuilt"
-                    ? t.agentComputer.workspace.livePlan(event.data.step_count, event.data.risk_level)
+                    ? t.agentComputer.workspace.livePlan(
+                        event.data.step_count,
+                        event.data.risk_level,
+                      )
                     : event.type === "CacheHit"
                       ? t.agentComputer.workspace.liveCacheHit
                       : t.agentComputer.workspace.liveCacheMiss}
@@ -363,4 +383,3 @@ export function TaskChecklist({
     </div>
   );
 }
-

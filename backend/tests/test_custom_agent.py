@@ -494,6 +494,7 @@ def agent_client(tmp_path, monkeypatch):
                 return await call_next(request)
             finally:
                 from deerflow.runtime.user_context import reset_current_user
+
                 reset_current_user(token)
 
     from app.gateway.routers import agents as agents_router
@@ -548,6 +549,7 @@ def disabled_agent_client(tmp_path, monkeypatch):
                 return await call_next(request)
             finally:
                 from deerflow.runtime.user_context import reset_current_user
+
                 reset_current_user(token)
 
     from app.gateway.routers import agents as agents_router

@@ -119,9 +119,7 @@ class PTYManager:
         size = TerminalSize(rows=rows, cols=cols)
         self._set_window_size_ioctl(master_fd, size)
 
-    def set_window_size_pixels(
-        self, master_fd: int, rows: int, cols: int, width_pixels: int, height_pixels: int
-    ) -> None:
+    def set_window_size_pixels(self, master_fd: int, rows: int, cols: int, width_pixels: int, height_pixels: int) -> None:
         """Set the terminal window size including pixel dimensions.
 
         Args:

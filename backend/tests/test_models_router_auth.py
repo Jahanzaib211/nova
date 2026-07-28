@@ -51,13 +51,7 @@ def _isolate_app_config_singleton():
 def config_env(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "sandbox:\n"
-        "  use: deerflow.sandbox.local.provider:LocalSandboxProvider\n"
-        "models:\n"
-        "  - name: config-model\n"
-        "    use: langchain_openai:ChatOpenAI\n"
-        "    model: gpt-4o-mini\n"
-        "    api_key: fake-key\n",
+        "sandbox:\n  use: deerflow.sandbox.local.provider:LocalSandboxProvider\nmodels:\n  - name: config-model\n    use: langchain_openai:ChatOpenAI\n    model: gpt-4o-mini\n    api_key: fake-key\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_path))

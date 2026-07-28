@@ -116,9 +116,7 @@ async def test_correlation_id_is_uuid_v4_format():
 
     mgr = RunManager()
     record = await mgr.create("thread-a", assistant_id="lead_agent")
-    assert HEX32.match(record.correlation_id), (
-        f"correlation_id must be 32 hex chars, got {record.correlation_id!r}"
-    )
+    assert HEX32.match(record.correlation_id), f"correlation_id must be 32 hex chars, got {record.correlation_id!r}"
 
     # Variant value across runs — generate 5 and confirm all unique.
     cids = {(await mgr.create(f"thread-{i}")).correlation_id for i in range(5)}

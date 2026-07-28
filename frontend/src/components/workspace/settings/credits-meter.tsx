@@ -28,7 +28,9 @@ export function CreditsMeter() {
 
   const load = () =>
     fetch("/api/v1/credits")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((r) =>
+        r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
+      )
       .then((data: Credits) => {
         setCredits(data);
         setStatus(data.request_status);
@@ -45,7 +47,8 @@ export function CreditsMeter() {
     credits.daily_limit > 0
       ? Math.min(100, Math.round((credits.used / credits.daily_limit) * 100))
       : 0;
-  const low = !credits.unlimited && credits.remaining <= credits.daily_limit * 0.1;
+  const low =
+    !credits.unlimited && credits.remaining <= credits.daily_limit * 0.1;
 
   const sendRequest = async () => {
     setSending(true);

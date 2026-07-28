@@ -35,9 +35,9 @@ export default function TermsPage() {
             <p>
               These Terms of Service (&ldquo;Terms&rdquo;) govern your access to
               and use of Nova (&ldquo;the Service&rdquo;), a computer agent
-              provided by Ali Technologies (&ldquo;we&rdquo;,
-              &ldquo;us&rdquo;). By creating an account or using the Service you
-              agree to these Terms. If you do not agree, do not use the Service.
+              provided by Ali Technologies (&ldquo;we&rdquo;, &ldquo;us&rdquo;).
+              By creating an account or using the Service you agree to these
+              Terms. If you do not agree, do not use the Service.
             </p>
           </section>
 

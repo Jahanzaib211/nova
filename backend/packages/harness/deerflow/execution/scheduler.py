@@ -169,9 +169,7 @@ class Scheduler:
                 )
 
         # Phase 2: Resource acquisition
-        acquired = self._resources.acquire(
-            request.execution_class, request.limits.queue_timeout
-        )
+        acquired = self._resources.acquire(request.execution_class, request.limits.queue_timeout)
         if not acquired:
             logger.warning(
                 "Execution %s denied: resource saturation for class %s",

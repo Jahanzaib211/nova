@@ -34,9 +34,7 @@ async def test_recursion_error_maps_to_step_budget_error():
 
     class ExhaustedAgent:
         async def astream(self, graph_input, config=None, stream_mode=None, subgraphs=False):
-            raise GraphRecursionError(
-                "Recursion limit of 5000 reached without hitting a stop condition."
-            )
+            raise GraphRecursionError("Recursion limit of 5000 reached without hitting a stop condition.")
             yield  # pragma: no cover — makes this an async generator
 
     await run_agent(
@@ -56,9 +54,7 @@ async def test_recursion_error_maps_to_step_budget_error():
     assert "step budget" in fetched.error
     assert "continue" in fetched.error, "error must tell the user how to resume"
 
-    error_events = [
-        c for c in bridge.publish.await_args_list if c.args[1] == "error"
-    ]
+    error_events = [c for c in bridge.publish.await_args_list if c.args[1] == "error"]
     assert len(error_events) == 1
     payload = error_events[0].args[2]
     assert payload["name"] == "GraphRecursionError"

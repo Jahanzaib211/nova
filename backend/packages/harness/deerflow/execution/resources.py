@@ -40,14 +40,10 @@ class ResourceManager:
     per successful acquire (the kernel guarantees this with try/finally).
     """
 
-    slots: dict[ExecutionClass, int] = field(
-        default_factory=lambda: dict(_DEFAULT_SLOTS)
-    )
+    slots: dict[ExecutionClass, int] = field(default_factory=lambda: dict(_DEFAULT_SLOTS))
 
     def __post_init__(self) -> None:
-        self._semaphores: dict[ExecutionClass, threading.BoundedSemaphore] = {
-            cls: threading.BoundedSemaphore(count) for cls, count in self.slots.items()
-        }
+        self._semaphores: dict[ExecutionClass, threading.BoundedSemaphore] = {cls: threading.BoundedSemaphore(count) for cls, count in self.slots.items()}
         self._in_flight: dict[ExecutionClass, int] = dict.fromkeys(self.slots, 0)
         self._lock = threading.Lock()
 

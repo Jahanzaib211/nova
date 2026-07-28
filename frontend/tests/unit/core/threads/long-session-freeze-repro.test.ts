@@ -51,8 +51,12 @@ describe("long-session frontend freeze — reproduction shape", () => {
   describe("layer 1 — streamTrace recorder shape", () => {
     it("REPRO: events recorded under NEXT_PUBLIC_NOVA_STREAM_TRACE=1 land in the ring buffer in order", async () => {
       process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE = "1";
-      const { streamTrace, recordHookStart, recordHookEvent, recordManagerState } =
-        await import(RECORDER_MODULE);
+      const {
+        streamTrace,
+        recordHookStart,
+        recordHookEvent,
+        recordManagerState,
+      } = await import(RECORDER_MODULE);
 
       expect(streamTrace.enabled).toBe(true);
 
@@ -118,11 +122,14 @@ describe("long-session frontend freeze — reproduction shape", () => {
 
       const recent = streamTrace.readRecent();
       const lastEventIdx = recent.findIndex(
-        (r) => r.stage === "hook.onLangChainEvent" && r.extra?.eventName === "on_tool_end",
+        (r) =>
+          r.stage === "hook.onLangChainEvent" &&
+          r.extra?.eventName === "on_tool_end",
       );
       const firstAfterGapIdx = recent.findIndex(
         (r) =>
-          r.stage === "hook.onLangChainEvent" && r.extra?.eventName === "on_chain_end",
+          r.stage === "hook.onLangChainEvent" &&
+          r.extra?.eventName === "on_chain_end",
       );
 
       expect(lastEventIdx).toBeGreaterThanOrEqual(0);
@@ -165,9 +172,8 @@ describe("long-session frontend freeze — reproduction shape", () => {
   describe("layer 3 — rejoin gate prevents recovery", () => {
     it("REPRO: rejoin attempt skipped while isLoading is true (matches hooks.ts:1049)", async () => {
       process.env.NEXT_PUBLIC_NOVA_STREAM_TRACE = "1";
-      const { streamTrace, recordRejoinAttempt, recordManagerState } = await import(
-        RECORDER_MODULE
-      );
+      const { streamTrace, recordRejoinAttempt, recordManagerState } =
+        await import(RECORDER_MODULE);
 
       // Simulate the hook deciding whether to call joinStream.
       // The real hook reads `isStreamLoadingRef.current` and bails on truthy.

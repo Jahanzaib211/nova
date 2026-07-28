@@ -54,10 +54,7 @@ class EventRegistry:
 
     def list_by_category(self, category: str) -> list[str]:
         """Return event type names for a given category."""
-        return [
-            name for name, meta in self._events.items()
-            if meta.category == category
-        ]
+        return [name for name, meta in self._events.items() if meta.category == category]
 
 
 # Module-level registry with all C3 events pre-registered
@@ -68,11 +65,7 @@ from deerflow.events import event as _event_module
 
 for _name in dir(_event_module):
     _cls = getattr(_event_module, _name)
-    if (
-        isinstance(_cls, type)
-        and issubclass(_cls, DomainEvent)
-        and _cls is not DomainEvent
-    ):
+    if isinstance(_cls, type) and issubclass(_cls, DomainEvent) and _cls is not DomainEvent:
         _category = "lifecycle"
         if "Workspace" in _name:
             _category = "workspace"

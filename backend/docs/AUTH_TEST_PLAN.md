@@ -28,6 +28,7 @@ make dev
 ```
 
 **验证点：**
+
 - [ ] 控制台不输出 admin 邮箱或明文密码
 - [ ] 控制台提示 `First boot detected — no admin account exists.`
 - [ ] 控制台提示访问 `/setup` 完成 admin 创建
@@ -42,6 +43,7 @@ make dev
 ```
 
 **验证点：**
+
 - [ ] 控制台不输出密码
 - [ ] `GET /api/v1/auth/setup-status` 返回 `{"needs_setup": false}`
 - [ ] 已登录用户如果 `needs_setup=True`，访问 workspace 会被引导到 `/setup` 完成改邮箱 / 改密码流程
@@ -61,6 +63,7 @@ make dev
 > 直连测试替换为对应端口。
 >
 > **CSRF token 提取**：多处用到从 cookie jar 提取 CSRF token，统一使用：
+>
 > ```bash
 > CSRF=$(python3 -c "
 > import http.cookiejar
@@ -68,6 +71,7 @@ make dev
 > print(next(c.value for c in cj if c.name == 'csrf_token'))
 > ")
 > ```
+>
 > 或简写（多数场景够用）：`CSRF=$(grep csrf_token cookies.txt | awk '{print $NF}')`
 
 ### 2.1 注册 + 登录 + 会话
@@ -79,6 +83,7 @@ curl -s $BASE/api/v1/auth/setup-status | jq .
 ```
 
 **预期：**
+
 - 干净数据库且尚未初始化 admin：返回 `{"needs_setup": true}`
 - 已存在 admin：返回 `{"needs_setup": false}`
 
@@ -92,6 +97,7 @@ curl -s -X POST $BASE/api/v1/auth/initialize \
 ```
 
 **预期：**
+
 - 状态码 201
 - Body: `{"id": "...", "email": "admin@example.com", "system_role": "admin", "needs_setup": false}`
 - `cookies.txt` 包含 `access_token`（HttpOnly）和 `csrf_token`（非 HttpOnly）
@@ -116,6 +122,7 @@ curl -s -X POST $BASE/api/v1/auth/change-password \
 ```
 
 **预期：**
+
 - 状态码 200
 - `{"message": "Password changed successfully"}`
 - 再调 `/auth/me` 仍为 `admin@example.com`，`needs_setup` 仍为 `false`
@@ -140,6 +147,7 @@ curl -s -X POST $BASE/api/v1/auth/change-password \
 ```
 
 **预期：**
+
 - 登录返回 `{"expires_in": 604800, "needs_setup": true}`
 - `change-password` 后 `/auth/me` 邮箱变为 `admin2@example.com`，`needs_setup` 变为 `false`
 
@@ -281,6 +289,7 @@ curl -s -X POST $BASE/api/v1/auth/login/local \
 ```
 
 **预期：**
+
 ```json
 {"code": "invalid_credentials", "message": "Incorrect email or password"}
 ```
@@ -375,6 +384,7 @@ curl -s -D - -X POST $BASE/api/v1/auth/login/local \
 ```
 
 **预期：**
+
 - `access_token`: `HttpOnly; Path=/; SameSite=lax`，无 `Secure`，无 `Max-Age`
 - `csrf_token`: `Path=/; SameSite=strict`，无 `HttpOnly`（JS 需要读取），无 `Secure`
 
@@ -401,6 +411,7 @@ curl -s -D - -X POST $GW/api/v1/auth/login/local \
 ```
 
 **预期：**
+
 - `access_token`: `HttpOnly; Secure; Path=/; SameSite=lax; Max-Age=604800`
 - `csrf_token`: `Secure; Path=/; SameSite=strict`，无 `HttpOnly`
 
@@ -675,6 +686,7 @@ make dev
 #### TC-UPG-01: 首次启动等待 admin 初始化
 
 **预期：**
+
 - [ ] 控制台不输出 admin 邮箱或随机密码
 - [ ] 访问 `/setup` 可创建第一个 admin
 - [ ] 无报错，正常启动
@@ -706,6 +718,7 @@ curl -s -X POST http://localhost:2026/api/threads/search \
 ```
 
 **预期：**
+
 - [ ] 返回的 thread 数量 ≥ 旧版创建的数量
 - [ ] 控制台日志有 `Migrated N orphan LangGraph thread(s) to admin`
 - [ ] 旧 thread 只对 admin 可见
@@ -719,6 +732,7 @@ curl -s http://localhost:2026/api/threads/<old-thread-id> \
 ```
 
 **预期：**
+
 - [ ] `metadata.title` 保留原值（如 `old-thread-1`）
 - [ ] 响应不回显服务端保留的 `user_id` / `owner_id`
 
@@ -770,6 +784,7 @@ grep AUTH_JWT_SECRET backend/.env || echo "NOT SET"
 ```
 
 **预期：**
+
 - [ ] 启动时 warning：`AUTH_JWT_SECRET is not set — using auto-generated ephemeral secret`
 - [ ] 服务正常可用
 - [ ] 重启后旧 session 失效（临时密钥变了）
@@ -806,6 +821,7 @@ make dev
 ```
 
 **预期：**
+
 - [ ] 服务正常启动（忽略 `deerflow.db`，无 auth 相关代码不报错）
 - [ ] 旧对话数据仍然可访问
 - [ ] `deerflow.db` 文件残留但不影响运行
@@ -819,6 +835,7 @@ make dev
 ```
 
 **预期：**
+
 - [ ] 识别已有 `deerflow.db`，不重新创建 admin
 - [ ] 旧的 admin 账号仍可登录（如果回退期间未删 `deerflow.db`）
 
@@ -838,6 +855,7 @@ curl -s $BASE/api/v1/auth/setup-status | jq .
 ```
 
 **预期：**
+
 - [ ] 控制台不输出密码
 - [ ] `setup-status` 仍为 `{"needs_setup": true}`
 - [ ] 访问 `/setup` 仍可创建第一个 admin
@@ -851,6 +869,7 @@ cat backend/.deer-flow/admin_initial_credentials.txt
 ```
 
 **预期：**
+
 - [ ] 命令行只输出凭据文件路径，不输出明文密码
 - [ ] 凭据文件权限为 `0600`
 - [ ] 凭据文件包含 email + password 行
@@ -867,6 +886,7 @@ curl -s -X POST $BASE/api/v1/auth/register \
 ```
 
 **预期：**
+
 - [ ] 当前代码允许注册普通用户并自动登录（201，角色为 `user`）
 - [ ] 但 `setup-status` 仍为 `{"needs_setup": true}`，因为 admin 仍不存在
 - [ ] 这是一个产品策略边界：若要求“必须先有 admin”，需要在 `/register` 增加 admin-exists gate
@@ -907,6 +927,7 @@ curl -s $BASE/api/v1/auth/me -b admin.txt | jq '{email, needs_setup}'
 ```
 
 **预期：**
+
 - [ ] `email` 变为 `admin@real.com`
 - [ ] `needs_setup` 变为 `false`
 - [ ] 后续登录使用新密码
@@ -922,6 +943,7 @@ make stop && make dev
 ```
 
 **预期：**
+
 - [ ] 服务正常启动
 - [ ] 账号密码仍可登录（密码存在 DB，与 JWT 密钥无关）
 - [ ] 旧的 JWT token 失效（密钥变了签名不匹配）
@@ -971,6 +993,7 @@ asyncio.run(boot())
 ```
 
 **预期：**
+
 - [ ] 不报错（SQLite UNIQUE 约束捕获竞争，第二个静默跳过）
 - [ ] 最终只有 1 个 admin
 
@@ -1052,6 +1075,7 @@ curl -s -w "%{http_code}" $BASE/api/v1/auth/me -b cookies.txt
 ```
 
 **预期：**
+
 - [ ] 两次改密码都成功
 - [ ] 最终密码为 Pass3
 - [ ] `token_version` 递增两次（+2）
@@ -1093,6 +1117,7 @@ sqlite3 backend/.deer-flow/data/deerflow.db \
 ```
 
 **预期：**
+
 - [ ] 一个成功（201），一个失败（400 `email_already_exists`）
 - [ ] 数据库中只有 1 条记录（UNIQUE 约束保护）
 
@@ -1207,6 +1232,7 @@ P2=$(awk -F': ' '/^password:/ {print $2}' /tmp/deerflow-reset-p2.txt)
 ```
 
 **预期：**
+
 - [ ] `.deer-flow/admin_initial_credentials.txt` 每次都会被重写，文件权限为 `0600`
 - [ ] P1 ≠ P2（每次生成新随机密码）
 - [ ] P1 不可用，只有 P2 有效
@@ -1416,6 +1442,7 @@ done
 > Docker Compose 文件：`docker/docker-compose.yaml`
 >
 > 前置条件：
+>
 > - `.env` 中设置 `AUTH_JWT_SECRET`（否则每次容器重启 session 全部失效）
 > - `DEER_FLOW_HOME` 挂载到宿主机目录（持久化 `deerflow.db`）
 
@@ -1463,6 +1490,7 @@ curl -s -w "%{http_code}" -o /dev/null $BASE/api/v1/auth/me -b docker_cookies.tx
 ```
 
 **预期：**
+
 - 有 `AUTH_JWT_SECRET` → 200（session 保持）
 - 无 `AUTH_JWT_SECRET` → 401（每次启动生成新临时密钥，旧 JWT 签名失效）
 
@@ -1517,6 +1545,7 @@ docker logs deer-flow-gateway 2>&1 | grep -iE "Password: .{15,}" && echo "FAIL: 
 ```
 
 **预期：**
+
 - 凭证文件存在于 `DEER_FLOW_HOME` 下，权限 `0600`
 - 容器日志输出**路径**（不是密码本身），符合 CodeQL `py/clear-text-logging-sensitive-data` 规则
 - `grep "Password:"` 在日志中**应当无匹配**（旧行为已废弃，simplify pass 移除了日志泄露路径）

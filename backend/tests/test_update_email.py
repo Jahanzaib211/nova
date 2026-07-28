@@ -124,4 +124,3 @@ def test_update_email_requires_auth(client):
 
     resp = _post_update_email(client, _PASSWORD, "nobody@example.com")
     assert resp.status_code == 401
-

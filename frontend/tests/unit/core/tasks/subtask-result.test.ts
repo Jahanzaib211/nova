@@ -174,12 +174,14 @@ describe("findSubtaskResultMessage", () => {
     const messages = [
       { type: "ai" },
       { type: "human" },
-      { type: "tool", tool_call_id: "call_task_1", content: "Task Succeeded. Result: done" },
+      {
+        type: "tool",
+        tool_call_id: "call_task_1",
+        content: "Task Succeeded. Result: done",
+      },
     ] as Message[];
 
-    expect(findSubtaskResultMessage("call_task_1", messages)).toBe(
-      messages[2],
-    );
+    expect(findSubtaskResultMessage("call_task_1", messages)).toBe(messages[2]);
   });
 
   it("returns the LAST duplicate so an SSE replay overlap cannot shadow the final state", () => {
@@ -194,9 +196,7 @@ describe("findSubtaskResultMessage", () => {
       content: "Task Succeeded. Result: done",
     } as Message;
 
-    expect(findSubtaskResultMessage("call_task_1", [early, final])).toBe(
-      final,
-    );
+    expect(findSubtaskResultMessage("call_task_1", [early, final])).toBe(final);
   });
 
   it("returns null when no ToolMessage exists for the call", () => {

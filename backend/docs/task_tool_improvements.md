@@ -11,14 +11,10 @@ The task tool has been improved to eliminate wasteful LLM polling. Previously, w
 The `run_in_background` parameter has been removed from the `task` tool. All subagent tasks now run asynchronously by default, but the tool handles completion automatically.
 
 **Before:**
+
 ```python
 # LLM had to manage polling
-task_id = task(
-    subagent_type="bash",
-    prompt="Run tests",
-    description="Run tests",
-    run_in_background=True
-)
+task_id = task(subagent_type="bash", prompt="Run tests", description="Run tests", run_in_background=True)
 # Then LLM had to poll repeatedly:
 while True:
     status = task_status(task_id)
@@ -27,25 +23,24 @@ while True:
 ```
 
 **After:**
+
 ```python
 # Tool blocks until complete, polling happens in backend
-result = task(
-    subagent_type="bash",
-    prompt="Run tests",
-    description="Run tests"
-)
+result = task(subagent_type="bash", prompt="Run tests", description="Run tests")
 # Result is available immediately after the call returns
 ```
 
 ### 2. Backend Polling
 
 The `task_tool` now:
+
 - Starts the subagent task asynchronously
 - Polls for completion in the backend (every 2 seconds)
 - Blocks the tool call until completion
 - Returns the final result directly
 
 This means:
+
 - ✅ LLM makes only ONE tool call
 - ✅ No wasteful LLM polling requests
 - ✅ Backend handles all status checking
@@ -94,6 +89,7 @@ while True:
 In addition to polling timeout, subagent execution now has a built-in timeout mechanism:
 
 **Configuration** (`packages/harness/deerflow/subagents/config.py`):
+
 ```python
 @dataclass
 class SubagentConfig:
@@ -116,6 +112,7 @@ To avoid nested thread pools and resource waste, we use two dedicated thread poo
    - Runs `execute()` method that invokes the agent
 
 **How it works**:
+
 ```python
 # In execute_async():
 _scheduler_pool.submit(run_task)  # Submit orchestration task
@@ -126,12 +123,14 @@ exec_result = future.result(timeout=timeout_seconds)  # Wait with timeout
 ```
 
 **Benefits**:
+
 - ✅ Clean separation of concerns (scheduling vs execution)
 - ✅ No nested thread pools
 - ✅ Timeout enforcement at the right level
 - ✅ Better resource utilization
 
 **Two-Level Timeout Protection**:
+
 1. **Execution Timeout**: Subagent execution itself has a 5-minute timeout (configurable in SubagentConfig)
 2. **Polling Timeout**: Tool polling has a 5-minute timeout (30 polls × 10 seconds)
 
@@ -154,19 +153,17 @@ To verify the changes work correctly:
 4. Verify no `task_status` calls are made
 
 Example test scenario:
+
 ```python
 # This should block for ~10 seconds then return result
-result = task(
-    subagent_type="bash",
-    prompt="sleep 10 && echo 'Done'",
-    description="Test task"
-)
+result = task(subagent_type="bash", prompt="sleep 10 && echo 'Done'", description="Test task")
 # result should contain "Done"
 ```
 
 ## Migration Notes
 
 For users/code that previously used `run_in_background=True`:
+
 - Simply remove the parameter
 - Remove any polling logic
 - The tool will automatically wait for completion

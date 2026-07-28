@@ -220,9 +220,7 @@ async def test_start_run_blocks_exhausted_user(monkeypatch):
     monkeypatch.setattr("app.gateway.credits.get_balance", AsyncMock(return_value=exhausted))
     monkeypatch.setenv("NOVA_CREDITS_ENFORCED", "1")  # wall is opt-in
 
-    request = SimpleNamespace(
-        state=SimpleNamespace(user=SimpleNamespace(id="u1", system_role="user", plan="free"))
-    )
+    request = SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="u1", system_role="user", plan="free")))
     body = SimpleNamespace(
         on_disconnect="continue",
         context={},
@@ -271,9 +269,7 @@ async def test_start_run_does_not_wall_admin(monkeypatch):
 
     monkeypatch.setattr(services, "set_current_user", _stop)
 
-    request = SimpleNamespace(
-        state=SimpleNamespace(user=SimpleNamespace(id="admin1", system_role="admin", plan="free"))
-    )
+    request = SimpleNamespace(state=SimpleNamespace(user=SimpleNamespace(id="admin1", system_role="admin", plan="free")))
     body = SimpleNamespace(
         on_disconnect="continue",
         context={},
@@ -288,4 +284,3 @@ async def test_start_run_does_not_wall_admin(monkeypatch):
     with pytest.raises(RuntimeError, match="reached create_or_reject"):
         await services.start_run(body, "t1", request)
     assert called["balance"] is False
-

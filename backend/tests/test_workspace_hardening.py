@@ -114,7 +114,7 @@ class TestRiskAnalyzerTokenized:
 
     def test_echo_of_dangerous_text_is_not_flagged(self):
         # the substring matcher would have false-positived here
-        assert self._risk(("echo", "rm -rf /")) .order <= RiskLevel.MEDIUM.order
+        assert self._risk(("echo", "rm -rf /")).order <= RiskLevel.MEDIUM.order
 
     def test_plain_commands_stay_low_or_medium(self):
         assert self._risk(("pytest", "-q")).order <= RiskLevel.MEDIUM.order

@@ -85,6 +85,7 @@ The `GuardrailMiddleware` implements `wrap_tool_call` / `awrap_tool_call` (the s
 The simplest option. Ships with DeerFlow. Block or allow tools by name. No external packages, no passport, no network.
 
 **config.yaml:**
+
 ```yaml
 guardrails:
   enabled: true
@@ -97,6 +98,7 @@ guardrails:
 This blocks `bash` and `write_file` for all requests. All other tools pass through.
 
 You can also use an allowlist (only these tools are permitted):
+
 ```yaml
 guardrails:
   enabled: true
@@ -107,6 +109,7 @@ guardrails:
 ```
 
 **Try it:**
+
 1. Add the config above to your `config.yaml`
 2. Start DeerFlow: `make dev`
 3. Ask the agent: "Use bash to run echo hello"
@@ -160,10 +163,12 @@ aport setup --framework deerflow
 ```
 
 This creates:
+
 - `~/.aport/deerflow/config.yaml` -- evaluator config (local or API mode)
 - `~/.aport/deerflow/aport/passport.json` -- OAP passport with capabilities and limits
 
 **config.yaml (using APort as the provider):**
+
 ```yaml
 guardrails:
   enabled: true
@@ -172,6 +177,7 @@ guardrails:
 ```
 
 **config.yaml (using your own OAP provider):**
+
 ```yaml
 guardrails:
   enabled: true
@@ -204,6 +210,7 @@ OAP providers may support different evaluation modes. For example, the APort ref
 A custom OAP provider can implement any evaluation strategy -- the DeerFlow middleware doesn't care how the provider reaches its decision.
 
 **Try it:**
+
 1. Install and set up as above
 2. Start DeerFlow and ask: "Create a file called test.txt with content hello"
 3. Then ask: "Now delete it using bash rm -rf"
@@ -215,6 +222,7 @@ Any Python class with `evaluate(request)` and `aevaluate(request)` methods works
 
 ```python
 # my_guardrail.py
+
 
 class MyGuardrailProvider:
     name = "my-company"
@@ -236,6 +244,7 @@ class MyGuardrailProvider:
 ```
 
 **config.yaml:**
+
 ```yaml
 guardrails:
   enabled: true
@@ -246,6 +255,7 @@ guardrails:
 Make sure `my_guardrail.py` is on the Python path (e.g. in the backend directory or installed as a package).
 
 **Try it:**
+
 1. Create `my_guardrail.py` in the backend directory
 2. Add the config
 3. Start DeerFlow and ask: "Use bash to delete test.txt"
@@ -358,6 +368,7 @@ uv run python -m pytest tests/test_guardrail_middleware.py -v
 ```
 
 25 tests covering:
+
 - AllowlistProvider: allow, deny, both allowlist+denylist, async
 - GuardrailMiddleware: allow passthrough, deny with OAP codes, fail-closed, fail-open, passport forwarding, empty reasons fallback, empty tool name, protocol isinstance check
 - Async paths: awrap_tool_call for allow, deny, fail-closed, fail-open

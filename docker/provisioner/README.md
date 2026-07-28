@@ -41,12 +41,14 @@ The **Sandbox Provisioner** is a FastAPI service that dynamically manages sandbo
 Host machine with a running Kubernetes cluster (Docker Desktop K8s, OrbStack, minikube, kind, etc.)
 
 ### Enable Kubernetes in Docker Desktop
+
 1. Open Docker Desktop settings
 2. Go to "Kubernetes" tab
 3. Check "Enable Kubernetes"
 4. Click "Apply & Restart"
 
 ### Enable Kubernetes in OrbStack
+
 1. Open OrbStack settings
 2. Go to "Kubernetes" tab
 3. Check "Enable Kubernetes"
@@ -54,9 +56,11 @@ Host machine with a running Kubernetes cluster (Docker Desktop K8s, OrbStack, mi
 ## API Endpoints
 
 ### `GET /health`
+
 Health check endpoint.
 
 **Response**:
+
 ```json
 {
   "status": "ok"
@@ -64,9 +68,11 @@ Health check endpoint.
 ```
 
 ### `POST /api/sandboxes`
+
 Create a new sandbox Pod + Service.
 
 **Request**:
+
 ```json
 {
   "sandbox_id": "abc-123",
@@ -78,6 +84,7 @@ Create a new sandbox Pod + Service.
 `user_id` is optional for backwards compatibility and defaults to `default`. When `USERDATA_PVC_NAME` is set, the provisioner uses it to isolate PVC-backed user-data directories.
 
 **Response**:
+
 ```json
 {
   "sandbox_id": "abc-123",
@@ -89,9 +96,11 @@ Create a new sandbox Pod + Service.
 **Idempotent**: Calling with the same `sandbox_id` returns the existing sandbox info.
 
 ### `GET /api/sandboxes/{sandbox_id}`
+
 Get status and URL of a specific sandbox.
 
 **Response**:
+
 ```json
 {
   "sandbox_id": "abc-123",
@@ -103,9 +112,11 @@ Get status and URL of a specific sandbox.
 **Status Values**: `Pending`, `Running`, `Succeeded`, `Failed`, `Unknown`, `NotFound`
 
 ### `DELETE /api/sandboxes/{sandbox_id}`
+
 Destroy a sandbox Pod + Service.
 
 **Response**:
+
 ```json
 {
   "ok": true,
@@ -114,9 +125,11 @@ Destroy a sandbox Pod + Service.
 ```
 
 ### `GET /api/sandboxes`
+
 List all sandboxes currently managed.
 
 **Response**:
+
 ```json
 {
   "sandboxes": [
@@ -170,7 +183,7 @@ This moves legacy `threads/{thread_id}/user-data` data under `users/<target-user
 
 ### Important: K8S_API_SERVER Override
 
-If your kubeconfig uses `localhost`, `127.0.0.1`, or `0.0.0.0` as the API server address (common with OrbStack, minikube, kind), the provisioner **cannot** reach it from inside the Docker container. 
+If your kubeconfig uses `localhost`, `127.0.0.1`, or `0.0.0.0` as the API server address (common with OrbStack, minikube, kind), the provisioner **cannot** reach it from inside the Docker container.
 
 **Solution**: Set `K8S_API_SERVER` to use `host.docker.internal`:
 
@@ -182,6 +195,7 @@ provisioner:
 ```
 
 Check your kubeconfig API server:
+
 ```bash
 kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
 ```
@@ -190,7 +204,7 @@ kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
 
 ### Host Machine Requirements
 
-1. **Kubernetes Cluster**: 
+1. **Kubernetes Cluster**:
    - Docker Desktop with Kubernetes enabled, or
    - OrbStack (built-in K8s), or
    - minikube, kind, k3s, etc.
@@ -223,6 +237,7 @@ docker compose -p deer-flow-dev -f docker/docker-compose-dev.yaml up -d provisio
 ```
 
 The compose file:
+
 - Mounts your host's `~/.kube/config` into the container
 - Adds `extra_hosts` entry for `host.docker.internal` (required on Linux)
 - Configures environment variables for K8s access
@@ -271,7 +286,8 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 
 **Cause**: The kubeconfig file doesn't exist at the mounted path.
 
-**Solution**: 
+**Solution**:
+
 - Ensure `~/.kube/config` exists on your host machine
 - Run `kubectl config view` to verify
 - Check the volume mount in docker-compose-dev.yaml
@@ -281,11 +297,14 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 **Cause**: The mounted `KUBECONFIG_PATH` points to a directory instead of a file.
 
 **Solution**:
+
 - Ensure the compose mount source is a file (e.g., `~/.kube/config`) not a directory
 - Verify inside container:
+
   ```bash
   docker exec deer-flow-provisioner ls -ld /root/.kube/config
   ```
+
 - Expected output should indicate a regular file (`-`), not a directory (`d`)
 
 ### Issue: "Connection refused" to K8s API
@@ -293,11 +312,15 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 **Cause**: The provisioner can't reach the K8s API server.
 
 **Solution**:
+
 1. Check your kubeconfig server address:
+
    ```bash
    kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
    ```
+
 2. If it's `localhost` or `127.0.0.1`, set `K8S_API_SERVER`:
+
    ```yaml
    environment:
      - K8S_API_SERVER=https://host.docker.internal:PORT
@@ -307,9 +330,11 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 
 **Cause**: HostPath volumes contain invalid paths (e.g., relative paths with `..`).
 
-**Solution**: 
+**Solution**:
+
 - Use absolute paths for `SKILLS_HOST_PATH` and `THREADS_HOST_PATH`
 - Verify the paths exist on your host machine:
+
   ```bash
   ls -la /path/to/skills
   ls -la /path/to/backend/.deer-flow/threads
@@ -320,6 +345,7 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 **Cause**: Usually pulling the sandbox image from the registry.
 
 **Solution**:
+
 - Pre-pull the image: `make docker-init`
 - Check Pod events: `kubectl describe pod sandbox-XXX -n deer-flow`
 - Check node: `kubectl get nodes`
@@ -329,6 +355,7 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 **Cause**: NodePort not reachable or `NODE_HOST` misconfigured.
 
 **Solution**:
+
 - Verify the Service exists: `kubectl get svc -n deer-flow`
 - Test from host: `curl http://localhost:NODE_PORT/v1/sandbox`
 - Ensure `extra_hosts` is set in docker-compose (Linux)
