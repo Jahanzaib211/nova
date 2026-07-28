@@ -1,6 +1,11 @@
 "use client";
 
-import { FilesIcon, XIcon } from "lucide-react";
+import {
+  FilesIcon,
+  LaptopIcon,
+  MessageSquareIcon,
+  XIcon,
+} from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
@@ -18,6 +23,7 @@ import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 import {
@@ -29,6 +35,42 @@ import { useThread } from "../messages/context";
 
 const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
+
+/**
+ * Below the mobile breakpoint there is no room to show chat, artifacts and the
+ * Agent's Computer side by side (the computer panel alone has a 380px floor),
+ * so the three become one full-width surface at a time behind this switcher.
+ */
+type MobilePanel = "chat" | "artifacts" | "computer";
+
+function MobileTabBtn({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active}
+      className={cn(
+        "flex min-h-11 flex-1 items-center justify-center gap-1.5 text-xs font-medium transition-colors",
+        active
+          ? "text-foreground border-foreground/60 border-b-2"
+          : "text-muted-foreground/70 border-b-2 border-transparent",
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
 
 const ChatBox: React.FC<{
   children: React.ReactNode;
@@ -157,6 +199,164 @@ const ChatBox: React.FC<{
     }
   }, [artifactPanelOpen]);
 
+  const isMobile = useIsMobile();
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>("chat");
+
+  // Opening either surface pulls it to the front, mirroring how they take over
+  // screen space on desktop.
+  useEffect(() => {
+    if (agentComputerOpen) setMobilePanel("computer");
+  }, [agentComputerOpen]);
+  useEffect(() => {
+    if (artifactPanelOpen) setMobilePanel("artifacts");
+  }, [artifactPanelOpen]);
+
+  // Derived rather than stored, so closing a panel can never strand the
+  // switcher on a tab that is no longer rendered.
+  const activeMobilePanel: MobilePanel =
+    (mobilePanel === "computer" && !agentComputerOpen) ||
+    (mobilePanel === "artifacts" && !artifactPanelOpen)
+      ? "chat"
+      : mobilePanel;
+  const showMobileTabs = agentComputerOpen || artifactPanelOpen;
+
+  const artifactsBody = selectedArtifact ? (
+    <ArtifactFileDetail
+      className="size-full"
+      filepath={selectedArtifact}
+      threadId={threadId}
+    />
+  ) : (
+    <div className="relative flex size-full justify-center">
+      <div className="absolute top-1 right-1 z-30">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={() => {
+            setArtifactsOpen(false);
+          }}
+        >
+          <XIcon />
+        </Button>
+      </div>
+      {thread.values.artifacts?.length === 0 ? (
+        <ConversationEmptyState
+          icon={<FilesIcon />}
+          title={t.a11y.noArtifact}
+          description={t.a11y.artifacts}
+        />
+      ) : (
+        <div className="flex size-full max-w-(--container-width-sm) flex-col justify-center p-4 pt-8">
+          <header className="shrink-0">
+            <h2 className="text-lg font-medium">{t.a11y.artifacts}</h2>
+          </header>
+          <main className="min-h-0 grow">
+            <ArtifactFileList
+              className="max-w-(--container-width-sm) p-4 pt-12"
+              files={thread.values.artifacts ?? []}
+              threadId={threadId}
+            />
+          </main>
+        </div>
+      )}
+    </div>
+  );
+
+  // Status bar above the panel — purely additive. Fixed-height row; the panel
+  // fills the remaining height below so its internal scroll areas and footer
+  // are not clipped.
+  const computerBody = (
+    <>
+      <RuntimeCapabilitiesBar
+        className="shrink-0"
+        sandboxEvents={activityEvents}
+      />
+      <div className="min-h-0 flex-1">
+        <WorkspaceStateProvider
+          threadId={threadId}
+          todos={thread.values.todos ?? []}
+        >
+          <AgentComputerPanel
+            threadId={threadId}
+            currentTool={currentTool}
+            isLoading={thread.isLoading}
+            messages={thread.messages}
+            activeWriteFilePath={activeWriteFilePath}
+            artifacts={thread.values.artifacts ?? []}
+            onClose={() => setAgentComputerOpen(false)}
+            onAgentMessage={onAgentMessage}
+          />
+        </WorkspaceStateProvider>
+      </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="flex h-full w-full flex-col overflow-hidden">
+        {showMobileTabs && (
+          <nav className="border-border/60 flex shrink-0 border-b">
+            <MobileTabBtn
+              active={activeMobilePanel === "chat"}
+              onClick={() => setMobilePanel("chat")}
+              icon={<MessageSquareIcon className="size-3.5" />}
+              label={t.a11y.chat}
+            />
+            {artifactPanelOpen && (
+              <MobileTabBtn
+                active={activeMobilePanel === "artifacts"}
+                onClick={() => setMobilePanel("artifacts")}
+                icon={<FilesIcon className="size-3.5" />}
+                label={t.a11y.artifacts}
+              />
+            )}
+            {agentComputerOpen && (
+              <MobileTabBtn
+                active={activeMobilePanel === "computer"}
+                onClick={() => setMobilePanel("computer")}
+                icon={<LaptopIcon className="size-3.5" />}
+                label={t.agentComputer.header}
+              />
+            )}
+          </nav>
+        )}
+
+        {/* All surfaces stay mounted and are toggled with `hidden` so chat
+            scroll position and the computer's tab state survive switching. */}
+        <div className="min-h-0 flex-1">
+          <div
+            className={cn(
+              "relative h-full",
+              activeMobilePanel !== "chat" && "hidden",
+            )}
+          >
+            {children}
+          </div>
+          {artifactPanelOpen && (
+            <div
+              className={cn(
+                "h-full p-4",
+                activeMobilePanel !== "artifacts" && "hidden",
+              )}
+            >
+              {artifactsBody}
+            </div>
+          )}
+          {agentComputerOpen && (
+            <div
+              className={cn(
+                "flex h-full flex-col overflow-hidden",
+                activeMobilePanel !== "computer" && "hidden",
+              )}
+            >
+              {computerBody}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* ── Centre: existing chat + artifacts split (unchanged) ── */}
@@ -190,49 +390,7 @@ const ChatBox: React.FC<{
                 artifactPanelOpen ? "translate-x-0" : "translate-x-full",
               )}
             >
-              {selectedArtifact ? (
-                <ArtifactFileDetail
-                  className="size-full"
-                  filepath={selectedArtifact}
-                  threadId={threadId}
-                />
-              ) : (
-                <div className="relative flex size-full justify-center">
-                  <div className="absolute top-1 right-1 z-30">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setArtifactsOpen(false);
-                      }}
-                    >
-                      <XIcon />
-                    </Button>
-                  </div>
-                  {thread.values.artifacts?.length === 0 ? (
-                    <ConversationEmptyState
-                      icon={<FilesIcon />}
-                      title={t.a11y.noArtifact}
-                      description={t.a11y.artifacts}
-                    />
-                  ) : (
-                    <div className="flex size-full max-w-(--container-width-sm) flex-col justify-center p-4 pt-8">
-                      <header className="shrink-0">
-                        <h2 className="text-lg font-medium">
-                          {t.a11y.artifacts}
-                        </h2>
-                      </header>
-                      <main className="min-h-0 grow">
-                        <ArtifactFileList
-                          className="max-w-(--container-width-sm) p-4 pt-12"
-                          files={thread.values.artifacts ?? []}
-                          threadId={threadId}
-                        />
-                      </main>
-                    </div>
-                  )}
-                </div>
-              )}
+              {artifactsBody}
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
@@ -255,27 +413,7 @@ const ChatBox: React.FC<{
               style={{ width: computerWidth }}
               className="flex h-full shrink-0 flex-col overflow-hidden"
             >
-              {/* Status bar above the panel — purely additive.
-                  Fixed-height row; the panel fills the remaining height below
-                  so its internal scroll areas and footer are not clipped. */}
-              <RuntimeCapabilitiesBar className="shrink-0" sandboxEvents={activityEvents} />
-              <div className="min-h-0 flex-1">
-                <WorkspaceStateProvider
-                  threadId={threadId}
-                  todos={thread.values.todos ?? []}
-                >
-                  <AgentComputerPanel
-                    threadId={threadId}
-                    currentTool={currentTool}
-                    isLoading={thread.isLoading}
-                    messages={thread.messages}
-                    activeWriteFilePath={activeWriteFilePath}
-                    artifacts={thread.values.artifacts ?? []}
-                    onClose={() => setAgentComputerOpen(false)}
-                    onAgentMessage={onAgentMessage}
-                  />
-                </WorkspaceStateProvider>
-              </div>
+              {computerBody}
             </div>
           </div>
         )}

@@ -38,8 +38,8 @@ export function Hero({ className }: { className?: string }) {
         maxOpacity={0.3}
         flickerChance={0.25}
       />
-      <div className="container-md relative z-10 mx-auto flex h-screen flex-col items-center justify-center">
-        <h1 className="flex items-center gap-2 text-4xl font-bold md:text-6xl">
+      <div className="container-md relative z-10 mx-auto flex min-h-screen flex-col items-center justify-center px-4 py-20 md:px-0 md:py-0">
+        <h1 className="flex flex-col items-center gap-2 text-center text-3xl font-bold sm:flex-row sm:text-4xl md:text-6xl">
           <WordRotate
             words={[
               "Deep Research",
@@ -71,17 +71,19 @@ export function Hero({ className }: { className?: string }) {
             </div>
           </a>
         )}
-        <p className="text-muted-foreground mt-8 scale-105 text-center text-2xl text-shadow-sm">
+        {/* The hard breaks shape the three-line desktop paragraph; on narrow
+            screens they would strand single words, so let it reflow instead. */}
+        <p className="text-muted-foreground mt-8 text-center text-base text-shadow-sm sm:text-lg md:scale-105 md:text-2xl">
           An open-source SuperAgent harness that researches, codes, and creates.
           With
-          <br />
+          <br className="hidden md:inline" />
           the help of sandboxes, memories, tools, skills and subagents, it
           handles
-          <br />
+          <br className="hidden md:inline" />
           different levels of tasks that could take minutes to hours.
         </p>
         <Link href="/workspace">
-          <Button className="size-lg mt-8 scale-108" size="lg">
+          <Button className="size-lg mt-8 md:scale-108" size="lg">
             <span className="text-md">{t.landing.hero.getStarted}</span>
             <ChevronRightIcon className="size-4" />
           </Button>

@@ -45,6 +45,7 @@ export interface Translations {
   home: {
     docs: string;
     blog: string;
+    menu: string;
   };
 
   // Welcome
@@ -804,6 +805,7 @@ export interface Translations {
     dragResize: string;
     editSkills: string;
     skillsFor: (agentName: string) => string;
+    chat: string;
     artifacts: string;
     todos: string;
     tor: string;

@@ -212,9 +212,11 @@ function FieldRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-3 items-center gap-3">
+    // Stacked on phones — inside the dialog there is only ~340px to split, so
+    // a 1/3 label column would squeeze the input past usability.
+    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3 sm:items-center sm:gap-3">
       <div className="text-sm font-medium">{label}</div>
-      <div className="col-span-2">{children}</div>
+      <div className="sm:col-span-2">{children}</div>
     </div>
   );
 }

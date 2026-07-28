@@ -334,7 +334,7 @@ export default function ProgressiveSkillsAnimation() {
   return (
     <div
       ref={containerRef}
-      className="relative flex h-[calc(100vh-280px)] w-full items-center justify-center overflow-hidden p-8"
+      className="relative flex w-full items-center justify-center overflow-hidden p-4 md:h-[calc(100vh-280px)] md:p-8"
     >
       {/* Overlay and Play Button */}
       <AnimatePresence>
@@ -369,7 +369,7 @@ export default function ProgressiveSkillsAnimation() {
 
       {/* Bottom Left Play/Pause Button */}
       <Tooltip content="Play / Pause">
-        <div className="absolute bottom-12 left-12 z-40 flex items-center gap-2">
+        <div className="absolute bottom-4 left-4 z-40 flex items-center gap-2 md:bottom-12 md:left-12">
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -388,7 +388,8 @@ export default function ProgressiveSkillsAnimation() {
         </div>
       </Tooltip>
 
-      <div className="flex h-full max-h-[700px] w-full max-w-6xl gap-8">
+      {/* Two panes side by side would be unreadably narrow on a phone. */}
+      <div className="flex h-full max-h-[700px] w-full max-w-6xl flex-col gap-4 md:flex-row md:gap-8">
         {/* Left: File Tree */}
         <div className="flex flex-1 flex-col">
           <motion.div

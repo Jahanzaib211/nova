@@ -124,18 +124,22 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {t.settings.description}
           </p>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
-            <ul className="space-y-1 pr-1">
+        {/* Below md there is no room for a 220px rail, so the sections become a
+            horizontally scrolling strip above the content. The explicit base
+            rows matter: the ScrollArea's `h-full` needs a bounded row to
+            resolve against, which an implicit `auto` row does not give it. */}
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-1">
+          <nav className="bg-sidebar min-h-0 overflow-x-auto rounded-lg border p-2 md:overflow-x-visible md:overflow-y-auto">
+            <ul className="flex gap-1 md:block md:space-y-1 md:pr-1">
               {sections.map(({ id, label, icon: Icon }) => {
                 const active = activeSection === id;
                 return (
-                  <li key={id}>
+                  <li key={id} className="shrink-0 md:shrink">
                     <button
                       type="button"
                       onClick={() => setActiveSection(id as SettingsSection)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        "flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors md:min-h-0",
                         active
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",

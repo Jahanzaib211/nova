@@ -10,7 +10,9 @@ export function SkillsSection({ className }: { className?: string }) {
   const { t } = useI18n();
   return (
     <Section
-      className={cn("h-[calc(100vh-64px)] w-full bg-white/2", className)}
+      // Pinned to the viewport only where the two-pane animation fits; on
+      // phones it stacks and needs to grow to its own height instead.
+      className={cn("w-full bg-white/2 md:h-[calc(100vh-64px)]", className)}
       title={t.landing.skills.title}
       subtitle={
         <div>

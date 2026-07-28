@@ -236,9 +236,13 @@ export function MessageList({
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
   // Server-truth liveness: a dropped stream must not paint still-running
-  // subtasks as failed. Shares the query (and its polling) with the rejoin
-  // logic in useThreadStream.
+  // subtasks as failed. Read-only consumer — `enabled: false` means this never
+  // issues its own request, it only reads what useThreadStream's rejoin query
+  // has already put in the cache under the same key. Owning a request here made
+  // the list fire GET /runs on first send, before POST /runs/stream (issue
+  // #2746), and made mock threads reach the real gateway.
   const activeRun = useActiveRun(threadId, {
+    enabled: false,
     isStreamLoading: thread.isLoading,
   });
   const hasActiveRun = activeRun !== null;

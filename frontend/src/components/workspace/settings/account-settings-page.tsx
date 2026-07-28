@@ -125,11 +125,15 @@ export function AccountSettingsPage() {
     <div className="space-y-8">
       <SettingsSection title={t.settings.account.profileTitle}>
         <div className="space-y-2">
-          <div className="grid grid-cols-[max-content_max-content] items-center gap-4">
+          {/* The value column must be able to shrink — a `max-content` column
+              lets a long email push the dialog into horizontal overflow. */}
+          <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-4">
             <span className="text-muted-foreground text-sm">
               {t.settings.account.email}
             </span>
-            <span className="text-sm font-medium">{user?.email ?? "—"}</span>
+            <span className="text-sm font-medium break-all">
+              {user?.email ?? "—"}
+            </span>
             <span className="text-muted-foreground text-sm">
               {t.settings.account.role}
             </span>

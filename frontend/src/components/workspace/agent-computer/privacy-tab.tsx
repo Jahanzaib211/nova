@@ -57,7 +57,7 @@ export function PrivacyPanel({ threadId }: { threadId?: string }) {
           <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
             {t.agentComputer.privacy.sourceHealth}
           </h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <StatusCard
               label={t.agentComputer.privacy.searxng}
               status={
@@ -84,7 +84,7 @@ export function PrivacyPanel({ threadId }: { threadId?: string }) {
           <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
             {t.agentComputer.privacy.cache}
           </h3>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <MetricCard
               label={t.agentComputer.privacy.size}
               value={`${status.cache?.size ?? 0}/${status.cache?.max_size ?? 0}`}
@@ -105,7 +105,7 @@ export function PrivacyPanel({ threadId }: { threadId?: string }) {
           <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
             {t.agentComputer.privacy.audit}
           </h3>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <MetricCard
               label={t.agentComputer.privacy.total}
               value={status.audit?.total_records ?? 0}
@@ -127,7 +127,7 @@ export function PrivacyPanel({ threadId }: { threadId?: string }) {
             <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
               {t.agentComputer.workspace.kernelTitle}
             </h3>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <MetricCard label={t.agentComputer.workspace.kernelScans} value={workspaceMetrics.scan.count} />
               <MetricCard
                 label={t.agentComputer.workspace.kernelAvgScan}

@@ -2,6 +2,16 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = process.env.E2E_PORT ?? "3000";
 
+// Shared with the mobile project below so a custom local browser build applies
+// to both.
+const chromiumLaunchOverride = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+  ? {
+      launchOptions: {
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+      },
+    }
+  : {};
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -19,6 +29,9 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      // The *.mobile.spec.ts files assert phone-only layouts and belong to the
+      // mobile project below.
+      testIgnore: /.*\.mobile\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // v7.3 (Nova rebrand): removed the hardcoded executablePath that
@@ -28,13 +41,18 @@ export default defineConfig({
         // Now we use the version Playwright installs by default.
         // Local developers with a custom browser path can still override
         // via PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH env var.
-        ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
-          ? {
-              launchOptions: {
-                executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
-              },
-            }
-          : {}),
+        ...chromiumLaunchOverride,
+      },
+    },
+    {
+      // Guards the responsive work: the workspace collapses its side-by-side
+      // panels into a switcher and the landing nav moves behind a sheet below
+      // the 768px breakpoint, neither of which Desktop Chrome exercises.
+      name: "mobile-chrome",
+      testMatch: /.*\.mobile\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        ...chromiumLaunchOverride,
       },
     },
   ],

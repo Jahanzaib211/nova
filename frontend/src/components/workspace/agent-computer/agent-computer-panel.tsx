@@ -52,7 +52,7 @@ function TabBtn({
     <button
       onClick={onClick}
       className={cn(
-        "relative flex shrink-0 items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+        "relative flex shrink-0 items-center gap-1 px-2.5 py-3 text-[11px] font-medium transition-colors md:py-1.5",
         active
           ? "text-foreground"
           : "text-muted-foreground/60 hover:text-muted-foreground",
@@ -364,7 +364,7 @@ export function AgentComputerPanel({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="h-6 w-6"
+                className="h-9 w-9 md:h-6 md:w-6"
                 onClick={handleDownloadZip}
               >
                 <FolderOpenIcon className="h-3.5 w-3.5" />
@@ -377,7 +377,7 @@ export function AgentComputerPanel({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="h-6 w-6"
+                className="h-9 w-9 md:h-6 md:w-6"
                 onClick={handleDownload}
               >
                 <DownloadIcon className="h-3.5 w-3.5" />
@@ -390,19 +390,24 @@ export function AgentComputerPanel({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="h-6 w-6"
+                className="h-9 w-9 md:h-6 md:w-6"
                 onClick={handleGitHubPush}
               >
                 <GithubIcon className="h-3.5 w-3.5" />
               </Button>
             </Tooltip>
           )}
-          <Tooltip content="Close">
+          <Tooltip content={t.common.close}>
             <Button
               size="icon-sm"
               variant="ghost"
               onClick={onClose}
-              className="h-6 w-6"
+              // The tooltip is the only label on hover-capable devices; touch
+              // never fires :hover, so the button also needs a real name.
+              // Names the panel too — a bare "Close" collides with the
+              // artifacts panel's own close button.
+              aria-label={`${t.common.close} ${t.agentComputer.header}`}
+              className="h-9 w-9 md:h-6 md:w-6"
             >
               <XIcon className="h-3.5 w-3.5" />
             </Button>

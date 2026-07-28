@@ -75,6 +75,9 @@ export function CaseStudySection({ className }: { className?: string }) {
                   "flex h-full w-full translate-y-[calc(100%-60px)] flex-col items-center",
                   "transition-all duration-300",
                   "group-hover/card:translate-y-[calc(100%-128px)]",
+                  // No :hover on touch — show the description up front instead
+                  // of leaving it permanently out of reach.
+                  "max-md:translate-y-[calc(100%-128px)]",
                 )}
               >
                 <div

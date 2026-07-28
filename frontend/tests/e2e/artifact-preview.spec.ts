@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { mockLangGraphAPI } from "./utils/mock-api";
 
@@ -56,6 +56,21 @@ function writeFileMessages({
   return messages;
 }
 
+/**
+ * A write_file tool call auto-opens the Agent's Computer, and while that panel
+ * is open chat-box.tsx deliberately collapses the centre artifacts panel so the
+ * same file is never shown on two surfaces at once. These tests cover the
+ * centre panel specifically, so dismiss the computer first.
+ */
+async function dismissAgentComputer(page: Page) {
+  const close = page.getByRole("button", {
+    name: /close agent's computer|关闭.*电脑/i,
+  });
+  if (await close.count()) {
+    await close.first().click();
+  }
+}
+
 test.describe("Artifact preview stability", () => {
   test("renders preview iframe for an in-progress write artifact", async ({
     page,
@@ -76,6 +91,8 @@ test.describe("Artifact preview stability", () => {
       timeout: 15_000,
     });
     await page.getByText(ARTIFACT_PATH).click();
+
+    await dismissAgentComputer(page);
 
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.html")).toBeVisible();
@@ -103,6 +120,8 @@ test.describe("Artifact preview stability", () => {
       timeout: 15_000,
     });
     await page.getByText(ARTIFACT_PATH).click();
+
+    await dismissAgentComputer(page);
 
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.html")).toBeVisible();
@@ -134,6 +153,8 @@ test.describe("Artifact preview stability", () => {
     });
     await page.getByText(MARKDOWN_ARTIFACT_PATH).click();
 
+    await dismissAgentComputer(page);
+
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.md")).toBeVisible();
     await expect(artifactsPanel.getByText("Markdown draft")).toBeVisible();
@@ -163,6 +184,8 @@ test.describe("Artifact preview stability", () => {
       timeout: 15_000,
     });
     await page.getByText(JSON_ARTIFACT_PATH).click();
+
+    await dismissAgentComputer(page);
 
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.json")).toBeVisible();

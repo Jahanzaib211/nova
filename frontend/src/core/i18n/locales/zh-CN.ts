@@ -57,6 +57,7 @@ export const zhCN: Translations = {
   home: {
     docs: "文档",
     blog: "博客",
+    menu: "菜单",
   },
 
   // Welcome
@@ -887,6 +888,7 @@ export const zhCN: Translations = {
     dragResize: "拖动或滚动以调整大小",
     editSkills: "编辑技能",
     skillsFor: (agentName: string) => `${agentName} 的技能`,
+    chat: "对话",
     artifacts: "产物",
     todos: "待办事项",
     tor: "TOR",

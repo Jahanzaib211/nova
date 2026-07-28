@@ -58,6 +58,7 @@ export const enUS: Translations = {
   home: {
     docs: "Docs",
     blog: "Blog",
+    menu: "Menu",
   },
 
   // Welcome
@@ -920,6 +921,7 @@ export const enUS: Translations = {
     dragResize: "Drag or scroll to resize",
     editSkills: "Edit skills",
     skillsFor: (agentName: string) => `Skills for ${agentName}`,
+    chat: "Chat",
     artifacts: "Artifacts",
     todos: "To-dos",
     tor: "TOR",

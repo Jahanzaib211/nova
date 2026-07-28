@@ -1,6 +1,7 @@
 import { StarFilledIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 
+import { MobileNav } from "@/components/landing/mobile-nav";
 import { Button } from "@/components/ui/button";
 import { NumberTicker } from "@/components/ui/number-ticker";
 import type { Locale } from "@/core/i18n/locale";
@@ -34,7 +35,7 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
           <h1 className="font-serif text-xl">Nova</h1>
         </a>
       </div>
-      <nav className="mr-8 ml-auto flex items-center gap-8 text-sm font-medium">
+      <nav className="mr-8 ml-auto hidden items-center gap-8 text-sm font-medium md:flex">
         <Link
           href={`/${lang}/docs`}
           className="text-secondary-foreground hover:text-foreground transition-colors"
@@ -48,7 +49,20 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
           {t.home.blog}
         </Link>
       </nav>
-      <div className="relative">
+
+      <div className="ml-auto md:hidden">
+        <MobileNav
+          links={[
+            { href: `/${lang}/docs`, label: t.home.docs },
+            { href: "/blog/posts", label: t.home.blog },
+          ]}
+          githubURL="https://github.com/Jahanzaib211/nova"
+          githubLabel="Star on GitHub"
+          menuLabel={t.home.menu}
+        />
+      </div>
+
+      <div className="relative hidden md:block">
         <div
           className="pointer-events-none absolute inset-0 z-0 h-full w-full rounded-full opacity-30 blur-2xl"
           style={{
