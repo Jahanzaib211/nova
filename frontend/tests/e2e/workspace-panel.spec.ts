@@ -39,13 +39,18 @@ test.describe("Workspace-aware panel tabs", () => {
     if (!(await openPanel(page))) return;
 
     await page.getByRole("tab", { name: "Files", exact: true }).click();
+    // Scoped to the Files tab's own DOM subtree (`data-tab="files"`): tabs
+    // stay mounted-but-hidden across switches (agent-computer-panel.tsx),
+    // so an unscoped page-wide text match is ambiguous — the Activity tab
+    // renders the same mocked snapshot's symbol count in its own banner.
+    const filesTab = page.locator('[data-tab="files"]');
     // WorkspaceCard renders project_count/symbol_count/command_count from
     // the mocked /snapshot response — this is real fetch + real render,
     // not a synthetic prop.
-    await expect(page.getByText("2", { exact: true }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-    await expect(page.getByText(/1,234|1234/)).toBeVisible();
+    await expect(filesTab.getByText("2", { exact: true }).first()).toBeVisible(
+      { timeout: 10_000 },
+    );
+    await expect(filesTab.getByText(/1,234|1234/)).toBeVisible();
   });
 
   test("Activity tab shows the live-indexed banner and a live scan event", async ({

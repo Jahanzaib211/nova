@@ -257,20 +257,42 @@ export function useLastBrowserCheck(threadId: string | null, enabled: boolean) {
 export function useBrowserCheck(threadId: string | null) {
   const [result, setResult] = useState<BrowserCheckResult | null>(null);
   const [running, setRunning] = useState(false);
+
+  // Tracks the *current* threadId for the in-flight guard below — a plain
+  // closure comparison doesn't work here since `run` is recreated (new
+  // closure) whenever threadId changes, so a captured `threadId` would
+  // always equal itself even for a stale in-flight call.
+  const latestThreadIdRef = useRef(threadId);
+  latestThreadIdRef.current = threadId;
+
+  // The Browser tab isn't remounted per-thread (only the panel is), so
+  // without this a manual self-test result from a previous thread would
+  // keep rendering after switching threads until the user re-runs it.
+  useEffect(() => {
+    setResult(null);
+    setRunning(false);
+  }, [threadId]);
+
   const run = useCallback(
     async (label = "app", routes = "/") => {
       if (!threadId) return;
+      const requestedFor = threadId;
       setRunning(true);
       try {
         const res = await fetch(
           `${getBackendBaseURL()}/api/sandbox/browser-check?thread_id=${encodeURIComponent(threadId)}&label=${encodeURIComponent(label)}&routes=${encodeURIComponent(routes)}`,
           { method: "POST" },
         );
-        setResult((await res.json()) as BrowserCheckResult);
+        const data = (await res.json()) as BrowserCheckResult;
+        // Guard against a slow response landing after the user has already
+        // switched to a different thread.
+        if (requestedFor === latestThreadIdRef.current) setResult(data);
       } catch {
-        setResult({ ok: false, reason: "request failed", routes: [] });
+        if (requestedFor === latestThreadIdRef.current) {
+          setResult({ ok: false, reason: "request failed", routes: [] });
+        }
       } finally {
-        setRunning(false);
+        if (requestedFor === latestThreadIdRef.current) setRunning(false);
       }
     },
     [threadId],

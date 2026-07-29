@@ -552,6 +552,7 @@ export interface Translations {
     pushToGithub: string;
     downloadAllZip: string;
     downloadActiveFile: string;
+    downloadFailed: string;
     verifyResult: {
       passed: (count: number) => string;
       failed: (count: number) => string;
@@ -645,6 +646,8 @@ export interface Translations {
       testedPort: (port: string) => string;
       livePreview: string;
       devServerCompiling: string;
+      devServerError: string;
+      retryPreview: string;
       previewWillAppear: string;
       previewWillAppearLine2: string;
       watchLiveBrowser: string;

@@ -271,7 +271,14 @@ const ChatBox: React.FC<{
           threadId={threadId}
           todos={thread.values.todos ?? []}
         >
+          {/* Keyed on threadId: resets browserFilePath/shownArtifactRef and
+              other internal state when switching threads (the panel's tabs
+              stay mounted-but-hidden across tab switches within one thread —
+              see the "hidden" wrappers below — but a genuinely different
+              thread should start the computer panel fresh, not inherit the
+              previous thread's open file/artifact). */}
           <AgentComputerPanel
+            key={threadId}
             threadId={threadId}
             currentTool={currentTool}
             isLoading={thread.isLoading}

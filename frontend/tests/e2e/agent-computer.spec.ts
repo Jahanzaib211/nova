@@ -61,4 +61,49 @@ test.describe("Agent Computer panel", () => {
     // The panel opens with tab buttons. Assert at least one tab is visible.
     await expect(page.getByRole("tab").first()).toBeVisible({ timeout: 5_000 });
   });
+
+  test("switching tabs hides content without unmounting it", async ({
+    page,
+  }) => {
+    // Regression test: tabs used to fully unmount via a ternary
+    // (`activeTab === "x" ? <Component/> : null`), which reset every tab's
+    // internal state (terminal mode, editor file, browser nav history) on
+    // every switch. Fixed to match the mobile chat/artifacts/computer
+    // switcher's always-mounted + `hidden` pattern — this asserts the DOM
+    // node for an inactive tab is present (`data-tab="..."`, just hidden),
+    // not removed.
+    await page.goto("/workspace/chats/new");
+    const trigger = page.getByRole("button", { name: /agent's computer/i });
+    if ((await trigger.count()) === 0) {
+      test.skip(
+        true,
+        "agent computer trigger not visible (sign-in gate or auth-disabled off)",
+      );
+      return;
+    }
+    await trigger.first().click();
+    await expect(page.getByRole("tab").first()).toBeVisible({ timeout: 5_000 });
+
+    const activityPanel = page.locator('[data-tab="activity"]');
+    const terminalPanel = page.locator('[data-tab="terminal"]');
+
+    // Activity is the default tab (no sessionStorage-remembered "browser"
+    // preference in a fresh test). Terminal is inactive but must still be
+    // attached to the DOM (not unmounted) and hidden via CSS.
+    await expect(activityPanel).toBeVisible();
+    await expect(terminalPanel).toBeAttached();
+    await expect(terminalPanel).toBeHidden();
+
+    await page.getByRole("tab", { name: /terminal/i }).click();
+    await expect(terminalPanel).toBeVisible();
+    await expect(activityPanel).toBeAttached();
+    await expect(activityPanel).toBeHidden();
+
+    // Switch back — Activity should still be the same attached node, not a
+    // freshly remounted one, and Terminal (now inactive) stays attached too.
+    await page.getByRole("tab", { name: /activity/i }).click();
+    await expect(activityPanel).toBeVisible();
+    await expect(terminalPanel).toBeAttached();
+    await expect(terminalPanel).toBeHidden();
+  });
 });

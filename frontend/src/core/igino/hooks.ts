@@ -7,11 +7,12 @@ import {
   fetchIGINOCacheStats,
 } from "./api";
 
-export function useIGINOStatus() {
+export function useIGINOStatus(enabled = true) {
   return useQuery({
     queryKey: ["igino", "status"],
     queryFn: fetchIGINOStatus,
-    refetchInterval: 15000,
+    enabled,
+    refetchInterval: enabled ? 15000 : false,
     retry: 1,
     staleTime: 10000,
   });

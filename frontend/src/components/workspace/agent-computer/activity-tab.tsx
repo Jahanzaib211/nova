@@ -211,10 +211,15 @@ export function ActivityPanel({
   events,
   threadId,
   verifyResult,
+  active = true,
 }: {
   events: AgentActivityEvent[];
   threadId: string;
   verifyResult?: VerifyResult | null;
+  /** Gates the snapshot query and SSE subscription so they don't run while
+   * the tab is hidden but stays mounted (the SSE connection in particular
+   * would otherwise leak — EventSource has no automatic idle-close). */
+  active?: boolean;
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -223,9 +228,9 @@ export function ActivityPanel({
     [events],
   );
   // Workspace-indexed banner (C10 item 7); null while the flag is off.
-  const { snapshot } = useWorkspaceSnapshot(threadId);
+  const { snapshot } = useWorkspaceSnapshot(threadId, active);
   // Live WIK activity — bus -> SSE bridge; empty while the flag is off.
-  const liveEvents = useWorkspaceEvents(threadId);
+  const liveEvents = useWorkspaceEvents(threadId, active);
   const recentLiveEvents = useMemo(() => liveEvents.slice(-5), [liveEvents]);
 
   useEffect(() => {

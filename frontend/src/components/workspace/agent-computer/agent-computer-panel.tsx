@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { AuroraText } from "@/components/ui/aurora-text";
 import { Button } from "@/components/ui/button";
@@ -285,7 +286,10 @@ export function AgentComputerPanel({
         { credentials: "include" },
       );
       const data = (await res.json()) as { content: string; exists: boolean };
-      if (!data.exists || !data.content) return;
+      if (!res.ok || !data.exists || !data.content) {
+        toast.error(t.agentComputer.downloadFailed);
+        return;
+      }
       const filename = target.split("/").at(-1) ?? "file";
       const blob = new Blob([data.content], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
@@ -295,9 +299,9 @@ export function AgentComputerPanel({
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      /* silent */
+      toast.error(t.agentComputer.downloadFailed);
     }
-  }, [threadId, browserFilePath, files]);
+  }, [threadId, browserFilePath, files, t.agentComputer.downloadFailed]);
 
   // Download ALL workspace files as zip
   const handleDownloadZip = useCallback(() => {
@@ -518,31 +522,45 @@ export function AgentComputerPanel({
 
       {effectiveLlmError ? <LlmErrorBadge event={effectiveLlmError} /> : null}
 
-      {/* ── Tab content ── */}
+      {/* ── Tab content ──
+          All tabs stay mounted and are toggled with `hidden` (matching the
+          mobile chat/artifacts/computer switcher's pattern in chat-box.tsx)
+          so scroll position, in-progress edits, terminal mode, and browser
+          nav history survive switching tabs — the previous ternary-unmount
+          approach reset all of that on every tab hop. Components that fetch
+          their own data (Editor, Browser, Activity, Privacy) already accept
+          an active/enabled-style prop to gate their queries while hidden. */}
       <div className="min-h-0 flex-1 overflow-hidden">
         <AgentComputerErrorBoundary tabName="Files">
-          {activeTab === "files" ? (
-            <ScrollArea className="h-full">
-              <FilesPanel
-                files={files}
-                artifacts={artifacts}
-                onSelectFile={handleSelectFile}
-                onSelectArtifact={handleSelectArtifact}
-                threadId={threadId}
-                runningEvents={mergedEvents}
-              />
-            </ScrollArea>
-          ) : null}
+          <ScrollArea
+            data-tab="files"
+            className={cn("h-full", activeTab !== "files" && "hidden")}
+          >
+            <FilesPanel
+              files={files}
+              artifacts={artifacts}
+              onSelectFile={handleSelectFile}
+              onSelectArtifact={handleSelectArtifact}
+              threadId={threadId}
+              runningEvents={mergedEvents}
+            />
+          </ScrollArea>
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Terminal">
-          {activeTab === "terminal" ? (
+          <div
+            data-tab="terminal"
+            className={cn("h-full", activeTab !== "terminal" && "hidden")}
+          >
             <Terminal events={mergedEvents} threadId={threadId} />
-          ) : null}
+          </div>
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Editor">
-          {activeTab === "editor" ? (
+          <div
+            data-tab="editor"
+            className={cn("h-full", activeTab !== "editor" && "hidden")}
+          >
             <Editor
               threadId={threadId}
               filePath={derivedFilePath}
@@ -552,11 +570,14 @@ export function AgentComputerPanel({
               activeTab={activeTab === "editor"}
               activeEdit={activeEdit}
             />
-          ) : null}
+          </div>
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Browser">
-          {activeTab === "browser" ? (
+          <div
+            data-tab="browser"
+            className={cn("h-full", activeTab !== "browser" && "hidden")}
+          >
             <Browser
               threadId={threadId}
               filePath={browserFilePath}
@@ -568,35 +589,49 @@ export function AgentComputerPanel({
               hasRunnableProject={hasRunnableProject}
               onAgentMessage={onAgentMessage}
               entryHtmlArtifact={latestHtmlArtifact}
+              active={activeTab === "browser"}
             />
-          ) : null}
+          </div>
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Review">
-          {activeTab === "review" ? (
+          <div
+            data-tab="review"
+            className={cn("h-full", activeTab !== "review" && "hidden")}
+          >
             <ReviewPanel
               threadId={threadId}
               review={reviewQuery.data}
               isFetching={reviewQuery.isFetching}
               onRegenerate={() => void reviewQuery.refetch()}
             />
-          ) : null}
+          </div>
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Activity">
-          {activeTab === "activity" ? (
+          <div
+            data-tab="activity"
+            className={cn("h-full", activeTab !== "activity" && "hidden")}
+          >
             <ActivityPanel
               events={mergedEvents}
               threadId={threadId}
               verifyResult={effectiveVerifyResult}
+              active={activeTab === "activity"}
             />
-          ) : null}
+          </div>
         </AgentComputerErrorBoundary>
 
         <AgentComputerErrorBoundary tabName="Privacy">
-          {activeTab === "privacy" ? (
-            <PrivacyPanel threadId={threadId} />
-          ) : null}
+          <div
+            data-tab="privacy"
+            className={cn("h-full", activeTab !== "privacy" && "hidden")}
+          >
+            <PrivacyPanel
+              threadId={threadId}
+              active={activeTab === "privacy"}
+            />
+          </div>
         </AgentComputerErrorBoundary>
       </div>
 

@@ -9,12 +9,19 @@ import { useIGINOStatus, useToggleIGINO } from "@/core/igino/hooks";
 import { useWorkspaceMetrics } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
-export function PrivacyPanel({ threadId }: { threadId?: string }) {
+export function PrivacyPanel({
+  threadId,
+  active = true,
+}: {
+  threadId?: string;
+  /** Gates the metrics query so it doesn't poll while the tab is hidden but stays mounted. */
+  active?: boolean;
+}) {
   const { t } = useI18n();
-  const { data: status, isLoading } = useIGINOStatus();
+  const { data: status, isLoading } = useIGINOStatus(active);
   const toggleMutation = useToggleIGINO();
   // Workspace kernel metrics (C10 item 10); null while the flag is off.
-  const workspaceMetrics = useWorkspaceMetrics(threadId ?? null);
+  const workspaceMetrics = useWorkspaceMetrics(threadId ?? null, active);
 
   if (isLoading) {
     return (

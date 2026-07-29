@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangleIcon,
   CodeIcon,
   DownloadIcon,
   ExternalLinkIcon,
@@ -8,6 +9,7 @@ import {
   GlobeIcon,
   LoaderCircleIcon,
   MonitorIcon,
+  RefreshCwIcon,
   XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +37,7 @@ export function Browser({
   hasRunnableProject = false,
   onAgentMessage,
   entryHtmlArtifact = null,
+  active = true,
 }: {
   threadId: string;
   filePath: string | null;
@@ -52,6 +55,8 @@ export function Browser({
   hasRunnableProject?: boolean;
   onAgentMessage?: (text: string) => void;
   entryHtmlArtifact?: string | null;
+  /** Gates the self-test poll so it doesn't run while the tab is hidden but stays mounted. */
+  active?: boolean;
 }) {
   const { t } = useI18n();
   const { content, exists } = useSandboxFile(threadId, filePath);
@@ -111,7 +116,7 @@ export function Browser({
   } = useBrowserCheck(threadId);
   // The deterministic auto-check runs on every preview — poll it so results show
   // without anyone clicking. Manual run (if any) takes precedence.
-  const autoTest = useLastBrowserCheck(threadId, devServer.running);
+  const autoTest = useLastBrowserCheck(threadId, active && devServer.running);
   const selfTest =
     manualTest ?? (autoTest && autoTest.routes.length > 0 ? autoTest : null);
   const [showSelfTest, setShowSelfTest] = useState(false);
@@ -150,8 +155,12 @@ export function Browser({
   }, [content, filename]);
 
   // Open the LIVE dev server preview in a real tab (proxy sets CSP sandbox + strips cookies).
+  // noopener/noreferrer: the opened page is agent-authored/uncontrolled content —
+  // without it, JS running there gets a `window.opener` handle back to this tab
+  // and can navigate it (reverse tabnabbing), undermining the sandboxing already
+  // applied to the equivalent iframe below.
   const openLiveInNewTab = useCallback(() => {
-    if (devServer.url) window.open(liveSrc, "_blank");
+    if (devServer.url) window.open(liveSrc, "_blank", "noopener,noreferrer");
   }, [devServer.url, liveSrc]);
 
   // Pseudo-HMR: auto-reload the preview iframe each time the dev server recompiles.
@@ -162,8 +171,14 @@ export function Browser({
 
   // Always-on preview: when a runnable project exists but no server is up, bring
   // it up deterministically (find project → install → start) — no click, no LLM.
-  // Fire once; if it stops later the user can use the manual button.
+  // Fire once per thread; if it stops later the user can use the manual button.
   const autoStartedRef = useRef(false);
+  // The Browser tab isn't remounted per-thread (only the panel is), so without
+  // this reset, switching to a second thread with `autoStartedRef.current`
+  // already `true` from the first thread silently skips auto-start there.
+  useEffect(() => {
+    autoStartedRef.current = false;
+  }, [threadId]);
   useEffect(() => {
     if (
       hasRunnableProject &&
@@ -462,6 +477,22 @@ export function Browser({
                   : "h-full w-full",
               )}
             />
+          ) : devServer.status === "error" || devServer.status === "stopped" ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-4 text-center">
+              <AlertTriangleIcon className="text-destructive/60 h-6 w-6" />
+              <p className="text-muted-foreground/70 text-xs">
+                {t.agentComputer.browser.devServerError}
+              </p>
+              {onStartPreview && (
+                <button
+                  onClick={() => void onStartPreview(selectedLabel)}
+                  className="border-border/40 text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
+                >
+                  <RefreshCwIcon className="h-3 w-3" />
+                  {t.agentComputer.browser.retryPreview}
+                </button>
+              )}
+            </div>
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3">
               <LoaderCircleIcon className="text-muted-foreground/40 h-6 w-6 animate-spin" />

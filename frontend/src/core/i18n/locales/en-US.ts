@@ -656,6 +656,7 @@ export const enUS: Translations = {
     pushToGithub: "Push to GitHub",
     downloadAllZip: "Download all (zip)",
     downloadActiveFile: "Download active file",
+    downloadFailed: "Download failed. Try again.",
     verifyResult: {
       passed: (count: number) =>
         `Self-test passed${count ? ` · ${count} route${count === 1 ? "" : "s"}` : ""}`,
@@ -758,6 +759,8 @@ export const enUS: Translations = {
       livePreview: "Live preview",
       devServerCompiling:
         "Dev server compiling\u2026 preview loads automatically",
+      devServerError: "The dev server hit an error and stopped.",
+      retryPreview: "Retry",
       previewWillAppear: "Browser preview will appear here",
       fileMissing: (name: string) =>
         `Preview file ${name || "(none)"} is not available in this workspace.`,

@@ -632,6 +632,7 @@ export const zhCN: Translations = {
     pushToGithub: "推送到 GitHub",
     downloadAllZip: "下载全部 (zip)",
     downloadActiveFile: "下载当前文件",
+    downloadFailed: "下载失败，请重试。",
     verifyResult: {
       passed: (count: number) => `自检通过${count ? ` · ${count} 条路由` : ""}`,
       failed: (count: number) =>
@@ -730,6 +731,8 @@ export const zhCN: Translations = {
       testedPort: (port: string) => `已测试 :${port}`,
       livePreview: "实时预览",
       devServerCompiling: "开发服务器编译中\u2026预览将自动加载",
+      devServerError: "开发服务器出错并已停止。",
+      retryPreview: "重试",
       previewWillAppear: "浏览器预览将显示在这里",
       fileMissing: (name: string) =>
         `预览文件 ${name || "(无)"} 在当前工作区不可用。`,
