@@ -2,6 +2,7 @@ import logging
 import os
 
 from langchain.chat_models import BaseChatModel
+from langchain_openai import ChatOpenAI
 
 from deerflow.config import get_app_config
 from deerflow.config.app_config import AppConfig
@@ -32,15 +33,21 @@ def _vllm_disable_chat_template_kwargs(chat_template_kwargs: dict) -> dict:
     return disable_kwargs
 
 
-def _enable_stream_usage_by_default(model_use_path: str, model_settings_from_config: dict) -> None:
+def _enable_stream_usage_by_default(model_class: type, model_settings_from_config: dict) -> None:
     """Enable stream usage for OpenAI-compatible models unless explicitly configured.
 
     LangChain only auto-enables ``stream_usage`` for OpenAI models when no custom
     base URL or client is configured. DeerFlow frequently uses OpenAI-compatible
     gateways, so token usage tracking would otherwise stay empty and the
     TokenUsageMiddleware would have nothing to log.
+
+    Checks ``issubclass``, not an exact path match — provider adapters like
+    ``PatchedChatMiniMax`` subclass ``ChatOpenAI`` and need the same defaults
+    as the base class, not silently skipped ones (see the identical fix on
+    ``_apply_stream_chunk_timeout_default`` below for the concrete bug this
+    was causing).
     """
-    if model_use_path != "langchain_openai:ChatOpenAI":
+    if not issubclass(model_class, ChatOpenAI):
         return
     if "stream_usage" in model_settings_from_config:
         return
@@ -60,9 +67,9 @@ def _enable_stream_usage_by_default(model_use_path: str, model_settings_from_con
 _LOCAL_ENDPOINT_PLACEHOLDER_API_KEY = "sk-no-key-required"
 
 
-def _apply_local_endpoint_api_key_default(model_use_path: str, model_settings_from_config: dict) -> None:
+def _apply_local_endpoint_api_key_default(model_class: type, model_settings_from_config: dict) -> None:
     """Inject a placeholder api_key for keyless OpenAI-compatible local endpoints."""
-    if model_use_path != "langchain_openai:ChatOpenAI":
+    if not issubclass(model_class, ChatOpenAI):
         return
     if model_settings_from_config.get("api_key") or model_settings_from_config.get("openai_api_key"):
         return
@@ -84,20 +91,32 @@ def _apply_local_endpoint_api_key_default(model_use_path: str, model_settings_fr
 _DEFAULT_STREAM_CHUNK_TIMEOUT_SECONDS: float = 240.0
 
 
-def _apply_stream_chunk_timeout_default(model_use_path: str, model_settings_from_config: dict) -> None:
+def _apply_stream_chunk_timeout_default(model_class: type, model_settings_from_config: dict) -> None:
     """Inject a generous ``stream_chunk_timeout`` for OpenAI-compatible clients.
 
     The ``stream_chunk_timeout`` kwarg is specific to ``langchain_openai:ChatOpenAI``
-    and is rejected by other providers' constructors as an unexpected keyword
-    argument. Behaviour:
+    (and its subclasses) and is rejected by other providers' constructors as an
+    unexpected keyword argument. Behaviour:
 
-    * OpenAI-compatible path: an explicit value in ``config.yaml`` is preserved.
-      An explicit ``null`` is dropped upstream by ``model_dump(exclude_none=True)``
-      and therefore treated as "unset", so the default is injected.
+    * OpenAI-compatible path (``issubclass(model_class, ChatOpenAI)``, so this
+      also covers provider adapters like ``PatchedChatMiniMax``): an explicit
+      value in ``config.yaml`` is preserved. An explicit ``null`` is dropped
+      upstream by ``model_dump(exclude_none=True)`` and therefore treated as
+      "unset", so the default is injected.
     * Non-OpenAI path: drop the key so it is never forwarded to an incompatible
       constructor (which would raise ``TypeError: unexpected keyword argument``).
+
+    Was previously an exact ``model_use_path == "langchain_openai:ChatOpenAI"``
+    string match, which silently excluded every subclass — including
+    ``PatchedChatMiniMax``, the adaptive-thinking reasoning model this 240s
+    default exists for in the first place (see the module comment above:
+    "too aggressive for reasoning models... whose first chunk can legitimately
+    take 90~150s"). MiniMax-M3 was running with langchain-openai's raw 60s
+    library default instead, one long thinking pause away from a spurious
+    StreamChunkTimeoutError on exactly the large-context requests it's meant
+    to handle.
     """
-    if model_use_path != "langchain_openai:ChatOpenAI":
+    if not issubclass(model_class, ChatOpenAI):
         model_settings_from_config.pop("stream_chunk_timeout", None)
         return
     if "stream_chunk_timeout" in model_settings_from_config:
@@ -190,9 +209,9 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         kwargs.pop("reasoning_effort", None)
         model_settings_from_config.pop("reasoning_effort", None)
 
-    _enable_stream_usage_by_default(model_config.use, model_settings_from_config)
-    _apply_stream_chunk_timeout_default(model_config.use, model_settings_from_config)
-    _apply_local_endpoint_api_key_default(model_config.use, model_settings_from_config)
+    _enable_stream_usage_by_default(model_class, model_settings_from_config)
+    _apply_stream_chunk_timeout_default(model_class, model_settings_from_config)
+    _apply_local_endpoint_api_key_default(model_class, model_settings_from_config)
 
     # Bring-your-own-key override: when a run has a user-supplied API key in
     # its task-local context, it replaces the configured key so usage bills to

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from langchain.chat_models import BaseChatModel
+from langchain_openai import ChatOpenAI
 
 from deerflow.config.app_config import AppConfig
 from deerflow.config.model_config import ModelConfig
@@ -585,7 +586,11 @@ def test_openai_compatible_provider_passes_base_url(monkeypatch):
 
     captured: dict = {}
 
-    class CapturingModel(FakeChatModel):
+    # Must subclass ChatOpenAI, not FakeChatModel/BaseChatModel directly: the
+    # factory's OpenAI-only defaults (stream_usage, stream_chunk_timeout,
+    # local-endpoint api_key) are now gated on issubclass(model_class,
+    # ChatOpenAI), not a string match, so subclass status matters here.
+    class CapturingModel(ChatOpenAI):
         def __init__(self, **kwargs):
             captured.update(kwargs)
             BaseChatModel.__init__(self, **kwargs)
@@ -651,7 +656,7 @@ def test_openai_compatible_provider_enables_stream_usage_for_openai_api_base(mon
 
     captured: dict = {}
 
-    class CapturingModel(FakeChatModel):
+    class CapturingModel(ChatOpenAI):
         def __init__(self, **kwargs):
             captured.update(kwargs)
             BaseChatModel.__init__(self, **kwargs)
@@ -1143,12 +1148,19 @@ def test_stream_chunk_timeout_defaults_to_240_for_openai_compatible_model(monkey
     default, so reasoning models with long thinking pauses don't trip
     langchain-openai's aggressive 60s built-in default.
     """
+    # Using a real ChatOpenAI subclass (required now that the factory's
+    # OpenAI-only defaults are gated on issubclass, not a string match — see
+    # test_openai_compatible_defaults_apply_to_chatopenai_subclasses) means
+    # pydantic's own post-init client construction runs for real and needs
+    # a resolvable api_key, even though this test's CapturingModel.__init__
+    # never calls it directly.
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     model = _make_model(use="langchain_openai:ChatOpenAI")
     cfg = _make_app_config([model])
 
     captured: dict = {}
 
-    class CapturingModel(FakeChatModel):
+    class CapturingModel(ChatOpenAI):
         def __init__(self, **kwargs):
             captured.update(kwargs)
             BaseChatModel.__init__(self, **kwargs)
@@ -1159,11 +1171,54 @@ def test_stream_chunk_timeout_defaults_to_240_for_openai_compatible_model(monkey
     assert captured.get("stream_chunk_timeout") == 240.0
 
 
+def test_openai_compatible_defaults_apply_to_chatopenai_subclasses(monkeypatch):
+    """Regression: a real subclass of ChatOpenAI (like PatchedChatMiniMax, whose
+    `use:` string is "deerflow.models.patched_minimax:PatchedChatMiniMax", never
+    "langchain_openai:ChatOpenAI" verbatim) must still get the same
+    OpenAI-compatible defaults as the base class — stream_chunk_timeout,
+    stream_usage, local-endpoint api_key. These were previously gated on an
+    exact string match against model_config.use, which silently skipped every
+    subclass and left MiniMax-M3 (an adaptive-thinking reasoning model) on
+    langchain-openai's raw 60s chunk-timeout instead of the intended 240s.
+    """
+
+    class SubclassOfChatOpenAI(ChatOpenAI):
+        """Stands in for PatchedChatMiniMax: a real ChatOpenAI subclass."""
+
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    captured: dict = {}
+    model = ModelConfig(
+        name="minimax-like",
+        display_name="MiniMax-like",
+        description=None,
+        use="deerflow.models.patched_minimax:PatchedChatMiniMax",
+        model="MiniMax-M3",
+        base_url="https://api.minimax.io/v1",
+        api_key="test-key",
+        supports_vision=True,
+        supports_thinking=False,
+    )
+    cfg = _make_app_config([model])
+    _patch_factory(monkeypatch, cfg, model_class=SubclassOfChatOpenAI)
+
+    factory_module.create_chat_model(name="minimax-like")
+
+    assert captured.get("stream_chunk_timeout") == 240.0
+    assert captured.get("stream_usage") is True
+
+
 def test_stream_chunk_timeout_user_value_not_overridden(monkeypatch):
     """If the user explicitly sets stream_chunk_timeout in config.yaml, the
     factory must not overwrite it with the default — even if the value is
     smaller (60s) or larger (600s) than the default.
     """
+    # See the comment in test_stream_chunk_timeout_defaults_to_240_for_openai_compatible_model:
+    # a real ChatOpenAI subclass needs a resolvable api_key for pydantic's own
+    # post-init client construction, independent of this test's own assertions.
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     model = ModelConfig(
         name="custom-timeout-model",
         display_name="Custom Timeout",
@@ -1176,7 +1231,7 @@ def test_stream_chunk_timeout_user_value_not_overridden(monkeypatch):
 
     captured: dict = {}
 
-    class CapturingModel(FakeChatModel):
+    class CapturingModel(ChatOpenAI):
         def __init__(self, **kwargs):
             captured.update(kwargs)
             BaseChatModel.__init__(self, **kwargs)
@@ -1272,7 +1327,7 @@ def test_local_endpoint_without_key_gets_placeholder(monkeypatch):
 
     captured: dict = {}
 
-    class CapturingModel(FakeChatModel):
+    class CapturingModel(ChatOpenAI):
         def __init__(self, **kwargs):
             captured.update(kwargs)
             BaseChatModel.__init__(self, **kwargs)
