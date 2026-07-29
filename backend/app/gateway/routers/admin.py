@@ -17,6 +17,12 @@ from app.gateway import admin_ops
 from app.gateway.credits import get_balance
 from app.gateway.deps import get_local_provider, require_admin_user
 from app.gateway.referrals import _add_grant
+from deerflow.persistence.engine import get_session_factory
+from deerflow.persistence.thread_meta import ThreadMetaRepository
+from deerflow.runtime.events.store.db import DbRunEventStore
+from deerflow.utils.time import coerce_iso
+
+_NO_SQL_BACKEND_DETAIL = "Conversation history requires a SQL-backed deployment (config.yaml: database.backend=sqlite|postgres)."
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -207,6 +213,105 @@ async def user_detail(user_id: str, request: Request) -> AdminUserDetail:
         bonus_daily_tokens=balance.bonus_daily_tokens,
         recent_runs=runs,
     )
+
+
+class AdminConversationRow(BaseModel):
+    """One thread in a user's conversation list (metadata only, no message content)."""
+
+    thread_id: str
+    display_name: str | None
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class AdminConversationsResponse(BaseModel):
+    data: list[AdminConversationRow]
+
+
+@router.get("/users/{user_id}/conversations", response_model=AdminConversationsResponse)
+async def list_user_conversations(
+    user_id: str,
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> AdminConversationsResponse:
+    """List one user's threads. Admin only. Logged to the audit trail since
+    it is a step toward reading that user's private conversation content.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    sf = get_session_factory()
+    if sf is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_NO_SQL_BACKEND_DETAIL)
+
+    rows = await ThreadMetaRepository(sf).search(user_id=user_id, limit=limit, offset=offset)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-conversations",
+        target_user_id=user_id,
+        payload={"limit": limit, "offset": offset},
+    )
+    return AdminConversationsResponse(
+        data=[
+            AdminConversationRow(
+                thread_id=r["thread_id"],
+                display_name=r.get("display_name"),
+                status=r.get("status", "idle"),
+                created_at=coerce_iso(r.get("created_at", "")),
+                updated_at=coerce_iso(r.get("updated_at", "")),
+            )
+            for r in rows
+        ]
+    )
+
+
+class AdminMessagesResponse(BaseModel):
+    data: list[dict]
+
+
+@router.get("/users/{user_id}/conversations/{thread_id}/messages", response_model=AdminMessagesResponse)
+async def get_user_conversation_messages(
+    user_id: str,
+    thread_id: str,
+    request: Request,
+    limit: int = Query(50, le=200),
+    before_seq: int | None = Query(default=None),
+    after_seq: int | None = Query(default=None),
+) -> AdminMessagesResponse:
+    """Full message content for one of a user's threads. Admin only.
+
+    Verifies ``thread_id`` actually belongs to ``user_id`` before returning
+    anything, so an admin cannot read another user's messages by guessing
+    thread ids. Every read is written to the audit trail since this is the
+    one admin surface that exposes private message text.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+
+    sf = get_session_factory()
+    if sf is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_NO_SQL_BACKEND_DETAIL)
+
+    if not await ThreadMetaRepository(sf).check_access(thread_id, user_id, require_existing=True):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    event_store = DbRunEventStore(sf)
+    # Ownership was already verified against the thread above; bypass this
+    # store's own per-message owner filter (which otherwise defaults to the
+    # *caller's* — i.e. the admin's — contextvar user_id, not the target
+    # user's) so every message in the thread is returned regardless of the
+    # per-row user_id (None for pre-auth legacy rows).
+    messages = await event_store.list_messages(thread_id, limit=limit, before_seq=before_seq, after_seq=after_seq, user_id=None)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-conversation-messages",
+        target_user_id=user_id,
+        payload={"thread_id": thread_id, "limit": limit},
+    )
+    return AdminMessagesResponse(data=messages)
 
 
 class MessageResponse(BaseModel):

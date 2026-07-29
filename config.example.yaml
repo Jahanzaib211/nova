@@ -881,7 +881,9 @@ sandbox:
 #   # Default: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
 #   # Recommended: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest (works on both x86_64 and arm64)
 #   # Custom images should extend the default image or implement the same AIO
-#   # sandbox HTTP API used by agent-sandbox. See backend/docs/CONFIGURATION.md.
+#   # sandbox HTTP API used by agent-sandbox. See backend/docs/CONFIGURATION.md
+#   # and docker/sandbox/README.md (e.g. Dockerfile.android adds an Android
+#   # build toolchain: JDK, Android SDK, Gradle, Kotlin).
 #   # image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
 #
 #   # Optional: Base port for sandbox containers (default: 8080)

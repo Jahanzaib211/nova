@@ -1,0 +1,59 @@
+# Extends Nova's default sandbox image with an Android build toolchain
+# (JDK, Android SDK cmdline-tools, Gradle, Kotlin, adb/platform-tools) so the
+# agent can actually compile the Android/Kotlin projects it writes instead of
+# only generating source that nothing can build.
+#
+# Deliberately NOT included: the Android emulator/AVD. Running it needs KVM
+# hardware acceleration, which a plain Docker container does not have — it
+# would install but never boot. This image can assemble/build APKs, not run
+# them on a virtual device.
+#
+# Build:
+#   docker build -t nova-sandbox-android:latest -f docker/sandbox/Dockerfile.android docker/sandbox/
+# Then point config.yaml's `sandbox.image` at the tag you built.
+
+FROM enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+
+ARG CMDLINE_TOOLS_VERSION=11076708
+ARG ANDROID_PLATFORM=android-34
+ARG ANDROID_BUILD_TOOLS=34.0.0
+ARG GRADLE_VERSION=8.7
+ARG KOTLIN_VERSION=1.9.24
+
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV GRADLE_HOME=/opt/gradle
+ENV KOTLIN_HOME=/opt/kotlin
+ENV PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${GRADLE_HOME}/bin:${KOTLIN_HOME}/bin:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        openjdk-17-jdk-headless \
+        unzip \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Android SDK cmdline-tools, then use sdkmanager to pull the rest.
+RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
+    && curl -fsSL -o /tmp/cmdline-tools.zip \
+        "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip" \
+    && unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
+    && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest" \
+    && rm /tmp/cmdline-tools.zip \
+    && yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null \
+    && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
+        "platform-tools" \
+        "platforms;${ANDROID_PLATFORM}" \
+        "build-tools;${ANDROID_BUILD_TOOLS}"
+
+# Gradle (standalone, in case a project's ./gradlew wrapper jar is missing).
+RUN curl -fsSL -o /tmp/gradle.zip "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" \
+    && unzip -q /tmp/gradle.zip -d /opt \
+    && mv "/opt/gradle-${GRADLE_VERSION}" "${GRADLE_HOME}" \
+    && rm /tmp/gradle.zip
+
+# Kotlin compiler.
+RUN curl -fsSL -o /tmp/kotlin.zip \
+        "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip" \
+    && unzip -q /tmp/kotlin.zip -d /opt \
+    && mv /opt/kotlinc "${KOTLIN_HOME}" \
+    && rm /tmp/kotlin.zip

@@ -260,3 +260,108 @@ def test_controls_forbidden_for_regular_user(app):
     attacker.post("/api/v1/auth/register", json={"email": "attacker@example.com", "password": _PASSWORD})
     r = attacker.request("POST", f"/api/v1/admin/users/{uid}/reset-usage", headers=_csrf(attacker))
     assert r.status_code == 403
+
+
+# ── Per-user conversation content (ops ability to read message text) ────
+
+
+def _make_thread(app, *, thread_id, user_id, display_name):
+    from datetime import UTC, datetime
+
+    from deerflow.persistence.engine import get_session_factory
+    from deerflow.persistence.thread_meta.model import ThreadMetaRow
+
+    async def _go():
+        async with get_session_factory()() as session:
+            session.add(
+                ThreadMetaRow(
+                    thread_id=thread_id,
+                    user_id=user_id,
+                    display_name=display_name,
+                    status="idle",
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_go())
+
+
+def _write_message(app, *, thread_id, run_id, content, seq=1):
+    from deerflow.persistence.engine import get_session_factory
+    from deerflow.persistence.models.run_event import RunEventRow
+
+    async def _go():
+        async with get_session_factory()() as session:
+            session.add(
+                RunEventRow(
+                    thread_id=thread_id,
+                    run_id=run_id,
+                    event_type="human_message",
+                    category="message",
+                    content=content,
+                    seq=seq,
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_go())
+
+
+def test_list_user_conversations_returns_threads(app):
+    uid = _register_get_id(app, "chatty@example.com")
+    _make_thread(app, thread_id="th1", user_id=uid, display_name="First chat")
+    admin = _admin_client(app)
+
+    resp = admin.get(f"/api/v1/admin/users/{uid}/conversations")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert len(data) == 1
+    assert data[0]["thread_id"] == "th1"
+    assert data[0]["display_name"] == "First chat"
+
+
+def test_get_user_conversation_messages_returns_content(app):
+    uid = _register_get_id(app, "reader@example.com")
+    _make_thread(app, thread_id="th2", user_id=uid, display_name="Second chat")
+    _write_message(app, thread_id="th2", run_id="r1", content="hello from the user")
+    admin = _admin_client(app)
+
+    resp = admin.get(f"/api/v1/admin/users/{uid}/conversations/th2/messages")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert len(data) == 1
+    assert data[0]["content"] == "hello from the user"
+
+
+def test_conversation_messages_404_for_wrong_owner(app):
+    uid = _register_get_id(app, "owner@example.com")
+    other_uid = _register_get_id(app, "other@example.com")
+    _make_thread(app, thread_id="th3", user_id=uid, display_name="Owner's chat")
+    admin = _admin_client(app)
+
+    resp = admin.get(f"/api/v1/admin/users/{other_uid}/conversations/th3/messages")
+    assert resp.status_code == 404
+
+
+def test_conversations_forbidden_for_regular_user(app):
+    uid = _register_get_id(app, "target@example.com")
+    attacker = TestClient(app)
+    attacker.post("/api/v1/auth/register", json={"email": "snoop@example.com", "password": _PASSWORD})
+
+    resp = attacker.get(f"/api/v1/admin/users/{uid}/conversations")
+    assert resp.status_code == 403
+
+
+def test_conversation_access_is_audited(app):
+    uid = _register_get_id(app, "audited@example.com")
+    _make_thread(app, thread_id="th4", user_id=uid, display_name="Audited chat")
+    admin = _admin_client(app)
+
+    admin.get(f"/api/v1/admin/users/{uid}/conversations")
+    admin.get(f"/api/v1/admin/users/{uid}/conversations/th4/messages")
+
+    audit = admin.get("/api/v1/admin/audit").json()
+    actions = {row["action"] for row in audit["data"]}
+    assert {"view-conversations", "view-conversation-messages"} <= actions

@@ -45,6 +45,21 @@
 
 ---
 
+## v9.1 — ops conversation visibility + Android sandbox toolchain
+
+**Session pattern:** two independent operator-facing gaps closed together: the ops console had no way to read a user's actual conversation content (only usage/billing metadata), and the agent sandbox had no Android build toolchain, so it could write Kotlin/Gradle Android projects it could not compile.
+
+### Features
+
+- **Admin conversation content** — `GET /api/v1/admin/users/{id}/conversations` (list a user's threads) and `GET /api/v1/admin/users/{id}/conversations/{thread_id}/messages` (full message content for one thread), both gated by `require_admin_user`. The messages endpoint verifies the thread actually belongs to the target user first (404 otherwise), so an admin cannot read another user's messages by guessing thread ids. Built directly on `ThreadMetaRepository` + `DbRunEventStore` via `get_session_factory()` (same SQL-only pattern as the rest of `admin_ops.py`) rather than the app.state-managed store abstractions, so both endpoints require a SQL-backed `database.backend` (503 in memory mode). Every read is written to the audit trail (`view-conversations` / `view-conversation-messages`) since this is the one admin surface that exposes private message text.
+- **Android-capable sandbox image** — `docker/sandbox/Dockerfile.android` extends the default AIO sandbox image (`enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest`, Ubuntu 22.04) with OpenJDK 17, Android SDK cmdline-tools + platform-tools + build-tools;34.0.0 + platforms;android-34, Gradle 8.7, and the Kotlin 1.9.24 compiler. Build-verified locally (`docker build` + `java`/`sdkmanager`/`gradle`/`kotlinc`/`adb` all resolve inside the built image). The emulator is deliberately not installed — it needs KVM hardware acceleration a plain Docker container doesn't have. See `docker/sandbox/README.md`.
+
+### Tests
+
+`test_admin_users.py` gained 5 tests for the new conversation endpoints (thread listing, message content, cross-user 404, regular-user 403, audit trail). Full backend suite green (5832 passed) except the pre-existing `test_client_live.py` live-LLM test, unrelated (Fireworks.ai account suspended for billing, not a code issue).
+
+---
+
 ## v9.0 — Phase C9: accounts, monetization & the referral flywheel
 
 **Session pattern:** greenfield product layer on top of the C-phase platform — accounts, usage credits, referrals, and paid billing. All additive; every account column backfills the 24 existing users.

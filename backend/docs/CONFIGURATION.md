@@ -191,6 +191,14 @@ When using Docker development (`make docker-start`), DeerFlow starts the `provis
 
 See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
 
+**Custom sandbox images**: the Docker-based modes above default to a
+pre-built image (`sandbox.image` in `config.yaml`, `enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest`)
+pulled by tag — there is no local Dockerfile for it. To add tooling the
+default image lacks (for example an Android build toolchain — JDK, Android
+SDK, Gradle, Kotlin), extend it with your own Dockerfile and point
+`sandbox.image` at the result. See [`docker/sandbox/README.md`](../../docker/sandbox/README.md)
+for a worked example (`Dockerfile.android`).
+
 ### Virtual Path System
 
 | Virtual Path | Physical Path |
