@@ -25,6 +25,8 @@ const config = {
   // served from origins it doesn't trust in dev — buttons render but do
   // nothing (native form GET). Whitelist every public-facing origin.
   allowedDevOrigins: ["localhost:2026", "nova.alilabsx.com"],
+  // Don't advertise the framework on every response.
+  poweredByHeader: false,
   i18n: {
     locales: ["en", "zh"],
     defaultLocale: "en",

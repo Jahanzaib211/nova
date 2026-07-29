@@ -245,6 +245,31 @@ def after_agent(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | N
     return None
 ```
 
+## 实现记录 (2026-01-14)
+
+### 涉及文件
+
+- `packages/harness/deerflow/agents/thread_state.py` — 新增 `title: str | None = None` 字段
+- `packages/harness/deerflow/config/title_config.py`（新建）— `TitleConfig` 配置类 + `get_title_config()` / `set_title_config()` / `load_title_config_from_dict()`
+- `packages/harness/deerflow/agents/middlewares/title_middleware.py`（新建）— `TitleMiddleware`：`_should_generate_title()`、`_generate_title()`、`after_agent()` 钩子，含 fallback 策略
+- `packages/harness/deerflow/config/app_config.py` — 在 `from_file()` 中加载 title 配置
+- `packages/harness/deerflow/agents/lead_agent/agent.py` — 注册 `TitleMiddleware`
+- `config.example.yaml` — 新增 `title` 配置段
+- `backend/tests/test_title_generation.py`（新建）— 配置类与 middleware 初始化测试
+
+### 性能影响与优化建议
+
+- 延迟增加约 0.5-1 秒（一次额外 LLM 调用），在 `after_agent` 中运行不阻塞主流程，每个 thread 只生成一次。
+- 优化方向：使用更快的模型、减少 `max_words`/`max_chars`、精简 prompt。
+
+### 后续计划
+
+- [ ] 添加集成测试（需要 mock LangGraph Runtime）
+- [ ] 支持自定义 prompt template
+- [ ] 支持多语言 title 生成
+- [ ] 添加 title 重新生成功能
+- [ ] 监控 title 生成成功率和延迟
+
 ## 相关文件
 
 - [`packages/harness/deerflow/agents/thread_state.py`](../packages/harness/deerflow/agents/thread_state.py) - ThreadState 定义

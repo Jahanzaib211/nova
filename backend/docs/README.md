@@ -52,7 +52,6 @@ docs/
 ├── summarization.md           # Summarization feature
 ├── plan_mode_usage.md         # Plan mode feature
 ├── STREAMING.md               # Token-level streaming design
-├── AUTO_TITLE_GENERATION.md   # Title generation
-├── TITLE_GENERATION_IMPLEMENTATION.md  # Title implementation details
+├── AUTO_TITLE_GENERATION.md   # Title generation (incl. implementation notes)
 └── TODO.md                    # Roadmap and issues
 ```

@@ -24,7 +24,7 @@
 | C6 | Workspace/Repository abstraction | ⏳ pending | Depends on C2 |
 | C7 | Deployment, HA, production hardening | ⏳ pending | Depends on C3–C6 |
 | C8 | Performance optimization and scaling | ⏳ pending | Depends on C7 |
-| C9 | Product features and extensibility | ⏳ pending | Depends on C8 |
+| C9 | Product features and extensibility | ✅ **complete** (v9.0) | Accounts (email edit, admin dashboard), terms/consent gate, usage credits + wall, referral flywheel, BYOK, Nova Plus/Stripe billing — see v9.0 below |
 
 **Design Principles:**
 
