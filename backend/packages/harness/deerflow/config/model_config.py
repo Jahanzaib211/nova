@@ -32,6 +32,26 @@ class ModelConfig(BaseModel):
         description="Extra settings to be passed to the model when thinking is disabled",
     )
     supports_vision: bool = Field(default_factory=lambda: False, description="Whether the model supports vision/image inputs")
+    hidden: bool = Field(
+        default=False,
+        description=(
+            "Excluded from the frontend's quick model picker when true, without "
+            "affecting availability. Still fully usable (config API, settings page, "
+            "existing threads pinned to it) — this only trims the default picker "
+            "down to the models an operator wants surfaced by default."
+        ),
+    )
+    max_input_tokens: int | None = Field(
+        default=None,
+        description=(
+            "Provider-documented context window for this model, wired onto the "
+            "constructed chat model's `profile` (LangChain's `max_input_tokens` "
+            "profile key) rather than passed as a raw constructor kwarg. Lets "
+            "SummarizationMiddleware use a `fraction`-type trigger that scales "
+            "correctly per model instead of one hand-picked token count shared "
+            "across models with very different real context windows."
+        ),
+    )
     stream_chunk_timeout: float | None = Field(
         default=None,
         description=(

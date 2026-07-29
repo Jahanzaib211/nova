@@ -101,7 +101,7 @@ _STREAM_DROP_EXCEPTIONS: frozenset[str] = frozenset(
 class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
     """Retry transient LLM errors and surface graceful assistant messages."""
 
-    retry_max_attempts: int = 3
+    retry_max_attempts: int = 5
     retry_base_delay_ms: int = 1000
     retry_cap_delay_ms: int = 8000
 

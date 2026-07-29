@@ -96,6 +96,21 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # Hardening parity with docker-compose.yaml's nginx service: drop all
+    # capabilities, add back only what nginx's master/worker model needs
+    # (NET_BIND_SERVICE for the listen port, CHOWN/SETUID/SETGID/DAC_OVERRIDE
+    # for the master process to spawn workers as the unprivileged nginx user).
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    pids_limit: 256
 
   # Frontend - Next.js Development Server
   frontend:
@@ -138,6 +153,15 @@ services:
       deer-flow-dev:
         ipv4_address: 192.168.200.4
     restart: unless-stopped
+    # Hardening parity with docker-compose.yaml's frontend service (prod
+    # target runs as USER node already; no cap_add needed).
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m
+    pids_limit: 512
 
   # Backend - Gateway API
   gateway:
@@ -233,6 +257,20 @@ services:
       # For Linux: map host.docker.internal to host gateway
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    # Hardening parity with docker-compose.yaml's gateway service, MINUS
+    # cap_drop: the `dev` build target (used here) has no USER directive and
+    # runs as root, unlike docker-compose.yaml's stage which drops to `app`.
+    # cap_drop: ALL on a root process strips CAP_DAC_OVERRIDE, which broke
+    # SQLite WAL access ("attempt to write a readonly database") the moment
+    # this was tried — root without DAC_OVERRIDE is bound by normal file
+    # permission bits like any other user. no-new-privileges alone is still
+    # real, zero-risk hardening (blocks setuid-binary privilege escalation
+    # from agent-directed bash commands via LocalSandboxProvider) and needs
+    # no capability grant. read_only is NOT set — this container writes
+    # runtime state to backend/.deer-flow via a live bind mount.
+    security_opt:
+      - "no-new-privileges:true"
+    pids_limit: 512
 
   # ── SearXNG (Privacy Search Engine) ──────────────────────────────────
   # v7.2 Batch 2A: bound to loopback so LAN/internet cannot reach SearXNG

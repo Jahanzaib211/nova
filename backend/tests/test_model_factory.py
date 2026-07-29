@@ -33,6 +33,7 @@ def _make_model(
     when_thinking_disabled: dict | None = None,
     thinking: dict | None = None,
     max_tokens: int | None = None,
+    max_input_tokens: int | None = None,
 ) -> ModelConfig:
     return ModelConfig(
         name=name,
@@ -41,6 +42,7 @@ def _make_model(
         use=use,
         model=name,
         max_tokens=max_tokens,
+        max_input_tokens=max_input_tokens,
         supports_thinking=supports_thinking,
         supports_reasoning_effort=supports_reasoning_effort,
         when_thinking_enabled=when_thinking_enabled,
@@ -933,6 +935,66 @@ def test_stream_usage_not_injected_for_non_openai_model(monkeypatch):
     factory_module.create_chat_model(name="claude")
 
     assert "stream_usage" not in captured
+
+
+def test_max_input_tokens_wired_onto_profile(monkeypatch):
+    """max_input_tokens should surface as profile={"max_input_tokens": ...}, not a raw kwarg."""
+    cfg = _make_app_config([_make_model("minimax-m3", max_input_tokens=1_000_000)])
+    _patch_factory(monkeypatch, cfg)
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
+
+    factory_module.create_chat_model(name="minimax-m3")
+
+    assert "max_input_tokens" not in captured
+    assert captured.get("profile") == {"max_input_tokens": 1_000_000}
+
+
+def test_max_input_tokens_absent_leaves_profile_unset(monkeypatch):
+    """Models without max_input_tokens configured should not get a profile kwarg at all."""
+    cfg = _make_app_config([_make_model("no-profile")])
+    _patch_factory(monkeypatch, cfg)
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
+
+    factory_module.create_chat_model(name="no-profile")
+
+    assert "profile" not in captured
+
+
+def test_hidden_flag_never_reaches_model_constructor(monkeypatch):
+    """`hidden` is a frontend-picker concern, not a real constructor kwarg."""
+    model_cfg = _make_model("minimax-m3")
+    model_cfg.hidden = True
+    cfg = _make_app_config([model_cfg])
+    _patch_factory(monkeypatch, cfg)
+
+    captured: dict = {}
+
+    class CapturingModel(FakeChatModel):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            BaseChatModel.__init__(self, **kwargs)
+
+    monkeypatch.setattr(factory_module, "resolve_class", lambda path, base: CapturingModel)
+
+    factory_module.create_chat_model(name="minimax-m3")
+
+    assert "hidden" not in captured
 
 
 def test_stream_usage_not_overridden_when_explicitly_set_in_config(monkeypatch):

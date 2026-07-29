@@ -15,6 +15,8 @@ export interface Model {
   has_api_key?: boolean;
   /** AMD-compute backing label (e.g. "AMD Instinct MI300X (Fireworks)"); null if not AMD-backed. */
   amd_compute?: string | null;
+  /** Excluded from the default quick model picker; still fully usable via settings. */
+  hidden?: boolean;
 }
 
 export interface TokenUsageSettings {

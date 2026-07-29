@@ -1042,35 +1042,37 @@ export function InputBox({
               <ModelSelectorContent>
                 <ModelSelectorInput placeholder={t.inputBox.searchModels} />
                 <ModelSelectorList>
-                  {models.map((m) => (
-                    <ModelSelectorItem
-                      key={m.name}
-                      value={m.name}
-                      onSelect={() => handleModelSelect(m.name)}
-                    >
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <ModelSelectorName>
-                          {getModelLabel(m)}
-                        </ModelSelectorName>
-                        <span className="text-muted-foreground truncate text-[10px]">
-                          {m.model}
-                        </span>
-                      </div>
-                      {m.amd_compute ? (
-                        <Badge
-                          variant="outline"
-                          className="ml-2 shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 dark:text-red-400"
-                        >
-                          {m.amd_compute}
-                        </Badge>
-                      ) : null}
-                      {m.name === context.model_name ? (
-                        <CheckIcon className="ml-auto size-4" />
-                      ) : (
-                        <div className="ml-auto size-4" />
-                      )}
-                    </ModelSelectorItem>
-                  ))}
+                  {models
+                    .filter((m) => !m.hidden || m.name === context.model_name)
+                    .map((m) => (
+                      <ModelSelectorItem
+                        key={m.name}
+                        value={m.name}
+                        onSelect={() => handleModelSelect(m.name)}
+                      >
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <ModelSelectorName>
+                            {getModelLabel(m)}
+                          </ModelSelectorName>
+                          <span className="text-muted-foreground truncate text-[10px]">
+                            {m.model}
+                          </span>
+                        </div>
+                        {m.amd_compute ? (
+                          <Badge
+                            variant="outline"
+                            className="ml-2 shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 dark:text-red-400"
+                          >
+                            {m.amd_compute}
+                          </Badge>
+                        ) : null}
+                        {m.name === context.model_name ? (
+                          <CheckIcon className="ml-auto size-4" />
+                        ) : (
+                          <div className="ml-auto size-4" />
+                        )}
+                      </ModelSelectorItem>
+                    ))}
                 </ModelSelectorList>
               </ModelSelectorContent>
             </ModelSelector>

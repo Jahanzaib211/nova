@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 15
+config_version: 16
 
 # ============================================================================
 # Logging
@@ -312,9 +312,15 @@ models:
   #   request_timeout: 600.0
   #   max_retries: 2
   #   max_tokens: 4096
+  #   # Real vendor ceiling per the docs line above (512K context / 128K max
+  #   # output) is much higher than the conservative defaults shown here —
+  #   # raise max_tokens/max_input_tokens together if your workload needs
+  #   # large single-turn output (e.g. writing whole files/pages).
+  #   max_input_tokens: 512000  # wired onto the model's `profile` for fraction-type summarization triggers (see summarization.trigger below)
   #   temperature: 1.0  # MiniMax requires temperature in (0.0, 1.0]
   #   supports_vision: true
   #   supports_thinking: true
+  #   # hidden: true  # uncomment to keep this model configured/usable but excluded from the frontend's default quick picker
   #   # PatchedChatMiniMax is the MiniMax adapter: it enables reasoning_split and
   #   # maps MiniMax's structured reasoning into reasoning_content (the field
   #   # DeerFlow understands), and it strips the per-message `name` field that
@@ -1050,7 +1056,12 @@ title:
 summarization:
   enabled: true
 
-  # Model to use for summarization (null = use default model)
+  # Model to use for summarization (null = use default model, i.e. models[0] —
+  # NOT necessarily the model actually used for chat sessions. If your active
+  # chat model isn't first in the `models` list, set this explicitly: a
+  # `fraction`-type trigger below reads its `max_input_tokens` profile, and a
+  # mismatched model here silently caps conversations at the WRONG model's
+  # context size.)
   # Recommended: Use a lightweight, cost-effective model like "gpt-4o-mini" or similar
   model_name: null
 

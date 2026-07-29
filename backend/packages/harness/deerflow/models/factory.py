@@ -148,8 +148,12 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
             "when_thinking_disabled",
             "thinking",
             "supports_vision",
+            "max_input_tokens",
+            "hidden",
         },
     )
+    if model_config.max_input_tokens is not None:
+        model_settings_from_config["profile"] = {"max_input_tokens": model_config.max_input_tokens}
     # Compute effective when_thinking_enabled by merging in the `thinking` shortcut field.
     # The `thinking` shortcut is equivalent to setting when_thinking_enabled["thinking"].
     has_thinking_settings = (model_config.when_thinking_enabled is not None) or (model_config.thinking is not None)

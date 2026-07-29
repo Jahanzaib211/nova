@@ -38,6 +38,7 @@ class ModelResponse(BaseModel):
     base_url: str | None = Field(None, description="Custom endpoint base URL, if configured")
     has_api_key: bool = Field(default=False, description="Whether an API key is configured (the key itself is never returned)")
     amd_compute: str | None = Field(None, description="AMD-compute backing label (e.g. 'AMD Instinct MI300X (Fireworks)'); None if not AMD-backed")
+    hidden: bool = Field(default=False, description="Excluded from the frontend's default quick model picker; still fully usable via settings/API")
 
 
 class TokenUsageResponse(BaseModel):
@@ -153,6 +154,7 @@ def _to_response(model: ModelConfig, runtime_names: set[str]) -> ModelResponse:
         base_url=_extra(model, "base_url"),
         has_api_key=bool(_extra(model, "api_key")),
         amd_compute=detect_amd_compute(model),
+        hidden=model.hidden,
     )
 
 

@@ -88,6 +88,7 @@ def test_factory_uses_byok_contextvar():
         supports_thinking=False,
         supports_reasoning_effort=False,
         supports_vision=False,
+        max_input_tokens=None,
         model_dump=lambda **_: {"api_key": "nova-key", "model": "gpt"},
     )
     app_cfg = SimpleNamespace(
