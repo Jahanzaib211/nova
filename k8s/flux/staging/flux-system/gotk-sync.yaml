@@ -7,6 +7,16 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m0s
+  # Caught live: same reasoning as k8s/flux/staging/gitrepository.yaml's
+  # timeout comment — this box's real CPU contention made the 60s
+  # default (this file's own generated value, before this edit)
+  # intermittently too short for an SSH clone. Editing a "DO NOT EDIT"
+  # bootstrap-generated file is the supported way to customize
+  # post-bootstrap Flux settings — it's meant to stop you from hand-
+  # editing it OUT OF SYNC with a future `flux bootstrap` re-run, not to
+  # prevent legitimate config changes managed through Git like anything
+  # else this chart owns.
+  timeout: 180s
   ref:
     branch: main
   secretRef:
