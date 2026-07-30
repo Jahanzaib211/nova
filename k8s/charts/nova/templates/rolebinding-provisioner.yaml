@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nova-provisioner
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: nova-provisioner
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: nova-provisioner
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,18 @@
+# Staging-environment overrides. Install with:
+#   helm install nova k8s/charts/nova -n nova-staging --create-namespace -f k8s/charts/nova/values-staging.yaml
+
+namespace: nova-staging
+nodePort: 30026
+
+images:
+  gateway: nova-gateway:staging
+  frontend: nova-frontend:staging
+  nginx: nginx:alpine
+  provisioner: nova-provisioner:staging
+  sandbox: nova-sandbox-android:latest
+
+# Absolute host path to the repo's custom-skills directory — mounted
+# read-write as a hostPath volume into the gateway pod, same content the
+# live Compose deployment already reads/writes. Single-node only; a real
+# multi-node cluster would need this on a shared/networked volume instead.
+skillsHostPath: /home/jahanzaib/Desktop/nova/skills/custom

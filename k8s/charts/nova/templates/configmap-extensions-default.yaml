@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nova-extensions-config-default
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+data:
+  extensions_config.json: |-
+{{ .Files.Get "files/extensions_config.default.json" | indent 4 }}

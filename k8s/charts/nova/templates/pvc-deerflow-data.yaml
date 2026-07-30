@@ -1,0 +1,44 @@
+# Backs backend/.deer-flow (SQLite DB + WAL, per-user memory.json, per-user
+# thread workspaces/uploads/outputs). ReadWriteOnce is correct: gateway is
+# hard-capped at replicas:1 (in-process stream_bridge), so nothing else ever
+# needs to mount this concurrently from the gateway side.
+#
+# Uses a STATIC PV with an explicit hostPath rather than the dynamic
+# `local-path` StorageClass: the provisioner creates sandbox Pods that need
+# to see the SAME thread files the gateway writes (uploads, workspace,
+# outputs) — dynamic provisioning picks an unpredictable host path per PVC,
+# which would make that alignment fragile to get right and hard to verify.
+# Pinning it here means THREADS_HOST_PATH on the provisioner Deployment can
+# point at the exact same directory with confidence, not a guess.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nova-deerflow-data-pv
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nova-deerflow-data-manual
+  hostPath:
+    path: /var/lib/nova-staging/deerflow-data
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nova-deerflow-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nova-deerflow-data-manual
+  volumeName: nova-deerflow-data-pv
+  resources:
+    requests:
+      storage: 5Gi

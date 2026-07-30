@@ -75,6 +75,19 @@ KUBECONFIG_PATH = os.environ.get("KUBECONFIG_PATH", "/root/.kube/config")
 # is ``host.docker.internal``; on Linux it may be the host's LAN IP.
 NODE_HOST = os.environ.get("NODE_HOST", "host.docker.internal")
 
+# "node-port" (default): the historical Compose scenario, where the backend
+# runs *outside* the cluster and must reach sandboxes via {NODE_HOST}:{NodePort}.
+# "cluster-dns": the backend runs as a Pod in the *same* cluster/namespace —
+# use the Service's in-cluster DNS name instead. Caught live running gateway
+# and the provisioner together in-cluster: a Pod calling its own node's
+# NodePort to reach another Pod on that same node ("hairpin" routing) got
+# "Connection refused" even though the same URL worked fine from the host
+# and the sandbox Pod was genuinely healthy — an environment-specific
+# kube-proxy/CNI interaction, not a sandbox bug. Cluster DNS sidesteps
+# hairpin routing entirely and is the more correct path for an in-cluster
+# caller regardless.
+SANDBOX_URL_MODE = os.environ.get("SANDBOX_URL_MODE", "node-port")
+
 
 def join_host_path(base: str, *parts: str) -> str:
     """Join host filesystem path segments while preserving native style."""
@@ -235,8 +248,10 @@ def _svc_name(sandbox_id: str) -> str:
     return f"sandbox-{sandbox_id}-svc"
 
 
-def _sandbox_url(node_port: int) -> str:
-    """Build the sandbox URL using the configured NODE_HOST."""
+def _sandbox_url(sandbox_id: str, node_port: int) -> str:
+    """Build the sandbox URL, per SANDBOX_URL_MODE (see its definition above)."""
+    if SANDBOX_URL_MODE == "cluster-dns":
+        return f"http://{_svc_name(sandbox_id)}.{K8S_NAMESPACE}.svc.cluster.local:8080"
     return f"http://{NODE_HOST}:{node_port}"
 
 
@@ -459,7 +474,7 @@ async def create_sandbox(req: CreateSandboxRequest):
     if existing_port:
         return SandboxResponse(
             sandbox_id=sandbox_id,
-            sandbox_url=_sandbox_url(existing_port),
+            sandbox_url=_sandbox_url(sandbox_id, existing_port),
             status=_get_pod_phase(sandbox_id),
         )
 
@@ -505,7 +520,7 @@ async def create_sandbox(req: CreateSandboxRequest):
 
     return SandboxResponse(
         sandbox_id=sandbox_id,
-        sandbox_url=_sandbox_url(node_port),
+        sandbox_url=_sandbox_url(sandbox_id, node_port),
         status=_get_pod_phase(sandbox_id),
     )
 
@@ -548,7 +563,7 @@ async def get_sandbox(sandbox_id: str):
 
     return SandboxResponse(
         sandbox_id=sandbox_id,
-        sandbox_url=_sandbox_url(node_port),
+        sandbox_url=_sandbox_url(sandbox_id, node_port),
         status=_get_pod_phase(sandbox_id),
     )
 
@@ -580,7 +595,7 @@ async def list_sandboxes():
             sandboxes.append(
                 SandboxResponse(
                     sandbox_id=sid,
-                    sandbox_url=_sandbox_url(node_port),
+                    sandbox_url=_sandbox_url(sid, node_port),
                     status=_get_pod_phase(sid),
                 )
             )

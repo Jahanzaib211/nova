@@ -1,0 +1,16 @@
+# Hard backstop protecting the rest of this shared box (an unrelated `gvm`
+# container alone runs 6GB RSS / 110% CPU) from anything misconfigured
+# inside nova-staging — independent of the per-container requests/limits
+# already set on each Deployment.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: nova-staging-quota
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.resourceQuota.requestsCpu | quote }}
+    requests.memory: {{ .Values.resourceQuota.requestsMemory | quote }}
+    limits.memory: {{ .Values.resourceQuota.limitsMemory | quote }}

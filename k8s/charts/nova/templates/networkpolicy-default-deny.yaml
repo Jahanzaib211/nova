@@ -1,0 +1,28 @@
+# CORRECTION (caught live): this was originally written on the assumption
+# that flannel does NOT enforce NetworkPolicy, so this file was believed
+# inert. That assumption was wrong for this k3s build — k3s embeds
+# kube-router's NetworkPolicy controller *inside the k3s server binary
+# itself* (not a separate pod, so `kubectl get pods -A` shows nothing for
+# it) and enforces it by default unless `--disable-network-policy` is
+# passed at install time, which this cluster's install command did not do.
+# `sudo iptables -L FORWARD -n -v` on the host confirms a live
+# KUBE-ROUTER-FORWARD chain actively processing packets. This IS real,
+# enforced isolation — every podSelector below matters. Caught the hard
+# way: sandbox pods (app: deer-flow-sandbox, created dynamically by the
+# provisioner, not covered by any of the allow-tier policies) were
+# silently unreachable from the gateway pod — connection refused on every
+# path (NodePort, ClusterIP, even direct pod IP) despite the sandbox pod
+# itself being genuinely healthy and Ready. Host-originated traffic
+# (kubelet's own readiness probes) was unaffected, which is what made this
+# look like a networking/hairpin bug at first instead of a policy block.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

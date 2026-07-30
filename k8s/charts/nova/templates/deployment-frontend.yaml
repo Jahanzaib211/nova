@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 4 }}
+spec:
+  replicas: {{ .Values.resources.frontend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nova.labels" . | nindent 8 }}
+        {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 8 }}
+    spec:
+      enableServiceLinks: false   # avoid legacy {SVCNAME}_PORT-style env collisions; see deployment-gateway.yaml
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000   # the `node` user baked into frontend/Dockerfile's prod target
+      containers:
+        - name: frontend
+          image: {{ .Values.images.frontend }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DEER_FLOW_INTERNAL_GATEWAY_BASE_URL
+              value: "http://gateway:8001"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: {{ .Values.resources.frontend.requests.cpu }}
+              memory: {{ .Values.resources.frontend.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.frontend.limits.cpu }}
+              memory: {{ .Values.resources.frontend.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 4 }}
+  ports:
+    - port: 3000
+      targetPort: 3000

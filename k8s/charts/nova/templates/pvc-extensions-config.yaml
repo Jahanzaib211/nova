@@ -1,0 +1,19 @@
+# extensions_config.json is read AND written by the Gateway API at runtime
+# (MCP config / skill enable-toggles) — a ConfigMap mount is read-only
+# in-pod, so this needs a real writable volume, seeded from the
+# nova-extensions-config-default ConfigMap by an initContainer on every pod
+# start (idempotent — see deployment-gateway.yaml).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nova-extensions-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 64Mi

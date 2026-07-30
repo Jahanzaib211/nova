@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provisioner
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nova.labels" . | nindent 8 }}
+        {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 8 }}
+    spec:
+      enableServiceLinks: false   # avoid legacy {SVCNAME}_PORT-style env collisions; see deployment-gateway.yaml
+      serviceAccountName: nova-provisioner
+      securityContext:
+        runAsNonRoot: false   # base image (python:3.12-slim) has no dedicated app user; RBAC scopes it, not container UID
+      containers:
+        - name: provisioner
+          image: {{ .Values.images.provisioner }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8002
+          env:
+            - name: K8S_NAMESPACE
+              value: {{ .Values.namespace | quote }}
+            # Caught live: gateway lives in the SAME cluster/namespace as
+            # the sandboxes this provisioner creates, unlike the Compose
+            # scenario this provisioner was originally built for (backend
+            # outside the cluster, reaching in via NodePort). A gateway Pod
+            # calling its own node's NodePort to reach a sandbox Pod on
+            # that same node ("hairpin" routing) got "Connection refused"
+            # even though the exact same URL worked from the host and the
+            # sandbox Pod was genuinely healthy — an environment-specific
+            # kube-proxy/CNI interaction. cluster-dns sidesteps hairpin
+            # routing entirely by using the Service's in-cluster DNS name.
+            - name: SANDBOX_URL_MODE
+              value: "cluster-dns"
+            # Explicit override — the provisioner's own default points at
+            # the unrelated upstream all-in-one-sandbox image, not Nova's
+            # Android-toolchain build.
+            - name: SANDBOX_IMAGE
+              value: {{ .Values.images.sandbox | quote }}
+            # Caught live: this value is NOT a path inside the provisioner's
+            # own container — app.py embeds it verbatim as the hostPath.path
+            # of the SANDBOX pod it creates (docker/provisioner/app.py
+            # _build_volumes(), type="Directory", no auto-create). Sandbox
+            # pods schedule on the same node, so this must be the real
+            # node-filesystem path, exactly like Compose's own
+            # SKILLS_HOST_PATH=${DEER_FLOW_ROOT}/skills. The parent of
+            # skillsHostPath (which points at .../skills/custom, matching
+            # config.yaml's container_path: /mnt/skills expecting the full
+            # public+custom root, not just custom). The provisioner
+            # container itself never reads this path, so no volume mount is
+            # needed here — only the string value matters.
+            - name: SKILLS_HOST_PATH
+              value: {{ dir .Values.skillsHostPath | quote }}
+            # PVC-backed user-data (not hostPath — hostPath mode in
+            # docker/provisioner/app.py only supports the legacy
+            # {thread_id}/user-data layout, missing the users/{user_id}/
+            # prefix the gateway actually uses; PVC mode's subPath convention
+            # is the one built for the current user-scoped layout). See the
+            # DEER_FLOW_HOME comment in configmap-env.yaml for the matching
+            # gateway-side mount alignment.
+            - name: USERDATA_PVC_NAME
+              value: nova-deerflow-data
+            # No KUBECONFIG_PATH set and no K8S_API_SERVER set — deliberately
+            # absent so _init_k8s_client()'s existing fallback engages
+            # load_incluster_config() via the ServiceAccount token instead of
+            # looking for a mounted kubeconfig file (verified directly in
+            # app.py: it only tries in-cluster config when the kubeconfig
+            # path doesn't exist).
+            - name: NODE_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: {{ .Values.resources.provisioner.requests.cpu }}
+              memory: {{ .Values.resources.provisioner.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.provisioner.limits.cpu }}
+              memory: {{ .Values.resources.provisioner.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provisioner
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 4 }}
+  ports:
+    - port: 8002
+      targetPort: 8002

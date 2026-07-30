@@ -1,0 +1,6 @@
+apiVersion: v2
+name: nova
+description: Nova (gateway + frontend + nginx + sandbox provisioner) — single-node K8s staging deployment
+type: application
+version: 0.1.0
+appVersion: "staging"

@@ -1,0 +1,106 @@
+# k3s enforces these via an embedded kube-router controller by default —
+# see the correction note in networkpolicy-default-deny.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-nginx-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - {}   # NodePort traffic arrives pre-DNAT'd from outside the pod network; allow all
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-from-nginx-and-provisioner
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 14 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-from-nginx
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 14 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-provisioner-from-nginx-and-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 14 }}
+---
+# Sandbox pods are created dynamically by the provisioner (not templated by
+# this chart, so app.kubernetes.io/name isn't set on them) — matched by the
+# raw "app: deer-flow-sandbox" label the provisioner itself assigns
+# (docker/provisioner/app.py _build_pod/_build_service). Caught live: this
+# rule was originally missing entirely, silently blocking every gateway ->
+# sandbox connection (NodePort, ClusterIP, and direct pod IP alike) while
+# leaving host-originated traffic like kubelet's readiness probes unaffected.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-sandbox-from-gateway-and-provisioner
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: deer-flow-sandbox
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 14 }}

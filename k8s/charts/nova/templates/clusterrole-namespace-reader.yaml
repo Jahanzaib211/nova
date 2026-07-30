@@ -1,0 +1,21 @@
+# The provisioner's _ensure_namespace() startup check calls
+# core_v1.read_namespace(K8S_NAMESPACE) — `namespaces` is a cluster-scoped
+# resource, so a namespaced Role (even one only ever bound within
+# nova-staging) cannot grant `get` on it; the API server rejects that grant
+# entirely. This ClusterRole is the only way to grant it — but resourceNames
+# pins the actual permission to just the one "nova-staging" object, so
+# combined with the RoleBinding below (not a ClusterRoleBinding), the
+# ServiceAccount ends up able to read exactly one Namespace, never any
+# other. Skipping this crash-loops the provisioner on first boot (a plain
+# 403, not caught as the code's existing 404-creates-it branch).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nova-staging-namespace-reader
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+    resourceNames: [{{ .Values.namespace | quote }}]

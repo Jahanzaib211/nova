@@ -24,6 +24,12 @@ nginx (Docker) → :2026
     └─ /*     → Frontend :3000 (Docker)
 ```
 
+**K8s staging** (single-node k3s, `nova-staging` namespace, isolated from
+the above — separate runtime, network, storage, secrets) also runs on this
+box for validating the sandbox-provisioner path (real K8s Pods instead of
+Docker-out-of-Docker) before any real cutover decision. Not part of the
+production traffic path. See [k8s/README.md](k8s/README.md).
+
 ---
 
 ## Deploy Steps

@@ -1,0 +1,222 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 4 }}
+spec:
+  # Hard cap at 1 — config.yaml has no stream_bridge: section (defaults to
+  # in-process `type: memory`), and Redis backend is explicitly "planned for
+  # Phase 2, not yet implemented" per its own schema docstring. A second
+  # replica would silently break SSE reconnect, run-cancel, and IM-channel-
+  # worker state. This mirrors the Compose deployment's own single-instance
+  # reality — parity, not a regression.
+  replicas: 1
+  strategy:
+    type: Recreate   # never run two gateway pods simultaneously, even mid-rollout
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nova.labels" . | nindent 8 }}
+        {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 8 }}
+    spec:
+      # Kubernetes auto-injects legacy Docker-links-style env vars for every
+      # Service in the namespace ({SVCNAME}_PORT, {SVCNAME}_SERVICE_HOST,
+      # etc.). Caught live: the Service named "gateway" injected
+      # GATEWAY_PORT=tcp://10.43.x.x:8001, colliding with (and overriding)
+      # the app's own GATEWAY_PORT=8001 env var, crashing config parsing
+      # (`int("tcp://...")`). Disabled everywhere in this chart, not just
+      # here — DNS-based service discovery (already used throughout) makes
+      # this legacy injection pure risk with no benefit.
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001    # the `app` user baked into backend/Dockerfile's final stage
+        runAsGroup: 10001
+        # Caught live: both PVCs (the static hostPath one and the dynamic
+        # local-path one) get created root-owned by default, and uid 10001
+        # can't write into a root:root 0755 directory — killed the
+        # channel-store init (non-fatal, logged) and would have killed real
+        # SQLite/memory/thread-data writes too. fsGroup makes the kubelet
+        # chgrp mounted volumes to this group (and set the setgid bit) before
+        # the pod starts, which is the standard fix for non-root containers
+        # + PVCs, not a workaround specific to this one bug.
+        fsGroup: 10001
+      initContainers:
+        # Caught live: fsGroup (above) does NOT cover this volume. It only
+        # applies to volume plugins that support ownership management —
+        # dynamic local-path PVCs (like extensions-config below) do, but the
+        # static hostPath-backed deerflow-data PV does not (a deliberate K8s
+        # restriction: it won't silently chown an arbitrary host directory).
+        # Confirmed by evidence, not assumption — the PermissionError on
+        # /app/backend/deerflow-pvc/deer-flow persisted even after fsGroup
+        # was added. A one-shot root chown here is the standard workaround,
+        # and self-heals if the PV is ever recreated (idempotent, cheap).
+        - name: fix-deerflow-data-perms
+          image: {{ .Values.images.gateway }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["sh", "-c", "chown -R 10001:10001 /app/backend/deerflow-pvc"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+          volumeMounts:
+            - name: deerflow-data
+              mountPath: /app/backend/deerflow-pvc
+        # extensions_config.json is read AND written by the Gateway API at
+        # runtime (MCP config / skill toggles) — seed the writable PVC from
+        # the ConfigMap default on first boot only. Idempotent: safe to
+        # re-run on every pod start, self-heals if the PVC is ever recreated.
+        - name: seed-extensions-config
+          image: {{ .Values.images.gateway }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["sh", "-c", "test -f /app/state/extensions_config.json || cp /config-seed/extensions_config.json /app/state/extensions_config.json"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            # The namespace ResourceQuota requires every container —
+            # including initContainers — to declare requests.cpu,
+            # requests.memory, and limits.memory explicitly, or the API
+            # server rejects pod creation outright (caught live: the first
+            # `helm install` attempt failed quota validation on exactly this
+            # container). Trivial values — it's a `test -f || cp` one-liner.
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          volumeMounts:
+            - name: extensions-config-seed
+              mountPath: /config-seed
+              readOnly: true
+            - name: extensions-config
+              mountPath: /app/state
+      containers:
+        - name: gateway
+          image: {{ .Values.images.gateway }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DEER_FLOW_EXTENSIONS_CONFIG_PATH
+              value: "/app/state/extensions_config.json"
+            # Real bug caught live: the backend Dockerfile's final/prod
+            # stage (non-root `app` user, uid 10001) has never actually run
+            # end-to-end before this — the Compose deployment uses the `dev`
+            # target (root) instead. `uv` defaults to $HOME/.cache/uv, and
+            # /home/app isn't writable for this user in the image as built.
+            # Point it at the /tmp emptyDir already mounted below instead of
+            # patching the Dockerfile (keeps this a config-only fix, no
+            # rebuild/reimport cycle needed to unblock staging).
+            - name: UV_CACHE_DIR
+              value: "/tmp/uv-cache"
+            - name: HOME
+              value: "/tmp"
+          envFrom:
+            - configMapRef:
+                name: nova-env
+            - secretRef:
+                name: nova-secrets
+          securityContext:
+            # Uses the final/default Dockerfile stage (not `dev`), which
+            # creates a real non-root `app` user — unlike the Compose dev
+            # target, cap_drop: ALL is safe here (see backend Dockerfile
+            # comment + this session's own SQLite-WAL regression on the
+            # dev target for why that distinction matters).
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: app-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: extensions-config
+              mountPath: /app/state
+            - name: deerflow-data
+              mountPath: /app/backend/deerflow-pvc
+            - name: skills-custom
+              mountPath: /app/skills/custom
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: {{ .Values.resources.gateway.requests.cpu }}
+              memory: {{ .Values.resources.gateway.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.gateway.limits.cpu }}
+              memory: {{ .Values.resources.gateway.limits.memory }}
+          # Slow cold boot (uv sync + heavy imports) — matches the Compose
+          # healthcheck's own 150s start_period.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 30
+            timeoutSeconds: 6
+            failureThreshold: 3
+      volumes:
+        - name: app-config
+          configMap:
+            name: nova-app-config
+        - name: extensions-config-seed
+          configMap:
+            name: nova-extensions-config-default
+        - name: extensions-config
+          persistentVolumeClaim:
+            claimName: nova-extensions-config
+        - name: deerflow-data
+          persistentVolumeClaim:
+            claimName: nova-deerflow-data
+        - name: skills-custom
+          hostPath:
+            path: {{ .Values.skillsHostPath }}
+            type: DirectoryOrCreate
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi   # doubles as $HOME/uv's cache now, not just scratch space
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 4 }}
+  ports:
+    - port: 8001
+      targetPort: 8001

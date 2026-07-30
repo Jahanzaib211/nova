@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nova-app-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+data:
+  config.yaml: |-
+{{ .Files.Get "files/config.yaml" | indent 4 }}
