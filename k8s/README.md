@@ -454,6 +454,48 @@ names that collided across releases — see `k8s/ARCHITECTURE.md` §9 bug
 throughout — this is exactly why the drill runs in a scratch namespace
 instead of against the real one.
 
+## Host watchdog (k3s cron)
+
+`k8s/scripts/k3s-watchdog.py` is a short-lived script (not a long-running
+daemon like `nova-healthcheck`) meant to run on a cron schedule, checking
+whether **k3s itself** is healthy — independent of anything the K8s API
+can report, since if the API server is down, the K8s-backed `/infra`
+dashboard can't tell you why. This one runs on the host, outside the
+cluster.
+
+Checks each run: `systemctl is-active k3s`, node `Ready` condition, root
+filesystem usage, and available memory. Writes a single JSON status file
+(default `~/.nova/k3s-watchdog-status.json`) that nova-ops's `/infra` page
+reads **directly off disk** — nova-ops runs on this same host via PM2, so
+this is a plain same-host file read, not a gateway round-trip; it isn't
+Nova application data.
+
+**Install** (already done on this box — documented for a new box or a
+disaster recovery from scratch):
+
+```bash
+# 1. Cron entry, every 5 minutes (cron has no CWD context — use an absolute path)
+(crontab -l 2>/dev/null; echo "*/5 * * * * /usr/bin/python3 /home/jahanzaib/Desktop/nova/k8s/scripts/k3s-watchdog.py >> ~/.nova/k3s-watchdog.log 2>&1") | crontab -
+
+# 2. Scoped sudoers rule for the one auto-fix action (restart k3s if it's
+#    down or the node has gone NotReady) — mirrors the existing
+#    cloudflared-nova.service pattern in scripts/healthcheck-daemon.py.
+#    This needs to be added by a human with root, same as any sudoers change:
+echo 'jahanzaib ALL=(root) NOPASSWD: /usr/bin/systemctl restart k3s' | sudo tee /etc/sudoers.d/nova-k3s-watchdog
+sudo chmod 0440 /etc/sudoers.d/nova-k3s-watchdog
+sudo visudo -c   # validates every file under /etc/sudoers.d, not just this one
+```
+
+Without step 2, the watchdog still runs, still writes status, and still
+surfaces problems in the nova-ops UI — it just can't self-heal a downed
+k3s service (the restart attempt fails with a permission error, logged
+in `action_history` like any other outcome).
+
+Auto-restart has a 10-minute cooldown (`K3S_WATCHDOG_RESTART_COOLDOWN_S`)
+so a persistent, non-transient failure doesn't turn into a restart loop —
+after one attempt, it waits and lets a human look, rather than hammering
+`systemctl restart` every 5 minutes forever.
+
 ## Firewalling the NodePort
 
 The nginx Service is `NodePort` (fixed `30026`), which listens on **all**
