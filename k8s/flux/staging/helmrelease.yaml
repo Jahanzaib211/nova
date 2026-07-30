@@ -1,0 +1,51 @@
+# Reconciles k8s/charts/nova against the nova-staging namespace on every
+# GitRepository sync — this IS the GitOps loop: push a change to
+# values-staging.yaml's content below (or to any chart template), Flux
+# applies it within one interval, no manual `helm upgrade` needed.
+#
+# Secrets (nova-secrets) are deliberately NOT managed here — bootstrap-secrets.sh
+# keeps creating them directly via kubectl, exactly as before. This
+# HelmRelease references the Secret by name only (via the chart's own
+# templates), never templates a secret value into a manifest Flux would
+# commit-track — see k8s/README.md and k8s/ARCHITECTURE.md §3.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: nova
+  namespace: flux-system
+spec:
+  interval: 1m
+  targetNamespace: nova-staging
+  releaseName: nova
+  chart:
+    spec:
+      chart: k8s/charts/nova
+      sourceRef:
+        kind: GitRepository
+        name: nova
+        namespace: flux-system
+  # Mirrors k8s/charts/nova/values-staging.yaml exactly — if that file
+  # changes, update this block to match (see k8s/README.md's GitOps section
+  # for why the values live here rather than a separate `-f` flag: Flux's
+  # HelmRelease has no equivalent of `helm upgrade -f`, values must be
+  # inline or referenced via valuesFrom).
+  values:
+    namespace: nova-staging
+    nodePort: 30026
+    images:
+      gateway: nova-gateway:staging
+      frontend: nova-frontend:staging
+      nginx: nginx:alpine
+      provisioner: nova-provisioner:staging
+      sandbox: nova-sandbox-android:latest
+      redis: redis:7-alpine
+    skillsHostPath: /home/jahanzaib/Desktop/nova/skills/custom
+  # A bad chart push shouldn't wedge the release — remediate automatically
+  # rather than leaving nova-staging in a half-upgraded state.
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true

@@ -1,0 +1,14 @@
+# Source: this same repo, main branch. Flux polls it and reconciles
+# whatever's under k8s/charts/nova whenever main changes — the actual
+# GitOps loop. 1m interval: staging wants fast feedback on a config push,
+# not the slower interval you'd use once this graduates to production.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: nova
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/Jahanzaib211/nova
+  ref:
+    branch: main
