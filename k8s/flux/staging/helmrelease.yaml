@@ -6,13 +6,16 @@
 # sourceRef points at the flux-system GitRepository (bootstrap's own
 # self-referencing source for this same repo) rather than a separate
 # GitRepository object. A second GitRepository pointing at the identical
-# url+ref+secretRef was tried first and caught live going genuinely
-# wrong: it consistently hung for the full clone timeout (180s) while
-# flux-system's own source, with byte-identical config, kept cloning
-# successfully in seconds every single cycle — apparently a lock/cache
-# contention within source-controller for two sources against the exact
-# same URL+credentials, not a timeout-tuning problem. There's no reason
-# to have two sources for one repo anyway.
+# url+ref+secretRef was tried first; the real cause of that one's
+# repeated timeouts turned out to be this repo's real size (~19MB,
+# 2000+ objects, grown substantially this session) against this box's
+# genuinely variable bandwidth to GitHub (measured directly:
+# ~3 MiB/s dropping to ~150 KiB/s mid-clone on the same transfer) — see
+# flux-system/gotk-sync.yaml's timeout comment for the actual
+# measurement. Whether two sources against the same URL independently
+# contend for anything inside source-controller was never conclusively
+# isolated. Removing the duplicate stands on its own merits regardless
+# — there was no reason to have two sources for one repo either way.
 #
 # Secrets (nova-secrets) are deliberately NOT managed here — bootstrap-secrets.sh
 # keeps creating them directly via kubectl, exactly as before. This

@@ -7,16 +7,21 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m0s
-  # Caught live: same reasoning as k8s/flux/staging/gitrepository.yaml's
-  # timeout comment — this box's real CPU contention made the 60s
-  # default (this file's own generated value, before this edit)
-  # intermittently too short for an SSH clone. Editing a "DO NOT EDIT"
-  # bootstrap-generated file is the supported way to customize
-  # post-bootstrap Flux settings — it's meant to stop you from hand-
-  # editing it OUT OF SYNC with a future `flux bootstrap` re-run, not to
-  # prevent legitimate config changes managed through Git like anything
-  # else this chart owns.
-  timeout: 180s
+  # Caught live via a direct `git clone --progress` timing test: this
+  # repo is ~19MB/2000+ objects now (grown substantially this session),
+  # and this box's real outbound bandwidth to GitHub is genuinely
+  # variable — observed dropping from ~3 MiB/s to ~150 KiB/s mid-transfer
+  # on the same clone. That easily pushes a full clone past 60s, and
+  # sometimes past 180s too. Not CPU contention, not a source-controller
+  # bug — a real, measured bandwidth constraint. 300s gives headroom for
+  # the slow stretches actually observed without masking a genuine
+  # outage (a clone that takes 5 real minutes is worth investigating on
+  # its own). Editing a "DO NOT EDIT" bootstrap-generated file is the
+  # supported way to customize post-bootstrap Flux settings — it's meant
+  # to stop you from hand-editing it OUT OF SYNC with a future `flux
+  # bootstrap` re-run, not to prevent legitimate config changes managed
+  # through Git like anything else this chart owns.
+  timeout: 300s
   ref:
     branch: main
   secretRef:
