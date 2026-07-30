@@ -1,0 +1,34 @@
+# CPU-based autoscaling — metrics-server is confirmed live in this cluster
+# (`kubectl top` works), so this is a real, functional primitive, not inert
+# YAML waiting on multi-node infra (see k8s/ARCHITECTURE.md's Phase 5 split
+# of "buildable now" vs "designed, not deployed"). Bounded to the box's own
+# headroom under the namespace ResourceQuota, not an arbitrary ceiling — see
+# resourcequota.yaml's comment and the sizing note in values.yaml.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: gateway
+  minReplicas: {{ .Values.resources.gateway.replicas }}
+  maxReplicas: {{ .Values.resources.gateway.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    # Scale up fast (agent runs are bursty), scale down slowly — avoids
+    # flapping a replica in and out right as a new burst of runs starts.
+    scaleUp:
+      stabilizationWindowSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300

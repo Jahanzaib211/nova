@@ -21,6 +21,8 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000   # the `node` user baked into frontend/Dockerfile's prod target
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: frontend
           image: {{ .Values.images.frontend }}
@@ -32,13 +34,25 @@ spec:
               value: "production"
             - name: DEER_FLOW_INTERNAL_GATEWAY_BASE_URL
               value: "http://gateway:8001"
+            # Caught live going to readOnlyRootFilesystem: `pnpm start` runs
+            # corepack, which writes its package-manager cache to
+            # $HOME/.cache — /home/node isn't on any writable mount. Same
+            # fix pattern as deployment-gateway.yaml's UV_CACHE_DIR/HOME.
+            - name: HOME
+              value: "/tmp"
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            # `next start` (non-standalone build, see frontend/Dockerfile)
+            # writes its ISR/image-optimization cache here at runtime — the
+            # rest of .next is pre-built and read-only.
+            - name: next-cache
+              mountPath: /app/frontend/.next/cache
           resources:
             requests:
               cpu: {{ .Values.resources.frontend.requests.cpu }}
@@ -65,6 +79,9 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        - name: next-cache
+          emptyDir:
+            sizeLimit: 256Mi
 ---
 apiVersion: v1
 kind: Service

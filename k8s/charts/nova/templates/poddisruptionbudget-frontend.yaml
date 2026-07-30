@@ -1,0 +1,15 @@
+# Same rationale as poddisruptionbudget-gateway.yaml — frontend already
+# runs replicas > 1 (values.yaml), this just protects that guarantee
+# during voluntary disruptions.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 6 }}

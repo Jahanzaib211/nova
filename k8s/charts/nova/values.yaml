@@ -24,6 +24,7 @@ resources:
     limits: { cpu: 200m, memory: 128Mi }
   frontend:
     replicas: 2
+    maxReplicas: 4   # HPA ceiling — see resourcequota.yaml, this + gateway's ceiling both fit under the 3Gi/3-core quota
     requests: { cpu: 100m, memory: 200Mi }
     limits: { cpu: 500m, memory: 512Mi }
   gateway:
@@ -32,6 +33,7 @@ resources:
     # lock, and Redis-backed rate limiter are all wired in — see
     # k8s/ARCHITECTURE.md §4/§10 for exactly what was blocking this before.
     replicas: 2
+    maxReplicas: 4   # HPA ceiling — same headroom note as frontend above
     requests: { cpu: 250m, memory: 384Mi }
     limits: { cpu: 1500m, memory: 1536Mi }
   provisioner:

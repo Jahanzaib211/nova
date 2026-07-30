@@ -228,3 +228,35 @@ class TestEngineLifecycle:
             pytest.raises(ImportError, match="uv sync --all-packages --extra postgres"),
         ):
             await init_engine("postgres", url="postgresql+asyncpg://x:x@localhost/x")
+
+    @pytest.mark.anyio
+    async def test_from_config_uses_resolved_sqlite_dir_not_raw_field(self, tmp_path, monkeypatch):
+        """Regression: init_engine_from_config must pass the resolved
+        (absolute, DEER_FLOW_SQLITE_DIR-aware) directory to init_engine, not
+        the raw ``sqlite_dir`` config field.
+
+        Caught live going to a k8s readOnlyRootFilesystem: the raw field
+        defaults to a relative path (".deer-flow/data"), which os.makedirs()
+        happily created under CWD when CWD was writable — silently the
+        wrong, unused directory — and crashes outright once CWD isn't
+        writable, even though DEER_FLOW_SQLITE_DIR pointed the *actual* DB
+        connection at a real, already-existing PVC path the whole time.
+        """
+        from unittest.mock import AsyncMock
+
+        from deerflow.config.database_config import DatabaseConfig
+        from deerflow.persistence import engine as engine_module
+
+        override_dir = tmp_path / "pvc-data"
+        monkeypatch.setenv("DEER_FLOW_SQLITE_DIR", str(override_dir))
+
+        config = DatabaseConfig(backend="sqlite", sqlite_dir=".deer-flow/data")
+        mock_init_engine = AsyncMock()
+        monkeypatch.setattr(engine_module, "init_engine", mock_init_engine)
+
+        await engine_module.init_engine_from_config(config)
+
+        mock_init_engine.assert_awaited_once()
+        _, kwargs = mock_init_engine.call_args
+        assert kwargs["sqlite_dir"] == str(override_dir)
+        assert kwargs["sqlite_dir"] != config.sqlite_dir

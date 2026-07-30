@@ -52,6 +52,8 @@ spec:
         # the pod starts, which is the standard fix for non-root containers
         # + PVCs, not a workaround specific to this one bug.
         fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         # Caught live: fsGroup (above) does NOT cover this volume. It only
         # applies to volume plugins that support ownership management —
@@ -163,6 +165,7 @@ spec:
             # comment + this session's own SQLite-WAL regression on the
             # dev target for why that distinction matters).
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           volumeMounts:

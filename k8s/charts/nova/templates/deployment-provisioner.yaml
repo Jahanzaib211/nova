@@ -21,6 +21,8 @@ spec:
       serviceAccountName: nova-provisioner
       securityContext:
         runAsNonRoot: false   # base image (python:3.12-slim) has no dedicated app user; RBAC scopes it, not container UID
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: provisioner
           image: {{ .Values.images.provisioner }}
@@ -82,8 +84,12 @@ spec:
                   fieldPath: status.hostIP
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: {{ .Values.resources.provisioner.requests.cpu }}
@@ -103,6 +109,10 @@ spec:
               port: 8002
             initialDelaySeconds: 10
             periodSeconds: 30
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
 ---
 apiVersion: v1
 kind: Service

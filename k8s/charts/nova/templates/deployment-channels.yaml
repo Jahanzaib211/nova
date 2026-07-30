@@ -52,6 +52,8 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         - name: fix-deerflow-data-perms
           image: {{ .Values.images.gateway }}
@@ -112,6 +114,7 @@ spec:
                 name: nova-secrets
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           volumeMounts:

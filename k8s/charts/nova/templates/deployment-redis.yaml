@@ -38,6 +38,8 @@ spec:
         fsGroup: 999       # PVC is dynamic local-path, so fsGroup DOES apply here
                             # (unlike deerflow-data's static hostPath PV — see that
                             # file's comment on why the two PVC types differ).
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
           image: {{ .Values.images.redis }}
@@ -47,6 +49,7 @@ spec:
             - containerPort: 6379
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
           volumeMounts:

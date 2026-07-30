@@ -175,7 +175,14 @@ async def init_engine_from_config(config) -> None:
         url=config.app_sqlalchemy_url,
         echo=config.echo_sql,
         pool_size=config.pool_size,
-        sqlite_dir=config.sqlite_dir if config.backend == "sqlite" else "",
+        # `_resolved_sqlite_dir`, not the raw `sqlite_dir` field — the raw
+        # field is a relative default (".deer-flow/data") that `sqlite_path`
+        # / `app_sqlalchemy_url` never actually point at; only the resolved
+        # (absolute, DEER_FLOW_SQLITE_DIR-aware) property matches the real
+        # DB path. Passing the raw field here silently created an unused
+        # directory under CWD instead of failing loudly — readOnlyRootFilesystem
+        # in k8s turned that into a startup crash instead of a silent no-op.
+        sqlite_dir=config._resolved_sqlite_dir if config.backend == "sqlite" else "",
     )
 
 
