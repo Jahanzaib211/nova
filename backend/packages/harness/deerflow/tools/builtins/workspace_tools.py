@@ -462,13 +462,22 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
     ``op`` receives a Playwright ``Page`` (the currently visible tab when one
     exists, else a fresh one) and returns a string.
 
-    ``thread_id`` scopes this call through the per-thread circuit breaker +
-    bounded retry (browser_circuit_breaker.py / browser_retry.py) — both
-    modules existed already, fully built and tested, but were never wired
-    into a real call site, so every CDP hiccup (chromium restart, websocket
-    reset) surfaced as an immediate, unretried failure. Falls back to the
-    unguarded path when no thread scope is available, rather than sharing
-    breaker/retry state across unrelated calls.
+    ``thread_id`` scopes the CDP *connect* through the per-thread circuit
+    breaker + bounded retry (browser_circuit_breaker.py / browser_retry.py)
+    — both modules existed already, fully built and tested, but were never
+    wired into a real call site, so every CDP hiccup (chromium restart,
+    websocket reset) surfaced as an immediate, unretried failure. Falls
+    back to the unguarded path when no thread scope is available, rather
+    than sharing breaker/retry state across unrelated calls.
+
+    Only the connect is retried — ``op`` itself always runs at most once.
+    Caught in review: an earlier version retried the whole
+    connect-then-``op`` closure, so a click/fill that succeeded but then
+    hit a transient error on ``browser.close()`` (which runs in a
+    ``finally`` *after* a successful ``return``, so its exception replaces
+    the return value) would get retried as a *new* click/fill — a real
+    double-submit risk for anything state-mutating, unlike ``navigate``
+    which already has its own idempotency cache.
     """
     from deerflow.sandbox.browser_check import _cdp_url_for_gateway
 
@@ -478,16 +487,9 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
 
     from playwright.sync_api import sync_playwright
 
-    def _connect_and_run():
+    def _connect(pw):
         try:
-            with sync_playwright() as pw:
-                browser = pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
-                try:
-                    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-                    page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                    return op(page)
-                finally:
-                    browser.close()
+            return pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
         except Exception as e:
             from deerflow.sandbox.browser_errors import classify_playwright_exception
 
@@ -496,12 +498,24 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
                 raise
             raise classified from e
 
-    if not thread_id:
-        return _connect_and_run()
+    with sync_playwright() as pw:
+        if thread_id:
+            from deerflow.sandbox.browser_retry import retry_browser_call
 
-    from deerflow.sandbox.browser_retry import retry_browser_call
-
-    return retry_browser_call(thread_id, _connect_and_run, operation="cdp_browser_op")
+            browser = retry_browser_call(thread_id, _connect, pw, operation="cdp_connect")
+        else:
+            browser = _connect(pw)
+        try:
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            return op(page)
+        finally:
+            # A close() failure must never clobber a successful op() result
+            # (an exception raised here would otherwise replace the return
+            # value above) nor mask op()'s own exception — we don't care
+            # whether cleanup succeeds, only whether op() did.
+            with contextlib.suppress(Exception):
+                browser.close()
 
 
 def _sdk_page_api_missing(exc: Exception) -> bool:

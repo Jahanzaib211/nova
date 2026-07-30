@@ -206,6 +206,57 @@ def test_cdp_browser_op_with_thread_id_does_not_retry_permanent_error():
     assert call_count["n"] == 1, "a permanent (non-connection) error must not be retried"
 
 
+def test_cdp_browser_op_does_not_rerun_op_when_close_fails():
+    """Regression (caught in review): op() must run at most once, even with
+    a thread_id. Before the fix, the whole connect-then-op closure was
+    retried as one unit — so a click/fill that succeeded but then hit a
+    transient error on browser.close() (which runs in a `finally` AFTER a
+    successful `return`, so its exception replaces the return value) would
+    get retried as a brand new click/fill. This is a real double-submit
+    risk for anything state-mutating, unlike navigate (which has its own
+    idempotency cache)."""
+    from deerflow.tools.builtins import workspace_tools
+
+    op_call_count = {"n": 0}
+
+    def _op(_page):
+        op_call_count["n"] += 1
+        return "clicked"
+
+    with _patch_playwright_error_types():
+
+        def _sync_playwright():
+            pw_cm = MagicMock()
+
+            def _pw_enter():
+                pw = MagicMock()
+                browser = MagicMock()
+                browser.contexts = []
+                ctx = MagicMock()
+                browser.new_context.return_value = ctx
+                ctx.pages = []
+                page = MagicMock()
+                ctx.new_page.return_value = page
+                pw.chromium.connect_over_cdp.return_value = browser
+                # Connect succeeds immediately; close() fails with a
+                # connection-shaped error message every time it's called.
+                browser.close.side_effect = _FakePlaywrightError("target closed")
+                return pw
+
+            pw_cm.__enter__.side_effect = _pw_enter
+            pw_cm.__exit__.return_value = False
+            return pw_cm
+
+        with (
+            patch("deerflow.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
+            patch("playwright.sync_api.sync_playwright", _sync_playwright),
+        ):
+            result = workspace_tools._cdp_browser_op(client=MagicMock(), op=_op, thread_id="local:test-thread")
+
+    assert result == "clicked"
+    assert op_call_count["n"] == 1, "op() must run exactly once regardless of a close() failure afterward"
+
+
 # ---------------------------------------------------------------------------
 # browser_check._run_targets_via_cdp
 # ---------------------------------------------------------------------------
@@ -237,3 +288,72 @@ def test_run_targets_via_cdp_with_thread_id_retries_connect_failure():
             result = browser_check._run_targets_via_cdp("ws://fake-cdp", [], with_screenshot=False, render_budget_ms=1000, thread_id="local:test-thread")
     assert result == []  # no targets to iterate, just proving the connect succeeded on retry
     assert call_count["n"] == 2
+
+
+def test_run_targets_via_cdp_mid_loop_new_page_failure_does_not_discard_prior_results():
+    """Regression (caught in review): page = ctx.new_page() used to sit
+    OUTSIDE the per-target try/except, so a failure creating a page for
+    ONE target escaped the loop entirely, hit the outer exception handler,
+    and (with a thread_id) triggered a full retry that redid every
+    already-succeeded target from scratch — contradicting this function's
+    own claim that "a bad target never triggers a reconnect". Build 3
+    targets where the middle one fails to get a page; the other two must
+    still both be recorded, in a single call with no retry."""
+    from deerflow.sandbox import browser_check
+
+    targets = [
+        ("t1", "html", "<html>one</html>"),
+        ("t2", "html", "<html>two</html>"),
+        ("t3", "html", "<html>three</html>"),
+    ]
+    new_page_call_count = {"n": 0}
+    connect_call_count = {"n": 0}
+
+    with _patch_playwright_error_types():
+
+        def _sync_playwright():
+            pw_cm = MagicMock()
+
+            def _pw_enter():
+                pw = MagicMock()
+
+                def _connect_over_cdp(_url, timeout=None):
+                    connect_call_count["n"] += 1
+                    browser = MagicMock()
+                    browser.contexts = []
+                    ctx = MagicMock()
+                    browser.new_context.return_value = ctx
+
+                    def _new_page():
+                        new_page_call_count["n"] += 1
+                        if new_page_call_count["n"] == 2:
+                            raise _FakePlaywrightError("crashed creating page")
+                        page = MagicMock()
+                        page.content.return_value = "<html>ok</html>"
+                        page.inner_text.return_value = "some text"
+                        page.screenshot.return_value = b"fake-png-bytes" * 20
+                        return page
+
+                    ctx.new_page.side_effect = _new_page
+                    return browser
+
+                pw.chromium.connect_over_cdp.side_effect = _connect_over_cdp
+                return pw
+
+            pw_cm.__enter__.side_effect = _pw_enter
+            pw_cm.__exit__.return_value = False
+            return pw_cm
+
+        with (
+            patch.object(browser_check, "_adaptive_wait"),
+            patch.object(browser_check, "_scan_html_errors", return_value=None),
+            patch("playwright.sync_api.sync_playwright", _sync_playwright),
+        ):
+            result = browser_check._run_targets_via_cdp("ws://fake-cdp", targets, with_screenshot=True, render_budget_ms=1000, thread_id="local:test-thread")
+
+    assert connect_call_count["n"] == 1, "the middle target's page failure must not trigger a reconnect"
+    assert [r.route for r in result] == ["t1", "t2", "t3"], "all three targets must be present, none silently dropped"
+    assert result[0].ok is True
+    assert result[1].ok is False
+    assert result[1].status == "unreachable"
+    assert result[2].ok is True

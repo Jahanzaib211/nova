@@ -533,9 +533,17 @@ def _run_targets_via_cdp_once(cdp_url: str, targets: list[tuple[str, str, str]],
             for name, kind, value in targets:
                 rr = RouteResult(route=name, ok=True, status="ok")
                 errors: list[str] = []
-                page = ctx.new_page()
-                page.on("console", lambda m: errors.append(f"{m.type}: {m.text}"[:300]) if m.type == "error" else None)
+                # page creation moved inside the try (was previously outside
+                # it): a ctx.new_page() failure for one target used to
+                # escape this loop entirely, hit the outer except below, and
+                # trigger a full retry that redid every already-succeeded
+                # target from scratch — silently discarding those results
+                # and contradicting this function's own "a bad target never
+                # triggers a reconnect" contract. Caught in review.
+                page = None
                 try:
+                    page = ctx.new_page()
+                    page.on("console", lambda m: errors.append(f"{m.type}: {m.text}"[:300]) if m.type == "error" else None)
                     if kind == "url":
                         page.goto(value, wait_until="load", timeout=20000)
                     else:
@@ -576,8 +584,9 @@ def _run_targets_via_cdp_once(cdp_url: str, targets: list[tuple[str, str, str]],
                 except Exception as e:
                     rr.ok, rr.status, rr.notes = False, "unreachable", str(e)[:160]
                 finally:
-                    with contextlib.suppress(Exception):
-                        page.close()
+                    if page is not None:
+                        with contextlib.suppress(Exception):
+                            page.close()
                 out.append(rr)
     except Exception as e:
         # Only reached for a genuine connect-level failure (per-target

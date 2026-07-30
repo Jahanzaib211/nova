@@ -2072,20 +2072,24 @@ def write_file_tool(
         content: The content to write to the file. ALWAYS PROVIDE THIS PARAMETER THIRD.
         append: Whether to append content to the end of the file instead of overwriting it. Defaults to False.
     """
+    # Computed once and threaded through — the hard-cap check, the
+    # auto-chunk decision, and the sandbox-observation log all used this
+    # same value but each re-encoded the full content independently
+    # (up to 3x for a large write, once more again inside
+    # _split_utf8_safe). Caught in review.
+    content_bytes = len(content.encode("utf-8"))
     if not append:
         hard_max = _effective_write_file_hard_max_bytes()
-        if hard_max > 0:
-            content_bytes = len(content.encode("utf-8"))
-            if content_bytes > hard_max:
-                return (
-                    f"Error: write_file content ({content_bytes} bytes) exceeds the "
-                    f"{hard_max}-byte hard limit, even for auto-chunked writes. This is "
-                    "almost certainly unintentional — split the content into smaller, "
-                    "purposeful pieces: either (a) write the first section now, then use "
-                    "`str_replace` for further edits, or (b) call write_file again with "
-                    "append=True carrying the next section. See SIZE POLICY in the tool "
-                    "docstring or issue #3189 for the rationale."
-                )
+        if hard_max > 0 and content_bytes > hard_max:
+            return (
+                f"Error: write_file content ({content_bytes} bytes) exceeds the "
+                f"{hard_max}-byte hard limit, even for auto-chunked writes. This is "
+                "almost certainly unintentional — split the content into smaller, "
+                "purposeful pieces: either (a) write the first section now, then use "
+                "`str_replace` for further edits, or (b) call write_file again with "
+                "append=True carrying the next section. See SIZE POLICY in the tool "
+                "docstring or issue #3189 for the rationale."
+            )
     try:
         requested_path = path
         sandbox = ensure_sandbox_initialized(runtime)
@@ -2096,15 +2100,44 @@ def write_file_tool(
             if not _is_custom_mount_path(path):
                 path = _resolve_and_validate_user_data_path(path, thread_data)
             # Custom mount paths are resolved by LocalSandbox._resolve_path()
-        content_bytes = len(content.encode("utf-8"))
         max_bytes = _effective_write_file_max_bytes()
         num_chunks = 1
         with get_file_operation_lock(sandbox, path):
             if not append and max_bytes > 0 and content_bytes > max_bytes:
                 pieces = _split_utf8_safe(content, _WRITE_FILE_CHUNK_BYTES)
                 num_chunks = len(pieces)
-                for i, piece in enumerate(pieces):
-                    sandbox.write_file(path, piece, i > 0)
+                chunks_written = 0
+                bytes_written = 0
+                try:
+                    for i, piece in enumerate(pieces):
+                        sandbox.write_file(path, piece, i > 0)
+                        chunks_written = i + 1
+                        bytes_written += len(piece.encode("utf-8"))
+                except Exception as e:
+                    if chunks_written == 0:
+                        # Failed on the very first chunk — nothing landed
+                        # on disk, same as a normal single-write failure.
+                        # Fall through to the existing generic handlers
+                        # below so error formatting stays consistent.
+                        raise
+                    # Caught in review: a failure on any chunk after the
+                    # first leaves the file in a genuinely NEW state that
+                    # never existed before auto-chunking — neither the
+                    # original content nor the intended new content, since
+                    # earlier chunks are already durably written. Silently
+                    # returning a generic error here would hide that the
+                    # file is now truncated mid-write; say so explicitly
+                    # and point at read_file to verify the real state.
+                    return _truncate_write_file_error_detail(
+                        f"Error: write_file failed partway through an auto-chunked write to "
+                        f"{requested_path} — {chunks_written}/{num_chunks} chunks "
+                        f"({bytes_written} of {content_bytes} bytes) were already written to disk "
+                        f"before this failure: {_sanitize_error(e, runtime)}. The file is now in a "
+                        "PARTIAL state (neither the original content nor the full new content) — "
+                        "use read_file to check its actual current content before deciding whether "
+                        "to retry the write or fix it up with str_replace.",
+                        _DEFAULT_WRITE_FILE_ERROR_MAX_CHARS,
+                    )
             else:
                 sandbox.write_file(path, content, append)
         sandbox_id = (runtime.state.get("sandbox") or {}).get("sandbox_id", "") if hasattr(runtime, "state") else ""

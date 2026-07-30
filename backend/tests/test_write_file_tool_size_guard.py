@@ -187,3 +187,75 @@ def test_split_utf8_safe_never_breaks_a_multibyte_character():
 def test_split_utf8_safe_content_under_limit_returns_single_chunk():
     content = "hello world"
     assert _split_utf8_safe(content, max_chunk_bytes=1024) == [content]
+
+
+# ---------------------------------------------------------------------------
+# Mid-chunk failure reporting (caught in review)
+# ---------------------------------------------------------------------------
+
+
+def test_chunk_failure_after_first_chunk_reports_partial_write_state():
+    """Regression (caught in review): a failure on any chunk after the
+    first leaves the file in a genuinely new state that never existed
+    before auto-chunking — some but not all of the intended content is
+    already durably on disk. The error must say so explicitly (chunk
+    count, byte count, and that the file is now partial) rather than
+    returning a generic write-failure message that hides this."""
+    fn = getattr(write_file_tool, "func", write_file_tool)
+    runtime = MagicMock()
+    payload = "abcdefghij" * (25 * 1024)  # 250 KB -> auto-chunks
+
+    with (
+        patch.object(tools_module, "ensure_sandbox_initialized") as mock_ensure,
+        patch.object(tools_module, "ensure_thread_directories_exist"),
+        patch.object(tools_module, "is_local_sandbox", return_value=False),
+        patch.object(tools_module, "get_file_operation_lock") as mock_lock,
+    ):
+        sandbox = MagicMock()
+        call_count = {"n": 0}
+
+        def _write_file(_path, _piece, _append):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise OSError("disk full")
+
+        sandbox.write_file = MagicMock(side_effect=_write_file)
+        mock_ensure.return_value = sandbox
+        mock_lock.return_value.__enter__ = MagicMock(return_value=None)
+        mock_lock.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = fn(runtime=runtime, description="test write", path="/tmp/test.txt", content=payload, append=False)
+
+    assert call_count["n"] == 2, "must have attempted (and failed on) the second chunk"
+    assert result.startswith("Error: write_file failed partway through an auto-chunked write")
+    assert "1/" in result, "must report how many chunks succeeded before the failure"
+    assert "PARTIAL" in result
+    assert "read_file" in result, "must point the caller at read_file to check the real on-disk state"
+
+
+def test_chunk_failure_on_first_chunk_falls_back_to_generic_error():
+    """A failure on the FIRST chunk means nothing landed on disk yet — no
+    different from an ordinary single-write failure — so it should fall
+    through to the existing generic OSError handling, not the
+    partial-write message (which would be misleading: nothing is
+    "partial" if zero chunks succeeded)."""
+    fn = getattr(write_file_tool, "func", write_file_tool)
+    runtime = MagicMock()
+    payload = "abcdefghij" * (25 * 1024)  # 250 KB -> auto-chunks
+
+    with (
+        patch.object(tools_module, "ensure_sandbox_initialized") as mock_ensure,
+        patch.object(tools_module, "ensure_thread_directories_exist"),
+        patch.object(tools_module, "is_local_sandbox", return_value=False),
+        patch.object(tools_module, "get_file_operation_lock") as mock_lock,
+    ):
+        sandbox = MagicMock()
+        sandbox.write_file = MagicMock(side_effect=OSError("disk full"))
+        mock_ensure.return_value = sandbox
+        mock_lock.return_value.__enter__ = MagicMock(return_value=None)
+        mock_lock.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = fn(runtime=runtime, description="test write", path="/tmp/test.txt", content=payload, append=False)
+
+    assert "partway through an auto-chunked write" not in result
+    assert "PARTIAL" not in result
