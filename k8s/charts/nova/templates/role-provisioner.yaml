@@ -9,3 +9,12 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "services"]
     verbs: ["create", "get", "list", "delete"]
+  # Read-only additions for the /api/infra/* dashboard surface (nova-ops).
+  # No new verbs beyond get/list anywhere — this whole feature adds zero
+  # new mutation capability.
+  - apiGroups: [""]
+    resources: ["pods/log", "events"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list"]

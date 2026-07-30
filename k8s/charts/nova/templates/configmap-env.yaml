@@ -28,3 +28,22 @@ data:
   # the gateway wrote).
   DEER_FLOW_HOME: "/app/backend/deerflow-pvc/deer-flow"
   GATEWAY_ENABLE_DOCS: "true"
+  # Caught live, the hard way, running 2 gateway replicas: DatabaseConfig
+  # ._resolved_sqlite_dir resolves database.sqlite_dir (".deer-flow/data")
+  # relative to the process's raw CWD (/app/backend in this image) — NOT
+  # relative to DEER_FLOW_HOME, despite DEER_FLOW_HOME governing nearly
+  # everything else (channel store, memory, skills). /app/backend is
+  # plain container filesystem, not the mounted PVC, so the SQLite
+  # database (shared by the checkpointer AND all app data — users,
+  # threads, everything) was silently per-pod-ephemeral this whole time:
+  # wiped on every restart with 1 replica, and with 2+ replicas each pod
+  # gets its own disconnected database (confirmed live: a user registered
+  # via one replica came back "user not found" on the other). This env
+  # var is the code's own purpose-built override for exactly this — see
+  # DatabaseConfig._resolved_sqlite_dir's docstring — a config-only fix,
+  # no rebuild needed.
+  DEER_FLOW_SQLITE_DIR: "/app/backend/deerflow-pvc/deer-flow/.deer-flow/data"
+  # In-cluster Redis Service DNS, no auth configured (staging trust level —
+  # see the comment in files/config.yaml's stream_bridge section). Resolved
+  # into config.yaml's stream_bridge.redis_url via its $REDIS_URL syntax.
+  REDIS_URL: "redis://redis.{{ .Values.namespace }}.svc.cluster.local:6379/0"

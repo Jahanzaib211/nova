@@ -12,7 +12,7 @@ class StreamBridgeConfig(BaseModel):
 
     type: StreamBridgeType = Field(
         default="memory",
-        description="Stream bridge backend type. 'memory' uses in-process asyncio.Queue (single-process only). 'redis' uses Redis Streams (planned for Phase 2, not yet implemented).",
+        description="Stream bridge backend type. 'memory' is in-process only (single replica). 'redis' uses Redis Streams and is required for a multi-replica Gateway — requires the 'redis' package extra (pip install 'deerflow-harness[redis]').",
     )
     redis_url: str | None = Field(
         default=None,

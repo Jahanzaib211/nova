@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 from deerflow.runtime.stream_bridge.diagnostics import register_correlation_id
 from deerflow.utils.time import now_iso as _now_iso
 
+from .cancel_signal import CancelSignal, NoopCancelSignal
+from .distributed_lock import DistributedLock, NoopDistributedLock
 from .schemas import DisconnectMode, RunStatus
 
 if TYPE_CHECKING:
@@ -132,6 +134,8 @@ class RunManager:
         *,
         persistence_retry_policy: PersistenceRetryPolicy | None = None,
         supervisor: Supervisor | None = None,
+        cancel_signal: CancelSignal | None = None,
+        distributed_lock: DistributedLock | None = None,
     ) -> None:
         self._runs: dict[str, RunRecord] = {}
         # Secondary index: thread_id -> insertion-ordered run_id set (a dict is
@@ -144,6 +148,13 @@ class RunManager:
         self._persistence_retry_policy = persistence_retry_policy or PersistenceRetryPolicy()
         # Phase C8: Supervisor for two-phase cancellation
         self._supervisor = supervisor
+        # Cross-replica cancel notification — see cancel_signal.py. Defaults
+        # to a no-op, matching today's single-replica-only behavior exactly
+        # when no Redis is configured.
+        self._cancel_signal: CancelSignal = cancel_signal or NoopCancelSignal()
+        # Cross-replica mutual exclusion for create_or_reject()'s "reject"
+        # strategy — see distributed_lock.py. Defaults to a no-op.
+        self._distributed_lock: DistributedLock = distributed_lock or NoopDistributedLock()
 
     def _index_run_locked(self, record: RunRecord) -> None:
         """Register *record* in the thread index. Caller must hold ``self._lock``."""
@@ -610,6 +621,12 @@ class RunManager:
         status_value = row.get("status")
         if status_value == RunStatus.interrupted.value:
             self._schedule_kernel_cancel(run_id)
+            # Re-publish on a repeat cancel too — pub/sub delivery isn't
+            # guaranteed (a message published while the owning replica's
+            # listener wasn't yet subscribed, e.g. a race at run startup,
+            # is simply lost, not queued), so a second "stop" click is a
+            # cheap, harmless way to retry the signal.
+            await self._cancel_signal.request_cancel(run_id)
             return True  # idempotent
         if status_value not in (RunStatus.pending.value, RunStatus.running.value):
             return False
@@ -627,8 +644,36 @@ class RunManager:
             logger.warning("Failed to persist interrupted for store-only run %s", run_id, exc_info=True)
             return False
         self._schedule_kernel_cancel(run_id)
+        # This run isn't in self._runs on THIS process — either it's owned
+        # by a different replica (the actual multi-replica case this
+        # exists for) or this worker restarted and the owning process is
+        # simply gone (in which case nothing is listening and this is a
+        # harmless no-op). Either way, the store write above is the
+        # durable signal; this is the low-latency wake-up for the common
+        # case where the owner is alive on another replica.
+        await self._cancel_signal.request_cancel(run_id)
         logger.info("Store-only run %s marked interrupted (action=%s)", run_id, action)
         return True
+
+    async def _watch_remote_cancel(self, run_id: str, abort_event: asyncio.Event) -> None:
+        try:
+            await self._cancel_signal.wait_for_cancel(run_id)
+            abort_event.set()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("cancel_signal.wait_for_cancel failed for run %s", run_id, exc_info=True)
+
+    def start_remote_cancel_watcher(self, run_id: str, abort_event: asyncio.Event) -> asyncio.Task:
+        """Spawn a background task that sets *abort_event* when a cancel
+        request for *run_id* arrives from another replica (see
+        cancel_signal.py). No-op-forever with the default NoopCancelSignal.
+
+        Callers (``services.py``'s ``start_run``) must cancel the returned
+        task once the run's own task completes, to avoid leaking a
+        subscription per finished run.
+        """
+        return asyncio.create_task(self._watch_remote_cancel(run_id, abort_event))
 
     def _schedule_kernel_cancel(self, run_id: str) -> None:
         """Phase C8: schedule kernel cancel for a run if supervisor is wired.
@@ -748,7 +793,24 @@ class RunManager:
         cancels inflight runs before creating.
 
         This method holds the lock across both the check and the insert,
-        eliminating the TOCTOU race in separate ``has_inflight`` + ``create``.
+        eliminating the TOCTOU race in separate ``has_inflight`` + ``create`` —
+        but that local ``asyncio.Lock`` only protects this one process. With
+        multiple Gateway replicas, two concurrent requests for the same
+        thread hitting *different* replicas would each pass their own local
+        check simultaneously. ``self._distributed_lock`` (see
+        distributed_lock.py, a no-op when no Redis is configured) closes
+        that gap by serializing this whole method per thread_id across
+        replicas; the store-inflight check below additionally covers runs
+        owned by *other* replicas, which this process's own ``_runs`` can't
+        see at all.
+
+        Scope note: the reject-strategy race is what this closes. The
+        interrupt/rollback strategies still only cancel *locally-visible*
+        inflight runs — cancelling a run owned by a different replica needs
+        the same cross-replica cancel path ``RunManager.cancel()`` already
+        uses (see cancel_signal.py), which create_or_reject doesn't invoke
+        today. Documented as a known smaller residual gap, not silently
+        assumed fixed.
         """
         run_id = str(uuid.uuid4())
         correlation_id = uuid.uuid4().hex
@@ -757,86 +819,112 @@ class RunManager:
         _supported_strategies = ("reject", "interrupt", "rollback")
         interrupted_records: list[RunRecord] = []
 
-        async with self._lock:
-            if multitask_strategy not in _supported_strategies:
-                raise UnsupportedStrategyError(f"Multitask strategy '{multitask_strategy}' is not yet supported. Supported strategies: {', '.join(_supported_strategies)}")
+        lock_key = f"thread:{thread_id}"
+        if not await self._distributed_lock.acquire(lock_key, ttl_seconds=10):
+            raise ConflictError(f"Thread {thread_id} already has a run being created on another replica")
 
-            inflight = [r for r in self._thread_records_locked(thread_id) if r.status in (RunStatus.pending, RunStatus.running)]
+        try:
+            async with self._lock:
+                if multitask_strategy not in _supported_strategies:
+                    raise UnsupportedStrategyError(f"Multitask strategy '{multitask_strategy}' is not yet supported. Supported strategies: {', '.join(_supported_strategies)}")
 
-            # Reap stale records whose tracked asyncio task has finished without a
-            # clean status transition (e.g. the task died/was cancelled mid-run).
-            # Without this, a dead run wedges the thread behind a permanent 409.
-            # Records with no tracked task (task is None) are left alone: that
-            # covers both brand-new runs still being set up by the caller and runs
-            # whose task is tracked elsewhere.
-            stale = [r for r in inflight if r.task is not None and r.task.done()]
-            if stale:
-                for r in stale:
-                    r.status = RunStatus.interrupted
-                    r.updated_at = now
-                    interrupted_records.append(r)
-                    logger.info("Reaped stale inflight run %s on thread %s (dead task)", r.run_id, thread_id)
-                stale_ids = {r.run_id for r in stale}
-                inflight = [r for r in inflight if r.run_id not in stale_ids]
+                inflight = [r for r in self._thread_records_locked(thread_id) if r.status in (RunStatus.pending, RunStatus.running)]
 
-            if multitask_strategy == "reject" and inflight:
-                raise ConflictError(f"Thread {thread_id} already has an active run")
+                # Reap stale records whose tracked asyncio task has finished without a
+                # clean status transition (e.g. the task died/was cancelled mid-run).
+                # Without this, a dead run wedges the thread behind a permanent 409.
+                # Records with no tracked task (task is None) are left alone: that
+                # covers both brand-new runs still being set up by the caller and runs
+                # whose task is tracked elsewhere.
+                stale = [r for r in inflight if r.task is not None and r.task.done()]
+                if stale:
+                    for r in stale:
+                        r.status = RunStatus.interrupted
+                        r.updated_at = now
+                        interrupted_records.append(r)
+                        logger.info("Reaped stale inflight run %s on thread %s (dead task)", r.run_id, thread_id)
+                    stale_ids = {r.run_id for r in stale}
+                    inflight = [r for r in inflight if r.run_id not in stale_ids]
 
-            if multitask_strategy in ("interrupt", "rollback") and inflight:
-                logger.info(
-                    "Preparing to cancel %d inflight run(s) on thread %s (strategy=%s)",
-                    len(inflight),
-                    thread_id,
-                    multitask_strategy,
+                if multitask_strategy == "reject" and inflight:
+                    raise ConflictError(f"Thread {thread_id} already has an active run")
+
+                if multitask_strategy == "reject" and self._store is not None:
+                    # Local ``inflight`` only sees runs on THIS process. A run
+                    # created by a different replica for the same thread is
+                    # invisible to ``self._runs`` but very much real — check
+                    # the durable, cross-replica-shared store too.
+                    local_ids = {r.run_id for r in inflight}
+                    try:
+                        store_rows = await self._store.list_by_thread(thread_id, limit=20)
+                    except Exception:
+                        logger.warning("Failed to check store for cross-replica inflight runs on thread %s", thread_id, exc_info=True)
+                        store_rows = []
+                    remote_inflight = [
+                        row
+                        for row in store_rows
+                        if row.get("status") in (RunStatus.pending.value, RunStatus.running.value) and row.get("run_id") not in local_ids
+                    ]
+                    if remote_inflight:
+                        raise ConflictError(f"Thread {thread_id} already has an active run on another replica")
+
+                if multitask_strategy in ("interrupt", "rollback") and inflight:
+                    logger.info(
+                        "Preparing to cancel %d inflight run(s) on thread %s (strategy=%s)",
+                        len(inflight),
+                        thread_id,
+                        multitask_strategy,
+                    )
+
+                record = RunRecord(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    assistant_id=assistant_id,
+                    status=RunStatus.pending,
+                    on_disconnect=on_disconnect,
+                    multitask_strategy=multitask_strategy,
+                    metadata=metadata or {},
+                    kwargs=kwargs or {},
+                    user_id=user_id,
+                    created_at=now,
+                    updated_at=now,
+                    model_name=model_name,
+                    correlation_id=correlation_id,
                 )
+                self._runs[run_id] = record
+                self._index_run_locked(record)
+                # Phase C0 — register the run's correlation_id so every
+                # subsequent diagnostics record stamped for this run or
+                # thread automatically carries the canonical identifier.
+                register_correlation_id(
+                    run_id=run_id,
+                    thread_id=thread_id,
+                    correlation_id=correlation_id,
+                )
+                persisted = False
+                try:
+                    await self._persist_new_run_to_store(record)
+                    persisted = True
+                except Exception:
+                    logger.warning("Failed to persist run %s; rolled back in-memory record", run_id, exc_info=True)
+                    raise
+                finally:
+                    # Also covers cancellation, which bypasses ``except Exception``.
+                    if not persisted:
+                        self._runs.pop(run_id, None)
+                        self._unindex_run_locked(run_id, record.thread_id)
 
-            record = RunRecord(
-                run_id=run_id,
-                thread_id=thread_id,
-                assistant_id=assistant_id,
-                status=RunStatus.pending,
-                on_disconnect=on_disconnect,
-                multitask_strategy=multitask_strategy,
-                metadata=metadata or {},
-                kwargs=kwargs or {},
-                user_id=user_id,
-                created_at=now,
-                updated_at=now,
-                model_name=model_name,
-                correlation_id=correlation_id,
-            )
-            self._runs[run_id] = record
-            self._index_run_locked(record)
-            # Phase C0 — register the run's correlation_id so every
-            # subsequent diagnostics record stamped for this run or
-            # thread automatically carries the canonical identifier.
-            register_correlation_id(
-                run_id=run_id,
-                thread_id=thread_id,
-                correlation_id=correlation_id,
-            )
-            persisted = False
-            try:
-                await self._persist_new_run_to_store(record)
-                persisted = True
-            except Exception:
-                logger.warning("Failed to persist run %s; rolled back in-memory record", run_id, exc_info=True)
-                raise
-            finally:
-                # Also covers cancellation, which bypasses ``except Exception``.
-                if not persisted:
-                    self._runs.pop(run_id, None)
-                    self._unindex_run_locked(run_id, record.thread_id)
-
-            if multitask_strategy in ("interrupt", "rollback") and inflight:
-                for r in inflight:
-                    r.abort_action = multitask_strategy
-                    r.abort_event.set()
-                    if r.task is not None and not r.task.done():
-                        r.task.cancel()
-                    r.status = RunStatus.interrupted
-                    r.updated_at = now
-                    interrupted_records.append(r)
+                if multitask_strategy in ("interrupt", "rollback") and inflight:
+                    for r in inflight:
+                        r.abort_action = multitask_strategy
+                        r.abort_event.set()
+                        if r.task is not None and not r.task.done():
+                            r.task.cancel()
+                        r.status = RunStatus.interrupted
+                        r.updated_at = now
+                        interrupted_records.append(r)
+        finally:
+            await self._distributed_lock.release(lock_key)
 
         for interrupted_record in interrupted_records:
             await self._persist_status(interrupted_record, RunStatus.interrupted)

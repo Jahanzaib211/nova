@@ -29,6 +29,7 @@ Architecture (docker-compose-dev):
 
 from __future__ import annotations
 
+import ast
 import logging
 import os
 import re
@@ -36,7 +37,7 @@ import time
 from contextlib import asynccontextmanager
 
 import urllib3
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from kubernetes import client as k8s_client
 from kubernetes import config as k8s_config
 from kubernetes.client.rest import ApiException
@@ -113,10 +114,18 @@ def join_host_path(base: str, *parts: str) -> str:
 # ── K8s client setup ────────────────────────────────────────────────────
 
 core_v1: k8s_client.CoreV1Api | None = None
+# Used by the read-only /api/infra/* surface: apps_v1 for Deployment
+# rollout status, metrics_api for the metrics.k8s.io aggregated API
+# (pod/node CPU+mem — served by metrics-server, confirmed live in this
+# cluster via `kubectl top`). Both share the same ApiClient/config as
+# core_v1, so they're built alongside it in _init_k8s_client() rather than
+# duplicating the kubeconfig/in-cluster-config resolution logic.
+apps_v1: k8s_client.AppsV1Api | None = None
+metrics_api: k8s_client.CustomObjectsApi | None = None
 
 
-def _init_k8s_client() -> k8s_client.CoreV1Api:
-    """Load kubeconfig from the mounted host config and return a CoreV1Api.
+def _init_k8s_client() -> tuple[k8s_client.CoreV1Api, k8s_client.AppsV1Api, k8s_client.CustomObjectsApi]:
+    """Load kubeconfig from the mounted host config and return the API clients.
 
     Tries the mounted kubeconfig first, then falls back to in-cluster
     config (useful if the provisioner itself runs inside K8s).
@@ -155,9 +164,13 @@ def _init_k8s_client() -> k8s_client.CoreV1Api:
         # Self-signed certs are common for local clusters
         configuration.verify_ssl = False
         api_client = k8s_client.ApiClient(configuration)
-        return k8s_client.CoreV1Api(api_client)
+        return (
+            k8s_client.CoreV1Api(api_client),
+            k8s_client.AppsV1Api(api_client),
+            k8s_client.CustomObjectsApi(api_client),
+        )
 
-    return k8s_client.CoreV1Api()
+    return k8s_client.CoreV1Api(), k8s_client.AppsV1Api(), k8s_client.CustomObjectsApi()
 
 
 def _wait_for_kubeconfig(timeout: int = 30) -> None:
@@ -211,9 +224,9 @@ def _ensure_namespace() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global core_v1
+    global core_v1, apps_v1, metrics_api
     _wait_for_kubeconfig()
-    core_v1 = _init_k8s_client()
+    core_v1, apps_v1, metrics_api = _init_k8s_client()
     _ensure_namespace()
     logger.info("Provisioner is ready (using host Kubernetes)")
     yield
@@ -235,6 +248,79 @@ class SandboxResponse(BaseModel):
     sandbox_id: str
     sandbox_url: str  # Direct access URL, e.g. http://host.docker.internal:{NodePort}
     status: str
+
+
+# ── /api/infra/* models (read-only cluster visibility for nova-ops) ──────
+# Resource quantities (cpu/memory) are returned as raw K8s strings (e.g.
+# "5m", "128Mi") rather than parsed into numbers — the Quantity format has
+# many suffixes (m, Ki/Mi/Gi, n, ...) and the raw string is already
+# human-readable; parsing it here would be a second place to get it wrong.
+
+
+class PodInfo(BaseModel):
+    name: str
+    phase: str
+    ready: str  # "N/M" containers ready
+    restarts: int
+    created_at: str | None  # ISO 8601, so callers can use their own relative-time formatter
+    node: str | None
+    component: str | None  # app.kubernetes.io/component, or "app" label for sandbox pods
+
+
+class PodsResponse(BaseModel):
+    pods: list[PodInfo]
+    count: int
+
+
+class DeploymentInfo(BaseModel):
+    name: str
+    desired: int
+    ready: int
+    available: int
+    updated: int
+    conditions: list[dict[str, str | None]]
+
+
+class DeploymentsResponse(BaseModel):
+    deployments: list[DeploymentInfo]
+    count: int
+
+
+class EventInfo(BaseModel):
+    type: str | None
+    reason: str | None
+    message: str | None
+    involved_object: str
+    count: int
+    last_timestamp: str | None
+
+
+class EventsResponse(BaseModel):
+    events: list[EventInfo]
+    count: int
+
+
+class PodMetric(BaseModel):
+    name: str
+    cpu: str
+    memory: str
+
+
+class NodeMetric(BaseModel):
+    name: str
+    cpu: str
+    memory: str
+
+
+class MetricsResponse(BaseModel):
+    pods: list[PodMetric]
+    nodes: list[NodeMetric]
+
+
+class PodLogsResponse(BaseModel):
+    pod: str
+    container: str | None
+    lines: list[str]
 
 
 # ── K8s resource helpers ─────────────────────────────────────────────────
@@ -601,3 +687,169 @@ async def list_sandboxes():
             )
 
     return {"sandboxes": sandboxes, "count": len(sandboxes)}
+
+
+# ── /api/infra/* — read-only cluster visibility for nova-ops ─────────────
+# Every endpoint below is a read. None of them can mutate the cluster.
+# Powers nova-ops's "Infra" dashboard via the gateway's admin proxy layer
+# (backend/app/gateway/routers/admin_infra.py) — see k8s/README.md.
+
+
+@app.get("/api/infra/pods", response_model=PodsResponse)
+async def list_all_pods():
+    """List every Pod in the namespace (not just sandboxes) for the infra dashboard."""
+    try:
+        pods = core_v1.list_namespaced_pod(K8S_NAMESPACE)
+    except ApiException as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to list pods: {exc.reason}")
+
+    infos: list[PodInfo] = []
+    for pod in pods.items:
+        statuses = pod.status.container_statuses or []
+        ready_count = sum(1 for s in statuses if s.ready)
+        restarts = sum(s.restart_count or 0 for s in statuses)
+        labels = pod.metadata.labels or {}
+        component = labels.get("app.kubernetes.io/component") or labels.get("app")
+        ts = pod.metadata.creation_timestamp
+        infos.append(
+            PodInfo(
+                name=pod.metadata.name,
+                phase=pod.status.phase or "Unknown",
+                ready=f"{ready_count}/{len(statuses)}",
+                restarts=restarts,
+                created_at=ts.isoformat() if ts else None,
+                node=pod.spec.node_name,
+                component=component,
+            )
+        )
+    infos.sort(key=lambda p: p.name)
+    return PodsResponse(pods=infos, count=len(infos))
+
+
+def _normalize_pod_log_text(raw: str) -> str:
+    """Work around a real bug in the kubernetes client (confirmed live,
+    v36.0.3): read_namespaced_pod_log's response deserialization assumes
+    JSON and falls back to str(raw_bytes) for the plain-text log response,
+    so *raw* sometimes comes back as the literal Python repr of a bytes
+    object (e.g. the string ``"b'line1\\nline2\\n'"``, escaped backslash-n
+    included) instead of the actual decoded text. Detect that exact shape
+    and unwrap it; leave normally-decoded strings untouched.
+    """
+    if len(raw) >= 3 and raw[0] == "b" and raw[1] in "'\"" and raw[-1] == raw[1]:
+        try:
+            decoded = ast.literal_eval(raw)
+        except (ValueError, SyntaxError):
+            return raw
+        if isinstance(decoded, bytes):
+            return decoded.decode("utf-8", errors="replace")
+    return raw
+
+
+@app.get("/api/infra/pods/{name}/logs", response_model=PodLogsResponse)
+async def get_pod_logs(
+    name: str,
+    tail: int = Query(200, ge=1, le=2000),
+    container: str | None = Query(None),
+):
+    """Tail logs for a Pod. Capped at 2000 lines to keep responses bounded."""
+    try:
+        raw = core_v1.read_namespaced_pod_log(
+            name=name,
+            namespace=K8S_NAMESPACE,
+            tail_lines=tail,
+            container=container,
+        )
+    except ApiException as exc:
+        raise HTTPException(status_code=exc.status or 500, detail=f"Failed to read logs for '{name}': {exc.reason}")
+
+    return PodLogsResponse(pod=name, container=container, lines=_normalize_pod_log_text(raw).splitlines())
+
+
+@app.get("/api/infra/deployments", response_model=DeploymentsResponse)
+async def list_deployments():
+    """List Deployments with rollout status (desired/ready/available/updated)."""
+    try:
+        deployments = apps_v1.list_namespaced_deployment(K8S_NAMESPACE)
+    except ApiException as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to list deployments: {exc.reason}")
+
+    infos: list[DeploymentInfo] = []
+    for dep in deployments.items:
+        status = dep.status
+        conditions = [
+            {"type": c.type, "status": c.status, "message": c.message}
+            for c in (status.conditions or [])
+        ]
+        infos.append(
+            DeploymentInfo(
+                name=dep.metadata.name,
+                desired=dep.spec.replicas or 0,
+                ready=status.ready_replicas or 0,
+                available=status.available_replicas or 0,
+                updated=status.updated_replicas or 0,
+                conditions=conditions,
+            )
+        )
+    infos.sort(key=lambda d: d.name)
+    return DeploymentsResponse(deployments=infos, count=len(infos))
+
+
+@app.get("/api/infra/events", response_model=EventsResponse)
+async def list_events(limit: int = Query(100, ge=1, le=500)):
+    """Recent namespace Events, newest first — the live equivalent of `kubectl get events`."""
+    try:
+        events = core_v1.list_namespaced_event(K8S_NAMESPACE)
+    except ApiException as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to list events: {exc.reason}")
+
+    def _sort_key(ev: k8s_client.CoreV1Event) -> str:
+        ts = ev.last_timestamp or ev.event_time or ev.metadata.creation_timestamp
+        return ts.isoformat() if ts else ""
+
+    items = sorted(events.items, key=_sort_key, reverse=True)[:limit]
+    infos = [
+        EventInfo(
+            type=ev.type,
+            reason=ev.reason,
+            message=ev.message,
+            involved_object=f"{ev.involved_object.kind}/{ev.involved_object.name}",
+            count=ev.count or 1,
+            last_timestamp=_sort_key(ev) or None,
+        )
+        for ev in items
+    ]
+    return EventsResponse(events=infos, count=len(infos))
+
+
+@app.get("/api/infra/metrics", response_model=MetricsResponse)
+async def get_metrics():
+    """Pod + node CPU/memory usage via the metrics.k8s.io aggregated API."""
+    pod_metrics: list[PodMetric] = []
+    try:
+        raw_pods = metrics_api.list_namespaced_custom_object(
+            "metrics.k8s.io", "v1beta1", K8S_NAMESPACE, "pods"
+        )
+        for item in raw_pods.get("items", []):
+            containers = item.get("containers", [])
+            # Sum per-container usage strings isn't meaningful across mixed
+            # units, so report the first container's usage for single-
+            # container pods (the common case here) and note multi-container
+            # pods by name only — avoids inventing a Quantity-arithmetic parser.
+            cpu = containers[0]["usage"]["cpu"] if containers else "0"
+            mem = containers[0]["usage"]["memory"] if containers else "0"
+            pod_metrics.append(PodMetric(name=item["metadata"]["name"], cpu=cpu, memory=mem))
+    except ApiException as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read pod metrics: {exc.reason}")
+
+    node_metrics: list[NodeMetric] = []
+    try:
+        raw_nodes = metrics_api.list_cluster_custom_object("metrics.k8s.io", "v1beta1", "nodes")
+        for item in raw_nodes.get("items", []):
+            usage = item.get("usage", {})
+            node_metrics.append(
+                NodeMetric(name=item["metadata"]["name"], cpu=usage.get("cpu", "0"), memory=usage.get("memory", "0"))
+            )
+    except ApiException as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to read node metrics: {exc.reason}")
+
+    return MetricsResponse(pods=pod_metrics, nodes=node_metrics)

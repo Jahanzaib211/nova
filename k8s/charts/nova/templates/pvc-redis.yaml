@@ -1,0 +1,19 @@
+# Dynamic local-path PVC (not a static hostPath like nova-deerflow-data) —
+# unlike the deerflow-data PV, nothing outside this one Redis pod ever
+# needs to see this PV's host path directly, so there's no alignment
+# constraint forcing a static PV. AOF persistence means a Redis restart
+# doesn't lose cancel-signal/rate-limit state, but this is not meant to be
+# durable across a full PV loss — Redis here is coordination state, not a
+# system of record (that's still SQLite/Postgres).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nova-redis-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.resources.redis.storage }}

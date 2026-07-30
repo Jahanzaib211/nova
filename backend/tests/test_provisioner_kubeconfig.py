@@ -62,13 +62,23 @@ def test_init_k8s_client_uses_file_kubeconfig(tmp_path, monkeypatch, provisioner
         "CoreV1Api",
         lambda *args, **kwargs: "core-v1",
     )
+    monkeypatch.setattr(
+        provisioner_module.k8s_client,
+        "AppsV1Api",
+        lambda *args, **kwargs: "apps-v1",
+    )
+    monkeypatch.setattr(
+        provisioner_module.k8s_client,
+        "CustomObjectsApi",
+        lambda *args, **kwargs: "custom-objects",
+    )
 
     provisioner_module.KUBECONFIG_PATH = str(kubeconfig_file)
 
     result = provisioner_module._init_k8s_client()
 
     assert called["config_file"] == str(kubeconfig_file)
-    assert result == "core-v1"
+    assert result == ("core-v1", "apps-v1", "custom-objects")
 
 
 def test_init_k8s_client_falls_back_to_incluster_when_missing(tmp_path, monkeypatch, provisioner_module):
@@ -90,10 +100,20 @@ def test_init_k8s_client_falls_back_to_incluster_when_missing(tmp_path, monkeypa
         "CoreV1Api",
         lambda *args, **kwargs: "core-v1",
     )
+    monkeypatch.setattr(
+        provisioner_module.k8s_client,
+        "AppsV1Api",
+        lambda *args, **kwargs: "apps-v1",
+    )
+    monkeypatch.setattr(
+        provisioner_module.k8s_client,
+        "CustomObjectsApi",
+        lambda *args, **kwargs: "custom-objects",
+    )
 
     provisioner_module.KUBECONFIG_PATH = str(missing_path)
 
     result = provisioner_module._init_k8s_client()
 
     assert calls["incluster"] == 1
-    assert result == "core-v1"
+    assert result == ("core-v1", "apps-v1", "custom-objects")

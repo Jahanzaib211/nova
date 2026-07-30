@@ -37,7 +37,7 @@ _SSE_HEADERS = {
 }
 
 
-def _terminal_end_response(record: RunRecord, bridge) -> StreamingResponse | None:
+async def _terminal_end_response(record: RunRecord, bridge) -> StreamingResponse | None:
     """Immediate ``end`` frame for joins of finished runs with a released buffer.
 
     ``bridge.subscribe`` lazily creates a stream for unknown run ids, so joining
@@ -46,7 +46,7 @@ def _terminal_end_response(record: RunRecord, bridge) -> StreamingResponse | Non
     terminal and nothing is retained there is nothing to replay — tell the
     client the stream is over so it falls back to persisted messages.
     """
-    if record.status in _TERMINAL_RUN_STATUSES and not bridge.has_run(record.run_id):
+    if record.status in _TERMINAL_RUN_STATUSES and not await bridge.has_run(record.run_id):
 
         async def _end_only():
             yield format_sse("end", None)
@@ -316,7 +316,7 @@ async def join_run(thread_id: str, run_id: str, request: Request) -> StreamingRe
         raise HTTPException(status_code=409, detail=f"Run {run_id} is not active on this worker and cannot be streamed")
 
     bridge = get_stream_bridge(request)
-    end_only = _terminal_end_response(record, bridge)
+    end_only = await _terminal_end_response(record, bridge)
     if end_only is not None:
         return end_only
     return StreamingResponse(
@@ -367,7 +367,7 @@ async def stream_existing_run(
             return Response(status_code=204)
 
     bridge = get_stream_bridge(request)
-    end_only = _terminal_end_response(record, bridge)
+    end_only = await _terminal_end_response(record, bridge)
     if end_only is not None:
         return end_only
     return StreamingResponse(

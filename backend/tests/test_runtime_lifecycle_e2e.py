@@ -520,7 +520,7 @@ def test_join_terminal_run_with_released_buffer_ends_immediately(isolated_app):
         # bridge cleanup with delay=60s after publish_end).
         bridge = isolated_app.state.stream_bridge
         asyncio.run(bridge.cleanup(run_id))
-        assert bridge.has_run(run_id) is False
+        assert asyncio.run(bridge.has_run(run_id)) is False
 
         with client.stream(
             "GET",

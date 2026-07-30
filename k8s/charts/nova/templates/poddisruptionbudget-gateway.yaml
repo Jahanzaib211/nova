@@ -1,0 +1,18 @@
+# Ensures a voluntary disruption (node drain, `kubectl rollout restart`,
+# cluster maintenance) can't take every gateway pod down at once. Only
+# meaningful now that replicas > 1 (Phase 2) — with a single node,
+# `kubectl drain` would still need to evict everything eventually, but
+# this bounds how aggressively rolling operations can proceed and keeps
+# the guarantee correct once a second node exists.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 6 }}

@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 16
+config_version: 17
 
 # ============================================================================
 # Logging
@@ -1227,6 +1227,28 @@ skill_evolution:
 database:
   backend: sqlite
   sqlite_dir: .deer-flow/data
+
+# ============================================================================
+# Stream Bridge Configuration
+# ============================================================================
+# Decouples agent workers (producers) from SSE endpoints (consumers).
+#
+# type: memory -- In-process event log. Single replica only: a run created
+#                 on one Gateway process cannot be joined/cancelled from a
+#                 different process. Fine for a single-instance deployment.
+# type: redis  -- Redis Streams. Required for a horizontally-scaled Gateway
+#                 (2+ replicas) — see k8s/ARCHITECTURE.md for why the
+#                 in-memory backend is a hard architectural blocker to
+#                 that. Also needs the `redis` package extra:
+#                 pip install 'deerflow-harness[redis]'
+#
+# stream_bridge:
+#   type: redis
+#   redis_url: $REDIS_URL
+#   queue_maxsize: 256
+stream_bridge:
+  type: memory
+  queue_maxsize: 256
 
 # ============================================================================
 # Run Events Configuration

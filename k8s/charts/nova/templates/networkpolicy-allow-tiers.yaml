@@ -19,6 +19,9 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  # Name predates the "channels" source being added (Phase 2) — kept
+  # as-is to avoid a spurious resource replace on upgrade; the ingress
+  # rule below is the source of truth, not the name.
   name: allow-gateway-from-nginx-and-provisioner
   namespace: {{ .Values.namespace }}
   labels:
@@ -34,6 +37,11 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 14 }}
+        # channels (deployment-channels.yaml) talks to Gateway over HTTP
+        # via langgraph-sdk to create/stream runs on behalf of IM users.
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "channels") | nindent 14 }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -75,6 +83,32 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 14 }}
+---
+# Both gateway (stream bridge, cancel signal, distributed lock, rate
+# limiter) and channels (runs the identical app code, same middleware
+# stack) construct a Redis client at startup when stream_bridge.type=redis
+# — both need ingress access here, not just gateway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis-from-gateway-and-channels
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "redis") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 14 }}
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "channels") | nindent 14 }}
 ---
 # Sandbox pods are created dynamically by the provisioner (not templated by
 # this chart, so app.kubernetes.io/name isn't set on them) — matched by the

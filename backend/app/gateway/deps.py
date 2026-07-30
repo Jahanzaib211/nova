@@ -28,7 +28,17 @@ from langgraph.types import Checkpointer
 
 from deerflow.config.app_config import AppConfig, get_app_config
 from deerflow.persistence.feedback import FeedbackRepository
-from deerflow.runtime import RunContext, RunManager, StreamBridge
+from deerflow.runtime import (
+    CancelSignal,
+    DistributedLock,
+    NoopCancelSignal,
+    NoopDistributedLock,
+    RedisCancelSignal,
+    RedisDistributedLock,
+    RunContext,
+    RunManager,
+    StreamBridge,
+)
 from deerflow.runtime.events.store.base import RunEventStore
 from deerflow.runtime.runs.store.base import RunStore
 from deerflow.services.container import service_container
@@ -222,8 +232,30 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.run_events_config = run_events_config
         app.state.run_event_store = make_run_event_store(run_events_config)
 
+        # Cross-replica cancel signal — see cancel_signal.py. Reuses the same
+        # stream_bridge.redis_url config key rather than introducing a
+        # second one; there's exactly one Redis instance in this deployment.
+        # getattr, not direct access: some test fixtures build a minimal
+        # SimpleNamespace config without every AppConfig field set.
+        stream_bridge_config = getattr(config, "stream_bridge", None)
+        cancel_signal: CancelSignal
+        if stream_bridge_config is not None and stream_bridge_config.type == "redis" and stream_bridge_config.redis_url:
+            cancel_signal = RedisCancelSignal(redis_url=stream_bridge_config.redis_url)
+        else:
+            cancel_signal = NoopCancelSignal()
+        stack.push_async_callback(cancel_signal.close)
+
+        # Cross-replica distributed lock — see distributed_lock.py. Same
+        # Redis instance, same config key, same getattr-defensive pattern.
+        distributed_lock: DistributedLock
+        if stream_bridge_config is not None and stream_bridge_config.type == "redis" and stream_bridge_config.redis_url:
+            distributed_lock = RedisDistributedLock(redis_url=stream_bridge_config.redis_url)
+        else:
+            distributed_lock = NoopDistributedLock()
+        stack.push_async_callback(distributed_lock.close)
+
         # RunManager with store backing for persistence
-        app.state.run_manager = RunManager(store=app.state.run_store)
+        app.state.run_manager = RunManager(store=app.state.run_store, cancel_signal=cancel_signal, distributed_lock=distributed_lock)
 
         # Wire the service container with gateway-owned singletons (Phase C2).
         # The container provides typed service interfaces; RunManager becomes

@@ -509,6 +509,14 @@ async def start_run(
             )
         )
         record.task = task
+        # Cross-replica cancellation: if a cancel request for this run lands
+        # on a different Gateway replica, that replica can't reach this
+        # process's record.task/abort_event directly (see cancel_signal.py).
+        # This watcher wakes abort_event locally the moment the remote
+        # signal arrives, so run_agent()'s existing polling loop needs no
+        # changes at all. No-op-forever when no Redis is configured.
+        cancel_watcher = run_mgr.start_remote_cancel_watcher(record.run_id, record.abort_event)
+        task.add_done_callback(lambda _: cancel_watcher.cancel())
 
         # Title sync is handled by worker.py's finally block which reads the
         # title from the checkpoint and calls thread_store.update_display_name

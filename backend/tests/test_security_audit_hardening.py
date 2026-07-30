@@ -11,6 +11,8 @@ authz/deps test suites; these tests pin the new logic introduced by the audit.
 
 from __future__ import annotations
 
+import pytest
+
 from app.gateway.auth_rate_limit_middleware import (
     _COST_MAX_ATTEMPTS,
     AuthRateLimitMiddleware,
@@ -65,22 +67,22 @@ def test_classify_routes_into_correct_tier():
     assert mw._classify("/api/threads/abc/runs") is None
 
 
-def test_cost_tier_blocks_after_max_attempts():
+@pytest.mark.anyio
+async def test_cost_tier_blocks_after_max_attempts():
     mw = _mw()
     key = "cost:203.0.113.7"
-    now = 1000.0
     for _ in range(_COST_MAX_ATTEMPTS):
-        assert mw._rate_limited(key, now, 60.0, _COST_MAX_ATTEMPTS) is None
-    retry_after = mw._rate_limited(key, now, 60.0, _COST_MAX_ATTEMPTS)
+        assert await mw._rate_limiter.check(key, window_seconds=60.0, max_attempts=_COST_MAX_ATTEMPTS) is None
+    retry_after = await mw._rate_limiter.check(key, window_seconds=60.0, max_attempts=_COST_MAX_ATTEMPTS)
     assert retry_after is not None and retry_after >= 1
 
 
-def test_windows_are_independent_per_tier_and_ip():
+@pytest.mark.anyio
+async def test_windows_are_independent_per_tier_and_ip():
     mw = _mw()
-    now = 1000.0
     # Exhaust one IP's cost window.
     for _ in range(_COST_MAX_ATTEMPTS):
-        mw._rate_limited("cost:1.1.1.1", now, 60.0, _COST_MAX_ATTEMPTS)
-    assert mw._rate_limited("cost:1.1.1.1", now, 60.0, _COST_MAX_ATTEMPTS) is not None
+        await mw._rate_limiter.check("cost:1.1.1.1", window_seconds=60.0, max_attempts=_COST_MAX_ATTEMPTS)
+    assert await mw._rate_limiter.check("cost:1.1.1.1", window_seconds=60.0, max_attempts=_COST_MAX_ATTEMPTS) is not None
     # A different IP is unaffected.
-    assert mw._rate_limited("cost:2.2.2.2", now, 60.0, _COST_MAX_ATTEMPTS) is None
+    assert await mw._rate_limiter.check("cost:2.2.2.2", window_seconds=60.0, max_attempts=_COST_MAX_ATTEMPTS) is None

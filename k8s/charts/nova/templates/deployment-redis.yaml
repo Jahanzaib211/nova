@@ -1,0 +1,90 @@
+# The one new real dependency for Phase 2 (multi-replica Gateway) — not an
+# observability nice-to-have, a functional prerequisite: the stream bridge,
+# cross-replica cancellation, the create_or_reject distributed lock, and
+# the rate limiter are all backed by this. See k8s/ARCHITECTURE.md §4/§10.
+#
+# Single replica deliberately — Redis itself isn't the horizontal-scaling
+# bottleneck here (Gateway is), and a single-node k3s cluster gains nothing
+# from a Redis HA topology (Sentinel/Cluster) it can't actually place on a
+# second node. AOF persistence (appendonly yes) means a pod restart doesn't
+# lose state; a full PV loss does — acceptable for coordination state that
+# isn't the system of record.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "redis") | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # ReadWriteOnce PVC — a rolling update would try to mount it twice
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nova.labels" . | nindent 8 }}
+        {{- include "nova.selectorLabels" (dict "component" "redis") | nindent 8 }}
+    spec:
+      enableServiceLinks: false   # see deployment-gateway.yaml's comment on this
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999    # the `redis` user baked into the redis:alpine image
+        runAsGroup: 999
+        fsGroup: 999       # PVC is dynamic local-path, so fsGroup DOES apply here
+                            # (unlike deerflow-data's static hostPath PV — see that
+                            # file's comment on why the two PVC types differ).
+      containers:
+        - name: redis
+          image: {{ .Values.images.redis }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
+          ports:
+            - containerPort: 6379
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: {{ .Values.resources.redis.requests.cpu }}
+              memory: {{ .Values.resources.redis.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.redis.limits.cpu }}
+              memory: {{ .Values.resources.redis.limits.memory }}
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: nova-redis-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "nova.selectorLabels" (dict "component" "redis") | nindent 4 }}
+  ports:
+    - port: 6379
+      targetPort: 6379

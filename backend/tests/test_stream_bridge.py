@@ -81,16 +81,16 @@ async def test_has_run_tracks_retention(bridge: MemoryStreamBridge):
     forever instead of terminating.
     """
     run_id = "run-retention"
-    assert bridge.has_run(run_id) is False
+    assert await bridge.has_run(run_id) is False
 
     await bridge.publish(run_id, "test", {})
-    assert bridge.has_run(run_id) is True
+    assert await bridge.has_run(run_id) is True
 
     await bridge.publish_end(run_id)
-    assert bridge.has_run(run_id) is True
+    assert await bridge.has_run(run_id) is True
 
     await bridge.cleanup(run_id)
-    assert bridge.has_run(run_id) is False
+    assert await bridge.has_run(run_id) is False
 
 
 @pytest.mark.anyio

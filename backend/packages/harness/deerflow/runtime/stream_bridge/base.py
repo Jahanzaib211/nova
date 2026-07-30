@@ -60,7 +60,7 @@ class StreamBridge(abc.ABC):
         the producer calls :meth:`publish_end`.
         """
 
-    def has_run(self, run_id: str) -> bool:
+    async def has_run(self, run_id: str) -> bool:
         """Whether events for *run_id* are currently retained.
 
         Consumers use this to avoid subscribing to a run whose buffer was
@@ -68,6 +68,12 @@ class StreamBridge(abc.ABC):
         lazily create a fresh, never-ending stream and heartbeat forever.
         Defaults to ``True`` so implementations without cheap retention
         checks keep today's behaviour.
+
+        Async because a network-backed implementation (e.g. Redis) cannot
+        answer this without an I/O call — a synchronous method here would
+        either block the event loop or force a fake synchronous wrapper
+        around an inherently async client. In-memory implementations that
+        answer from a local dict pay no real cost for the ``await``.
         """
         return True
 

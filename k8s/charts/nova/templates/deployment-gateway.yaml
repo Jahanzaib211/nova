@@ -7,15 +7,20 @@ metadata:
     {{- include "nova.labels" . | nindent 4 }}
     {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 4 }}
 spec:
-  # Hard cap at 1 — config.yaml has no stream_bridge: section (defaults to
-  # in-process `type: memory`), and Redis backend is explicitly "planned for
-  # Phase 2, not yet implemented" per its own schema docstring. A second
-  # replica would silently break SSE reconnect, run-cancel, and IM-channel-
-  # worker state. This mirrors the Compose deployment's own single-instance
-  # reality — parity, not a regression.
-  replicas: 1
+  # Phase 2: the replicas:1 hard cap is lifted. stream_bridge.type=redis
+  # (files/config.yaml) plus the cross-replica cancel signal, distributed
+  # create_or_reject lock, and Redis-backed rate limiter (all wired in
+  # backend/app/gateway/deps.py) close the specific blockers that made a
+  # second replica unsafe before — see k8s/ARCHITECTURE.md §4/§10 for the
+  # exact code-level explanation of each one. IM channel workers are the
+  # one piece that couldn't just be "fixed to be replica-safe" in place —
+  # they're extracted to deployment-channels.yaml instead.
+  replicas: {{ .Values.resources.gateway.replicas }}
   strategy:
-    type: Recreate   # never run two gateway pods simultaneously, even mid-rollout
+    type: RollingUpdate   # safe now — replicas are no longer single-instance-assumed
+    rollingUpdate:
+      maxUnavailable: 0   # zero-downtime: never drop below the configured replica count
+      maxSurge: 1
   selector:
     matchLabels:
       {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 6 }}
@@ -60,7 +65,16 @@ spec:
         - name: fix-deerflow-data-perms
           image: {{ .Values.images.gateway }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: ["sh", "-c", "chown -R 10001:10001 /app/backend/deerflow-pvc"]
+          # mkdir -p: caught live, the hard way — DatabaseConfig
+          # ._resolved_sqlite_dir doesn't create its own parent directory,
+          # and DEER_FLOW_SQLITE_DIR (configmap-env.yaml) points somewhere
+          # on this PVC that's never existed before on a fresh PV. Without
+          # this, every gateway/channels pod crash-loops on startup with
+          # "sqlite3.OperationalError: unable to open database file" —
+          # not a permissions error (fsGroup/chown both succeed), just a
+          # missing directory. Idempotent, self-heals if the PV is ever
+          # recreated, same as the chown below.
+          command: ["sh", "-c", "mkdir -p /app/backend/deerflow-pvc/deer-flow/.deer-flow/data && chown -R 10001:10001 /app/backend/deerflow-pvc"]
           securityContext:
             runAsUser: 0
             runAsNonRoot: false
@@ -130,6 +144,13 @@ spec:
               value: "/tmp/uv-cache"
             - name: HOME
               value: "/tmp"
+            # IM channel workers run on the dedicated channels Deployment
+            # instead — see deployment-channels.yaml and app.py's
+            # DEER_FLOW_RUN_CHANNELS comment. Explicit "0" here, not
+            # relying on any default, since this Deployment is the one
+            # that actually gets scaled to 2+ replicas.
+            - name: DEER_FLOW_RUN_CHANNELS
+              value: "0"
           envFrom:
             - configMapRef:
                 name: nova-env

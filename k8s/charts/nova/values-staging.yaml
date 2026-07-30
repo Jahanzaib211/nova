@@ -10,6 +10,7 @@ images:
   nginx: nginx:alpine
   provisioner: nova-provisioner:staging
   sandbox: nova-sandbox-android:latest
+  redis: redis:7-alpine
 
 # Absolute host path to the repo's custom-skills directory — mounted
 # read-write as a hostPath volume into the gateway pod, same content the

@@ -19,6 +19,7 @@ Configuration (env vars):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import random
@@ -128,7 +129,7 @@ class SearxngClient:
                         exc,
                         sleep_s * 1000,
                     )
-                    time.sleep(sleep_s)
+                    await asyncio.sleep(sleep_s)
                     continue
                 if _HAS_METRICS:
                     _igino_search_total.inc("error")

@@ -1,0 +1,176 @@
+# Dedicated single-replica Deployment for IM channel workers (Slack/
+# Telegram/Discord/etc.) — extracted out of the horizontally-scaled
+# gateway Deployment. See app/gateway/app.py's DEER_FLOW_RUN_CHANNELS
+# comment and k8s/ARCHITECTURE.md §4: each channel worker opens a
+# persistent, exclusive-ish connection per process (Slack Socket Mode,
+# Telegram long-polling, Discord's gateway client) with zero cross-replica
+# dedup — N horizontally-scaled gateway replicas all running channels
+# would mean N-fold duplicate message delivery. Channels already talk to
+# Gateway purely over HTTP (langgraph-sdk), so they have no reason to be
+# colocated with the scaled replicas at all.
+#
+# Deliberately near-identical to deployment-gateway.yaml (same image, same
+# volumes/initContainers/mounts) rather than a stripped-down variant —
+# minimizes the risk of a NEW first-boot-only bug class in an unexercised
+# code path, matching this session's own experience building the original
+# gateway Deployment (the uv-cache/non-root bug was exactly this kind of
+# thing). The only real differences: DEER_FLOW_RUN_CHANNELS=1, replicas
+# hard-pinned to 1 (never scaled), and no Service — nothing calls into
+# this pod, it only calls out (to Gateway's Service and external IM
+# platforms), so nothing needs to route traffic to it.
+#
+# Real activation of any configured channel needs its bot credentials
+# bootstrapped into nova-secrets first — not yet done for IM channels
+# specifically (see the Phase 6 gap noted in k8s/ARCHITECTURE.md §3:
+# bootstrap-secrets.sh only covers 10 of the secrets Compose's env_file
+# implicitly grants). This Deployment is correct infrastructure ahead of
+# that fix landing, not conditional on it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: channels
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "channels") | nindent 4 }}
+spec:
+  replicas: 1   # never scaled — see comment above
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "channels") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nova.labels" . | nindent 8 }}
+        {{- include "nova.selectorLabels" (dict "component" "channels") | nindent 8 }}
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: fix-deerflow-data-perms
+          image: {{ .Values.images.gateway }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          # See the matching comment in deployment-gateway.yaml — this pod
+          # runs the identical app code and hits the identical
+          # missing-sqlite-parent-dir crash without this.
+          command: ["sh", "-c", "mkdir -p /app/backend/deerflow-pvc/deer-flow/.deer-flow/data && chown -R 10001:10001 /app/backend/deerflow-pvc"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "FOWNER"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 32Mi }
+          volumeMounts:
+            - name: deerflow-data
+              mountPath: /app/backend/deerflow-pvc
+        - name: seed-extensions-config
+          image: {{ .Values.images.gateway }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["sh", "-c", "test -f /app/state/extensions_config.json || cp /config-seed/extensions_config.json /app/state/extensions_config.json"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 50m, memory: 32Mi }
+          volumeMounts:
+            - name: extensions-config-seed
+              mountPath: /config-seed
+              readOnly: true
+            - name: extensions-config
+              mountPath: /app/state
+      containers:
+        - name: channels
+          image: {{ .Values.images.gateway }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - containerPort: 8001   # unrouted — no Service points at this pod
+          env:
+            - name: DEER_FLOW_EXTENSIONS_CONFIG_PATH
+              value: "/app/state/extensions_config.json"
+            - name: UV_CACHE_DIR
+              value: "/tmp/uv-cache"
+            - name: HOME
+              value: "/tmp"
+            - name: DEER_FLOW_RUN_CHANNELS
+              value: "1"
+          envFrom:
+            - configMapRef:
+                name: nova-env
+            - secretRef:
+                name: nova-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: app-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: extensions-config
+              mountPath: /app/state
+            - name: deerflow-data
+              mountPath: /app/backend/deerflow-pvc
+            - name: skills-custom
+              mountPath: /app/skills/custom
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: {{ .Values.resources.channels.requests.cpu }}
+              memory: {{ .Values.resources.channels.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.channels.limits.cpu }}
+              memory: {{ .Values.resources.channels.limits.memory }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 30
+            timeoutSeconds: 6
+            failureThreshold: 3
+      volumes:
+        - name: app-config
+          configMap:
+            name: nova-app-config
+        - name: extensions-config-seed
+          configMap:
+            name: nova-extensions-config-default
+        - name: extensions-config
+          persistentVolumeClaim:
+            claimName: nova-extensions-config
+        - name: deerflow-data
+          persistentVolumeClaim:
+            claimName: nova-deerflow-data
+        - name: skills-custom
+          hostPath:
+            path: {{ .Values.skillsHostPath }}
+            type: DirectoryOrCreate
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi

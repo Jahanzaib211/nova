@@ -1,0 +1,18 @@
+# Powers the /api/infra/metrics endpoint (nova-ops dashboard). Node CPU/mem
+# usage is served by metrics-server's aggregated API (metrics.k8s.io) and is
+# inherently cluster-scoped — unlike namespaces (see
+# clusterrole-namespace-reader.yaml), there is no resourceNames trick to pin
+# this to just nova-staging's own node, because a node isn't "owned" by any
+# namespace. This is the one deliberately broader-than-namespace grant in
+# this chart; it is read-only (get/list only) and limited to exactly two
+# resource types under metrics.k8s.io.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nova-provisioner-metrics-reader
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]

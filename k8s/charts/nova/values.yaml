@@ -10,6 +10,7 @@ images:
   nginx: nginx:alpine
   provisioner: nova-provisioner:staging      # the provisioner service's own image (docker/provisioner/Dockerfile)
   sandbox: nova-sandbox-android:latest       # SANDBOX_IMAGE — the image used for the sandbox PODS the provisioner creates
+  redis: redis:7-alpine                      # public image, pulled directly — no local build/import step needed
 
 imagePullPolicy: IfNotPresent
 
@@ -26,14 +27,36 @@ resources:
     requests: { cpu: 100m, memory: 200Mi }
     limits: { cpu: 500m, memory: 512Mi }
   gateway:
-    replicas: 1   # hard cap — see Chart NOTES.txt, in-process stream_bridge/RunManager singletons
+    # Phase 2: replicas raised from a hard 1 to 2 now that the Redis stream
+    # bridge, cross-replica cancel signal, distributed create_or_reject
+    # lock, and Redis-backed rate limiter are all wired in — see
+    # k8s/ARCHITECTURE.md §4/§10 for exactly what was blocking this before.
+    replicas: 2
     requests: { cpu: 250m, memory: 384Mi }
     limits: { cpu: 1500m, memory: 1536Mi }
   provisioner:
-    requests: { cpu: 50m, memory: 96Mi }
-    limits: { cpu: 300m, memory: 256Mi }
+    # Bumped for the /api/infra/* dashboard surface (pod/deployment/event
+    # listing + log tailing) added alongside the sandbox lifecycle API.
+    # Headroom, not a fix for an observed problem — live usage before this
+    # change was ~1m CPU / 78Mi memory (`kubectl top`).
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 384Mi }
+  redis:
+    # Coordination state, not the system of record — modest sizing.
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 256Mi }
+    storage: 512Mi
+  channels:
+    # Same image as gateway but not serving HTTP traffic — lighter than a
+    # gateway replica.
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: 500m, memory: 512Mi }
 
 resourceQuota:
-  requestsCpu: "2"
-  requestsMemory: 2Gi
-  limitsMemory: 6Gi
+  # Bumped alongside the gateway replicas:1->2 change and the two new
+  # workloads (redis, channels) — the box has 30GB RAM total and this is
+  # still a protective ceiling relative to other real tenants on it (e.g.
+  # gvm alone runs ~6GB), not a loosened backstop.
+  requestsCpu: "3"
+  requestsMemory: 3Gi
+  limitsMemory: 8Gi

@@ -10,20 +10,22 @@ available):
   spawning unbounded runs and driving provider spend (audit B1). The default
   cap is generous enough that no interactive user reaches it.
 
-Single-node only (in-memory); for multi-node deployments back this with Redis.
+Backed by ``rate_limiter.py``'s ``RateLimiter`` interface — in-memory
+(single replica, the default) or Redis (multi-replica, so an attacker can't
+just spread requests across replicas to multiply their effective quota).
 """
 
 from __future__ import annotations
 
 import os
-import time
-from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp
+
+from app.gateway.rate_limiter import InMemoryRateLimiter, RateLimiter
 
 # Auth brute-force tier (suffix match on the auth prefix).
 _AUTH_SUFFIXES = ("/auth/login/local", "/auth/register", "/auth/change-password")
@@ -57,10 +59,11 @@ _COST_MAX_ATTEMPTS = _int_env("NOVA_RUN_RATE_MAX", 60)
 
 
 class AuthRateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, rate_limiter: RateLimiter | None = None) -> None:
         super().__init__(app)
-        # Keyed by ``"{tier}:{ip}"`` so the auth and cost windows are independent.
-        self._hits: dict[str, deque[float]] = defaultdict(deque)
+        # Keyed by "{tier}:{ip}" so the auth and cost windows are independent —
+        # one shared limiter instance covers both tiers.
+        self._rate_limiter: RateLimiter = rate_limiter or InMemoryRateLimiter()
 
     def _client_ip(self, request: Request) -> str:
         # Honor X-Forwarded-For (nginx) first hop, else peer.
@@ -79,29 +82,15 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
             return ("cost", _COST_WINDOW_SECONDS, _COST_MAX_ATTEMPTS)
         return None
 
-    def _rate_limited(self, key: str, now: float, window_seconds: float, max_attempts: int) -> int | None:
-        """Record a hit; return ``Retry-After`` seconds when over the limit, else None."""
-        window = self._hits[key]
-        cutoff = now - window_seconds
-        while window and window[0] < cutoff:
-            window.popleft()
-
-        if len(window) >= max_attempts:
-            return int(window_seconds - (now - window[0])) + 1
-
-        window.append(now)
-        return None
-
     async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         classified = self._classify(request.url.path)
         if request.method != "POST" or classified is None:
             return await call_next(request)
 
         tier, window_seconds, max_attempts = classified
-        now = time.monotonic()
         key = f"{tier}:{self._client_ip(request)}"
 
-        retry_after = self._rate_limited(key, now, window_seconds, max_attempts)
+        retry_after = await self._rate_limiter.check(key, window_seconds=window_seconds, max_attempts=max_attempts)
         if retry_after is not None:
             message = "Too many attempts. Please wait and try again." if tier == "auth" else "You're sending requests too quickly. Please wait a moment and try again."
             return JSONResponse(
@@ -109,11 +98,5 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": {"code": "rate_limited", "message": message}},
                 headers={"Retry-After": str(max(retry_after, 1))},
             )
-
-        # Opportunistic cleanup so the dict doesn't grow unbounded.
-        if len(self._hits) > 10_000:
-            global_cutoff = now - max(_AUTH_WINDOW_SECONDS, _COST_WINDOW_SECONDS)
-            for k in [k for k, v in self._hits.items() if not v or v[-1] < global_cutoff]:
-                self._hits.pop(k, None)
 
         return await call_next(request)

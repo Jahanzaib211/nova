@@ -67,3 +67,63 @@ def test_shutdown_is_bounded_when_channel_stop_hangs():
     assert elapsed < _SHUTDOWN_HOOK_TIMEOUT_SECONDS + 8.0, f"Lifespan shutdown took {elapsed:.2f}s; expected <= {_SHUTDOWN_HOOK_TIMEOUT_SECONDS + 8.0:.1f}s"
     # Lower bound: the wait_for should actually have waited.
     assert elapsed >= _SHUTDOWN_HOOK_TIMEOUT_SECONDS - 0.5, f"Lifespan exited too quickly ({elapsed:.2f}s); wait_for may not have been invoked."
+
+
+# ---------------------------------------------------------------------------
+# DEER_FLOW_RUN_CHANNELS gating (Phase 2: channels extracted to their own
+# Deployment — see deployment-channels.yaml and app.py's comment on this).
+# ---------------------------------------------------------------------------
+
+
+async def _run_lifespan_and_report_channel_start(monkeypatch, *, run_channels_env: str | None) -> bool:
+    """Drive the lifespan context, return whether start_channel_service was called."""
+    from app.gateway.app import lifespan
+
+    if run_channels_env is None:
+        monkeypatch.delenv("DEER_FLOW_RUN_CHANNELS", raising=False)
+    else:
+        monkeypatch.setenv("DEER_FLOW_RUN_CHANNELS", run_channels_env)
+
+    app = FastAPI()
+    fake_service = MagicMock()
+    fake_service.get_status = MagicMock(return_value={})
+    started = False
+
+    async def fake_start(_config):
+        nonlocal started
+        started = True
+        return fake_service
+
+    async def fake_stop():
+        return None
+
+    with (
+        patch("app.gateway.app.get_app_config"),
+        patch("app.gateway.app.get_gateway_config", return_value=MagicMock(host="x", port=0)),
+        patch("app.gateway.app.langgraph_runtime", _noop_langgraph_runtime),
+        patch("app.channels.service.start_channel_service", side_effect=fake_start),
+        patch("app.channels.service.stop_channel_service", side_effect=fake_stop),
+    ):
+        async with lifespan(app):
+            pass
+
+    return started
+
+
+def test_channels_start_by_default(monkeypatch):
+    """No DEER_FLOW_RUN_CHANNELS set -> channels start (matches Compose's
+    single-process-does-everything behavior, unchanged for non-K8s deployments)."""
+    started = asyncio.run(_run_lifespan_and_report_channel_start(monkeypatch, run_channels_env=None))
+    assert started is True
+
+
+def test_channels_start_when_explicitly_enabled(monkeypatch):
+    started = asyncio.run(_run_lifespan_and_report_channel_start(monkeypatch, run_channels_env="1"))
+    assert started is True
+
+
+def test_channels_do_not_start_when_disabled(monkeypatch):
+    """DEER_FLOW_RUN_CHANNELS=0 -> channels do not start (the horizontally-
+    scaled gateway Deployment's setting — see deployment-gateway.yaml)."""
+    started = asyncio.run(_run_lifespan_and_report_channel_start(monkeypatch, run_channels_env="0"))
+    assert started is False

@@ -13,8 +13,10 @@ from app.gateway.auth_rate_limit_middleware import AuthRateLimitMiddleware
 from app.gateway.config import get_gateway_config
 from app.gateway.csrf_middleware import CSRFMiddleware, get_configured_cors_origins
 from app.gateway.deps import langgraph_runtime
+from app.gateway.rate_limiter import InMemoryRateLimiter, RateLimiter, RedisRateLimiter
 from app.gateway.routers import (
     admin,
+    admin_infra,
     agents,
     artifacts,
     assistants_compat,
@@ -237,14 +239,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Must run AFTER langgraph_runtime so app.state.store is available for thread migration
         await _ensure_admin_user(app)
 
-        # Start IM channel service if any channels are configured
-        try:
-            from app.channels.service import start_channel_service
+        # Start IM channel service if any channels are configured.
+        #
+        # DEER_FLOW_RUN_CHANNELS gates this — default "1" (today's Compose
+        # behavior, one process does everything). A horizontally-scaled
+        # Gateway deployment must set this to "0" on the HTTP-serving
+        # replicas: channel workers (Slack Socket Mode, Telegram
+        # long-polling, Discord's gateway client) each open a persistent,
+        # exclusive-ish connection per process with zero cross-replica
+        # dedup (confirmed live, see k8s/ARCHITECTURE.md §4) — N replicas
+        # all starting channels means N-fold duplicate message delivery.
+        # Channels already talk to Gateway purely over HTTP
+        # (langgraph-sdk), so they have no reason to be colocated with the
+        # scaled replicas at all — see deployment-channels.yaml, a
+        # dedicated single-replica Deployment with this flag set to "1".
+        if os.environ.get("DEER_FLOW_RUN_CHANNELS", "1") != "0":
+            try:
+                from app.channels.service import start_channel_service
 
-            channel_service = await start_channel_service(startup_config)
-            logger.info("Channel service started: %s", channel_service.get_status())
-        except Exception:
-            logger.exception("No IM channels configured or channel service failed to start")
+                channel_service = await start_channel_service(startup_config)
+                logger.info("Channel service started: %s", channel_service.get_status())
+            except Exception:
+                logger.exception("No IM channels configured or channel service failed to start")
+        else:
+            logger.info("Channel service disabled on this replica (DEER_FLOW_RUN_CHANNELS=0)")
 
         yield
 
@@ -378,8 +396,24 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     app.add_middleware(CSRFMiddleware)
 
     # Rate limiting on auth endpoints (added last → outermost → runs first, so
-    # floods are rejected before auth/CSRF processing). In-memory, single-node.
-    app.add_middleware(AuthRateLimitMiddleware)
+    # floods are rejected before auth/CSRF processing). Redis-backed when
+    # stream_bridge.type=redis is configured (same Redis instance, same
+    # config key as the stream bridge/cancel signal/distributed lock) —
+    # otherwise an attacker could reset their quota just by having requests
+    # land on a different replica's own in-memory counter. Read via
+    # get_app_config() directly (not the async lifespan's startup_config)
+    # since middleware registration happens before the app starts serving.
+    _rate_limiter_stream_bridge_config = getattr(get_app_config(), "stream_bridge", None)
+    rate_limiter: RateLimiter
+    if (
+        _rate_limiter_stream_bridge_config is not None
+        and _rate_limiter_stream_bridge_config.type == "redis"
+        and _rate_limiter_stream_bridge_config.redis_url
+    ):
+        rate_limiter = RedisRateLimiter(redis_url=_rate_limiter_stream_bridge_config.redis_url)
+    else:
+        rate_limiter = InMemoryRateLimiter()
+    app.add_middleware(AuthRateLimitMiddleware, rate_limiter=rate_limiter)
 
     # CORS: the unified nginx endpoint is same-origin by default. Split-origin
     # browser clients must opt in with this explicit Gateway allowlist so CORS
@@ -436,6 +470,10 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Admin API is mounted at /api/v1/admin (registration roster + stats)
     app.include_router(admin.router)
+
+    # Admin infra API is mounted at /api/v1/admin/infra (read-only K8s
+    # pod/deployment/event/metrics visibility, proxied to the provisioner)
+    app.include_router(admin_infra.router)
 
     # Legal API is mounted at /api/v1/legal (TOS version + consent recording)
     app.include_router(legal.router)
