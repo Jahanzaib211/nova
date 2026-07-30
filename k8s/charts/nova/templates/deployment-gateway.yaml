@@ -30,6 +30,18 @@ spec:
         {{- include "nova.labels" . | nindent 8 }}
         {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 8 }}
     spec:
+      # Designed for, not deployed: this cluster has exactly one node today,
+      # so ScheduleAnyway makes this a genuine no-op right now (there is
+      # nothing to spread across) — but it's the correct, real field for
+      # the day a second node exists, activating without a chart change.
+      # See k8s/README.md's Multi-node section.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 14 }}
       # Kubernetes auto-injects legacy Docker-links-style env vars for every
       # Service in the namespace ({SVCNAME}_PORT, {SVCNAME}_SERVICE_HOST,
       # etc.). Caught live: the Service named "gateway" injected

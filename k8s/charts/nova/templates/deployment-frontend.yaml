@@ -17,6 +17,15 @@ spec:
         {{- include "nova.labels" . | nindent 8 }}
         {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 8 }}
     spec:
+      # Designed for, not deployed — see deployment-gateway.yaml's comment
+      # and k8s/README.md's Multi-node section.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "frontend") | nindent 14 }}
       enableServiceLinks: false   # avoid legacy {SVCNAME}_PORT-style env collisions; see deployment-gateway.yaml
       securityContext:
         runAsNonRoot: true
