@@ -543,6 +543,7 @@ export function AgentComputerPanel({
               onSelectArtifact={handleSelectArtifact}
               threadId={threadId}
               runningEvents={mergedEvents}
+              active={activeTab === "files"}
             />
           </ScrollArea>
         </AgentComputerErrorBoundary>

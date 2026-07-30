@@ -411,7 +411,7 @@ def _run_browser_check_unlocked(
     routes_result: list[RouteResult] | None = None
     if cdp:
         try:
-            routes_result = _run_targets_via_cdp(cdp, targets, with_screenshot, render_budget_ms)
+            routes_result = _run_targets_via_cdp(cdp, targets, with_screenshot, render_budget_ms, thread_id=thread_id)
         except Exception as e:
             logger.warning("browser_check CDP engine failed (%s); falling back to browser_page", e)
             routes_result = None
@@ -485,63 +485,109 @@ def _cdp_url_for_gateway(client: Any) -> str | None:
     return _rewrite_cdp_netloc(cdp, new_host="host.docker.internal")
 
 
-def _run_targets_via_cdp(cdp_url: str, targets: list[tuple[str, str, str]], with_screenshot: bool, render_budget_ms: int) -> list[RouteResult]:
-    """Drive the existing browser over CDP with Playwright. Raises if it can't connect."""
+def _run_targets_via_cdp(
+    cdp_url: str,
+    targets: list[tuple[str, str, str]],
+    with_screenshot: bool,
+    render_budget_ms: int,
+    *,
+    thread_id: str | None = None,
+) -> list[RouteResult]:
+    """Drive the existing browser over CDP with Playwright. Raises if it can't connect.
+
+    ``thread_id`` scopes the CDP connect through the per-thread circuit
+    breaker + bounded retry (browser_circuit_breaker.py / browser_retry.py)
+    — see the matching comment on workspace_tools.py's ``_cdp_browser_op``
+    for why this matters: both modules existed, fully built and tested,
+    but neither was wired into a real call site before this. Only the
+    *connect* is retried, not individual per-target navigation failures —
+    those are already caught and recorded per-route below without raising,
+    so a bad target never triggers a reconnect.
+    """
+    if thread_id:
+        from deerflow.sandbox.browser_retry import retry_browser_call
+
+        return retry_browser_call(
+            thread_id,
+            _run_targets_via_cdp_once,
+            cdp_url,
+            targets,
+            with_screenshot,
+            render_budget_ms,
+            operation="browser_check_cdp",
+        )
+    return _run_targets_via_cdp_once(cdp_url, targets, with_screenshot, render_budget_ms)
+
+
+def _run_targets_via_cdp_once(cdp_url: str, targets: list[tuple[str, str, str]], with_screenshot: bool, render_budget_ms: int) -> list[RouteResult]:
+    """Single (unretried) attempt — see ``_run_targets_via_cdp`` for the retry wrapper."""
     from playwright.sync_api import sync_playwright
 
+    from deerflow.sandbox.browser_errors import classify_playwright_exception
+
     out: list[RouteResult] = []
-    with sync_playwright() as pw:
-        browser = pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
-        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-        for name, kind, value in targets:
-            rr = RouteResult(route=name, ok=True, status="ok")
-            errors: list[str] = []
-            page = ctx.new_page()
-            page.on("console", lambda m: errors.append(f"{m.type}: {m.text}"[:300]) if m.type == "error" else None)
-            try:
-                if kind == "url":
-                    page.goto(value, wait_until="load", timeout=20000)
-                else:
-                    page.set_content(value, wait_until="load", timeout=20000)
-                # Adaptive render wait (v7+): try ``networkidle`` first (fast
-                # path for cached/static pages), fall back to a budget-bounded
-                # sleep so the caller never waits more than ``render_budget_ms``
-                # total — even if networkidle never settles (long-polling,
-                # websockets, infinite animations).
-                _adaptive_wait(page, render_budget_ms)
-
-                # Capture the screenshot first — it's the ground truth for "did it render".
-                shot = b""
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            for name, kind, value in targets:
+                rr = RouteResult(route=name, ok=True, status="ok")
+                errors: list[str] = []
+                page = ctx.new_page()
+                page.on("console", lambda m: errors.append(f"{m.type}: {m.text}"[:300]) if m.type == "error" else None)
                 try:
-                    shot = page.screenshot(full_page=False)
-                    rr.screenshot_b64 = base64.b64encode(shot).decode("ascii")
-                except Exception:
-                    pass
+                    if kind == "url":
+                        page.goto(value, wait_until="load", timeout=20000)
+                    else:
+                        page.set_content(value, wait_until="load", timeout=20000)
+                    # Adaptive render wait (v7+): try ``networkidle`` first (fast
+                    # path for cached/static pages), fall back to a budget-bounded
+                    # sleep so the caller never waits more than ``render_budget_ms``
+                    # total — even if networkidle never settles (long-polling,
+                    # websockets, infinite animations).
+                    _adaptive_wait(page, render_budget_ms)
 
-                # Explicit error fingerprints (real failures, not heuristics).
-                marker = _scan_html_errors(page.content())
-                if marker:
-                    rr.ok, rr.status, rr.notes = False, "render_error", marker
-
-                # Blank detection by PIXELS, not innerText — a canvas/visual app has
-                # empty innerText but a non-trivial screenshot, so it's NOT blank.
-                if rr.ok:
+                    # Capture the screenshot first — it's the ground truth for "did it render".
+                    shot = b""
                     try:
-                        body_text = page.inner_text("body").strip()
+                        shot = page.screenshot(full_page=False)
+                        rr.screenshot_b64 = base64.b64encode(shot).decode("ascii")
                     except Exception:
-                        body_text = ""
-                    if not body_text and (not shot or len(shot) < _BLANK_SCREENSHOT_MAX_BYTES):
-                        rr.ok, rr.status, rr.notes = False, "blank", "page rendered blank (no text, no pixels)"
+                        pass
 
-                rr.console_errors = errors
-                if errors and rr.ok:
-                    rr.ok, rr.status = False, "console_errors"
-            except Exception as e:
-                rr.ok, rr.status, rr.notes = False, "unreachable", str(e)[:160]
-            finally:
-                with contextlib.suppress(Exception):
-                    page.close()
-            out.append(rr)
+                    # Explicit error fingerprints (real failures, not heuristics).
+                    marker = _scan_html_errors(page.content())
+                    if marker:
+                        rr.ok, rr.status, rr.notes = False, "render_error", marker
+
+                    # Blank detection by PIXELS, not innerText — a canvas/visual app has
+                    # empty innerText but a non-trivial screenshot, so it's NOT blank.
+                    if rr.ok:
+                        try:
+                            body_text = page.inner_text("body").strip()
+                        except Exception:
+                            body_text = ""
+                        if not body_text and (not shot or len(shot) < _BLANK_SCREENSHOT_MAX_BYTES):
+                            rr.ok, rr.status, rr.notes = False, "blank", "page rendered blank (no text, no pixels)"
+
+                    rr.console_errors = errors
+                    if errors and rr.ok:
+                        rr.ok, rr.status = False, "console_errors"
+                except Exception as e:
+                    rr.ok, rr.status, rr.notes = False, "unreachable", str(e)[:160]
+                finally:
+                    with contextlib.suppress(Exception):
+                        page.close()
+                out.append(rr)
+    except Exception as e:
+        # Only reached for a genuine connect-level failure (per-target
+        # errors above are caught and recorded on the RouteResult, never
+        # raised) — classify it so retry_browser_call can tell transient
+        # CDP hiccups apart from a permanent/unknown failure.
+        classified = classify_playwright_exception(e)
+        if classified is e:
+            raise
+        raise classified from e
     return out
 
 

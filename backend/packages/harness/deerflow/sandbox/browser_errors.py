@@ -127,3 +127,44 @@ def is_transient(exc: BaseException) -> bool:
 def is_permanent(exc: BaseException) -> bool:
     """True if ``exc`` is a browser error that should fail fast."""
     return isinstance(exc, PERMANENT_EXCEPTIONS)
+
+
+def classify_playwright_exception(exc: Exception) -> Exception:
+    """Translate a raw Playwright/network exception into this module's
+    typed hierarchy when it's clearly transient, so ``retry_browser_call``
+    (browser_retry.py) knows it's safe to retry.
+
+    Shared by every real CDP call site (workspace_tools.py's
+    ``_cdp_browser_op``, browser_check.py's ``_run_targets_via_cdp``) —
+    both open a raw Playwright connection over CDP and need the exact same
+    translation, so this lives here once rather than duplicated per call
+    site.
+
+    Returns ``exc`` unchanged for anything it doesn't recognize —
+    ``retry_browser_call`` already fails fast on any non-``BrowserError``,
+    which is the correct, safe default for exceptions this function can't
+    confidently classify (guessing "permanent" would risk masking a real
+    transient failure as unretryable; leaving it unclassified just means
+    "don't retry," never "retry something that shouldn't be").
+    """
+    if isinstance(exc, BrowserError):
+        return exc
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    except ImportError:
+        return exc
+
+    if isinstance(exc, PlaywrightTimeoutError):
+        return BrowserTimeoutError(str(exc))
+    if isinstance(exc, (ConnectionError, OSError)):
+        return BrowserConnectionError(str(exc))
+    if isinstance(exc, PlaywrightError):
+        msg = str(exc).lower()
+        # Playwright raises the same base Error for both connection-layer
+        # failures and page-level errors (bad selector, eval exception) —
+        # sniff the message for the connection-specific signatures rather
+        # than treating every PlaywrightError as retryable.
+        if any(s in msg for s in ("websocket", "econnrefused", "connection", "closed", "disconnected", "target closed", "net::")):
+            return BrowserConnectionError(str(exc))
+    return exc

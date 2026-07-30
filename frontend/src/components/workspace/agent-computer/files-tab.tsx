@@ -272,6 +272,7 @@ export function FilesPanel({
   onSelectArtifact,
   threadId,
   runningEvents,
+  active = true,
 }: {
   files: SandboxFile[];
   artifacts: string[];
@@ -279,6 +280,7 @@ export function FilesPanel({
   onSelectArtifact: (path: string) => void;
   threadId: string;
   runningEvents: AgentActivityEvent[];
+  active?: boolean;
 }) {
   const { t } = useI18n();
   const tree = useMemo(() => buildFileTree(files), [files]);
@@ -286,7 +288,15 @@ export function FilesPanel({
     TERMINAL_TOOLS.has(e.type),
   ).length;
   // Workspace intelligence: renders nothing while the backend flag is off.
-  const workspaceState = useWorkspaceSnapshot(threadId);
+  // `active` gates the query the same way every other tab does (see
+  // agent-computer-panel.tsx's comment on the pattern) — this tab was the
+  // one missed, and since all tabs stay mounted (only `hidden` via CSS)
+  // while Activity's own useWorkspaceSnapshot call shares this exact query
+  // key, an always-enabled observer here kept refetching the snapshot in
+  // the background regardless of which tab the user was actually looking
+  // at (workspace scans/audit events firing while on Terminal/Browser/
+  // Privacy/etc.).
+  const workspaceState = useWorkspaceSnapshot(threadId, active);
   const workspaceAvailable =
     workspaceState.availability === "available" &&
     workspaceState.snapshot !== null;

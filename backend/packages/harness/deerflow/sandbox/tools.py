@@ -55,15 +55,30 @@ _DEFAULT_GREP_MAX_RESULTS = 100
 _MAX_GREP_MAX_RESULTS = 500
 _DEFAULT_WRITE_FILE_ERROR_MAX_CHARS = 2000
 
-# Maximum bytes accepted in a single non-append write_file call (issue #3189).
-# Oversized single-shot writes correlate with LLM streaming chunk-gap timeouts
-# because the tool-call JSON payload (which the model must emit as one
-# continuous stream) grows past the safe window. 80 KB ≈ 20K tokens, a
-# comfortable headroom under the factory-default 240s stream_chunk_timeout.
-# Deployments can override via env var DEERFLOW_WRITE_FILE_MAX_BYTES; set to
-# 0 (or negative) to disable the guard entirely.
-_WRITE_FILE_CONTENT_MAX_BYTES = 80 * 1024
+# Maximum bytes accepted in a single non-append write_file call before the
+# tool starts auto-chunking (issue #3189). Oversized single-shot writes
+# correlate with LLM streaming chunk-gap timeouts because the tool-call JSON
+# payload (which the model must emit as one continuous stream) grows past the
+# safe window. 200 KB ≈ 50K tokens, still comfortable headroom under the
+# factory-default 240s stream_chunk_timeout. Deployments can override via env
+# var DEERFLOW_WRITE_FILE_MAX_BYTES; set to 0 (or negative) to disable this
+# threshold entirely (auto-chunking then only kicks in at the hard ceiling
+# below).
+_WRITE_FILE_CONTENT_MAX_BYTES = 200 * 1024
 _WRITE_FILE_MAX_BYTES_ENV = "DEERFLOW_WRITE_FILE_MAX_BYTES"
+
+# Above this, even auto-chunking is refused — a call this large is almost
+# certainly a runaway/looping generation rather than a legitimate document,
+# and silently accepting it would just move the failure mode from "clear
+# error" to "very slow write of garbage." Deployments can override via env
+# var DEERFLOW_WRITE_FILE_HARD_MAX_BYTES.
+_WRITE_FILE_HARD_MAX_BYTES = 2 * 1024 * 1024
+_WRITE_FILE_HARD_MAX_BYTES_ENV = "DEERFLOW_WRITE_FILE_HARD_MAX_BYTES"
+
+# Chunk size used when a write auto-chunks — comfortably under the soft
+# threshold above so each individual internal write stays cheap regardless
+# of which threshold triggered the chunking.
+_WRITE_FILE_CHUNK_BYTES = 150 * 1024
 _LOCAL_BASH_CWD_COMMANDS = {"cd", "pushd"}
 _LOCAL_BASH_COMMAND_WRAPPERS = {"command", "builtin"}
 _LOCAL_BASH_COMMAND_PREFIX_KEYWORDS = {"!", "{", "case", "do", "elif", "else", "for", "if", "select", "then", "time", "until", "while"}
@@ -1974,6 +1989,48 @@ def _effective_write_file_max_bytes() -> int:
         return _WRITE_FILE_CONTENT_MAX_BYTES
 
 
+def _effective_write_file_hard_max_bytes() -> int:
+    """Return the hard ceiling above which even auto-chunking is refused."""
+    raw = os.environ.get(_WRITE_FILE_HARD_MAX_BYTES_ENV)
+    if raw is None:
+        return _WRITE_FILE_HARD_MAX_BYTES
+    try:
+        return int(raw)
+    except ValueError:
+        return _WRITE_FILE_HARD_MAX_BYTES
+
+
+def _split_utf8_safe(content: str, max_chunk_bytes: int) -> list[str]:
+    """Split ``content`` into chunks of at most ``max_chunk_bytes`` UTF-8
+    bytes each, without ever cutting a multi-byte character in half.
+
+    Continuation bytes in UTF-8 always match ``0b10xxxxxx`` (0x80-0xBF) —
+    backing off a proposed cut point while it lands on one guarantees the
+    cut only ever falls on a real character boundary.
+    """
+    data = content.encode("utf-8")
+    total = len(data)
+    if total <= max_chunk_bytes:
+        return [content]
+    chunks: list[str] = []
+    start = 0
+    while start < total:
+        end = min(start + max_chunk_bytes, total)
+        if end < total:
+            boundary = end
+            while boundary > start and (data[boundary] & 0xC0) == 0x80:
+                boundary -= 1
+            # Only back off if it actually found a real boundary — a
+            # pathological single character wider than max_chunk_bytes
+            # falls back to the original (still-valid, just larger) cut
+            # rather than looping forever or emitting an empty chunk.
+            if boundary > start:
+                end = boundary
+        chunks.append(data[start:end].decode("utf-8"))
+        start = end
+    return chunks
+
+
 @tool("write_file", parse_docstring=True)
 def write_file_tool(
     runtime: Runtime,
@@ -1985,24 +2042,29 @@ def write_file_tool(
     """Write text content to a file. By default this overwrites the target file; set append=True to add content to the end without replacing existing content.
 
     SIZE POLICY (issue #3189):
-    A single non-append write_file call must not exceed 80 KB of UTF-8 content.
     Oversized single-shot writes correlate with LLM streaming chunk-gap
     timeouts because the tool-call JSON payload — which the model must emit as
-    one continuous stream — grows past the safe window. For larger documents,
-    use ONE of these strategies (write_file rejects oversized payloads with an
-    actionable error):
+    one continuous stream — grows past the safe window. A single non-append
+    call over 200 KB of UTF-8 content is written via automatic internal
+    chunking instead of failing outright — the full content still lands in
+    one file in one tool call, just as a sequence of safe-sized writes under
+    the hood. Only content over 2 MB (almost certainly a runaway generation,
+    not a legitimate document) is still rejected outright.
+
+    For very large or evolving documents, these patterns are still preferred
+    over relying on auto-chunking:
 
       1. INCREMENTAL EDIT (preferred for revisions): after the initial write,
          use `str_replace` to surgically update sections. This is the same
          pattern Claude Code's Write+Edit and OpenAI Codex's apply_patch use,
          and keeps each tool call's payload small.
       2. APPEND-IN-CHUNKS (for new long-form content): split the document into
-         sections, each well under 80 KB. First call uses append=False to
-         create the file; subsequent calls use append=True. The 80 KB cap does
-         NOT apply to append=True calls.
+         sections yourself. First call uses append=False to create the file;
+         subsequent calls use append=True.
 
-    Operators can override the cap via env var `DEERFLOW_WRITE_FILE_MAX_BYTES`
-    (0 disables the guard entirely). Raising it risks streaming timeouts.
+    Operators can override the thresholds via env vars
+    `DEERFLOW_WRITE_FILE_MAX_BYTES` (auto-chunk threshold, 0 disables) and
+    `DEERFLOW_WRITE_FILE_HARD_MAX_BYTES` (hard rejection ceiling).
 
     Args:
         description: Explain why you are writing to this file in short words. ALWAYS PROVIDE THIS PARAMETER FIRST.
@@ -2011,17 +2073,18 @@ def write_file_tool(
         append: Whether to append content to the end of the file instead of overwriting it. Defaults to False.
     """
     if not append:
-        max_bytes = _effective_write_file_max_bytes()
-        if max_bytes > 0:
+        hard_max = _effective_write_file_hard_max_bytes()
+        if hard_max > 0:
             content_bytes = len(content.encode("utf-8"))
-            if content_bytes > max_bytes:
+            if content_bytes > hard_max:
                 return (
                     f"Error: write_file content ({content_bytes} bytes) exceeds the "
-                    f"{max_bytes}-byte single-call limit. Split the content into smaller "
-                    "pieces: either (a) write the first section now, then use `str_replace` "
-                    "for further edits, or (b) call write_file again with append=True "
-                    "carrying the next section. See SIZE POLICY in the tool docstring "
-                    "or issue #3189 for the rationale."
+                    f"{hard_max}-byte hard limit, even for auto-chunked writes. This is "
+                    "almost certainly unintentional — split the content into smaller, "
+                    "purposeful pieces: either (a) write the first section now, then use "
+                    "`str_replace` for further edits, or (b) call write_file again with "
+                    "append=True carrying the next section. See SIZE POLICY in the tool "
+                    "docstring or issue #3189 for the rationale."
                 )
     try:
         requested_path = path
@@ -2033,11 +2096,22 @@ def write_file_tool(
             if not _is_custom_mount_path(path):
                 path = _resolve_and_validate_user_data_path(path, thread_data)
             # Custom mount paths are resolved by LocalSandbox._resolve_path()
+        content_bytes = len(content.encode("utf-8"))
+        max_bytes = _effective_write_file_max_bytes()
+        num_chunks = 1
         with get_file_operation_lock(sandbox, path):
-            sandbox.write_file(path, content, append)
+            if not append and max_bytes > 0 and content_bytes > max_bytes:
+                pieces = _split_utf8_safe(content, _WRITE_FILE_CHUNK_BYTES)
+                num_chunks = len(pieces)
+                for i, piece in enumerate(pieces):
+                    sandbox.write_file(path, piece, i > 0)
+            else:
+                sandbox.write_file(path, content, append)
         sandbox_id = (runtime.state.get("sandbox") or {}).get("sandbox_id", "") if hasattr(runtime, "state") else ""
         verb = "Appended" if append else "Wrote"
-        _write_sandbox_observation(sandbox_id, "write_file", requested_path, f"{verb} {len(content.encode('utf-8'))} bytes")
+        _write_sandbox_observation(sandbox_id, "write_file", requested_path, f"{verb} {content_bytes} bytes")
+        if num_chunks > 1:
+            return f"OK (auto-chunked into {num_chunks} internal writes, {content_bytes} bytes total)"
         return "OK"
     except SandboxError as e:
         return _format_write_file_error(requested_path, e, runtime)

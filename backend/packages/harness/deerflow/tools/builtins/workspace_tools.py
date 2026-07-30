@@ -449,7 +449,7 @@ def _localhost_navigate_hint(url: str, page_text: str | None) -> str | None:
     )
 
 
-def _cdp_browser_op(client, op):
+def _cdp_browser_op(client, op, *, thread_id: str | None = None):
     """Run a page operation over CDP against the sandbox's live chromium.
 
     Fallback for AIO images that predate the SDK's ``/v1/browser_page/*`` REST
@@ -461,6 +461,14 @@ def _cdp_browser_op(client, op):
 
     ``op`` receives a Playwright ``Page`` (the currently visible tab when one
     exists, else a fresh one) and returns a string.
+
+    ``thread_id`` scopes this call through the per-thread circuit breaker +
+    bounded retry (browser_circuit_breaker.py / browser_retry.py) — both
+    modules existed already, fully built and tested, but were never wired
+    into a real call site, so every CDP hiccup (chromium restart, websocket
+    reset) surfaced as an immediate, unretried failure. Falls back to the
+    unguarded path when no thread scope is available, rather than sharing
+    breaker/retry state across unrelated calls.
     """
     from deerflow.sandbox.browser_check import _cdp_url_for_gateway
 
@@ -470,14 +478,30 @@ def _cdp_browser_op(client, op):
 
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
+    def _connect_and_run():
         try:
-            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            return op(page)
-        finally:
-            browser.close()
+            with sync_playwright() as pw:
+                browser = pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
+                try:
+                    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+                    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                    return op(page)
+                finally:
+                    browser.close()
+        except Exception as e:
+            from deerflow.sandbox.browser_errors import classify_playwright_exception
+
+            classified = classify_playwright_exception(e)
+            if classified is e:
+                raise
+            raise classified from e
+
+    if not thread_id:
+        return _connect_and_run()
+
+    from deerflow.sandbox.browser_retry import retry_browser_call
+
+    return retry_browser_call(thread_id, _connect_and_run, operation="cdp_browser_op")
 
 
 def _sdk_page_api_missing(exc: Exception) -> bool:
@@ -654,7 +678,7 @@ def browser_navigate_tool(
                 page.goto(url, wait_until="load", timeout=20000)
                 return page.inner_text("body", timeout=5000)
 
-            text = _cdp_browser_op(client, _nav)[:1500]
+            text = _cdp_browser_op(client, _nav, thread_id=_tid)[:1500]
         _write_sandbox_observation(_get_sandbox_id(runtime), "browser", url, f"navigated to {url[:80]}")
         result = f"Opened {url}\n\n{text}"
         hint = _localhost_navigate_hint(url, text)
@@ -686,7 +710,7 @@ def browser_click_tool(runtime: Runtime, description: str, selector: str) -> str
         except Exception as sdk_exc:
             if not _sdk_page_api_missing(sdk_exc):
                 raise
-            _cdp_browser_op(client, lambda page: page.click(selector, timeout=10000) or "")
+            _cdp_browser_op(client, lambda page: page.click(selector, timeout=10000) or "", thread_id=_tid)
         return f"Clicked {selector}."
     except Exception as e:
         return f"Error: {e}"
@@ -720,7 +744,7 @@ def browser_input_tool(runtime: Runtime, description: str, selector: str, text: 
                     page.keyboard.press("Enter")
                 return ""
 
-            _cdp_browser_op(client, _fill)
+            _cdp_browser_op(client, _fill, thread_id=_tid)
         return f"Typed into {selector}."
     except Exception as e:
         return f"Error: {e}"
@@ -743,7 +767,7 @@ def browser_eval_tool(runtime: Runtime, description: str, script: str) -> str:
         except Exception as sdk_exc:
             if not _sdk_page_api_missing(sdk_exc):
                 raise
-            result = _cdp_browser_op(client, lambda page: str(page.evaluate(script)))
+            result = _cdp_browser_op(client, lambda page: str(page.evaluate(script)), thread_id=_tid)
             return result[:2000] or "(no result)"
     except Exception as e:
         return f"Error: {e}"
