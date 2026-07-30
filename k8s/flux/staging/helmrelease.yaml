@@ -3,6 +3,17 @@
 # values-staging.yaml's content below (or to any chart template), Flux
 # applies it within one interval, no manual `helm upgrade` needed.
 #
+# sourceRef points at the flux-system GitRepository (bootstrap's own
+# self-referencing source for this same repo) rather than a separate
+# GitRepository object. A second GitRepository pointing at the identical
+# url+ref+secretRef was tried first and caught live going genuinely
+# wrong: it consistently hung for the full clone timeout (180s) while
+# flux-system's own source, with byte-identical config, kept cloning
+# successfully in seconds every single cycle — apparently a lock/cache
+# contention within source-controller for two sources against the exact
+# same URL+credentials, not a timeout-tuning problem. There's no reason
+# to have two sources for one repo anyway.
+#
 # Secrets (nova-secrets) are deliberately NOT managed here — bootstrap-secrets.sh
 # keeps creating them directly via kubectl, exactly as before. This
 # HelmRelease references the Secret by name only (via the chart's own
@@ -22,7 +33,7 @@ spec:
       chart: k8s/charts/nova
       sourceRef:
         kind: GitRepository
-        name: nova
+        name: flux-system
         namespace: flux-system
   # Mirrors k8s/charts/nova/values-staging.yaml exactly — if that file
   # changes, update this block to match (see k8s/README.md's GitOps section
