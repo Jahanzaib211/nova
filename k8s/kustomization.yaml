@@ -1,0 +1,39 @@
+# This file lives at k8s/ (not k8s/flux/staging/, where the rest of the
+# Flux install lives) specifically so it can reach
+# charts/nova/values-staging.yaml directly — Kustomize's load-restrictor
+# (also enforced by Flux's kustomize-controller, not just a local
+# `kubectl kustomize` build) blocks reading any file outside the
+# Kustomization's own root directory, by declared path, even via a
+# symlink that resolves back into bounds. flux-system/gotk-sync.yaml's
+# Kustomization CR points spec.path at ./k8s (not ./k8s/flux/staging)
+# to match. Kustomize only touches files explicitly listed below — the
+# rest of k8s/ (the Helm chart's Go-template files, docs, scripts) is
+# never read or interpreted just because it's technically in-tree now.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - flux/staging/helmrelease.yaml
+# Generates the ConfigMap the HelmRelease's valuesFrom reads, straight
+# from the real values-staging.yaml file — the same file `helm upgrade`
+# is run with manually. This exists because a hand-copied values: block
+# inlined into helmrelease.yaml drifted out of sync with real chart
+# changes (Phase 5's maxReplicas, Phase 7's deerflowDataHostPath/backup
+# fields) and, when Flux finally reconciled successfully, applied that
+# stale config to the live nova-staging deployment — deleting the
+# PersistentVolume and CronJob (both got empty/invalid hostPath.path)
+# and taking down a working staging environment. See
+# k8s/ARCHITECTURE.md §9 for the full incident writeup. Generating the
+# ConfigMap from the file directly makes that entire class of drift
+# structurally impossible — there's only ever one copy of these values.
+configMapGenerator:
+  - name: nova-values-staging
+    namespace: flux-system
+    files:
+      - values-staging.yaml=charts/nova/values-staging.yaml
+generatorOptions:
+  # A stable name (not a content-hash suffix) so helmrelease.yaml's
+  # valuesFrom.name can reference it directly — Kustomize's automatic
+  # hash-suffix reference-fixup doesn't know about Flux's
+  # HelmRelease.spec.valuesFrom field, so a hashed name would silently
+  # break that reference instead of being patched to match.
+  disableNameSuffixHash: true

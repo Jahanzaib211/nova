@@ -35,7 +35,10 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m0s
-  path: ./k8s/flux/staging
+  # ./k8s, not ./k8s/flux/staging — needs to reach
+  # charts/nova/values-staging.yaml too. See k8s/kustomization.yaml's
+  # comment for why.
+  path: ./k8s
   prune: true
   sourceRef:
     kind: GitRepository

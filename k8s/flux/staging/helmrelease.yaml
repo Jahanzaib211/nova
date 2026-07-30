@@ -38,22 +38,14 @@ spec:
         kind: GitRepository
         name: flux-system
         namespace: flux-system
-  # Mirrors k8s/charts/nova/values-staging.yaml exactly — if that file
-  # changes, update this block to match (see k8s/README.md's GitOps section
-  # for why the values live here rather than a separate `-f` flag: Flux's
-  # HelmRelease has no equivalent of `helm upgrade -f`, values must be
-  # inline or referenced via valuesFrom).
-  values:
-    namespace: nova-staging
-    nodePort: 30026
-    images:
-      gateway: nova-gateway:staging
-      frontend: nova-frontend:staging
-      nginx: nginx:alpine
-      provisioner: nova-provisioner:staging
-      sandbox: nova-sandbox-android:latest
-      redis: redis:7-alpine
-    skillsHostPath: /home/jahanzaib/Desktop/nova/skills/custom
+  # Generated directly from k8s/charts/nova/values-staging.yaml by
+  # kustomization.yaml's configMapGenerator — not a hand-copied block.
+  # See that file's comment for why: a hand-copied version of this
+  # drifted out of sync and caused a real incident.
+  valuesFrom:
+    - kind: ConfigMap
+      name: nova-values-staging
+      valuesKey: values-staging.yaml
   # A bad chart push shouldn't wedge the release — remediate automatically
   # rather than leaving nova-staging in a half-upgraded state.
   install:
