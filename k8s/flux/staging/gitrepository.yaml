@@ -17,6 +17,14 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
+  # Caught live: the 60s default clone timeout is marginal on this box —
+  # real, ongoing CPU contention from other processes (load average
+  # regularly 2.5+) makes an SSH clone (ECDSA key exchange is CPU-bound)
+  # intermittently exceed 60s even though the connection itself is fine
+  # (confirmed: raw TCP to github.com:22 always connects instantly).
+  # 180s gives real headroom without masking an actual outage — a clone
+  # that takes 3 real minutes is worth investigating on its own.
+  timeout: 180s
   url: ssh://git@github.com/Jahanzaib211/nova
   secretRef:
     name: flux-system
