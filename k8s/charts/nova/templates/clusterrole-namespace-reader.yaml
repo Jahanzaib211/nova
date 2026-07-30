@@ -8,10 +8,15 @@
 # ServiceAccount ends up able to read exactly one Namespace, never any
 # other. Skipping this crash-loops the provisioner on first boot (a plain
 # 403, not caught as the code's existing 404-creates-it branch).
+#
+# ClusterRoles are cluster-scoped — namespaced so a second release of this
+# chart into a different namespace (e.g. a Phase 7 DR-drill install)
+# doesn't collide with this one under Helm's per-release ownership
+# tracking. Caught live running exactly that drill.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: nova-staging-namespace-reader
+  name: {{ .Values.namespace }}-namespace-reader
   labels:
     {{- include "nova.labels" . | nindent 4 }}
 rules:

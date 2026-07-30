@@ -1,0 +1,105 @@
+# Hourly SQLite (WAL-safe, via sqlite3's own online .backup() API) +
+# extensions_config.json backup — see files/backup.py for the actual logic
+# and its honest same-node limitation. RPO is bounded by this interval:
+# ~1 hour. RTO is measured, not guessed — see k8s/README.md's DR section
+# for the real dry-run restore this was verified against.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nova-backup
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "nova.labels" . | nindent 12 }}
+            {{- include "nova.selectorLabels" (dict "component" "backup") | nindent 12 }}
+        spec:
+          enableServiceLinks: false
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          initContainers:
+            # Same gotcha as deployment-gateway.yaml's fix-deerflow-data-perms:
+            # fsGroup does not cover hostPath volumes, and a fresh
+            # DirectoryOrCreate hostPath is created root:root by the kubelet.
+            - name: fix-backup-dir-perms
+              image: {{ .Values.images.gateway }}
+              imagePullPolicy: {{ .Values.imagePullPolicy }}
+              command: ["sh", "-c", "mkdir -p /backup && chown -R 10001:10001 /backup"]
+              securityContext:
+                runAsUser: 0
+                runAsNonRoot: false
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                  add: ["CHOWN", "FOWNER"]
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { cpu: 100m, memory: 32Mi }
+              volumeMounts:
+                - name: backup-dest
+                  mountPath: /backup
+          containers:
+            - name: backup
+              image: {{ .Values.images.gateway }}
+              imagePullPolicy: {{ .Values.imagePullPolicy }}
+              command: ["python3", "/scripts/backup.py"]
+              env:
+                - name: HOME
+                  value: "/tmp"
+                - name: BACKUP_RETENTION_COUNT
+                  value: {{ .Values.backup.retentionCount | quote }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: backup-script
+                  mountPath: /scripts
+                  readOnly: true
+                - name: deerflow-data
+                  mountPath: /data
+                  readOnly: true
+                - name: extensions-config
+                  mountPath: /extensions-config
+                  readOnly: true
+                - name: backup-dest
+                  mountPath: /backup
+                - name: tmp
+                  mountPath: /tmp
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 500m, memory: 256Mi }
+          volumes:
+            - name: backup-script
+              configMap:
+                name: nova-backup-script
+            - name: deerflow-data
+              persistentVolumeClaim:
+                claimName: nova-deerflow-data
+            - name: extensions-config
+              persistentVolumeClaim:
+                claimName: nova-extensions-config
+            - name: backup-dest
+              hostPath:
+                path: {{ .Values.backup.hostPath }}
+                type: DirectoryOrCreate
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

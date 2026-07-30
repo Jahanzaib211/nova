@@ -5,7 +5,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: nova-provisioner-metrics-reader
+  name: {{ .Values.namespace }}-provisioner-metrics-reader
   labels:
     {{- include "nova.labels" . | nindent 4 }}
 subjects:
@@ -14,5 +14,5 @@ subjects:
     namespace: {{ .Values.namespace }}
 roleRef:
   kind: ClusterRole
-  name: nova-provisioner-metrics-reader
+  name: {{ .Values.namespace }}-provisioner-metrics-reader
   apiGroup: rbac.authorization.k8s.io

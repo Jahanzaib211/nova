@@ -6,10 +6,15 @@
 # namespace. This is the one deliberately broader-than-namespace grant in
 # this chart; it is read-only (get/list only) and limited to exactly two
 # resource types under metrics.k8s.io.
+#
+# Namespaced (like clusterrole-namespace-reader.yaml) so a second release
+# of this chart doesn't collide with this one under Helm's per-release
+# ownership tracking, even though the grant itself is inherently
+# cluster-wide either way.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: nova-provisioner-metrics-reader
+  name: {{ .Values.namespace }}-provisioner-metrics-reader
   labels:
     {{- include "nova.labels" . | nindent 4 }}
 rules:

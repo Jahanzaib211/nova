@@ -1,7 +1,10 @@
 # Backs backend/.deer-flow (SQLite DB + WAL, per-user memory.json, per-user
-# thread workspaces/uploads/outputs). ReadWriteOnce is correct: gateway is
-# hard-capped at replicas:1 (in-process stream_bridge), so nothing else ever
-# needs to mount this concurrently from the gateway side.
+# thread workspaces/uploads/outputs). ReadWriteOnce is correct here because
+# it's node-scoped, not pod-scoped: gateway (now 2 replicas, Phase 2),
+# channels, and this file's own backup CronJob (Phase 7) all mount it
+# concurrently today, which works precisely because every pod in this
+# single-node cluster lands on the same node RWO is scoped to. A real
+# second node would need this to become ReadWriteMany instead.
 #
 # Uses a STATIC PV with an explicit hostPath rather than the dynamic
 # `local-path` StorageClass: the provisioner creates sandbox Pods that need
@@ -13,7 +16,13 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: nova-deerflow-data-pv
+  # PVs are cluster-scoped and PVC.spec.volumeName is immutable once bound
+  # — deerflowDataPVName defaults to the original literal name so the
+  # live release's existing binding never changes on upgrade. A second
+  # release into a different namespace (e.g. a Phase 7 DR-drill install)
+  # overrides both this and deerflowDataHostPath to avoid colliding with
+  # the live PV or reusing its data.
+  name: {{ .Values.deerflowDataPVName }}
   labels:
     {{- include "nova.labels" . | nindent 4 }}
 spec:
@@ -24,7 +33,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: nova-deerflow-data-manual
   hostPath:
-    path: /var/lib/nova-staging/deerflow-data
+    path: {{ .Values.deerflowDataHostPath }}
     type: DirectoryOrCreate
 ---
 apiVersion: v1
@@ -38,7 +47,7 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: nova-deerflow-data-manual
-  volumeName: nova-deerflow-data-pv
+  volumeName: {{ .Values.deerflowDataPVName }}
   resources:
     requests:
       storage: 5Gi

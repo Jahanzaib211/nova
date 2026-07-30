@@ -17,3 +17,8 @@ images:
 # live Compose deployment already reads/writes. Single-node only; a real
 # multi-node cluster would need this on a shared/networked volume instead.
 skillsHostPath: /home/jahanzaib/Desktop/nova/skills/custom
+
+deerflowDataHostPath: /var/lib/nova-staging/deerflow-data
+
+backup:
+  hostPath: /var/lib/nova-staging/backups

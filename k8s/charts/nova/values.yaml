@@ -18,6 +18,24 @@ nodePort: 30026
 
 skillsHostPath: ""   # set in values-staging.yaml to the repo's skills/custom absolute path
 
+# Defaults preserve the exact name/path the live nova-staging release has
+# always used (PVC.spec.volumeName is immutable — changing the default
+# here would break that release's upgrade). Override both together for a
+# second release into a different namespace (e.g. a DR-drill install) —
+# see pvc-deerflow-data.yaml's comment.
+deerflowDataPVName: nova-deerflow-data-pv
+deerflowDataHostPath: ""   # set in values-staging.yaml
+
+backup:
+  # Same-node hostPath — see cronjob-backup.yaml's comment and
+  # k8s/ARCHITECTURE.md's DR section for the honest limitation this
+  # implies (a whole-node loss takes the backups with it; this protects
+  # against bad deploys / data corruption / operator error, not that).
+  # Set in values-staging.yaml to a real absolute path outside the k3s
+  # data dir.
+  hostPath: ""
+  retentionCount: 72   # hourly backups × 3 days
+
 resources:
   nginx:
     requests: { cpu: 25m, memory: 32Mi }
