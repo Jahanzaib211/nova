@@ -1,0 +1,33 @@
+# Pod Security Standards, applied honestly rather than aspirationally.
+#
+# `enforce` is namespace-wide and all-or-nothing — there is no built-in way
+# to enforce a stricter level for some pods in a namespace and a looser one
+# for others. gateway and channels (deployment-gateway.yaml,
+# deployment-channels.yaml) mount a real `hostPath` volume for
+# `skillsHostPath` — a deliberate single-node design choice (see
+# k8s/ARCHITECTURE.md's Phase 5 scoping notes) — and "HostPath Volumes must
+# be forbidden" is a control in BOTH the `baseline` and `restricted`
+# policies, not just `restricted`. Setting `enforce` any higher than
+# `privileged` here would reject every gateway/channels pod outright on
+# the next rollout — confirmed against the upstream Pod Security Standards
+# spec, not assumed.
+#
+# `warn` + `audit` at `restricted` cost nothing (no blocking) and give real
+# visibility: `kubectl apply`/`helm upgrade` prints a warning listing every
+# control each pod violates, and the API server audit log records it. This
+# is the standard incremental-adoption pattern for PSS, applied honestly
+# instead of a label that would either lie (if set to "restricted" while
+# something else silently exempts the violating pods) or break the cluster
+# (if actually enforced against workloads that need hostPath). frontend and
+# redis (no hostPath, non-root, capabilities dropped, readOnlyRootFilesystem)
+# already pass `restricted` outright — the warn/audit output makes that
+# provable, not just claimed.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
