@@ -34,11 +34,13 @@ export function ReviewPanel({
   review,
   isFetching,
   onRegenerate,
+  active = true,
 }: {
   threadId: string;
   review: SandboxReview | undefined;
   isFetching: boolean;
   onRegenerate: () => void;
+  active?: boolean;
 }) {
   const { t } = useI18n();
   const risks = review?.risks ?? [];
@@ -46,7 +48,12 @@ export function ReviewPanel({
   const med = risks.filter((r) => r.level === "med").length;
   // Latest WIK plan-built verdict (bus -> SSE bridge); undefined pre-flag
   // or before any plan has been built for this thread.
-  const liveEvents = useWorkspaceEvents(threadId);
+  // `active` gates the SSE connection. Every tab stays mounted (only `hidden`
+  // via CSS), and EventSource has no idle-close — so an ungated call here held
+  // an open connection to /api/workspace/{id}/events for the whole life of the
+  // thread, on top of Activity's own. Activity already gates its identical
+  // call; this one was missed.
+  const liveEvents = useWorkspaceEvents(threadId, active);
   const latestPlan = useMemo(
     () =>
       [...liveEvents]

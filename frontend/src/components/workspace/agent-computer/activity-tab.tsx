@@ -233,9 +233,16 @@ export function ActivityPanel({
   const liveEvents = useWorkspaceEvents(threadId, active);
   const recentLiveEvents = useMemo(() => liveEvents.slice(-5), [liveEvents]);
 
+  // Follow the feed. Depending on `length` alone stopped working on exactly the
+  // runs where following matters most: the event buffer is capped at 200 and
+  // trims from the front, so past that point every new event drops an old one,
+  // `length` is pinned at the cap, and the effect never fired again — the feed
+  // silently stopped scrolling partway through any long run. Keying on the
+  // newest event as well keeps it firing once the cap is reached.
+  const newestEvent = timeline.at(-1);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [timeline.length]);
+  }, [timeline.length, newestEvent?.id, newestEvent?.status]);
 
   return (
     <div className="flex h-full flex-col">

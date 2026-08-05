@@ -694,6 +694,7 @@ export interface Translations {
       switchToEditorSuffix: string;
       startLivePreview: string;
       fileMissing: (name: string) => string;
+      fileEmpty: (name: string) => string;
     };
     activity: {
       title: (count: number) => string;

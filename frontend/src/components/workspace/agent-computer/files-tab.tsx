@@ -5,6 +5,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   CodeIcon,
+  DownloadIcon,
   FileIcon,
   FileTextIcon,
   FolderIcon,
@@ -17,6 +18,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { Progress } from "@/components/ui/progress";
+import { urlOfArtifact } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
@@ -91,15 +93,40 @@ export function selectTreeFiles(
   return files.filter((f) => !presented.has(f.virtual_path));
 }
 
+/** Mount roots that keep their folder name at the top of the tree. */
+const MOUNT_FOLDERS = ["outputs", "uploads"] as const;
+
+/**
+ * Virtual path -> the path shown in the tree.
+ *
+ * Workspace files are flattened to the top level (that is the repo the user
+ * cares about); outputs/ and uploads/ keep their mount folder so deliverables
+ * stay visible. That flattening puts the workspace's OWN `outputs/` directory
+ * into the same namespace as the `/mnt/user-data/outputs` mount, so
+ * `workspace/outputs/report.md` and `outputs/report.md` both became
+ * `outputs/report.md` — one silently overwrote the other in the tree while the
+ * header count still counted both, so the panel claimed N files and drew N-1,
+ * and which one survived flipped with mtime ordering.
+ *
+ * Only the genuinely ambiguous workspace paths get disambiguated, so the common
+ * case keeps its flat shape.
+ */
+const WORKSPACE_PREFIX = /^\/mnt\/user-data\/workspace\/?(.*)$/;
+
+export function treePathOf(virtualPath: string): string {
+  const workspace = WORKSPACE_PREFIX.exec(virtualPath);
+  if (workspace) {
+    const rel = workspace[1] ?? "";
+    const head = rel.split("/")[0];
+    return MOUNT_FOLDERS.some((f) => f === head) ? `workspace/${rel}` : rel;
+  }
+  return virtualPath.replace(/^\/mnt\/user-data\/?/, "");
+}
+
 function buildFileTree(files: SandboxFile[]): FileTreeNode {
   const root: FileTreeNode = { name: "user-data", children: {} };
   for (const file of files) {
-    // Workspace files stay at the top level; outputs/ and uploads/ keep
-    // their mount folder so agent deliverables are visible in the tree.
-    const rel = file.virtual_path
-      .replace(/^\/mnt\/user-data\/workspace\/?/, "")
-      .replace(/^\/mnt\/user-data\/?/, "");
-    const parts = rel.split("/").filter(Boolean);
+    const parts = treePathOf(file.virtual_path).split("/").filter(Boolean);
     let node = root;
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i]!;
@@ -112,11 +139,15 @@ function buildFileTree(files: SandboxFile[]): FileTreeNode {
 }
 
 // Folders first, then files — both alphabetical — so the tree reads like a real repo.
+// A node can be BOTH a file and a folder (a file `build` next to `build/out.js`),
+// so children are always summed rather than short-circuited on `node.file` —
+// doing that returned 1 and made every descendant uncountable, matching the
+// render bug where the whole subtree disappeared.
 function countFiles(node: FileTreeNode): number {
-  if (node.file) return 1;
+  const own = node.file ? 1 : 0;
   return Object.values(node.children).reduce(
     (sum, child) => sum + countFiles(child),
-    0,
+    own,
   );
 }
 
@@ -193,93 +224,117 @@ function FileTreeNode({
   outlineEnabled?: boolean;
   path?: string;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(true);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const hasChildren = Object.keys(node.children).length > 0;
   const nodePath = path ? `${path}/${node.name}` : node.name;
-  if (!node.file && hasChildren) {
-    return (
-      <div>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="text-muted-foreground hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
-          style={{ paddingLeft: `${depth * 10 + 4}px` }}
-        >
-          {open ? (
-            <FolderOpenIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
-          ) : (
-            <FolderIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
-          )}
-          <span className="font-medium">{node.name}/</span>
-          <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
-            {countFiles(node)}
-          </span>
-        </button>
-        {open &&
-          sortTreeNodes(Object.values(node.children)).map((child) => (
-            <FileTreeNode
-              key={child.name}
-              node={child}
-              depth={depth + 1}
-              onSelect={onSelect}
-              threadId={threadId}
-              outlineEnabled={outlineEnabled}
-              path={nodePath}
-            />
-          ))}
-      </div>
-    );
-  }
-  if (node.file) {
-    const canOutline = Boolean(
-      outlineEnabled &&
-      threadId &&
-      OUTLINE_EXTENSIONS.has(fileExtension(node.name)),
-    );
-    return (
-      <div>
-        <div
-          className="hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
-          style={{ paddingLeft: `${depth * 10 + 4}px` }}
-        >
-          {canOutline && (
-            <button
-              onClick={() => setOutlineOpen((v) => !v)}
-              aria-label={`Toggle symbols for ${node.name}`}
-              aria-expanded={outlineOpen}
-              className="text-muted-foreground/60 hover:text-foreground -ml-0.5 shrink-0"
-            >
-              {outlineOpen ? (
-                <ChevronDownIcon className="h-2.5 w-2.5" />
-              ) : (
-                <ChevronRightIcon className="h-2.5 w-2.5" />
-              )}
-            </button>
-          )}
-          <button
-            onClick={() => onSelect(node.file!)}
-            className="flex min-w-0 flex-1 items-center gap-1"
+  const canOutline = Boolean(
+    node.file &&
+    outlineEnabled &&
+    threadId &&
+    OUTLINE_EXTENSIONS.has(fileExtension(node.name)),
+  );
+
+  if (!node.file && !hasChildren) return null;
+
+  // A node can be a file AND a folder at once — a file `build` sitting next to
+  // `build/out.js`. Previously the folder branch was skipped whenever
+  // `node.file` was set, so the node rendered as a lone file row and every
+  // descendant became unreachable. Render both.
+  return (
+    <div>
+      {node.file && (
+        <>
+          <div
+            className="hover:bg-muted/30 group flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
+            style={{ paddingLeft: `${depth * 10 + 4}px` }}
           >
-            {getFileIcon(node.name)}
-            <span className="text-foreground truncate font-mono">
-              {node.name}
-            </span>
-            <span className="text-muted-foreground/40 ml-auto shrink-0">
-              {formatBytes(node.file.size)}
+            {canOutline && (
+              <button
+                onClick={() => setOutlineOpen((v) => !v)}
+                aria-label={`Toggle symbols for ${node.name}`}
+                aria-expanded={outlineOpen}
+                className="text-muted-foreground/60 hover:text-foreground -ml-0.5 shrink-0"
+              >
+                {outlineOpen ? (
+                  <ChevronDownIcon className="h-2.5 w-2.5" />
+                ) : (
+                  <ChevronRightIcon className="h-2.5 w-2.5" />
+                )}
+              </button>
+            )}
+            <button
+              onClick={() => onSelect(node.file!)}
+              className="flex min-w-0 flex-1 items-center gap-1"
+            >
+              {getFileIcon(node.name)}
+              <span className="text-foreground truncate font-mono">
+                {node.name}
+              </span>
+              <span className="text-muted-foreground/40 ml-auto shrink-0">
+                {formatBytes(node.file.size)}
+              </span>
+            </button>
+            {threadId && (
+              <a
+                href={urlOfArtifact({
+                  filepath: node.file.virtual_path,
+                  threadId,
+                  download: true,
+                })}
+                download={node.name}
+                onClick={(e) => e.stopPropagation()}
+                title={t.common.download}
+                aria-label={`${t.common.download} ${node.name}`}
+                className="text-muted-foreground/40 hover:text-foreground shrink-0 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+              >
+                <DownloadIcon className="h-2.5 w-2.5" />
+              </a>
+            )}
+          </div>
+          {canOutline && outlineOpen && (
+            <FileSymbolOutline
+              threadId={threadId!}
+              filePath={nodePath}
+              depth={depth + 1}
+            />
+          )}
+        </>
+      )}
+      {hasChildren && (
+        <>
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="text-muted-foreground hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
+            style={{ paddingLeft: `${depth * 10 + 4}px` }}
+          >
+            {open ? (
+              <FolderOpenIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
+            ) : (
+              <FolderIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
+            )}
+            <span className="font-medium">{node.name}/</span>
+            <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
+              {countFiles(node) - (node.file ? 1 : 0)}
             </span>
           </button>
-        </div>
-        {canOutline && outlineOpen && (
-          <FileSymbolOutline
-            threadId={threadId!}
-            filePath={nodePath}
-            depth={depth + 1}
-          />
-        )}
-      </div>
-    );
-  }
-  return null;
+          {open &&
+            sortTreeNodes(Object.values(node.children)).map((child) => (
+              <FileTreeNode
+                key={child.name}
+                node={child}
+                depth={depth + 1}
+                onSelect={onSelect}
+                threadId={threadId}
+                outlineEnabled={outlineEnabled}
+                path={nodePath}
+              />
+            ))}
+        </>
+      )}
+    </div>
+  );
 }
 
 // ──────────────────────────────────────────────────────────
@@ -303,9 +358,13 @@ export function FilesPanel({
   active?: boolean;
 }) {
   const { t } = useI18n();
+  // The backend's merge_artifacts reducer already dedupes, but this list is
+  // used as a React key — one duplicate from any future writer would collide
+  // keys and make rows render/click inconsistently. Cheap to be certain.
+  const uniqueArtifacts = useMemo(() => [...new Set(artifacts)], [artifacts]);
   const treeFiles = useMemo(
-    () => selectTreeFiles(files, artifacts),
-    [files, artifacts],
+    () => selectTreeFiles(files, uniqueArtifacts),
+    [files, uniqueArtifacts],
   );
   const tree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
   const runningCount = runningEvents.filter((e) =>
@@ -363,29 +422,46 @@ export function FilesPanel({
         </div>
       )}
       {/* Outputs (presented deliverables) */}
-      {artifacts.length > 0 && (
+      {uniqueArtifacts.length > 0 && (
         <div>
           <div className="flex items-center justify-between px-1 pb-1">
             <div className="text-muted-foreground/70 flex items-center gap-1.5 text-[11px] font-medium">
               <FileTextIcon className="h-3 w-3 text-emerald-400" />
               Outputs
               <span className="bg-muted rounded px-1 text-[10px]">
-                {artifacts.length}
+                {uniqueArtifacts.length}
               </span>
             </div>
           </div>
           <div className="border-border/20 bg-muted/10 rounded border p-1">
-            {artifacts.map((path) => (
-              <button
+            {uniqueArtifacts.map((path) => (
+              <div
                 key={path}
-                onClick={() => onSelectArtifact(path)}
-                className="hover:bg-muted/30 flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
+                className="hover:bg-muted/30 group flex w-full items-center gap-1 rounded px-1 py-0.5 text-[11px] transition-colors"
               >
-                {getFileIcon(path.split("/").at(-1) ?? "")}
-                <span className="text-foreground truncate font-mono">
-                  {path.split("/").at(-1)}
-                </span>
-              </button>
+                <button
+                  onClick={() => onSelectArtifact(path)}
+                  className="flex min-w-0 flex-1 items-center gap-1"
+                >
+                  {getFileIcon(path.split("/").at(-1) ?? "")}
+                  <span className="text-foreground truncate font-mono">
+                    {path.split("/").at(-1)}
+                  </span>
+                </button>
+                <a
+                  href={urlOfArtifact({
+                    filepath: path,
+                    threadId,
+                    download: true,
+                  })}
+                  download={path.split("/").at(-1)}
+                  title={t.common.download}
+                  aria-label={`${t.common.download} ${path.split("/").at(-1)}`}
+                  className="text-muted-foreground/40 hover:text-foreground shrink-0 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+                >
+                  <DownloadIcon className="h-2.5 w-2.5" />
+                </a>
+              </div>
             ))}
           </div>
         </div>

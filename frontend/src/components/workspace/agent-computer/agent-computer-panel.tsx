@@ -553,7 +553,11 @@ export function AgentComputerPanel({
             data-tab="terminal"
             className={cn("h-full", activeTab !== "terminal" && "hidden")}
           >
-            <Terminal events={mergedEvents} threadId={threadId} />
+            <Terminal
+              events={mergedEvents}
+              threadId={threadId}
+              active={activeTab === "terminal"}
+            />
           </div>
         </AgentComputerErrorBoundary>
 
@@ -605,6 +609,7 @@ export function AgentComputerPanel({
               review={reviewQuery.data}
               isFetching={reviewQuery.isFetching}
               onRegenerate={() => void reviewQuery.refetch()}
+              active={activeTab === "review"}
             />
           </div>
         </AgentComputerErrorBoundary>

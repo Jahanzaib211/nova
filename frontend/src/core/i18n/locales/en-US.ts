@@ -796,6 +796,8 @@ export const enUS: Translations = {
       previewWillAppear: "Browser preview will appear here",
       fileMissing: (name: string) =>
         `Preview file ${name || "(none)"} is not available in this workspace.`,
+      fileEmpty: (name: string) =>
+        `${name || "This file"} is empty — nothing to preview yet.`,
       previewWillAppearLine2: "once the agent writes an HTML file",
       watchLiveBrowser: "Watch the agent's live browser",
       projectType: {

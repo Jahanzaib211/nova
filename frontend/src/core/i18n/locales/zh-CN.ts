@@ -767,6 +767,8 @@ export const zhCN: Translations = {
       previewWillAppear: "浏览器预览将显示在这里",
       fileMissing: (name: string) =>
         `预览文件 ${name || "(无)"} 在当前工作区不可用。`,
+      fileEmpty: (name: string) =>
+        `${name || "该文件"} 为空，暂无可预览的内容。`,
       previewWillAppearLine2: "当智能体写入 HTML 文件后即可显示",
       watchLiveBrowser: "查看智能体实时浏览器",
       projectType: {

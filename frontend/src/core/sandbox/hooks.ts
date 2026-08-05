@@ -481,8 +481,13 @@ const warnedFilePaths = new Set<string>();
 export function useSandboxFile(
   threadId: string | null,
   path: string | null,
-): { content: string; exists: boolean; size: number } {
-  const { data } = useQuery<{ content: string; exists: boolean; size: number }>(
+  enabled = true,
+): { content: string; exists: boolean; size: number; isLoading: boolean } {
+  const { data, isPending } = useQuery<{
+    content: string;
+    exists: boolean;
+    size: number;
+  }>(
     {
       queryKey: ["sandbox", "file", threadId, path],
       queryFn: async () => {
@@ -509,13 +514,26 @@ export function useSandboxFile(
           size: number;
         }>;
       },
-      enabled: Boolean(threadId) && Boolean(path),
+      // `enabled` lets callers stop the 2s poll when the result is not being
+      // shown. `refetchIntervalInBackground: false` only covers a backgrounded
+      // *window* — it does nothing for a tab that is merely `hidden` via CSS
+      // while staying mounted, which is how the Agent's Computer works. Without
+      // this the panel re-downloaded the whole deliverable 30x/minute forever,
+      // including while the live dev-server preview made the result unused.
+      enabled: Boolean(threadId) && Boolean(path) && enabled,
       refetchInterval: 2000,
       refetchIntervalInBackground: false,
+      // Keep the previous file's data while a new path loads. Changing `path`
+      // changes the query key, so without this `data` is briefly undefined and
+      // the UI flashed "file is missing" for one round-trip on every click.
+      placeholderData: (prev) => prev,
     },
   );
 
-  return data ?? { content: "", exists: false, size: 0 };
+  return {
+    ...(data ?? { content: "", exists: false, size: 0 }),
+    isLoading: isPending,
+  };
 }
 
 // ── useSandboxTodo (kept for compatibility) ────────────────

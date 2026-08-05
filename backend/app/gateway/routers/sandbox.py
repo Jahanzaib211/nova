@@ -397,6 +397,28 @@ async def download_sandbox_zip(
 
     def build_zip() -> bytes:
         buf = io.BytesIO()
+        # Guards against two files claiming one archive path. Flattening the
+        # workspace to the archive root puts the workspace's own `outputs/`
+        # directory in the same namespace as the outputs mount, so
+        # workspace/outputs/report.md and outputs/report.md both resolved to
+        # "outputs/report.md". zipfile happily writes both (only a UserWarning),
+        # and every extractor keeps whichever lands last — so one of the two
+        # files was silently unrecoverable from the archive.
+        seen: set[str] = set()
+
+        def unique(arcname: str) -> str:
+            if arcname not in seen:
+                seen.add(arcname)
+                return arcname
+            stem, dot, ext = arcname.rpartition(".")
+            base, suffix = (stem, f".{ext}") if dot else (arcname, "")
+            n = 2
+            while f"{base} ({n}){suffix}" in seen:
+                n += 1
+            resolved = f"{base} ({n}){suffix}"
+            seen.add(resolved)
+            return resolved
+
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             for root, arc_prefix in roots:
                 if not root.exists():
@@ -409,8 +431,11 @@ async def download_sandbox_zip(
                         continue
                     try:
                         rel = host_path.relative_to(root)
-                        arcname = f"{arc_prefix}/{rel.as_posix()}" if arc_prefix else str(rel)
-                        zf.write(host_path, arcname=arcname)
+                        # as_posix() on both branches: str(rel) uses the OS
+                        # separator, which writes backslash-separated entry
+                        # names on Windows and violates the ZIP spec.
+                        arcname = f"{arc_prefix}/{rel.as_posix()}" if arc_prefix else rel.as_posix()
+                        zf.write(host_path, arcname=unique(arcname))
                     except (OSError, PermissionError):
                         continue
         return buf.getvalue()

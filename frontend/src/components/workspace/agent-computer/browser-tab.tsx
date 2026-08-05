@@ -59,7 +59,17 @@ export function Browser({
   active?: boolean;
 }) {
   const { t } = useI18n();
-  const { content, exists } = useSandboxFile(threadId, filePath);
+  // Only poll the static-preview file when its result can actually be shown:
+  // the tab is visible AND the live dev server isn't taking precedence (when it
+  // is, the component returns early and `content` is never read). This is a 2s
+  // poll of the file's ENTIRE contents, so leaving it on while hidden
+  // re-downloaded the whole deliverable 30x/minute for the life of the thread.
+  const staticPreviewNeeded = Boolean(active) && !devServer.running;
+  const { content, exists, isLoading } = useSandboxFile(
+    threadId,
+    filePath,
+    staticPreviewNeeded,
+  );
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
   const [reloadKey, setReloadKey] = useState(0);
   const filename = filePath?.split("/").at(-1) ?? "";
@@ -106,7 +116,11 @@ export function Browser({
 
   // Live VNC view of the sandbox's real browser (watch the agent browse).
   const [showVnc, setShowVnc] = useState(false);
-  const { vnc: vncUrl } = useSandboxTerminalUrl(threadId, showVnc);
+  // Gate on `active` as well as `showVnc`: tabs stay mounted (only `hidden` via
+  // CSS), so once VNC was toggled on the noVNC iframe kept streaming video —
+  // bandwidth and CPU — while the user sat on Files or Terminal.
+  const vncVisible = Boolean(active) && showVnc;
+  const { vnc: vncUrl } = useSandboxTerminalUrl(threadId, vncVisible);
 
   // Agent browser self-test (native sandbox Chromium): console errors + screenshot.
   const {
@@ -209,7 +223,7 @@ export function Browser({
           </span>
         </div>
         <div className="min-h-0 flex-1 bg-black">
-          {vncUrl ? (
+          {vncUrl && vncVisible ? (
             <iframe
               key={vncUrl}
               src={vncUrl}
@@ -635,8 +649,14 @@ export function Browser({
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
-            {exists ? (
+            {isLoading ? (
               <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
+            ) : exists ? (
+              // Fetched, and the file really is empty (or not HTML). Spinning
+              // here waited forever on a 0-byte deliverable.
+              <p className="text-muted-foreground/60 text-xs">
+                {t.agentComputer.browser.fileEmpty(filename)}
+              </p>
             ) : (
               <>
                 <GlobeIcon className="text-muted-foreground/20 h-6 w-6" />

@@ -21,9 +21,12 @@ export const TERMINAL_TOOLS = new Set([
 export function Terminal({
   events,
   threadId,
+  active = true,
 }: {
   events: AgentActivityEvent[];
   threadId: string;
+  /** Gates the live ttyd session so it doesn't stay attached while hidden. */
+  active?: boolean;
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -31,9 +34,13 @@ export function Terminal({
   // "shell" = the sandbox's real interactive ttyd terminal (type into it live);
   // "stream" = the agent's command output log.
   const [mode, setMode] = useState<"stream" | "shell">("stream");
+  // Every tab stays mounted (only `hidden` via CSS), so once the user flipped to
+  // Shell the ttyd iframe held a live WebSocket + PTY for the rest of the
+  // panel's life no matter which tab was on screen. Gate on `active` too.
+  const shellVisible = active && mode === "shell";
   const { terminal: terminalUrl } = useSandboxTerminalUrl(
     threadId,
-    mode === "shell",
+    shellVisible,
   );
 
   useEffect(() => {
@@ -77,7 +84,7 @@ export function Terminal({
       <div className="flex h-full flex-col">
         {ModeToggle}
         <div className="min-h-0 flex-1 bg-black">
-          {terminalUrl ? (
+          {terminalUrl && shellVisible ? (
             <iframe
               key={terminalUrl}
               src={terminalUrl}

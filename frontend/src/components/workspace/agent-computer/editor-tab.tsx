@@ -82,10 +82,20 @@ export function Editor({
   const stats = useMemo(() => (diff ? diffStats(diff) : null), [diff]);
 
   // Default to Diff while an edit is fresh; let the user flip to the full file.
+  //
+  // Keyed on which edit this is, NOT on the object. `activeEdit` comes from
+  // `getActiveEdit(messages)`, which builds a fresh object literal every time
+  // it recomputes, and `messages` gets a new identity on every streaming chunk.
+  // Depending on the object meant this effect refired continuously while the
+  // agent wrote, so a user who clicked "File" to read the whole thing was
+  // yanked back to "Diff" a fraction of a second later, every time — the toggle
+  // was effectively unusable during streaming. The path+kind key still resets
+  // the view when the agent moves to a genuinely different edit.
+  const editKey = editForFile ? `${editForFile.path}:${editForFile.kind}` : null;
   const [mode, setMode] = useState<"diff" | "file">("diff");
   useEffect(() => {
-    if (editForFile) setMode("diff");
-  }, [editForFile]);
+    if (editKey) setMode("diff");
+  }, [editKey]);
   const showDiff = mode === "diff" && diff !== null;
 
   // Auto-scroll while writing

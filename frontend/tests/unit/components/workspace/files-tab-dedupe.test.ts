@@ -10,7 +10,10 @@
 
 import { describe, expect, test } from "vitest";
 
-import { selectTreeFiles } from "@/components/workspace/agent-computer/files-tab";
+import {
+  selectTreeFiles,
+  treePathOf,
+} from "@/components/workspace/agent-computer/files-tab";
 import type { SandboxFile } from "@/core/sandbox/hooks";
 
 function file(virtual_path: string): SandboxFile {
@@ -80,5 +83,61 @@ describe("selectTreeFiles", () => {
     expect(out.map((f) => f.virtual_path)).toEqual([
       "/mnt/user-data/workspace/report.pdf",
     ]);
+  });
+});
+
+describe("treePathOf", () => {
+  test("workspace files are flattened to the top level", () => {
+    expect(treePathOf("/mnt/user-data/workspace/src/index.ts")).toBe(
+      "src/index.ts",
+    );
+  });
+
+  test("outputs and uploads keep their mount folder", () => {
+    expect(treePathOf("/mnt/user-data/outputs/report.pdf")).toBe(
+      "outputs/report.pdf",
+    );
+    expect(treePathOf("/mnt/user-data/uploads/notes.txt")).toBe(
+      "uploads/notes.txt",
+    );
+  });
+
+  test("a workspace outputs/ dir does NOT collide with the outputs mount", () => {
+    // The regression: both flattened to "outputs/report.md", so one silently
+    // overwrote the other in the tree while the header still counted both.
+    const fromWorkspace = treePathOf(
+      "/mnt/user-data/workspace/outputs/report.md",
+    );
+    const fromMount = treePathOf("/mnt/user-data/outputs/report.md");
+    expect(fromWorkspace).not.toBe(fromMount);
+    expect(fromWorkspace).toBe("workspace/outputs/report.md");
+  });
+
+  test("a workspace uploads/ dir is disambiguated too", () => {
+    expect(treePathOf("/mnt/user-data/workspace/uploads/a.csv")).toBe(
+      "workspace/uploads/a.csv",
+    );
+  });
+
+  test("only the ambiguous names are prefixed — the common case stays flat", () => {
+    // `output` (singular) and `outputsy` must not trip the check.
+    expect(treePathOf("/mnt/user-data/workspace/output/a.txt")).toBe(
+      "output/a.txt",
+    );
+    expect(treePathOf("/mnt/user-data/workspace/outputsy/a.txt")).toBe(
+      "outputsy/a.txt",
+    );
+  });
+
+  test("every distinct virtual path maps to a distinct tree path", () => {
+    const paths = [
+      "/mnt/user-data/workspace/outputs/report.md",
+      "/mnt/user-data/outputs/report.md",
+      "/mnt/user-data/workspace/uploads/a.csv",
+      "/mnt/user-data/uploads/a.csv",
+      "/mnt/user-data/workspace/src/index.ts",
+    ];
+    const mapped = paths.map(treePathOf);
+    expect(new Set(mapped).size).toBe(paths.length);
   });
 });
