@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 
 
 class WeComChannel(Channel):
+    """WeCom (Enterprise WeChat) bot channel using the AI bot WebSocket API.
+
+    Configuration keys (in ``config.yaml`` under ``channels.wecom``):
+        - ``bot_id`` / ``bot_secret``: WeCom AI bot credentials.
+        - ``allowed_users``: (optional) List of allowed WeCom user IDs. Empty = allow all.
+        - ``working_message``: (optional) Placeholder text shown while streaming.
+    """
+
     def __init__(self, bus: MessageBus, config: dict[str, Any]) -> None:
         super().__init__(name="wecom", bus=bus, config=config)
         self._bot_id: str | None = None
@@ -31,6 +39,7 @@ class WeComChannel(Channel):
         self._ws_frames: dict[str, dict[str, Any]] = {}
         self._ws_stream_ids: dict[str, str] = {}
         self._working_message = "Working on it..."
+        self._allowed_users: set[str] = {str(uid).strip() for uid in config.get("allowed_users", []) if str(uid).strip()}
 
     @property
     def supports_streaming(self) -> bool:
@@ -294,6 +303,8 @@ class WeComChannel(Channel):
 
         user_id = (body.get("from") or {}).get("userid")
 
+        # Handle the connect code before applying allowed_users so a browser-initiated
+        # bind can bootstrap an external identity that is not yet whitelisted.
         connect_code = self._pending_connect_code(text)
         if connect_code:
             handled = await self._bind_connection_from_connect_code(
@@ -303,6 +314,9 @@ class WeComChannel(Channel):
             )
             if handled:
                 return
+
+        if not self._check_user(str(user_id or "")):
+            return
 
         inbound_type = InboundMessageType.COMMAND if is_known_channel_command(text) else InboundMessageType.CHAT
         inbound = self._make_inbound(
@@ -331,6 +345,11 @@ class WeComChannel(Channel):
 
         inbound = await self._attach_connection_identity(inbound)
         await self.bus.publish_inbound(inbound)
+
+    def _check_user(self, user_id: str) -> bool:
+        if not self._allowed_users:
+            return True
+        return user_id in self._allowed_users
 
     async def _attach_connection_identity(self, inbound: InboundMessage) -> InboundMessage:
         return await attach_connection_identity(

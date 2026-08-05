@@ -4132,6 +4132,58 @@ class TestWeComChannel:
 
         _run(go())
 
+    def test_publish_ws_inbound_blocks_non_whitelisted_sender(self, monkeypatch):
+        async def go():
+            bus = MessageBus()
+            bus.publish_inbound = AsyncMock()
+            channel = WeComChannel(bus, config={"allowed_users": ["allowed-user"]})
+            channel._ws_client = SimpleNamespace(reply_stream=AsyncMock())
+
+            monkeypatch.setitem(
+                __import__("sys").modules,
+                "aibot",
+                SimpleNamespace(generate_req_id=lambda prefix: "stream-1"),
+            )
+
+            frame = {
+                "body": {
+                    "msgid": "msg-1",
+                    "from": {"userid": "blocked-user"},
+                }
+            }
+
+            await channel._publish_ws_inbound(frame, "hello")
+
+            bus.publish_inbound.assert_not_awaited()
+
+        _run(go())
+
+    def test_publish_ws_inbound_admits_whitelisted_sender(self, monkeypatch):
+        async def go():
+            bus = MessageBus()
+            bus.publish_inbound = AsyncMock()
+            channel = WeComChannel(bus, config={"allowed_users": ["allowed-user"]})
+            channel._ws_client = SimpleNamespace(reply_stream=AsyncMock())
+
+            monkeypatch.setitem(
+                __import__("sys").modules,
+                "aibot",
+                SimpleNamespace(generate_req_id=lambda prefix: "stream-1"),
+            )
+
+            frame = {
+                "body": {
+                    "msgid": "msg-1",
+                    "from": {"userid": "allowed-user"},
+                }
+            }
+
+            await channel._publish_ws_inbound(frame, "hello")
+
+            bus.publish_inbound.assert_awaited_once()
+
+        _run(go())
+
     def test_on_outbound_sends_attachment_before_clearing_context(self, tmp_path):
         async def go():
             bus = MessageBus()

@@ -1,0 +1,77 @@
+//@version=6
+// Indicator template — signals, levels, alerts, and an info table.
+// Companion to strategy.pine. One script per file: if you need a backtest
+// too, that is a second file.
+indicator("Indicator Template", overlay = true, max_labels_count = 500)
+
+// ── Inputs ──────────────────────────────────────────────────────────────────
+fastLen  = input.int(9,     "Fast EMA",      minval = 1)
+slowLen  = input.int(21,    "Slow EMA",      minval = 1)
+rsiLen   = input.int(14,    "RSI length",    minval = 1)
+atrLen   = input.int(14,    "ATR length",    minval = 1)
+atrMult  = input.float(1.5, "Stop (ATR x)",  minval = 0.1, step = 0.1)
+rr       = input.float(2.0, "Reward:Risk",   minval = 0.1, step = 0.1)
+showLbls = input.bool(true, "Show signal labels")
+
+// ── Indicators ──────────────────────────────────────────────────────────────
+fastEma = ta.ema(close, fastLen)
+slowEma = ta.ema(close, slowLen)
+rsiVal  = ta.rsi(close, rsiLen)
+atr     = ta.atr(atrLen)
+
+// ── Signals ─────────────────────────────────────────────────────────────────
+// barstate.isconfirmed keeps live signals from flickering as the bar forms.
+longSignal  = ta.crossover(fastEma, slowEma)  and rsiVal > 50 and barstate.isconfirmed
+shortSignal = ta.crossunder(fastEma, slowEma) and rsiVal < 50 and barstate.isconfirmed
+
+// ── Levels ──────────────────────────────────────────────────────────────────
+var float entryPx = na
+var float stopPx  = na
+var float tgtPx   = na
+
+if longSignal
+    entryPx := close
+    stopPx  := close - atr * atrMult
+    tgtPx   := close + atr * atrMult * rr
+else if shortSignal
+    entryPx := close
+    stopPx  := close + atr * atrMult
+    tgtPx   := close - atr * atrMult * rr
+
+// ── Plots ───────────────────────────────────────────────────────────────────
+plot(fastEma, "Fast EMA", color.new(color.aqua,   0))
+plot(slowEma, "Slow EMA", color.new(color.orange, 0))
+
+plotshape(longSignal,  "Long",  shape.triangleup,   location.belowbar, color.new(color.green, 0), size = size.small)
+plotshape(shortSignal, "Short", shape.triangledown, location.abovebar, color.new(color.red,   0), size = size.small)
+
+if showLbls and longSignal
+    label.new(bar_index, low,  "LONG\nSL " + str.tostring(stopPx, format.mintick) + "\nTP " + str.tostring(tgtPx, format.mintick),
+              style = label.style_label_up,   color = color.new(color.green, 20), textcolor = color.white, size = size.small)
+if showLbls and shortSignal
+    label.new(bar_index, high, "SHORT\nSL " + str.tostring(stopPx, format.mintick) + "\nTP " + str.tostring(tgtPx, format.mintick),
+              style = label.style_label_down, color = color.new(color.red,   20), textcolor = color.white, size = size.small)
+
+// ── Alerts ──────────────────────────────────────────────────────────────────
+// alert() over alertcondition(): the message is built at runtime, so it can
+// carry live prices. alertcondition() needs a compile-time constant string.
+if longSignal
+    alert("LONG " + syminfo.ticker + " @ " + str.tostring(close, format.mintick) +
+          " | SL " + str.tostring(stopPx, format.mintick) +
+          " | TP " + str.tostring(tgtPx,  format.mintick), alert.freq_once_per_bar_close)
+if shortSignal
+    alert("SHORT " + syminfo.ticker + " @ " + str.tostring(close, format.mintick) +
+          " | SL " + str.tostring(stopPx, format.mintick) +
+          " | TP " + str.tostring(tgtPx,  format.mintick), alert.freq_once_per_bar_close)
+
+// ── Info table ──────────────────────────────────────────────────────────────
+if barstate.islast
+    var table info = table.new(position.top_right, 2, 4, border_width = 1)
+    table.cell(info, 0, 0, "RSI",   text_color = color.white)
+    table.cell(info, 1, 0, str.tostring(rsiVal, "#.#"),          text_color = color.white)
+    table.cell(info, 0, 1, "ATR",   text_color = color.white)
+    table.cell(info, 1, 1, str.tostring(atr, format.mintick),    text_color = color.white)
+    table.cell(info, 0, 2, "Stop",  text_color = color.white)
+    table.cell(info, 1, 2, str.tostring(stopPx, format.mintick), text_color = color.white)
+    table.cell(info, 0, 3, "Target", text_color = color.white)
+    table.cell(info, 1, 3, str.tostring(tgtPx, format.mintick),  text_color = color.white)

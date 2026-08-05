@@ -603,6 +603,32 @@ When you install `.skill` archives through the Gateway, Nova accepts standard op
 
 Tools follow the same philosophy. Nova comes with a core toolset — web search, web fetch, file operations, bash execution — and supports custom tools via MCP servers and Python functions. Swap anything. Add anything.
 
+#### Market Data & Trading
+
+The `trading` tool group gives the agent real market data from free, keyless sources:
+
+| Tool | What it does |
+|---|---|
+| `get_ohlcv` | OHLCV candles — **yfinance** for equities/FX/futures, **ccxt** public endpoints for crypto |
+| `compute_indicators` | SMA, EMA, RSI (Wilder), MACD, ATR, ADX/DMI, Bollinger, session-anchored VWAP with ±kσ bands |
+| `backtest_signals` | Replays entry signals against real candles → win rate, expectancy in R, profit factor, max drawdown |
+
+No API keys. The indicators are pure Python, so they work on a default install; fetching live data needs one optional extra:
+
+```bash
+cd backend && uv sync --extra trading    # installs yfinance + ccxt
+```
+
+A bar that touches both stop and target is scored as a **loss** — OHLC data cannot reveal intrabar order, and assuming the favourable one manufactures edge that won't survive live trading.
+
+Gold note: there is no free spot XAU/USD feed. `XAUUSD`, `XAUUSD=X`, and `XAU=X` all return nothing from Yahoo. Use `GC=F` (COMEX futures) or `PAXG/USDT` via ccxt for a spot-tracking series — the tools say so when you get it wrong.
+
+Paired with this is the bundled **`pine-script`** skill for TradingView Pine Script v5/v6: language references, indicator/strategy templates with realistic backtest defaults, and a validator that catches invented built-ins before you paste into TradingView:
+
+```bash
+python /mnt/skills/public/pine-script/scripts/validate_pine.py mystrategy.pine
+```
+
 Gateway-generated follow-up suggestions now normalize both plain-string model output and block/list-style rich content before parsing the JSON array response, so provider-specific content wrappers do not silently drop suggestions.
 
 ```

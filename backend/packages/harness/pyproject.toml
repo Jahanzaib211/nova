@@ -51,6 +51,13 @@ postgres = [
 ]
 pymupdf = ["pymupdf4llm>=0.0.17"]
 redis = ["redis[hiredis]>=5.0.0"]
+# Market data sources for the `trading` tool group. Optional because
+# yfinance pulls pandas + numpy into every install; the indicators
+# themselves are pure Python and need nothing.
+trading = [
+    "ccxt>=4.4.0",
+    "yfinance>=0.2.51",
+]
 
 [build-system]
 requires = ["hatchling"]

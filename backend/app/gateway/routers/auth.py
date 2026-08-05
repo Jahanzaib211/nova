@@ -628,38 +628,3 @@ async def initialize_admin(request: Request, response: Response, body: Initializ
     _set_session_cookie(response, token, request)
 
     return UserResponse(id=str(user.id), email=user.email, system_role=user.system_role)
-
-
-# ── OAuth Endpoints (Future/Placeholder) ─────────────────────────────────
-
-
-@router.get("/oauth/{provider}")
-async def oauth_login(provider: str):
-    """Initiate OAuth login flow.
-
-    Redirects to the OAuth provider's authorization URL.
-    Currently a placeholder - requires OAuth provider implementation.
-    """
-    if provider not in ["github", "google"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported OAuth provider: {provider}",
-        )
-
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="OAuth login not yet implemented",
-    )
-
-
-@router.get("/callback/{provider}")
-async def oauth_callback(provider: str, code: str, state: str):
-    """OAuth callback endpoint.
-
-    Handles the OAuth provider's callback after user authorization.
-    Currently a placeholder.
-    """
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="OAuth callback not yet implemented",
-    )

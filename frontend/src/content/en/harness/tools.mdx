@@ -107,6 +107,54 @@ tools:
   - use: deerflow.sandbox.tools:bash_tool # requires host bash or container sandbox
 ```
 
+## Market data tools
+
+The `trading` group gives the agent real market data from free, keyless sources.
+
+| Tool                  | Description                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------------- |
+| `get_ohlcv`           | OHLCV candles — yfinance for equities/FX/futures, ccxt public endpoints for crypto        |
+| `compute_indicators`  | SMA, EMA, RSI (Wilder), MACD, ATR, ADX/DMI, Bollinger, session-anchored VWAP with ±kσ bands |
+| `backtest_signals`    | Replays entry signals against real candles → win rate, expectancy in R, profit factor      |
+
+```yaml
+tool_groups:
+  - name: trading
+
+tools:
+  - name: get_ohlcv
+    group: trading
+    use: deerflow.community.market_data.tools:get_ohlcv_tool
+    max_limit: 1000
+  - name: compute_indicators
+    group: trading
+    use: deerflow.community.market_data.tools:compute_indicators_tool
+  - name: backtest_signals
+    group: trading
+    use: deerflow.community.market_data.tools:backtest_signals_tool
+```
+
+The indicators are pure Python, so `compute_indicators` and `backtest_signals` work on a
+default install. Fetching live data needs one optional extra:
+
+```bash
+cd backend && uv sync --extra trading   # yfinance + ccxt
+```
+
+Without it, `get_ohlcv` returns an install hint rather than an import traceback.
+
+A bar that touches both stop and target is scored as a **loss** — OHLC data cannot reveal
+intrabar order, and assuming the favourable one manufactures edge that will not survive live
+trading. The count of such bars is reported so you can judge the impact.
+
+There is no free spot XAU/USD feed: `XAUUSD`, `XAUUSD=X`, and `XAU=X` all return an empty
+frame from Yahoo. Use `GC=F` / `MGC=F` (COMEX futures, ~1% above spot from carry), or
+`PAXG/USDT` / `XAUT/USDT` via `source: ccxt` for a spot-tracking series. Yahoo FX pairs need
+the `=X` suffix (`EURUSD=X`, not `EURUSD`).
+
+See also the bundled [`pine-script` skill](/harness/skills) for turning a validated strategy
+into TradingView Pine Script.
+
 ## Community tools
 
 Community tools connect the agent to external services. They are configured in `config.yaml` under `tools:` using the `use:` field to specify the implementation.

@@ -133,6 +133,7 @@ tool_groups:
   - name: file:read    # Read-only file operations
   - name: file:write   # Write file operations
   - name: bash         # Shell command execution
+  - name: trading      # Market data, indicators, signal backtesting
 ```
 
 ### Tools
@@ -157,6 +158,20 @@ tools:
 - `read_file` - Read file contents with optional line range
 - `write_file` - Write/append to files, creates directories; overwrites by default and exposes the `append` argument in the model-facing schema for end-of-file writes
 - `str_replace` - Substring replacement (single or all occurrences); same-path serialization is scoped to `(sandbox.id, path)` so isolated sandboxes do not contend on identical virtual paths inside one process
+
+**Trading Tools** (group `trading`, free and keyless):
+
+- `get_ohlcv` - OHLCV candles; `BASE/QUOTE` pairs route to ccxt public endpoints, everything else to yfinance
+- `compute_indicators` - SMA, EMA, RSI (Wilder), MACD, ATR, ADX/DMI, Bollinger, session-anchored VWAP with ±kσ bands
+- `backtest_signals` - Replays `{time, side, entry, stop, target}` signals against real candles
+
+Indicators are pure Python and need no dependencies. Fetching live data requires the optional
+extra — `cd backend && uv sync --extra trading` (yfinance + ccxt). In Docker, set `UV_EXTRAS=trading`
+in the root `.env`; `docker/dev-entrypoint.sh` turns it into `uv sync --extra trading` at gateway
+start. Without the extra, `get_ohlcv` returns an install hint rather than an import traceback.
+
+There is no free spot XAU/USD feed: `XAUUSD`, `XAUUSD=X` and `XAU=X` all return an empty frame
+from Yahoo. Use `GC=F` / `MGC=F` (COMEX futures) or `PAXG/USDT` via ccxt.
 
 ### Sandbox
 

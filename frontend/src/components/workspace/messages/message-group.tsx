@@ -2,10 +2,13 @@
 
 import type { Message } from "@langchain/langgraph-sdk";
 import {
+  ActivityIcon,
   BookOpenTextIcon,
   CameraIcon,
+  CandlestickChartIcon,
   ChevronUp,
   CoinsIcon,
+  FlaskConicalIcon,
   FolderOpenIcon,
   GlobeIcon,
   LightbulbIcon,
@@ -34,6 +37,7 @@ import {
   findToolCallResult,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
+import { isTradingTool, summarizeTradingResult } from "@/core/tools/trading";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -696,6 +700,70 @@ function ToolCall({
               : t.toolCalls.useTool("screenshot")}
           </ChainOfThoughtSearchResult>
         )}
+      </ChainOfThoughtStep>
+    );
+  } else if (isTradingTool(name)) {
+    // Trading tools return a JSON string. Dumping it inline would flood the
+    // chat with candles, so reduce it to the few numbers a decision turns on
+    // and leave the full payload to the model.
+    const description: string | undefined = (args as { description: string })
+      ?.description;
+    const fallbackLabel =
+      name === "get_ohlcv"
+        ? t.toolCalls.fetchMarketData
+        : name === "compute_indicators"
+          ? t.toolCalls.computeIndicators
+          : t.toolCalls.backtestSignals;
+    const icon =
+      name === "get_ohlcv"
+        ? CandlestickChartIcon
+        : name === "compute_indicators"
+          ? ActivityIcon
+          : FlaskConicalIcon;
+    const summary = summarizeTradingResult(
+      name,
+      typeof result === "string" ? result : undefined,
+    );
+
+    return (
+      <ChainOfThoughtStep
+        key={id}
+        label={resolveLabel(description ?? fallbackLabel)}
+        icon={icon}
+      >
+        {summary?.error ? (
+          <ChainOfThoughtSearchResult
+            className="text-destructive"
+            data-testid="trading-error"
+          >
+            {summary.error}
+          </ChainOfThoughtSearchResult>
+        ) : summary && summary.stats.length > 0 ? (
+          <div
+            className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
+            data-testid="trading-summary"
+          >
+            {summary.subtitle && (
+              <span className="text-muted-foreground font-medium">
+                {summary.subtitle}
+              </span>
+            )}
+            {summary.stats.map((stat) => (
+              <span key={stat.label} className="flex items-baseline gap-1">
+                <span className="text-muted-foreground">{stat.label}</span>
+                <span
+                  className={cn(
+                    "font-mono tabular-nums",
+                    stat.tone === "positive" && "text-emerald-600",
+                    stat.tone === "negative" && "text-destructive",
+                  )}
+                >
+                  {stat.value}
+                </span>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </ChainOfThoughtStep>
     );
   } else {

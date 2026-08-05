@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 17
+config_version: 18
 
 # ============================================================================
 # Logging
@@ -528,6 +528,7 @@ tool_groups:
   - name: file:read
   - name: file:write
   - name: bash
+  - name: trading
 
 # ============================================================================
 # Tools Configuration
@@ -714,6 +715,26 @@ tools:
   - name: bash
     group: bash
     use: deerflow.sandbox.tools:bash_tool
+
+  # Market data / trading tools.
+  # Free and keyless: yfinance (equities, FX, futures) and ccxt public
+  # endpoints (crypto). Requires the optional extra:
+  #   cd backend && uv sync --extra trading
+  # Without it, get_ohlcv returns an install hint; compute_indicators and
+  # backtest_signals still work on bars you already have (indicators are
+  # pure Python).
+  - name: get_ohlcv
+    group: trading
+    use: deerflow.community.market_data.tools:get_ohlcv_tool
+    max_limit: 1000
+
+  - name: compute_indicators
+    group: trading
+    use: deerflow.community.market_data.tools:compute_indicators_tool
+
+  - name: backtest_signals
+    group: trading
+    use: deerflow.community.market_data.tools:backtest_signals_tool
 
 # ============================================================================
 # Tool Search Configuration (Deferred Tool Loading)

@@ -104,6 +104,52 @@ tools:
   - use: deerflow.sandbox.tools:bash_tool
 ```
 
+## 行情数据工具
+
+`trading` 工具组通过免费、无需密钥的数据源为 Agent 提供真实行情数据。
+
+| 工具                  | 描述                                                                        |
+| --------------------- | --------------------------------------------------------------------------- |
+| `get_ohlcv`           | OHLCV K 线 —— 股票/外汇/期货走 yfinance，加密货币走 ccxt 公开接口            |
+| `compute_indicators`  | SMA、EMA、RSI（Wilder）、MACD、ATR、ADX/DMI、布林带，以及带 ±kσ 通道的分时段 VWAP |
+| `backtest_signals`    | 用真实 K 线回放入场信号 → 胜率、以 R 计的期望值、盈亏比                       |
+
+```yaml
+tool_groups:
+  - name: trading
+
+tools:
+  - name: get_ohlcv
+    group: trading
+    use: deerflow.community.market_data.tools:get_ohlcv_tool
+    max_limit: 1000
+  - name: compute_indicators
+    group: trading
+    use: deerflow.community.market_data.tools:compute_indicators_tool
+  - name: backtest_signals
+    group: trading
+    use: deerflow.community.market_data.tools:backtest_signals_tool
+```
+
+指标实现为纯 Python，因此 `compute_indicators` 和 `backtest_signals` 在默认安装下即可使用。
+获取实时数据需要安装可选依赖：
+
+```bash
+cd backend && uv sync --extra trading   # yfinance + ccxt
+```
+
+未安装时，`get_ohlcv` 会返回安装提示，而不是抛出 import 异常。
+
+若某根 K 线同时触及止损和止盈，将记为**亏损** —— OHLC 数据无法还原 K 线内部的价格先后顺序，
+若假设为有利顺序，就会制造出无法在实盘中复现的收益。此类 K 线的数量会一并返回，便于评估影响。
+
+现货 XAU/USD 没有免费数据源：`XAUUSD`、`XAUUSD=X` 和 `XAU=X` 在 Yahoo 上均返回空数据。
+请使用 `GC=F` / `MGC=F`（COMEX 黄金期货，因持有成本约高于现货 1%），或通过 `source: ccxt`
+使用 `PAXG/USDT` / `XAUT/USDT` 获取贴近现货的序列。Yahoo 外汇代码需要 `=X` 后缀
+（`EURUSD=X`，而非 `EURUSD`）。
+
+另见内置的 [`pine-script` 技能](/harness/skills)，可将验证过的策略转换为 TradingView Pine Script。
+
 ## 社区工具
 
 社区工具将 Agent 连接到外部服务。在 `config.yaml` 的 `tools:` 下使用 `use:` 字段指定实现来配置。

@@ -9,14 +9,17 @@ the ops console's service token (see ``ops_auth.py``).
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.gateway import admin_ops
 from app.gateway.credits import get_balance
-from app.gateway.deps import get_local_provider, require_admin_user
+from app.gateway.deps import get_local_provider, get_run_service, require_admin_user
 from app.gateway.referrals import _add_grant
+from app.gateway.routers.channel_connections import ChannelConnectionResponse, ChannelConnectionsResponse, _get_channel_connections_config, _get_repository
+from app.gateway.routers.thread_runs import _cancel_conflict_detail
 from deerflow.persistence.engine import get_session_factory
 from deerflow.persistence.thread_meta import ThreadMetaRepository
 from deerflow.runtime.events.store.db import DbRunEventStore
@@ -314,8 +317,103 @@ async def get_user_conversation_messages(
     return AdminMessagesResponse(data=messages)
 
 
+@router.get("/users/{user_id}/channels", response_model=ChannelConnectionsResponse)
+async def list_user_channel_connections(user_id: str, request: Request) -> ChannelConnectionsResponse:
+    """List one user's IM channel connections (no raw credentials). Admin only.
+
+    Logged to the audit trail since it reveals which external platform
+    accounts (Telegram, Slack, Feishu, ...) are bound to this user.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    config = await _get_channel_connections_config(request)
+    if not config.enabled:
+        return ChannelConnectionsResponse(connections=[])
+
+    repo = _get_repository(request, config)
+    rows = await repo.list_connections(user_id)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-channel-connections",
+        target_user_id=user_id,
+        payload={"count": len(rows)},
+    )
+    return ChannelConnectionsResponse(connections=[ChannelConnectionResponse(**row) for row in rows])
+
+
+@router.delete("/users/{user_id}/channels/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_user_channel_connection(user_id: str, connection_id: str, request: Request) -> Response:
+    """Revoke one of a user's IM channel connections. Admin only."""
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    config = await _get_channel_connections_config(request)
+    if not config.enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Channel connections are disabled")
+
+    repo = _get_repository(request, config)
+    disconnected = await repo.disconnect_connection(connection_id=connection_id, owner_user_id=user_id)
+    if not disconnected:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel connection not found")
+
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="revoke-channel-connection",
+        target_user_id=user_id,
+        payload={"connection_id": connection_id},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 class MessageResponse(BaseModel):
     message: str
+
+
+@router.post("/users/{user_id}/conversations/{thread_id}/runs/{run_id}/cancel", response_model=MessageResponse)
+async def cancel_user_run(
+    user_id: str,
+    thread_id: str,
+    run_id: str,
+    request: Request,
+    action: Literal["interrupt", "rollback"] = Query(default="interrupt", description="Cancel action"),
+) -> MessageResponse:
+    """Cancel another user's run. Admin only.
+
+    Verifies ``thread_id`` belongs to ``user_id`` first, same as
+    ``get_user_conversation_messages``, so an admin cannot cancel a run on a
+    thread by guessing ids. Logged to the audit trail since this stops a
+    user's in-flight work.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+
+    sf = get_session_factory()
+    if sf is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_NO_SQL_BACKEND_DETAIL)
+
+    if not await ThreadMetaRepository(sf).check_access(thread_id, user_id, require_existing=True):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    run_svc = get_run_service(request)
+    detail = await run_svc.get(run_id)
+    if detail is None or detail.thread_id != thread_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Run {run_id} not found")
+
+    cancelled = await run_svc.cancel(run_id, action=action)
+    if not cancelled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_cancel_conflict_detail(run_id, detail))
+
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="cancel-user-run",
+        target_user_id=user_id,
+        payload={"thread_id": thread_id, "run_id": run_id, "action": action},
+    )
+    return MessageResponse(message="Run cancelled")
 
 
 @router.post("/users/{user_id}/reset-usage", response_model=MessageResponse)
@@ -417,10 +515,15 @@ class AuditResponse(BaseModel):
 
 
 @router.get("/audit", response_model=AuditResponse)
-async def audit(request: Request, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)) -> AuditResponse:
+async def audit(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    target_user_id: str | None = Query(default=None, description="Filter to audit rows recorded against this user"),
+) -> AuditResponse:
     """The operator-action audit trail, newest first. Admin only."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
-    rows, total = await admin_ops.list_audit(limit=limit, offset=offset)
+    rows, total = await admin_ops.list_audit(limit=limit, offset=offset, target_user_id=target_user_id)
     return AuditResponse(data=rows, total=total, limit=limit, offset=offset)
 
 

@@ -22,7 +22,14 @@ export function explainToolCall(toolCall: ToolCall, t: Translations) {
   } else if (toolCall.name === "write_todos") {
     return t.toolCalls.writeTodos;
   } else if (toolCall.args.description) {
+    // Agent-authored and task-specific, so it beats any static label.
     return toolCall.args.description;
+  } else if (toolCall.name === "get_ohlcv") {
+    return t.toolCalls.fetchMarketData;
+  } else if (toolCall.name === "compute_indicators") {
+    return t.toolCalls.computeIndicators;
+  } else if (toolCall.name === "backtest_signals") {
+    return t.toolCalls.backtestSignals;
   } else {
     return t.toolCalls.useTool(toolCall.name);
   }

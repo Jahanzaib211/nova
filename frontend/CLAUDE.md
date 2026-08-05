@@ -56,6 +56,7 @@ The frontend is a stateful chat application. Users create **threads** (conversat
   - `messages/` — Message processing and transformation
   - `mcp/` — Model Context Protocol integration
   - `models/` — TypeScript types and data models
+  - `tools/` — Tool-call labelling (`utils.ts`) and per-tool result summarizers (`trading.ts`, which reduces the `trading` group's JSON payloads to a compact stat row)
 - **`hooks/`** — Shared React hooks
 - **`lib/`** — Utilities (`cn()` from clsx + tailwind-merge)
 - **`server/`** — Server-side code (better-auth, not yet active)

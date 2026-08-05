@@ -459,3 +459,53 @@ def test_feishu_treats_unknown_slash_text_as_chat(text):
 
         mock_make_inbound.assert_called_once()
         assert mock_make_inbound.call_args[1]["msg_type"].value == "chat", f"{text!r} should be classified as CHAT"
+
+
+def test_feishu_allowed_users_filter_blocks_non_whitelisted_sender():
+    bus = MessageBus()
+    config = {"app_id": "test", "app_secret": "test", "allowed_users": ["allowed-user"]}
+    channel = FeishuChannel(bus, config)
+
+    event = _make_text_event("hello", user_id="blocked-user")
+
+    with pytest.MonkeyPatch.context() as m:
+        mock_make_inbound = MagicMock()
+        m.setattr(channel, "_make_inbound", mock_make_inbound)
+        channel._on_message(event)
+
+        mock_make_inbound.assert_not_called()
+
+
+def test_feishu_allowed_users_filter_admits_whitelisted_sender():
+    bus = MessageBus()
+    config = {"app_id": "test", "app_secret": "test", "allowed_users": ["allowed-user"]}
+    channel = FeishuChannel(bus, config)
+
+    event = _make_text_event("hello", user_id="allowed-user")
+
+    with pytest.MonkeyPatch.context() as m:
+        mock_make_inbound = MagicMock()
+        m.setattr(channel, "_make_inbound", mock_make_inbound)
+        channel._on_message(event)
+
+        mock_make_inbound.assert_called_once()
+
+
+def test_feishu_connect_code_bypasses_allowed_users_filter():
+    bus = MessageBus()
+    config = {"app_id": "test", "app_secret": "test", "allowed_users": ["allowed-user"]}
+    channel = FeishuChannel(bus, config)
+    channel._pending_connect_code = MagicMock(return_value="connect-code")  # type: ignore[method-assign]
+    channel._bind_connection_from_connect_code = AsyncMock(return_value=True)  # type: ignore[method-assign]
+
+    event = _make_text_event("/connect connect-code", user_id="blocked-user")
+
+    with pytest.MonkeyPatch.context() as m:
+        mock_make_inbound = MagicMock()
+        m.setattr(channel, "_make_inbound", mock_make_inbound)
+        channel._on_message(event)
+
+        # No main loop running in this synchronous test, so the bind future
+        # never gets scheduled — but the connect-code branch must still
+        # return before reaching the allowed_users gate either way.
+        mock_make_inbound.assert_not_called()

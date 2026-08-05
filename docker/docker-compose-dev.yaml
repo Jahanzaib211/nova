@@ -162,6 +162,15 @@ services:
     tmpfs:
       - /tmp:size=64m
     pids_limit: 512
+    # Cap the Next server. Learned from a real incident on 2026-08-01: this
+    # container had no limit, next-server leaked to 13.9 GiB over ~18h uptime,
+    # the host burned through 7.5 GiB of 8 GiB swap, and the kernel OOM-killer
+    # took out unrelated desktop processes. With a limit, Docker kills and
+    # restarts only this container (restart: unless-stopped above) instead of
+    # letting one leak destabilise the whole machine. The Helm chart already
+    # capped frontend at 512Mi — this brings compose to parity, with headroom
+    # because the compose build runs `next start` from a fuller image.
+    mem_limit: 2g
 
   # Backend - Gateway API
   gateway:
@@ -271,6 +280,11 @@ services:
     security_opt:
       - "no-new-privileges:true"
     pids_limit: 512
+    # Same rationale as the frontend cap above — no service on this host
+    # should be able to exhaust 30 GiB unbounded. Sized well above the Helm
+    # chart's 1536Mi because the dev gateway also carries uv's build cache,
+    # Playwright, and in-process agent runs that the chart's pods do not.
+    mem_limit: 6g
 
   # ── SearXNG (Privacy Search Engine) ──────────────────────────────────
   # v7.2 Batch 2A: bound to loopback so LAN/internet cannot reach SearXNG

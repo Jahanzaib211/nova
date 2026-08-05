@@ -191,6 +191,52 @@ def test_wecom_connect_command_binds_identity(tmp_path):
     anyio.run(go)
 
 
+def test_wecom_connect_code_bypasses_allowed_users_filter(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    import anyio
+
+    from app.channels.wecom import WeComChannel
+
+    async def go():
+        repo = await _make_repo(tmp_path, "wecom")
+        state = "wecom-bind-code"
+        await _seed_state(repo, "wecom", state)
+
+        bus = MessageBus()
+        bus.publish_inbound = AsyncMock()
+
+        # The newcomer ("blocked-user") is not in allowed_users yet, but a
+        # valid connect code must still bootstrap their first bind.
+        channel = WeComChannel(
+            bus=bus,
+            config={"bot_id": "bot", "bot_secret": "secret", "allowed_users": ["allowed-user"], "connection_repo": repo},
+        )
+        channel._ws_client = MagicMock()
+        channel._ws_client.reply = AsyncMock()
+        monkeypatch.setitem(sys.modules, "aibot", SimpleNamespace(generate_req_id=lambda prefix: "stream-1"))
+
+        frame = {
+            "body": {
+                "msgid": "msg-1",
+                "from": {"userid": "blocked-user"},
+                "aibotid": "bot-1",
+                "chattype": "single",
+            }
+        }
+
+        await channel._publish_ws_inbound(frame, f"/connect {state}")
+
+        connections = await repo.list_connections("deerflow-user-1")
+        assert len(connections) == 1
+        assert connections[0]["external_account_id"] == "blocked-user"
+        bus.publish_inbound.assert_not_awaited()
+        await repo.close()
+
+    anyio.run(go)
+
+
 def test_additional_channels_attach_owner_identity(tmp_path):
     import anyio
 

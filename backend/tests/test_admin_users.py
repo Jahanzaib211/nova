@@ -244,6 +244,35 @@ def test_reset_all_usage_and_audit_trail(app):
     assert audit["total"] >= 2
 
 
+def test_audit_filterable_by_target_user(app):
+    uid_a = _register_get_id(app, "audit-a@example.com")
+    uid_b = _register_get_id(app, "audit-b@example.com")
+    admin = _admin_client(app)  # 3 users total (a, b, admin)
+
+    admin.request("POST", f"/api/v1/admin/users/{uid_a}/reset-usage", headers=_csrf(admin))
+    admin.request("POST", f"/api/v1/admin/users/{uid_b}/reset-usage", headers=_csrf(admin))
+    # reset-all-usage records target_user_id=None — must not leak into a
+    # user-scoped filter.
+    admin.request("POST", "/api/v1/admin/reset-all-usage", headers=_csrf(admin))
+
+    scoped = admin.get("/api/v1/admin/audit", params={"target_user_id": uid_a}).json()
+    assert scoped["total"] == 1
+    assert scoped["data"][0]["action"] == "reset-usage"
+    assert scoped["data"][0]["target_user_id"] == uid_a
+
+    unscoped = admin.get("/api/v1/admin/audit").json()
+    assert unscoped["total"] >= 3
+
+
+def test_audit_filter_forbidden_for_regular_user(app):
+    uid = _register_get_id(app, "audit-target@example.com")
+    attacker = TestClient(app)
+    attacker.post("/api/v1/auth/register", json={"email": "audit-snoop@example.com", "password": _PASSWORD})
+
+    resp = attacker.get("/api/v1/admin/audit", params={"target_user_id": uid})
+    assert resp.status_code == 403
+
+
 def test_activity_feed_lists_runs(app):
     from datetime import UTC, datetime
 
@@ -365,3 +394,219 @@ def test_conversation_access_is_audited(app):
     audit = admin.get("/api/v1/admin/audit").json()
     actions = {row["action"] for row in audit["data"]}
     assert {"view-conversations", "view-conversation-messages"} <= actions
+
+
+# ── Admin cancel another user's run ──────────────────────────────────────
+#
+# app.state.run_manager / run_service are normally populated by the ASGI
+# lifespan handler, but entering it here (``with TestClient(app) as ...:``)
+# would re-run init_engine_from_config and clobber this fixture's
+# tmp_path-scoped SQLite engine set up above. Wire a real RunManager onto
+# app.state directly instead, exactly like test_cancel_run_idempotent.py
+# does for its own minimal test app — no full lifespan needed.
+
+
+def _create_run(app, *, thread_id, user_id):
+    from deerflow.runtime import RunManager
+    from deerflow.services.implementations import RunServiceImpl
+
+    if not hasattr(app.state, "run_manager"):
+        app.state.run_manager = RunManager()
+        app.state.run_service = RunServiceImpl(app.state.run_manager)
+
+    return asyncio.run(app.state.run_manager.create(thread_id, user_id=user_id)).run_id
+
+
+def test_admin_can_cancel_user_run(app):
+    uid = _register_get_id(app, "stoppable@example.com")
+    _make_thread(app, thread_id="th5", user_id=uid, display_name="Long task")
+    run_id = _create_run(app, thread_id="th5", user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.request(
+        "POST",
+        f"/api/v1/admin/users/{uid}/conversations/th5/runs/{run_id}/cancel",
+        headers=_csrf(admin),
+    )
+    assert resp.status_code == 200, resp.text
+
+    from deerflow.runtime import RunStatus
+
+    record = asyncio.run(app.state.run_manager.get(run_id))
+    assert record.status == RunStatus.interrupted
+
+
+def test_admin_cancel_run_404_for_wrong_owner(app):
+    uid = _register_get_id(app, "real-owner@example.com")
+    other_uid = _register_get_id(app, "not-owner@example.com")
+    _make_thread(app, thread_id="th6", user_id=uid, display_name="Owner's task")
+    run_id = _create_run(app, thread_id="th6", user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.request(
+        "POST",
+        f"/api/v1/admin/users/{other_uid}/conversations/th6/runs/{run_id}/cancel",
+        headers=_csrf(admin),
+    )
+    assert resp.status_code == 404
+
+
+def test_admin_cancel_run_404_for_unknown_run(app):
+    uid = _register_get_id(app, "no-run@example.com")
+    _make_thread(app, thread_id="th7", user_id=uid, display_name="Empty thread")
+    _create_run(app, thread_id="th7", user_id=uid)  # wires app.state.run_manager/run_service
+    admin = _admin_client(app)
+
+    resp = admin.request(
+        "POST",
+        f"/api/v1/admin/users/{uid}/conversations/th7/runs/no-such-run/cancel",
+        headers=_csrf(admin),
+    )
+    assert resp.status_code == 404
+
+
+def test_admin_cancel_run_forbidden_for_regular_user(app):
+    uid = _register_get_id(app, "target-user@example.com")
+    _make_thread(app, thread_id="th8", user_id=uid, display_name="Task")
+    run_id = _create_run(app, thread_id="th8", user_id=uid)
+
+    attacker = TestClient(app)
+    attacker.post("/api/v1/auth/register", json={"email": "not-admin@example.com", "password": _PASSWORD})
+
+    resp = attacker.request(
+        "POST",
+        f"/api/v1/admin/users/{uid}/conversations/th8/runs/{run_id}/cancel",
+        headers=_csrf(attacker),
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_cancel_run_is_audited(app):
+    uid = _register_get_id(app, "audited-run@example.com")
+    _make_thread(app, thread_id="th9", user_id=uid, display_name="Audited task")
+    run_id = _create_run(app, thread_id="th9", user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.request(
+        "POST",
+        f"/api/v1/admin/users/{uid}/conversations/th9/runs/{run_id}/cancel",
+        headers=_csrf(admin),
+    )
+    assert resp.status_code == 200
+
+    audit = admin.get("/api/v1/admin/audit").json()
+    actions = {row["action"] for row in audit["data"]}
+    assert "cancel-user-run" in actions
+
+
+# ── Admin visibility into user channel connections ───────────────────────
+
+
+def _enable_channel_connections(app):
+    from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+
+    app.state.channel_connections_config = ChannelConnectionsConfig.model_validate({"enabled": True, "telegram": {"enabled": True, "bot_username": "deerflow_bot"}})
+
+
+def _create_connection(app, *, user_id, provider="telegram", external_account_id="ext-1"):
+    from deerflow.persistence.channel_connections import ChannelConnectionRepository
+    from deerflow.persistence.engine import get_session_factory
+
+    repo = ChannelConnectionRepository(get_session_factory())
+    row = asyncio.run(
+        repo.upsert_connection(
+            owner_user_id=user_id,
+            provider=provider,
+            external_account_id=external_account_id,
+            status="connected",
+        )
+    )
+    return row["id"]
+
+
+def test_admin_can_list_user_channel_connections(app):
+    uid = _register_get_id(app, "linked@example.com")
+    _enable_channel_connections(app)
+    _create_connection(app, user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.get(f"/api/v1/admin/users/{uid}/channels")
+    assert resp.status_code == 200, resp.text
+    connections = resp.json()["connections"]
+    assert len(connections) == 1
+    assert connections[0]["provider"] == "telegram"
+    assert connections[0]["external_account_id"] == "ext-1"
+
+
+def test_admin_channel_connections_404_for_unknown_user(app):
+    _enable_channel_connections(app)
+    admin = _admin_client(app)
+
+    resp = admin.get("/api/v1/admin/users/no-such-user/channels")
+    assert resp.status_code == 404
+
+
+def test_admin_channel_connections_forbidden_for_regular_user(app):
+    uid = _register_get_id(app, "spied-on@example.com")
+    _enable_channel_connections(app)
+    _create_connection(app, user_id=uid)
+
+    attacker = TestClient(app)
+    attacker.post("/api/v1/auth/register", json={"email": "channel-snoop@example.com", "password": _PASSWORD})
+
+    resp = attacker.get(f"/api/v1/admin/users/{uid}/channels")
+    assert resp.status_code == 403
+
+
+def test_admin_can_revoke_user_channel_connection(app):
+    uid = _register_get_id(app, "revocable@example.com")
+    _enable_channel_connections(app)
+    connection_id = _create_connection(app, user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.request(
+        "DELETE",
+        f"/api/v1/admin/users/{uid}/channels/{connection_id}",
+        headers=_csrf(admin),
+    )
+    assert resp.status_code == 204, resp.text
+
+    # list_connections returns all rows regardless of status (same behavior
+    # as the user-facing GET /api/channels/connections) — revocation shows
+    # up as a status flip, not row removal.
+    remaining = admin.get(f"/api/v1/admin/users/{uid}/channels").json()["connections"]
+    assert len(remaining) == 1
+    assert remaining[0]["status"] == "revoked"
+
+
+def test_admin_revoke_channel_connection_404_for_wrong_owner(app):
+    uid = _register_get_id(app, "owner-of-connection@example.com")
+    other_uid = _register_get_id(app, "not-connection-owner@example.com")
+    _enable_channel_connections(app)
+    connection_id = _create_connection(app, user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.request(
+        "DELETE",
+        f"/api/v1/admin/users/{other_uid}/channels/{connection_id}",
+        headers=_csrf(admin),
+    )
+    assert resp.status_code == 404
+
+    # The connection must survive an admin request scoped to the wrong owner.
+    remaining = admin.get(f"/api/v1/admin/users/{uid}/channels").json()["connections"]
+    assert len(remaining) == 1
+
+
+def test_admin_channel_connections_access_is_audited(app):
+    uid = _register_get_id(app, "audited-channels@example.com")
+    _enable_channel_connections(app)
+    connection_id = _create_connection(app, user_id=uid)
+    admin = _admin_client(app)
+
+    admin.get(f"/api/v1/admin/users/{uid}/channels")
+    admin.request("DELETE", f"/api/v1/admin/users/{uid}/channels/{connection_id}", headers=_csrf(admin))
+
+    audit = admin.get("/api/v1/admin/audit").json()
+    actions = {row["action"] for row in audit["data"]}
+    assert {"view-channel-connections", "revoke-channel-connection"} <= actions

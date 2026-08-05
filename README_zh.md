@@ -240,6 +240,36 @@ Nova 2.0 不再是一个需要拼接的框架。它是一个超级智能体框�
 
 工具遵循同样的理念。Nova 随附核心工具集——网络搜索、网页抓取、文件操作、bash 执行——并通过 MCP 服务器和 Python 函数支持自定义工具。替换任何东西。添加任何东西。
 
+#### 行情数据与交易
+
+`trading` 工具组通过免费、无需密钥的数据源为智能体提供真实行情数据：
+
+| 工具 | 功能 |
+|---|---|
+| `get_ohlcv` | OHLCV K 线 —— 股票/外汇/期货走 **yfinance**，加密货币走 **ccxt** 公开接口 |
+| `compute_indicators` | SMA、EMA、RSI（Wilder）、MACD、ATR、ADX/DMI、布林带，以及带 ±kσ 通道的分时段 VWAP |
+| `backtest_signals` | 用真实 K 线回放入场信号 → 胜率、以 R 计的期望值、盈亏比、最大回撤 |
+
+无需 API 密钥。指标为纯 Python 实现，默认安装即可使用；获取实时数据需要一个可选依赖：
+
+```bash
+cd backend && uv sync --extra trading    # 安装 yfinance + ccxt
+```
+
+若某根 K 线同时触及止损和止盈，将记为**亏损** —— OHLC 数据无法还原 K 线内部的价格顺序，
+假设为有利顺序会制造出无法在实盘中复现的收益。
+
+黄金说明：现货 XAU/USD 没有免费数据源，`XAUUSD`、`XAUUSD=X` 和 `XAU=X` 在 Yahoo 上均返回空数据。
+请使用 `GC=F`（COMEX 期货），或通过 ccxt 使用 `PAXG/USDT` 获取贴近现货的序列 —— 用错代码时工具会给出提示。
+
+与之配套的是内置的 **`pine-script`** 技能，用于编写 TradingView Pine Script v5/v6：
+语言参考、带真实回测默认值的指标/策略模板，以及一个能在粘贴到 TradingView 之前
+捕获虚构内置标识符的校验器：
+
+```bash
+python /mnt/skills/public/pine-script/scripts/validate_pine.py mystrategy.pine
+```
+
 ### 子智能体
 
 复杂任务很少能在一个步骤中完成。Nova 将其分解。

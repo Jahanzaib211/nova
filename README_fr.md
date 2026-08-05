@@ -234,6 +234,39 @@ Les skills sont chargés progressivement — uniquement quand la tâche en a bes
 
 Les outils suivent la même philosophie. Nova ship avec un ensemble d'outils de base — recherche web, fetch web, opérations fichiers, exécution bash — et supporte les outils personnalisés via les serveurs MCP et les fonctions Python. Remplacez tout. Ajoutez tout.
 
+#### Données de marché et trading
+
+Le groupe d'outils `trading` fournit à l'agent de vraies données de marché depuis des sources gratuites et sans clé d'API :
+
+| Outil | Rôle |
+|---|---|
+| `get_ohlcv` | Chandeliers OHLCV — **yfinance** pour actions/forex/futures, endpoints publics **ccxt** pour la crypto |
+| `compute_indicators` | SMA, EMA, RSI (Wilder), MACD, ATR, ADX/DMI, bandes de Bollinger, VWAP ancré à la séance avec bandes ±kσ |
+| `backtest_signals` | Rejoue les signaux d'entrée sur de vraies bougies → taux de réussite, espérance en R, facteur de profit, drawdown max |
+
+Aucune clé d'API. Les indicateurs sont en Python pur et fonctionnent avec l'installation par défaut ;
+récupérer des données live demande une seule dépendance optionnelle :
+
+```bash
+cd backend && uv sync --extra trading    # installe yfinance + ccxt
+```
+
+Une bougie qui touche à la fois le stop et l'objectif est comptée comme une **perte** — les données OHLC
+ne permettent pas de reconstituer l'ordre des prix à l'intérieur de la bougie, et supposer l'ordre
+favorable fabrique un avantage qui ne survivra pas au trading réel.
+
+À propos de l'or : il n'existe pas de flux spot XAU/USD gratuit — `XAUUSD`, `XAUUSD=X` et `XAU=X`
+renvoient tous des données vides chez Yahoo. Utilisez `GC=F` (futures COMEX) ou `PAXG/USDT`
+via ccxt pour une série qui suit le spot — l'outil vous l'indique si le symbole est incorrect.
+
+En complément, le skill intégré **`pine-script`** couvre l'écriture de TradingView Pine Script v5/v6 :
+référence du langage, templates d'indicateur et de stratégie avec des paramètres de backtest réalistes,
+et un validateur qui détecte les identifiants intégrés inventés avant de coller dans TradingView :
+
+```bash
+python /mnt/skills/public/pine-script/scripts/validate_pine.py mystrategy.pine
+```
+
 ### Sous-Agents
 
 Les tâches complexes tiennent rarement en un seul passage. Nova les décompose.

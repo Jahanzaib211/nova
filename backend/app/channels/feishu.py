@@ -41,6 +41,7 @@ class FeishuChannel(Channel):
         - ``app_id``: Feishu app ID.
         - ``app_secret``: Feishu app secret.
         - ``verification_token``: (optional) Event verification token.
+        - ``allowed_users``: (optional) List of allowed Feishu open_ids. Empty = allow all.
 
     The channel uses WebSocket long-connection mode so no public IP is required.
 
@@ -72,6 +73,7 @@ class FeishuChannel(Channel):
         self._CreateImageRequestBody = None
         self._GetMessageResourceRequest = None
         self._thread_lock = threading.Lock()
+        self._allowed_users: set[str] = {str(uid).strip() for uid in config.get("allowed_users", []) if str(uid).strip()}
 
     @staticmethod
     def _non_empty_str(value: Any) -> str | None:
@@ -82,6 +84,11 @@ class FeishuChannel(Channel):
     @staticmethod
     def _pending_key(chat_id: str, user_id: str) -> tuple[str, str]:
         return (chat_id, user_id)
+
+    def _check_user(self, user_id: str) -> bool:
+        if not self._allowed_users:
+            return True
+        return user_id in self._allowed_users
 
     @property
     def supports_streaming(self) -> bool:
@@ -873,6 +880,10 @@ class FeishuChannel(Channel):
                     fut.add_done_callback(lambda f, mid=msg_id: self._log_future_error(f, "bind_connection", mid))
                 else:
                     logger.warning("[Feishu] main loop not running, cannot bind channel connection")
+                return
+
+            if not self._check_user(sender_id):
+                logger.info("[Feishu] sender not in allowed_users, ignoring message: sender=%s", sender_id)
                 return
 
             # Only treat known slash commands as commands; absolute paths and

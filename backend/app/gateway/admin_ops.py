@@ -49,15 +49,24 @@ async def list_audit(
     *,
     limit: int,
     offset: int,
+    target_user_id: str | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> tuple[list[dict], int]:
-    """Return (rows, total) of audit entries, newest first."""
+    """Return (rows, total) of audit entries, newest first.
+
+    ``target_user_id``, when given, restricts to rows recorded against that
+    user (the audit trail's own ``target_user_id`` column, not the actor).
+    """
     sf = session_factory or get_session_factory()
     if sf is None:
         return [], 0
     async with sf() as session:
-        total = int(await session.scalar(select(func.count()).select_from(AdminAuditRow)) or 0)
+        count_stmt = select(func.count()).select_from(AdminAuditRow)
         stmt = select(AdminAuditRow).order_by(AdminAuditRow.created_at.desc()).limit(limit).offset(offset)
+        if target_user_id is not None:
+            count_stmt = count_stmt.where(AdminAuditRow.target_user_id == target_user_id)
+            stmt = stmt.where(AdminAuditRow.target_user_id == target_user_id)
+        total = int(await session.scalar(count_stmt) or 0)
         rows = (await session.execute(stmt)).scalars().all()
         data = [
             {

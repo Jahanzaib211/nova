@@ -251,6 +251,10 @@ export interface Translations {
     clickToViewContent: string;
     writeTodos: string;
     skillInstallTooltip: string;
+    fetchMarketData: string;
+    computeIndicators: string;
+    backtestSignals: string;
+    marketDataError: string;
   };
 
   // Uploads
@@ -452,6 +456,32 @@ export interface Translations {
       description: string;
       adminRequired: string;
       empty: string;
+      addButton: string;
+      addTitle: string;
+      editTitle: string;
+      formDescription: string;
+      fieldName: string;
+      fieldDescription: string;
+      fieldType: string;
+      typeStdio: string;
+      typeSse: string;
+      typeHttp: string;
+      fieldCommand: string;
+      fieldArgs: string;
+      fieldArgsHint: string;
+      fieldUrl: string;
+      fieldEnv: string;
+      fieldHeaders: string;
+      envKeyPlaceholder: string;
+      envValuePlaceholder: string;
+      addEnvVar: string;
+      addHeader: string;
+      removeRow: string;
+      saveButton: string;
+      confirmDelete: string;
+      created: string;
+      updated: string;
+      deleted: string;
     };
     channels: {
       title: string;
@@ -465,6 +495,7 @@ export interface Translations {
       emptyTitle: string;
       emptyDescription: string;
       emptyButton: string;
+      updateError: string;
     };
     notification: {
       title: string;

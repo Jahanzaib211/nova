@@ -3,6 +3,25 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type { Skill } from "./type";
 
+export class SkillUpdateError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "SkillUpdateError";
+    this.status = status;
+  }
+}
+
+async function readErrorDetail(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  const error = (await response.json().catch(() => ({}))) as {
+    detail?: unknown;
+  };
+  return typeof error.detail === "string" ? error.detail : fallback;
+}
+
 export async function loadSkills(): Promise<Skill[]> {
   const skills = await fetch(`${getBackendBaseURL()}/api/skills`);
   // TanStack Query requires queryFn to return a defined value. Surface
@@ -29,6 +48,16 @@ export async function enableSkill(skillName: string, enabled: boolean) {
       }),
     },
   );
+  if (!response.ok) {
+    // Previously returned response.json() unconditionally here — a failed
+    // toggle (403 admin-required, 404, 5xx) still resolved as "success",
+    // so useEnableSkill's onSuccess fired, the query got invalidated, and
+    // the Switch silently reverted with zero user feedback.
+    throw new SkillUpdateError(
+      response.status,
+      await readErrorDetail(response, "Failed to update skill"),
+    );
+  }
   return response.json();
 }
 

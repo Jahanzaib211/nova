@@ -30,5 +30,12 @@ export function useEnableSkill() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["skills"] });
     },
+    onError: () => {
+      // The Switch is controlled by query data, not local state — on
+      // failure there's nothing optimistic to roll back, but the query
+      // still needs invalidating so a stale cached "enabled" value (if
+      // any) doesn't linger. The caller surfaces the actual error message.
+      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+    },
   });
 }

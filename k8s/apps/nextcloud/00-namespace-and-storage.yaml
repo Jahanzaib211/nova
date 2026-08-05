@@ -1,0 +1,44 @@
+# Nextcloud on k3s — namespace + persistent volumes.
+#
+# Storage note: the cluster's only StorageClass is `local-path`
+# (rancher.io/local-path), which writes to /var/lib/rancher/k3s/storage on
+# whichever node the pod first schedules to. That volume does NOT follow a pod
+# to another node. Every workload here is therefore pinned to the control-plane
+# node via nodeSelector, so a future worker joining the cluster can never cause
+# a reschedule that silently comes up against an empty disk.
+#
+# When workers join and RAM frees up, the upgrade path is Longhorn (replicated
+# block storage): install open-iscsi + nfs-common on every node, deploy the
+# Longhorn chart, then re-create these PVCs with storageClassName: longhorn and
+# restore from the backup CronJob. Only at that point is it safe to drop the
+# nodeSelectors and let Nextcloud float across nodes.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nextcloud
+  labels:
+    app.kubernetes.io/part-of: nextcloud
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-data
+  namespace: nextcloud
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-db
+  namespace: nextcloud
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
