@@ -686,3 +686,129 @@ export function handleRunStream(route: Route) {
     body,
   });
 }
+
+// ── Sandbox surface (Agent's Computer) ─────────────────────────────────
+// The panel polls a handful of /api/sandbox/* endpoints on an interval. Without
+// mocks these proxy to a gateway that isn't running under `pnpm start`, so the
+// tabs render empty and every assertion is vacuous.
+
+export type MockSandboxFile = {
+  path: string;
+  virtual_path: string;
+  name: string;
+  size: number;
+  mtime: number;
+  modified: string;
+};
+
+/** Build a SandboxFile from a virtual path, as `GET /api/sandbox/files` would. */
+export function sandboxFile(
+  virtual_path: string,
+  size = 128,
+  mtime = 1_700_000_000,
+): MockSandboxFile {
+  return {
+    path: `/host${virtual_path}`,
+    virtual_path,
+    name: virtual_path.split("/").at(-1) ?? "",
+    size,
+    mtime,
+    modified: "12:00:00",
+  };
+}
+
+export function mockSandboxAPI(
+  page: Page,
+  options?: {
+    files?: MockSandboxFile[];
+    fileContent?: string;
+    fileExists?: boolean;
+    devStatus?: { running: boolean; status: string; port: number | null; url: string | null };
+  },
+) {
+  const files = options?.files ?? [];
+
+  void page.route("**/api/sandbox/files*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ files }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/file?*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        content: options?.fileContent ?? "",
+        path: "/mnt/user-data/workspace/index.html",
+        exists: options?.fileExists ?? false,
+        size: (options?.fileContent ?? "").length,
+      }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/dev-status*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        options?.devStatus ?? {
+          running: false,
+          status: "stopped",
+          port: null,
+          url: null,
+        },
+      ),
+    }),
+  );
+
+  void page.route("**/api/sandbox/dev-servers*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ servers: [] }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/todo*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ todos: [] }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/review*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ risks: [] }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/browser-check-last*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, routes: [] }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/terminal-url*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        terminal: "/api/sandbox/appview/t/terminal",
+        vnc: "/api/sandbox/appview/t/vnc/index.html",
+        port: 39123,
+      }),
+    }),
+  );
+
+  void page.route("**/api/sandbox/logs*", (route) =>
+    route.fulfill({ status: 200, contentType: "text/event-stream", body: "" }),
+  );
+}

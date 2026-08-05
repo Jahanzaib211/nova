@@ -26,6 +26,26 @@ Unit tests live under `tests/unit/` and mirror the `src/` layout (e.g., `tests/u
 
 E2E tests live under `tests/e2e/` and use Playwright with Chromium. They mock all backend APIs via `page.route()` network interception and test real page interactions (navigation, chat input, streaming responses). Config: `playwright.config.ts`.
 
+**Running E2E locally.** Two gotchas on this box:
+
+- Port 3000 is often taken by an unrelated project, and `reuseExistingServer` is
+  on outside CI — so Playwright would happily test *that* app. Always pass a
+  free port: `E2E_PORT=3111 CI=1 pnpm exec playwright test --project=chromium`.
+- `playwright install` refuses on Ubuntu 26.04, so the browser build
+  `@playwright/test` wants may be missing. If a run fails with
+  `Executable doesn't exist`, alias a cached build to the expected revision
+  (check `node_modules/.pnpm/playwright-core@*/.../browsers.json` for the number):
+
+  ```bash
+  cd ~/.cache/ms-playwright
+  ln -sfn chromium_headless_shell-<cached> chromium_headless_shell-<wanted>
+  ```
+
+The Agent's Computer panel polls several `/api/sandbox/*` endpoints; without
+`mockSandboxAPI` (`tests/e2e/utils/mock-api.ts`) those proxy to a gateway that
+isn't running under `pnpm start`, the tabs render empty, and assertions pass
+vacuously.
+
 ## Architecture
 
 ```

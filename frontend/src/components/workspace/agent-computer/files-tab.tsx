@@ -287,7 +287,7 @@ function FileTreeNode({
                 onClick={(e) => e.stopPropagation()}
                 title={t.common.download}
                 aria-label={`${t.common.download} ${node.name}`}
-                className="text-muted-foreground/40 hover:text-foreground shrink-0 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+                className="text-muted-foreground/50 hover:text-foreground shrink-0 transition-colors"
               >
                 <DownloadIcon className="h-2.5 w-2.5" />
               </a>
@@ -457,7 +457,7 @@ export function FilesPanel({
                   download={path.split("/").at(-1)}
                   title={t.common.download}
                   aria-label={`${t.common.download} ${path.split("/").at(-1)}`}
-                  className="text-muted-foreground/40 hover:text-foreground shrink-0 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+                  className="text-muted-foreground/50 hover:text-foreground shrink-0 transition-colors"
                 >
                   <DownloadIcon className="h-2.5 w-2.5" />
                 </a>

@@ -60,11 +60,18 @@ export function Browser({
 }) {
   const { t } = useI18n();
   // Only poll the static-preview file when its result can actually be shown:
-  // the tab is visible AND the live dev server isn't taking precedence (when it
-  // is, the component returns early and `content` is never read). This is a 2s
-  // poll of the file's ENTIRE contents, so leaving it on while hidden
+  // the tab is visible AND the live dev server isn't taking precedence. This is
+  // a 2s poll of the file's ENTIRE contents, so leaving it on while hidden
   // re-downloaded the whole deliverable 30x/minute for the life of the thread.
-  const staticPreviewNeeded = Boolean(active) && !devServer.running;
+  //
+  // The second half MUST mirror the early-return condition below exactly
+  // (`devServer.running && devServer.url`). Gating on `running` alone was a
+  // regression: while a dev server is starting it reports running with no URL
+  // yet, so the component falls through to this static path — and with fetching
+  // disabled the preview sat blank through the whole "Dev server compiling…"
+  // window instead of showing the deliverable.
+  const liveServerTakesOver = Boolean(devServer.running && devServer.url);
+  const staticPreviewNeeded = Boolean(active) && !liveServerTakesOver;
   const { content, exists, isLoading } = useSandboxFile(
     threadId,
     filePath,
