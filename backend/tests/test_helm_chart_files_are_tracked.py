@@ -131,7 +131,7 @@ class TestChartLabelSanitization:
     def test_chart_label_replaces_plus(self) -> None:
         text = self.HELPERS.read_text(encoding="utf-8")
         line = next(ln for ln in text.splitlines() if "helm.sh/chart:" in ln)
-        assert 'replace "+" "_"' in line, f'helm.sh/chart must sanitize SemVer build metadata: {line.strip()}'
+        assert 'replace "+" "_"' in line, f"helm.sh/chart must sanitize SemVer build metadata: {line.strip()}"
 
     def test_chart_label_is_truncated_to_the_label_limit(self) -> None:
         line = next(ln for ln in self.HELPERS.read_text(encoding="utf-8").splitlines() if "helm.sh/chart:" in ln)
