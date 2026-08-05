@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import fnmatch
+import json
 import os
 import re
 import shlex
@@ -349,17 +350,35 @@ async def start_dev_server_tool(
 
 
 def _aio_client_and_thread(runtime: Runtime):
-    """Resolve (client, thread_id, error). client is the agent_sandbox SDK client."""
+    """Resolve (client, thread_id, error). client is the agent_sandbox SDK client.
+
+    Goes through ``ensure_sandbox_initialized`` rather than reading
+    ``runtime.state["sandbox"]["sandbox_id"]`` directly. Every other sandbox
+    tool already did; this resolver did not, and that was the whole cause of
+    the browser tools' "fails once on a fresh thread, works on retry" transient:
+    on the first tool call of a thread the state key is absent, so ``sandbox_id``
+    was ``""`` and the tool bailed with "requires a per-thread sandbox" without
+    ever trying to acquire one. The same gap produced bursts of "sandbox not
+    available" whenever the provider dropped a stale container, because
+    ``provider.get()`` returns ``None`` there while ``ensure_sandbox_initialized``
+    explicitly re-acquires.
+
+    Sync on purpose: the browser tools are sync tools, so the sync helper is the
+    correct one — ``ensure_sandbox_initialized_async`` would need an event loop
+    these callers do not have.
+    """
     if is_local_sandbox(runtime):
         return None, None, "Error: this tool requires the container (AIO) sandbox."
-    sandbox_id = _get_sandbox_id(runtime)
     try:
         thread_id = _extract_thread_id_from_thread_data(get_thread_data(runtime))
     except Exception:
         thread_id = None
-    if not thread_id or not sandbox_id:
+    if not thread_id:
         return None, None, "Error: this tool requires a per-thread sandbox."
-    sandbox = get_sandbox_provider().get(sandbox_id)
+    try:
+        sandbox = ensure_sandbox_initialized(runtime)
+    except Exception as e:
+        return None, None, f"Error: sandbox not available ({e})."
     if sandbox is None:
         return None, None, "Error: sandbox not available."
     client = getattr(sandbox, "_client", None)
@@ -459,8 +478,9 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
     same chromium the Browser tab streams over VNC — the user still watches
     the navigation live.
 
-    ``op`` receives a Playwright ``Page`` (the currently visible tab when one
-    exists, else a fresh one) and returns a string.
+    ``op`` receives a Playwright ``Page`` chosen by ``_active_page`` (the
+    genuinely visible tab when one exists, else a fresh one) and returns a
+    string.
 
     ``thread_id`` scopes the CDP *connect* through the per-thread circuit
     breaker + bounded retry (browser_circuit_breaker.py / browser_retry.py)
@@ -507,8 +527,19 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
             browser = _connect(pw)
         try:
             ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page, _created = _active_page(ctx)
             return op(page)
+        except Exception as op_exc:
+            # Classify for a consistent, typed error surface — NOT for retry.
+            # `op` still runs at most once (see the invariant above); this
+            # only means a page-op failure is reported in the same vocabulary
+            # as a connect failure instead of leaking a raw Playwright dump.
+            from deerflow.sandbox.browser_errors import classify_playwright_exception
+
+            classified = classify_playwright_exception(op_exc)
+            if classified is op_exc:
+                raise
+            raise classified from op_exc
         finally:
             # A close() failure must never clobber a successful op() result
             # (an exception raised here would otherwise replace the return
@@ -518,10 +549,166 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
                 browser.close()
 
 
-def _sdk_page_api_missing(exc: Exception) -> bool:
-    """True when the SDK's browser_page REST call hit an image without those routes."""
+def _active_page(ctx):
+    """Pick the tab a human would call "the current one", plus whether we created it.
+
+    CDP exposes no "active tab" primitive, so probe each page for
+    ``document.visibilityState`` and take the first visible one. The old
+    ``ctx.pages[0]`` picked the *first* tab in the context, which is only
+    the visible one by coincidence — with several tabs open (very common
+    once the agent has opened a docs page alongside the app it is testing)
+    clicks and evals silently landed on the wrong page.
+
+    Every probe is suppressed individually: a crashed or still-loading tab
+    must degrade the *choice*, never break it. Falls back to the most
+    recently opened page (``pages[-1]``, the best heuristic when nothing
+    reports visible — a freshly opened tab is usually the interesting one),
+    then a new page.
+
+    Returns ``(page, created)``. Callers must only ``close()`` the page when
+    ``created`` is True — closing a page we merely borrowed would destroy
+    the user's tab mid-session.
+    """
+    pages = list(getattr(ctx, "pages", None) or [])
+    for page in pages:
+        with contextlib.suppress(Exception):
+            if page.evaluate("document.visibilityState") == "visible":
+                return page, False
+    if pages:
+        return pages[-1], False
+    return ctx.new_page(), True
+
+
+def _browser_op_timeout_ms() -> int:
+    """Timeout for a single page operation (click/fill/eval), in ms.
+
+    Raised from the original hardcoded 10s: SPA-heavy targets (TradingView
+    et al) routinely take longer than that to reach first-interactive, so
+    10s produced timeouts that looked like broken selectors but were really
+    just an impatient deadline.
+    """
+    try:
+        return max(1000, int(os.environ.get("DEERFLOW_BROWSER_OP_TIMEOUT_MS", "30000")))
+    except ValueError:
+        return 30000
+
+
+def _should_fallback_to_cdp(exc: Exception) -> bool:
+    """True when an SDK ``browser_page`` call can't be served and CDP should take over.
+
+    Three cases, most precise first:
+
+    1. A real HTTP 404 from the SDK — the AIO image predates the
+       ``/v1/browser_page/*`` routes. Read ``status_code`` off the SDK's
+       ``ApiError`` rather than sniffing ``str(exc)``: the old substring
+       form ("404" and "not found" both present) also matched *page-level*
+       errors whose body happened to contain those tokens, which is very
+       plausible when the page under test is itself a 404 — and that
+       wrongly re-ran side-effectful ops over CDP.
+
+    2. ``TypeError``/``AttributeError`` — the SDK's Python signature drifted
+       from what we call. This is the case that mattered: ``browser_eval``
+       passed ``script=`` to a method that takes ``expression=``, and
+       ``browser_input`` passed ``value=`` to one that takes ``text=``. Both
+       raise ``TypeError`` *before any HTTP request*, neither matched the
+       old substring gate, so both were re-raised and the CDP fallback below
+       them was unreachable — the tools had never once worked. Signature
+       drift should degrade to the CDP path, never hard-fail.
+
+    3. The legacy substring check, kept last for SDK versions that stringify
+       transport errors without exposing a status code.
+    """
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status == 404
+
+    if isinstance(exc, (TypeError, AttributeError)):
+        return True
+
     text = str(exc).lower()
     return "404" in text and "not found" in text
+
+
+def _selector_failure(page, selector: str, what: str, frame_count: int, timeout: int, exc: Exception) -> RuntimeError:
+    """Build an actionable failure for a selector that never resolved.
+
+    A bare Playwright timeout dump tells the model nothing it can act on.
+    Naming the page actually in front of us is usually enough for it to
+    self-correct (wrong tab, redirected to a login wall, still loading).
+    """
+    url = "?"
+    title = "?"
+    with contextlib.suppress(Exception):
+        url = page.url
+    with contextlib.suppress(Exception):
+        title = page.title()
+    return RuntimeError(
+        f"could not {what} {selector!r} after {timeout}ms (searched the main frame + {frame_count} child frame(s)); page is {title!r} at {url} — check the selector, or whether the element is behind a login/overlay. Underlying error: {exc}"
+    )
+
+
+def _selector_action(page, selector: str, action, *, what: str) -> str:
+    """Run ``action(target, timeout_ms)`` against whichever frame owns ``selector``.
+
+    Tries the main frame first, then each child frame — controls inside an
+    iframe (embedded editors, payment widgets, most third-party chrome) are
+    invisible to a main-frame-only selector, which previously surfaced as a
+    plain timeout with no hint that a frame was even involved.
+
+    The main-frame attempt gets the full timeout because that is the common
+    case and the element is usually just slow; child frames are then probed
+    at 3s each, since by that point we already know the element is not where
+    it normally lives and a per-frame long wait would multiply the deadline.
+    """
+    timeout = _browser_op_timeout_ms()
+    try:
+        return action(page, timeout) or ""
+    except Exception as main_exc:
+        frames = [f for f in (getattr(page, "frames", None) or []) if f is not getattr(page, "main_frame", None)]
+        for frame in frames:
+            try:
+                frame.wait_for_selector(selector, timeout=3000, state="attached")
+            except Exception:
+                continue
+            with contextlib.suppress(Exception):
+                return action(frame, timeout) or ""
+        raise _selector_failure(page, selector, what, len(frames), timeout, main_exc) from main_exc
+
+
+def _eval_js(page, script: str):
+    """Evaluate ``script``, retrying multi-statement bodies wrapped in an IIFE.
+
+    Playwright's ``evaluate`` takes an *expression*, so the shape a model
+    reaches for most naturally — ``const x = 1; return x;`` — is a JS
+    SyntaxError, i.e. a permanent failure that no retry layer will save.
+    Wrapping it in an arrow IIFE makes it valid without changing what the
+    author meant. Only retried on a syntax error, so a genuine runtime
+    exception still surfaces as itself.
+    """
+    try:
+        return page.evaluate(script)
+    except Exception as exc:
+        text = str(exc)
+        if "SyntaxError" not in text and "Illegal return statement" not in text:
+            raise
+        return page.evaluate(f"(() => {{\n{script}\n}})()")
+
+
+def _format_eval_result(value) -> str:
+    """Render a JS value as something the model can actually parse.
+
+    The old code did ``str(page.evaluate(...))``, which is Python ``repr``:
+    a JS object came back as ``{'a': 1}`` (single quotes — not JSON), ``null``
+    as ``None``, and ``true`` as ``True``. JSON round-trips all three.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _data_str(resp) -> str:
@@ -684,7 +871,7 @@ def browser_navigate_tool(
             client.browser_page.navigate(url=url, wait_until="load", timeout=20000)
             text = _data_str(client.browser_page.get_text())[:1500]
         except Exception as sdk_exc:
-            if not _sdk_page_api_missing(sdk_exc):
+            if not _should_fallback_to_cdp(sdk_exc):
                 raise
 
             # Image predates /v1/browser_page — drive the same chromium over CDP.
@@ -722,9 +909,22 @@ def browser_click_tool(runtime: Runtime, description: str, selector: str) -> str
         try:
             client.browser_page.click(selector=selector)
         except Exception as sdk_exc:
-            if not _sdk_page_api_missing(sdk_exc):
+            if not _should_fallback_to_cdp(sdk_exc):
                 raise
-            _cdp_browser_op(client, lambda page: page.click(selector, timeout=10000) or "", thread_id=_tid)
+
+            def _click(page):
+                def _do(target, timeout):
+                    # Scroll first: Playwright auto-waits for actionability,
+                    # but an element parked outside a scroll container can
+                    # stay "not stable" until something moves it into view.
+                    with contextlib.suppress(Exception):
+                        target.locator(selector).first.scroll_into_view_if_needed(timeout=timeout)
+                    target.click(selector, timeout=timeout)
+                    return ""
+
+                return _selector_action(page, selector, _do, what="click")
+
+            _cdp_browser_op(client, _click, thread_id=_tid)
         return f"Clicked {selector}."
     except Exception as e:
         return f"Error: {e}"
@@ -745,15 +945,23 @@ def browser_input_tool(runtime: Runtime, description: str, selector: str, text: 
         return err
     try:
         try:
-            client.browser_page.fill(selector=selector, value=text)
+            # `text=` is the SDK's parameter name, not `value=`. Passing
+            # `value=` raised TypeError before any request left the process,
+            # and that TypeError did not match the old CDP-fallback gate, so
+            # this tool could never type anything on any image.
+            client.browser_page.fill(selector=selector, text=text)
             if press_enter:
                 client.browser_page.press_key(key="Enter")
         except Exception as sdk_exc:
-            if not _sdk_page_api_missing(sdk_exc):
+            if not _should_fallback_to_cdp(sdk_exc):
                 raise
 
             def _fill(page):
-                page.fill(selector, text, timeout=10000)
+                def _do(target, timeout):
+                    target.fill(selector, text, timeout=timeout)
+                    return ""
+
+                _selector_action(page, selector, _do, what="type into")
                 if press_enter:
                     page.keyboard.press("Enter")
                 return ""
@@ -768,20 +976,31 @@ def browser_input_tool(runtime: Runtime, description: str, selector: str, text: 
 def browser_eval_tool(runtime: Runtime, description: str, script: str) -> str:
     """Run JavaScript in the sandbox browser and return the result.
 
+    Accepts either a bare expression (``document.title``) or a multi-statement
+    body (``const el = document.querySelector('h1'); return el.textContent;``)
+    — the latter is wrapped in an IIFE automatically.
+
+    Objects and arrays come back as JSON, so the result can be parsed rather
+    than eyeballed.
+
     Args:
         description: Why you are evaluating. ALWAYS PROVIDE THIS FIRST.
-        script: JavaScript expression to evaluate.
+        script: JavaScript expression or statement body to evaluate.
     """
     client, _tid, err = _aio_client_and_thread(runtime)
     if err:
         return err
     try:
         try:
-            return _data_str(client.browser_page.evaluate(script=script))[:2000] or "(no result)"
+            # `expression=` is the SDK's parameter name, not `script=`.
+            # Passing `script=` raised TypeError before any request was
+            # made, and that TypeError did not match the old CDP-fallback
+            # gate, so this tool had never executed a line of JavaScript.
+            return _data_str(client.browser_page.evaluate(expression=script))[:2000] or "(no result)"
         except Exception as sdk_exc:
-            if not _sdk_page_api_missing(sdk_exc):
+            if not _should_fallback_to_cdp(sdk_exc):
                 raise
-            result = _cdp_browser_op(client, lambda page: str(page.evaluate(script)), thread_id=_tid)
+            result = _cdp_browser_op(client, lambda page: _format_eval_result(_eval_js(page, script)), thread_id=_tid)
             return result[:2000] or "(no result)"
     except Exception as e:
         return f"Error: {e}"
@@ -835,12 +1054,19 @@ def screenshot_tool(
                 with sync_playwright() as pw:
                     browser = pw.chromium.connect_over_cdp(cdp, timeout=10000)
                     ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-                    page = ctx.new_page()
+                    # Was `ctx.new_page()`, which opens a blank tab and
+                    # screenshots *that* — so this tool reliably returned a
+                    # white rectangle instead of the page the agent had just
+                    # navigated to, and the agent trusted it.
+                    page, created = _active_page(ctx)
                     try:
                         png = page.screenshot(full_page=full_page)
                     finally:
-                        with contextlib.suppress(Exception):
-                            page.close()
+                        # Only close a page we opened; closing a borrowed tab
+                        # would destroy the user's live session mid-task.
+                        if created:
+                            with contextlib.suppress(Exception):
+                                page.close()
             except Exception:
                 png = None
 
@@ -1170,15 +1396,16 @@ def browser_check_tool(
     try:
         from deerflow.sandbox.browser_check import run_browser_check
 
-        sandbox_id = _get_sandbox_id(runtime)
         if is_local_sandbox(runtime):
             return "Error: browser self-test requires the container (AIO) sandbox."
         thread_id = _extract_thread_id_from_thread_data(get_thread_data(runtime))
-        if not thread_id or not sandbox_id:
+        if not thread_id:
             return "Error: browser self-test requires a per-thread sandbox."
-        sandbox = get_sandbox_provider().get(sandbox_id)
+        # Lazy-acquire like every other sandbox tool — see _aio_client_and_thread.
+        sandbox = ensure_sandbox_initialized(runtime)
         if sandbox is None:
             return "Error: sandbox not available."
+        sandbox_id = getattr(sandbox, "id", "") or _get_sandbox_id(runtime)
         route_list = [r.strip() for r in routes.split(",") if r.strip()] or ["/"]
         check = run_browser_check(thread_id, sandbox, routes=route_list, with_screenshot=False)
         _write_sandbox_observation(

@@ -226,18 +226,49 @@ async def test_crawl_no_auth_header_without_api_key(jina_client, monkeypatch):
 
 @pytest.mark.anyio
 async def test_web_fetch_tool_returns_error_on_crawl_failure(monkeypatch):
-    """Test that web_fetch_tool short-circuits and returns the error string when crawl fails."""
+    """When Jina fails AND the direct fallback fails, the error surfaces both.
+
+    web_fetch no longer short-circuits on a Jina error: r.jina.ai now 401s
+    without an API key, which had left the tool dead on every deployment that
+    never set JINA_API_KEY. A failing Jina now falls through to a direct fetch,
+    so this test stubs *both* legs — otherwise it would reach the real network.
+    """
 
     async def mock_crawl(self, url, **kwargs):
         return "Error: Jina API returned status 429: Rate limited"
+
+    async def mock_direct(url, timeout, proxy, trust_env):
+        return "Error: direct fetch returned status 500"
 
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
     monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr("deerflow.community.jina_ai.tools._direct_fetch", mock_direct)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert result.startswith("Error:")
     assert "429" in result
+    assert "500" in result
+
+
+@pytest.mark.anyio
+async def test_web_fetch_tool_falls_back_to_direct_fetch(monkeypatch):
+    """A failing Jina must not kill the tool when the origin is reachable."""
+
+    async def mock_crawl(self, url, **kwargs):
+        return "Error: Jina API returned status 401: Invalid API key"
+
+    async def mock_direct(url, timeout, proxy, trust_env):
+        return "<html><body><article><p>Fallback content</p></article></body></html>"
+
+    mock_config = MagicMock()
+    mock_config.get_tool_config.return_value = None
+    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
+    monkeypatch.setattr("deerflow.community.jina_ai.tools._direct_fetch", mock_direct)
+    result = await web_fetch_tool.ainvoke("https://example.com")
+    assert not result.startswith("Error:")
+    assert "Fallback content" in result
 
 
 @pytest.mark.anyio

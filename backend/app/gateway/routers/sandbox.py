@@ -674,13 +674,20 @@ async def save_skill(thread_id: str, name: str, path: str = ""):
 
 @router.get("/terminal-url")
 async def terminal_url(thread_id: str):
-    """Return direct host URLs for the sandbox's interactive ttyd terminal + noVNC
-    browser view, for embedding in the Agent's Computer.
+    """Return **same-origin** URLs for the sandbox's interactive ttyd terminal +
+    noVNC browser view, for embedding in the Agent's Computer.
 
-    The per-thread container publishes its API/UI port (8080) on the host, so the
-    user's browser reaches ttyd/noVNC directly at ``localhost:{published_port}`` —
-    they manage their own WebSocket to that port, so no gateway WS-proxy is needed.
-    (Local dev: the browser shares the Docker host.)"""
+    These used to be absolute ``http://localhost:{published_port}`` URLs pointing
+    straight at the container's published port, on the assumption that "the
+    browser shares the Docker host". That only holds for local development. On
+    any real deployment (nova.alilabsx.com is Docker Compose behind a Cloudflare
+    tunnel; the browser is nowhere near the host) those URLs are unreachable, and
+    the app shell's own CSP ``frame-src 'self' blob:`` would refuse to frame them
+    anyway. Both panes were therefore permanently blank once deployed.
+
+    Routing them through ``/api/sandbox/appview/{thread_id}/`` keeps them
+    same-origin, so they satisfy ``frame-src 'self'``, inherit the proxy's opaque
+    ``sandbox`` CSP, and work identically local and deployed."""
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -697,7 +704,7 @@ async def terminal_url(thread_id: str):
         if not base:
             return {"terminal": None, "vnc": None, "reason": "sandbox unavailable"}
         port = urlparse(base).port or 8080
-        host_base = f"http://localhost:{port}"
+        prefix = _appview_prefix(thread_id)
         # Keep ttyd's session_id query if the SDK provides one.
         query = ""
         try:
@@ -707,8 +714,10 @@ async def terminal_url(thread_id: str):
             query = urlparse(raw).query
         except Exception:
             query = ""
-        terminal = f"{host_base}/terminal" + (f"?{query}" if query else "")
-        return {"terminal": terminal, "vnc": f"{host_base}/vnc/index.html", "port": port}
+        terminal = f"{prefix}/terminal" + (f"?{query}" if query else "")
+        # `port` is reported for diagnostics only — it is the container's published
+        # host port and is deliberately no longer part of either URL.
+        return {"terminal": terminal, "vnc": f"{prefix}/vnc/index.html", "port": port}
     except Exception as e:
         logger.warning("terminal-url failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
         return {"terminal": None, "vnc": None, "reason": "internal error"}
@@ -774,6 +783,118 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     resp_headers.pop("set-cookie", None)
     resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
     return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers, media_type=upstream.headers.get("content-type") or None)
+
+
+def _appview_prefix(thread_id: str) -> str:
+    """Same-origin mount point for the sandbox container's own web UI (ttyd, noVNC)."""
+    return f"/api/sandbox/appview/{thread_id}"
+
+
+async def _sandbox_base_url(thread_id: str) -> str:
+    """Resolve the per-thread sandbox container's base URL, or raise HTTPException."""
+    from deerflow.sandbox import get_sandbox_provider
+
+    provider = get_sandbox_provider()
+    if not hasattr(provider, "get_preview_endpoint"):
+        raise HTTPException(status_code=400, detail="appview requires the container sandbox")
+    sandbox_id = await asyncio.to_thread(provider.acquire, thread_id)
+    sandbox = provider.get(sandbox_id)
+    base_url = getattr(sandbox, "base_url", None)
+    if not base_url:
+        raise HTTPException(status_code=503, detail="sandbox unavailable")
+    return str(base_url).rstrip("/")
+
+
+# Injected into appview HTML so the container UI's own WebSockets come back
+# through the gateway instead of straight at the app origin's root. ttyd and
+# noVNC both build their socket URL in JS from `window.location`, so a <base>
+# tag cannot reach them — only patching the constructor can. Cross-origin
+# sockets are left untouched.
+_APPVIEW_WS_SHIM = """<script>(function(){
+var P=%(ws_prefix)s;var Orig=window.WebSocket;
+function rw(u){try{var x=new URL(u,window.location.href);
+if(x.host!==window.location.host)return u;
+if(x.pathname.indexOf(P)===0)return x.href;
+x.pathname=P+x.pathname;
+x.protocol=(window.location.protocol==='https:')?'wss:':'ws:';
+return x.href}catch(e){return u}}
+function W(u,p){return p===undefined?new Orig(rw(u)):new Orig(rw(u),p)}
+W.prototype=Orig.prototype;W.CONNECTING=0;W.OPEN=1;W.CLOSING=2;W.CLOSED=3;
+window.WebSocket=W})();</script>"""
+
+
+async def _proxy_appview(thread_id: str, path: str, request: Request) -> Response:
+    """Proxy the sandbox container's own web UI (ttyd at /terminal, noVNC at
+    /vnc/) through the gateway so it is same-origin with the app shell."""
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    base_url = await _sandbox_base_url(thread_id)
+
+    prefix = _appview_prefix(thread_id)
+    target = f"{base_url}/{path}"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+
+    _STRIP = _HOP_BY_HOP | {"host", "cookie", "authorization", "proxy-authorization", "x-api-key", "x-csrf-token"}
+    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in _STRIP}
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
+            upstream = await client.request(request.method, target, headers=fwd_headers, content=body)
+    except httpx.ConnectError:
+        return Response(content="sandbox UI unavailable", status_code=503)
+    except Exception as e:
+        logger.warning("appview request failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
+        return Response(content="Proxy error", status_code=502)
+
+    resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
+    location = resp_headers.get("location") or resp_headers.get("Location")
+    if location and location.startswith("/") and not location.startswith(prefix):
+        resp_headers["location"] = f"{prefix}{location}"
+
+    content = upstream.content
+    content_type = upstream.headers.get("content-type", "")
+    if "text/html" in content_type:
+        try:
+            html = content.decode("utf-8", errors="replace")
+            shim = _APPVIEW_WS_SHIM % {"ws_prefix": json.dumps(f"/api/sandbox/appview-ws/{thread_id}")}
+            if "<head>" in html:
+                injected = f'<head><base href="{prefix}/">{shim}' if "<base " not in html else f"<head>{shim}"
+                html = html.replace("<head>", injected, 1)
+            else:
+                html = shim + html
+            html = html.replace('href="/', f'href="{prefix}/').replace('src="/', f'src="{prefix}/').replace('action="/', f'action="{prefix}/')
+            content = html.encode("utf-8")
+        except Exception:
+            pass
+        # Content-Length is now wrong for the rewritten body; httpx set it from
+        # upstream. Drop it and let Starlette recompute.
+        resp_headers.pop("content-length", None)
+        resp_headers.pop("Content-Length", None)
+
+    resp_headers.pop("set-cookie", None)
+    resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+    return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=content_type or None)
+
+
+def _make_appview_wrapper(method: str):
+    """Per-method wrapper around _proxy_appview (unique OpenAPI operationIds)."""
+
+    async def handler(thread_id: str, path: str, request: Request) -> Response:
+        return await _proxy_appview(thread_id, path, request)
+
+    handler.__name__ = f"appview_{method.lower()}"
+    handler.__qualname__ = handler.__name__
+    handler.__doc__ = "Proxy the sandbox container's own web UI (ttyd, noVNC) same-origin through the gateway."
+    return handler
+
+
+for _method in _PROXY_METHODS:
+    router.add_api_route(
+        "/appview/{thread_id}/{path:path}",
+        _make_appview_wrapper(_method),
+        methods=[_method],
+    )
 
 
 def _make_absproxy_wrapper(method: str):
@@ -998,45 +1119,72 @@ async def proxy_dev_server_ws_labeled(websocket: WebSocket, thread_id: str, labe
     await _proxy_dev_server_ws(websocket, thread_id, label, path)
 
 
-async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str, path: str):
-    """Bridge the browser's HMR WebSocket to the dev server's WS so the live
-    preview hot-reloads when the agent edits files."""
+@router.websocket("/appview-ws/{thread_id}/{path:path}")
+async def proxy_appview_ws(websocket: WebSocket, thread_id: str, path: str):
+    """Bridge ttyd's and noVNC's WebSockets to the sandbox container's own UI port.
+
+    Reached via the WebSocket shim injected by ``_proxy_appview`` — the browser
+    opens a same-origin socket here and the gateway relays it into the container,
+    so the live terminal and VNC panes work on deployments where the container's
+    published port is not reachable from the browser at all."""
+    if not _caller_owns_thread(thread_id):
+        await websocket.close(code=1008)
+        return
+    if not _ws_same_origin(websocket):
+        await websocket.close(code=1008)
+        return
+    try:
+        base_url = await _sandbox_base_url(thread_id)
+    except HTTPException:
+        await websocket.close(code=1011)
+        return
+    except Exception:
+        await websocket.close(code=1011)
+        return
+
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(base_url)
+    query = websocket.url.query
+    upstream_url = f"ws://{parts.netloc}/{path}" + (f"?{query}" if query else "")
+    await websocket.accept()
+    await _bridge_ws(websocket, upstream_url)
+
+
+def _ws_same_origin(websocket: WebSocket) -> bool:
+    """Anti cross-site-WebSocket-hijacking: only accept same-origin handshakes."""
+    origin = websocket.headers.get("origin")
+    host = websocket.headers.get("host")
+    if not origin or not host:
+        return True
+    from urllib.parse import urlparse
+
+    return urlparse(origin).netloc == host
+
+
+async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:
+    """Relay an already-accepted client WebSocket to ``upstream_url``.
+
+    Handles text *and* binary frames in both directions. ttyd and noVNC are
+    binary protocols, so a text-only pump silently drops their traffic.
+    """
     import asyncio as _asyncio
 
     import websockets as _ws
 
-    handle = get_dev_server(thread_id, label)
-    if handle is None or handle.status not in ("starting", "ready"):
-        await websocket.close(code=1011)
-        return
-
-    # Anti cross-site-WebSocket-hijacking: only accept same-origin handshakes.
-    origin = websocket.headers.get("origin")
-    host = websocket.headers.get("host")
-    if origin and host:
-        from urllib.parse import urlparse
-
-        if urlparse(origin).netloc != host:
-            await websocket.close(code=1008)
-            return
-
-    # Cross-tenant check — refuse if the caller doesn't own this thread.
-    if not _caller_owns_thread(thread_id):
-        await websocket.close(code=1008)
-        return
-
-    await websocket.accept()
-    query = websocket.url.query
-    upstream_url = f"ws://{handle.host}:{handle.port}/{path}" + (f"?{query}" if query else "")
-
     try:
-        async with _ws.connect(upstream_url, open_timeout=10) as upstream:
+        async with _ws.connect(upstream_url, open_timeout=10, max_size=None) as upstream:
 
             async def client_to_upstream():
                 try:
                     while True:
-                        msg = await websocket.receive_text()
-                        await upstream.send(msg)
+                        msg = await websocket.receive()
+                        if msg.get("type") == "websocket.disconnect":
+                            return
+                        if (data := msg.get("bytes")) is not None:
+                            await upstream.send(data)
+                        elif (text := msg.get("text")) is not None:
+                            await upstream.send(text)
                 except (WebSocketDisconnect, Exception):
                     return
 
@@ -1054,7 +1202,31 @@ async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str,
     except Exception:
         pass
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await websocket.close()
-        except Exception:
-            pass
+
+
+async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str, path: str):
+    """Bridge the browser's HMR WebSocket to the dev server's WS so the live
+    preview hot-reloads when the agent edits files."""
+    handle = get_dev_server(thread_id, label)
+    if handle is None or handle.status not in ("starting", "ready"):
+        await websocket.close(code=1011)
+        return
+
+    if not _ws_same_origin(websocket):
+        await websocket.close(code=1008)
+        return
+
+    # Cross-tenant check — refuse if the caller doesn't own this thread.
+    if not _caller_owns_thread(thread_id):
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    query = websocket.url.query
+    upstream_url = f"ws://{handle.host}:{handle.port}/{path}" + (f"?{query}" if query else "")
+    # Shared bridge: relays binary as well as text. The previous inline pump used
+    # receive_text(), which raises on a binary frame and tears the socket down —
+    # harmless for webpack/Vite HMR (text-only) but wrong in general.
+    await _bridge_ws(websocket, upstream_url)

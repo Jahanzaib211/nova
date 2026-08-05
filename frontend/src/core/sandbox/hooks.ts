@@ -186,8 +186,14 @@ export function sandboxReviewDownloadUrl(threadId: string): string {
 }
 
 // ── useSandboxTerminalUrl ──────────────────────────────────
-// Direct host URLs for the sandbox's interactive ttyd terminal + noVNC browser,
+// Same-origin URLs for the sandbox's interactive ttyd terminal + noVNC browser,
 // for embedding live views in the Agent's Computer. Enable only when needed.
+//
+// The backend returns app-root-relative paths (/api/sandbox/appview/...). It
+// used to return absolute http://localhost:{published_port} URLs, which only
+// resolved when the browser happened to run on the Docker host — on any real
+// deployment both panes were permanently blank, and the app shell's
+// `frame-src 'self' blob:` CSP would have refused them regardless.
 
 export type SandboxTerminalUrls = {
   terminal: string | null;
@@ -207,7 +213,13 @@ export function useSandboxTerminalUrl(
         `${getBackendBaseURL()}/api/sandbox/terminal-url?thread_id=${encodeURIComponent(threadId!)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
-      return res.json() as Promise<SandboxTerminalUrls>;
+      const raw = (await res.json()) as SandboxTerminalUrls;
+      // Prefix root-relative paths so split-origin deployments (where
+      // NEXT_PUBLIC_BACKEND_BASE_URL is set) still reach the gateway.
+      const base = getBackendBaseURL();
+      const abs = (u: string | null) =>
+        u?.startsWith("/") ? `${base}${u}` : u;
+      return { ...raw, terminal: abs(raw.terminal), vnc: abs(raw.vnc) };
     },
     enabled: Boolean(threadId) && enabled,
     staleTime: 60_000,

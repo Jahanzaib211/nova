@@ -32,9 +32,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
 # Markers
 # ---------------------------------------------------------------------------
 
+from support.live_gate import live_skip_reason
+
+# Opt-in via DEERFLOW_LIVE_TESTS=1; never runs in CI; still needs a real key.
 requires_llm = pytest.mark.skipif(
-    os.getenv("CI", "").lower() in ("true", "1") or not os.getenv("OPENAI_API_KEY"),
-    reason="Requires LLM API key — skipped in CI or when OPENAI_API_KEY is unset",
+    live_skip_reason() is not None or not os.getenv("OPENAI_API_KEY"),
+    reason="Live LLM test: set DEERFLOW_LIVE_TESTS=1 and OPENAI_API_KEY to run",
 )
 
 

@@ -65,16 +65,32 @@ helm upgrade nova k8s/charts/nova -n nova-staging -f k8s/charts/nova/values-stag
 ```
 
 **Critical:** a `helm upgrade` that only changes a ConfigMap (e.g.
-`config.yaml`, `nginx.conf`, `extensions_config.default.json`) does **not**
-restart the pod that mounts it — Kubernetes updates the file on disk
-in-place but the already-running process keeps its old in-memory state.
-Follow up with an explicit rollout restart for whichever component owns
-that file:
+`config.yaml`, `extensions_config.default.json`) does **not** restart the pod
+that mounts it. Two independent reasons, and the second is the one that bites:
+
+1. The Deployment spec is byte-identical, so Helm generates no new pod
+   template and therefore no rollout — `helm upgrade` reports success anyway.
+2. These ConfigMaps are mounted with **`subPath`**, which kubelet never
+   updates in place. The file inside the container is frozen at pod creation,
+   so even a long-lived pod would never see the new content. (This is why the
+   older wording here — "Kubernetes updates the file on disk in-place but the
+   process keeps its old in-memory state" — was wrong: with `subPath` the
+   on-disk file does not change either.)
+
+`nginx` is now exempt: `deployment-nginx.yaml` carries a
+`checksum/nginx-config` annotation computed from the ConfigMap template, so
+changing `files/nginx.conf` rolls the pod automatically. Everything else still
+needs an explicit restart:
 
 ```bash
 kubectl rollout restart deployment/gateway -n nova-staging   # config.yaml, env vars
-kubectl rollout restart deployment/nginx    -n nova-staging   # nginx.conf
+# nginx rolls itself via checksum/nginx-config — no manual restart needed
 ```
+
+The same trap applies to **image rebuilds**: tags are static (`nova-gateway:staging`)
+with `imagePullPolicy: IfNotPresent`, so rebuilding under the same tag also
+produces an identical spec and no rollout. Always `kubectl rollout restart`
+after `build-images.sh`.
 
 This mirrors the same rule documented in the root `CLAUDE.md` for
 `STARTUP_ONLY_FIELDS` in Compose — it's not new here, just easy to forget

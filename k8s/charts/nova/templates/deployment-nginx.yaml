@@ -13,6 +13,19 @@ spec:
       {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        # Roll the pod whenever files/nginx.conf changes. Without this a
+        # `helm upgrade` that only touches the ConfigMap reports success and
+        # changes nothing: the Deployment spec is byte-identical, so no new
+        # pod template is generated. Worse, the mount below uses `subPath`,
+        # which kubelet never updates in place — so the container's
+        # /etc/nginx/nginx.conf is frozen at pod creation and even a
+        # long-lived pod would never pick the new config up.
+        #
+        # Caught by shipping the Agent's Computer iframe fix (the preview
+        # locations in files/nginx.conf): the ConfigMap updated, the pod kept
+        # serving the old config, and staging looked unchanged.
+        checksum/nginx-config: {{ include (print $.Template.BasePath "/configmap-nginx.yaml") . | sha256sum }}
       labels:
         {{- include "nova.labels" . | nindent 8 }}
         {{- include "nova.selectorLabels" (dict "component" "nginx") | nindent 8 }}

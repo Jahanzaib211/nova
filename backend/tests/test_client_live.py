@@ -11,16 +11,15 @@ import os
 from pathlib import Path
 
 import pytest
+from support.live_gate import live_skip_reason
 
 from deerflow.client import DeerFlowClient, StreamEvent
 from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.uploads.manager import PathTraversalError
 
-# Skip entire module in CI or when no config.yaml exists
-_skip_reason = None
-if os.environ.get("CI"):
-    _skip_reason = "Live tests skipped in CI"
-elif not Path(__file__).resolve().parents[2].joinpath("config.yaml").exists():
+# Live tests are opt-in (DEERFLOW_LIVE_TESTS=1) and never run in CI.
+_skip_reason = live_skip_reason()
+if _skip_reason is None and not Path(__file__).resolve().parents[2].joinpath("config.yaml").exists():
     _skip_reason = "No config.yaml found — live tests require valid API credentials"
 
 if _skip_reason:

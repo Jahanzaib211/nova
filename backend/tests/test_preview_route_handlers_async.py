@@ -19,6 +19,7 @@ PROXY_PATH_PREFIXES = (
     "/api/sandbox/preview/",
     "/api/sandbox/lpreview/",
     "/api/sandbox/absproxy/",
+    "/api/sandbox/appview/",
 )
 
 

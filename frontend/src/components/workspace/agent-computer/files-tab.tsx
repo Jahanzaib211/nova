@@ -71,6 +71,26 @@ type FileTreeNode = {
   file?: SandboxFile;
 };
 
+/**
+ * Files for the repository tree: everything on disk minus what the Outputs
+ * section already renders.
+ *
+ * `GET /api/sandbox/files` walks the workspace, outputs AND uploads roots,
+ * while presented deliverables are listed separately as `artifacts` — so every
+ * presented file showed up twice in the panel, once per section. Both sections
+ * earn their place (deliverables vs. everything on disk); a file just belongs
+ * to exactly one. `artifacts` and `virtual_path` share the same
+ * `/mnt/user-data/outputs/...` spelling, so an exact match is the right key.
+ */
+export function selectTreeFiles(
+  files: SandboxFile[],
+  artifacts: string[],
+): SandboxFile[] {
+  if (artifacts.length === 0) return files;
+  const presented = new Set(artifacts);
+  return files.filter((f) => !presented.has(f.virtual_path));
+}
+
 function buildFileTree(files: SandboxFile[]): FileTreeNode {
   const root: FileTreeNode = { name: "user-data", children: {} };
   for (const file of files) {
@@ -283,7 +303,11 @@ export function FilesPanel({
   active?: boolean;
 }) {
   const { t } = useI18n();
-  const tree = useMemo(() => buildFileTree(files), [files]);
+  const treeFiles = useMemo(
+    () => selectTreeFiles(files, artifacts),
+    [files, artifacts],
+  );
+  const tree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
   const runningCount = runningEvents.filter((e) =>
     TERMINAL_TOOLS.has(e.type),
   ).length;
@@ -367,7 +391,7 @@ export function FilesPanel({
         </div>
       )}
       {/* Repository tree */}
-      {(files.length > 0 || runningCount > 0) && (
+      {(treeFiles.length > 0 || runningCount > 0) && (
         <div>
           <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
             <FolderIcon className="h-3 w-3 text-yellow-400" />
@@ -375,7 +399,7 @@ export function FilesPanel({
               {t.agentComputer.files.repository}
             </span>
             <span className="bg-muted rounded px-1 text-[10px]">
-              {files.length}
+              {treeFiles.length}
             </span>
             {runningCount > 0 && (
               <div className="ml-auto flex items-center gap-1.5">
