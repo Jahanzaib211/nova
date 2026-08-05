@@ -1,0 +1,84 @@
+"""Every file the Helm chart reads must be committed to git.
+
+Flux only ever sees committed files. `.Files.Get` on a path that isn't in the
+clone returns an **empty string** — no error, no warning — so the chart renders
+a ConfigMap with empty data and both `helm upgrade` and the HelmRelease report
+success. The pods then fail on whatever the missing content was supposed to
+provide.
+
+This is not hypothetical. The root .gitignore carries an unanchored
+`config.yaml` pattern (correct for the operator-local file, which holds real
+credentials), and it also matched `k8s/charts/nova/files/config.yaml` — a chart
+*source* whose every secret is a `$ENV_VAR` reference. Result:
+`nova-app-config` was applied with `config.yaml: ""`, the gateway died in
+`AppConfig.model_validate` on the missing required `sandbox` field, and
+nova-staging sat in CrashLoopBackOff for five days (≈780 restarts) with nginx
+crash-looping behind it because its liveness probe hit the dead gateway.
+
+So: parse the chart templates for `.Files.Get "..."` and assert git tracks each
+referenced path. A pure-git check — no cluster, no helm binary.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CHART_DIR = REPO_ROOT / "k8s" / "charts" / "nova"
+TEMPLATES = CHART_DIR / "templates"
+
+_FILES_GET = re.compile(r'\.Files\.Get\s+"([^"]+)"')
+
+
+def _referenced_files() -> set[str]:
+    refs: set[str] = set()
+    for tpl in TEMPLATES.rglob("*.yaml"):
+        refs |= set(_FILES_GET.findall(tpl.read_text(encoding="utf-8")))
+    return refs
+
+
+def _git_tracked(path: Path) -> bool:
+    rel = path.relative_to(REPO_ROOT).as_posix()
+    out = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", rel],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return out.returncode == 0
+
+
+pytestmark = pytest.mark.skipif(not (REPO_ROOT / ".git").exists(), reason="not a git checkout")
+
+
+def test_chart_templates_reference_at_least_one_file() -> None:
+    """Guard the guard — a broken regex would make every other test vacuous."""
+    refs = _referenced_files()
+    assert refs, "no .Files.Get references found; the parser is broken"
+    assert "files/nginx.conf" in refs
+
+
+@pytest.mark.parametrize("ref", sorted(_referenced_files()))
+def test_referenced_chart_file_exists_on_disk(ref: str) -> None:
+    assert (CHART_DIR / ref).is_file(), f"chart references {ref} but it does not exist"
+
+
+@pytest.mark.parametrize("ref", sorted(_referenced_files()))
+def test_referenced_chart_file_is_tracked_by_git(ref: str) -> None:
+    """The actual regression: present locally, invisible to Flux."""
+    path = CHART_DIR / ref
+    assert _git_tracked(path), f"{path.relative_to(REPO_ROOT)} is referenced by a chart template but is NOT tracked by git — Flux will render it as an empty string and the deployment will fail silently. Check .gitignore."
+
+
+def test_operator_local_config_stays_ignored() -> None:
+    """The .gitignore negation must not have un-ignored the real secrets file."""
+    out = subprocess.run(
+        ["git", "check-ignore", "-q", "config.yaml"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+    )
+    assert out.returncode == 0, "the repo-root config.yaml holds real credentials and must stay gitignored"

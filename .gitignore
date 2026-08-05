@@ -24,10 +24,24 @@ venv/
 .env
 
 # Configuration files
+# These patterns are unanchored, so they match at ANY depth — that is deliberate
+# for the operator-local files (which hold real credentials), but it also
+# swallowed the Helm chart's own templates. See the negations below.
 config.yaml
 runtime_models.yaml
 mcp_config.json
 extensions_config.json
+
+# The Helm chart's files/ are chart *sources*, not operator config: every
+# secret in them is a `$ENV_VAR` reference resolved at runtime from the
+# `nova-secrets` Secret, never a literal. They must be tracked or Flux — which
+# only ever sees committed files — renders the ConfigMap from a file that isn't
+# there. `.Files.Get` returns "" silently, so `nova-app-config` was applied with
+# `config.yaml: ""`, the gateway failed AppConfig validation on the missing
+# required `sandbox` field, and nova-staging sat in CrashLoopBackOff for five
+# days while `helm upgrade` and the HelmRelease both reported success.
+!k8s/charts/nova/files/config.yaml
+!k8s/charts/nova/files/*.yaml
 
 # IDE
 .idea/

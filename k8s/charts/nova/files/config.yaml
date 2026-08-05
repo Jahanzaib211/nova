@@ -1,0 +1,239 @@
+config_version: 16
+log_level: info
+token_usage:
+  enabled: true
+models:
+- name: minimax-m3
+  display_name: MiniMax M3
+  use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  model: MiniMax-M3
+  api_key: $MINIMAX_API_KEY
+  base_url: https://api.minimax.io/v1
+  request_timeout: 600.0
+  max_retries: 4
+  max_tokens: 131072
+  max_input_tokens: 1000000
+  temperature: 1.0
+  supports_vision: true
+  supports_thinking: true
+  when_thinking_enabled:
+    extra_body:
+      thinking:
+        type: adaptive
+  when_thinking_disabled:
+    extra_body:
+      thinking:
+        type: disabled
+# The three Fireworks-hosted models below are hidden from the default quick
+# model picker (see `hidden: true`) so MiniMax M3 is the only model shown by
+# default, per operator preference. They remain fully configured/usable —
+# reachable via the settings page, the /api/models API, and any thread
+# already pinned to one — this only trims the picker's default surface.
+- name: fireworks-minimax-m3
+  display_name: MiniMax M3 (AMD MI300X via Fireworks)
+  use: langchain_openai:ChatOpenAI
+  model: accounts/fireworks/models/minimax-m3
+  api_key: $FIREWORKS_API_KEY
+  base_url: https://api.fireworks.ai/inference/v1
+  supports_thinking: true
+  supports_vision: true
+  max_tokens: 300000
+  max_input_tokens: 512000
+  temperature: 0.7
+  max_retries: 4
+  hidden: true
+  amd_compute: true
+- name: fireworks-gemma-4-31b
+  display_name: Gemma 4 31B (AMD MI300X via Fireworks)
+  use: langchain_openai:ChatOpenAI
+  model: accounts/fireworks/models/gemma-4-31b-it
+  api_key: $FIREWORKS_API_KEY
+  base_url: https://api.fireworks.ai/inference/v1
+  supports_thinking: true
+  supports_vision: true
+  max_tokens: 100000
+  max_input_tokens: 262144
+  max_retries: 4
+  hidden: true
+  amd_compute: true
+- name: fireworks-kimi-k2p7
+  display_name: Kimi K2.7 Code (AMD MI300X via Fireworks)
+  use: langchain_openai:ChatOpenAI
+  model: accounts/fireworks/models/kimi-k2p7-code
+  api_key: $FIREWORKS_API_KEY
+  base_url: https://api.fireworks.ai/inference/v1
+  supports_thinking: true
+  supports_vision: false
+  max_tokens: 100000
+  max_input_tokens: 262144
+  max_retries: 4
+  hidden: true
+  amd_compute: true
+tool_groups:
+- name: web
+- name: file:read
+- name: file:write
+- name: bash
+tools:
+- name: web_search
+  group: web
+  use: deerflow.community.ddg_search.tools:web_search_tool
+  max_results: 5
+- name: web_fetch
+  group: web
+  use: deerflow.community.jina_ai.tools:web_fetch_tool
+  timeout: 10
+- name: image_search
+  group: web
+  use: deerflow.community.image_search.tools:image_search_tool
+  max_results: 5
+- name: ls
+  group: file:read
+  use: deerflow.sandbox.tools:ls_tool
+- name: read_file
+  group: file:read
+  use: deerflow.sandbox.tools:read_file_tool
+- name: glob
+  group: file:read
+  use: deerflow.sandbox.tools:glob_tool
+  max_results: 200
+- name: grep
+  group: file:read
+  use: deerflow.sandbox.tools:grep_tool
+  max_results: 100
+- name: write_file
+  group: file:write
+  use: deerflow.sandbox.tools:write_file_tool
+- name: str_replace
+  group: file:write
+  use: deerflow.sandbox.tools:str_replace_tool
+- name: bash
+  group: bash
+  use: deerflow.sandbox.tools:bash_tool
+tool_search:
+  enabled: false
+tool_output:
+  enabled: true
+  externalize_min_chars: 12000
+  preview_head_chars: 2000
+  preview_tail_chars: 1000
+  fallback_max_chars: 30000
+  fallback_head_chars: 8000
+  fallback_tail_chars: 3000
+  storage_subdir: .tool-results
+  exempt_tools:
+  - read_file
+  - read_file_tool
+suggestions:
+  enabled: true
+loop_detection:
+  enabled: true
+  warn_threshold: 3
+  hard_limit: 5
+  window_size: 20
+  max_tracked_threads: 100
+  tool_freq_warn: 30
+  tool_freq_hard_limit: 50
+  tool_freq_overrides:
+    bash:
+      warn: 120
+      hard_limit: 250
+    write_file:
+      warn: 120
+      hard_limit: 250
+    str_replace:
+      warn: 120
+      hard_limit: 250
+safety_finish_reason:
+  enabled: true
+uploads:
+  max_files: 10
+  max_file_size: 52428800
+  max_total_size: 104857600
+  auto_convert_documents: false
+  pdf_converter: auto
+sandbox:
+  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  # K8s-staging difference from the Compose deployment: provisioner_url set
+  # -> AioSandboxProvider returns a RemoteSandboxBackend instead of the DooD
+  # local-Docker backend (verified in aio_sandbox_provider.py — this is a
+  # pure config switch, no code change). Sandbox execution becomes real
+  # per-thread K8s Pods created by the provisioner Deployment in this same
+  # namespace, which is also the more correct security posture in a cluster
+  # (no host Docker socket mounted into any pod here, unlike DooD).
+  provisioner_url: http://provisioner.nova-staging.svc.cluster.local:8002
+  image: nova-sandbox-android:latest
+  replicas: 3
+  container_prefix: deer-flow-sandbox
+  bash_output_max_chars: 20000
+  read_file_output_max_chars: 50000
+  ls_output_max_chars: 20000
+  allow_host_bash: false
+subagents:
+  timeout_seconds: 1800
+  agents:
+    general-purpose:
+      timeout_seconds: 2700
+      max_turns: 600
+    bash:
+      timeout_seconds: 600
+      max_turns: 100
+skills:
+  container_path: /mnt/skills
+title:
+  enabled: true
+  max_words: 6
+  max_chars: 60
+  model_name: null
+summarization:
+  enabled: true
+  model_name: minimax-m3
+  trigger:
+  - type: fraction
+    value: 0.75
+  keep:
+    type: messages
+    value: 10
+  trim_tokens_to_summarize: 200000
+  summary_prompt: null
+  preserve_recent_skill_count: 5
+  preserve_recent_skill_tokens: 25000
+  preserve_recent_skill_tokens_per_skill: 5000
+  skill_file_read_tool_names:
+  - read_file
+  - read
+  - view
+  - cat
+memory:
+  enabled: true
+  storage_path: memory.json
+  debounce_seconds: 30
+  model_name: null
+  max_facts: 100
+  fact_confidence_threshold: 0.7
+  injection_enabled: true
+  max_injection_tokens: 2000
+  token_counting: tiktoken
+agents_api:
+  enabled: true
+skill_evolution:
+  enabled: false
+  moderation_model_name: null
+database:
+  backend: sqlite
+  sqlite_dir: .deer-flow/data
+# Real Redis, in-cluster, no auth configured (staging-only trust level —
+# reachable only within the NetworkPolicy-restricted namespace, which is
+# actually enforced by this k3s build; see the correction note in
+# networkpolicy-default-deny.yaml). Add Redis AUTH before any real
+# production cutover — noted as a known gap, not silently assumed fixed.
+stream_bridge:
+  type: redis
+  redis_url: $REDIS_URL
+  queue_maxsize: 256
+run_events:
+  backend: db
+  max_trace_content: 10240
+  track_token_usage: true
+workspace:
+  intelligence_enabled: true
