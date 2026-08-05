@@ -112,3 +112,27 @@ class TestHelmReleaseReconcileStrategy:
         docs = [d for d in yaml.safe_load_all(self.HELMRELEASE.read_text(encoding="utf-8")) if d]
         hr = next(d for d in docs if d.get("kind") == "HelmRelease")
         assert hr["spec"]["chart"]["spec"]["sourceRef"]["kind"] == "GitRepository"
+
+
+class TestChartLabelSanitization:
+    """`helm.sh/chart` must survive a SemVer build-metadata suffix.
+
+    With `reconcileStrategy: Revision`, Flux packages the chart as
+    `nova-0.1.0+<git-sha>`. `+` is not a legal Kubernetes label character, so
+    without the standard `replace "+" "_"` every object in the chart fails
+    server-side apply with "metadata.labels: Invalid value", the upgrade rolls
+    back, and the release wedges. Helm's own `helm create` scaffold includes
+    this replace; this chart was hand-written and omitted it, which turned the
+    reconcileStrategy fix into a cluster-wide apply failure.
+    """
+
+    HELPERS = REPO_ROOT / "k8s" / "charts" / "nova" / "templates" / "_helpers.tpl"
+
+    def test_chart_label_replaces_plus(self) -> None:
+        text = self.HELPERS.read_text(encoding="utf-8")
+        line = next(ln for ln in text.splitlines() if "helm.sh/chart:" in ln)
+        assert 'replace "+" "_"' in line, f'helm.sh/chart must sanitize SemVer build metadata: {line.strip()}'
+
+    def test_chart_label_is_truncated_to_the_label_limit(self) -> None:
+        line = next(ln for ln in self.HELPERS.read_text(encoding="utf-8").splitlines() if "helm.sh/chart:" in ln)
+        assert "trunc 63" in line, "label values are capped at 63 characters"
