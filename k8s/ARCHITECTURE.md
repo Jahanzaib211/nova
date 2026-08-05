@@ -47,20 +47,25 @@ on this hardware.
 Full detail gathered by exhaustive `os.environ.get`/`os.getenv` search across `backend/app/` and `backend/packages/harness/deerflow/`.
 
 ### (a) Third-party API keys
+
 `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `LLM_API_KEY`, `OPENAI_API_BASE`/`LLM_BASE_URL`, `GITHUB_TOKEN`, `BRAVE_SEARCH_API_KEY`, `SERPER_API_KEY`, `INFOQUEST_API_KEY`, `JINA_API_KEY`, plus config.yaml-interpolated (`$VAR`) keys for Tavily/Firecrawl/Volcengine/Gemini/Deepseek/Novita/Minimax/Stepfun/VLLM/Fireworks.
 
 ### (b) Session / auth secrets
+
 `AUTH_JWT_SECRET` (auto-generated + persisted to `{base_dir}/.jwt_secret` mode 0600 if unset — a durability dependency on `DEER_FLOW_HOME`/PVC persistence), `DEER_FLOW_INTERNAL_AUTH_TOKEN` (required in production, process refuses to start without it), `NOVA_OPS_TOKEN`, `DEER_FLOW_AUTH_DISABLED`, `NOVA_BYOK_SECRET` (Fernet key encrypting user API keys at rest), `NOVA_BYOK_ENABLED`, `AUTH_TRUSTED_PROXIES`.
 
 ### (c) Infrastructure connection strings
+
 `DATABASE_URL` (Postgres DSN via `$DATABASE_URL` config.yaml interpolation), `DEER_FLOW_DATABASE_URL` (**separate** env var used only by Alembic migrations — a documented drift risk between the app's own DB-URL resolution and the migration tool's), `DEER_FLOW_SQLITE_DIR`. No Redis connection var exists yet (added in Phase 2).
 
 ### (d)/(e) Feature flags, paths, misc
+
 `NOVA_CREDITS_ENFORCED`, `GATEWAY_CORS_ORIGINS`, `GATEWAY_ENABLE_DOCS`, `DEER_FLOW_ENV`/`ENVIRONMENT`, the full `DEERFLOW_IGINO_*` privacy-search config block, `DEER_FLOW_HOME`/`DEER_FLOW_PROJECT_ROOT`/`DEER_FLOW_CONFIG_PATH`/`DEER_FLOW_EXTENSIONS_CONFIG_PATH` path overrides, tracing env names (`LANGSMITH_*`, `LANGFUSE_*`).
 
 ### Secrets gap — closed in Phase 6
 
 `k8s/scripts/bootstrap-secrets.sh` originally populated exactly 10 keys in `nova-secrets`:
+
 ```
 BETTER_AUTH_SECRET, DEER_FLOW_INTERNAL_AUTH_TOKEN, NOVA_OPS_TOKEN, SEARXNG_SECRET_KEY   (freshly generated)
 FIREWORKS_API_KEY, MINIMAX_API_KEY, TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, INFOQUEST_API_KEY   (from .env)
@@ -69,6 +74,7 @@ FIREWORKS_API_KEY, MINIMAX_API_KEY, TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY
 Compose's `env_file: ../.env` pattern (`docker-compose.yaml:154-155,192-193`) implicitly grants the container access to **every** variable in root `.env` — the K8s script only covered 10, leaving `DATABASE_URL`, Stripe, BYOK, `GITHUB_TOKEN`, tracing keys, most LLM/search providers, and every IM channel credential silently unbootstrapped. Phase 6 expanded the script to explicitly enumerate every secret-shaped env var the codebase actually reads (found via `grep -rn os.environ` across `app/`/`packages/harness/` plus every `$VAR` reference in `config.example.yaml`) — 48 keys now, not a blind full-`.env` passthrough (that would risk local dev path values like `DEER_FLOW_HOME` silently overriding `configmap-env.yaml`'s correct in-container paths, since `secretRef` is listed after `configMapRef` in every Deployment's `envFrom`). It also now generates `AUTH_JWT_SECRET` itself rather than relying on `auth/config.py`'s file-persisted fallback, which has a real check-then-act race across replicas on a fresh PVC — see §9 bug #12.
 
 ### nova-ops (separate repo) secrets
+
 `GATEWAY_URL`, `NOVA_OPS_TOKEN` (must match Nova's own value — a shared secret across two repos), `OPS_PASSCODE`, `OPS_SESSION_SECRET`.
 
 ## 4. State Architecture — the actual scaling blocker, with exact code references

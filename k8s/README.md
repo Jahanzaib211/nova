@@ -24,11 +24,13 @@ decision — this is staging only.
 ## Prerequisites
 
 - k3s installed without Traefik/servicelb (this box):
+
   ```bash
   curl -sfL https://get.k3s.io | sh -s - server \
     --disable traefik --disable servicelb \
     --write-kubeconfig-mode 644
   ```
+
   `~/.kube/config` is a copy of `/etc/rancher/k3s/k3s.yaml` (mode 644
   makes the copy sudo-free).
 - Helm v3 (installed as a static binary, no sudo needed):
@@ -465,8 +467,8 @@ Measured result: **~8 minutes** from "namespace doesn't exist" to
 "verified working authenticated session against the restored data,"
 including catching and fixing a real chart bug along the way (hardcoded,
 non-namespaced `ClusterRole`/`ClusterRoleBinding`/`PersistentVolume`
-names that collided across releases — see `k8s/ARCHITECTURE.md` §9 bug
-#14). The live `nova-staging` release was completely unaffected
+names that collided across releases — see `k8s/ARCHITECTURE.md` §9
+bug #14). The live `nova-staging` release was completely unaffected
 throughout — this is exactly why the drill runs in a scratch namespace
 instead of against the real one.
 

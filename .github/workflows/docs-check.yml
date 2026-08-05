@@ -55,13 +55,21 @@ jobs:
             --ignore "backend/.venv/**" \
             --ignore "skills/**" \
             --ignore "frontend/public/demo/**" \
+            --ignore "frontend/test-results/**" \
+            --ignore "frontend/playwright-report/**" \
             "**/*.md"
 
       - name: Check for broken internal links
         run: |
           # Simple internal link checker for markdown files
           # Looks for [text](./path) or [text](../path) style links and verifies the target exists
-          find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" -not -path "./frontend/node_modules/*" -not -path "./.deer-flow/*" -not -path "./.next/*" -not -path "./backend/.venv/*" | while read file; do
+          #
+          # Scope is `git ls-files`, not `find`: the previous filter listed a few
+          # known directories by name, which missed *nested* node_modules and the
+          # real agent-data path (backend/.deer-flow, not ./.deer-flow). Locally
+          # that buried the signal under hundreds of broken links from vendored
+          # package READMEs. Only tracked docs are ours to keep valid anyway.
+          git ls-files '*.md' | while read file; do
             dir=$(dirname "$file")
             grep -oP '\[.*?\]\(\K\./[^)]+|\[.*?\]\(\K\.\./[^)]+' "$file" | while read link; do
               # Resolve relative path
