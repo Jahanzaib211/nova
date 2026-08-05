@@ -38,6 +38,23 @@ spec:
         kind: GitRepository
         name: flux-system
         namespace: flux-system
+      # MUST be Revision, not the `ChartVersion` default.
+      #
+      # With ChartVersion, source-controller only repackages the chart when
+      # Chart.yaml's `version:` changes — and ours is pinned at 0.1.0 and never
+      # bumped. So every commit that changed chart *content* (templates,
+      # files/nginx.conf, files/config.yaml) produced no new chart artifact and
+      # no upgrade, while `flux get helmrelease` cheerfully reported
+      # "Helm upgrade succeeded" from the last time the version did change.
+      # `helm history nova` showed 2 revisions across five days of commits.
+      #
+      # Revision repackages whenever the GitRepository revision changes, which
+      # is what a git-sourced chart actually wants. This is the third
+      # independent silent-no-op path in this deployment (the other two: no
+      # checksum annotation on the nginx Deployment, and static :staging image
+      # tags with imagePullPolicy IfNotPresent) — all of which report success
+      # while changing nothing.
+      reconcileStrategy: Revision
   # Generated directly from k8s/charts/nova/values-staging.yaml by
   # kustomization.yaml's configMapGenerator — not a hand-copied block.
   # See that file's comment for why: a hand-copied version of this

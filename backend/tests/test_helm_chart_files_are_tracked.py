@@ -82,3 +82,33 @@ def test_operator_local_config_stays_ignored() -> None:
         capture_output=True,
     )
     assert out.returncode == 0, "the repo-root config.yaml holds real credentials and must stay gitignored"
+
+
+class TestHelmReleaseReconcileStrategy:
+    """A git-sourced chart must repackage on git revision, not chart version.
+
+    Flux's default `reconcileStrategy: ChartVersion` only rebuilds the chart
+    artifact when Chart.yaml's `version:` changes. Ours is pinned at 0.1.0 and
+    never bumped, so five days of commits touching chart templates and
+    files/ produced no upgrade at all — while `flux get helmrelease` reported
+    "Helm upgrade succeeded" the whole time and `helm history` sat at 2
+    revisions. Every chart-content fix silently did nothing.
+    """
+
+    HELMRELEASE = REPO_ROOT / "k8s" / "flux" / "staging" / "helmrelease.yaml"
+
+    def test_uses_revision_strategy(self) -> None:
+        import yaml
+
+        docs = [d for d in yaml.safe_load_all(self.HELMRELEASE.read_text(encoding="utf-8")) if d]
+        hr = next(d for d in docs if d.get("kind") == "HelmRelease")
+        chart_spec = hr["spec"]["chart"]["spec"]
+        assert chart_spec.get("reconcileStrategy") == "Revision", "a git-sourced chart with a pinned version must use reconcileStrategy: Revision, or no chart-content change ever reaches the cluster"
+
+    def test_chart_is_sourced_from_git(self) -> None:
+        """The strategy above only matters for a GitRepository source."""
+        import yaml
+
+        docs = [d for d in yaml.safe_load_all(self.HELMRELEASE.read_text(encoding="utf-8")) if d]
+        hr = next(d for d in docs if d.get("kind") == "HelmRelease")
+        assert hr["spec"]["chart"]["spec"]["sourceRef"]["kind"] == "GitRepository"
