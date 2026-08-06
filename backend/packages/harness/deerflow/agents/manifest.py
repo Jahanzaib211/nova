@@ -194,7 +194,9 @@ Self-observation: screenshot captures the current viewport inline for visual ver
 File ops: file.*, scaffold_project, search_files, grep_files.
 Network: deploy_expose (absproxy publish), agent_notify (activity feed).
 Host access: localhost inside the sandbox is the container itself; services
-running on the host machine are at http://host.docker.internal:<port>.
+running on the host machine are at the sandbox's host alias (Docker:
+http://host.docker.internal:<port>; other deployments differ — prefer
+in-container ports).
 
 {tool_block}
 

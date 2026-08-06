@@ -17,7 +17,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 // Register through the frontend origin (same-origin proxy) so the auth cookies
 // are stored for and sent to localhost:3000 — the gateway is reached via the
 // next.config rewrite, never cross-origin from the browser.
-const APP = "http://localhost:3000";
+// Must follow the config's APP_PORT, not a hardcoded 3000: with something
+// else already on 3000 these tests silently drove that app instead and
+// failed as if Nova had regressed.
+const APP = `http://localhost:${process.env.E2E_PORT ?? "3000"}`;
 const fixture = JSON.parse(
   readFileSync(
     join(

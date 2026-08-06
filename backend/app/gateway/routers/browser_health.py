@@ -74,8 +74,14 @@ def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool, float, str | None]:
             if client is None:
                 continue
             try:
-                info = client.browser.get_info()
-                cdp_url = getattr(getattr(info, "data", info), "cdp_url", None)
+                # Reuse browser_check's rewrite instead of probing the reported
+                # URL directly. The sandbox self-reports CDP on a loopback
+                # address (true inside its own container), so probing it raw
+                # tested the *gateway's* own localhost in every deployment mode
+                # and reported healthy/unhealthy for the wrong process.
+                from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+
+                cdp_url = _cdp_url_for_gateway(client, sandbox)
                 if not cdp_url:
                     continue
                 # Cheap reachability check: parse host:port, TCP connect with timeout.

@@ -769,17 +769,25 @@ cd backend && uv export --no-hashes --no-dev > /tmp/reqs.txt
 uvx pip-audit --no-deps --disable-pip -r /tmp/reqs.txt
 ```
 
-**The LangChain exception.** `langchain`, `langchain-anthropic`,
-`langgraph-checkpoint`, `langgraph-sdk`, `langsmith` and `mcp` currently carry
-advisories, and the fix is available. It is not applied because taking it pulls
-a far larger change than the advisory implies — resolving those six also moves
-`langgraph` 1.1→1.2, `langchain-core` 1.3→1.5, `anthropic` 0.97→0.120, and
-*downgrades* `websockets` 16→15 (which `app/gateway/routers/sandbox.py`'s WS
-bridges run on). The full suite passes on that resolution, but the suite mocks
-every LLM call, so green here says nothing about real agent behaviour. Ship it
-as its own change, with a live agent smoke test (a real chat run exercising
-tools + streaming + a subagent) and a check that the WS bridges still relay —
-not bundled into unrelated work.
+**Taken (was a standing exception).** The LangChain family advisories are now
+resolved and `pip-audit` reports **no known vulnerabilities**. Two things made
+it safe to take:
+
+* `websockets` is now a **declared** dependency pinned `>=15.0.1,<16`. It was
+  an undeclared transitive, and an earlier resolution silently pulled it
+  *backwards* with nothing to notice — it is what the gateway's WebSocket
+  bridges (`routers/sandbox.py`, `routers/voice.py`) run on. The upper bound is
+  upstream, not preference: `langchain` 1.3.9 — the release fixing
+  PYSEC-2026-2192 — requires `websockets<16`, so `>=16` and a
+  vulnerability-free langchain are mutually unsatisfiable today.
+* The replay harness validated it without an API key: `test_replay_golden.py`
+  plus the three `e2e-real-backend` specs drive the real gateway end to end, and
+  a replay *miss* would have caught any change in message serialization or
+  prompt assembly under `langchain-core` 1.5.
+
+Re-audit any time with the command above. When a langchain release drops the
+`websockets<16` constraint, lift the ceiling in
+`packages/harness/pyproject.toml`.
 
 ## Code Style
 

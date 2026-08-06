@@ -407,7 +407,7 @@ def _run_browser_check_unlocked(
     # Primary engine: Playwright over the existing AIO chromium's CDP endpoint. The
     # SDK's browser_page HTTP API is 404 on this sandbox image, but CDP works — so we
     # drive a real Playwright page (goto for servers, set_content for static HTML).
-    cdp = _cdp_url_for_gateway(client)
+    cdp = _cdp_url_for_gateway(client, sandbox)
     routes_result: list[RouteResult] | None = None
     if cdp:
         try:
@@ -437,7 +437,10 @@ def _run_browser_check_unlocked(
     return result
 
 
-def _rewrite_cdp_netloc(cdp_url: str, new_host: str) -> str | None:
+_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "::1")
+
+
+def _rewrite_cdp_netloc(cdp_url: str, new_host: str, new_port: int | None = None) -> str | None:
     """Swap the netloc (host[:port]) of a CDP websocket URL with ``urlsplit``.
 
     Replaces the previous brittle ``str.replace`` which corrupted path / query /
@@ -445,8 +448,10 @@ def _rewrite_cdp_netloc(cdp_url: str, new_host: str) -> str | None:
     is not a parseable URL — callers should treat that as "CDP unavailable"
     and fall back to the SDK HTTP API.
 
-    The original port is preserved (CDP defaults to 8080/9222/3000 depending
-    on the chromium image). If the URL has no port, only the host is swapped.
+    ``new_port`` overrides the port; when omitted the original is preserved.
+    The override matters because the sandbox reports its *container-internal*
+    port (8080), while the gateway must reach the **published** one, which the
+    local backend allocates dynamically per container.
     """
     try:
         parts = urlsplit(cdp_url)
@@ -454,19 +459,83 @@ def _rewrite_cdp_netloc(cdp_url: str, new_host: str) -> str | None:
         return None
     if not parts.scheme or not parts.netloc:
         return None
-    # Preserve the original port. If absent, omit it from the new netloc.
-    new_port = parts.port
-    new_netloc = f"{new_host}:{new_port}" if new_port else new_host
+    port = new_port if new_port is not None else parts.port
+    # Bracket IPv6 literals so the netloc stays parseable.
+    host = f"[{new_host}]" if ":" in new_host else new_host
+    new_netloc = f"{host}:{port}" if port else host
     return urlunsplit((parts.scheme, new_netloc, parts.path, parts.query, parts.fragment))
 
 
-def _cdp_url_for_gateway(client: Any) -> str | None:
+def _base_url_of(obj: Any) -> str | None:
+    """Best-effort gateway-reachable base URL for a sandbox *or* its SDK client.
+
+    ``AioSandbox`` exposes ``.base_url``; the generated SDK client carries the
+    same value on its transport wrapper. Accepting either means the callers of
+    ``_cdp_url_for_gateway`` don't have to be rewired to thread a sandbox
+    through — they already hold one or the other.
+    """
+    if obj is None:
+        return None
+    base = getattr(obj, "base_url", None)
+    if base:
+        return str(base)
+    wrapper = getattr(obj, "_client_wrapper", None)
+    getter = getattr(wrapper, "get_base_url", None)
+    if callable(getter):
+        try:
+            return str(getter())
+        except Exception:
+            return None
+    return None
+
+
+def gateway_reachable_host_port(*candidates: Any) -> tuple[str | None, int | None]:
+    """Where the *gateway* can reach this sandbox, derived from its own base URL.
+
+    That base URL is already gateway-reachable in both deployment modes: the
+    local/DooD backend builds it from ``DEER_FLOW_SANDBOX_HOST`` plus the
+    **published** host port, and the provisioner backend uses the Service
+    address it minted. Same derivation as
+    ``AioSandboxProvider.get_preview_endpoint`` and ``dev_server``, both of
+    which have always done this correctly.
+
+    Candidates are tried in order, so callers can pass the richer source first.
+    """
+    for candidate in candidates:
+        base = _base_url_of(candidate)
+        if not base:
+            continue
+        try:
+            parts = urlsplit(base)
+        except ValueError:
+            continue
+        if parts.hostname:
+            return parts.hostname, parts.port
+    return None, None
+
+
+def _cdp_url_for_gateway(client: Any, sandbox: Any = None) -> str | None:
     """The AIO chromium's CDP websocket, rewritten to be reachable from the gateway.
 
-    Only rewrites ``localhost`` and ``127.0.0.1`` host components (the
-    container-internal chromium); other hosts pass through untouched so this
-    helper also works when chromium is already on a routable address (e.g.
-    a remote AIO deployment).
+    The sandbox self-reports CDP on a loopback address because that is true
+    *inside its own container*. Rewriting that to the host/port the gateway
+    actually uses is what makes the connection work.
+
+    Host and port both come from ``sandbox.base_url``. This previously hardcoded
+    ``host.docker.internal`` and preserved the reported port, which was wrong
+    twice over:
+
+    * ``host.docker.internal`` is a Docker-only name. It does not resolve inside
+      a k3s pod, so every CDP call on the provisioner path would fail — and fail
+      *slowly*, burning all three retries and tripping the circuit breaker, so it
+      surfaced as flaky timeouts rather than an honest unresolvable host.
+    * Keeping the reported port (8080) is only correct for the first container.
+      The local backend publishes each sandbox's 8080 on a different host port,
+      so a second concurrent sandbox was pointed at the *first* one's browser.
+
+    Non-loopback hosts still pass through untouched, so a chromium already on a
+    routable address is left alone. Without a sandbox we fall back to
+    ``DEER_FLOW_SANDBOX_HOST`` and then to the URL as reported.
     """
     try:
         info = client.browser.get_info()
@@ -480,9 +549,19 @@ def _cdp_url_for_gateway(client: Any) -> str | None:
     except ValueError:
         return None
     host = (parts.hostname or "").lower()
-    if host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+    if host not in _LOOPBACK_HOSTS:
         return cdp  # already routable; pass through
-    return _rewrite_cdp_netloc(cdp, new_host="host.docker.internal")
+
+    new_host, new_port = gateway_reachable_host_port(sandbox, client)
+    if not new_host:
+        new_host = os.environ.get("DEER_FLOW_SANDBOX_HOST") or None
+        new_port = None
+    if not new_host:
+        # Nothing better to offer than what the sandbox reported.
+        return cdp
+    if new_host.lower() in _LOOPBACK_HOSTS and new_port is None:
+        return cdp
+    return _rewrite_cdp_netloc(cdp, new_host=new_host, new_port=new_port)
 
 
 def _run_targets_via_cdp(

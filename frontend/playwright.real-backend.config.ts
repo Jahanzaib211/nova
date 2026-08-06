@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Overridable so the suite can avoid a port already owned by an unrelated
+// local project. `reuseExistingServer` is on outside CI, so a collision on the
+// default silently runs the whole suite against *someone else's app* — which
+// looks exactly like a product regression. Same guard as playwright.config.ts.
+const APP_PORT = process.env.E2E_PORT ?? "3000";
+const GATEWAY_PORT = process.env.E2E_GATEWAY_PORT ?? "8011";
+
 /**
  * Layer 2 of the record/replay e2e: the REAL Next.js frontend rendering data
  * from a REAL gateway whose LLM is the deterministic `ReplayChatModel` (no API
@@ -21,7 +28,7 @@ export default defineConfig({
   timeout: 90_000,
 
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: `http://localhost:${APP_PORT}`,
     trace: "on-first-retry",
   },
 
@@ -29,9 +36,9 @@ export default defineConfig({
 
   webServer: [
     {
-      command: "uv run python scripts/run_replay_gateway.py --port 8011",
+      command: `uv run python scripts/run_replay_gateway.py --port ${GATEWAY_PORT}`,
       cwd: "../backend",
-      url: "http://localhost:8011/health",
+      url: `http://localhost:${GATEWAY_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
       stdout: "pipe",
@@ -42,11 +49,18 @@ export default defineConfig({
       env: {
         DEERFLOW_ENABLE_TEST_SEED: "1",
         DEER_FLOW_AUTH_DISABLED: "1",
+        // `is_auth_disabled()` deliberately refuses to honour
+        // DEER_FLOW_AUTH_DISABLED when the environment declares production —
+        // a good guard. But the gateway calls load_dotenv() at import, so an
+        // operator .env carrying DEER_FLOW_ENV=production (this box has one)
+        // silently re-enabled auth and made this suite 401 as though the app
+        // had regressed. Declare the harness's own environment explicitly.
+        DEER_FLOW_ENV: "test",
       },
     },
     {
-      command: "pnpm build && pnpm start",
-      url: "http://localhost:3000",
+      command: `pnpm build && pnpm start --port ${APP_PORT}`,
+      url: `http://localhost:${APP_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 240_000,
       env: {
@@ -57,7 +71,7 @@ export default defineConfig({
         // next.config rewrites (same-origin proxy) instead of talking to the
         // gateway cross-origin — cross-origin fetches drop the auth cookies.
         // Just point that proxy at the replay gateway.
-        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: "http://127.0.0.1:8011",
+        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
       },
     },
   ],

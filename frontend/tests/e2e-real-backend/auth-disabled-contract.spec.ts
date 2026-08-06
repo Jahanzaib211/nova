@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 
 import { AUTH_DISABLED_USER } from "../../src/core/auth/auth-disabled-user";
 
-const APP = "http://localhost:3000";
+// Must follow the config's APP_PORT, not a hardcoded 3000: with something
+// else already on 3000 these tests silently drove that app instead and
+// failed as if Nova had regressed.
+const APP = `http://localhost:${process.env.E2E_PORT ?? "3000"}`;
 
 test.describe("auth-disabled contract (real backend)", () => {
   test("gateway /auth/me returns the frontend synthetic user without a cookie", async ({

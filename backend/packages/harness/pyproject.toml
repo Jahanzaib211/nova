@@ -4,6 +4,18 @@ version = "2.1.0"
 description = "DeerFlow agent harness framework"
 requires-python = ">=3.12"
 dependencies = [
+    # Declared explicitly, not left transitive. The gateway's WebSocket bridges
+    # (app/gateway/routers/sandbox.py, routers/voice.py) run on it, and an
+    # unconstrained langchain-family lock resolution silently pulled it
+    # *backwards* with nothing to notice. A floor pin turns any future
+    # regression into a resolver error instead of a surprise.
+    #
+    # The ceiling is upstream, not a preference: langchain 1.3.9 — the release
+    # that fixes PYSEC-2026-2192 — requires websockets<16, so ">=16" and a
+    # vulnerability-free langchain are mutually unsatisfiable today. We take the
+    # security fix; 15.0.1 carries every API these bridges use (verified:
+    # connect(open_timeout=, max_size=, ping_interval=)).
+    "websockets>=15.0.1,<16",
     "agent-client-protocol>=0.4.0",
     "agent-sandbox>=0.0.19",
     "dotenv>=0.9.9",

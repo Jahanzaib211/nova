@@ -201,41 +201,90 @@ class TestRewriteCdpNetloc:
 # ============================================================
 
 
+class _FakeSandbox:
+    """Minimal stand-in: only ``base_url`` is read."""
+
+    def __init__(self, base_url: str | None) -> None:
+        self.base_url = base_url
+
+
+def _fake_client(cdp_url, base_url=None):
+    """A client whose browser.get_info() reports ``cdp_url``.
+
+    Deliberately not a bare MagicMock: MagicMock auto-creates ``base_url`` and
+    ``_client_wrapper``, which the rewrite now consults — an auto-mock would
+    silently feed it garbage and make these assertions meaningless.
+    """
+    client = MagicMock()
+    client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url=cdp_url))
+    if base_url is None:
+        del client.base_url
+        del client._client_wrapper
+    else:
+        client.base_url = base_url
+    return client
+
+
 class TestCdpUrlForGateway:
-    """Top-level helper that gates on the URL being localhost-ish."""
+    """Rewrites a container-loopback CDP URL to something the gateway can reach.
 
-    def test_localhost_rewritten(self) -> None:
-        client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url="ws://localhost:8080/devtools/browser/abc"))
-        assert _cdp_url_for_gateway(client) == "ws://host.docker.internal:8080/devtools/browser/abc"
+    The sandbox reports CDP on loopback because that is true *inside its own
+    container*. Host AND port both come from the sandbox's own ``base_url``,
+    which is gateway-reachable in every deployment mode. This used to hardcode
+    ``host.docker.internal`` and keep the reported port — wrong under k8s (the
+    name does not resolve) and wrong for any second concurrent sandbox on
+    Docker (each container's 8080 is published on a different host port).
+    """
 
-    def test_ipv4_loopback_rewritten(self) -> None:
-        client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url="ws://127.0.0.1:8080/x"))
-        out = _cdp_url_for_gateway(client)
-        assert out is not None and "host.docker.internal" in out
+    def test_docker_host_and_published_port_come_from_base_url(self) -> None:
+        client = _fake_client("ws://localhost:8080/devtools/browser/abc")
+        sandbox = _FakeSandbox("http://host.docker.internal:39123")
+        assert _cdp_url_for_gateway(client, sandbox) == "ws://host.docker.internal:39123/devtools/browser/abc"
 
-    def test_zero_zero_zero_zero_rewritten(self) -> None:
-        client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url="ws://0.0.0.0:8080/x"))
-        out = _cdp_url_for_gateway(client)
-        assert out is not None and "host.docker.internal" in out
+    def test_k8s_service_address_is_used_verbatim(self) -> None:
+        """The regression: host.docker.internal does not resolve inside a pod."""
+        client = _fake_client("ws://127.0.0.1:8080/x")
+        sandbox = _FakeSandbox("http://sandbox-abc.nova-staging.svc.cluster.local:30456")
+        out = _cdp_url_for_gateway(client, sandbox)
+        assert out == "ws://sandbox-abc.nova-staging.svc.cluster.local:30456/x"
+        assert "host.docker.internal" not in out
+
+    def test_second_sandbox_gets_its_own_port(self) -> None:
+        """Latent multi-sandbox bug: the reported port is the *container's* 8080."""
+        client = _fake_client("ws://0.0.0.0:8080/x")
+        first = _cdp_url_for_gateway(client, _FakeSandbox("http://host.docker.internal:39123"))
+        second = _cdp_url_for_gateway(client, _FakeSandbox("http://host.docker.internal:39124"))
+        assert first != second
+        assert second is not None and second.endswith(":39124/x")
+
+    def test_falls_back_to_the_sdk_client_base_url(self) -> None:
+        """Call sites that only hold a client still get a correct rewrite."""
+        client = _fake_client("ws://localhost:8080/x", base_url="http://host.docker.internal:39200")
+        assert _cdp_url_for_gateway(client) == "ws://host.docker.internal:39200/x"
+
+    def test_falls_back_to_sandbox_host_env(self, monkeypatch) -> None:
+        monkeypatch.setenv("DEER_FLOW_SANDBOX_HOST", "sandbox.internal")
+        client = _fake_client("ws://localhost:8080/x")
+        out = _cdp_url_for_gateway(client, _FakeSandbox(None))
+        assert out == "ws://sandbox.internal:8080/x"
+
+    def test_no_signal_leaves_the_url_alone(self, monkeypatch) -> None:
+        """Better to return the honest reported URL than invent a bad host."""
+        monkeypatch.delenv("DEER_FLOW_SANDBOX_HOST", raising=False)
+        client = _fake_client("ws://localhost:8080/x")
+        assert _cdp_url_for_gateway(client, _FakeSandbox(None)) == "ws://localhost:8080/x"
 
     def test_routable_host_passes_through(self) -> None:
         """A non-loopback chromium host should NOT be rewritten — works for remote AIO."""
-        client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url="ws://chromium.prod.example.com:9222/x"))
-        assert _cdp_url_for_gateway(client) == "ws://chromium.prod.example.com:9222/x"
+        client = _fake_client("ws://chromium.prod.example.com:9222/x")
+        sandbox = _FakeSandbox("http://host.docker.internal:39123")
+        assert _cdp_url_for_gateway(client, sandbox) == "ws://chromium.prod.example.com:9222/x"
 
     def test_no_cdp_url_returns_none(self) -> None:
-        client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url=None))
-        assert _cdp_url_for_gateway(client) is None
+        assert _cdp_url_for_gateway(_fake_client(None)) is None
 
     def test_empty_cdp_url_returns_none(self) -> None:
-        client = MagicMock()
-        client.browser.get_info.return_value = MagicMock(data=MagicMock(cdp_url=""))
-        assert _cdp_url_for_gateway(client) is None
+        assert _cdp_url_for_gateway(_fake_client("")) is None
 
     def test_get_info_raises_returns_none(self) -> None:
         client = MagicMock()

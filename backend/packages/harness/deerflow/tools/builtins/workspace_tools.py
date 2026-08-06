@@ -439,13 +439,25 @@ class _BrowserNavigateIdempotency:
 _browser_navigate_idempotency = _BrowserNavigateIdempotency()
 
 
+def _host_alias() -> str:
+    """How the sandbox should address the machine the gateway runs on.
+
+    ``host.docker.internal`` is a Docker-only name — under the k8s provisioner
+    it resolves to nothing, so hardcoding it into model-facing hints sent the
+    agent chasing an address that cannot exist there.
+    """
+    return os.environ.get("DEER_FLOW_SANDBOX_HOST") or "host.docker.internal"
+
+
 def _localhost_navigate_hint(url: str, page_text: str | None) -> str | None:
     """Actionable hint when navigating a loopback URL that has nothing behind it.
 
     Inside the sandbox, ``localhost`` is the container itself — a user's server
-    on the host machine lives at ``host.docker.internal:<port>``. Returns a
-    hint string when the URL targets loopback and the navigation errored or the
-    page reads like a connection failure / 404; None otherwise.
+    on the host machine lives at whatever ``DEER_FLOW_SANDBOX_HOST`` resolves to
+    (``host.docker.internal`` under Docker; a Service address under the
+    provisioner). Returns a hint string when the URL targets loopback and the
+    navigation errored or the page reads like a connection failure / 404;
+    None otherwise.
     """
     from urllib.parse import urlparse
 
@@ -463,7 +475,7 @@ def _localhost_navigate_hint(url: str, page_text: str | None) -> str | None:
     port = parsed.port or 80
     return (
         f"\n\nHint: nothing answered at {url} inside the sandbox — localhost here is the sandbox container, not the host machine. "
-        f"If the server runs on the host, navigate to http://host.docker.internal:{port} instead. "
+        f"If the server runs on the host, navigate to http://{_host_alias()}:{port} instead. "
         f"If it should run inside the sandbox, start it first (see dev_server / system_probe)."
     )
 
@@ -845,7 +857,7 @@ def browser_navigate_tool(
     URLs on ``localhost`` / ``127.0.0.1`` refer to the sandbox container
     itself — use them for servers you started inside the sandbox. Services
     running on the host machine are reachable at
-    ``http://host.docker.internal:<port>`` instead.
+    ``http://<host-alias>:<port>`` instead (see ``DEER_FLOW_SANDBOX_HOST``).
 
     Args:
         description: Why you are navigating. ALWAYS PROVIDE THIS FIRST.
