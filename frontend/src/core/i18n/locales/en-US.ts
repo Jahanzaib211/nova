@@ -415,6 +415,7 @@ export const enUS: Translations = {
       tools: "Tools",
       skills: "Skills",
       notification: "Notification",
+      voice: "Voice",
       about: "About",
     },
     models: {

@@ -1,0 +1,29 @@
+# GPU overlay for voice — appended by scripts/docker.sh on top of
+# docker-compose.voice.yaml, and only when *both* `nvidia-smi` works on the host
+# and Docker actually has the `nvidia` runtime registered.
+#
+# It is a separate file from docker-compose.voice.yaml on purpose: a device
+# reservation on a machine with no GPU makes the container fail to start, so a
+# host with weights but no GPU must still get CPU voice rather than no gateway.
+#
+# Measured on an RTX 3060 (see scripts/fetch-voice-models.sh for the full table):
+#   Whisper  RTF 0.632 -> 0.021
+#   Kokoro   first audio 510 ms -> 200 ms   (fp32 weights)
+#
+# Both engines resolve `device: auto` at load and fall back to CPU on their own
+# (deerflow/speech/devices.py), so this overlay only grants access — it never
+# forces anything onto the GPU.
+services:
+  gateway:
+    environment:
+      # onnxruntime-gpu instead of onnxruntime. They both provide the
+      # `onnxruntime` module, so the extras are alternatives, never additive —
+      # scripts/docker.sh substitutes rather than appends.
+      - UV_EXTRAS=${DEERFLOW_VOICE_UV_EXTRAS:-trading,voice-gpu}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

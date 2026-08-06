@@ -15,6 +15,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { getBackendBaseURL } from "@/core/config";
 
+import { CAPTURE_RATE, FRAME_SAMPLES, WORKLET_SOURCE } from "./capture";
 import { VoicePlayer, toPcm16 } from "./playback";
 import {
   initialVoiceState,
@@ -23,28 +24,9 @@ import {
   type VoiceState,
 } from "./state";
 
-const CAPTURE_RATE = 16000;
-/** 20 ms frames — what the server's VAD expects. */
-const FRAME_SAMPLES = (CAPTURE_RATE * 20) / 1000;
-
-/**
- * Worklet source. It only forwards raw frames; every decision (is this speech?
- * has the turn ended?) is made server-side so there is exactly one
- * implementation of the turn-taking rules.
- */
-const WORKLET_SOURCE = `
-class NovaCaptureProcessor extends AudioWorkletProcessor {
-  process(inputs) {
-    const channel = inputs[0] && inputs[0][0];
-    if (channel && channel.length) {
-      // Copy: the render quantum buffer is reused after this returns.
-      this.port.postMessage(new Float32Array(channel));
-    }
-    return true;
-  }
-}
-registerProcessor('nova-capture', NovaCaptureProcessor);
-`;
+// Capture geometry and the worklet live in ./capture so the settings panel's
+// microphone test drives the identical path. A test with its own copy would
+// pass happily while the real conversation was broken.
 
 export type UseVoiceSession = {
   state: VoiceState;

@@ -241,15 +241,39 @@ start() {
         if [ -n "$kokoro" ] && [ -s "$voice_dir/voices-v1.0.bin" ] && [ -s "$voice_dir/silero_vad.onnx" ]; then
             export DEERFLOW_VOICE_MODEL_DIR="$voice_dir"
             export DEERFLOW_TTS_MODEL_FILE="$kokoro"
-            # Append `voice` to whatever extras the user already had, without
-            # duplicating it if it is present.
+
+            # Use the GPU only when the host can actually deliver it. `nvidia-smi`
+            # alone is not enough: the driver can be fine while Docker has no
+            # `nvidia` runtime registered, and a device reservation then stops
+            # the container from starting at all. Both must hold.
+            local voice_extra="voice"
+            local use_gpu=0
+            if nvidia-smi -L >/dev/null 2>&1 && docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
+                use_gpu=1
+                voice_extra="voice-gpu"
+            fi
+
+            # `voice` and `voice-gpu` are alternatives, not additions — both
+            # provide the `onnxruntime` module. Strip either before appending.
             local base_extras="${UV_EXTRAS:-trading}"
-            case ",$base_extras," in
-                *,voice,*) export DEERFLOW_VOICE_UV_EXTRAS="$base_extras" ;;
-                *) export DEERFLOW_VOICE_UV_EXTRAS="$base_extras,voice" ;;
-            esac
+            local cleaned=""
+            local part
+            for part in $(printf '%s' "$base_extras" | tr ',' ' '); do
+                case "$part" in
+                    voice | voice-gpu | "") continue ;;
+                    *) cleaned="${cleaned:+$cleaned,}$part" ;;
+                esac
+            done
+            export DEERFLOW_VOICE_UV_EXTRAS="${cleaned:+$cleaned,}$voice_extra"
+
             echo -e "${BLUE}Voice enabled: mounting $voice_dir (read-only), extras=$DEERFLOW_VOICE_UV_EXTRAS${NC}"
             COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.voice.yaml"
+            if [ "$use_gpu" = "1" ]; then
+                echo -e "${BLUE}  GPU detected — granting the gateway a CUDA device (engines still fall back to CPU on their own).${NC}"
+                COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.voice-gpu.yaml"
+            else
+                echo -e "${YELLOW}  No usable GPU (needs nvidia-smi + the nvidia Docker runtime) — voice will run on CPU.${NC}"
+            fi
         else
             echo -e "${YELLOW}⚠ speech.enabled is true but model weights are missing in $voice_dir — voice will report unavailable.${NC}"
             echo -e "${YELLOW}  Run ./scripts/fetch-voice-models.sh to download them.${NC}"

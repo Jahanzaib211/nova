@@ -38,6 +38,17 @@ SKIP_FILES = {
     "scripts/check_no_cross_references.sh",  # wrapper that mentions the names
 }
 
+# Directories of *generated* output. Skipped by prefix rather than by listing
+# every file, because the contents are regenerated and the file set changes.
+#
+# `graphify-out/` is a knowledge graph built by indexing this repository — which
+# means it indexes this very file, including the sentence describing the rule.
+# The result is a self-referential false positive: the graph "mentions" the
+# forbidden names only because it quotes the guard that forbids them. This rule
+# exists to stop nova *coupling* to those projects, and a generated index of our
+# own documentation is not a coupling.
+SKIP_PREFIXES = ("graphify-out/",)
+
 # Forbidden strings (case-insensitive matching)
 FORBIDDEN = [
     "ali-kernel",  # the service we don't couple to
@@ -78,7 +89,7 @@ def _gather_files() -> list[Path]:
         if any(part.startswith(".") for part in path.parts):
             continue  # skip .git, .opencode, etc.
         rel = str(path.relative_to(REPO_ROOT))
-        if rel in SKIP_FILES:
+        if rel in SKIP_FILES or rel.startswith(SKIP_PREFIXES):
             continue
         files.append(path)
     return files

@@ -118,6 +118,119 @@ async def voice_status(refresh: bool = False) -> dict:
     return {**detail, **_readiness}
 
 
+# Engines the settings panel offers. Kept here rather than discovered by import
+# scanning: every entry is a class path the registry will `resolve_class`, and a
+# typo should fail at config-write time with a clear message, not at first use.
+ENGINE_CATALOG: dict[str, list[dict]] = {
+    "stt": [
+        {
+            "use": "deerflow.speech.engines.faster_whisper_stt:FasterWhisperSTT",
+            "label": "Whisper (faster-whisper)",
+            "languages": "99 languages, including Urdu, Hindi and Arabic, and it handles code-switching mid-sentence.",
+            "models": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "distil-large-v3"],
+            "default": True,
+        },
+    ],
+    "tts": [
+        {
+            "use": "deerflow.speech.engines.kokoro_tts:KokoroTTS",
+            "label": "Kokoro-82M",
+            "note": "Apache-2.0. Use the fp32 weights — the int8 build is ~5.5x slower on the same hardware.",
+            "voices": ["af_heart", "af_bella", "af_nicole", "af_sarah", "am_adam", "am_michael", "bf_emma", "bm_george"],
+            "default": True,
+        },
+        {
+            "use": "deerflow.speech.engines.null:ToneTTS",
+            "label": "Test tone (no weights)",
+            "note": "Synthesizes a tone instead of speech. For checking the audio path when weights are absent.",
+        },
+    ],
+}
+
+
+def _engine_status(engine, kind: str) -> dict:
+    """What an engine actually is at runtime, not what was requested."""
+    return {
+        "name": getattr(engine, "name", kind),
+        "device_requested": getattr(engine, "device", None),
+        "device_actual": getattr(engine, "resolved_device", None),
+        "model": getattr(engine, "model_size", None) or getattr(engine, "_model_path", None),
+        "compute_type": getattr(engine, "compute_type", None),
+        "sample_rate": getattr(engine, "sample_rate", None),
+    }
+
+
+@router.get("/config")
+@require_auth
+async def get_voice_config(request: Request) -> dict:
+    """Current voice settings, the catalog to choose from, and live state."""
+    from deerflow.speech import registry
+
+    settings = registry._merged_config()
+    detail: dict = {
+        "settings": settings,
+        "catalog": ENGINE_CATALOG,
+        "overrides_path": str(registry.overrides_path()),
+        "has_overrides": registry.overrides_path().is_file(),
+    }
+    # Report what is loaded *now* — device_requested vs device_actual is the
+    # whole point, since `auto` silently resolves and `cuda` can fall back.
+    if settings.get("enabled"):
+        with contextlib.suppress(Exception):
+            detail["live"] = {
+                "stt": _engine_status(registry.get_stt_engine(), "stt"),
+                "tts": _engine_status(registry.get_tts_engine(), "tts"),
+            }
+    return detail
+
+
+@router.put("/config")
+@require_auth
+async def put_voice_config(request: Request) -> dict:
+    """Write voice settings and make them take effect immediately.
+
+    Writes to a **separate overrides file**, never `config.yaml`: that file is
+    operator-owned and commented, and `yaml.dump` would strip every comment.
+    """
+    global _readiness
+    from deerflow.speech import registry
+
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="expected a JSON object")
+
+    # Validate engine class paths before persisting, so a typo cannot leave
+    # voice unloadable until someone reads the logs.
+    for section in ("stt", "tts"):
+        cfg = body.get(section)
+        if isinstance(cfg, dict) and cfg.get("use"):
+            from deerflow.reflection import resolve_class
+            from deerflow.speech.base import SpeechToText, TextToSpeech
+
+            base = SpeechToText if section == "stt" else TextToSpeech
+            try:
+                resolve_class(cfg["use"], base)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"speech.{section}.use is not usable: {e}") from e
+
+    path = await asyncio.to_thread(registry.save_overrides, body)
+    # The cached readiness answer describes engines that no longer exist.
+    _readiness = None
+    return {"saved": str(path), "settings": registry._merged_config()}
+
+
+@router.delete("/config")
+@require_auth
+async def reset_voice_config(request: Request) -> dict:
+    """Drop the overrides and fall back to `config.yaml`."""
+    global _readiness
+    from deerflow.speech import registry
+
+    await asyncio.to_thread(registry.clear_overrides)
+    _readiness = None
+    return {"settings": registry._merged_config()}
+
+
 # Long enough for a greeting or a short confirmation, short enough that this
 # cannot be used as an open-ended synthesis service. Synthesis is CPU-bound and
 # runs in the gateway process, so an unbounded body here is a cheap way to eat
@@ -134,15 +247,87 @@ def _wav_of(pcm: bytes, sample_rate: int) -> bytes:
     """
     import struct
 
-    return (
-        b"RIFF"
-        + struct.pack("<I", 36 + len(pcm))
-        + b"WAVEfmt "
-        + struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16)
-        + b"data"
-        + struct.pack("<I", len(pcm))
-        + pcm
-    )
+    return b"RIFF" + struct.pack("<I", 36 + len(pcm)) + b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16) + b"data" + struct.pack("<I", len(pcm)) + pcm
+
+
+# A diagnostic clip, not a transcription service. Long enough to say a sentence.
+MAX_TRANSCRIBE_SECONDS = 30
+MAX_TRANSCRIBE_BYTES = CLIENT_SAMPLE_RATE * 2 * MAX_TRANSCRIBE_SECONDS + 1024
+
+
+def _pcm_from_wav(data: bytes) -> tuple[bytes, int]:
+    """Extract PCM16 mono and its rate from a WAV, without ffmpeg.
+
+    The client records raw PCM through the same AudioWorklet the live session
+    uses and wraps it in a WAV header, so a full decoder is unnecessary — and
+    ffmpeg is absent from the running gateway image, which would make a
+    container-format upload fail exactly where the diagnostic is most needed.
+    """
+    import io
+    import wave
+
+    with wave.open(io.BytesIO(data), "rb") as wav:
+        if wav.getsampwidth() != 2:
+            raise HTTPException(status_code=400, detail="expected 16-bit PCM audio")
+        channels = wav.getnchannels()
+        rate = wav.getframerate()
+        frames = wav.readframes(wav.getnframes())
+
+    if channels > 1:
+        # Keep the first channel rather than mixing: capture is mono by
+        # construction, so more than one channel means something is misconfigured
+        # and averaging would hide it.
+        import array
+
+        samples = array.array("h", frames)
+        frames = array.array("h", samples[::channels]).tobytes()
+    return frames, rate
+
+
+@router.post("/transcribe")
+@require_auth
+async def voice_transcribe(request: Request) -> dict:
+    """Transcribe a short uploaded clip. Backs the settings panel's mic test.
+
+    This is the one check that covers the whole capture path — permission,
+    device, sample rate, worklet, and the STT engine — in a single action.
+    """
+    from deerflow.speech.base import AudioChunk
+    from deerflow.speech.registry import get_stt_engine, is_speech_enabled
+
+    if not is_speech_enabled():
+        raise HTTPException(status_code=503, detail="Voice is not enabled")
+
+    form = await request.form()
+    upload = form.get("audio")
+    if upload is None or not hasattr(upload, "read"):
+        raise HTTPException(status_code=400, detail="an 'audio' file part is required")
+
+    data = await upload.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="the audio part was empty")
+    if len(data) > MAX_TRANSCRIBE_BYTES:
+        raise HTTPException(status_code=413, detail=f"clip exceeds {MAX_TRANSCRIBE_SECONDS}s")
+
+    try:
+        pcm, rate = _pcm_from_wav(data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"could not read the audio (expected WAV PCM16): {e}") from e
+
+    def _run() -> str:
+        engine = get_stt_engine()
+        engine.warmup()
+        return (engine.transcribe(AudioChunk(pcm=pcm, sample_rate=rate)).text or "").strip()
+
+    try:
+        text = await asyncio.to_thread(_run)
+    except Exception as e:
+        logger.warning("voice /transcribe failed: %s", e)
+        raise HTTPException(status_code=503, detail="Transcription unavailable") from e
+
+    return {"text": text, "sample_rate": rate, "duration_s": round(len(pcm) / 2 / rate, 2) if rate else None}
 
 
 @router.post("/speak")

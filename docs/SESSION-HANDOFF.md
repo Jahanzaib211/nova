@@ -123,6 +123,41 @@ Defaults flipped to fp32 in `scripts/fetch-voice-models.sh`,
 `scripts/docker.sh`, `docker/docker-compose.voice.yaml`, `.env`, and the
 real-engine test's model preference order.
 
+### Voice settings panel (P3) — done
+
+`Settings → Voice`. Backend `GET/PUT/DELETE /api/voice/config` plus
+`POST /api/voice/transcribe`; frontend `voice-settings-page.tsx` +
+`core/voice/config.ts` + `core/voice/capture.ts`.
+
+Three decisions worth keeping:
+
+- **Writes never touch `config.yaml`.** They go to
+  `$DEER_FLOW_HOME/voice-settings.yaml` and are layered over the `speech:`
+  section one level deep. Rewriting `config.yaml` would need either `yaml.dump`
+  (destroys all comments) or a round-trip YAML dependency for one endpoint.
+- **`save_overrides()` calls `reset_engines()`.** Engines are process
+  singletons — without it the panel writes a file, reports success, and keeps
+  using the engine built at startup. Negative-tested: removing the reset fails
+  exactly two tests in `tests/test_voice_settings.py`.
+- **The mic test records through the same AudioWorklet the live session uses**
+  (`core/voice/capture.ts`) and uploads WAV PCM16. MediaRecorder's WebM would
+  need ffmpeg — which is in the Dockerfile but **absent from the running dev
+  image**, i.e. it would fail exactly where a diagnostic matters most.
+
+The panel shows `device_requested` vs `device_actual` and measured RTF, so a
+`cuda` request that silently fell back, or synthesis slower than playback, is
+visible instead of mysterious.
+
+### A trap this session hit: `git add -A`
+
+`graphify-out/` (129 MB of generated knowledge graph) was swept into a commit.
+It is **intentionally committed** per the note in `.gitignore`, so it was not
+removed — but it broke `tests/test_no_cross_references.py`, because the graph
+indexes this repo *including the guard's own docstring*, producing a
+self-referential false positive. Fixed with a `SKIP_PREFIXES` entry for
+generated output; negative-tested to confirm the guard still catches real
+violations.
+
 ### The measurements that reprioritised everything
 
 | Stage | Measured (CPU) | Note |
@@ -145,7 +180,7 @@ Probed live. All are on `127.0.0.1` unless noted.
 |---|---|---|---|
 | **pgvector** | 5438 | `pgvector 0.8.6` on pg16 | ❌ Nova has no vector search at all |
 | **SearXNG** | 8090 | JSON API → HTTP 200 | ❌ integration exists, unconfigured |
-| **llama.cpp** | 18082 | Ornith-9B-Q4_K_M, 16k ctx, **on GPU** | ❌ |
+| **llama.cpp** | 18082 | a local 9B GGUF, 16k ctx, **on GPU** | ❌ |
 | Meilisearch ×2 | 7700 / 7701 | v1.11 | ❌ |
 | MinIO ×2 | 9010 / 9020 | latest | ❌ artifacts are on local disk |
 | Redis ×4 | 6380–6382 | 7 / 8-alpine | ❌ not configured |
@@ -208,15 +243,15 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
   model and point the background tasks at it:
   ```yaml
   models:
-    - name: local-ornith
+    - name: local-llama
       use: langchain_openai:ChatOpenAI
-      model: ornith-9b
+      model: <the alias llama.cpp reports at /v1/models>
       base_url: http://127.0.0.1:18082/v1
       api_key: "not-needed"
-  memory:  { model_name: local-ornith }
-  title:   { model_name: local-ornith }
+  memory:  { model_name: local-llama }
+  title:   { model_name: local-llama }
   ```
-- **Caveat:** Ornith-9B's quality for *structured fact extraction* is unverified.
+- **Caveat:** the local model's quality for *structured fact extraction* is unverified.
   Gate on a comparison run before switching permanently.
 
 #### G5. Redis support exists but is unconfigured → single worker, volatile runs

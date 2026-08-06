@@ -26,8 +26,11 @@ voice is unaffected.
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import threading
+from pathlib import Path
 from typing import Any
 
 from deerflow.reflection import resolve_class
@@ -61,14 +64,86 @@ def _speech_config() -> dict[str, Any]:
     return dump() if callable(dump) else {}
 
 
+def overrides_path() -> Path:
+    """Where UI-written voice settings live.
+
+    Deliberately **not** ``config.yaml``. That file is operator-owned and
+    heavily commented, and there is no way to rewrite it from Python without
+    either destroying every comment (``yaml.dump``) or taking on a round-trip
+    YAML dependency for the sake of one endpoint. Keeping the settings panel's
+    output in its own file means config.yaml is never touched, the two sources
+    stay legible, and "reset to defaults" is just deleting a file.
+
+    Precedence: this file wins over ``config.yaml``, key by key.
+    """
+    home = os.environ.get("DEER_FLOW_HOME")
+    base = Path(home) if home else Path(".deer-flow")
+    return base / "voice-settings.yaml"
+
+
+def _load_overrides() -> dict[str, Any]:
+    path = overrides_path()
+    try:
+        if not path.is_file():
+            return {}
+        import yaml
+
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        # A corrupt override must not take voice down — config.yaml still applies.
+        logger.warning("could not read %s; ignoring voice overrides", path, exc_info=True)
+        return {}
+
+
+def _merged_config() -> dict[str, Any]:
+    """config.yaml's ``speech:`` section with the UI overrides layered on top.
+
+    One level of merge, not a deep merge: ``stt``/``tts``/``vad`` are replaced
+    wholesale when present. A deep merge would let a stale key from config.yaml
+    survive inside a section the user just rewrote, which is exactly the kind of
+    invisible state that makes a settings panel untrustworthy.
+    """
+    merged = dict(_speech_config())
+    for key, value in _load_overrides().items():
+        merged[key] = value
+    return merged
+
+
+def save_overrides(settings: dict[str, Any]) -> Path:
+    """Persist UI settings and drop the cached engines so they take effect.
+
+    The reset is not optional. Engines are process singletons, so without it the
+    panel writes a file, reports success, and every subsequent request keeps
+    using the engine built at startup — the change appears to work and does
+    nothing at all.
+    """
+    import yaml
+
+    from deerflow.utils.atomic_write import atomic_write_text
+
+    path = overrides_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(path, yaml.safe_dump(settings, default_flow_style=False, allow_unicode=True, sort_keys=False))
+    reset_engines()
+    return path
+
+
+def clear_overrides() -> None:
+    """Reset to whatever ``config.yaml`` says."""
+    with contextlib.suppress(FileNotFoundError):
+        overrides_path().unlink()
+    reset_engines()
+
+
 def is_speech_enabled() -> bool:
     """Voice is opt-in; absent config means off, not broken."""
-    cfg = _speech_config()
+    cfg = _merged_config()
     return bool(cfg.get("enabled", False))
 
 
 def _build(section: str, default_use: str, base: type) -> Any:
-    cfg = dict(_speech_config().get(section) or {})
+    cfg = dict(_merged_config().get(section) or {})
     use = cfg.pop("use", None) or default_use
     cfg.pop("enabled", None)
     engine_cls = resolve_class(use, base)

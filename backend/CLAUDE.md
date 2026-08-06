@@ -843,9 +843,79 @@ throttles a single long-lived connection hard — an observed download decayed t
 **Docker.** `docker/docker-compose.voice.yaml` is an opt-in overlay, appended by
 `scripts/docker.sh` only when `speech.enabled: true` *and* the weights exist on
 disk; otherwise the stack starts normally and reports voice unavailable. It
-mounts the weights read-only and appends `voice` to `UV_EXTRAS` — no image
+mounts the weights read-only and sets the voice extra in `UV_EXTRAS` — no image
 rebuild is needed, since `dev-entrypoint.sh` runs `uv sync` into the
 `gateway-venv` volume on every boot.
+
+`docker-compose.voice-gpu.yaml` is a **second** overlay, appended only when
+`nvidia-smi` works **and** Docker has the `nvidia` runtime registered. Both
+conditions matter: the driver can be healthy while Docker cannot deliver a
+device, and a device reservation then stops the container from starting at all,
+so a GPU-less host must still get CPU voice rather than no gateway. `voice` and
+`voice-gpu` are **alternatives, never both** — they each provide the
+`onnxruntime` module — so `docker.sh` strips one before adding the other.
+
+## Voice performance — measured, and counter-intuitive
+
+| Kokoro model | Device | RTF | First audio |
+|---|---|---|---|
+| int8 | cpu | 2.163× | 2815 ms |
+| int8 | cuda | 2.156× | 2851 ms |
+| **fp32** | **cpu** | **0.392×** | **510 ms** |
+| **fp32** | **cuda** | **0.154×** | **200 ms** |
+
+**The int8 build is 5.5× slower than fp32 on the same CPU**, and it makes the GPU
+nearly useless as well — onnxruntime inserts ~547 Memcpy nodes because most int8
+ops have no CUDA kernel and bounce back to the host. int8 was originally chosen
+to save 222 MB of disk; it cost 5.5× throughput. **Default is fp32 everywhere.**
+Note fp32-on-CPU alone takes first audio 2815 → 510 ms, so the k3s deployment
+(no GPU) benefits from the weights change on its own.
+
+Whisper on CUDA: RTF 0.632 → 0.021 (~30×).
+
+**CUDA without `LD_LIBRARY_PATH`.** The `nvidia-*-cu12` wheels install CUDA under
+`site-packages/nvidia/*/lib`, off the linker's search path. `LD_LIBRARY_PATH`
+*cannot* fix this from inside Python — the linker reads it at `exec`, so a
+process cannot set it for itself and every entry point (uvicorn, pytest, the
+container CMD) would have to remember. `speech/devices.py::preload_cuda_libraries()`
+loads them `RTLD_GLOBAL` instead, which needs no environment at all. Two
+subtleties: it must run on the **onnx path as well as** the CTranslate2 one, and
+onnxruntime dlopens cuDNN by its **unversioned** name (`libcudnn.so`) which a
+resident `libcudnn.so.9` does not satisfy — `onnxruntime.preload_dlls()` handles
+that case, so it is tried first and the ctypes pass remains for CTranslate2.
+
+`device: auto|cuda|cpu` is resolved per engine by `speech/devices.py`. `auto`
+chooses silently; an explicit `cuda` that falls back warns **once, loudly**. That
+asymmetry is deliberate — silent degradation is exactly what hid the deaf-VAD bug.
+
+## Voice settings API (`/api/voice/config`)
+
+`GET` / `PUT` / `DELETE`, all `@require_auth`. Backs the settings panel at
+`frontend/src/components/workspace/settings/voice-settings-page.tsx`.
+
+**Writes go to a separate overrides file, never `config.yaml`.** That file is
+operator-owned and commented, and there is no way to rewrite it from Python
+without either destroying every comment (`yaml.dump`) or adding a round-trip
+YAML dependency for one endpoint. `registry.overrides_path()` resolves to
+`$DEER_FLOW_HOME/voice-settings.yaml`; `_merged_config()` layers it over
+`config.yaml`'s `speech:` section, one level deep — **not** a deep merge, so a
+section the user rewrites is replaced wholesale rather than letting a stale key
+survive inside it.
+
+**`save_overrides()` must call `reset_engines()`.** Engines are process
+singletons, so without it the panel writes a file, reports success, and every
+later request keeps using the engine built at startup — the settings appear to
+work and do nothing. `TestSavingDropsCachedEngines` in
+`tests/test_voice_settings.py` is the guard; removing the reset fails exactly
+two tests. The `PUT` handler also clears the cached `/status` readiness, which
+otherwise describes engines that no longer exist.
+
+`POST /api/voice/transcribe` backs the panel's microphone test. It accepts
+**WAV PCM16 only** and parses it with the stdlib `wave` module — the client
+records through `core/voice/capture.ts`, the same AudioWorklet the live session
+uses, so the test exercises the real path. MediaRecorder's WebM would need
+ffmpeg, which is in the Dockerfile but **absent from the running dev image**,
+i.e. it would fail exactly where the diagnostic matters most.
 
 ## Dependency security
 

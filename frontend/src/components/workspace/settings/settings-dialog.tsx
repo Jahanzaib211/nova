@@ -2,6 +2,7 @@
 
 import {
   BellIcon,
+  MicIcon,
   CableIcon,
   CpuIcon,
   InfoIcon,
@@ -29,6 +30,7 @@ import { ModelsSettingsPage } from "@/components/workspace/settings/models-setti
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
+import { VoiceSettingsPage } from "@/components/workspace/settings/voice-settings-page";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,7 @@ type SettingsSection =
   | "tools"
   | "skills"
   | "notification"
+  | "voice"
   | "about";
 
 type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
@@ -77,6 +80,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
         id: "notification",
         label: t.settings.sections.notification,
         icon: BellIcon,
+      },
+      {
+        id: "voice",
+        label: t.settings.sections.voice,
+        icon: MicIcon,
       },
       {
         id: "channels",
@@ -165,6 +173,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 />
               )}
               {activeSection === "notification" && <NotificationSettingsPage />}
+              {activeSection === "voice" && <VoiceSettingsPage />}
               {activeSection === "channels" && <ChannelsSettingsPage />}
               {activeSection === "models" && <ModelsSettingsPage />}
               {activeSection === "about" && <AboutSettingsPage />}

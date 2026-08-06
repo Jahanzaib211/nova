@@ -397,6 +397,7 @@ export const zhCN: Translations = {
       tools: "工具",
       skills: "技能",
       notification: "通知",
+      voice: "语音",
       about: "关于",
     },
     models: {
