@@ -888,6 +888,41 @@ that case, so it is tried first and the ctypes pass remains for CTranslate2.
 chooses silently; an explicit `cuda` that falls back warns **once, loudly**. That
 asymmetry is deliberate — silent degradation is exactly what hid the deaf-VAD bug.
 
+## Semantic turn detection (`speech/turn.py`)
+
+A VAD only knows whether *sound* stopped, which is why Nova cut you off when you
+paused mid-sentence. `pipecat-ai/smart-turn-v3` (8 MB, BSD-2, ~12 ms CPU) judges
+whether a *thought* finished, from prosody. **Opt-in**, and it degrades to
+VAD-only behaviour whenever it is off, missing, or failing — it can never be the
+reason voice breaks.
+
+**The input contract is not what the model card says.** The card describes "raw
+waveform"; that is true of *their library*, not the exported graph, which takes
+`input_features [batch, 80, 800]` — an 80-bin log-mel over the last 8 s. Its
+axes are dynamic, so a waveform runs fine and returns a meaningless number, the
+same trap as the Silero VAD. `SmartTurnV3._ensure()` asserts the shape and
+refuses to load a model that does not match.
+
+Reference pipeline (pipecat's `inference.py`): keep the last 8 s → right-pad to
+8 s → normalise the waveform to zero mean/unit variance → Whisper log-mel with
+`chunk_length=8`. Nova uses `faster_whisper`'s extractor rather than
+`transformers`' so the stack keeps one runtime and no torch. **That substitution
+is validated, not assumed**: `test_matches_the_reference_feature_extractor`
+compares both against the real model and skips when `transformers` is absent
+(it is a test oracle, deliberately *not* a runtime dependency).
+
+**Do not evaluate this with TTS.** Synthesized speech renders every standalone
+string with sentence-final prosody, so "I was thinking that maybe we should"
+scores as complete. Measured: complete 0.987 vs incomplete 0.950 — no usable
+separation. That is a property of the fixture, not the model; real human audio
+is required, which is what the settings panel's microphone test is for.
+
+**The bug worth remembering**: `SPEECH_START` used to clear the utterance
+buffer unconditionally. Once a pause could *continue* a turn, that discarded the
+first half of a split sentence — "…maybe we should" + "deploy on Friday" reached
+the STT engine as only the second half. State now resets only when `_capturing`
+is false. Pinned by `test_resuming_after_a_pause_keeps_the_first_half`.
+
 ## Voice settings API (`/api/voice/config`)
 
 `GET` / `PUT` / `DELETE`, all `@require_auth`. Backs the settings panel at

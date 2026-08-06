@@ -128,6 +128,10 @@ fi
 echo "Downloading voice models into $DEST  (TTS precision: $PRECISION)"
 # Small files first, so VAD and voices are usable while the big one streams.
 fetch "https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx" "silero_vad.onnx"
+# Semantic turn detection (8 MB, BSD-2). Judges whether a *thought* finished,
+# not merely whether sound stopped — the difference between Nova waiting while
+# you think and Nova interrupting you.
+fetch "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx" "smart-turn-v3.2-cpu.onnx"
 fetch "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" "voices-v1.0.bin"
 fetch "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$KOKORO_FILE" "$KOKORO_FILE"
 

@@ -131,6 +131,17 @@ ENGINE_CATALOG: dict[str, list[dict]] = {
             "default": True,
         },
     ],
+    "turn": [
+        {
+            "use": "deerflow.speech.turn:SmartTurnV3",
+            "label": "Smart Turn v3",
+            "note": (
+                "Judges whether you finished a *thought*, not just whether sound stopped — so Nova waits "
+                "while you pause mid-sentence instead of interrupting. 8 MB, ~12 ms on CPU. Needs "
+                "smart-turn-v3.2-cpu.onnx from scripts/fetch-voice-models.sh."
+            ),
+        },
+    ],
     "tts": [
         {
             "use": "deerflow.speech.engines.kokoro_tts:KokoroTTS",
@@ -399,6 +410,8 @@ class VoiceSession:
         vad,
         respond: Responder,
         voice: str | None = None,
+        turn_detector=None,
+        turn_config=None,
     ) -> None:
         self._send_json = send_json
         self._send_bytes = send_bytes
@@ -407,6 +420,14 @@ class VoiceSession:
         self._vad = vad
         self._respond = respond
         self._voice = voice
+
+        # Semantic endpointing. Absent, it degrades to exactly the VAD-only
+        # behaviour, so turn detection can never be the reason voice breaks.
+        from deerflow.speech.turn import AlwaysComplete, TurnConfig
+
+        self._turn = turn_detector or AlwaysComplete()
+        self._turn_config = turn_config or TurnConfig()
+        self._extensions = 0
 
         self._utterance = bytearray()
         self._capturing = False
@@ -435,21 +456,64 @@ class VoiceSession:
                 if self.is_speaking:
                     await self._cancel_speech()
                     await self._send_json({"type": "interrupt"})
-                self._capturing = True
-                self._utterance.clear()
+
+                # Only a *new* utterance resets state. When `_capturing` is
+                # already true we are mid-turn — the semantic detector judged the
+                # thought unfinished and we kept listening, so this is the user
+                # resuming, not starting over. Clearing here would discard the
+                # first half of the sentence ("...maybe we should" + "deploy on
+                # Friday" arriving as just the second half), and resetting the
+                # counter would defeat the extension cap entirely.
+                if not self._capturing:
+                    self._capturing = True
+                    self._utterance.clear()
+                    self._extensions = 0
                 await self._send_json({"type": "listening"})
 
+            forced = False
             if self._capturing:
                 self._utterance.extend(frame)
                 if len(self._utterance) > MAX_UTTERANCE_BYTES:
                     # Hard ceiling; treat as end-of-turn rather than growing.
+                    # `forced` skips the semantic check — at this point we are
+                    # out of buffer, so "is the thought finished?" is moot.
                     event = VadEvent.SPEECH_END
+                    forced = True
 
             if event is VadEvent.SPEECH_END and self._capturing:
-                self._capturing = False
                 audio = bytes(self._utterance)
+                if not forced and not await self._turn_has_ended(audio):
+                    # The speaker paused mid-thought. Keep the buffer and keep
+                    # listening rather than answering an unfinished sentence —
+                    # this is the difference between a conversation and an
+                    # interrogation.
+                    self._extensions += 1
+                    self._vad.reset()
+                    continue
+
+                self._capturing = False
+                self._extensions = 0
                 self._utterance.clear()
                 await self._handle_utterance(audio)
+
+    async def _turn_has_ended(self, pcm: bytes) -> bool:
+        """Has the speaker finished a thought, not merely stopped making noise?
+
+        Bounded by `max_extensions` so a detector that keeps saying "not yet"
+        cannot hold the turn open indefinitely — a wrong *incomplete* verdict
+        costs the user a real wait, which is worse than answering slightly early.
+        """
+        if self._extensions >= self._turn_config.max_extensions:
+            return True
+        try:
+            probability = await asyncio.to_thread(self._turn.completion_probability, pcm, CLIENT_SAMPLE_RATE)
+        except Exception:
+            logger.debug("turn detection failed; ending the turn", exc_info=True)
+            return True
+        ended = probability >= self._turn_config.threshold
+        if not ended:
+            await self._send_json({"type": "listening", "reason": "incomplete"})
+        return ended
 
     async def _handle_utterance(self, pcm: bytes) -> None:
         from deerflow.speech.base import AudioChunk
@@ -618,7 +682,13 @@ async def voice_session(websocket: WebSocket, thread_id: str) -> None:
         await reject(websocket, code=1011)
         return
 
+    from deerflow.speech.registry import _merged_config
+    from deerflow.speech.turn import TurnConfig, get_turn_detector
     from deerflow.speech.vad import SileroVad, VadConfig
+
+    # Semantic endpointing is opt-in and degrades to VAD-only when off or when
+    # its weights are missing, so it can never be the reason a session fails.
+    turn_settings = dict(_merged_config().get("turn") or {})
 
     await websocket.accept()
     session = VoiceSession(
@@ -628,6 +698,8 @@ async def voice_session(websocket: WebSocket, thread_id: str) -> None:
         tts=tts,
         vad=SileroVad(VadConfig.from_env(), sample_rate=CLIENT_SAMPLE_RATE),
         respond=await _agent_responder(thread_id),
+        turn_detector=get_turn_detector(turn_settings),
+        turn_config=TurnConfig.from_env(),
     )
 
     try:
