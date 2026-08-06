@@ -54,6 +54,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Self-hosted voice. Everything here runs on onnxruntime — deliberately no
+# PyTorch, which is what keeps the gateway image and its memory footprint small.
+# Weights are fetched separately by scripts/fetch-voice-models.sh.
+voice = [
+    "faster-whisper>=1.1.0",   # Whisper on CTranslate2 — ~4x faster, far leaner
+    "kokoro-onnx>=0.4.0",      # Kokoro-82M TTS, Apache-2.0, ONNX (no torch)
+    "onnxruntime>=1.20.0",     # shared by Kokoro and Silero VAD
+    "numpy>=1.26.0",
+]
+
 ollama = ["langchain-ollama>=0.3.0"]
 postgres = [
     "asyncpg>=0.29",

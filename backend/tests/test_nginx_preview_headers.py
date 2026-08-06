@@ -207,3 +207,54 @@ class TestK8sConfigMapActuallyReachesThePod:
         assert "checksum/nginx-config:" in text, "nginx pod will not roll when files/nginx.conf changes"
         assert "configmap-nginx.yaml" in text, "the checksum must be computed from the nginx ConfigMap template"
         assert "sha256sum" in text
+
+
+VOICE_LOCATION = "location ~ ^/api/voice/session/"
+
+
+class TestVoiceWebSocketLocation:
+    """The voice session is a WebSocket and needs its own nginx location.
+
+    The generic `location /api/` sets no `Upgrade` header, so the handshake
+    400s behind nginx while working perfectly under `make dev`, which bypasses
+    nginx entirely. That is the exact shape of the bug that blanked the Browser
+    tab for a release, so it is pinned here before it can happen twice.
+    """
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_location_exists(self, name: str) -> None:
+        assert VOICE_LOCATION in _read(name), f"{name}: voice WebSocket has no location — the handshake will fail behind nginx"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_supports_websocket_upgrade(self, name: str) -> None:
+        body = _strip_comments(_location_body(_read(name), VOICE_LOCATION))
+        assert "proxy_set_header Upgrade $http_upgrade;" in body, f"{name}: voice socket cannot upgrade"
+        assert "proxy_set_header Connection $connection_upgrade;" in body, f"{name}: Connection must come from the $connection_upgrade map"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_read_timeout_survives_a_quiet_conversation(self, name: str) -> None:
+        """A voice session is idle between utterances by design."""
+        body = _strip_comments(_location_body(_read(name), VOICE_LOCATION))
+        assert "proxy_read_timeout" in body, f"{name}: nginx's 60s default would drop the mic mid-conversation"
+
+
+class TestMicrophonePermission:
+    """`Permissions-Policy: microphone=()` disables getUserMedia app-wide.
+
+    It was set that way, so voice capture could never work on any deployment —
+    and only there, since local dev serves no headers at all. `(self)` permits
+    our own origin while still blocking every embedded third party.
+    """
+
+    @pytest.mark.parametrize("name", HEADERED)
+    def test_microphone_allowed_for_self(self, name: str) -> None:
+        text = _read(name)
+        assert "microphone=(self)" in text, f"{name}: microphone is blocked app-wide; voice capture cannot work"
+        assert "microphone=()" not in text, f"{name}: a fully-disabling microphone policy is still present"
+
+    @pytest.mark.parametrize("name", HEADERED)
+    def test_camera_and_geolocation_stay_disabled(self, name: str) -> None:
+        """Relaxing the mic must not relax anything else."""
+        text = _read(name)
+        assert "camera=()" in text, f"{name}: camera should remain disabled"
+        assert "geolocation=()" in text, f"{name}: geolocation should remain disabled"

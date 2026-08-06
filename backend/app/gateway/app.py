@@ -46,6 +46,9 @@ from app.gateway.routers import (
 from app.gateway.routers import (
     sandbox as sandbox_router,
 )
+from app.gateway.routers import (
+    voice as voice_router,
+)
 from deerflow.config import app_config as deerflow_app_config
 from deerflow.config.app_config import apply_logging_level
 
@@ -513,6 +516,10 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # iGIN0: privacy search endpoints
     app.include_router(igino.router)
+
+    # Voice: full-duplex speech session + capability probe. Self-hosted engines,
+    # opt-in via config.yaml `speech.enabled`; the WS refuses cleanly when off.
+    app.include_router(voice_router.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:

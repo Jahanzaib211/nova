@@ -76,6 +76,15 @@ ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONIOENCODING=utf-8
 
+# ffmpeg: decoding UPLOADED audio (mp3/m4a/ogg -> wav) for transcription.
+# Deliberately not in the realtime voice path — the browser captures with an
+# AudioWorklet and streams raw PCM, so live conversation never touches a
+# container format. ~60 MB, and `pydub` (already present transitively via
+# markitdown[all]) is a no-op for anything but .wav without it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy Node.js runtime from builder (provides npx for MCP servers)
 COPY --from=builder /usr/bin/node /usr/bin/node
 COPY --from=builder /usr/lib/node_modules /usr/lib/node_modules

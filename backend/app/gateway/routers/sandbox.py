@@ -1177,14 +1177,14 @@ async def proxy_appview_ws(websocket: WebSocket, thread_id: str, path: str):
 
 
 def _ws_same_origin(websocket: WebSocket) -> bool:
-    """Anti cross-site-WebSocket-hijacking: only accept same-origin handshakes."""
-    origin = websocket.headers.get("origin")
-    host = websocket.headers.get("host")
-    if not origin or not host:
-        return True
-    from urllib.parse import urlparse
+    """Anti cross-site-WebSocket-hijacking: only accept same-origin handshakes.
 
-    return urlparse(origin).netloc == host
+    Delegates to the shared implementation so this router and the voice router
+    cannot drift apart on an admission check.
+    """
+    from app.gateway.ws_guards import ws_same_origin
+
+    return ws_same_origin(websocket)
 
 
 async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:

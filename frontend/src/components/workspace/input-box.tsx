@@ -89,6 +89,7 @@ import {
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 import { Tooltip } from "./tooltip";
+import { VoiceButton } from "./voice-button";
 
 type InputMode = "flash" | "thinking" | "pro" | "ultra";
 
@@ -729,6 +730,7 @@ export function InputBox({
             </PromptInputActionMenuContent>
           </PromptInputActionMenu> */}
             <AddAttachmentsButton className="px-2!" />
+            <VoiceButton threadId={threadId} className="px-2!" />
             <PromptInputActionMenu>
               <ModeHoverGuide
                 mode={

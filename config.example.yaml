@@ -871,6 +871,31 @@ uploads:
   # markitdown  — always use MarkItDown (original behaviour, no extra dependency).
   pdf_converter: auto
 
+# ── Voice (speech-to-text + text-to-speech) ──────────────────────────────────
+# Self-hosted and off by default. No API key, no per-minute cost, and no audio
+# ever leaves the machine. Engines run on onnxruntime — deliberately no PyTorch,
+# which is what keeps the image and the memory footprint small.
+#
+# Install the extra first:  cd backend && uv sync --extra voice
+# Fetch model weights:      scripts/fetch-voice-models.sh
+speech:
+  enabled: false
+  stt:
+    # faster-whisper (Whisper on CTranslate2): ~4x faster and far leaner than
+    # openai-whisper for the same weights.
+    use: deerflow.speech.engines.faster_whisper_stt:FasterWhisperSTT
+    model: base          # tiny | base | small | medium | large-v3
+    compute_type: int8   # int8 is realtime on CPU; float32 is more accurate
+    # language: en       # omit to auto-detect
+  tts:
+    # Kokoro-82M via ONNX — best quality-per-byte in open source, Apache-2.0.
+    use: deerflow.speech.engines.kokoro_tts:KokoroTTS
+    voice: af_heart
+  # Engines that need no weights at all. Swap these in to exercise the whole
+  # pipeline (capture, VAD, transport, playback) without downloading anything:
+  #   stt: { use: deerflow.speech.engines.null:ScriptedSTT }
+  #   tts: { use: deerflow.speech.engines.null:ToneTTS }
+
 sandbox:
   use: deerflow.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is

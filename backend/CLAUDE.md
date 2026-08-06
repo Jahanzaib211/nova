@@ -757,6 +757,53 @@ For models with `supports_vision: true`:
 - `view_image_tool` added to agent's toolset
 - Images automatically converted to base64 and injected into state
 
+## Voice (self-hosted STT/TTS)
+
+Full-duplex speech: talk to Nova, Nova talks back, and you can interrupt it
+mid-sentence. Everything runs locally — no API key, no per-minute cost, no audio
+leaving the machine. **Off by default** (`speech.enabled` in `config.yaml`).
+
+| Job | Technology | Why |
+|---|---|---|
+| STT | `faster-whisper` (Whisper on CTranslate2) | ~4x faster and far leaner than `openai-whisper`; int8 is realtime on CPU |
+| TTS | `kokoro-onnx` (Kokoro-82M, Apache-2.0) | best quality-per-byte in open source, and the ONNX build means **no PyTorch** |
+| VAD | Silero VAD (ONNX, ~2 MB) | decides when you started/stopped talking — this is what makes barge-in possible |
+
+The no-PyTorch constraint is the load-bearing decision: torch would add ~2 GB to
+the gateway image and a lot of resident memory. `onnxruntime` is shared by
+Kokoro and Silero.
+
+**Engines are not models.** `models/factory.py` resolves every `models:` entry
+through `resolve_class(..., BaseChatModel)`, a hard type gate — a Whisper client
+cannot be declared there. `deerflow/speech/registry.py` is a small parallel
+registry on the generic reflection layer, mirroring how `sandbox.use` works.
+
+**Everything is testable without weights.** `speech/engines/null.py` provides
+`ScriptedSTT` / `SilentSTT` / `ToneTTS`; the whole suite (`tests/test_voice_session.py`)
+runs against them, so CI needs no models, no onnxruntime and no network.
+
+**Transport** is one WebSocket at `/api/voice/session/{thread_id}`
+(`app/gateway/routers/voice.py`): binary PCM16 up, JSON events + binary PCM16
+down. The browser captures with an AudioWorklet and sends **raw PCM**, so ffmpeg
+is never in the realtime path — it is only needed to decode uploaded audio files.
+`VoiceSession` holds the turn-taking logic and is deliberately separable from the
+route so it can be unit tested against fake engines and a fake socket.
+
+**Two deployment traps, both invisible on `make dev`:**
+
+1. `Permissions-Policy: microphone=()` disables `getUserMedia` **app-wide**. It
+   is now `microphone=(self)` in all three headered nginx configs. Local dev
+   serves no headers at all, so this can only ever fail in a deployment.
+2. A WebSocket path needs its own nginx `location` — the generic `location /api/`
+   sets no `Upgrade` header. `/api/voice/session/` has one in **all four**
+   configs, with a long `proxy_read_timeout` because a voice session is idle
+   between utterances by design.
+
+Both are pinned by `tests/test_nginx_preview_headers.py`.
+
+Setup: `uv sync --extra voice`, then `scripts/fetch-voice-models.sh`, then set
+`speech.enabled: true`.
+
 ## Dependency security
 
 `uv.lock` is kept clear of known-vulnerable packages for everything **except**
@@ -773,14 +820,14 @@ uvx pip-audit --no-deps --disable-pip -r /tmp/reqs.txt
 resolved and `pip-audit` reports **no known vulnerabilities**. Two things made
 it safe to take:
 
-* `websockets` is now a **declared** dependency pinned `>=15.0.1,<16`. It was
+- `websockets` is now a **declared** dependency pinned `>=15.0.1,<16`. It was
   an undeclared transitive, and an earlier resolution silently pulled it
   *backwards* with nothing to notice — it is what the gateway's WebSocket
   bridges (`routers/sandbox.py`, `routers/voice.py`) run on. The upper bound is
   upstream, not preference: `langchain` 1.3.9 — the release fixing
   PYSEC-2026-2192 — requires `websockets<16`, so `>=16` and a
   vulnerability-free langchain are mutually unsatisfiable today.
-* The replay harness validated it without an API key: `test_replay_golden.py`
+- The replay harness validated it without an API key: `test_replay_golden.py`
   plus the three `e2e-real-backend` specs drive the real gateway end to end, and
   a replay *miss* would have caught any change in message serialization or
   prompt assembly under `langchain-core` 1.5.

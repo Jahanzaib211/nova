@@ -121,6 +121,10 @@ class AppConfig(BaseModel):
     guardrails: GuardrailsConfig = Field(default_factory=GuardrailsConfig, description="Guardrail middleware configuration")
     workspace: WorkspaceIntelConfig = Field(default_factory=WorkspaceIntelConfig, description="Workspace intelligence kernel configuration")
     suggestions: SuggestionsConfig = Field(default_factory=SuggestionsConfig, description="Follow-up suggestions configuration.")
+    speech: dict = Field(
+        default_factory=dict,
+        description="Voice (STT/TTS) configuration. Untyped on purpose: engine kwargs are engine-specific and are passed straight to the constructor by deerflow.speech.registry, the same way sandbox.use works. Absent or enabled=false means voice is off.",
+    )
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig, description="LLM circuit breaker configuration")
     channel_connections: ChannelConnectionsConfig = Field(
         default_factory=ChannelConnectionsConfig,
