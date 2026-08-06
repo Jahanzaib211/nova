@@ -14,14 +14,89 @@ set -euo pipefail
 DEST="${DEERFLOW_VOICE_MODEL_DIR:-$HOME/.cache/nova/voice}"
 mkdir -p "$DEST"
 
+# How many range requests to run at once.
+#
+# This is not premature optimization. GitHub's release CDN throttles a single
+# long-lived connection hard — an observed download decayed to ~19 KB/s on a
+# 160 Mbit link, which turns the 92 MB model into a 90-minute wait. The same
+# host serves ~470 KB/s aggregate across parallel connections. Splitting the
+# file is the difference between three minutes and an afternoon.
+JOBS="${DEERFLOW_FETCH_JOBS:-8}"
+# Below this, connection setup costs more than the parallelism saves.
+PARALLEL_MIN_BYTES=$((4 * 1024 * 1024))
+
+remote_size() {
+  # -L because these are redirects to a CDN; the last Content-Length wins, since
+  # the redirect hops themselves report 0.
+  curl -fsIL --max-time 30 "$1" 2>/dev/null \
+    | tr -d '\r' \
+    | awk 'tolower($1) == "content-length:" && $2 > 0 { n = $2 } END { print n + 0 }'
+}
+
+# Download one byte range, resuming whatever is already on disk.
+#
+# `curl -C -` cannot be combined with `-r`: -C sets its own Range header and the
+# two collide. So the resume offset is computed here and the part is appended.
+fetch_range() {
+  local url="$1" part="$2" start="$3" end="$4"
+  local have=0
+  [ -f "$part" ] && have=$(stat -c %s "$part")
+  local want=$((end - start + 1))
+  [ "$have" -ge "$want" ] && return 0
+  curl -fsL --retry 5 --retry-delay 2 --retry-all-errors \
+    -r "$((start + have))-$end" "$url" >> "$part"
+}
+
+fetch_parallel() {
+  local url="$1" out="$2" size="$3"
+  local chunk=$(((size + JOBS - 1) / JOBS))
+  local pids=() i start end rc=0
+
+  for ((i = 0; i < JOBS; i++)); do
+    start=$((i * chunk))
+    [ "$start" -ge "$size" ] && break
+    end=$((start + chunk - 1))
+    [ "$end" -ge "$size" ] && end=$((size - 1))
+    # Zero-padded: the reassembly below relies on glob order, and `chunk10`
+    # sorts before `chunk2`. Unpadded names would scramble the file in a way
+    # the size check cannot detect.
+    fetch_range "$url" "$(printf '%s/%s.chunk%03d' "$DEST" "$out" "$i")" "$start" "$end" &
+    pids+=($!)
+  done
+  for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+  if [ "$rc" -ne 0 ]; then
+    echo "  a chunk failed — re-run to resume" >&2
+    return 1
+  fi
+
+  cat "$DEST/$out".chunk* > "$DEST/$out.partial"
+  local got
+  got=$(stat -c %s "$DEST/$out.partial")
+  if [ "$got" -ne "$size" ]; then
+    # Truncated or overlapping parts would produce a corrupt ONNX file that
+    # fails deep inside onnxruntime with an unreadable error. Fail loudly here.
+    echo "  size mismatch for $out: got $got, expected $size" >&2
+    rm -f "$DEST/$out.partial"
+    return 1
+  fi
+  rm -f "$DEST/$out".chunk*
+}
+
 fetch() {
   local url="$1" out="$2"
   if [ -s "$DEST/$out" ]; then
     echo "  already have $out"
     return
   fi
-  echo "  fetching $out"
-  curl -fL --progress-bar -o "$DEST/$out.partial" "$url"
+  local size
+  size=$(remote_size "$url")
+  if [ "$size" -ge "$PARALLEL_MIN_BYTES" ]; then
+    echo "  fetching $out ($((size / 1024 / 1024)) MB, ${JOBS} parallel ranges)"
+    fetch_parallel "$url" "$out" "$size"
+  else
+    echo "  fetching $out"
+    curl -fL --progress-bar --retry 5 --retry-all-errors -o "$DEST/$out.partial" "$url"
+  fi
   mv "$DEST/$out.partial" "$DEST/$out"   # never leave a truncated file behind
 }
 

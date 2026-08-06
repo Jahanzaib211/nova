@@ -58,6 +58,78 @@ class TestVad:
         assert VadEvent.SPEECH_END not in events
         assert vad.is_speaking
 
+
+class TestSileroInputContract:
+    """Pin the tensor shape Nova hands Silero — no weights, so this runs in CI.
+
+    Silero's ONNX graph has dynamic axes: a wrong-shaped input returns a
+    meaningless probability instead of raising. Nova shipped a VAD that fed it
+    320-sample frames with no context prefix, and on real speech the model never
+    exceeded p=0.06 — completely deaf, while every weightless test stayed green
+    because silence and noise still (correctly) produced no speech.
+
+    Measured against the real model: 512-sample window + 64-sample context
+    reaches p=1.00 on speech; drop the context and the same audio caps at 0.06.
+    These tests assert the shape, which is the part CI can check.
+    """
+
+    @staticmethod
+    def _vad_with_stub(monkeypatch, widths: list[int], prob: float = 0.9):
+        np = pytest.importorskip("numpy")
+        from deerflow.speech import vad as vad_mod
+
+        class StubSession:
+            def run(self, _outputs, feeds):
+                widths.append(int(feeds["input"].shape[-1]))
+                # onnxruntime returns a flat list of the graph's outputs —
+                # here [probability, stateN]. Returning ([prob], state) instead
+                # would shift every index in the caller by one and silently
+                # route it into the energy-VAD fallback.
+                return [np.array([[prob]], dtype=np.float32), feeds["state"]]
+
+        vad = vad_mod.SileroVad(VadConfig(speech_ms=40, silence_ms=200), sample_rate=16_000)
+        vad._session = StubSession()
+        vad._load_attempted = True
+        vad._state = np.zeros((2, 1, 128), dtype=np.float32)
+        return vad
+
+    def test_model_receives_window_plus_context(self, monkeypatch) -> None:
+        widths: list[int] = []
+        vad = self._vad_with_stub(monkeypatch, widths)
+        for _ in range(20):
+            vad.accept(LOUD)
+        assert widths, "the model was never invoked"
+        # 512 window + 64 context. Not 512, and never the raw 320-sample frame.
+        assert set(widths) == {576}, f"wrong input width(s): {sorted(set(widths))}"
+
+    def test_frames_are_buffered_not_dropped(self) -> None:
+        """20 ms frames are 320 samples and windows are 512 — they do not divide
+        evenly, so leftover audio must carry over rather than be discarded."""
+        widths: list[int] = []
+        vad = self._vad_with_stub(None, widths)
+        for _ in range(32):  # 32 * 320 = 10240 samples = exactly 20 windows
+            vad.accept(LOUD)
+        assert len(widths) == 20, f"expected 20 windows from 10240 samples, got {len(widths)}"
+
+    def test_a_partial_window_holds_the_previous_verdict(self) -> None:
+        """A frame too short to complete a window must not report silence —
+        that would reset the speech run every other frame and stop speech_ms
+        from ever accumulating."""
+        widths: list[int] = []
+        vad = self._vad_with_stub(None, widths, prob=0.99)
+        vad.accept(LOUD)  # 320 samples: no window completes yet
+        vad.accept(LOUD)  # 640: one window, verdict True
+        before = len(widths)
+        assert vad._frame_is_speech(LOUD) is True  # 960: still no new window
+        assert len(widths) == before, "no new inference should have run"
+
+    def test_unsupported_sample_rate_falls_back_instead_of_guessing(self) -> None:
+        from deerflow.speech.vad import SileroVad
+
+        vad = SileroVad(VadConfig(), sample_rate=44_100, model_path=__file__)
+        vad._ensure_session()
+        assert vad._session is None, "a mis-windowed Silero is worse than an honest energy VAD"
+
     def test_a_stuck_mic_cannot_buffer_forever(self) -> None:
         vad = EnergyVad(VadConfig(speech_ms=40, silence_ms=10_000, max_utterance_ms=200))
         events = [vad.accept(LOUD) for _ in range(40)]
@@ -531,3 +603,101 @@ class TestStatusProbeHonesty:
         out = self._status(monkeypatch, enabled=False)
         assert out["enabled"] is False
         assert "ready" not in out
+
+
+class TestOneShotSpeak:
+    """`POST /api/voice/speak` — Nova talking without a conversation.
+
+    The login greeting is why this exists. Opening the duplex socket to say
+    hello would prompt for the microphone before the user has asked for
+    anything, which is the reliable way to get that permission denied forever.
+    """
+
+    def _speak(self, monkeypatch, body, *, tts=None, enabled=True):
+        import asyncio
+
+        from app.gateway.routers import voice as voice_mod
+        from deerflow.speech import registry
+
+        monkeypatch.setattr(registry, "is_speech_enabled", lambda: enabled)
+        if tts is not None:
+            monkeypatch.setattr(registry, "get_tts_engine", lambda: tts)
+
+        class _Req:
+            async def json(self):
+                return body
+
+        # The route function is wrapped by @require_auth; call the underlying
+        # implementation so this stays a unit test of the synthesis path.
+        fn = getattr(voice_mod.voice_speak, "__wrapped__", voice_mod.voice_speak)
+        return asyncio.run(fn(_Req()))
+
+    def test_endpoint_is_auth_guarded(self) -> None:
+        """The tests above unwrap `@require_auth` to reach the synthesis path,
+        so nothing else here would notice if the decorator were removed. Without
+        it this is an unauthenticated, CPU-burning endpoint on a public origin.
+        """
+        from app.gateway.routers import voice as voice_mod
+
+        assert hasattr(voice_mod.voice_speak, "__wrapped__"), "@require_auth is missing from /api/voice/speak"
+
+    def test_returns_a_playable_wav(self, monkeypatch) -> None:
+        resp = self._speak(monkeypatch, {"text": "Good evening. Nova here."}, tts=ToneTTS())
+        assert resp.media_type == "audio/wav"
+        body = resp.body
+        assert body[:4] == b"RIFF" and body[8:12] == b"WAVE", "not a WAV container"
+        # The declared payload size must match the bytes actually present, or
+        # decodeAudioData rejects the whole buffer in the browser.
+        import struct
+
+        declared = struct.unpack("<I", body[40:44])[0]
+        assert declared == len(body) - 44
+        assert declared > 0, "a WAV with no samples plays as silence"
+
+    def test_wav_header_declares_the_engine_sample_rate(self, monkeypatch) -> None:
+        """A wrong rate in the header does not fail — it just plays chipmunked."""
+        import struct
+
+        tts = ToneTTS()
+        resp = self._speak(monkeypatch, {"text": "hello"}, tts=tts)
+        assert struct.unpack("<I", resp.body[24:28])[0] == tts.sample_rate
+
+    def test_rejects_empty_text(self, monkeypatch) -> None:
+        from fastapi import HTTPException
+
+        for body in ({"text": "   "}, {"text": ""}, {}):
+            with pytest.raises(HTTPException) as e:
+                self._speak(monkeypatch, body, tts=ToneTTS())
+            assert e.value.status_code == 400
+
+    def test_caps_length_so_it_cannot_become_a_synthesis_service(self, monkeypatch) -> None:
+        from app.gateway.routers.voice import MAX_SPEAK_CHARS
+
+        spoken: list[str] = []
+
+        class _Recording(ToneTTS):
+            async def synthesize(self, text, *, voice=None):
+                spoken.append(text)
+                async for chunk in super().synthesize(text, voice=voice):
+                    yield chunk
+
+        self._speak(monkeypatch, {"text": "a" * (MAX_SPEAK_CHARS * 3)}, tts=_Recording())
+        assert len(spoken[0]) == MAX_SPEAK_CHARS
+
+    def test_503_when_voice_is_disabled(self, monkeypatch) -> None:
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as e:
+            self._speak(monkeypatch, {"text": "hi"}, enabled=False)
+        assert e.value.status_code == 503
+
+    def test_engine_failure_is_503_not_500(self, monkeypatch) -> None:
+        from fastapi import HTTPException
+
+        class _Broken(ToneTTS):
+            def warmup(self) -> None:
+                raise SpeechEngineUnavailable("weights missing")
+
+        with pytest.raises(HTTPException) as e:
+            self._speak(monkeypatch, {"text": "hi"}, tts=_Broken())
+        assert e.value.status_code == 503

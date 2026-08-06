@@ -165,7 +165,8 @@ test("capture the live voice panel in each phase", async ({ page }) => {
   await page.screenshot({ path: "screens/14-voice-composer-full.png" });
 });
 
-test("capture the mic hidden when voice is off", async ({ page }) => {
+// The pill still renders when voice is off — it just offers the setup hint.
+test("capture the voice pill in its not-yet-enabled state", async ({ page }) => {
   await setup(page, false);
   await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
   await page.waitForTimeout(3000);

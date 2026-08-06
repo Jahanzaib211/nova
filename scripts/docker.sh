@@ -41,6 +41,21 @@ load_proxy_env_from_dotenv() {
     done
 }
 
+# Is `speech.enabled: true` set in config.yaml? Same awk section-walk as
+# detect_sandbox_mode — deliberately not a YAML parser, since adding a Python
+# dependency to a shell wrapper that runs before the venv exists is worse than
+# reading one boolean the blunt way.
+speech_enabled_in_config() {
+    local config_file="$PROJECT_ROOT/config.yaml"
+    [ -f "$config_file" ] || return 1
+    awk '
+        /^[[:space:]]*speech:[[:space:]]*$/ { in_speech=1; next }
+        in_speech && /^[^[:space:]#]/ { in_speech=0 }
+        in_speech && /^[[:space:]]*enabled:[[:space:]]*true[[:space:]]*$/ { found=1; exit }
+        END { exit(found ? 0 : 1) }
+    ' "$config_file"
+}
+
 detect_sandbox_mode() {
     local config_file="$PROJECT_ROOT/config.yaml"
     local sandbox_use=""
@@ -208,6 +223,36 @@ start() {
         fi
         echo -e "${YELLOW}Mounting host Docker socket into gateway (DooD = host root-equivalent). See SECURITY.md.${NC}"
         COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.dood.yaml"
+    fi
+
+    # Voice needs two things the base compose file cannot assume: the model
+    # weights on disk and the `voice` uv extra. Both are gated here so a machine
+    # without weights starts normally and simply reports voice unavailable,
+    # rather than bind-mounting an empty directory and failing at first use.
+    if speech_enabled_in_config; then
+        local voice_dir="${DEERFLOW_VOICE_MODEL_DIR:-$HOME/.cache/nova/voice}"
+        local kokoro=""
+        # int8 is the fetch script's default; fp32 is an opt-in. Pick whichever
+        # is actually present so the container path matches the host file.
+        for candidate in kokoro-v1.0.int8.onnx kokoro-v1.0.onnx; do
+            if [ -s "$voice_dir/$candidate" ]; then kokoro="$candidate"; break; fi
+        done
+        if [ -n "$kokoro" ] && [ -s "$voice_dir/voices-v1.0.bin" ] && [ -s "$voice_dir/silero_vad.onnx" ]; then
+            export DEERFLOW_VOICE_MODEL_DIR="$voice_dir"
+            export DEERFLOW_TTS_MODEL_FILE="$kokoro"
+            # Append `voice` to whatever extras the user already had, without
+            # duplicating it if it is present.
+            local base_extras="${UV_EXTRAS:-trading}"
+            case ",$base_extras," in
+                *,voice,*) export DEERFLOW_VOICE_UV_EXTRAS="$base_extras" ;;
+                *) export DEERFLOW_VOICE_UV_EXTRAS="$base_extras,voice" ;;
+            esac
+            echo -e "${BLUE}Voice enabled: mounting $voice_dir (read-only), extras=$DEERFLOW_VOICE_UV_EXTRAS${NC}"
+            COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.voice.yaml"
+        else
+            echo -e "${YELLOW}⚠ speech.enabled is true but model weights are missing in $voice_dir — voice will report unavailable.${NC}"
+            echo -e "${YELLOW}  Run ./scripts/fetch-voice-models.sh to download them.${NC}"
+        fi
     fi
 
     echo -e "${BLUE}Runtime: Gateway embedded agent runtime${NC}"

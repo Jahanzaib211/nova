@@ -1,0 +1,32 @@
+# Opt-in voice overlay — appended by scripts/docker.sh when `speech.enabled` is
+# true in config.yaml *and* the model weights exist on the host.
+#
+# Why an overlay rather than the base compose file: the weights are a ~120 MB
+# out-of-band download (scripts/fetch-voice-models.sh), so a bind mount in the
+# base file would fail — or silently mount an empty directory — for everyone who
+# has not fetched them. Mounting nothing and reporting "voice off" is the honest
+# default; see the dood and cli-auth overlays for the same reasoning.
+#
+# The gateway installs the Python side at startup, not at image build:
+# dev-entrypoint.sh runs `uv sync --all-packages $EXTRAS_FLAGS` into the
+# gateway-venv volume on every boot, so adding `voice` to UV_EXTRAS is enough —
+# no image rebuild needed.
+services:
+  gateway:
+    volumes:
+      # Read-only: the gateway loads these weights, it never writes them.
+      # huggingface_hub will log one "Ignored error ... Read-only file system"
+      # on start, from trying to refresh the cached whisper ref. It is ignored
+      # by design upstream and the model still loads; mounting rw just to
+      # silence a log line would trade a real guarantee for cosmetics.
+      - ${DEERFLOW_VOICE_MODEL_DIR:?voice overlay requires DEERFLOW_VOICE_MODEL_DIR}:/app/voice-models:ro
+    environment:
+      # These override the host paths that ../.env carries via env_file —
+      # `environment:` wins over `env_file:` in compose. Without the override
+      # the container would inherit paths like /home/<user>/.cache/... which do
+      # not exist inside it, and the status probe would report voice unavailable.
+      - UV_EXTRAS=${DEERFLOW_VOICE_UV_EXTRAS:-trading,voice}
+      - DEERFLOW_VOICE_MODEL_DIR=/app/voice-models
+      - DEERFLOW_TTS_MODEL_PATH=/app/voice-models/${DEERFLOW_TTS_MODEL_FILE:-kokoro-v1.0.int8.onnx}
+      - DEERFLOW_TTS_VOICES_PATH=/app/voice-models/voices-v1.0.bin
+      - DEERFLOW_VAD_MODEL_PATH=/app/voice-models/silero_vad.onnx

@@ -158,6 +158,20 @@ class TestGlobalPostureUnchanged:
         text = _read(name)
         assert "frame-src 'self' blob:;" in text, f"{name}: app shell must allow framing same-origin previews and blob: artifact previews"
 
+    @pytest.mark.parametrize("name", ["docker", "k8s"])
+    def test_app_shell_csp_allows_blob_audio(self, name: str) -> None:
+        """Nova speaking plays a `blob:` URL, and CSP has no implicit media rule.
+
+        There is no `media-src` fallback chain — it falls straight back to
+        `default-src 'self'`, and a blob URL is not 'self'. Without an explicit
+        `media-src blob:` every spoken reply and the login greeting are silently
+        refused by the browser, on deployments only: local dev serves no CSP at
+        all, so this cannot fail on `make dev`. Same shape as the frame-src and
+        Permissions-Policy traps above.
+        """
+        text = _read(name)
+        assert "media-src 'self' blob: data:;" in text, f"{name}: blob: audio is CSP-blocked, so Nova cannot speak"
+
 
 class TestDockerAndK8sStayInSync:
     """k8s/charts/nova/files/nginx.conf is a hand-maintained copy of the docker one.

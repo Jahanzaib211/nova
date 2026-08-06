@@ -789,7 +789,33 @@ is never in the realtime path — it is only needed to decode uploaded audio fil
 `VoiceSession` holds the turn-taking logic and is deliberately separable from the
 route so it can be unit tested against fake engines and a fake socket.
 
-**Two deployment traps, both invisible on `make dev`:**
+`POST /api/voice/speak` is the **one-shot** counterpart: text in, a WAV out. It
+exists so Nova can talk *without* a conversation — the login greeting
+(`frontend/src/core/voice/greeting.ts`) is the motivating case. Opening the
+duplex socket to say hello would prompt for the microphone before the user has
+asked for anything, which is the reliable way to get that permission denied for
+good. It is `@require_auth`-gated and capped at `MAX_SPEAK_CHARS`, because
+synthesis is CPU-bound and runs in the gateway process.
+
+**The Silero input contract (this one is vicious).** The exported ONNX graph has
+dynamic axes, so a wrong-shaped input does **not** raise — it returns a
+meaningless probability. Two requirements, both undocumented in the file itself:
+exactly **512 samples** per window at 16 kHz, and the previous window's last
+**64 samples prepended as context** (so the real input is 576 wide; the
+reference Python wrapper does this internally, which is why reimplementations
+miss it). Measured on real speech: with the prefix the model peaks at p=1.00 and
+calls 85% of windows voiced; without it the same audio never exceeds p=0.06.
+A VAD missing it is not "less accurate" — it is **deaf**, and it fails in the
+worst direction: silence and noise still test correctly, so every weightless
+test stays green while nobody can talk to Nova. Frames arrive at 20 ms
+(320 samples) and do not divide evenly into 512, so `SileroVad` buffers and
+carries a partial window's verdict forward rather than reporting a phantom
+silent frame. Pinned hermetically by `TestSileroInputContract` in
+`tests/test_voice_session.py`, which asserts the 576-wide tensor without needing
+weights. `SileroVad` also degrades to `EnergyVad` on inference failure — it now
+warns once per session, because that silent degradation is exactly what hid this.
+
+**Three deployment traps, all invisible on `make dev`:**
 
 1. `Permissions-Policy: microphone=()` disables `getUserMedia` **app-wide**. It
    is now `microphone=(self)` in all three headered nginx configs. Local dev
@@ -798,11 +824,28 @@ route so it can be unit tested against fake engines and a fake socket.
    sets no `Upgrade` header. `/api/voice/session/` has one in **all four**
    configs, with a long `proxy_read_timeout` because a voice session is idle
    between utterances by design.
+3. **CSP has no `media-src` fallback chain** — it falls straight back to
+   `default-src 'self'`, and a `blob:` URL is not `'self'`. Playing synthesized
+   audio (`new Audio(blob:…)`) was therefore refused on every deployment while
+   working perfectly on `make dev`. The app-shell policy now carries
+   `media-src 'self' blob: data:`.
 
-Both are pinned by `tests/test_nginx_preview_headers.py`.
+All three are pinned by `tests/test_nginx_preview_headers.py`.
 
 Setup: `uv sync --extra voice`, then `scripts/fetch-voice-models.sh`, then set
 `speech.enabled: true`.
+
+The fetch script downloads via **8 parallel byte ranges**. GitHub's release CDN
+throttles a single long-lived connection hard — an observed download decayed to
+~19 KB/s on a 160 Mbit link (90 minutes for the 92 MB model) while serving
+~470 KB/s across parallel connections. Tune with `DEERFLOW_FETCH_JOBS`.
+
+**Docker.** `docker/docker-compose.voice.yaml` is an opt-in overlay, appended by
+`scripts/docker.sh` only when `speech.enabled: true` *and* the weights exist on
+disk; otherwise the stack starts normally and reports voice unavailable. It
+mounts the weights read-only and appends `voice` to `UV_EXTRAS` — no image
+rebuild is needed, since `dev-entrypoint.sh` runs `uv sync` into the
+`gateway-venv` volume on every boot.
 
 ## Dependency security
 

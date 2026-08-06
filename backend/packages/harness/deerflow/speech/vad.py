@@ -23,10 +23,13 @@ from __future__ import annotations
 
 import abc
 import array
+import logging
 import math
 import os
 from dataclasses import dataclass
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 FRAME_MS = 20
 """Frames are 20 ms — the granularity every VAD here expects."""
@@ -164,6 +167,24 @@ class SileroVad(Vad):
     endpointing rather than breaking voice entirely.
     """
 
+    # Silero's exported graph has two undocumented input requirements, and
+    # violating either fails *silently* — the dynamic axes accept any shape and
+    # return a meaningless probability rather than raising.
+    #
+    #   1. Exactly one window size per sample rate: 512 samples at 16 kHz.
+    #   2. The previous window's last 64 samples prepended as context, so the
+    #      real input is 576 wide. The reference wrapper does this internally,
+    #      which is why almost every reimplementation misses it.
+    #
+    # Measured on real synthesized speech: with the context prefix the model
+    # peaks at p=1.00 and calls 85% of windows voiced; without it, p never
+    # exceeds 0.06 on the same audio. So a VAD missing the prefix is not
+    # "slightly less accurate" — it is deaf, and it fails closed in the worst
+    # way: silence and noise still test fine, so unit tests look green while
+    # nobody can talk to Nova at all.
+    _WINDOW_SAMPLES = {16_000: 512, 8_000: 256}
+    _CONTEXT_SAMPLES = {16_000: 64, 8_000: 32}
+
     def __init__(self, config: VadConfig | None = None, sample_rate: int = 16_000, model_path: str | None = None) -> None:
         super().__init__(config, sample_rate)
         self._session = None
@@ -171,12 +192,26 @@ class SileroVad(Vad):
         self._fallback = EnergyVad(config, sample_rate)
         self._model_path = model_path or os.environ.get("DEERFLOW_VAD_MODEL_PATH")
         self._load_attempted = False
+        # Frames arrive at FRAME_MS; windows leave at _window_samples. The two
+        # do not divide evenly (320 vs 512), so partial audio is carried over.
+        self._window_samples = self._WINDOW_SAMPLES.get(sample_rate, 0)
+        self._context_samples = self._CONTEXT_SAMPLES.get(sample_rate, 0)
+        self._buf = bytearray()
+        self._context = None
+        self._last_speech = False
+        # Per-session, not per-frame: see the fallback handler below.
+        self._warned_fallback = False
 
     def _ensure_session(self) -> None:
         if self._load_attempted:
             return
         self._load_attempted = True
         if not self._model_path or not os.path.exists(self._model_path):
+            return
+        if not self._window_samples:
+            # An unsupported rate would mean guessing a window size. The energy
+            # VAD is a worse detector but an honest one; a mis-windowed Silero
+            # is neither.
             return
         try:
             import numpy as np
@@ -193,6 +228,9 @@ class SileroVad(Vad):
     def reset(self) -> None:
         super().reset()
         self._fallback.reset()
+        self._buf.clear()
+        self._context = None
+        self._last_speech = False
         if self._session is not None:
             try:
                 import numpy as np
@@ -208,17 +246,49 @@ class SileroVad(Vad):
         try:
             import numpy as np
 
-            samples = np.frombuffer(frame[: len(frame) - (len(frame) % 2)], dtype=np.int16)
-            if samples.size == 0:
-                return False
-            audio = (samples.astype(np.float32) / 32768.0).reshape(1, -1)
-            out, self._state = self._session.run(
-                None,
-                {"input": audio, "state": self._state, "sr": np.array(self.sample_rate, dtype=np.int64)},
-            )
-            return float(out[0][0]) >= self.config.threshold
+            self._buf.extend(frame)
+            window_bytes = self._window_samples * 2
+
+            if self._context is None:
+                self._context = np.zeros(self._context_samples, dtype=np.float32)
+
+            decided: bool | None = None
+            while len(self._buf) >= window_bytes:
+                window = np.frombuffer(bytes(self._buf[:window_bytes]), dtype=np.int16)
+                del self._buf[:window_bytes]
+                samples = window.astype(np.float32) / 32768.0
+                audio = np.concatenate([self._context, samples]).reshape(1, -1)
+                # Carry the tail forward before the next window — this is the
+                # context requirement documented on _CONTEXT_SAMPLES.
+                self._context = samples[-self._context_samples :] if self._context_samples else self._context
+                out, self._state = self._session.run(
+                    None,
+                    {"input": audio, "state": self._state, "sr": np.array(self.sample_rate, dtype=np.int64)},
+                )
+                speech = float(out[0][0]) >= self.config.threshold
+                # `or` across windows: onset should be reported as soon as any
+                # window in this frame is speech, rather than waiting for the
+                # frame to be uniformly voiced.
+                decided = speech if decided is None else (decided or speech)
+
+            if decided is None:
+                # This frame did not complete a window (320 < 512). Repeating the
+                # previous verdict keeps the caller's run-length accounting
+                # monotonic — returning False here would inject a phantom silent
+                # frame mid-utterance and reset the speech run on every other
+                # frame, so speech_ms could never accumulate.
+                return self._last_speech
+            self._last_speech = decided
+            return decided
         except Exception:
-            # One bad inference must not kill the session.
+            # One bad inference must not kill the session — but it must not be
+            # invisible either. Degrading to the energy VAD is exactly how a
+            # broken Silero contract stayed hidden: endpointing still "worked",
+            # just badly, with nothing anywhere saying so. Warn once (not per
+            # 20 ms frame, which would flood the log at 50 lines/second).
+            if not self._warned_fallback:
+                self._warned_fallback = True
+                logger.warning("Silero VAD inference failed; falling back to energy VAD for this session", exc_info=True)
             return self._fallback._frame_is_speech(frame)
 
 

@@ -47,8 +47,9 @@ import re
 import threading
 from collections.abc import AsyncIterator, Callable
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 
+from app.gateway.authz import require_auth
 from app.gateway.ws_guards import caller_owns_thread, reject, ws_same_origin
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,85 @@ async def voice_status(refresh: bool = False) -> dict:
     if _readiness is None or refresh:
         _readiness = await asyncio.to_thread(_probe_engines)
     return {**detail, **_readiness}
+
+
+# Long enough for a greeting or a short confirmation, short enough that this
+# cannot be used as an open-ended synthesis service. Synthesis is CPU-bound and
+# runs in the gateway process, so an unbounded body here is a cheap way to eat
+# every core.
+MAX_SPEAK_CHARS = 400
+
+
+def _wav_of(pcm: bytes, sample_rate: int) -> bytes:
+    """Wrap raw PCM16 mono in a WAV header.
+
+    The socket path streams bare PCM because the client already knows the
+    format. A one-shot reply has no such context, and a WAV means the browser
+    can hand it straight to ``decodeAudioData`` with no custom parsing.
+    """
+    import struct
+
+    return (
+        b"RIFF"
+        + struct.pack("<I", 36 + len(pcm))
+        + b"WAVEfmt "
+        + struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16)
+        + b"data"
+        + struct.pack("<I", len(pcm))
+        + pcm
+    )
+
+
+@router.post("/speak")
+@require_auth
+async def voice_speak(request: Request) -> Response:
+    """Synthesize a short piece of text and return it as a WAV.
+
+    This exists for Nova speaking *without* a conversation — the login greeting
+    is the motivating case. Opening the full duplex socket for that would ask
+    for microphone permission just to say hello, which is both rude and a
+    reliable way to get the permission denied for good.
+    """
+    from deerflow.speech.registry import get_tts_engine, is_speech_enabled
+
+    if not is_speech_enabled():
+        raise HTTPException(status_code=503, detail="Voice is not enabled")
+
+    body = await request.json()
+    text = (body or {}).get("text") or ""
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    text = text.strip()[:MAX_SPEAK_CHARS]
+    voice = (body or {}).get("voice") or None
+
+    def _render() -> tuple[bytes, int]:
+        engine = get_tts_engine()
+        engine.warmup()
+        pcm = bytearray()
+        rate = engine.sample_rate
+
+        async def _drain() -> None:
+            nonlocal rate
+            async for chunk in engine.synthesize(text, voice=voice):
+                pcm.extend(chunk.pcm)
+                rate = chunk.sample_rate
+
+        asyncio.run(_drain())
+        return bytes(pcm), rate
+
+    try:
+        # Synthesis is CPU-bound; keep it off the event loop or it stalls every
+        # other request on this worker for the duration.
+        pcm, rate = await asyncio.to_thread(_render)
+    except Exception as e:
+        logger.warning("voice /speak failed: %s", e)
+        raise HTTPException(status_code=503, detail="Speech synthesis unavailable") from e
+
+    return Response(
+        content=_wav_of(pcm, rate),
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 class VoiceSession:
