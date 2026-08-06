@@ -184,7 +184,7 @@ def _speak(session, frames: list[bytes]):
 
 class TestVoiceSession:
     def test_a_full_turn_transcribes_responds_and_speaks(self) -> None:
-        async def respond(text):
+        async def respond(text, cancel):
             yield f"you said {text}"
 
         session = _session(ScriptedSTT(["hello nova"]), ToneTTS(), respond)
@@ -202,7 +202,7 @@ class TestVoiceSession:
         """Noise that transcribes to nothing must not spawn an agent turn."""
         called = []
 
-        async def respond(text):
+        async def respond(text, cancel):
             called.append(text)
             yield "should not happen"
 
@@ -217,7 +217,7 @@ class TestVoiceSession:
         """Barge-in: the whole reason this is a duplex socket."""
         started = asyncio.Event()
 
-        async def respond(text):
+        async def respond(text, cancel):
             started.set()
             yield "a very long reply that would take a while to speak aloud"
 
@@ -238,7 +238,7 @@ class TestVoiceSession:
         assert "interrupt" in _socket.kinds()
 
     def test_interrupt_is_not_sent_when_nova_is_silent(self) -> None:
-        async def respond(text):
+        async def respond(text, cancel):
             yield "ok"
 
         session = _session(ScriptedSTT(["hi"]), ToneTTS(), respond)
@@ -247,7 +247,7 @@ class TestVoiceSession:
         assert _socket.kinds().count("interrupt") == 0
 
     def test_a_failing_turn_reports_an_error_instead_of_dying(self) -> None:
-        async def respond(text):
+        async def respond(text, cancel):
             raise RuntimeError("model exploded")
             yield  # pragma: no cover
 
@@ -258,7 +258,7 @@ class TestVoiceSession:
     def test_typed_text_still_gets_spoken(self) -> None:
         """Accessibility: type instead of speak, Nova still answers aloud."""
 
-        async def respond(text):
+        async def respond(text, cancel):
             yield f"echo {text}"
 
         session = _session(ScriptedSTT(), ToneTTS(), respond)
@@ -379,3 +379,155 @@ class TestSentenceStreaming:
 
         for text in ['He said "go." Then left', "See note (a.) Next"]:
             assert _SENTENCE_END.search(text) is not None
+
+
+class TestLongTaskCancellation:
+    """Interrupting a long task must stop the *agent run*, not just playback.
+
+    Cancelling only the asyncio task would leave the worker thread streaming
+    tokens into a void — on a long task that is real money and real latency for
+    output nobody will ever hear.
+    """
+
+    def test_barge_in_signals_the_run_to_stop(self) -> None:
+        observed: dict[str, object] = {}
+        produced: list[str] = []
+
+        async def respond(text, cancel):
+            observed["cancel"] = cancel
+            # A long task: many sentences, yielding between each.
+            for i in range(200):
+                if cancel.is_set():
+                    return
+                produced.append(f"s{i}")
+                yield f"Sentence number {i}."
+                await asyncio.sleep(0.005)
+
+        session = _session(ScriptedSTT(["start the long job", "stop"]), ToneTTS(chunk_ms=20, chunk_delay_s=0.01), respond)
+
+        async def go():
+            for f in [LOUD] * 4 + [QUIET] * 8:
+                await session.on_audio(f)
+            await asyncio.sleep(0.05)
+            assert session.is_speaking, "the long turn never started"
+            # Talk over it.
+            for f in [LOUD] * 4:
+                await session.on_audio(f)
+
+        asyncio.run(go())
+
+        cancel = observed.get("cancel")
+        assert cancel is not None, "the responder was never given a cancel token"
+        assert cancel.is_set(), "barge-in did not signal the agent run to stop"
+        # And it genuinely stopped early rather than producing all 200
+        # sentences. (The generator is usually closed at its await point before
+        # the flag check runs — either path is a real stop; what must never
+        # happen is the task running to completion.)
+        assert len(produced) < 200, f"the long task ran to completion ({len(produced)} sentences)"
+
+    def test_each_turn_gets_a_fresh_cancel_token(self) -> None:
+        """A previous barge-in must not kill the turn the user just started."""
+        tokens = []
+
+        async def respond(text, cancel):
+            tokens.append(cancel)
+            yield "ok"
+
+        session = _session(ScriptedSTT(["one"]), ToneTTS(), respond)
+
+        async def go():
+            await session.handle_text("first")
+            for _ in range(50):
+                await asyncio.sleep(0)
+                if not session.is_speaking:
+                    break
+            await session.close()  # sets the first token
+            await session.handle_text("second")
+            for _ in range(50):
+                await asyncio.sleep(0)
+                if not session.is_speaking:
+                    break
+
+        asyncio.run(go())
+        assert len(tokens) == 2
+        assert tokens[0] is not tokens[1]
+        assert not tokens[1].is_set(), "the new turn inherited a cancelled token"
+
+    def test_explicit_stop_also_halts_the_run(self) -> None:
+        """The stop control must work mid-task, not only between turns."""
+        seen: dict[str, object] = {}
+
+        async def respond(text, cancel):
+            seen["cancel"] = cancel
+            for i in range(200):
+                if cancel.is_set():
+                    return
+                yield f"Part {i}."
+                await asyncio.sleep(0.005)
+
+        session = _session(ScriptedSTT(["go"]), ToneTTS(chunk_ms=20, chunk_delay_s=0.01), respond)
+
+        async def go():
+            await session.handle_text("run something long")
+            await asyncio.sleep(0.05)
+            assert session.is_speaking
+            await session.close()
+
+        asyncio.run(go())
+        assert seen["cancel"].is_set()  # type: ignore[union-attr]
+        assert not session.is_speaking
+
+
+class TestStatusProbeHonesty:
+    """`/api/voice/status` must not claim voice works when it doesn't.
+
+    Engines construct lazily — they don't touch model weights until first use —
+    so "the object constructed" is no evidence at all. An earlier version
+    reported ready on that basis and offered a mic that failed the moment it was
+    clicked. The probe now warms the engines, which is what actually fails when
+    weights or dependencies are missing.
+    """
+
+    def _status(self, monkeypatch, *, stt=None, tts=None, enabled=True):
+        import asyncio
+
+        from app.gateway.routers import voice as voice_mod
+        from deerflow.speech import registry
+
+        monkeypatch.setattr(registry, "is_speech_enabled", lambda: enabled)
+        monkeypatch.setattr(voice_mod, "_readiness", None)
+        if stt is not None:
+            monkeypatch.setattr(registry, "get_stt_engine", lambda: stt)
+        if tts is not None:
+            monkeypatch.setattr(registry, "get_tts_engine", lambda: tts)
+        return asyncio.run(voice_mod.voice_status())
+
+    def test_reports_not_ready_when_warmup_fails(self, monkeypatch) -> None:
+        class _Broken(ToneTTS):
+            def warmup(self) -> None:
+                raise SpeechEngineUnavailable("Voices file not found at /nope.bin")
+
+        out = self._status(monkeypatch, stt=ScriptedSTT(), tts=_Broken())
+        assert out["enabled"] is True
+        assert out["ready"] is False
+        assert "Voices file not found" in out["reason"]
+
+    def test_reports_ready_when_engines_warm_up(self, monkeypatch) -> None:
+        out = self._status(monkeypatch, stt=ScriptedSTT(), tts=ToneTTS())
+        assert out["ready"] is True
+        assert out["stt"] == "scripted"
+        assert out["tts"] == "tone"
+        assert "reason" not in out
+
+    def test_disabled_short_circuits_without_touching_engines(self, monkeypatch) -> None:
+        """Voice off must not pay the model-load cost."""
+
+        def _boom():
+            raise AssertionError("engines must not be built when voice is disabled")
+
+        from deerflow.speech import registry
+
+        monkeypatch.setattr(registry, "get_tts_engine", _boom)
+        out = self._status(monkeypatch, enabled=False)
+        assert out["enabled"] is False
+        assert "ready" not in out

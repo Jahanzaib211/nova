@@ -44,6 +44,7 @@ import contextlib
 import logging
 import queue as queue_mod
 import re
+import threading
 from collections.abc import AsyncIterator, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -59,26 +60,61 @@ CLIENT_SAMPLE_RATE = 16_000
 # Refuse to buffer an unbounded utterance even if the VAD never fires.
 MAX_UTTERANCE_BYTES = CLIENT_SAMPLE_RATE * 2 * 60  # 60s of PCM16
 
+# A responder turns a transcript into a stream of speakable text. It takes a
+# cancel event so a long-running turn can actually be stopped mid-generation.
+Responder = Callable[[str, threading.Event], AsyncIterator[str]]
+
+
+# Cached readiness probe. Constructing an engine is lazy — it does not touch
+# model weights — so "it constructed" is NOT evidence that voice works. We have
+# to actually warm it up, which is expensive, so the outcome is cached.
+_readiness: dict | None = None
+
+
+def _probe_engines() -> dict:
+    """Actually load the engines and report honestly whether voice will work.
+
+    An earlier version reported ready purely because the engine objects
+    constructed. They construct lazily, so it said yes with model paths that did
+    not exist — the UI offered a mic that failed the moment you clicked it.
+    """
+    from deerflow.speech.registry import get_stt_engine, get_tts_engine
+
+    detail: dict = {}
+    try:
+        stt = get_stt_engine()
+        tts = get_tts_engine()
+        detail["stt"] = stt.name
+        detail["tts"] = tts.name
+        # The part that matters: this raises when weights or deps are missing.
+        stt.warmup()
+        tts.warmup()
+        detail["ready"] = True
+    except Exception as e:
+        detail["ready"] = False
+        detail["reason"] = str(e)
+    return detail
+
 
 @router.get("/status")
-async def voice_status() -> dict:
-    """Whether voice is usable, so the UI can hide the mic instead of failing on click."""
+async def voice_status(refresh: bool = False) -> dict:
+    """Whether voice is genuinely usable, so the UI can tell the truth.
+
+    Warming the engines can take seconds on a cold start, so it runs off the
+    event loop and the result is cached. ``?refresh=1`` re-probes after an
+    operator installs weights, without a gateway restart.
+    """
+    global _readiness
     from deerflow.speech.registry import is_speech_enabled
 
     enabled = is_speech_enabled()
     detail: dict = {"enabled": enabled, "sample_rate": CLIENT_SAMPLE_RATE}
-    if enabled:
-        try:
-            from deerflow.speech.registry import get_stt_engine, get_tts_engine
+    if not enabled:
+        return detail
 
-            detail["stt"] = get_stt_engine().name
-            detail["tts"] = get_tts_engine().name
-            detail["ready"] = True
-        except Exception as e:
-            # Configured but not installed: say so plainly instead of 500ing.
-            detail["ready"] = False
-            detail["reason"] = str(e)
-    return detail
+    if _readiness is None or refresh:
+        _readiness = await asyncio.to_thread(_probe_engines)
+    return {**detail, **_readiness}
 
 
 class VoiceSession:
@@ -96,7 +132,7 @@ class VoiceSession:
         stt,
         tts,
         vad,
-        respond: Callable[[str], AsyncIterator[str]],
+        respond: Responder,
         voice: str | None = None,
     ) -> None:
         self._send_json = send_json
@@ -110,6 +146,12 @@ class VoiceSession:
         self._utterance = bytearray()
         self._capturing = False
         self._speak_task: asyncio.Task | None = None
+        # Set to stop the *agent run* (not just playback). A long task must
+        # actually halt when interrupted, otherwise it keeps generating into a
+        # void — the reason cancellation is cooperative rather than a bare
+        # task.cancel() is that client.stream is a sync generator on a worker
+        # thread, which asyncio cannot interrupt.
+        self._run_cancel = threading.Event()
         self.turns: list[str] = []
 
     @property
@@ -160,6 +202,9 @@ class VoiceSession:
 
     async def handle_text(self, text: str) -> None:
         """Run one turn: agent response, then speak it."""
+        # Fresh cancel token per turn — a previous barge-in must not kill the
+        # turn the user just started.
+        self._run_cancel = threading.Event()
         self.turns.append(text)
         await self._send_json({"type": "thinking"})
         self._speak_task = asyncio.create_task(self._respond_and_speak(text))
@@ -167,7 +212,7 @@ class VoiceSession:
     async def _respond_and_speak(self, text: str) -> None:
         try:
             await self._send_json({"type": "speaking", "sample_rate": getattr(self._tts, "sample_rate", 24_000)})
-            async for reply in self._respond(text):
+            async for reply in self._respond(text, self._run_cancel):
                 if not reply:
                     continue
                 await self._send_json({"type": "assistant", "text": reply})
@@ -184,6 +229,9 @@ class VoiceSession:
                 await self._send_json({"type": "error", "message": "voice turn failed"})
 
     async def _cancel_speech(self) -> None:
+        # Stop generation first, then playback. Order matters: cancelling the
+        # asyncio task alone would leave the worker thread streaming tokens.
+        self._run_cancel.set()
         task = self._speak_task
         self._speak_task = None
         if task is None or task.done():
@@ -211,14 +259,21 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
     keyed by message id, so we accumulate and cut on sentence boundaries.
     """
 
-    def _drain(queue: queue_mod.Queue[str | None], text: str) -> None:
+    def _drain(queue: queue_mod.Queue[str | None], text: str, cancel: threading.Event) -> None:
         from deerflow.client import DeerFlowClient
 
         client = DeerFlowClient()
         buffer = ""
         seen: dict[str, str] = {}
+        stream = client.stream(text, thread_id=thread_id)
         try:
-            for event in client.stream(text, thread_id=thread_id):
+            for event in stream:
+                # Cooperative cancellation. Without this the agent keeps
+                # generating after a barge-in — on a long task that burns
+                # tokens producing output nobody will ever hear. Closing the
+                # generator in `finally` unwinds the graph for real.
+                if cancel.is_set():
+                    break
                 if event.type != "messages-tuple":
                     continue
                 data = event.data or {}
@@ -241,20 +296,22 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
                     if sentence:
                         queue.put(sentence)
             tail = buffer.strip()
-            if tail:
+            if tail and not cancel.is_set():
                 queue.put(tail)
         except Exception as e:
             logger.warning("voice agent run failed: %s", e)
         finally:
+            with contextlib.suppress(Exception):
+                stream.close()  # GeneratorExit unwinds the graph run
             queue.put(None)  # sentinel: generation finished
 
-    async def respond(text: str) -> AsyncIterator[str]:
+    async def respond(text: str, cancel: threading.Event) -> AsyncIterator[str]:
         # client.stream is a *sync* generator, so it runs on a worker thread and
         # hands sentences back through a queue. Doing it inline would block the
         # event loop and stall every other socket on this worker.
         queue: queue_mod.Queue[str | None] = queue_mod.Queue()
         loop = asyncio.get_running_loop()
-        task = loop.run_in_executor(None, _drain, queue, text)
+        task = loop.run_in_executor(None, _drain, queue, text, cancel)
         try:
             while True:
                 item = await loop.run_in_executor(None, queue.get)
@@ -262,8 +319,10 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
                     break
                 yield item
         finally:
-            # Cancellation (barge-in) leaves the worker running to completion;
-            # it is bounded by the agent run and its output is simply dropped.
+            # Tell the worker to stop, then wait for it. Setting the flag is
+            # what makes a barge-in during a long task actually stop the run
+            # rather than orphan it.
+            cancel.set()
             with contextlib.suppress(Exception):
                 await task
 

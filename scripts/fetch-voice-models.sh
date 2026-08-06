@@ -25,16 +25,27 @@ fetch() {
   mv "$DEST/$out.partial" "$DEST/$out"   # never leave a truncated file behind
 }
 
-echo "Downloading voice models into $DEST"
-fetch "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" "kokoro-v1.0.onnx"
-fetch "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" "voices-v1.0.bin"
+# int8 by default: 92 MB vs 325 MB for fp32, materially less resident memory,
+# and the quality gap is small for conversational speech. Set
+# DEERFLOW_TTS_PRECISION=fp32 for the larger model.
+PRECISION="${DEERFLOW_TTS_PRECISION:-int8}"
+if [ "$PRECISION" = "fp32" ]; then
+  KOKORO_FILE="kokoro-v1.0.onnx"
+else
+  KOKORO_FILE="kokoro-v1.0.int8.onnx"
+fi
+
+echo "Downloading voice models into $DEST  (TTS precision: $PRECISION)"
+# Small files first, so VAD and voices are usable while the big one streams.
 fetch "https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx" "silero_vad.onnx"
+fetch "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" "voices-v1.0.bin"
+fetch "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$KOKORO_FILE" "$KOKORO_FILE"
 
 cat <<EOF
 
 Done. Add to your .env:
 
-  DEERFLOW_TTS_MODEL_PATH=$DEST/kokoro-v1.0.onnx
+  DEERFLOW_TTS_MODEL_PATH=$DEST/$KOKORO_FILE
   DEERFLOW_TTS_VOICES_PATH=$DEST/voices-v1.0.bin
   DEERFLOW_VAD_MODEL_PATH=$DEST/silero_vad.onnx
 

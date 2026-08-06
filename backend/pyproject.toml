@@ -28,6 +28,8 @@ dependencies = [
 postgres = ["deerflow-harness[postgres]"]
 discord = ["discord.py>=2.7.0"]
 trading = ["deerflow-harness[trading]"]
+# Self-hosted voice (STT/TTS). Forwarded from the harness, same as trading.
+voice = ["deerflow-harness[voice]"]
 
 [dependency-groups]
 dev = [
