@@ -107,3 +107,7 @@ hackathon/track1/out/
 
 # Cloudflare Tunnel secret (commit the .example instead)
 config/cloudflared-nova.env
+
+# Graphify knowledge graph (build cache + cost; the rest is commit-able per team setup)
+graphify-out/cost.json
+graphify-out/cache/

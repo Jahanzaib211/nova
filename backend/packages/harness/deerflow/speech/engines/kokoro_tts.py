@@ -52,14 +52,48 @@ def split_for_speech(text: str, max_chars: int = 240) -> list[str]:
 class KokoroTTS(TextToSpeech):
     name = "kokoro"
 
-    def __init__(self, voice: str | None = None, model_path: str | None = None, voices_path: str | None = None, speed: float = 1.0) -> None:
+    def __init__(
+        self,
+        voice: str | None = None,
+        model_path: str | None = None,
+        voices_path: str | None = None,
+        speed: float = 1.0,
+        device: str | None = None,
+    ) -> None:
         self.voice = voice or os.environ.get("DEERFLOW_TTS_VOICE", "af_heart")
         self.speed = speed
         self.sample_rate = 24_000
         self._model_path = model_path or os.environ.get("DEERFLOW_TTS_MODEL_PATH")
         self._voices_path = voices_path or os.environ.get("DEERFLOW_TTS_VOICES_PATH")
+        self.device = device or os.environ.get("DEERFLOW_TTS_DEVICE", "auto")
+        # Set once the session is built, so callers (and the status probe) can
+        # report where synthesis is *actually* running rather than what was asked for.
+        self.resolved_device = "cpu"
         self._engine = None
         self._lock = threading.Lock()
+
+    def _build_session(self):
+        """Build the ONNX session ourselves, with providers we choose.
+
+        `kokoro_onnx` decides its own providers by calling
+        ``importlib.util.find_spec("onnxruntime-gpu")`` — that is a *distribution*
+        name, not a module name, and hyphens cannot appear in module names, so it
+        can never match. The result is that Kokoro silently stays on CPU even
+        when onnxruntime-gpu is correctly installed. Its `ONNX_PROVIDER` env var
+        is a global override and would drag every other ONNX model along with it.
+
+        `Kokoro.from_session()` is the clean way out: we construct the session
+        with an explicit provider list and hand it over.
+        """
+        import onnxruntime as ort
+
+        from deerflow.speech.devices import resolve_onnx_providers
+
+        providers, resolved = resolve_onnx_providers(self.device, subsystem="kokoro-tts")
+        self.resolved_device = resolved
+
+        opts = ort.SessionOptions()
+        return ort.InferenceSession(self._model_path, sess_options=opts, providers=providers)
 
     def _ensure_engine(self):
         if self._engine is not None:
@@ -73,7 +107,15 @@ class KokoroTTS(TextToSpeech):
                 raise SpeechEngineUnavailable("kokoro-onnx is not installed. Install it with:\n    cd backend && uv sync --extra voice") from e
             if not self._model_path or not self._voices_path:
                 raise SpeechEngineUnavailable("Kokoro needs model weights. Set DEERFLOW_TTS_MODEL_PATH and DEERFLOW_TTS_VOICES_PATH,\nor run: scripts/fetch-voice-models.sh")
-            self._engine = Kokoro(self._model_path, self._voices_path)
+            try:
+                self._engine = Kokoro.from_session(self._build_session(), self._voices_path)
+            except Exception as e:
+                # from_session reads session._model_path, a private attribute.
+                # If a future onnxruntime drops it, fall back to Kokoro's own
+                # constructor (CPU) rather than losing speech altogether.
+                logger.warning("Kokoro.from_session failed (%s); falling back to the default CPU constructor", e)
+                self._engine = Kokoro(self._model_path, self._voices_path)
+                self.resolved_device = "cpu"
             return self._engine
 
     def warmup(self) -> None:

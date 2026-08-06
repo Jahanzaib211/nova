@@ -27,11 +27,13 @@ import pytest
 from deerflow.speech.base import STT_SAMPLE_RATE, AudioChunk
 
 MODEL_DIR = Path(os.environ.get("DEERFLOW_VOICE_MODEL_DIR", Path.home() / ".cache/nova/voice"))
-# The fetch script defaults to the int8 build (92 MB vs 325 MB, materially less
-# resident memory). Accept either so the tests work whichever was downloaded.
+# fp32 first: it is the fetch script's default and is measurably ~5.5x faster
+# than the int8 build on the same hardware (see the table in
+# scripts/fetch-voice-models.sh). int8 is still accepted so a machine that only
+# has the smaller weights still runs these tests.
 KOKORO_MODEL = next(
-    (MODEL_DIR / n for n in ("kokoro-v1.0.int8.onnx", "kokoro-v1.0.onnx") if (MODEL_DIR / n).is_file()),
-    MODEL_DIR / "kokoro-v1.0.int8.onnx",
+    (MODEL_DIR / n for n in ("kokoro-v1.0.onnx", "kokoro-v1.0.int8.onnx") if (MODEL_DIR / n).is_file()),
+    MODEL_DIR / "kokoro-v1.0.onnx",
 )
 KOKORO_VOICES = MODEL_DIR / "voices-v1.0.bin"
 SILERO_VAD = MODEL_DIR / "silero_vad.onnx"

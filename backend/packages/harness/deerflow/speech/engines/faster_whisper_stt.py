@@ -30,13 +30,21 @@ class FasterWhisperSTT(SpeechToText):
         self,
         model: str | None = None,
         compute_type: str | None = None,
-        device: str = "cpu",
+        device: str | None = None,
         language: str | None = None,
         download_root: str | None = None,
     ) -> None:
         self.model_size = model or os.environ.get("DEERFLOW_STT_MODEL", "base")
-        self.compute_type = compute_type or os.environ.get("DEERFLOW_STT_COMPUTE", "int8")
-        self.device = device
+        # `device` is resolved lazily at load time, not here: CTranslate2 can see
+        # a CUDA device while still failing to load one (its CUDA runtime libs
+        # are a separate install), and the honest answer is only known after a
+        # load attempt. `resolved_device` carries what actually happened.
+        self.device = device or os.environ.get("DEERFLOW_STT_DEVICE", "auto")
+        self.resolved_device = "cpu"
+        # Deliberately not defaulted here — the right compute type depends on the
+        # device, and int8 only makes sense as a CPU concession.
+        self._configured_compute = compute_type or os.environ.get("DEERFLOW_STT_COMPUTE") or None
+        self.compute_type = self._configured_compute or "int8"
         self.language = language or os.environ.get("DEERFLOW_STT_LANGUAGE") or None
         self.download_root = download_root or os.environ.get("DEERFLOW_VOICE_MODEL_DIR")
         self._model = None
@@ -53,13 +61,32 @@ class FasterWhisperSTT(SpeechToText):
                 from faster_whisper import WhisperModel
             except ImportError as e:
                 raise SpeechEngineUnavailable("faster-whisper is not installed. Install it with:\n    cd backend && uv sync --extra voice") from e
-            logger.info("loading faster-whisper model=%s compute=%s", self.model_size, self.compute_type)
-            self._model = WhisperModel(
-                self.model_size,
-                device=self.device,
-                compute_type=self.compute_type,
-                download_root=self.download_root,
-            )
+            from deerflow.speech.devices import default_compute_type, resolve_ct2_device
+
+            device = resolve_ct2_device(self.device, subsystem="faster-whisper")
+            compute = default_compute_type(device, self._configured_compute)
+            logger.info("loading faster-whisper model=%s device=%s compute=%s", self.model_size, device, compute)
+            try:
+                self._model = WhisperModel(self.model_size, device=device, compute_type=compute, download_root=self.download_root)
+            except Exception as e:
+                if device != "cuda":
+                    raise
+                # CTranslate2 reports a CUDA device from the driver alone, but
+                # links its own CUDA 12 runtime — on a host with only CUDA 13
+                # installed this fails at load with a `libcublas.so.12` error.
+                # Losing speech entirely over that would be a worse outcome than
+                # running slowly, so fall back, loudly.
+                logger.warning(
+                    "faster-whisper failed to load on CUDA (%s); falling back to CPU. "
+                    "If this is the CUDA runtime, install the GPU extra: uv sync --extra voice-gpu",
+                    e,
+                )
+                device = "cpu"
+                compute = default_compute_type(device, self._configured_compute)
+                self._model = WhisperModel(self.model_size, device=device, compute_type=compute, download_root=self.download_root)
+
+            self.resolved_device = device
+            self.compute_type = compute
             return self._model
 
     def warmup(self) -> None:

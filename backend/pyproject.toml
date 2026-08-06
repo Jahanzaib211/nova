@@ -30,6 +30,9 @@ discord = ["discord.py>=2.7.0"]
 trading = ["deerflow-harness[trading]"]
 # Self-hosted voice (STT/TTS). Forwarded from the harness, same as trading.
 voice = ["deerflow-harness[voice]"]
+# Forwarded like `voice` — an extra declared only on the harness is not
+# reachable as `uv sync --extra voice-gpu` from the root workspace.
+voice-gpu = ["deerflow-harness[voice-gpu]"]
 
 [dependency-groups]
 dev = [

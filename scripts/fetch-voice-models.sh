@@ -100,10 +100,25 @@ fetch() {
   mv "$DEST/$out.partial" "$DEST/$out"   # never leave a truncated file behind
 }
 
-# int8 by default: 92 MB vs 325 MB for fp32, materially less resident memory,
-# and the quality gap is small for conversational speech. Set
-# DEERFLOW_TTS_PRECISION=fp32 for the larger model.
-PRECISION="${DEERFLOW_TTS_PRECISION:-int8}"
+# fp32 by default, despite being 311 MB against int8's 89 MB.
+#
+# This is measured, not assumed. The int8 build is **5.5x slower than fp32 on
+# the same CPU** — the opposite of what quantization is supposed to buy:
+#
+#   model  device   RTF     first-audio
+#   int8   cpu      2.163x  2815 ms
+#   int8   cuda     2.156x  2851 ms   <- barely helped; ~547 Memcpy nodes are
+#                                        inserted because most int8 ops have no
+#                                        CUDA kernel and bounce back to the host
+#   fp32   cpu      0.392x   510 ms
+#   fp32   cuda     0.154x   200 ms
+#
+# So int8 was costing 5.5x throughput to save 222 MB of disk, and it made the
+# GPU nearly useless as well. fp32 is faster than real time even on CPU, which
+# matters for the k3s deployment that has no GPU at all.
+#
+# Set DEERFLOW_TTS_PRECISION=int8 if disk is genuinely the binding constraint.
+PRECISION="${DEERFLOW_TTS_PRECISION:-fp32}"
 if [ "$PRECISION" = "fp32" ]; then
   KOKORO_FILE="kokoro-v1.0.onnx"
 else

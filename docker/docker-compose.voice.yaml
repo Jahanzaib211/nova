@@ -27,6 +27,6 @@ services:
       # not exist inside it, and the status probe would report voice unavailable.
       - UV_EXTRAS=${DEERFLOW_VOICE_UV_EXTRAS:-trading,voice}
       - DEERFLOW_VOICE_MODEL_DIR=/app/voice-models
-      - DEERFLOW_TTS_MODEL_PATH=/app/voice-models/${DEERFLOW_TTS_MODEL_FILE:-kokoro-v1.0.int8.onnx}
+      - DEERFLOW_TTS_MODEL_PATH=/app/voice-models/${DEERFLOW_TTS_MODEL_FILE:-kokoro-v1.0.onnx}
       - DEERFLOW_TTS_VOICES_PATH=/app/voice-models/voices-v1.0.bin
       - DEERFLOW_VAD_MODEL_PATH=/app/voice-models/silero_vad.onnx

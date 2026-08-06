@@ -1,0 +1,56 @@
+# graphify ignore patterns for the Nova repo.
+# Same syntax as .gitignore; merged with .gitignore (this wins on conflicts).
+# Goal: index source, config, docs, SQL — skip build artifacts, deps, user data.
+
+# --- Python ---
+backend/.venv/
+backend/.deer-flow/
+**/__pycache__/
+**/*.pyc
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/site-packages/
+
+# --- Node / frontend build ---
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/dist/
+frontend/build/
+frontend/.tsbuildinfo
+frontend/next-env.d.ts
+
+# --- Build / dist / cache globally ---
+**/dist/
+**/build/
+**/.cache/
+**/coverage/
+**/.pytest_cache/
+**/.tox/
+**/.nox/
+
+# --- Lock files (massive, no semantic value) ---
+**/*.lock
+**/uv.lock
+**/pnpm-lock.yaml
+**/yarn.lock
+**/package-lock.json
+**/composer.lock
+
+# --- User data / runtime state (per-user, ephemeral) ---
+backend/.deer-flow/users/
+backend/.deer-flow/threads/
+backend/.deer-flow/cache/
+backend/.deer-flow/data/
+
+# --- Graphify's own output (don't index the index) ---
+graphify-out/
+.graphify/
+
+# --- Misc noise ---
+**/*.min.js
+**/*.min.css
+**/*.map
+**/.DS_Store
+**/Thumbs.db

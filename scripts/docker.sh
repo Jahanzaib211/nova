@@ -232,9 +232,10 @@ start() {
     if speech_enabled_in_config; then
         local voice_dir="${DEERFLOW_VOICE_MODEL_DIR:-$HOME/.cache/nova/voice}"
         local kokoro=""
-        # int8 is the fetch script's default; fp32 is an opt-in. Pick whichever
-        # is actually present so the container path matches the host file.
-        for candidate in kokoro-v1.0.int8.onnx kokoro-v1.0.onnx; do
+        # fp32 first — it is the default and ~5.5x faster than int8 (measured;
+        # see scripts/fetch-voice-models.sh). Fall back to int8 so a host that
+        # only fetched the smaller weights still gets working voice.
+        for candidate in kokoro-v1.0.onnx kokoro-v1.0.int8.onnx; do
             if [ -s "$voice_dir/$candidate" ]; then kokoro="$candidate"; break; fi
         done
         if [ -n "$kokoro" ] && [ -s "$voice_dir/voices-v1.0.bin" ] && [ -s "$voice_dir/silero_vad.onnx" ]; then
