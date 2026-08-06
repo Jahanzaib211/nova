@@ -23,6 +23,9 @@ venv/
 # Environment variables
 .env
 
+# Secret backups produced by scripts/secrets-export.sh — real values, 0600.
+secrets-backup*.env
+
 # Configuration files
 # These patterns are unanchored, so they match at ANY depth — that is deliberate
 # for the operator-local files (which hold real credentials), but it also
