@@ -348,3 +348,34 @@ class TestRegistry:
             assert registry.get_stt_engine() is stt
         finally:
             registry.reset_engines()
+
+
+class TestSentenceStreaming:
+    """Nova must start speaking on the first finished sentence, not at the end.
+
+    Waiting for the whole reply is what makes an assistant feel laggy — several
+    seconds of silence, then a monologue.
+    """
+
+    def test_sentence_boundaries_are_detected(self) -> None:
+        from app.gateway.routers.voice import _SENTENCE_END
+
+        buffer = "Hello there. How are you? Fine! Done"
+        cuts = []
+        while (m := _SENTENCE_END.search(buffer)) is not None:
+            cuts.append(buffer[: m.end()].strip())
+            buffer = buffer[m.end() :]
+        assert cuts == ["Hello there.", "How are you?", "Fine!"]
+        assert buffer.strip() == "Done"  # tail flushed separately
+
+    def test_a_decimal_does_not_split_a_sentence(self) -> None:
+        """`3.5` must not be mistaken for a sentence end."""
+        from app.gateway.routers.voice import _SENTENCE_END
+
+        assert _SENTENCE_END.search("the value is 3.5 exactly") is None
+
+    def test_quoted_and_bracketed_endings_are_handled(self) -> None:
+        from app.gateway.routers.voice import _SENTENCE_END
+
+        for text in ['He said "go." Then left', "See note (a.) Next"]:
+            assert _SENTENCE_END.search(text) is not None

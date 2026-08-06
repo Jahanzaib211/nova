@@ -42,6 +42,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import queue as queue_mod
+import re
 from collections.abc import AsyncIterator, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -194,21 +196,76 @@ class VoiceSession:
         await self._cancel_speech()
 
 
+# Speak once a sentence is complete rather than waiting for the whole reply.
+# Waiting is what makes an assistant feel laggy: Nova would sit silent through
+# the entire generation and then talk. Punctuation is the natural boundary
+# because it is also where the TTS wants to break for prosody.
+_SENTENCE_END = re.compile(r"[.!?]['\")\]]?\s")
+
+
 async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]]:
-    """Bridge a transcript to the normal agent run path.
+    """Bridge a transcript to the normal agent run path, streaming sentences out.
 
     Deliberately thin: voice must not become a second place where agent
-    behaviour is defined.
+    behaviour is defined. The existing client streams AI text as *deltas*
+    keyed by message id, so we accumulate and cut on sentence boundaries.
     """
 
-    async def respond(text: str) -> AsyncIterator[str]:
+    def _drain(queue: queue_mod.Queue[str | None], text: str) -> None:
         from deerflow.client import DeerFlowClient
 
         client = DeerFlowClient()
+        buffer = ""
+        seen: dict[str, str] = {}
+        try:
+            for event in client.stream(text, thread_id=thread_id):
+                if event.type != "messages-tuple":
+                    continue
+                data = event.data or {}
+                if data.get("type") != "ai":
+                    continue
+                delta = str(data.get("content") or "")
+                if not delta:
+                    continue
+                # Deltas are per message id; a new id means a new message.
+                msg_id = str(data.get("id") or "")
+                if msg_id and seen.get(msg_id) is None:
+                    seen[msg_id] = ""
+                buffer += delta
+
+                # Emit every complete sentence sitting in the buffer.
+                while (m := _SENTENCE_END.search(buffer)) is not None:
+                    cut = m.end()
+                    sentence = buffer[:cut].strip()
+                    buffer = buffer[cut:]
+                    if sentence:
+                        queue.put(sentence)
+            tail = buffer.strip()
+            if tail:
+                queue.put(tail)
+        except Exception as e:
+            logger.warning("voice agent run failed: %s", e)
+        finally:
+            queue.put(None)  # sentinel: generation finished
+
+    async def respond(text: str) -> AsyncIterator[str]:
+        # client.stream is a *sync* generator, so it runs on a worker thread and
+        # hands sentences back through a queue. Doing it inline would block the
+        # event loop and stall every other socket on this worker.
+        queue: queue_mod.Queue[str | None] = queue_mod.Queue()
         loop = asyncio.get_running_loop()
-        reply = await loop.run_in_executor(None, lambda: client.chat(text, thread_id=thread_id))
-        if reply:
-            yield reply
+        task = loop.run_in_executor(None, _drain, queue, text)
+        try:
+            while True:
+                item = await loop.run_in_executor(None, queue.get)
+                if item is None:
+                    break
+                yield item
+        finally:
+            # Cancellation (barge-in) leaves the worker running to completion;
+            # it is bounded by the agent run and its output is simply dropped.
+            with contextlib.suppress(Exception):
+                await task
 
     return respond
 

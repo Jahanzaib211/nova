@@ -135,11 +135,33 @@ test.describe("Voice", () => {
     await stubVoiceSocket(page);
   });
 
-  test("the mic button is hidden when voice is not configured", async ({ page }) => {
-    // A dead button that fails on click is worse than no button.
+  test("the control is visible even before voice is switched on", async ({ page }) => {
+    // Returning null when voice was unconfigured made the entire feature
+    // invisible — nobody discovers a capability that leaves no trace in the UI.
+    // It now shows, and explains itself on click.
     await mockVoiceAvailable(page, false);
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
-    await expect(page.getByTestId("voice-button")).toHaveCount(0);
+
+    const button = page.getByTestId("voice-button");
+    await expect(button).toBeVisible();
+    await expect(button).toHaveAttribute("data-voice-available", "false");
+    await expect(button).toContainText("Voice");
+
+    await button.click();
+    const hint = page.getByTestId("voice-setup-hint");
+    await expect(hint).toBeVisible();
+    await expect(hint).toContainText("uv sync --extra voice");
+    // Clicking must NOT have started a session.
+    await expect(button).toHaveAttribute("data-voice-phase", "closed");
+  });
+
+  test("the control reads as a labelled feature, not a bare icon", async ({ page }) => {
+    await mockVoiceAvailable(page);
+    await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+    const button = page.getByTestId("voice-button");
+    await expect(button).toBeVisible();
+    await expect(button).toContainText("Voice");
+    await expect(button).toHaveAttribute("data-voice-available", "true");
   });
 
   test("clicking the mic opens a session and starts streaming audio", async ({
@@ -244,5 +266,46 @@ test.describe("Voice", () => {
 
     await button.click();
     await expect(button).toHaveAttribute("data-voice-phase", "closed");
+  });
+
+  test("the live panel shows the phase, the transcript and a stop control", async ({
+    page,
+  }) => {
+    await mockVoiceAvailable(page);
+    if (!(await openChat(page))) return;
+
+    // No panel until a session is live — voice mode must not occupy the
+    // composer when it is off.
+    await expect(page.getByTestId("voice-panel")).toHaveCount(0);
+
+    await page.getByTestId("voice-button").click();
+    await waitForSocket(page);
+
+    const emit = (msg: unknown) =>
+      page.evaluate(
+        (m) =>
+          (window as never as { __voice: { emit: (x: unknown) => void } }).__voice.emit(m),
+        msg,
+      );
+
+    await emit({ type: "ready" });
+    const panel = page.getByTestId("voice-panel");
+    await expect(panel).toBeVisible();
+
+    await emit({ type: "listening" });
+    await emit({ type: "transcript", text: "deploy status", final: true });
+    await expect(panel).toContainText("Listening");
+    await expect(panel).toContainText("deploy status");
+
+    await emit({ type: "speaking" });
+    await emit({ type: "assistant", text: "Everything is green." });
+    await expect(panel).toContainText("Speaking");
+    await expect(panel).toContainText("Everything is green.");
+    // Discoverability: barge-in is invisible unless we say so.
+    await expect(panel).toContainText("interrupt");
+
+    // The stop control ends the session and the panel goes away.
+    await page.getByTestId("voice-stop").click();
+    await expect(page.getByTestId("voice-panel")).toHaveCount(0);
   });
 });
