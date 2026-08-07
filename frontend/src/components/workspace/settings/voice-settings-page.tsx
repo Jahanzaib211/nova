@@ -37,6 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { SettingsSection } from "./settings-section";
+import { VoiceLab } from "./voice-lab";
 
 const TEST_PHRASE = "Nova is online. All systems are green.";
 
@@ -307,11 +308,19 @@ export function VoiceSettingsPage() {
           </div>
         </div>
 
-        {/* ── Tests ──────────────────────────────────────────────────── */}
+        {/* ── The lab: drive the real engines ────────────────────────── */}
+        <VoiceLab
+          enabled={enabled}
+          voices={ttsChoice?.voices ?? []}
+          activeVoice={tts.voice ?? "af_heart"}
+          onPickVoice={(v) => section("tts", { voice: v })}
+        />
+
+        {/* ── Quick tests ────────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-1 text-sm font-semibold">Check it works</h3>
+          <h3 className="mb-1 text-sm font-semibold">One-click checks</h3>
           <p className="text-muted-foreground mb-3 text-xs">
-            Settings can be valid and still not work — missing weights, no GPU, a denied microphone. These run the real paths.
+            The same paths as the lab above, with fixed inputs — for when you just want a yes or no.
           </p>
 
           <div className="space-y-3">

@@ -94,10 +94,31 @@ export type VoiceStatus = {
   sample_rate?: number;
 };
 
+/**
+ * Normalize whatever the server sent into a shape the UI can render.
+ *
+ * The panel renders `config.catalog.stt` directly, so a response missing
+ * `catalog` crashes it — which is exactly what happened when PUT replied with a
+ * different shape than GET. The server now returns one shape for all three
+ * verbs, and this is the belt to that braces: a settings screen that white-
+ * screens is worse than one showing an empty list.
+ */
+function normalizeConfig(raw: unknown): VoiceConfig {
+  const data = (raw ?? {}) as Partial<VoiceConfig>;
+  const catalog = data.catalog ?? ({} as VoiceConfig["catalog"]);
+  return {
+    settings: data.settings ?? {},
+    catalog: { stt: catalog.stt ?? [], tts: catalog.tts ?? [], turn: catalog.turn ?? [] },
+    overrides_path: data.overrides_path ?? "",
+    has_overrides: Boolean(data.has_overrides),
+    live: data.live,
+  };
+}
+
 export async function getVoiceConfig(): Promise<VoiceConfig> {
   const res = await apiFetch("/api/voice/config");
   if (!res.ok) throw new Error(`Could not load voice settings (HTTP ${res.status})`);
-  return (await res.json()) as VoiceConfig;
+  return normalizeConfig(await res.json());
 }
 
 export async function putVoiceConfig(settings: VoiceSettings): Promise<VoiceConfig> {
@@ -112,13 +133,13 @@ export async function putVoiceConfig(settings: VoiceSettings): Promise<VoiceConf
     const detail = await res.json().catch(() => null);
     throw new Error(detail?.detail ?? `Could not save voice settings (HTTP ${res.status})`);
   }
-  return (await res.json()) as VoiceConfig;
+  return normalizeConfig(await res.json());
 }
 
 export async function resetVoiceConfig(): Promise<VoiceConfig> {
   const res = await apiFetch("/api/voice/config", { method: "DELETE" });
   if (!res.ok) throw new Error(`Could not reset voice settings (HTTP ${res.status})`);
-  return (await res.json()) as VoiceConfig;
+  return normalizeConfig(await res.json());
 }
 
 /**

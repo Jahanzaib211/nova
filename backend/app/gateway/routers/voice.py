@@ -171,14 +171,20 @@ def _engine_status(engine, kind: str) -> dict:
     }
 
 
-@router.get("/config")
-@require_auth
-async def get_voice_config(request: Request) -> dict:
-    """Current voice settings, the catalog to choose from, and live state."""
+def _config_payload() -> dict:
+    """The one shape every /config verb returns.
+
+    GET, PUT and DELETE all answer with this. They used to differ — PUT replied
+    `{saved, settings}` with no catalog — and the panel does `setConfig(response)`
+    after a save, so changing any setting wiped the catalog and the next render
+    crashed on `config.catalog.stt`. Endpoints that describe the same resource
+    should describe it the same way; anything else pushes the difference onto
+    every caller.
+    """
     from deerflow.speech import registry
 
     settings = registry._merged_config()
-    detail: dict = {
+    payload: dict = {
         "settings": settings,
         "catalog": ENGINE_CATALOG,
         "overrides_path": str(registry.overrides_path()),
@@ -188,11 +194,18 @@ async def get_voice_config(request: Request) -> dict:
     # whole point, since `auto` silently resolves and `cuda` can fall back.
     if settings.get("enabled"):
         with contextlib.suppress(Exception):
-            detail["live"] = {
+            payload["live"] = {
                 "stt": _engine_status(registry.get_stt_engine(), "stt"),
                 "tts": _engine_status(registry.get_tts_engine(), "tts"),
             }
-    return detail
+    return payload
+
+
+@router.get("/config")
+@require_auth
+async def get_voice_config(request: Request) -> dict:
+    """Current voice settings, the catalog to choose from, and live state."""
+    return _config_payload()
 
 
 @router.put("/config")
@@ -224,10 +237,10 @@ async def put_voice_config(request: Request) -> dict:
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"speech.{section}.use is not usable: {e}") from e
 
-    path = await asyncio.to_thread(registry.save_overrides, body)
+    await asyncio.to_thread(registry.save_overrides, body)
     # The cached readiness answer describes engines that no longer exist.
     _readiness = None
-    return {"saved": str(path), "settings": registry._merged_config()}
+    return _config_payload()
 
 
 @router.delete("/config")
@@ -239,7 +252,7 @@ async def reset_voice_config(request: Request) -> dict:
 
     await asyncio.to_thread(registry.clear_overrides)
     _readiness = None
-    return {"settings": registry._merged_config()}
+    return _config_payload()
 
 
 # Long enough for a greeting or a short confirmation, short enough that this

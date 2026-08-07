@@ -127,6 +127,41 @@ class TestConfigEndpoints:
         assert out["settings"]["enabled"] is True
         assert registry.overrides_path().is_file()
 
+    def test_every_verb_returns_the_same_shape(self) -> None:
+        """GET, PUT and DELETE describe the same resource, so they must describe
+        it identically.
+
+        They did not: PUT replied `{saved, settings}` with no `catalog`. The
+        panel does `setConfig(response)` after saving, so changing any setting
+        wiped the catalog and the next render died on `config.catalog.stt` —
+        a TypeError in the UI for a purely server-side inconsistency.
+        """
+        from app.gateway.routers import voice as voice_mod
+
+        # `live` is deliberately conditional — it only exists while voice is
+        # enabled and the engines actually loaded — so it is not part of the
+        # guaranteed shape. Everything the panel renders unconditionally is.
+        required = {"settings", "catalog", "overrides_path", "has_overrides"}
+
+        get_keys = set(self._call(voice_mod.get_voice_config))
+        put_keys = set(self._call(voice_mod.put_voice_config, {"enabled": True}))
+        delete_keys = set(self._call(voice_mod.reset_voice_config))
+
+        for verb, keys in (("GET", get_keys), ("PUT", put_keys), ("DELETE", delete_keys)):
+            assert required <= keys, f"{verb} is missing {required - keys} — the panel renders these without guarding"
+
+    def test_catalog_covers_every_configurable_section(self) -> None:
+        """The panel renders a section per catalog key; a missing one silently
+        removes the only way to configure that engine from the UI."""
+        from app.gateway.routers import voice as voice_mod
+
+        catalog = self._call(voice_mod.get_voice_config)["catalog"]
+        assert {"stt", "tts", "turn"} <= set(catalog)
+        for section, entries in catalog.items():
+            assert entries, f"catalog.{section} is empty — nothing would render"
+            for entry in entries:
+                assert entry.get("use") and entry.get("label"), f"catalog.{section} entry is missing use/label: {entry}"
+
     def test_put_rejects_an_unusable_engine_path(self) -> None:
         """A typo must fail at write time with a clear message, not leave voice
         unloadable until someone reads the logs."""
