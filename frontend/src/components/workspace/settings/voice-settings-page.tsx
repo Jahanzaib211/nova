@@ -27,6 +27,7 @@ import {
   getVoiceStatus,
   putVoiceConfig,
   resetVoiceConfig,
+  stopSpeaking,
   testMicrophone,
   testSpeaker,
   type MicTest,
@@ -95,7 +96,12 @@ export function VoiceSettingsPage() {
 
   useEffect(() => {
     void refresh();
-    return () => abort.current?.abort();
+    // Aborting the fetch does not stop audio that already started playing;
+    // closing the dialog mid-test would otherwise leave Nova talking.
+    return () => {
+      abort.current?.abort();
+      stopSpeaking();
+    };
   }, [refresh]);
 
   const save = useCallback(
@@ -333,6 +339,12 @@ export function VoiceSettingsPage() {
                 <span className={cn("text-xs", speaker.ok ? "text-muted-foreground" : "text-destructive")}>
                   {speaker.ok ? (
                     <>
+                      {speaker.blocked && (
+                        <>
+                          <span className="text-amber-500">browser blocked autoplay</span>
+                          {" · "}
+                        </>
+                      )}
                       {Math.round(speaker.latencyMs)} ms
                       {speaker.rtf != null && (
                         <>

@@ -16,11 +16,11 @@
  */
 
 import { GaugeIcon, Loader2Icon, MicIcon, PlayIcon, SquareIcon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { testMicrophone, testSpeaker, type MicTest, type SpeakerTest } from "@/core/voice/config";
+import { stopSpeaking, testMicrophone, testSpeaker, type MicTest, type SpeakerTest } from "@/core/voice/config";
 import { cn } from "@/lib/utils";
 
 /** Long enough to be a fair timing sample, short enough not to be a wait. */
@@ -60,9 +60,19 @@ export function VoiceLab({
   const stop = useCallback(() => {
     abort.current?.abort();
     abort.current = null;
+    // Aborting the fetch does nothing to audio that is already playing —
+    // the clip would keep talking after the button said it stopped.
+    stopSpeaking();
     setSpeaking(false);
     setBenching(false);
     setRecording(false);
+  }, []);
+
+  // Leaving the panel (or the dialog closing) must not leave a voice talking
+  // to an empty room.
+  useEffect(() => () => {
+    abort.current?.abort();
+    stopSpeaking();
   }, []);
 
   const speak = useCallback(async () => {
@@ -70,7 +80,7 @@ export function VoiceLab({
     setSpeaking(true);
     setLast(null);
     abort.current = new AbortController();
-    setLast(await testSpeaker(text, abort.current.signal));
+    setLast(await testSpeaker(text, abort.current.signal, { awaitPlayback: true }));
     setSpeaking(false);
   }, [text]);
 
@@ -88,7 +98,10 @@ export function VoiceLab({
     const signal = abort.current.signal;
     for (const voice of voices) {
       if (signal.aborted) break;
-      const result = await testSpeaker(`This is ${voice.replace(/^[abm]{1,2}_/, "")}. ${text}`, signal);
+      // awaitPlayback is what makes this an audition rather than a pile-up:
+      // play() resolves when audio *starts*, so without it all eight voices
+      // speak at once.
+      const result = await testSpeaker(`This is ${voice.replace(/^[abm]{1,2}_/, "")}. ${text}`, signal, { awaitPlayback: true });
       setSamples((prev) => [...prev, { voice, result }]);
     }
     setBenching(false);
@@ -157,6 +170,14 @@ export function VoiceLab({
                 value={last.rtf != null ? `${last.rtf.toFixed(2)}×` : "—"}
                 warn={(last.rtf ?? 0) > 1}
               />
+              {last.blocked && (
+                <div className="flex w-full items-center gap-2 text-xs text-amber-500">
+                  <span>Your browser blocked autoplay — the audio arrived fine.</span>
+                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => void last.play?.()}>
+                    Play it
+                  </Button>
+                </div>
+              )}
               {(last.rtf ?? 0) > 1 && (
                 <p className="text-xs text-amber-500">
                   Slower than real time — audio cannot keep up with playback. Check the device setting above.

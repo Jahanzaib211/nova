@@ -154,6 +154,15 @@ export async function getVoiceStatus(refresh = false): Promise<VoiceStatus> {
 
 export type SpeakerTest = {
   ok: boolean;
+  /**
+   * The audio arrived but the browser refused to start it without a user
+   * gesture. Firefox blocks media autoplay by default, so this is common and
+   * is NOT a failure of the voice stack — reporting it as one sent people
+   * hunting a backend bug when the fix is one click. `play()` replays it from
+   * inside a real click handler, where the browser allows it.
+   */
+  blocked?: boolean;
+  play?: () => Promise<void>;
   /** Server-side synthesis time, measured client-side round trip. */
   latencyMs: number;
   /** Audio seconds produced per second of wall clock. <1 means slower than real time. */
@@ -173,13 +182,77 @@ function wavDurationSeconds(buf: ArrayBuffer): number | null {
 }
 
 /**
+ * The single owner of test playback.
+ *
+ * Without one, overlapping audio is the default: `HTMLAudioElement.play()`
+ * resolves when playback *starts*, not when it ends, so a caller that awaits it
+ * and immediately plays the next clip stacks them. Auditioning eight voices did
+ * exactly that — eight voices talking simultaneously, which reads as "the lab
+ * glitches" rather than as a bug in the lab.
+ *
+ * One element at a time, stopped before the next begins, and stoppable from
+ * outside so the Stop button silences audio instead of only cancelling a fetch.
+ */
+let current: { audio: HTMLAudioElement; url: string } | null = null;
+
+export function stopSpeaking(): void {
+  if (!current) return;
+  const { audio, url } = current;
+  current = null;
+  audio.pause();
+  audio.src = "";
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Resolves when playback finishes (or fails, or is stopped), reporting whether
+ * the browser refused to start it.
+ */
+function playToCompletion(url: string, signal?: AbortSignal): { done: Promise<{ blocked: boolean }>; audio: HTMLAudioElement } {
+  stopSpeaking();
+  const audio = new Audio(url);
+  current = { audio, url };
+
+  const done = new Promise<{ blocked: boolean }>((resolve) => {
+    const finish = (blocked = false) => {
+      if (current?.audio === audio) {
+        current = null;
+        URL.revokeObjectURL(url);
+      }
+      resolve({ blocked });
+    };
+    audio.addEventListener("ended", () => finish(), { once: true });
+    audio.addEventListener("error", () => finish(), { once: true });
+    signal?.addEventListener("abort", () => {
+      audio.pause();
+      finish();
+    }, { once: true });
+
+    // Firefox blocks media autoplay by default and Chrome does on low
+    // engagement. The audio arrived either way, so this is a browser policy
+    // outcome, not a broken engine — say which so the UI can offer a click.
+    void audio.play().catch(() => finish(true));
+  });
+
+  return { done, audio };
+}
+
+/**
  * Synthesize a phrase, play it, and report real numbers.
  *
- * Reporting RTF matters: Kokoro's int8 build runs *slower than real time* on
- * CPU, which sounds like stuttering rather than an obvious error. A number the
- * user can see makes that diagnosable instead of mysterious.
+ * `awaitPlayback` matters for sequences: without it the caller races ahead and
+ * the clips overlap. Latency is always measured to *first audio* — the number
+ * a user feels — not to the end of playback.
+ *
+ * Reporting RTF matters too: Kokoro's int8 build runs *slower than real time*
+ * on CPU, which sounds like stuttering rather than an obvious error. A number
+ * the user can see makes that diagnosable instead of mysterious.
  */
-export async function testSpeaker(text: string, signal?: AbortSignal): Promise<SpeakerTest> {
+export async function testSpeaker(
+  text: string,
+  signal?: AbortSignal,
+  opts: { awaitPlayback?: boolean } = {},
+): Promise<SpeakerTest> {
   const started = performance.now();
   try {
     const res = await apiFetch("/api/voice/speak", {
@@ -196,22 +269,25 @@ export async function testSpeaker(text: string, signal?: AbortSignal): Promise<S
     const buf = await res.arrayBuffer();
     const latencyMs = performance.now() - started;
     const durationS = wavDurationSeconds(buf);
-
     const url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
-    const audio = new Audio(url);
-    audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
-    // Autoplay may be refused if this was not triggered by a click. The test is
-    // still meaningful — the audio arrived — so a refusal is not a failure.
-    await audio.play().catch(() => undefined);
 
-    return {
-      ok: true,
-      latencyMs,
-      durationS,
-      rtf: durationS ? latencyMs / 1000 / durationS : null,
-    };
+    const { done, audio } = playToCompletion(url, signal);
+    const base = { ok: true as const, latencyMs, durationS, rtf: durationS ? latencyMs / 1000 / durationS : null };
+
+    if (!opts.awaitPlayback) {
+      // Give the browser a moment to reject autoplay so the caller learns about
+      // it; without this the answer always looks like "playing fine".
+      const settled = await Promise.race([done, new Promise<null>((r) => setTimeout(() => r(null), 150))]);
+      if (settled?.blocked) return { ...base, blocked: true, play: () => audio.play() };
+      return base;
+    }
+
+    const { blocked } = await done;
+    return blocked ? { ...base, blocked: true, play: () => audio.play() } : base;
   } catch (e) {
-    return { ok: false, latencyMs: performance.now() - started, rtf: null, durationS: null, error: String(e) };
+    // An aborted fetch is a deliberate stop, not an error to shout about.
+    if (signal?.aborted) return { ok: false, latencyMs: performance.now() - started, rtf: null, durationS: null, error: "stopped" };
+    return { ok: false, latencyMs: performance.now() - started, rtf: null, durationS: null, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
