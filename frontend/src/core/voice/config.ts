@@ -60,16 +60,26 @@ export type TtsSettings = {
   [key: string]: unknown;
 };
 
+/** Semantic endpointing. Opt-in: see `speech/turn.py`. */
+export type TurnSettings = {
+  use?: string;
+  enabled?: boolean;
+  threshold?: number;
+  device?: string;
+  [key: string]: unknown;
+};
+
 export type VoiceSettings = {
   enabled?: boolean;
   stt?: SttSettings;
   tts?: TtsSettings;
+  turn?: TurnSettings;
   vad?: Record<string, unknown>;
 };
 
 export type VoiceConfig = {
   settings: VoiceSettings;
-  catalog: { stt: EngineChoice[]; tts: EngineChoice[] };
+  catalog: { stt: EngineChoice[]; tts: EngineChoice[]; turn?: EngineChoice[] };
   overrides_path: string;
   has_overrides: boolean;
   live?: { stt: EngineLive; tts: EngineLive };

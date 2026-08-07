@@ -120,7 +120,7 @@ export function VoiceSettingsPage() {
   );
 
   const section = useCallback(
-    (name: "stt" | "tts", patch: Record<string, unknown>) => {
+    (name: "stt" | "tts" | "turn", patch: Record<string, unknown>) => {
       const current = config?.settings?.[name] ?? {};
       return save({ [name]: { ...current, ...patch } });
     },
@@ -166,6 +166,8 @@ export function VoiceSettingsPage() {
   const ready = Boolean(status?.ready);
   const sttChoice = config.catalog.stt.find((c) => c.use === stt.use) ?? config.catalog.stt[0];
   const ttsChoice = config.catalog.tts.find((c) => c.use === tts.use) ?? config.catalog.tts[0];
+  const turn = settings.turn ?? {};
+  const turnChoice = config.catalog.turn?.[0];
 
   return (
     <SettingsSection
@@ -271,6 +273,37 @@ export function VoiceSettingsPage() {
             <Row label="Device" hint={DEVICES.find((d) => d.value === (tts.device ?? "auto"))?.hint}>
               <Choice options={DEVICES} value={tts.device ?? "auto"} onChange={(v) => section("tts", { device: v })} />
             </Row>
+          </div>
+        </div>
+
+        {/* ── Turn-taking ────────────────────────────────────────────── */}
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">Turn-taking</h3>
+          <p className="text-muted-foreground mb-2 text-xs">{turnChoice?.note}</p>
+          <div className="divide-border/50 divide-y">
+            <Row
+              label="Wait while you think"
+              hint="Off by default. Judges whether you finished a thought rather than just stopping — verify it with your own voice using the microphone test below."
+            >
+              <Switch
+                checked={Boolean(turn.enabled)}
+                disabled={saving || !enabled}
+                onCheckedChange={(v) => section("turn", { enabled: v, use: turnChoice?.use })}
+              />
+            </Row>
+            {Boolean(turn.enabled) && (
+              <Row label="Confidence" hint="Higher means Nova waits more readily. A wrong wait costs you real time, so this is not free.">
+                <Choice
+                  options={[
+                    { value: "0.5", label: "0.5" },
+                    { value: "0.7", label: "0.7" },
+                    { value: "0.85", label: "0.85" },
+                  ]}
+                  value={String(turn.threshold ?? 0.7)}
+                  onChange={(v) => section("turn", { threshold: Number(v) })}
+                />
+              </Row>
+            )}
           </div>
         </div>
 
