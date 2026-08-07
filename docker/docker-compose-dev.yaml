@@ -143,6 +143,12 @@ services:
       # and matches the value pinned in nginx.conf (Batch 2A). For
       # production deployments behind a real LB, override via .env.
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
+      # Heap ceiling *below* mem_limit (4 GiB). Without this Node grows until
+      # the kernel OOM-kills it — abrupt, nothing in the log, and an nginx 502
+      # for whoever is using the app. With it, V8 collects harder as it nears
+      # the limit and the process stays alive. 3 GiB leaves room for the
+      # non-heap side (Turbopack's native allocations, buffers, the runtime).
+      - NODE_OPTIONS=--max-old-space-size=3072
       # Match the gateway: dev mode skips the sign-in gate so the user
       # can interact with the app immediately. Production must set
       # DEER_FLOW_AUTH_DISABLED=0 (or DEER_FLOW_ENV=prod).
@@ -170,7 +176,13 @@ services:
     # letting one leak destabilise the whole machine. The Helm chart already
     # capped frontend at 512Mi — this brings compose to parity, with headroom
     # because the compose build runs `next start` from a fuller image.
-    mem_limit: 2g
+    # 4 GiB, not 2. Next 16 dev with Turbopack holds the whole module graph,
+    # source maps and HMR history resident, and that set grows with every
+    # recompile rather than shrinking back. Measured at 1.98 GiB against the old
+    # 2 GiB cap, which OOM-killed the container 155 times — each kill shows up
+    # as an nginx 502 because the upstream simply vanishes. The host has 30 GiB,
+    # so this is still a small share.
+    mem_limit: 4g
 
   # Backend - Gateway API
   gateway:
