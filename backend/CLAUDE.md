@@ -888,6 +888,24 @@ that case, so it is tried first and the ctypes pass remains for CTranslate2.
 chooses silently; an explicit `cuda` that falls back warns **once, loudly**. That
 asymmetry is deliberate — silent degradation is exactly what hid the deaf-VAD bug.
 
+**A provider being *listed* is not proof it will run.** onnxruntime accepts
+`CUDAExecutionProvider`, then drops it at session creation when its CUDA runtime
+is missing or version-mismatched — reporting that only on stderr. Keeping that
+session is the worst of the three options: the graph is still partitioned for
+CUDA, hundreds of Memcpy nodes are inserted, and it measured **slower than plain
+CPU** (RTF 2.18 vs 0.398 in the gateway container). `KokoroTTS._build_session()`
+therefore checks `session.get_providers()` and **rebuilds CPU-only** when CUDA
+was dropped, and `resolved_device` reports what the session actually got rather
+than what was requested. Pinned by `TestHalfCudaSessionIsRejected`.
+
+**Container reality (as deployed):** ctranslate2 links CUDA **12**, which the
+`nvidia-*-cu12` wheels satisfy, so **STT runs on the GPU** (RTF 0.024). Current
+`onnxruntime-gpu` builds want CUDA **13**, which the container does not have, so
+**TTS runs on CPU** at RTF 0.398 / 517 ms first audio — the good fp32 path. That
+split is the best available combination there and is reached automatically by
+`auto`; no per-environment configuration is needed. Give the container a CUDA 13
+runtime (`nvidia-*-cu13` wheels) if you want TTS on the GPU too.
+
 ## Semantic turn detection (`speech/turn.py`)
 
 A VAD only knows whether *sound* stopped, which is why Nova cut you off when you

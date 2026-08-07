@@ -164,6 +164,59 @@ class TestComputeTypeFollowsDevice:
         assert devices.default_compute_type("cpu", "float32") == "float32"
 
 
+class TestHalfCudaSessionIsRejected:
+    """onnxruntime accepts CUDAExecutionProvider, then silently drops it at
+    session creation when its CUDA runtime is missing or version-mismatched.
+
+    Keeping that session is the *worst* outcome: the graph is still partitioned
+    for CUDA, hundreds of Memcpy nodes get inserted, and it measured **slower
+    than plain CPU** — RTF 2.18 against 0.398 in the gateway container. So the
+    engine rebuilds CPU-only rather than living in the broken middle, and
+    reports the device it actually got.
+    """
+
+    @staticmethod
+    def _kokoro_with_fake_ort(monkeypatch, granted_providers):
+        import sys
+        import types
+
+        from deerflow.speech.engines import kokoro_tts
+
+        built: list[list[str]] = []
+
+        class FakeSession:
+            def __init__(self, _path, sess_options=None, providers=None):
+                built.append(list(providers or []))
+                self._granted = granted_providers(providers or [])
+
+            def get_providers(self):
+                return self._granted
+
+        fake_ort = types.ModuleType("onnxruntime")
+        fake_ort.InferenceSession = FakeSession
+        fake_ort.SessionOptions = lambda: object()
+        fake_ort.get_available_providers = lambda: [devices.CUDA_PROVIDER, devices.CPU_PROVIDER]
+        monkeypatch.setitem(sys.modules, "onnxruntime", fake_ort)
+
+        engine = kokoro_tts.KokoroTTS(model_path="/model.onnx", voices_path="/voices.bin", device="cuda")
+        return engine, built
+
+    def test_rebuilds_cpu_only_when_cuda_is_dropped(self, monkeypatch) -> None:
+        engine, built = self._kokoro_with_fake_ort(monkeypatch, lambda _req: [devices.CPU_PROVIDER])
+        engine._build_session()
+
+        assert len(built) == 2, "the half-CUDA session was kept instead of being rebuilt"
+        assert built[1] == [devices.CPU_PROVIDER], f"rebuild did not drop CUDA: {built[1]}"
+        assert engine.resolved_device == "cpu", "reported cuda while running on cpu"
+
+    def test_keeps_the_session_when_cuda_really_works(self, monkeypatch) -> None:
+        engine, built = self._kokoro_with_fake_ort(monkeypatch, lambda req: list(req))
+        engine._build_session()
+
+        assert len(built) == 1, "rebuilt a session that was working fine"
+        assert engine.resolved_device == "cuda"
+
+
 class TestEnginesAcceptDevice:
     """The registry does `engine_cls(**cfg)`, so a config key that the engine
     does not accept raises at construction. These pin the constructor surface

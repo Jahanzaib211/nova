@@ -87,13 +87,37 @@ class KokoroTTS(TextToSpeech):
         """
         import onnxruntime as ort
 
-        from deerflow.speech.devices import resolve_onnx_providers
+        from deerflow.speech.devices import CPU_PROVIDER, CUDA_PROVIDER, resolve_onnx_providers
 
         providers, resolved = resolve_onnx_providers(self.device, subsystem="kokoro-tts")
-        self.resolved_device = resolved
 
         opts = ort.SessionOptions()
-        return ort.InferenceSession(self._model_path, sess_options=opts, providers=providers)
+        session = ort.InferenceSession(self._model_path, sess_options=opts, providers=providers)
+
+        # Trust what the session *got*, not what we asked for. onnxruntime will
+        # accept CUDAExecutionProvider and then drop it at session creation when
+        # its CUDA runtime libraries are missing or version-mismatched, saying so
+        # only on stderr. Believing the request produced a status page claiming
+        # "cuda" while every op ran on CPU — the exact class of lie this codebase
+        # keeps getting bitten by.
+        active = session.get_providers()
+        if resolved == "cuda" and CUDA_PROVIDER not in active:
+            # Rebuild CPU-only rather than keep the half-CUDA session. A session
+            # that lists CUDA but cannot run it partitions the graph anyway and
+            # inserts hundreds of Memcpy nodes, which measured **slower than
+            # plain CPU** (RTF 2.18 vs 0.39). Falling back properly is not just
+            # cosmetic here — the broken middle state is the worst option.
+            logger.warning(
+                "kokoro-tts: onnxruntime advertised CUDA but the session fell back to %s "
+                "(usually a CUDA runtime version mismatch — see stderr). Rebuilding CPU-only, "
+                "because a partially-CUDA graph is slower than CPU.",
+                active,
+            )
+            session = ort.InferenceSession(self._model_path, sess_options=opts, providers=[CPU_PROVIDER])
+            active = session.get_providers()
+
+        self.resolved_device = "cuda" if CUDA_PROVIDER in active else "cpu"
+        return session
 
     def _ensure_engine(self):
         if self._engine is not None:
