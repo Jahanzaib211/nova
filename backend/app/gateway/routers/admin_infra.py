@@ -50,28 +50,60 @@ class PodLogsRequest(BaseModel):
 async def get_pods(request: Request) -> dict:
     """List every Pod in the provisioner's namespace."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
-    return await _call(infra_client.list_pods(_provisioner_url()))
+    result = await _call(infra_client.list_pods(_provisioner_url()))
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-infra-pods",
+        target_user_id=None,
+        payload={},
+        request=request,
+    )
+    return result
 
 
 @router.get("/deployments")
 async def get_deployments(request: Request) -> dict:
     """List Deployments with rollout status."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
-    return await _call(infra_client.list_deployments(_provisioner_url()))
+    result = await _call(infra_client.list_deployments(_provisioner_url()))
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-infra-deployments",
+        target_user_id=None,
+        payload={},
+        request=request,
+    )
+    return result
 
 
 @router.get("/events")
 async def get_events(request: Request, limit: int = Query(100, ge=1, le=500)) -> dict:
     """Recent namespace Events, newest first."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
-    return await _call(infra_client.list_events(_provisioner_url(), limit=limit))
+    result = await _call(infra_client.list_events(_provisioner_url(), limit=limit))
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-infra-events",
+        target_user_id=None,
+        payload={"limit": limit},
+        request=request,
+    )
+    return result
 
 
 @router.get("/metrics")
 async def get_metrics(request: Request) -> dict:
     """Pod + node CPU/memory usage."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
-    return await _call(infra_client.get_metrics(_provisioner_url()))
+    result = await _call(infra_client.get_metrics(_provisioner_url()))
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-infra-metrics",
+        target_user_id=None,
+        payload={},
+        request=request,
+    )
+    return result
 
 
 @router.get("/pods/{pod_name}/logs")
@@ -89,5 +121,6 @@ async def get_pod_logs(
         action="view-pod-logs",
         target_user_id=None,
         payload={"pod": pod_name, "tail": tail, "container": container},
+        request=request,
     )
     return result

@@ -74,6 +74,16 @@ class UserRow(Base):
     daily_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
     credit_usage_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Account-level activity tracking. Stamped by LocalAuthProvider on every
+    # successful authenticate(); surfaced by the ops console's "recent
+    # signups" panel so operators can spot dormant accounts.
+    last_sign_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Operator "forbid" toggle. When True, AuthMiddleware rejects the user
+    # before any password / OAuth flow runs; the user keeps their data so
+    # an admin can audit and unforbid without a destructive delete.
+    is_forbidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("0"))
+
     __table_args__ = (
         Index(
             "idx_users_oauth_identity",

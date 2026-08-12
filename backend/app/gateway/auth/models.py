@@ -50,6 +50,12 @@ class User(BaseModel):
     daily_limit_override: int | None = Field(None, description="Custom daily token limit; overrides the plan allowance when set")
     credit_usage_reset_at: datetime | None = Field(None, description="Operator usage-reset marker; usage counts only after this moment today")
 
+    # Account activity tracking — stamped on every successful authenticate()
+    last_sign_in_at: datetime | None = Field(None, description="Wall-clock time of the most recent successful login")
+
+    # Operator "forbid" toggle — middleware rejects login when True
+    is_forbidden: bool = Field(default=False, description="When True, the AuthMiddleware rejects this user before any password check")
+
 
 class UserResponse(BaseModel):
     """Response model for user info endpoint."""

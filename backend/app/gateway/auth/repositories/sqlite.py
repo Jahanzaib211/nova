@@ -57,6 +57,8 @@ class SQLiteUserRepository(UserRepository):
             referred_by=row.referred_by,
             daily_limit_override=row.daily_limit_override,
             credit_usage_reset_at=(row.credit_usage_reset_at.replace(tzinfo=UTC) if row.credit_usage_reset_at and not row.credit_usage_reset_at.tzinfo else row.credit_usage_reset_at),
+            last_sign_in_at=(row.last_sign_in_at.replace(tzinfo=UTC) if row.last_sign_in_at and not row.last_sign_in_at.tzinfo else row.last_sign_in_at),
+            is_forbidden=row.is_forbidden,
         )
 
     @staticmethod
@@ -82,6 +84,8 @@ class SQLiteUserRepository(UserRepository):
             referred_by=user.referred_by,
             daily_limit_override=user.daily_limit_override,
             credit_usage_reset_at=user.credit_usage_reset_at,
+            last_sign_in_at=user.last_sign_in_at,
+            is_forbidden=user.is_forbidden,
         )
 
     # ── CRUD ──────────────────────────────────────────────────────────
@@ -139,6 +143,8 @@ class SQLiteUserRepository(UserRepository):
             row.referred_by = user.referred_by
             row.daily_limit_override = user.daily_limit_override
             row.credit_usage_reset_at = user.credit_usage_reset_at
+            row.last_sign_in_at = user.last_sign_in_at
+            row.is_forbidden = user.is_forbidden
             await session.commit()
         return user
 

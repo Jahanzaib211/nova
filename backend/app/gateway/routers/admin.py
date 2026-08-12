@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from app.gateway import admin_ops
 from app.gateway.credits import get_balance
@@ -48,6 +48,10 @@ class AdminUserRow(BaseModel):
     plan_status: str | None = None
     created_at: datetime
 
+    @field_serializer("created_at")
+    def _ser_created_at(self, value: datetime) -> datetime:
+        return admin_ops.utc(value)
+
 
 class AdminUsersResponse(BaseModel):
     """Paginated users roster."""
@@ -81,6 +85,14 @@ async def list_users(
     total = await provider.count_users()
     users = await provider.list_users(limit=limit, offset=offset)
 
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-users",
+        target_user_id=None,
+        payload={"limit": limit, "offset": offset, "total": total},
+        request=request,
+    )
+
     rows = [
         AdminUserRow(
             id=str(u.id),
@@ -101,6 +113,73 @@ async def list_users(
     )
 
 
+# ── Recent users (per-user live stats) ──────────────────────────────────
+# NOTE: this route is declared BEFORE the wildcard ``/users/{user_id}``
+# route below — FastAPI matches routes in registration order, so a
+# literal segment like "recent" must win over the parametric segment.
+
+class RecentUserRow(BaseModel):
+    """One row in the recent-users roster.
+
+    Same shape as :class:`AdminUserRow` plus the per-user activity fields
+    the Overview "Recent signups" panel needs: last successful login and
+    last run timestamp (aggregated from the runs table).
+    """
+
+    id: str
+    email: str
+    system_role: str
+    plan: str
+    plan_status: str | None = None
+    created_at: datetime
+    last_sign_in_at: datetime | None = None
+    last_run_at: datetime | None = None
+    is_forbidden: bool = False
+
+    @field_serializer("created_at", "last_sign_in_at", "last_run_at")
+    def _ser(self, value: datetime | None) -> datetime | None:
+        return admin_ops.utc(value)
+
+
+class RecentUsersResponse(BaseModel):
+    data: list[RecentUserRow]
+    limit: int
+    offset: int
+
+
+@router.get("/users/recent", response_model=RecentUsersResponse)
+async def recent_users(
+    request: Request,
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> RecentUsersResponse:
+    """Per-user live stats: newest users with last-sign-in + last-run.
+
+    The new ``last_sign_in_at`` column is stamped on every successful
+    login (``POST /api/v1/auth/login/local``); ``last_run_at`` is
+    aggregated from the ``runs`` table. The Overview's "Recent signups"
+    panel polls this endpoint to surface per-user activity, and the
+    user-detail page uses the same data to show "last run" against the
+    admin's chosen user.
+
+    Admin only.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    rows = await admin_ops.recent_users(limit=limit, offset=offset)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-users-recent",
+        target_user_id=None,
+        payload={"limit": limit, "offset": offset, "rows": len(rows)},
+        request=request,
+    )
+    return RecentUsersResponse(
+        data=[RecentUserRow(**row) for row in rows],
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/users/stats", response_model=AdminUserStats)
 async def user_stats(request: Request) -> AdminUserStats:
     """Aggregate signup metrics: total, plan breakdown, recent growth. Admin only."""
@@ -112,6 +191,14 @@ async def user_stats(request: Request) -> AdminUserStats:
     by_plan = await provider.count_users_by_plan()
     new_7 = await provider.count_users_since(now - timedelta(days=7))
     new_30 = await provider.count_users_since(now - timedelta(days=30))
+
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-user-stats",
+        target_user_id=None,
+        payload={"total": total},
+        request=request,
+    )
 
     return AdminUserStats(
         total=total,
@@ -148,7 +235,7 @@ async def set_user_plan(user_id: str, body: SetPlanRequest, request: Request) ->
     # Manual grant: reflect an admin-set status so the UI can distinguish it.
     user.plan_status = "admin_granted" if body.plan != "free" else None
     await provider.update_user(user)
-    await admin_ops.record_audit(actor=_actor(request), action="set-plan", target_user_id=user_id, payload={"plan": body.plan})
+    await admin_ops.record_audit(actor=_actor(request), action="set-plan", target_user_id=user_id, payload={"plan": body.plan}, request=request)
 
     return AdminUserRow(
         id=str(user.id),
@@ -172,6 +259,8 @@ class AdminUserDetail(BaseModel):
     plan: str
     plan_status: str | None
     created_at: datetime
+    last_sign_in_at: datetime | None
+    is_forbidden: bool
     referral_code: str | None
     referred_by: str | None
     referral_count: int
@@ -183,6 +272,10 @@ class AdminUserDetail(BaseModel):
     remaining: int
     bonus_daily_tokens: int
     recent_runs: list[dict]
+
+    @field_serializer("created_at", "credit_usage_reset_at", "last_sign_in_at")
+    def _ser_datetime(self, value: datetime | None) -> datetime | None:
+        return admin_ops.utc(value)
 
 
 @router.get("/users/{user_id}", response_model=AdminUserDetail)
@@ -198,6 +291,14 @@ async def user_detail(user_id: str, request: Request) -> AdminUserDetail:
     referral_count = await provider.count_users_referred_by(user.referral_code) if user.referral_code else 0
     runs = await admin_ops.recent_runs_for_user(user_id, limit=10)
 
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-user-detail",
+        target_user_id=user_id,
+        payload={"runs_returned": len(runs)},
+        request=request,
+    )
+
     return AdminUserDetail(
         id=str(user.id),
         email=user.email,
@@ -205,6 +306,8 @@ async def user_detail(user_id: str, request: Request) -> AdminUserDetail:
         plan=user.plan,
         plan_status=user.plan_status,
         created_at=user.created_at,
+        last_sign_in_at=user.last_sign_in_at,
+        is_forbidden=user.is_forbidden,
         referral_code=user.referral_code,
         referred_by=user.referred_by,
         referral_count=referral_count,
@@ -257,6 +360,7 @@ async def list_user_conversations(
         action="view-conversations",
         target_user_id=user_id,
         payload={"limit": limit, "offset": offset},
+        request=request,
     )
     return AdminConversationsResponse(
         data=[
@@ -313,6 +417,7 @@ async def get_user_conversation_messages(
         action="view-conversation-messages",
         target_user_id=user_id,
         payload={"thread_id": thread_id, "limit": limit},
+        request=request,
     )
     return AdminMessagesResponse(data=messages)
 
@@ -340,6 +445,7 @@ async def list_user_channel_connections(user_id: str, request: Request) -> Chann
         action="view-channel-connections",
         target_user_id=user_id,
         payload={"count": len(rows)},
+        request=request,
     )
     return ChannelConnectionsResponse(connections=[ChannelConnectionResponse(**row) for row in rows])
 
@@ -366,6 +472,7 @@ async def revoke_user_channel_connection(user_id: str, connection_id: str, reque
         action="revoke-channel-connection",
         target_user_id=user_id,
         payload={"connection_id": connection_id},
+        request=request,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -412,6 +519,7 @@ async def cancel_user_run(
         action="cancel-user-run",
         target_user_id=user_id,
         payload={"thread_id": thread_id, "run_id": run_id, "action": action},
+        request=request,
     )
     return MessageResponse(message="Run cancelled")
 
@@ -426,7 +534,7 @@ async def reset_usage(user_id: str, request: Request) -> MessageResponse:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     user.credit_usage_reset_at = datetime.now(UTC)
     await provider.update_user(user)
-    await admin_ops.record_audit(actor=_actor(request), action="reset-usage", target_user_id=user_id, payload={})
+    await admin_ops.record_audit(actor=_actor(request), action="reset-usage", target_user_id=user_id, payload={}, request=request)
     return MessageResponse(message="Usage reset")
 
 
@@ -455,6 +563,7 @@ async def grant_credits(user_id: str, body: GrantRequest, request: Request) -> M
         action="grant-credits",
         target_user_id=user_id,
         payload={"daily_bonus_tokens": body.daily_bonus_tokens, "days": body.days},
+        request=request,
     )
     return MessageResponse(message="Credits granted")
 
@@ -479,6 +588,7 @@ async def set_limit(user_id: str, body: SetLimitRequest, request: Request) -> Me
         action="set-limit",
         target_user_id=user_id,
         payload={"daily_limit_override": body.daily_limit_override},
+        request=request,
     )
     return MessageResponse(message="Limit updated")
 
@@ -489,7 +599,7 @@ async def reset_all_usage(request: Request) -> MessageResponse:
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     provider = get_local_provider()
     count = await provider.reset_all_usage(datetime.now(UTC))
-    await admin_ops.record_audit(actor=_actor(request), action="reset-all-usage", target_user_id=None, payload={"users": count})
+    await admin_ops.record_audit(actor=_actor(request), action="reset-all-usage", target_user_id=None, payload={"users": count}, request=request)
     return MessageResponse(message=f"Usage reset for {count} users")
 
 
@@ -504,6 +614,13 @@ async def activity(request: Request, limit: int = Query(50, ge=1, le=200), offse
     """Recent runs across all users (with owner email + tokens). Admin only."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     rows = await admin_ops.recent_activity(limit=limit, offset=offset)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-activity",
+        target_user_id=None,
+        payload={"limit": limit, "offset": offset, "rows": len(rows)},
+        request=request,
+    )
     return ActivityResponse(data=rows, limit=limit, offset=offset)
 
 
@@ -524,6 +641,13 @@ async def audit(
     """The operator-action audit trail, newest first. Admin only."""
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     rows, total = await admin_ops.list_audit(limit=limit, offset=offset, target_user_id=target_user_id)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-audit",
+        target_user_id=target_user_id,
+        payload={"limit": limit, "offset": offset, "total": total},
+        request=request,
+    )
     return AuditResponse(data=rows, total=total, limit=limit, offset=offset)
 
 
@@ -549,6 +673,13 @@ async def list_credit_requests(
 
     rows, total = await cr.list_requests(status=None if status_filter == "all" else status_filter, limit=limit, offset=offset)
     pending = await cr.pending_count()
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-credit-requests",
+        target_user_id=None,
+        payload={"status_filter": status_filter, "limit": limit, "offset": offset, "total": total},
+        request=request,
+    )
     return CreditRequestsResponse(data=rows, total=total, pending=pending)
 
 
@@ -587,5 +718,269 @@ async def resolve_credit_request(request_id: str, body: ResolveRequestBody, requ
         action="resolve-credit-request",
         target_user_id=existing["user_id"],
         payload={"approve": body.approve, "daily_bonus_tokens": body.daily_bonus_tokens if body.approve else 0, "days": body.days if body.approve else 0},
+        request=request,
     )
     return MessageResponse(message="Request approved" if body.approve else "Request declined")
+
+
+# ── God-mode session control ────────────────────────────────────────────
+
+
+class ResetPasswordResponse(BaseModel):
+    """Operator-facing payload for the admin password reset.
+
+    The new plaintext is returned **once** in the response. The operator
+    must capture it before navigating away; the server keeps only the
+    bcrypt hash. The CLI tool (``reset_admin.py``) writes the same value
+    to a 0600 file for headless operations; the HTTP path returns it
+    inline so the console can display and copy it.
+    """
+
+    email: str
+    new_password: str
+
+
+@router.post("/users/{user_id}/reset-password", response_model=ResetPasswordResponse)
+async def reset_user_password(user_id: str, request: Request) -> ResetPasswordResponse:
+    """Generate a fresh password for a user, sign them out everywhere.
+
+    Every call bumps ``token_version`` (invalidating every existing JWT for
+    the user), rotates the bcrypt hash, and marks ``needs_setup=True`` so
+    the next login forces the user through the change-password flow.
+
+    The new plaintext is returned **once** in the response body. The bytes
+    never touch the DB (only the bcrypt hash) and never touch the audit
+    log. The action is `reset-password` on the trail so the operator's
+    identity is recorded.
+    """
+    from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+    from app.gateway.auth.reset_admin import reset_user_password as _reset
+    from deerflow.persistence.engine import get_session_factory
+
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    user = await provider.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    sf = get_session_factory()
+    if sf is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Persistence not available")
+
+    result = await _reset(SQLiteUserRepository(sf), user.email)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Could not reset password")
+
+    user_email, new_password = result
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="reset-password",
+        target_user_id=user_id,
+        payload={"needs_setup": True},
+        request=request,
+    )
+    return ResetPasswordResponse(email=user_email, new_password=new_password)
+
+
+@router.post("/users/{user_id}/revoke-sessions", response_model=MessageResponse)
+async def revoke_user_sessions(user_id: str, request: Request) -> MessageResponse:
+    """Sign a user out everywhere without changing the password.
+
+    Bumps ``token_version`` so every existing JWT for the user is rejected
+    on the next request. The user keeps their password and can log in
+    again with the next session cookie. Use ``reset-password`` when the
+    goal is to lock them out AND rotate the secret.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    user = await provider.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.token_version += 1
+    await provider.update_user(user)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="revoke-sessions",
+        target_user_id=user_id,
+        payload={"token_version": user.token_version},
+        request=request,
+    )
+    return MessageResponse(message="All sessions revoked")
+
+
+@router.post("/users/{user_id}/forbid", response_model=MessageResponse)
+async def forbid_user(user_id: str, request: Request) -> MessageResponse:
+    """Ban a user: reject login at the middleware without deleting the row.
+
+    The AuthMiddleware checks ``is_forbidden`` before any password / OAuth
+    path runs, so the user's next login attempt returns 403. The user
+    keeps their data so the operator can audit, then ``unforbid`` to
+    restore access. Admins can still reach the user via the ops console
+    because admin operations authenticate via the ops service token
+    (synthetic admin user), bypassing the session branch.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    user = await provider.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.is_forbidden:
+        return MessageResponse(message="User is already forbidden")
+    user.is_forbidden = True
+    user.token_version += 1  # sign them out everywhere too
+    await provider.update_user(user)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="forbid-user",
+        target_user_id=user_id,
+        payload={"also_revoked_sessions": True},
+        request=request,
+    )
+    return MessageResponse(message="User forbidden")
+
+
+@router.post("/users/{user_id}/unforbid", response_model=MessageResponse)
+async def unforbid_user(user_id: str, request: Request) -> MessageResponse:
+    """Reverse :func:`forbid_user`. The user can log in again."""
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    user = await provider.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not user.is_forbidden:
+        return MessageResponse(message="User is not forbidden")
+    user.is_forbidden = False
+    await provider.update_user(user)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="unforbid-user",
+        target_user_id=user_id,
+        payload={},
+        request=request,
+    )
+    return MessageResponse(message="User restored")
+
+
+class UserSessionEvent(BaseModel):
+    """One auth event in a user's session history."""
+
+    id: str
+    action: str
+    actor: str
+    payload: dict
+    actor_ip: str | None = None
+    actor_user_agent: str | None = None
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def _ser(self, value: datetime) -> datetime:
+        return admin_ops.utc(value)
+
+
+class UserSessionsResponse(BaseModel):
+    data: list[UserSessionEvent]
+
+
+@router.get("/users/{user_id}/sessions", response_model=UserSessionsResponse)
+async def user_sessions(
+    user_id: str,
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+) -> UserSessionsResponse:
+    """Auth history for a user from the audit trail.
+
+    Surface a chronological list of (login, logout, change-password,
+    update-email, failed-login, reset-password, revoke-sessions) for one
+    user, newest first. Built from ``admin_ops.user_auth_history`` which
+    joins the audit table on ``target_user_id`` and the actor's email.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    rows = await admin_ops.user_auth_history(user_id=user_id, limit=limit)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-sessions",
+        target_user_id=user_id,
+        payload={"limit": limit, "rows": len(rows)},
+        request=request,
+    )
+    return UserSessionsResponse(data=[UserSessionEvent(**row) for row in rows])
+
+
+# ── God-mode BYOK (Bring-Your-Own-Key) management ───────────────────────
+
+
+class ByokAdminResponse(BaseModel):
+    """One user's BYOK state, as visible to an admin."""
+
+    enabled: bool
+    has_key: bool
+    provider: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @field_serializer("created_at", "updated_at")
+    def _ser(self, value: datetime | None) -> datetime | None:
+        return admin_ops.utc(value)
+
+
+@router.get("/users/{user_id}/byok", response_model=ByokAdminResponse)
+async def user_byok_status(user_id: str, request: Request) -> ByokAdminResponse:
+    """Read a user's BYOK state. Admin only.
+
+    The encrypted key is never returned; only the metadata (provider,
+    timestamps, "have a key" boolean).
+    """
+    from app.gateway import byok
+
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if not byok.byok_enabled():
+        return ByokAdminResponse(enabled=False, has_key=False)
+
+    row = await byok.get_key_row(user_id)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-user-byok",
+        target_user_id=user_id,
+        payload={"has_key": row is not None},
+        request=request,
+    )
+    return ByokAdminResponse(
+        enabled=True,
+        has_key=row is not None,
+        provider=row.provider if row is not None else None,
+        created_at=row.created_at if row is not None else None,
+        updated_at=row.updated_at if row is not None else None,
+    )
+
+
+@router.delete("/users/{user_id}/byok", response_model=MessageResponse)
+async def revoke_user_byok(user_id: str, request: Request) -> MessageResponse:
+    """Wipe a user's stored BYOK key. Admin only.
+
+    The user can re-upload a new key via the self-service route; until
+    they do, requests that need the key will fail. The action is audited
+    so the operator's identity is on the trail.
+    """
+    from app.gateway import byok
+
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    await byok.clear_user_key(user_id)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="revoke-user-byok",
+        target_user_id=user_id,
+        payload={},
+        request=request,
+    )
+    return MessageResponse(message="BYOK key revoked")

@@ -1,7 +1,7 @@
 """Local email/password authentication provider."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.gateway.auth.models import User
 from app.gateway.auth.password import hash_password_async, needs_rehash, verify_password_async
@@ -29,7 +29,10 @@ class LocalAuthProvider(AuthProvider):
             credentials: dict with 'email' and 'password' keys
 
         Returns:
-            User if authentication succeeds, None otherwise
+            User if authentication succeeds, None otherwise.
+            ``None`` is also returned for accounts with ``is_forbidden=True``
+            so the operator toggle blocks the user before the password
+            check has a chance to log a useful failure message.
         """
         email = credentials.get("email")
         password = credentials.get("password")
@@ -39,6 +42,12 @@ class LocalAuthProvider(AuthProvider):
 
         user = await self._repo.get_user_by_email(email)
         if user is None:
+            return None
+
+        if user.is_forbidden:
+            # Operator-banned account. Return None so the public-facing
+            # response is identical to "wrong password" — never leak the
+            # existence of a banned account to a probing attacker.
             return None
 
         if user.password_hash is None:
@@ -56,6 +65,15 @@ class LocalAuthProvider(AuthProvider):
                 # Rehash is an opportunistic upgrade; a transient DB error must not
                 # prevent an otherwise-valid login from succeeding.
                 logger.warning("Failed to rehash password for user %s; login will still succeed", user.email, exc_info=True)
+
+        # Stamp the wall-clock moment of this successful login. Best-effort:
+        # a transient write failure must not block the authenticated response.
+        # The Overview "recent signups" panel uses this to surface "last seen".
+        try:
+            user.last_sign_in_at = datetime.now(UTC)
+            await self._repo.update_user(user)
+        except Exception:
+            logger.warning("Failed to stamp last_sign_in_at for user %s; login will still succeed", user.email, exc_info=True)
 
         return user
 

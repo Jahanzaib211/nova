@@ -2,18 +2,19 @@
 
 import asyncio
 import logging
-import os
 import time
-from ipaddress import ip_address, ip_network
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.gateway import admin_ops
 from app.gateway.auth import (
     UserResponse,
     create_access_token,
 )
+from app.gateway.auth.client_meta import get_client_ip
 from app.gateway.auth.config import get_auth_config
 from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
 from app.gateway.csrf_middleware import is_secure_request
@@ -181,67 +182,6 @@ _LOCKOUT_SECONDS = 300  # 5 minutes
 _login_attempts: dict[str, tuple[int, float]] = {}
 
 
-def _trusted_proxies() -> list:
-    """Parse ``AUTH_TRUSTED_PROXIES`` env var into a list of ip_network objects.
-
-    Comma-separated CIDR or single-IP entries. Empty / unset = no proxy is
-    trusted (direct mode). Invalid entries are skipped with a logger warning.
-    Read live so env-var overrides take effect immediately and tests can
-    ``monkeypatch.setenv`` without poking a module-level cache.
-    """
-    raw = os.getenv("AUTH_TRUSTED_PROXIES", "").strip()
-    if not raw:
-        return []
-    nets = []
-    for entry in raw.split(","):
-        entry = entry.strip()
-        if not entry:
-            continue
-        try:
-            nets.append(ip_network(entry, strict=False))
-        except ValueError:
-            logger.warning("AUTH_TRUSTED_PROXIES: ignoring invalid entry %r", entry)
-    return nets
-
-
-def _get_client_ip(request: Request) -> str:
-    """Extract the real client IP for rate limiting.
-
-    Trust model:
-
-    - The TCP peer (``request.client.host``) is always the baseline. It is
-      whatever the kernel reports as the connecting socket — unforgeable
-      by the client itself.
-    - ``X-Real-IP`` is **only** honored if the TCP peer is in the
-      ``AUTH_TRUSTED_PROXIES`` allowlist (set via env var, comma-separated
-      CIDR or single IPs). When set, the gateway is assumed to be behind a
-      reverse proxy (nginx, Cloudflare, ALB, …) that overwrites
-      ``X-Real-IP`` with the original client address.
-    - With no ``AUTH_TRUSTED_PROXIES`` set, ``X-Real-IP`` is silently
-      ignored — closing the bypass where any client could rotate the
-      header to dodge per-IP rate limits in dev / direct-gateway mode.
-
-    ``X-Forwarded-For`` is intentionally NOT used because it is naturally
-    client-controlled at the *first* hop and the trust chain is harder to
-    audit per-request.
-    """
-    peer_host = request.client.host if request.client else None
-
-    trusted = _trusted_proxies()
-    if trusted and peer_host:
-        try:
-            peer_ip = ip_address(peer_host)
-            if any(peer_ip in net for net in trusted):
-                real_ip = request.headers.get("x-real-ip", "").strip()
-                if real_ip:
-                    return real_ip
-        except ValueError:
-            # peer_host wasn't a parseable IP (e.g. "unknown") — fall through
-            pass
-
-    return peer_host or "unknown"
-
-
 def _check_rate_limit(ip: str) -> None:
     """Raise 429 if the IP is currently locked out."""
     record = _login_attempts.get(ip)
@@ -299,13 +239,36 @@ async def login_local(
     form_data: OAuth2PasswordRequestForm = Depends(),
 ):
     """Local email/password login."""
-    client_ip = _get_client_ip(request)
+    client_ip = get_client_ip(request)
     _check_rate_limit(client_ip)
 
     user = await get_local_provider().authenticate({"email": form_data.username, "password": form_data.password})
 
     if user is None:
         _record_login_failure(client_ip)
+        # Audit failed logins so brute-force attempts are visible. We capture
+        # only the submitted email (not the supplied password) and the IP.
+        await admin_ops.record_audit(
+            actor=form_data.username or "unknown",
+            action="failed-login",
+            target_user_id=None,
+            payload={"email": form_data.username, "ip": client_ip},
+            request=request,
+        )
+        # Distinguish "forbidden" from "wrong password" so the operator's
+        # user-detail view can show what's happening. The local provider
+        # returns None for both; we re-query only the email column to
+        # decide whether to surface 403 vs 401.
+        provider = get_local_provider()
+        existing = await provider.get_user_by_email(form_data.username)
+        if existing is not None and existing.is_forbidden:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=AuthErrorResponse(
+                    code=AuthErrorCode.NOT_AUTHENTICATED,
+                    message="Account is forbidden. Contact support.",
+                ).model_dump(),
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=AuthErrorResponse(code=AuthErrorCode.INVALID_CREDENTIALS, message="Incorrect email or password").model_dump(),
@@ -314,6 +277,14 @@ async def login_local(
     _record_login_success(client_ip)
     token = create_access_token(str(user.id), token_version=user.token_version)
     _set_session_cookie(response, token, request)
+
+    await admin_ops.record_audit(
+        actor=user.email,
+        action="login",
+        target_user_id=str(user.id),
+        payload={"needs_setup": user.needs_setup, "ip": client_ip},
+        request=request,
+    )
 
     return LoginResponse(
         expires_in=get_auth_config().token_expiry_days * 24 * 3600,
@@ -375,13 +346,31 @@ async def register(request: Request, response: Response, body: RegisterRequest):
     token = create_access_token(str(user.id), token_version=user.token_version)
     _set_session_cookie(response, token, request)
 
+    await admin_ops.record_audit(
+        actor=user.email,
+        action="register",
+        target_user_id=str(user.id),
+        payload={"referred_by": user.referred_by, "accepted_terms": bool(body.accepted_terms)},
+        request=request,
+    )
+
     return UserResponse(id=str(user.id), email=user.email, system_role=user.system_role)
 
 
 @router.post("/logout", response_model=MessageResponse)
 async def logout(request: Request, response: Response):
     """Logout current user by clearing the cookie."""
+    actor = getattr(request.state, "user", None)
+    actor_email = getattr(actor, "email", None) or "unknown" if actor else "anonymous"
     response.delete_cookie(key="access_token", secure=is_secure_request(request), samesite="lax")
+    if actor is not None:
+        await admin_ops.record_audit(
+            actor=actor_email,
+            action="logout",
+            target_user_id=str(getattr(actor, "id", None) or ""),
+            payload={},
+            request=request,
+        )
     return MessageResponse(message="Successfully logged out")
 
 
@@ -438,6 +427,14 @@ async def change_password(request: Request, response: Response, body: ChangePass
     token = create_access_token(str(user.id), token_version=user.token_version)
     _set_session_cookie(response, token, request)
 
+    await admin_ops.record_audit(
+        actor=user.email,
+        action="change-password",
+        target_user_id=str(user.id),
+        payload={"also_change_email": bool(body.new_email)},
+        request=request,
+    )
+
     return MessageResponse(message="Password changed successfully")
 
 
@@ -493,6 +490,14 @@ async def update_email(request: Request, response: Response, body: UpdateEmailRe
         token = create_access_token(str(user.id), token_version=user.token_version)
         _set_session_cookie(response, token, request)
 
+        await admin_ops.record_audit(
+            actor=user.email,
+            action="update-email",
+            target_user_id=str(user.id),
+            payload={"new_email": body.new_email},
+            request=request,
+        )
+
     return UserResponse(
         id=str(user.id),
         email=user.email,
@@ -535,7 +540,7 @@ _SETUP_STATUS_INFLIGHT_GUARD = asyncio.Lock()
 @router.get("/setup-status")
 async def setup_status(request: Request):
     """Check if an admin account exists. Returns needs_setup=True when no admin exists."""
-    client_ip = _get_client_ip(request)
+    client_ip = get_client_ip(request)
     now = time.time()
 
     # Return cached result when within TTL — avoids 429 on multi-tab reconnection.
@@ -626,5 +631,13 @@ async def initialize_admin(request: Request, response: Response, body: Initializ
 
     token = create_access_token(str(user.id), token_version=user.token_version)
     _set_session_cookie(response, token, request)
+
+    await admin_ops.record_audit(
+        actor=user.email,
+        action="initialize",
+        target_user_id=str(user.id),
+        payload={"first_admin": True},
+        request=request,
+    )
 
     return UserResponse(id=str(user.id), email=user.email, system_role=user.system_role)

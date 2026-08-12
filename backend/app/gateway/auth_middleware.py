@@ -17,6 +17,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp
 
 from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
+from app.gateway.auth.client_meta import get_client_ip, get_client_user_agent
 from app.gateway.auth_disabled import (
     AUTH_SOURCE_AUTH_DISABLED,
     AUTH_SOURCE_INTERNAL,
@@ -88,6 +89,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Always stamp originator metadata first, regardless of auth outcome.
+        # Public-path requests still produce audit rows when their handlers
+        # record them (e.g. login attempts that fail), so the metadata
+        # has to be present on every request that reaches a route handler.
+        request.state.actor_ip = get_client_ip(request)
+        request.state.actor_user_agent = get_client_user_agent(request)
+
         if _is_public(request.url.path):
             return await call_next(request)
 
@@ -143,6 +151,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     "detail": AuthErrorResponse(
                         code=AuthErrorCode.NOT_AUTHENTICATED,
                         message="Authentication required",
+                    ).model_dump()
+                },
+            )
+
+        # Operator "forbid" toggle: reject banned users before any password
+        # check runs. The user is null + token_version is bumped, so even
+        # an existing JWT will fail on its next request. The admin can
+        # still reach the user via the ops console because admin operations
+        # authenticate via the ops service token (synthetic admin user),
+        # bypassing this branch.
+        if (
+            auth_source == AUTH_SOURCE_SESSION
+            and getattr(user, "is_forbidden", False)
+        ):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "detail": AuthErrorResponse(
+                        code=AuthErrorCode.NOT_AUTHENTICATED,
+                        message="Account is forbidden. Contact support.",
                     ).model_dump()
                 },
             )

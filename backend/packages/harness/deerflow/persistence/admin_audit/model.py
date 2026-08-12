@@ -34,6 +34,12 @@ class AdminAuditRow(Base):
     # Action parameters (plan chosen, tokens granted, limit value, ...).
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
+    # Network origin of the operator. Populated by AuthMiddleware from the
+    # same trust chain AuthMiddleware applies to login rate limits. Nullable
+    # for backwards compatibility with rows written before the migration.
+    actor_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -256,9 +256,13 @@ def test_audit_filterable_by_target_user(app):
     admin.request("POST", "/api/v1/admin/reset-all-usage", headers=_csrf(admin))
 
     scoped = admin.get("/api/v1/admin/audit", params={"target_user_id": uid_a}).json()
-    assert scoped["total"] == 1
-    assert scoped["data"][0]["action"] == "reset-usage"
-    assert scoped["data"][0]["target_user_id"] == uid_a
+    # The reset-usage row is the only mutating action on uid_a. The
+    # remaining "view-audit" row stamped by the line above carries the
+    # same target_user_id (the filter value), so the count is 2.
+    assert scoped["total"] == 2
+    actions = {row["action"] for row in scoped["data"]}
+    assert "reset-usage" in actions
+    assert all(row["target_user_id"] == uid_a for row in scoped["data"])
 
     unscoped = admin.get("/api/v1/admin/audit").json()
     assert unscoped["total"] >= 3
@@ -281,6 +285,54 @@ def test_activity_feed_lists_runs(app):
     admin = _admin_client(app)
     feed = admin.get("/api/v1/admin/activity").json()["data"]
     assert any(r["run_id"] == "rx" and r["email"] == "runner@example.com" for r in feed)
+
+
+def _utc_offset_seconds(iso: str) -> int:
+    """Parse an ISO string and return its UTC offset in seconds.
+
+    Browsers parse an offset-less ISO datetime as *local* time, so every
+    timestamp the ops console renders would drift by the viewer's offset.
+    The admin API must emit tz-aware UTC. Accept both ``Z`` and ``+00:00``.
+    """
+    from datetime import datetime, timezone
+
+    assert isinstance(iso, str) and iso, f"expected a non-empty ISO string, got {iso!r}"
+    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    assert dt.tzinfo is not None, f"created_at must be tz-aware, got {iso!r}"
+    return dt.utcoffset().total_seconds()
+
+
+def test_admin_timestamps_are_tz_aware_utc(app):
+    """Regression: naive UTC datetimes must never reach the console.
+
+    SQLite ``DateTime(timezone=True)`` columns come back naive; before the
+    fix Pydantic serialized them offset-less and the browser reinterpreted
+    them as local time. Every admin surface must emit ``+00:00``/``Z``.
+    """
+    from datetime import UTC, datetime
+
+    uid = _register_get_id(app, "tz@example.com")
+    # Store naive UTC to simulate the SQLite round-trip that strips tzinfo.
+    _insert_run(app, run_id="tz-run", user_id=uid, tokens=100, when=datetime(2026, 8, 11, 16, 38, 13))
+    admin = _admin_client(app)
+
+    users = admin.get("/api/v1/admin/users").json()["data"]
+    row = next(u for u in users if u["email"] == "tz@example.com")
+    assert _utc_offset_seconds(row["created_at"]) == 0
+
+    detail = admin.get(f"/api/v1/admin/users/{uid}").json()
+    assert _utc_offset_seconds(detail["created_at"]) == 0
+    assert detail["credit_usage_reset_at"] is None
+    assert _utc_offset_seconds(detail["recent_runs"][0]["created_at"]) == 0
+
+    feed = admin.get("/api/v1/admin/activity").json()["data"]
+    assert _utc_offset_seconds(feed[0]["created_at"]) == 0
+
+    # Trigger an audited action so the trail has a row to inspect.
+    admin.request("POST", f"/api/v1/admin/users/{uid}/reset-usage", headers=_csrf(admin))
+    audit = admin.get("/api/v1/admin/audit").json()["data"]
+    assert audit, "expected at least one audit row after reset-usage"
+    assert _utc_offset_seconds(audit[0]["created_at"]) == 0
 
 
 def test_controls_forbidden_for_regular_user(app):

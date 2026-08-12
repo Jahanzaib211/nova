@@ -16,6 +16,7 @@ from app.channels.runtime_config_store import (
     apply_runtime_connection_config,
     merge_runtime_channel_configs,
 )
+from app.gateway import admin_ops
 from app.gateway.deps import require_admin_user
 from deerflow.config.channel_connections_config import ChannelConnectionsConfig
 from deerflow.persistence.channel_connections import ChannelConnectionRepository
@@ -28,6 +29,12 @@ _STATE_TTL_SECONDS = 600
 _MAX_PENDING_CONNECT_CODES_PER_PROVIDER = 5
 _MASKED_CREDENTIAL_VALUE = "********"
 _ADMIN_REQUIRED_DETAIL = "Admin privileges required to manage channel runtime credentials."
+
+
+def _actor(request: Request) -> str:
+    """Audit actor: the admin's email, or 'ops-console' for token calls."""
+    user = getattr(request.state, "user", None)
+    return getattr(user, "email", None) or getattr(user, "id", None) or "unknown"
 
 
 class ChannelCredentialFieldResponse(BaseModel):
@@ -598,6 +605,14 @@ async def disconnect_channel_provider_runtime(provider: str, request: Request) -
     live_channels_config.pop(provider, None)
     request.app.state.channels_config = live_channels_config
 
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="deconfigure-channel-runtime",
+        target_user_id=None,
+        payload={"provider": provider},
+        request=request,
+    )
+
     return _provider_response(config, live_channels_config, provider, _PROVIDER_META[provider])
 
 
@@ -684,5 +699,13 @@ async def configure_channel_provider_runtime(
     live_channels_config = await _get_channels_config(request)
     live_channels_config[provider] = runtime_config
     request.app.state.channels_config = live_channels_config
+
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="configure-channel-runtime",
+        target_user_id=None,
+        payload={"provider": provider, "keys": sorted(values.keys())},
+        request=request,
+    )
 
     return _provider_response(config, live_channels_config, provider, _PROVIDER_META[provider])

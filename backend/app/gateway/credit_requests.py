@@ -13,6 +13,7 @@ from uuid import uuid4
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.gateway.admin_ops import utc
 from deerflow.persistence.credit_request.model import CreditRequestRow
 from deerflow.persistence.engine import get_session_factory
 
@@ -25,8 +26,8 @@ def _row_to_dict(r: CreditRequestRow) -> dict:
         "reason": r.reason,
         "requested_tokens": r.requested_tokens,
         "status": r.status,
-        "created_at": r.created_at,
-        "resolved_at": r.resolved_at,
+        "created_at": utc(r.created_at),
+        "resolved_at": utc(r.resolved_at),
         "resolved_by": r.resolved_by,
     }
 
