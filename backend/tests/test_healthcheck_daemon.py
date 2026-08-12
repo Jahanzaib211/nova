@@ -163,6 +163,152 @@ class TestDispatchFixes:
 
 
 # ---------------------------------------------------------------------------
+# Repair circuit breaker
+#
+# Regression cover for 2026-08-12: a repair that could never succeed (pm2 app
+# "deerflow" did not exist; ~/Desktop/dify and ~/Desktop/llama-bridge were
+# gone) was retried every cycle forever, spawning ~281 subprocesses/minute
+# until the machine exhausted RAM + swap and froze.
+# ---------------------------------------------------------------------------
+
+
+class TestFixCircuitBreaker:
+    def _red_cycle(self, state, probe="P11_dify"):
+        state.cycle_id += 1
+        report = healthcheck.CycleReport(
+            cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0
+        )
+        report.add(healthcheck.ProbeResult(probe, healthcheck.Status.RED, "down", 1.0))
+        healthcheck.dispatch_fixes(report, state)
+        return report
+
+    def test_failing_repair_backs_off_instead_of_retrying_every_cycle(
+        self, monkeypatch
+    ):
+        attempts: list[int] = []
+        monkeypatch.setattr(
+            healthcheck, "fix_dify", lambda: attempts.append(1) or False
+        )
+
+        state = healthcheck.WatchdogState()
+        for _ in range(12):
+            self._red_cycle(state)
+
+        # Without backoff this would be 11 attempts (every cycle after the
+        # first). Backoff is exponential, so it must be far fewer.
+        assert len(attempts) < 6, f"repair retried too eagerly: {len(attempts)}"
+        assert state.fix_failures["P11_dify"] == len(attempts)
+
+    def test_circuit_opens_after_repeated_failures_and_stops_all_attempts(
+        self, monkeypatch
+    ):
+        attempts: list[int] = []
+        monkeypatch.setattr(
+            healthcheck, "fix_dify", lambda: attempts.append(1) or False
+        )
+
+        state = healthcheck.WatchdogState()
+        for _ in range(400):
+            self._red_cycle(state)
+
+        assert "P11_dify" in state.fix_circuit_open
+        assert len(attempts) == healthcheck.FIX_FAILURE_LIMIT
+        # Once open, further cycles must not spawn a single extra attempt.
+        before = len(attempts)
+        for _ in range(50):
+            self._red_cycle(state)
+        assert len(attempts) == before
+
+    def test_recovery_closes_the_circuit(self, monkeypatch):
+        monkeypatch.setattr(healthcheck, "fix_dify", lambda: False)
+
+        state = healthcheck.WatchdogState()
+        for _ in range(400):
+            self._red_cycle(state)
+        assert "P11_dify" in state.fix_circuit_open
+
+        # Probe goes GREEN on its own -> breaker resets, repairs re-armed.
+        state.cycle_id += 1
+        report = healthcheck.CycleReport(
+            cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0
+        )
+        report.add(healthcheck.ProbeResult("P11_dify", healthcheck.Status.GREEN, "ok", 1.0))
+        healthcheck.dispatch_fixes(report, state)
+
+        assert "P11_dify" not in state.fix_circuit_open
+        assert "P11_dify" not in state.fix_failures
+
+        attempts: list[int] = []
+        monkeypatch.setattr(
+            healthcheck, "fix_dify", lambda: attempts.append(1) or True
+        )
+        for _ in range(2):
+            self._red_cycle(state)
+        assert attempts == [1]
+
+    def test_successful_repair_leaves_breaker_clean(self, monkeypatch):
+        monkeypatch.setattr(healthcheck, "fix_dify", lambda: True)
+        state = healthcheck.WatchdogState()
+        for _ in range(5):
+            self._red_cycle(state)
+        assert state.fix_failures.get("P11_dify", 0) == 0
+        assert "P11_dify" not in state.fix_circuit_open
+
+
+class TestDisabledProbes:
+    def test_empty_by_default(self, monkeypatch):
+        monkeypatch.delenv("HEALTHCHECK_DISABLED_PROBES", raising=False)
+        assert healthcheck.disabled_probes() == set()
+
+    def test_parses_and_strips_names(self, monkeypatch):
+        monkeypatch.setenv(
+            "HEALTHCHECK_DISABLED_PROBES", " P9_bridge , P11_dify ,, P12_tunnel "
+        )
+        assert healthcheck.disabled_probes() == {"P9_bridge", "P11_dify", "P12_tunnel"}
+
+    @pytest.mark.asyncio
+    async def test_disabled_probes_are_not_run(self, monkeypatch):
+        ran: list[str] = []
+
+        async def fake_green(*args, **kwargs):
+            return healthcheck.ProbeResult(
+                "mock", healthcheck.Status.GREEN, "mock-ok", 1.0
+            )
+
+        for name in [
+            "probe_nginx",
+            "probe_gateway",
+            "probe_frontend",
+            "probe_local_llm_gateway",
+            "probe_llama_loopback",
+            "probe_llama_vram",
+            "probe_containers",
+            "probe_binary_attestation",
+            "probe_litellm",
+        ]:
+            monkeypatch.setattr(healthcheck, name, fake_green)
+
+        # These three must never be invoked at all — not merely ignored.
+        for name in ["probe_llama_bridge", "probe_dify", "probe_tunnel"]:
+            async def spy(*args, _n=name, **kwargs):
+                ran.append(_n)
+                return await fake_green()
+
+            monkeypatch.setattr(healthcheck, name, spy)
+
+        monkeypatch.setenv(
+            "HEALTHCHECK_DISABLED_PROBES", "P9_bridge,P11_dify,P12_tunnel"
+        )
+        report = await healthcheck.run_cycle(healthcheck.WatchdogState())
+
+        assert ran == []
+        assert len(report.probes) == 9
+        assert {p.name for p in report.probes}.isdisjoint(
+            {"P9_bridge", "P11_dify", "P12_tunnel"}
+        )
+
+
+# ---------------------------------------------------------------------------
 # fix_binary_attestation behavior (no real systemd needed)
 # ---------------------------------------------------------------------------
 

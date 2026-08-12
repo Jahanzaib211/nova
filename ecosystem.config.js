@@ -7,7 +7,21 @@
 // `pm2 restart` and per-thread sandbox containers fail to start.
 //
 // To (re-)register after editing (restarts the whole stack — do when idle):
-//   pm2 delete deerflow && pm2 start ecosystem.config.js --only deerflow && pm2 save
+//   pm2 delete nova && pm2 start ecosystem.config.js --only nova && pm2 save
+//
+// 2026-08-13 — removed four apps that could never start. nova-healthcheck
+// diffs this file against the live pm2 list and tries to "heal" anything
+// missing, so every unstartable entry here became an infinite repair loop
+// (~281 failed auto-fix actions/minute, each spawning a fresh Node process)
+// that exhausted RAM + swap and froze the machine on 2026-08-12:
+//   llama-bridge-disabled — script ~/Desktop/llama-bridge/ does not exist
+//   nova-dify             — script ~/Desktop/dify/ does not exist
+//   nova-tunnel           — wraps cloudflared-nova.service, which is not
+//                           installed; nova.alilabsx.com is served by the
+//                           `tunnel-nova` pm2 app instead
+//   nova-monitoring       — Grafana/Prometheus/Loki duplicate the k3s
+//                           monitoring namespace; none were running
+// Anything added back here MUST be startable, or it becomes a repair loop.
 module.exports = {
   apps: [
     {
@@ -36,24 +50,6 @@ module.exports = {
       kill_timeout: 10000,
     },
     {
-      // Exposes llama-server (127.0.0.1:8081) on the docker bridge IP
-      // (172.17.0.1:8081) so Nova's container can reach it via
-      // `host.docker.internal:8081`. Honors the project's "never bind to
-      // 0.0.0.0" rule — only the bridge IP, not LAN. Started before
-      // `deerflow` so it's already accepting connections when the gateway
-      // boots; ECONNREFUSED on first client is naturally retried by the
-      // bridge's per-connection forward.
-      name: "llama-bridge-disabled",
-      script: process.env.LOCAL_LLM_BRIDGE_SCRIPT || "/home/jahanzaib/Desktop/llama-bridge/llama_bridge.py",
-      interpreter: "none",
-      autorestart: false,
-      max_restarts: 3,
-      restart_delay: 5000,
-      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/llama-bridge-out.log")}`,
-      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/llama-bridge-error.log")}`,
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-    },
-    {
       // LiteLLM proxy — Nova's unified OpenAI-compatible model gateway.
       // Routes to the Ollama daemon (127.0.0.1:11434) and its free cloud
       // models; add more providers in docker/litellm/config.yaml. Bound to
@@ -70,24 +66,6 @@ module.exports = {
       kill_timeout: 8000,
       out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-litellm-out.log")}`,
       error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-litellm-error.log")}`,
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-    },
-    {
-      // Dify stack (fork: Jahanzaib211/dify at ~/Desktop/dify) — same
-      // foreground-compose pattern as the deerflow app so PM2 owns the
-      // lifecycle and reboots bring it back. UI at 127.0.0.1:8088; its
-      // api/worker/plugin_daemon reach the nova-litellm proxy via
-      // host.docker.internal:4000 (see dify/docker/docker-compose.override.yaml).
-      name: "nova-dify",
-      script: `${require("path").resolve(require("os").homedir(), "Desktop/dify/docker/pm2-dify.sh")}`,
-      interpreter: "none",
-      cwd: `${require("path").resolve(require("os").homedir(), "Desktop/dify/docker")}`,
-      autorestart: true,
-      max_restarts: 10,
-      restart_delay: 5000,
-      kill_timeout: 30000,
-      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-dify-out.log")}`,
-      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-dify-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
@@ -120,6 +98,17 @@ module.exports = {
         LITELLM_PORT: "4000",
         DIFY_HOST: "127.0.0.1",
         DIFY_PORT: "8088",
+        // Probes for services that have been retired. Left enabled they sit
+        // RED forever, which both trains the operator to ignore this
+        // dashboard and — before the repair circuit breaker existed — drove
+        // an endless auto-fix retry storm:
+        //   P9_bridge  — llama-bridge; ~/Desktop/llama-bridge does not exist
+        //   P11_dify   — nova-dify;    ~/Desktop/dify does not exist
+        //   P12_tunnel — cloudflared-nova.service is not installed; the
+        //                public hostname is served by the `tunnel-nova` pm2
+        //                app via ~/.cloudflared/nova-config.yml instead
+        // Re-enable by removing a name here once the service is back.
+        HEALTHCHECK_DISABLED_PROBES: "P9_bridge,P11_dify,P12_tunnel",
         // Binary-attestation probe — left unset by default. To enable:
         //   WATCHDOG_ATTESTATION_BINARY_PATH=/path/to/binary
         //   WATCHDOG_ATTESTATION_CONSTITUTION_PATH=/path/to/constitution
@@ -127,56 +116,6 @@ module.exports = {
         //   WATCHDOG_ATTESTATION_RESTART_CMD="sudo systemctl restart my-svc"
         HEALTHCHECK_CYCLE_DEADLINE_SEC: "60",
       },
-    },
-    {
-      // Cloudflare Tunnel — public hostname nova.alilabsx.com → Nova
-      // gateway on localhost:2026. The tunnel itself is owned by systemd
-      // (cloudflared-nova.service) for boot persistence; this PM2 entry
-      // is the observability wrapper — tails journald into PM2 logs and
-      // emits a 30s heartbeat that the watchdog's P12_tunnel probe reads.
-      //
-      // If the systemd unit dies, the wrapper exits and PM2 restarts us,
-      // which re-nudges `systemctl start cloudflared-nova.service`. Both
-      // layers independently auto-recover — see
-      // scripts/pm2-cloudflared-nova.sh for the exact sequence.
-      name: "nova-tunnel",
-      script: `${require("path").resolve(__dirname, "scripts/pm2-cloudflared-nova.sh")}`,
-      interpreter: "none",
-      cwd: __dirname,
-      autorestart: true,
-      // systemd does the real work; this wrapper is just a tail. Cap
-      // restarts so we don't loop forever if systemd is broken.
-      max_restarts: 10,
-      restart_delay: 10000,
-      kill_timeout: 5000,
-      out_file: "/var/log/cloudflared/nova-out.log",
-      error_file: "/var/log/cloudflared/nova-error.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-    },
-    {
-      // Nova observability stack — Grafana + Prometheus + Loki + Alloy +
-      // blackbox + node_exporter + cadvisor + Uptime Kuma.
-      //
-      // Foreground docker compose so PM2 owns the lifecycle and reboots
-      // bring the whole stack back. All services loopback-only (127.0.0.1).
-      //
-      // To (re-)register after editing:
-      //   pm2 delete nova-monitoring && pm2 start ecosystem.config.js --only nova-monitoring && pm2 save
-      name: "nova-monitoring",
-      script: `${require("path").resolve(__dirname, "scripts/pm2-monitoring.sh")}`,
-      interpreter: "none",
-      cwd: __dirname,
-      env: {
-        DEER_FLOW_ROOT: __dirname,
-      },
-      autorestart: true,
-      max_restarts: 10,
-      restart_delay: 5000,
-      exp_backoff_restart_delay: 60,
-      kill_timeout: 15000,
-      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-monitoring-out.log")}`,
-      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-monitoring-error.log")}`,
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
   ],
 };
