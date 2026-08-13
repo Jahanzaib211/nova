@@ -180,6 +180,97 @@ async def recent_users(
     )
 
 
+# ── Users studio (ranked view of the whole user base) ──────────────────
+
+
+class StudioUserEntry(BaseModel):
+    """One row in the ranked users-studio table.
+
+    Composition of every per-user field the new schema exposes so the
+    panel can sort, filter, and render the bar column without a follow-up
+    request. The bar column is rendered client-side: the value is
+    normalized to the heaviest user in the current page so the bar
+    reflects the batch, not the global max.
+    """
+
+    id: str
+    email: str
+    system_role: str
+    plan: str
+    plan_status: str | None = None
+    created_at: datetime
+    last_sign_in_at: datetime | None = None
+    is_forbidden: bool = False
+    run_count: int = 0
+    lifetime_tokens: int = 0
+    recent_failed_login_count: int = 0
+
+    @field_serializer("created_at", "last_sign_in_at")
+    def _ser(self, value: datetime | None) -> datetime | None:
+        return admin_ops.utc(value)
+
+
+class StudioMetrics(BaseModel):
+    dormant_count: int
+    forbidden_count: int
+    no_run_count: int
+    active_30d: int
+    total_users: int
+
+
+class StudioResponse(BaseModel):
+    ranking: list[StudioUserEntry]
+    by_plan: dict[str, int]
+    metrics: StudioMetrics
+    total_users: int
+    limit: int
+    offset: int
+    sort: str
+
+
+@router.get("/users/studio", response_model=StudioResponse)
+async def users_studio(
+    request: Request,
+    sort: str = Query("tokens", pattern="^(tokens|activity|runs|recency|failed)$"),
+    plan: str | None = Query(None, pattern="^(free|plus|enterprise)$"),
+    limit: int = Query(25, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> StudioResponse:
+    """Ranked view of the whole user base.
+
+    Powers the ``/users/studio`` page in the operator console. The
+    existing roster endpoints return the bare list, recent signups, or
+    aggregate stats — none of them rank the whole user base by a
+    chosen metric. The studio joins ``users`` with two sub-aggregations
+    (runs and recent failed-logins) so each row carries the data the
+    ranked table needs without a follow-up request.
+
+    Default sort is ``tokens`` (lifetime, descending) because the
+    current dataset immediately surfaces the system-straining user
+    (300+ runs, 200M+ tokens) instead of a chrono-only order.
+
+    Admin only. Audited ``view-users-studio``.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    body = await admin_ops.studio_users(sort=sort, limit=limit, offset=offset, plan=plan)
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-users-studio",
+        target_user_id=None,
+        payload={"sort": sort, "limit": limit, "offset": offset, "plan": plan, "rows": len(body["ranking"])},
+        request=request,
+    )
+    return StudioResponse(
+        ranking=[StudioUserEntry(**row) for row in body["ranking"]],
+        by_plan=body["by_plan"],
+        metrics=StudioMetrics(**body["metrics"]),
+        total_users=body["total_users"],
+        limit=body["limit"],
+        offset=body["offset"],
+        sort=body["sort"],
+    )
+
+
 @router.get("/users/stats", response_model=AdminUserStats)
 async def user_stats(request: Request) -> AdminUserStats:
     """Aggregate signup metrics: total, plan breakdown, recent growth. Admin only."""

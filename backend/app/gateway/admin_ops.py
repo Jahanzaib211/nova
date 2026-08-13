@@ -7,7 +7,7 @@ shared engine) and fail closed only on a genuinely missing engine.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -250,6 +250,183 @@ async def recent_users(
             }
             for r in rows
         ]
+
+
+async def studio_users(
+    *,
+    sort: str = "tokens",
+    limit: int = 25,
+    offset: int = 0,
+    plan: str | None = None,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> dict:
+    """Ranked "users studio" view for the Overview's whole-of-user-base ranking.
+
+    The existing ``/users`` returns the bare roster; ``/users/recent``
+    returns newest signups; ``/users/stats`` returns aggregates. None of
+    them ranks the whole user base by a chosen metric. The studio is
+    the view that asks "who is generating the action on this system",
+    so it joins the user table with two aggregations:
+
+    1. ``runs`` — COUNT + SUM(total_tokens) per user. Powers the "By
+       tokens" sort and the bar visual on every row.
+    2. ``admin_audit`` filtered by ``action='failed-login'`` and the
+       last 7 days — powers the dormancy-failure signal on the
+       "Recency" sort.
+
+    A single SQL query does the work: the two aggregations are
+    sub-queries, the main ``SELECT`` joins ``users`` to both, filters
+    by plan (when supplied), and orders by the chosen column. The
+    total row count is exposed separately so the page can render a
+    paginator without a second query.
+
+    Returns a dict with:
+      - ``ranking``: list of dicts, one per user, sorted by the chosen key
+      - ``by_plan``: aggregate count per plan (free / plus / enterprise)
+      - ``metrics``: dormant_count, forbidden_count, no_run_count,
+        active_30d, total_users (each rendered as a KPI on the page)
+      - ``total_users``, ``limit``, ``offset``, ``sort``
+    """
+    sf = session_factory or get_session_factory()
+    if sf is None:
+        return {
+            "ranking": [],
+            "by_plan": {},
+            "metrics": {
+                "dormant_count": 0,
+                "forbidden_count": 0,
+                "no_run_count": 0,
+                "active_30d": 0,
+                "total_users": 0,
+            },
+            "total_users": 0,
+            "limit": limit,
+            "offset": offset,
+            "sort": sort,
+        }
+    from sqlalchemy import func as sql_func
+
+    async with sf() as session:
+        # Per-user run aggregates.
+        run_agg = (
+            select(
+                RunRow.user_id.label("user_id"),
+                sql_func.count(RunRow.run_id).label("run_count"),
+                sql_func.coalesce(sql_func.sum(RunRow.total_tokens), 0).label("lifetime_tokens"),
+            )
+            .group_by(RunRow.user_id)
+            .subquery()
+        )
+
+        # Failed-login count in the last 7 days per user (actor email matched).
+        # We aggregate by actor (email) for failed-login events and later
+        # LEFT JOIN to users by email. The asymmetry is intentional: failed-login
+        # rows are written with the submitted email in the actor column.
+        last_7d = datetime.now(UTC) - timedelta(days=7)
+        failed_agg = (
+            select(
+                AdminAuditRow.actor.label("actor"),
+                sql_func.count(AdminAuditRow.id).label("failed_count"),
+            )
+            .where(
+                AdminAuditRow.action == "failed-login",
+                AdminAuditRow.created_at >= last_7d,
+            )
+            .group_by(AdminAuditRow.actor)
+            .subquery()
+        )
+
+        # Main ranking query.
+        order_col = {
+            "tokens": run_agg.c.lifetime_tokens.desc().nulls_last(),
+            "activity": UserRow.last_sign_in_at.desc().nulls_last(),
+            "runs": run_agg.c.run_count.desc().nulls_last(),
+            "recency": UserRow.created_at.desc(),
+            "failed": failed_agg.c.failed_count.desc().nulls_last(),
+        }.get(sort, run_agg.c.lifetime_tokens.desc().nulls_last())
+
+        stmt = (
+            select(
+                UserRow.id,
+                UserRow.email,
+                UserRow.system_role,
+                UserRow.plan,
+                UserRow.plan_status,
+                UserRow.created_at,
+                UserRow.last_sign_in_at,
+                UserRow.is_forbidden,
+                run_agg.c.run_count,
+                run_agg.c.lifetime_tokens,
+                failed_agg.c.failed_count,
+            )
+            .outerjoin(run_agg, run_agg.c.user_id == UserRow.id)
+            .outerjoin(failed_agg, failed_agg.c.actor == UserRow.email)
+        )
+        if plan and plan in ("free", "plus", "enterprise"):
+            stmt = stmt.where(UserRow.plan == plan)
+        stmt = stmt.order_by(order_col).limit(limit).offset(offset)
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        # Aggregate metrics — separate small queries so the page can
+        # render KPI strips above the ranking table.
+        total_users = await session.scalar(select(sql_func.count(UserRow.id))) or 0
+        forbidden_count = await session.scalar(
+            select(sql_func.count(UserRow.id)).where(UserRow.is_forbidden == True)  # noqa: E712
+        ) or 0
+        active_30d = await session.scalar(
+            select(sql_func.count(UserRow.id)).where(
+                UserRow.last_sign_in_at >= (datetime.now(UTC) - timedelta(days=30))
+            )
+        ) or 0
+        dormant_count = await session.scalar(
+            select(sql_func.count(UserRow.id)).where(
+                UserRow.last_sign_in_at < (datetime.now(UTC) - timedelta(days=7))
+            )
+        ) or 0
+        no_run_count = await session.scalar(
+            select(sql_func.count(UserRow.id))
+            .select_from(UserRow)
+            .outerjoin(run_agg, run_agg.c.user_id == UserRow.id)
+            .where(run_agg.c.user_id.is_(None))
+        ) or 0
+        by_plan_rows = (
+            await session.execute(
+                select(UserRow.plan, sql_func.count(UserRow.id)).group_by(UserRow.plan)
+            )
+        ).all()
+        by_plan = {plan: count for plan, count in by_plan_rows}
+
+        return {
+            "ranking": [
+                {
+                    "id": r.id,
+                    "email": r.email,
+                    "system_role": r.system_role,
+                    "plan": r.plan,
+                    "plan_status": r.plan_status,
+                    "created_at": utc(r.created_at),
+                    "last_sign_in_at": utc(r.last_sign_in_at),
+                    "is_forbidden": r.is_forbidden,
+                    "run_count": int(r.run_count or 0),
+                    "lifetime_tokens": int(r.lifetime_tokens or 0),
+                    "recent_failed_login_count": int(r.failed_count or 0),
+                }
+                for r in rows
+            ],
+            "by_plan": by_plan,
+            "metrics": {
+                "dormant_count": int(dormant_count),
+                "forbidden_count": int(forbidden_count),
+                "no_run_count": int(no_run_count),
+                "active_30d": int(active_30d),
+                "total_users": int(total_users),
+            },
+            "total_users": int(total_users),
+            "limit": limit,
+            "offset": offset,
+            "sort": sort,
+        }
 
 
 async def user_auth_history(
