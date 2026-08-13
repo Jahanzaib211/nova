@@ -358,3 +358,88 @@ def test_user_byok_round_trip(app, monkeypatch):
     # The key is now gone.
     resp2 = admin.get(f"/api/v1/admin/users/{uid}/byok")
     assert resp2.json()["has_key"] is False
+
+# ── Users studio (ranked view) ──────────────────────────────────────────
+
+
+def test_studio_returns_ranked_users_and_aggregates(app):
+    from datetime import UTC, datetime
+
+    # Register a heavy user with a run, then init the admin in the same
+    # session to avoid the "already initialized" 409 the helper would
+    # raise on a second call.
+    client = TestClient(app)
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "heavy@example.com", "password": _PASSWORD},
+    )
+    uid = client.get("/api/v1/auth/me").json()["id"]
+    _insert_run(app, user_id=uid, tokens=100_000, when=datetime(2026, 8, 12, 12, 0, 0))
+
+    admin = _admin_client(app)
+    resp = admin.get("/api/v1/admin/users/studio")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["metrics"]["total_users"] >= 1
+    assert "free" in body["by_plan"]
+    # The heavy user is the top of the tokens ranking.
+    top = body["ranking"][0]
+    assert top["email"] == "heavy@example.com"
+    assert top["lifetime_tokens"] >= 100_000
+    assert top["run_count"] >= 1
+
+
+def test_studio_supports_sort_and_plan_filter(app):
+    from datetime import UTC, datetime
+
+    admin = _admin_client(app)
+
+    # tokens desc by default.
+    resp = admin.get("/api/v1/admin/users/studio", params={"sort": "tokens", "limit": 5})
+    assert resp.status_code == 200
+    body = resp.json()
+    rows = body["ranking"]
+    assert rows
+    tokens = [r["lifetime_tokens"] for r in rows]
+    assert tokens == sorted(tokens, reverse=True)
+
+    # recency == created_at desc.
+    resp = admin.get("/api/v1/admin/users/studio", params={"sort": "recency", "limit": 5})
+    assert resp.status_code == 200
+    body = resp.json()
+    rows = body["ranking"]
+    assert rows
+    # The most recent user is at the top.
+    assert body["metrics"]["total_users"] >= 1
+
+    # Plan filter narrows results.
+    resp = admin.get("/api/v1/admin/users/studio", params={"plan": "free"})
+    assert resp.status_code == 200
+    body = resp.json()
+    for r in body["ranking"]:
+        assert r["plan"] == "free"
+
+
+def test_studio_403_for_regular_user(app):
+    _admin_client(app)
+    user = TestClient(app)
+    user.post("/api/v1/auth/register", json={"email": "attacker@example.com", "password": _PASSWORD})
+    resp = user.get("/api/v1/admin/users/studio")
+    assert resp.status_code == 403
+
+
+def test_studio_rejects_unknown_sort(app):
+    """422 path validation rejects any sort not in the allowed set."""
+    monkey = pytest.MonkeyPatch()
+    monkey.setenv("NOVA_OPS_TOKEN", "studio-token")
+    try:
+        client = TestClient(app)
+        resp = client.get(
+            "/api/v1/admin/users/studio",
+            params={"sort": "wat"},
+            headers={"X-Nova-Ops-Token": "studio-token"},
+        )
+    finally:
+        monkey.undo()
+    assert resp.status_code == 422
+

@@ -56,6 +56,36 @@ Per-user live stats with last-sign-in + last-run. Audited `view-users-recent`.
 `last_sign_in_at` is stamped on every successful `POST /api/v1/auth/login/local`;
 `last_run_at` is aggregated from the `runs` table via a single LEFT JOIN.
 
+### `GET /api/v1/admin/users/studio`
+
+Ranked view of the whole user base. The counterpart endpoint to `/users/recent`
+— where `/users/recent` returns the newest, `/users/studio` returns the
+biggest by a chosen metric. Powers the `Users studio` page in the ops
+console (the ranked table that answers "who is generating the action on
+this system").
+
+| Query | Type | Default | Description |
+|---|---|---|---|
+| `sort` | `"tokens"` \| `"runs"` \| `"activity"` \| `"recency"` \| `"failed"` | `"tokens"` | Sort column. `tokens` / `runs` order by lifetime aggregates from the `runs` table; `activity` / `recency` order by `last_sign_in_at` / `created_at`; `failed` orders by recent failed-login count from `admin_audit`. |
+| `plan` | `"free"` \| `"plus"` \| `"enterprise"` | (none) | Filter to one plan tier. |
+| `limit` | int (1–200) | 25 | Page size |
+| `offset` | int (≥0) | 0 | Page offset |
+
+Audited `view-users-studio`.
+
+**Response**: `StudioResponse` with `{ranking: list[StudioUserEntry], by_plan: dict, metrics: StudioMetrics, total_users, limit, offset, sort}`.
+
+`StudioUserEntry`: `{id, email, system_role, plan, plan_status, created_at, last_sign_in_at, is_forbidden, run_count, lifetime_tokens, recent_failed_login_count}`.
+
+`StudioMetrics`: `{total_users, dormant_count, forbidden_count, no_run_count, active_30d}` — these are the KPI tiles at the top of the page.
+
+`by_plan`: aggregate count per plan (`{free: 39, enterprise: 6}`).
+
+The two LEFT JOINs are: `runs` aggregated by `user_id` (for `run_count` and
+`lifetime_tokens`) and `admin_audit` filtered by `action='failed-login'`
+and `created_at >= now()-7d` aggregated by `actor` (for
+`recent_failed_login_count`). Each runs in a single SQL.
+
 ### `GET /api/v1/admin/users/{user_id}`
 
 Per-user detail: profile + credit standing + recent runs. Audited
@@ -307,6 +337,7 @@ The full enumeration of action names that the gateway writes to
 | `view-users` | `GET /api/v1/admin/users` |
 | `view-user-stats` | `GET /api/v1/admin/users/stats` |
 | `view-users-recent` | `GET /api/v1/admin/users/recent` |
+| `view-users-studio` | `GET /api/v1/admin/users/studio` |
 | `view-user-detail` | `GET /api/v1/admin/users/{id}` |
 | `view-sessions` | `GET /api/v1/admin/users/{id}/sessions` |
 | `set-plan` | `PATCH /api/v1/admin/users/{id}/plan` |

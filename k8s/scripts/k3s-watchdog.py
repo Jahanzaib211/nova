@@ -41,11 +41,18 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+# k3s registers a node under the lowercased hostname. Only this node's
+# readiness may trigger the local `systemctl restart k3s` auto-fix — see
+# check_node_ready().
+LOCAL_NODE_NAME = os.environ.get(
+    "K3S_WATCHDOG_LOCAL_NODE", socket.gethostname().lower()
+)
 STATUS_PATH = Path(os.environ.get("K3S_WATCHDOG_STATUS_PATH", str(Path.home() / ".nova" / "k3s-watchdog-status.json")))
 KUBECONFIG = os.environ.get("K3S_WATCHDOG_KUBECONFIG", str(Path.home() / ".kube" / "config"))
 DISK_PATH = os.environ.get("K3S_WATCHDOG_DISK_PATH", "/")
@@ -89,17 +96,42 @@ def check_node_ready() -> dict:
     if not items:
         return {"name": "node_ready", "ok": False, "detail": "no nodes returned"}
 
-    not_ready = []
+    # Only the LOCAL node gates the restart action. The one auto-fix this
+    # watchdog has is `systemctl restart k3s` on *this* machine, which cannot
+    # do anything about a worker that is down — on 2026-08-12 the remote node
+    # `boggyman` sat NotReady for 12 days and this check restarted local k3s
+    # 63 times in a single boot (~2GB peak each), which was a significant
+    # contributor to the memory exhaustion that froze the host.
+    #
+    # Remote nodes are still reported, as a separate non-actionable warning.
+    local = LOCAL_NODE_NAME
+    local_ready = None
+    remote_not_ready = []
     for node in items:
         name = node.get("metadata", {}).get("name", "?")
         conditions = node.get("status", {}).get("conditions", [])
         ready_cond = next((c for c in conditions if c.get("type") == "Ready"), None)
-        if not ready_cond or ready_cond.get("status") != "True":
-            not_ready.append(name)
+        ready = bool(ready_cond) and ready_cond.get("status") == "True"
+        if name == local:
+            local_ready = ready
+        elif not ready:
+            remote_not_ready.append(name)
 
-    if not_ready:
-        return {"name": "node_ready", "ok": False, "detail": f"not Ready: {', '.join(not_ready)}"}
-    return {"name": "node_ready", "ok": True, "detail": f"{len(items)} node(s) Ready"}
+    if local_ready is None:
+        return {
+            "name": "node_ready",
+            "ok": False,
+            "detail": f"local node {local!r} not present in cluster",
+        }
+
+    detail = f"local node {local} Ready"
+    if not local_ready:
+        return {"name": "node_ready", "ok": False, "detail": f"not Ready: {local}"}
+    if remote_not_ready:
+        # ok=True on purpose: a restart here would not help, and looping on it
+        # is what caused the outage. Surface it for a human instead.
+        detail += f" (remote NotReady, not actionable here: {', '.join(remote_not_ready)})"
+    return {"name": "node_ready", "ok": True, "detail": detail}
 
 
 def check_disk() -> dict:

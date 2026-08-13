@@ -77,6 +77,33 @@ import httpx
 
 CYCLE_DEADLINE_SEC = float(os.environ.get("HEALTHCHECK_CYCLE_DEADLINE_SEC", "60"))
 
+# A repair that can never succeed — a script path that no longer exists, a
+# missing sudoers rule — must not spawn subprocesses forever. On 2026-08-12
+# this daemon ran 281 failing auto-fix actions per minute (733 `pm2` + 725
+# `sudo` spawns in 21 minutes), each pm2 invocation a fresh ~50-100MB Node
+# process, and drove the machine into swap exhaustion until it froze.
+#
+# So: back off exponentially per probe after each failed repair, and once a
+# repair has failed FIX_FAILURE_LIMIT times in a row, open a circuit breaker
+# and stop attempting it. The breaker closes again as soon as the probe
+# recovers on its own, so a genuinely transient failure still self-heals.
+FIX_FAILURE_LIMIT = int(os.environ.get("HEALTHCHECK_FIX_FAILURE_LIMIT", "5"))
+FIX_BACKOFF_MAX_CYCLES = int(
+    os.environ.get("HEALTHCHECK_FIX_BACKOFF_MAX_CYCLES", "60")
+)
+
+
+def disabled_probes() -> set[str]:
+    """Probe names switched off via HEALTHCHECK_DISABLED_PROBES (comma-separated).
+
+    A probe for a service that has been retired would otherwise sit RED
+    forever, and this daemon's whole value is being the operator's single pane
+    of glass — permanently-red probes for things nobody intends to run train
+    you to ignore it, which is how a real outage gets missed.
+    """
+    raw = os.environ.get("HEALTHCHECK_DISABLED_PROBES", "")
+    return {name.strip() for name in raw.split(",") if name.strip()}
+
 # Logs go to stderr so they don't get mixed with the per-cycle JSON status
 # line on stdout. PM2 captures stderr into error_file, stdout into out_file;
 # `pm2 logs nova-healthcheck --lines 1 --nostream` then shows just the JSON,
@@ -730,22 +757,89 @@ def fix_binary_attestation() -> bool:
     return True
 
 
-def fix_deerflow_containers() -> bool:
-    """Restart the deerflow PM2 app so the foreground docker compose re-attaches
-    or recreates missing containers."""
-    log.warning("auto-fix: pm2 restart deerflow")
+def _ecosystem_file() -> str:
+    """Path to nova's pm2 ecosystem config — the source of truth for every
+    app's script path."""
+    return os.environ.get(
+        "NOVA_ECOSYSTEM_FILE",
+        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
+    )
+
+
+def _pm2_script_path(described_stdout: str) -> Optional[str]:
+    """Pull the 'script path' cell out of `pm2 describe` table output."""
+    for line in described_stdout.splitlines():
+        if "script path" in line and "│" in line:
+            return line.split("│")[-2].strip()
+    return None
+
+
+def _heal_pm2_app(app: str, timeout: int = 30, check_drift: bool = False) -> bool:
+    """Restart a pm2 app, or re-register it from ecosystem.config.js when it is
+    missing — and, with ``check_drift``, when pm2's saved dump points at a
+    script that no longer exists on disk (restarting that just resurrects
+    orphaned stale code).
+
+    Returns False on failure so the caller's circuit breaker can back off: a
+    repair whose script path does not exist can never succeed, and retrying it
+    every cycle is what exhausted this machine's memory on 2026-08-12.
+    """
+    ecosystem = _ecosystem_file()
     try:
-        subprocess.run(
-            ["pm2", "restart", "deerflow"], check=True, timeout=30, capture_output=True
+        described = subprocess.run(
+            ["pm2", "describe", app], timeout=15, capture_output=True, text=True
         )
+        drifted = False
+        if check_drift and described.returncode == 0:
+            script_path = _pm2_script_path(described.stdout)
+            drifted = script_path is not None and not Path(script_path).exists()
+        if described.returncode != 0 or drifted:
+            log.warning(
+                "auto-fix: %s %s — re-registering from %s",
+                app,
+                "script path missing on disk" if drifted else "not registered",
+                ecosystem,
+            )
+            if check_drift:
+                subprocess.run(["pm2", "delete", app], timeout=15, capture_output=True)
+            subprocess.run(
+                ["pm2", "start", ecosystem, "--only", app],
+                check=True,
+                timeout=timeout,
+                capture_output=True,
+            )
+            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
+        else:
+            log.warning("auto-fix: pm2 restart %s", app)
+            subprocess.run(
+                ["pm2", "restart", app],
+                check=True,
+                timeout=timeout,
+                capture_output=True,
+            )
         return True
     except (
         subprocess.CalledProcessError,
         subprocess.TimeoutExpired,
         FileNotFoundError,
     ) as e:
-        log.error("auto-fix: failed to pm2 restart deerflow: %s", e)
+        log.error("auto-fix: failed to heal %s: %s", app, e)
         return False
+
+
+def fix_deerflow_containers() -> bool:
+    """Heal a RED P7_containers by restarting the pm2 app that owns the
+    deer-flow-dev compose stack.
+
+    That app is named ``nova`` in ecosystem.config.js — it execs
+    scripts/pm2-deerflow.sh, which brings the stack up with
+    docker-compose.prod-frontend.yaml in the -f chain. Restarting it both
+    recreates missing containers and puts the frontend back on the prod
+    target. This previously restarted a pm2 app named "deerflow", which has
+    never existed, so the repair could only ever fail — and did, every cycle,
+    forever.
+    """
+    return _heal_pm2_app("nova", timeout=60)
 
 
 def fix_llama_bridge() -> bool:
@@ -759,98 +853,13 @@ def fix_llama_bridge() -> bool:
          the wrong thing. In that case re-register from ecosystem.config.js,
          which is the source of truth for the script path, and persist.
     """
-    ecosystem = os.environ.get(
-        "NOVA_ECOSYSTEM_FILE",
-        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
-    )
-    try:
-        described = subprocess.run(
-            ["pm2", "describe", "llama-bridge"],
-            timeout=15,
-            capture_output=True,
-            text=True,
-        )
-        script_path = None
-        for line in described.stdout.splitlines():
-            if "script path" in line:
-                script_path = line.split("│")[-2].strip() if "│" in line else None
-        drifted = script_path is not None and not Path(script_path).exists()
-        if described.returncode != 0 or drifted:
-            log.warning(
-                "auto-fix: llama-bridge %s — re-registering from %s",
-                "script path missing on disk" if drifted else "not registered",
-                ecosystem,
-            )
-            subprocess.run(
-                ["pm2", "delete", "llama-bridge"], timeout=15, capture_output=True
-            )
-            subprocess.run(
-                ["pm2", "start", ecosystem, "--only", "llama-bridge"],
-                check=True,
-                timeout=30,
-                capture_output=True,
-            )
-            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
-        else:
-            log.warning("auto-fix: pm2 restart llama-bridge")
-            subprocess.run(
-                ["pm2", "restart", "llama-bridge"],
-                check=True,
-                timeout=30,
-                capture_output=True,
-            )
-        return True
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ) as e:
-        log.error("auto-fix: failed to heal llama-bridge: %s", e)
-        return False
+    return _heal_pm2_app("llama-bridge", check_drift=True)
 
 
 def fix_litellm() -> bool:
     """Heal the nova-litellm PM2 app for a RED P10_litellm: restart, or
-    re-register from ecosystem.config.js if the app is missing (same drift
-    protection as fix_llama_bridge)."""
-    ecosystem = os.environ.get(
-        "NOVA_ECOSYSTEM_FILE",
-        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
-    )
-    try:
-        described = subprocess.run(
-            ["pm2", "describe", "nova-litellm"],
-            timeout=15,
-            capture_output=True,
-            text=True,
-        )
-        if described.returncode != 0:
-            log.warning(
-                "auto-fix: nova-litellm not registered — starting from %s", ecosystem
-            )
-            subprocess.run(
-                ["pm2", "start", ecosystem, "--only", "nova-litellm"],
-                check=True,
-                timeout=30,
-                capture_output=True,
-            )
-            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
-        else:
-            log.warning("auto-fix: pm2 restart nova-litellm")
-            subprocess.run(
-                ["pm2", "restart", "nova-litellm"],
-                check=True,
-                timeout=30,
-                capture_output=True,
-            )
-        return True
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ) as e:
-        log.error("auto-fix: failed to heal nova-litellm: %s", e)
-        return False
+    re-register from ecosystem.config.js if the app is missing."""
+    return _heal_pm2_app("nova-litellm")
 
 
 def fix_dify() -> bool:
@@ -859,41 +868,7 @@ def fix_dify() -> bool:
     `docker compose up` in the foreground, so a restart reconciles the whole
     Dify compose stack. Longer timeout than the other fixes — a full stack
     bring-up is not instant."""
-    ecosystem = os.environ.get(
-        "NOVA_ECOSYSTEM_FILE",
-        str(Path(__file__).resolve().parent.parent / "ecosystem.config.js"),
-    )
-    try:
-        described = subprocess.run(
-            ["pm2", "describe", "nova-dify"], timeout=15, capture_output=True, text=True
-        )
-        if described.returncode != 0:
-            log.warning(
-                "auto-fix: nova-dify not registered — starting from %s", ecosystem
-            )
-            subprocess.run(
-                ["pm2", "start", ecosystem, "--only", "nova-dify"],
-                check=True,
-                timeout=60,
-                capture_output=True,
-            )
-            subprocess.run(["pm2", "save"], timeout=15, capture_output=True)
-        else:
-            log.warning("auto-fix: pm2 restart nova-dify")
-            subprocess.run(
-                ["pm2", "restart", "nova-dify"],
-                check=True,
-                timeout=60,
-                capture_output=True,
-            )
-        return True
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ) as e:
-        log.error("auto-fix: failed to heal nova-dify: %s", e)
-        return False
+    return _heal_pm2_app("nova-dify", timeout=60)
 
 
 def fix_tunnel() -> bool:
@@ -1015,6 +990,67 @@ class WatchdogState:
     cycle_id: int = 0
     consecutive_red: dict[str, int] = field(default_factory=dict)
     consecutive_yellow: dict[str, int] = field(default_factory=dict)
+    # Circuit-breaker bookkeeping, keyed by probe name.
+    fix_failures: dict[str, int] = field(default_factory=dict)
+    next_fix_cycle: dict[str, int] = field(default_factory=dict)
+    fix_circuit_open: set[str] = field(default_factory=set)
+
+
+# probe name -> (fix callable, suffix appended to probe.detail on success).
+# The callables look their target up in module globals at call time so tests
+# can monkeypatch e.g. `fix_dify` on the module and still be dispatched to.
+FIX_DISPATCH: dict[str, tuple[Callable[[], bool], str]] = {
+    "P8_binary_attestation": (
+        lambda: fix_binary_attestation(),
+        " [attestation reset + restart issued]",
+    ),
+    "P7_containers": (
+        lambda: fix_deerflow_containers(),
+        " [pm2 restart nova issued]",
+    ),
+    "P9_bridge": (lambda: fix_llama_bridge(), " [llama-bridge healed via pm2]"),
+    "P10_litellm": (lambda: fix_litellm(), " [nova-litellm healed via pm2]"),
+    "P11_dify": (lambda: fix_dify(), " [nova-dify healed via pm2]"),
+    "P12_tunnel": (
+        lambda: fix_tunnel(),
+        " [systemctl reset-failed+restart issued, verified active]",
+    ),
+}
+
+
+def _reset_fix_breaker(state: WatchdogState, name: str) -> None:
+    """Forget a probe's repair history — called when it goes non-RED, so a
+    probe that recovers on its own gets a clean slate next time it breaks."""
+    state.fix_failures.pop(name, None)
+    state.next_fix_cycle.pop(name, None)
+    state.fix_circuit_open.discard(name)
+
+
+def _record_fix_failure(state: WatchdogState, name: str) -> None:
+    """Back off exponentially after a failed repair, and trip the breaker once
+    a repair has failed FIX_FAILURE_LIMIT times in a row."""
+    failures = state.fix_failures.get(name, 0) + 1
+    state.fix_failures[name] = failures
+    if failures >= FIX_FAILURE_LIMIT:
+        state.fix_circuit_open.add(name)
+        log.error(
+            "auto-fix: giving up on %s after %d consecutive failures — circuit "
+            "open, no further repair attempts until the probe recovers. This "
+            "usually means the repair can never succeed (missing script path, "
+            "missing sudoers rule). Investigate manually.",
+            name,
+            failures,
+        )
+        return
+    backoff = min(2**failures, FIX_BACKOFF_MAX_CYCLES)
+    state.next_fix_cycle[name] = state.cycle_id + backoff
+    log.warning(
+        "auto-fix: %s repair failed (%d/%d) — backing off %d cycles",
+        name,
+        failures,
+        FIX_FAILURE_LIMIT,
+        backoff,
+    )
 
 
 def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
@@ -1033,6 +1069,7 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
         else:
             state.consecutive_red[probe.name] = 0
             state.consecutive_yellow[probe.name] = 0
+            _reset_fix_breaker(state, probe.name)
 
     for probe in report.probes:
         if probe.status != Status.RED:
@@ -1040,34 +1077,22 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
         # Only fix after 2 consecutive REDs (one cycle might be a transient blip)
         if state.consecutive_red[probe.name] < 2:
             continue
-        if probe.name == "P8_binary_attestation":
-            if fix_binary_attestation():
+        fix = FIX_DISPATCH.get(probe.name)
+        if fix is not None:
+            fix_fn, detail_suffix = fix
+            # A repair that keeps failing is throttled, then abandoned. We do
+            # NOT mark a probe fixed without the repair reporting success, so
+            # the dashboard stays RED until it is genuinely healthy again.
+            if probe.name in state.fix_circuit_open:
+                continue
+            if state.cycle_id < state.next_fix_cycle.get(probe.name, 0):
+                continue
+            if fix_fn():
                 probe.fixed = True
-                probe.detail += " [attestation reset + restart issued]"
-        elif probe.name == "P7_containers":
-            if fix_deerflow_containers():
-                probe.fixed = True
-                probe.detail += " [pm2 restart deerflow issued]"
-        elif probe.name == "P9_bridge":
-            if fix_llama_bridge():
-                probe.fixed = True
-                probe.detail += " [llama-bridge healed via pm2]"
-        elif probe.name == "P10_litellm":
-            if fix_litellm():
-                probe.fixed = True
-                probe.detail += " [nova-litellm healed via pm2]"
-        elif probe.name == "P11_dify":
-            if fix_dify():
-                probe.fixed = True
-                probe.detail += " [nova-dify healed via pm2]"
-        elif probe.name == "P12_tunnel":
-            if fix_tunnel():
-                probe.fixed = True
-                probe.detail += " [systemctl reset-failed+restart issued, verified active]"
-            # If fix_tunnel() returned False, the next probe cycle will
-            # re-attempt. We do NOT mark the probe as fixed without
-            # verification, so the dashboard stays RED until the tunnel
-            # is genuinely reachable end-to-end.
+                probe.detail += detail_suffix
+                _reset_fix_breaker(state, probe.name)
+            else:
+                _record_fix_failure(state, probe.name)
         else:
             # Warn once when the probe first becomes fix-eligible, then every
             # 20th cycle while it stays RED — not every 30s forever (the P9
@@ -1086,66 +1111,61 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
     t0 = time.perf_counter()
     report = CycleReport(cycle_id=state.cycle_id, started_at=t0, duration_ms=0.0)
 
-    # (name, coroutine) pairs so we can label a probe correctly even if it
-    # raises before producing its own ProbeResult.
-    probes: list[
-        tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]
-    ] = [
-        ("P1_nginx", asyncio.ensure_future(probe_nginx())),
-        ("P2_gateway", asyncio.ensure_future(probe_gateway())),
-        ("P3_frontend", asyncio.ensure_future(probe_frontend())),
+    # (name, coroutine factory) pairs. The coroutine is only created for probes
+    # that are enabled, so a disabled probe costs nothing and never emits a
+    # "coroutine was never awaited" warning. Naming the probe here also lets us
+    # label it correctly if it raises before producing its own ProbeResult.
+    probe_factories: list[tuple[str, Callable[[], Awaitable[ProbeResult]]]] = [
+        ("P1_nginx", probe_nginx),
+        ("P2_gateway", probe_gateway),
+        ("P3_frontend", probe_frontend),
         (
             "P4_local_llm_gateway",
-            asyncio.ensure_future(
-                probe_local_llm_gateway(
-                    port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000"))
-                )
+            lambda: probe_local_llm_gateway(
+                port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000"))
             ),
         ),
         (
             "P5_llama_loopback",
-            asyncio.ensure_future(
-                probe_llama_loopback(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))
+            lambda: probe_llama_loopback(
+                host=os.environ.get("LLAMA_HOST", "127.0.0.1")
             ),
         ),
         (
             "P6_llama_vram",
-            asyncio.ensure_future(
-                probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1"))
-            ),
+            lambda: probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1")),
         ),
-        ("P7_containers", asyncio.ensure_future(probe_containers())),
-        ("P8_binary_attestation", asyncio.ensure_future(probe_binary_attestation())),
+        ("P7_containers", probe_containers),
+        ("P8_binary_attestation", probe_binary_attestation),
         (
             "P9_bridge",
-            asyncio.ensure_future(
-                probe_llama_bridge(
-                    host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1")
-                )
+            lambda: probe_llama_bridge(
+                host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1")
             ),
         ),
         (
             "P10_litellm",
-            asyncio.ensure_future(
-                probe_litellm(
-                    host=os.environ.get("LITELLM_HOST", "172.17.0.1"),
-                    port=int(os.environ.get("LITELLM_PORT", "4000")),
-                )
+            lambda: probe_litellm(
+                host=os.environ.get("LITELLM_HOST", "172.17.0.1"),
+                port=int(os.environ.get("LITELLM_PORT", "4000")),
             ),
         ),
         (
             "P11_dify",
-            asyncio.ensure_future(
-                probe_dify(
-                    host=os.environ.get("DIFY_HOST", "127.0.0.1"),
-                    port=int(os.environ.get("DIFY_PORT", "8088")),
-                )
+            lambda: probe_dify(
+                host=os.environ.get("DIFY_HOST", "127.0.0.1"),
+                port=int(os.environ.get("DIFY_PORT", "8088")),
             ),
         ),
-        (
-            "P12_tunnel",
-            asyncio.ensure_future(probe_tunnel()),
-        ),
+        ("P12_tunnel", probe_tunnel),
+    ]
+    skip = disabled_probes()
+    probes: list[
+        tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]
+    ] = [
+        (name, asyncio.ensure_future(factory()))
+        for name, factory in probe_factories
+        if name not in skip
     ]
     results = await asyncio.gather(*(c for _, c in probes), return_exceptions=True)
     for (name, _), result in zip(probes, results):
