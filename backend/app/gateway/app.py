@@ -37,6 +37,7 @@ from app.gateway.routers import (
     models,
     referral,
     runs,
+    runtime,
     sharing,
     skills,
     suggestions,
@@ -512,6 +513,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Runtime capabilities: skills, tools, hooks, subagents, circuit states (v7.1)
     app.include_router(capabilities.router)
+
+    # Runtime config (read-only): summarization, subagents, guardrails
+    app.include_router(runtime.router)
 
     # Workspace intelligence (feature-flagged: workspace.intelligence_enabled)
     app.include_router(workspace.router)

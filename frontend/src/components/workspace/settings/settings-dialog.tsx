@@ -11,6 +11,7 @@ import {
   SparklesIcon,
   UserIcon,
   WrenchIcon,
+  ServerIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -28,6 +29,7 @@ import { ChannelsSettingsPage } from "@/components/workspace/settings/channels-s
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelsSettingsPage } from "@/components/workspace/settings/models-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
+import { RuntimeSettingsPage } from "@/components/workspace/settings/runtime-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
 import { VoiceSettingsPage } from "@/components/workspace/settings/voice-settings-page";
@@ -40,6 +42,7 @@ export type SettingsSection =
   | "channels"
   | "models"
   | "memory"
+  | "runtime"
   | "tools"
   | "skills"
   | "notification"
@@ -68,6 +71,11 @@ export function useSettingsSections() {
         id: "memory",
         label: t.settings.sections.memory,
         icon: BrainIcon,
+      },
+      {
+        id: "runtime",
+        label: t.settings.sections.runtime,
+        icon: ServerIcon,
       },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
@@ -133,6 +141,7 @@ export function SettingsSectionsShell({
           {activeSection === "account" && <AccountSettingsPage />}
           {activeSection === "appearance" && <AppearanceSettingsPage />}
           {activeSection === "memory" && <MemorySettingsPage />}
+          {activeSection === "runtime" && <RuntimeSettingsPage />}
           {activeSection === "tools" && <ToolSettingsPage />}
           {activeSection === "skills" && (
             <SkillSettingsPage onClose={onClose} />

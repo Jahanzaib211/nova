@@ -334,11 +334,46 @@ export interface Translations {
       channels: string;
       models: string;
       memory: string;
+      runtime: string;
       tools: string;
       skills: string;
       notification: string;
       voice: string;
       about: string;
+    };
+    runtime: {
+      title: string;
+      description: string;
+      unavailable: string;
+      editHint: string;
+      on: string;
+      off: string;
+      yes: string;
+      no: string;
+      notSet: string;
+      summarization: {
+        title: string;
+        description: string;
+        enabled: string;
+        model: string;
+        trigger: string;
+        keep: string;
+      };
+      subagents: {
+        title: string;
+        description: string;
+        timeout: string;
+        maxTurns: string;
+        customAgents: string;
+      };
+      guardrails: {
+        title: string;
+        description: string;
+        enabled: string;
+        failClosed: string;
+        provider: string;
+        passport: string;
+      };
     };
     models: {
       title: string;

@@ -421,11 +421,52 @@ export const enUS: Translations = {
       channels: "Channels",
       models: "Models",
       memory: "Memory",
+      runtime: "Runtime",
       tools: "Tools",
       skills: "Skills",
       notification: "Notification",
       voice: "Voice",
       about: "About",
+    },
+    runtime: {
+      title: "Runtime",
+      description:
+        "Read-only view of the operator-facing config sections that affect runtime behavior. Edit config.yaml to change these.",
+      unavailable:
+        "Could not load runtime config. Check that the gateway is running and you are signed in.",
+      editHint:
+        "Changes to these values require editing config.yaml and reloading the gateway. Some sections are restart-required.",
+      on: "On",
+      off: "Off",
+      yes: "Yes",
+      no: "No",
+      notSet: "Not set",
+      summarization: {
+        title: "Summarization",
+        description:
+          "Automatic conversation summarization when approaching token or message limits.",
+        enabled: "Enabled",
+        model: "Model",
+        trigger: "Trigger",
+        keep: "Keep policy",
+      },
+      subagents: {
+        title: "Subagents",
+        description:
+          "Delegated task execution by the lead agent.",
+        timeout: "Default timeout",
+        maxTurns: "Default max turns",
+        customAgents: "Custom agents",
+      },
+      guardrails: {
+        title: "Guardrails",
+        description:
+          "Pre-tool-call authorization that can block dangerous tool invocations.",
+        enabled: "Enabled",
+        failClosed: "Fail closed",
+        provider: "Provider",
+        passport: "Passport",
+      },
     },
     models: {
       title: "Models",
