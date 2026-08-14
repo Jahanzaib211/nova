@@ -434,14 +434,14 @@ For models with `supports_vision: true`:
 
 See `docs/` directory for detailed documentation:
 
-- [CONFIGURATION.md](docs/CONFIGURATION.md) - Configuration options
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architecture details
-- [API.md](docs/API.md) - API reference
-- [SETUP.md](docs/SETUP.md) - Setup guide
-- [FILE_UPLOAD.md](docs/FILE_UPLOAD.md) - File upload feature
-- [PATH_EXAMPLES.md](docs/PATH_EXAMPLES.md) - Path types and usage
-- [summarization.md](docs/summarization.md) - Context summarization
-- [plan_mode_usage.md](docs/plan_mode_usage.md) - Plan mode with TodoList
+- [CONFIGURATION.md](backend/docs/CONFIGURATION.md) - Configuration options
+- [ARCHITECTURE.md](backend/docs/ARCHITECTURE.md) - Architecture details
+- [API.md](backend/docs/API.md) - API reference
+- [SETUP.md](backend/docs/SETUP.md) - Setup guide
+- [FILE_UPLOAD.md](backend/docs/FILE_UPLOAD.md) - File upload feature
+- [PATH_EXAMPLES.md](backend/docs/PATH_EXAMPLES.md) - Path types and usage
+- [summarization.md](backend/docs/summarization.md) - Context summarization
+- [plan_mode_usage.md](backend/docs/plan_mode_usage.md) - Plan mode with TodoList
 
 ---
 

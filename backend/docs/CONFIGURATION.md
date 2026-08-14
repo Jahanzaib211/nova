@@ -204,7 +204,7 @@ sandbox:
 
 When using Docker development (`make docker-start`), DeerFlow starts the `provisioner` service only when this provisioner mode is configured. In Local/Docker modes, `provisioner` is not started.
 
-See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
+See the [Sandbox Configuration Guide](#sandbox) to configure your preferred mode.
 
 **Custom sandbox images**: the Docker-based modes above default to a
 pre-built image (`sandbox.image` in `config.yaml`, `enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest`)

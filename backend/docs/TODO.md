@@ -16,8 +16,8 @@
 ## Planned Features
 
 - [ ] Pooling the sandbox resources to reduce the number of sandbox containers
-- [ ] Add authentication/authorization layer
-- [ ] Implement rate limiting
+- [x] Add authentication/authorization layer
+- [x] Implement rate limiting
 - [ ] Add metrics and monitoring
 - [ ] Support for more document formats in upload
 - [ ] Skill marketplace / remote skill installation

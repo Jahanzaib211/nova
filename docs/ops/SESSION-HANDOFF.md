@@ -1,7 +1,11 @@
 # Nova — Session Handoff & Gap Register
 
+> **Historical document** — snapshot as of 2026-08-06. Test counts and gap
+> references may be stale. For current status see `docs/AUDIT.md` and
+> `README.md`.
+
 **Date:** 2026-08-06 · **Branch:** `main` · **Last commit:** `5f37b642`
-**Status:** all suites green — backend 6218 · frontend 539 · e2e 73 · ruff clean
+**Status:** all suites green — backend 6430 · frontend 565 · e2e 73 · ruff clean
 
 This document exists so the next session can resume with zero context loss. It
 covers (1) work in flight, (2) a full-stack gap audit with evidence, and (3) a
@@ -332,7 +336,7 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
   `utils/file_conversion.py` — the same hook the voice plan uses for audio.
 - **Feeds:** G7 (RAG over scanned documents).
 
-#### G10. 6218 tests, none testing whether Nova is *good*
+#### G10. 6430 tests, none testing whether Nova is *good*
 - `tests/test_replay_golden.py` is deterministic replay — it catches
   serialization drift, not answer quality. A prompt change can silently degrade
   the agent with every test still green.
@@ -380,7 +384,7 @@ half-implemented and blocked only on G1.
 ## 5. Verification (must stay green throughout)
 
 ```bash
-# Backend — baseline 6218 passed / 0 failed
+# Backend — baseline 6430 passed / 0 failed
 cd backend && PYTHONPATH=. uv run pytest tests/ -q
 DEERFLOW_VOICE_MODEL_DIR=~/.cache/nova/voice PYTHONPATH=. \
   uv run pytest tests/test_voice_engines_real.py -v     # 10, none skipped
