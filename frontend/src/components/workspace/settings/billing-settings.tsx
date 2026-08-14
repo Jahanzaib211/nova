@@ -45,6 +45,8 @@ export function BillingSettings() {
         const { url } = (await res.json()) as { url: string };
         window.location.href = url;
       }
+    } catch {
+      // Redirect failed — user can retry
     } finally {
       setBusy(false);
     }
