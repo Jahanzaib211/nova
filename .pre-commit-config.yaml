@@ -31,3 +31,20 @@ repos:
         language: system
         files: ^frontend/
         types_or: [javascript, tsx, ts, json, css]
+
+  # Security: dependency audit on lockfile changes
+  - repo: local
+    hooks:
+      - id: pip-audit
+        name: pip-audit (backend)
+        entry: bash -c 'cd backend && uv export --no-hashes --no-dev > /tmp/reqs.txt && uvx pip-audit --no-deps --disable-pip -r /tmp/reqs.txt' --
+        language: system
+        files: ^backend/(pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+      - id: npm-audit
+        name: npm audit (frontend)
+        entry: bash -c 'cd frontend && pnpm audit --audit-level=moderate'
+        language: system
+        files: ^frontend/(package\.json|pnpm-lock\.yaml)$
+        pass_filenames: false

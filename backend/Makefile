@@ -10,6 +10,9 @@ gateway:
 test:
 	PYTHONPATH=. PYTHONIOENCODING=utf-8 PYTHONUTF8=1 uv run pytest tests/ -v
 
+coverage:
+	PYTHONPATH=. PYTHONIOENCODING=utf-8 PYTHONUTF8=1 uv run pytest tests/ --cov=packages/harness/deerflow --cov-report=term-missing --cov-report=html:.deer-flow/htmlcov --ignore=tests/test_sandbox_orphan_reconciliation_e2e.py -q
+
 test-blocking-io:
 	PYTHONPATH=. PYTHONIOENCODING=utf-8 PYTHONUTF8=1 uv run pytest tests/blocking_io -q --tb=short
 

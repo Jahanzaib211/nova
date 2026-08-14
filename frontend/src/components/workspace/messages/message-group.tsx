@@ -19,7 +19,7 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ChainOfThought,
@@ -596,18 +596,21 @@ function ToolCall({
       description = t.toolCalls.writeFile;
     }
     const path: string | undefined = (args as { path: string })?.path;
-    if (isLoading && isLast && autoOpen && autoSelect && path && !result) {
-      setTimeout(() => {
+    useEffect(() => {
+      if (isLoading && isLast && autoOpen && autoSelect && path && !result) {
         const url = new URL(
           `write-file:${path}?message_id=${messageId}&tool_call_id=${id}`,
         ).toString();
         if (selectedArtifact === url) {
           return;
         }
-        select(url, true);
-        setOpen(true);
-      }, 100);
-    }
+        const timer = setTimeout(() => {
+          select(url, true);
+          setOpen(true);
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }, [isLoading, isLast, autoOpen, autoSelect, path, result, selectedArtifact, id, messageId, select, setOpen]);
 
     return (
       <ChainOfThoughtStep

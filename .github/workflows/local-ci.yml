@@ -1,0 +1,178 @@
+name: Local CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: local-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON: "3.12"
+  NODE: "22"
+  PNPM: "10.26.2"
+
+jobs:
+  # ── Backend ──────────────────────────────────────────────────────────────
+  backend-lint:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cd backend && make lint
+
+  backend-format:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cd backend && make format-check
+
+  backend-tests:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cp config.example.yaml config.yaml
+      - run: cd backend && PYTHONPATH=. make test
+
+  backend-blocking-io:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cd backend && make test-blocking-io
+
+  backend-coverage:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cp config.example.yaml config.yaml
+      - run: cd backend && PYTHONPATH=. make coverage
+
+  backend-cross-ref:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - run: cd backend && PYTHONPATH=../scripts python tests/test_no_cross_references.py
+
+  # ── Frontend ─────────────────────────────────────────────────────────────
+  frontend-lint:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE }}
+      - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && pnpm lint
+      - run: cd frontend && pnpm typecheck
+
+  frontend-tests:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE }}
+      - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && pnpm test
+
+  frontend-build:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE }}
+      - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && BETTER_AUTH_SECRET=local-dev-secret pnpm build
+
+  # ── Security ─────────────────────────────────────────────────────────────
+  dep-audit:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cd backend && uv export --no-hashes --no-dev > /tmp/reqs.txt
+      - run: uvx pip-audit --no-deps --disable-pip -r /tmp/reqs.txt || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE }}
+      - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && pnpm audit || true
+
+  # ── Gate summary ─────────────────────────────────────────────────────────
+  local-ci-gate:
+    if: always()
+    needs: [backend-lint, backend-format, backend-tests, backend-blocking-io, backend-coverage, backend-cross-ref, frontend-lint, frontend-tests, frontend-build, dep-audit]
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - name: Check all jobs
+        run: |
+          results=("${{ needs.backend-lint.result }}" \
+                   "${{ needs.backend-format.result }}" \
+                   "${{ needs.backend-tests.result }}" \
+                   "${{ needs.backend-blocking-io.result }}" \
+                   "${{ needs.backend-coverage.result }}" \
+                   "${{ needs.backend-cross-ref.result }}" \
+                   "${{ needs.frontend-lint.result }}" \
+                   "${{ needs.frontend-tests.result }}" \
+                   "${{ needs.frontend-build.result }}" \
+                   "${{ needs.dep-audit.result }}")
+          for r in "${results[@]}"; do
+            if [ "$r" != "success" ]; then
+              echo "::error::Gate failed: $r"
+              exit 1
+            fi
+          done
+          echo "All gates passed."

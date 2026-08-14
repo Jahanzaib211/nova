@@ -307,7 +307,7 @@ export function ActivityPanel({
             </div>
           ) : (
             timeline.map((event, i) => (
-              <ActivityEventCard key={i} index={i} event={event} />
+              <ActivityEventCard key={event.id || i} index={i} event={event} />
             ))
           )}
           <div ref={bottomRef} />
@@ -363,7 +363,7 @@ export function TaskChecklist({
           const isInProgress = todo.status === "in_progress";
           return (
             <div
-              key={i}
+              key={todo.content || i}
               className={cn(
                 "flex items-start gap-1.5 rounded px-1 py-0.5 text-xs",
                 isInProgress && "bg-muted/40",
