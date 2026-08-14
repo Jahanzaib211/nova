@@ -18,7 +18,7 @@ always correct regardless of the public host behind nginx.
 from __future__ import annotations
 
 import logging
-import uuid
+import secrets
 from datetime import datetime
 from typing import Any
 
@@ -85,7 +85,7 @@ async def create_share_link(thread_id: str, request: Request) -> ShareThreadResp
         if existing is not None:
             return ShareThreadResponse(token=existing.token, thread_id=thread_id, shared=True)
 
-        token = uuid.uuid4().hex
+        token = secrets.token_urlsafe(32)
         session.add(SharedThreadRow(token=token, thread_id=thread_id))
         await session.commit()
 

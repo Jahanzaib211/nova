@@ -75,6 +75,11 @@ export function TodoList({
           collapsed ? "h-0 pb-3" : "h-28 pb-4",
         )}
       >
+        <div role="status" aria-live="polite" className="sr-only">
+          {`${todos.length} ${t.a11y.todos}${
+            todos.some((todo) => todo.status === "in_progress") ? ", " + (todos.find((td) => td.status === "in_progress")?.content ?? "") : ""
+          }`}
+        </div>
         <QueueList className="bg-background mt-0 w-full rounded-t-xl">
           {todos.map((todo, i) => (
             <QueueItem key={i + (todo.content ?? "")}>

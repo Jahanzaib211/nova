@@ -26,6 +26,7 @@ export const enUS: Translations = {
     rename: "Rename",
     history: "History",
     share: "Share",
+    createShareLink: "Create share link",
     shareHint:
       "Anyone with the link can view this conversation read-only.",
     sharePlaceholder: "Creating share link…",

@@ -15,6 +15,7 @@ export interface Translations {
     rename: string;
     history: string;
     share: string;
+    createShareLink: string;
     shareHint: string;
     sharePlaceholder: string;
     copyLink: string;

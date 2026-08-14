@@ -88,7 +88,7 @@ def test_share_roundtrip_is_public_and_sanitized(db_session_factory):
     body = created.json()
     assert body["shared"] is True
     assert body["thread_id"] == "thread-1"
-    assert len(body["token"]) == 32
+    assert len(body["token"]) >= 32
 
     shared = client.get(f"/api/share/{body['token']}")
     assert shared.status_code == 200

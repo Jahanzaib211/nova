@@ -27,6 +27,7 @@ export const zhCN: Translations = {
     history: "历史记录",
     share: "分享",
     shareHint: "获得链接的任何人都可以只读查看此对话。",
+    createShareLink: "生成分享链接",
     sharePlaceholder: "正在创建分享链接…",
     copyLink: "复制链接",
     shareRevoked: "分享链接已撤销",

@@ -104,7 +104,15 @@ export function CreditsMeter() {
               {t.settings.account.creditsUsedToday}
             </span>
           </div>
-          <div className="bg-muted h-2 overflow-hidden rounded-full">
+          <div
+            className="bg-muted h-2 overflow-hidden rounded-full"
+            role="progressbar"
+            aria-label={t.settings.account.creditsUsedToday}
+            aria-valuenow={Math.round(usedPct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={`${credits.used.toLocaleString()} / ${credits.daily_limit.toLocaleString()}`}
+          >
             <div
               className={
                 low

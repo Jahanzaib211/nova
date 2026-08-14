@@ -17,6 +17,7 @@ just spread requests across replicas to multiply their effective quota).
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from collections.abc import Awaitable, Callable
 
@@ -59,6 +60,29 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _trusted_proxy_cidrs() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """Parse AUTH_TRUSTED_PROXIES (comma-separated CIDRs) into a tuple."""
+    raw = os.environ.get("AUTH_TRUSTED_PROXIES", "")
+    out: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            out.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            continue
+    return tuple(out)
+
+
+def _ip_in_trusted_set(ip_str: str, cidrs: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return False
+    return any(ip in cidr for cidr in cidrs)
+
+
 # Env-overridable so operators can tighten/loosen without a code change.
 _COST_WINDOW_SECONDS = float(_int_env("NOVA_RUN_RATE_WINDOW", 60))
 _COST_MAX_ATTEMPTS = _int_env("NOVA_RUN_RATE_MAX", 60)
@@ -74,9 +98,14 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
     def _client_ip(self, request: Request) -> str:
         # Honor X-Forwarded-For (nginx) first hop, else peer.
         xff = request.headers.get("x-forwarded-for")
-        if xff:
+        peer = request.client.host if request.client else "unknown"
+        # Only trust X-Forwarded-For when the TCP peer is in the trusted-proxy
+        # CIDR list. Without this guard, any direct client can spoof their IP
+        # by setting the header themselves and bypass the rate limiter.
+        trusted = _trusted_proxy_cidrs()
+        if trusted and xff and _ip_in_trusted_set(peer, trusted):
             return xff.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+        return peer
 
     def _classify(self, path: str) -> tuple[str, float, int] | None:
         """Return ``(tier, window_seconds, max_attempts)`` for a throttled path."""

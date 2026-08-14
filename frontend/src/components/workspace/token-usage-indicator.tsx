@@ -2,7 +2,7 @@
 
 import type { Message } from "@langchain/langgraph-sdk";
 import { ChevronDownIcon, CoinsIcon } from "lucide-react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,7 +39,7 @@ interface TokenUsageIndicatorProps {
   className?: string;
 }
 
-export function TokenUsageIndicator({
+export function TokenUsageIndicator_({
   threadId,
   messages,
   pendingMessages,
@@ -164,3 +164,5 @@ function presetKeyToTranslationKey(preset: TokenUsageViewPreset) {
       return preset;
   }
 }
+
+export const TokenUsageIndicator = memo(TokenUsageIndicator_);
