@@ -41,7 +41,20 @@ export function CreditsMeter() {
     void load();
   }, []);
 
-  if (error || !credits) return null;
+  if (error) {
+    return (
+      <SettingsSection
+        title={t.settings.account.creditsTitle}
+        description={t.settings.account.creditsDescription}
+      >
+        <p className="text-muted-foreground text-sm">
+          Credits information unavailable.
+        </p>
+      </SettingsSection>
+    );
+  }
+
+  if (!credits) return null;
 
   const usedPct =
     credits.daily_limit > 0
@@ -63,6 +76,8 @@ export function CreditsMeter() {
         setShowForm(false);
         setReason("");
       }
+    } catch {
+      // Request failed — user can retry
     } finally {
       setSending(false);
     }
