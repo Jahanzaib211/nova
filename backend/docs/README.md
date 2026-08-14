@@ -1,57 +1,19 @@
-# Documentation
+# backend/docs
 
-This directory contains detailed documentation for the Nova backend.
+Developer-facing documentation for the Nova backend.
 
-## Quick Links
+## Contents
 
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture overview |
-| [API.md](API.md) | Complete API reference |
-| [AUTH_DESIGN.md](AUTH_DESIGN.md) | User authentication, CSRF, and per-user isolation design |
-| [CONFIGURATION.md](CONFIGURATION.md) | Configuration options |
-| [SETUP.md](SETUP.md) | Quick setup guide |
+- `API.md` — Gateway REST API reference
+- `ARCHITECTURE.md` — Backend architecture details
+- `CONFIGURATION.md` — Configuration options reference
+- `FILE_UPLOAD.md` — File upload feature docs
+- `PATH_EXAMPLES.md` — Virtual and physical path examples
+- `STREAMING.md` — SSE streaming design and testing strategy
+- `IM_CHANNEL_CONNECTIONS.md` — User-owned IM channel connection setup
+- `GUARDRAILS.md` — Guardrail middleware setup and provider protocol
 
-## Feature Documentation
+## Also see
 
-| Document | Description |
-|----------|-------------|
-| [STREAMING.md](STREAMING.md) | Token-level streaming design: Gateway vs NovaClient paths, `stream_mode` semantics, per-id dedup |
-| [FILE_UPLOAD.md](FILE_UPLOAD.md) | File upload functionality |
-| [PATH_EXAMPLES.md](PATH_EXAMPLES.md) | Path types and usage examples |
-| [SANDBOX_MEMORY_PROFILING.md](SANDBOX_MEMORY_PROFILING.md) | Sandbox memory baseline and runtime comparison guide |
-| [summarization.md](summarization.md) | Context summarization feature |
-| [plan_mode_usage.md](plan_mode_usage.md) | Plan mode with TodoList |
-| [AUTO_TITLE_GENERATION.md](AUTO_TITLE_GENERATION.md) | Automatic title generation |
-
-## Development
-
-| Document | Description |
-|----------|-------------|
-| [TODO.md](TODO.md) | Planned features and known issues |
-
-## Getting Started
-
-1. **New to Nova?** Start with [SETUP.md](SETUP.md) for quick installation
-2. **Configuring the system?** See [CONFIGURATION.md](CONFIGURATION.md)
-3. **Understanding the architecture?** Read [ARCHITECTURE.md](ARCHITECTURE.md)
-4. **Building integrations?** Check [API.md](API.md) for API reference
-
-## Document Organization
-
-```
-docs/
-├── README.md                  # This file
-├── ARCHITECTURE.md            # System architecture
-├── API.md                     # API reference
-├── AUTH_DESIGN.md             # User authentication and isolation design
-├── CONFIGURATION.md           # Configuration guide
-├── SETUP.md                   # Setup instructions
-├── FILE_UPLOAD.md             # File upload feature
-├── PATH_EXAMPLES.md           # Path usage examples
-├── summarization.md           # Summarization feature
-├── plan_mode_usage.md         # Plan mode feature
-├── STREAMING.md               # Token-level streaming design
-├── AUTO_TITLE_GENERATION.md   # Title generation (incl. implementation notes)
-└── TODO.md                    # Roadmap and issues
-```
+- `backend/CLAUDE.md` — project rules for AI coding assistants
+- `backend/Makefile` — `make test`, `make lint`, `make gateway`

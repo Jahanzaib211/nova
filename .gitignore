@@ -100,6 +100,7 @@ pr-build/
 /tmp/
 .kilo/
 .opencode/nova-agent-workspace/
+.nova/self-audit/
 .playwright-mcp/
 
 # AMD hackathon local smoke-test artifacts

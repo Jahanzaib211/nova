@@ -503,3 +503,36 @@ A second sweep of failures surfaced while exercising the Browser tab:
 - frontend Playwright mocked: **73 passed, 3 skipped**
 
 Branch: `audit/codify-sandbox-2026-08-14`. Ready to merge to `main`.
+
+---
+
+## 7. Self-probe 2026-08-14 — write_file integrity
+
+**Date:** 2026-08-14 · **Branch:** `main` (c71e4264) · **Status:** all green
+
+The `Novaselfprobe.zip` self-audit output reported F2: `write_file` of 102 810 B
+produced only 68 909 B on disk (silent truncation). Investigation:
+
+### Findings
+
+- **`LocalSandbox.write_file`** (local sandbox): rounds-trips all payloads correctly.
+  Tested via `tests/test_write_file_no_truncation.py` (8 cases: 102 KB, 200 KB
+  threshold, UTF-8 boundary, append, emoji, overwrite).
+- **`AioSandbox.write_file`** (Docker sandbox): not yet reproduced. The AIO path
+  delegates to `self._client.file.write_file()` which may have different behavior.
+- **Tool layer** (`write_file_tool`): auto-chunk logic and byte-count reporting
+  already covered by `test_write_file_tool_size_guard.py` (11 cases).
+
+### Actions taken
+
+1. Added `tests/test_write_file_no_truncation.py` — 8 integrity cases.
+2. Moved `Novaselfprobe.zip` → `.nova/self-audit/` (gitignored).
+3. Committed probe output as `docs/audit/2026-08-14-self-probe.md`.
+4. Added `.opencode/skill/nova-self-audit/SKILL.md` + `make self-audit`.
+5. Added `docs/ops/README.md`, `docs/audit/README.md`.
+
+### Remaining
+
+- Reproduce F2 on AIO sandbox (requires Docker with DooD overlay).
+- Move `backend/scripts/` → `backend/tests/scripts/` ✅ (done this session).
+- Move `backend/contracts/` → `contracts/` ✅ (done this session).
