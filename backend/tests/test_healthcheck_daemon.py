@@ -175,20 +175,14 @@ class TestDispatchFixes:
 class TestFixCircuitBreaker:
     def _red_cycle(self, state, probe="P11_dify"):
         state.cycle_id += 1
-        report = healthcheck.CycleReport(
-            cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0
-        )
+        report = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
         report.add(healthcheck.ProbeResult(probe, healthcheck.Status.RED, "down", 1.0))
         healthcheck.dispatch_fixes(report, state)
         return report
 
-    def test_failing_repair_backs_off_instead_of_retrying_every_cycle(
-        self, monkeypatch
-    ):
+    def test_failing_repair_backs_off_instead_of_retrying_every_cycle(self, monkeypatch):
         attempts: list[int] = []
-        monkeypatch.setattr(
-            healthcheck, "fix_dify", lambda: attempts.append(1) or False
-        )
+        monkeypatch.setattr(healthcheck, "fix_dify", lambda: attempts.append(1) or False)
 
         state = healthcheck.WatchdogState()
         for _ in range(12):
@@ -199,13 +193,9 @@ class TestFixCircuitBreaker:
         assert len(attempts) < 6, f"repair retried too eagerly: {len(attempts)}"
         assert state.fix_failures["P11_dify"] == len(attempts)
 
-    def test_circuit_opens_after_repeated_failures_and_stops_all_attempts(
-        self, monkeypatch
-    ):
+    def test_circuit_opens_after_repeated_failures_and_stops_all_attempts(self, monkeypatch):
         attempts: list[int] = []
-        monkeypatch.setattr(
-            healthcheck, "fix_dify", lambda: attempts.append(1) or False
-        )
+        monkeypatch.setattr(healthcheck, "fix_dify", lambda: attempts.append(1) or False)
 
         state = healthcheck.WatchdogState()
         for _ in range(400):
@@ -229,9 +219,7 @@ class TestFixCircuitBreaker:
 
         # Probe goes GREEN on its own -> breaker resets, repairs re-armed.
         state.cycle_id += 1
-        report = healthcheck.CycleReport(
-            cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0
-        )
+        report = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
         report.add(healthcheck.ProbeResult("P11_dify", healthcheck.Status.GREEN, "ok", 1.0))
         healthcheck.dispatch_fixes(report, state)
 
@@ -239,9 +227,7 @@ class TestFixCircuitBreaker:
         assert "P11_dify" not in state.fix_failures
 
         attempts: list[int] = []
-        monkeypatch.setattr(
-            healthcheck, "fix_dify", lambda: attempts.append(1) or True
-        )
+        monkeypatch.setattr(healthcheck, "fix_dify", lambda: attempts.append(1) or True)
         for _ in range(2):
             self._red_cycle(state)
         assert attempts == [1]
@@ -261,9 +247,7 @@ class TestDisabledProbes:
         assert healthcheck.disabled_probes() == set()
 
     def test_parses_and_strips_names(self, monkeypatch):
-        monkeypatch.setenv(
-            "HEALTHCHECK_DISABLED_PROBES", " P9_bridge , P11_dify ,, P12_tunnel "
-        )
+        monkeypatch.setenv("HEALTHCHECK_DISABLED_PROBES", " P9_bridge , P11_dify ,, P12_tunnel ")
         assert healthcheck.disabled_probes() == {"P9_bridge", "P11_dify", "P12_tunnel"}
 
     @pytest.mark.asyncio
@@ -271,9 +255,7 @@ class TestDisabledProbes:
         ran: list[str] = []
 
         async def fake_green(*args, **kwargs):
-            return healthcheck.ProbeResult(
-                "mock", healthcheck.Status.GREEN, "mock-ok", 1.0
-            )
+            return healthcheck.ProbeResult("mock", healthcheck.Status.GREEN, "mock-ok", 1.0)
 
         for name in [
             "probe_nginx",
@@ -290,22 +272,19 @@ class TestDisabledProbes:
 
         # These three must never be invoked at all — not merely ignored.
         for name in ["probe_llama_bridge", "probe_dify", "probe_tunnel"]:
+
             async def spy(*args, _n=name, **kwargs):
                 ran.append(_n)
                 return await fake_green()
 
             monkeypatch.setattr(healthcheck, name, spy)
 
-        monkeypatch.setenv(
-            "HEALTHCHECK_DISABLED_PROBES", "P9_bridge,P11_dify,P12_tunnel"
-        )
+        monkeypatch.setenv("HEALTHCHECK_DISABLED_PROBES", "P9_bridge,P11_dify,P12_tunnel")
         report = await healthcheck.run_cycle(healthcheck.WatchdogState())
 
         assert ran == []
         assert len(report.probes) == 9
-        assert {p.name for p in report.probes}.isdisjoint(
-            {"P9_bridge", "P11_dify", "P12_tunnel"}
-        )
+        assert {p.name for p in report.probes}.isdisjoint({"P9_bridge", "P11_dify", "P12_tunnel"})
 
 
 # ---------------------------------------------------------------------------

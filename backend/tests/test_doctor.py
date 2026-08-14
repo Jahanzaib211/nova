@@ -466,6 +466,37 @@ class TestCheckSandbox:
         results = doctor.check_sandbox(cfg)
         assert any(result.label == "container runtime available" and result.status == "warn" for result in results)
 
+    def test_container_sandbox_dood_daemon_unreachable_fails(self, tmp_path, monkeypatch):
+        """aio/DooD mode must fail loudly when the Docker CLI works but the daemon does not.
+
+        This is the 2026-08-10 regression: the stack was started without the
+        docker-compose.dood.yaml overlay, so the gateway had a docker CLI but no
+        socket — every sandbox tool call failed with a generic daemon error.
+        """
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("config_version: 5\nsandbox:\n  use: deerflow.community.aio_sandbox:AioSandboxProvider\ntools: []\n")
+        monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/docker")
+        monkeypatch.setattr(doctor, "_run", lambda _cmd: None)
+        results = doctor.check_sandbox(cfg)
+        assert any(result.label == "docker daemon reachable" and result.status == "fail" for result in results)
+
+    def test_container_sandbox_dood_daemon_reachable_ok(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("config_version: 5\nsandbox:\n  use: deerflow.community.aio_sandbox:AioSandboxProvider\ntools: []\n")
+        monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/docker")
+        monkeypatch.setattr(doctor, "_run", lambda _cmd: "29.6.2")
+        results = doctor.check_sandbox(cfg)
+        assert any(result.label == "docker daemon reachable" and result.status == "ok" for result in results)
+
+    def test_container_sandbox_provisioner_mode_skips_daemon_probe(self, tmp_path, monkeypatch):
+        """Provisioner (Kubernetes) mode does not mount the socket, so no probe."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("config_version: 5\nsandbox:\n  use: deerflow.community.aio_sandbox:AioSandboxProvider\n  provisioner_url: http://provisioner:8002\ntools: []\n")
+        monkeypatch.setattr(doctor.shutil, "which", lambda _name: "/usr/bin/docker")
+        monkeypatch.setattr(doctor, "_run", lambda _cmd: (_ for _ in ()).throw(AssertionError("probe must not run in provisioner mode")))
+        results = doctor.check_sandbox(cfg)
+        assert not any(result.label == "docker daemon reachable" for result in results)
+
 
 # ---------------------------------------------------------------------------
 # main() exit code

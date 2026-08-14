@@ -57,6 +57,7 @@ help:
 	@echo "  docker-init            Pull sandbox image (only once or when image updates)"
 	@echo "  docker-start           Start the dev stack (auto-detects sandbox mode from config.yaml)"
 	@echo "  docker-stop            Stop the dev stack"
+	@echo "  docker-status          Report sandbox mode + DooD socket + gateway health"
 	@echo "  docker-logs [ARGS=...] Tail dev stack logs (ARGS passed to scripts/docker.sh logs)"
 	@echo "  up                     Build + start the production stack (./scripts/deploy.sh)"
 	@echo "  down                   Tear down the production stack"
@@ -124,6 +125,9 @@ docker-start:
 
 docker-stop:
 	@./scripts/docker.sh stop
+
+docker-status:
+	@./scripts/docker.sh status
 
 docker-logs:
 	@./scripts/docker.sh logs $(ARGS)

@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { loadMCPConfig, MCPConfigRequestError, updateMCPConfig } from "./api";
+import {
+  loadMCPConfig,
+  MCPConfigRequestError,
+  resetMCPCache,
+  updateMCPConfig,
+} from "./api";
 import type { MCPServerConfig } from "./types";
 
 export function useMCPConfig() {
@@ -112,6 +117,16 @@ export function useDeleteMCPServer() {
       delete remaining[serverName];
       await updateMCPConfig({ mcp_servers: remaining });
     },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["mcpConfig"] });
+    },
+  });
+}
+
+export function useResetMCPCache() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => resetMCPCache(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["mcpConfig"] });
     },

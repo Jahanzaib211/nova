@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 18
+config_version: 19
 
 # ============================================================================
 # Logging
@@ -1522,6 +1522,27 @@ run_events:
 #   failure_threshold: 5
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
+
+# ============================================================
+# Email (self-service password reset)
+# ============================================================
+# Outbound SMTP for the forgot-password flow. When enabled, POST
+# /api/v1/auth/forgot-password emails a one-time reset link
+# (GET /reset-password?token=...) that expires after 30 minutes.
+# When disabled (default), forgot-password reports
+# password_reset_disabled so operators know the flow is inert.
+# password: is resolved as an environment variable when it starts with `$`.
+# email:
+#   enabled: false
+#   host: smtp.example.com
+#   port: 587
+#   use_tls: true        # STARTTLS (port 587); set false with use_ssl for 465
+#   use_ssl: false       # implicit TLS
+#   username: nova
+#   password: $SMTP_PASSWORD
+#   from_email: no-reply@example.com
+#   from_name: Nova
+#   reset_link_base_url: ""  # empty = use the request's own base URL
 
 # ============================================================
 # Workspace Intelligence (Phase C9/C10)

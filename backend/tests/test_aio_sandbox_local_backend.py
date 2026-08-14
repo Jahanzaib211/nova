@@ -27,6 +27,82 @@ def _install_fake_kernel(handler) -> FakeExecutionKernel:
     return fake
 
 
+class TestDooDDaemonGuard:
+    """aio/DooD daemon-reachability guard (2026-08-10 sandbox outage).
+
+    The regression: the stack was started without the docker-compose.dood.yaml
+    overlay, so the gateway had a working docker CLI but no socket — every
+    sandbox tool call failed with a generic "Cannot connect to the Docker
+    daemon". The probe and the create() guard turn that into an actionable
+    error that names the exact fix.
+    """
+
+    def _backend(self) -> LocalContainerBackend:
+        return LocalContainerBackend(
+            image="sandbox:latest",
+            base_port=8080,
+            container_prefix="sandbox",
+            config_mounts=[],
+            environment={},
+        )
+
+    def test_probe_daemon_reports_reachable(self, monkeypatch):
+        backend = self._backend()
+        monkeypatch.setattr(backend, "_runtime", "docker")
+        _install_fake_kernel(lambda request: (0, "29.6.2", ""))
+        ok, detail = backend.probe_daemon()
+        assert ok is True
+        assert "29.6.2" in detail
+
+    def test_probe_daemon_reports_unreachable(self, monkeypatch):
+        backend = self._backend()
+        monkeypatch.setattr(backend, "_runtime", "docker")
+        _install_fake_kernel(lambda request: (1, "", "Cannot connect to the Docker daemon at unix:///var/run/docker.sock"))
+        ok, detail = backend.probe_daemon()
+        assert ok is False
+        assert "Cannot connect to the Docker daemon" in detail
+
+    def test_probe_daemon_container_runtime_skips_probe(self, monkeypatch):
+        backend = self._backend()
+        monkeypatch.setattr(backend, "_runtime", "container")
+        ok, detail = backend.probe_daemon()
+        assert ok is True
+        assert "Apple Container" in detail
+
+    def test_probe_daemon_issues_server_version_command(self, monkeypatch):
+        backend = self._backend()
+        monkeypatch.setattr(backend, "_runtime", "docker")
+        fake = _install_fake_kernel(lambda request: (0, "29.6.2", ""))
+        backend.probe_daemon()
+        argv = fake.requests[0].argv
+        assert argv[0] == "docker"
+        assert "version" in argv
+        assert "{{.Server.Version}}" in argv
+
+    def test_create_raises_actionable_error_when_daemon_unreachable(self, monkeypatch):
+        backend = self._backend()
+        monkeypatch.setattr(backend, "_runtime", "docker")
+        _install_fake_kernel(lambda request: (1, "", "Cannot connect to the Docker daemon"))
+        with pytest.raises(RuntimeError, match="docker-compose.dood.yaml"):
+            backend.create(thread_id="t1", sandbox_id="guard-abc")
+
+    def test_create_proceeds_when_daemon_reachable(self, monkeypatch):
+        backend = self._backend()
+        monkeypatch.setattr(backend, "_runtime", "docker")
+
+        def fake_exec(request):
+            argv = list(request.argv)
+            if "version" in argv:
+                return (0, "29.6.2", "")
+            if "run" in argv[:2]:
+                return (0, "container-id\n", "")
+            return (0, "", "")
+
+        _install_fake_kernel(fake_exec)
+        info = backend.create(thread_id="t1", sandbox_id="guard-ok")
+        assert info.container_id == "container-id"
+
+
 def test_format_container_mount_uses_mount_syntax_for_docker_windows_paths():
     args = _format_container_mount("docker", "D:/deer-flow/backend/.deer-flow/threads", "/mnt/threads", False)
 

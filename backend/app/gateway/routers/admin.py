@@ -118,6 +118,7 @@ async def list_users(
 # route below — FastAPI matches routes in registration order, so a
 # literal segment like "recent" must win over the parametric segment.
 
+
 class RecentUserRow(BaseModel):
     """One row in the recent-users roster.
 
@@ -511,6 +512,78 @@ async def get_user_conversation_messages(
         request=request,
     )
     return AdminMessagesResponse(data=messages)
+
+
+class AdminThreadRunsResponse(BaseModel):
+    """Set of run ids for a thread, optionally filtered by status."""
+
+    thread_id: str
+    run_ids: list[str]
+    statuses: list[str]
+
+
+def _utc_iso(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC).isoformat()
+    return dt.astimezone(UTC).isoformat()
+
+
+@router.get("/users/{user_id}/conversations/{thread_id}/runs", response_model=AdminThreadRunsResponse)
+async def list_user_thread_runs(
+    user_id: str,
+    thread_id: str,
+    request: Request,
+    status_filter: str | None = Query(
+        None,
+        pattern="^(pending|running|success|error|timeout|interrupted)$",
+        description="Filter by run status. Default: all.",
+    ),
+    limit: int = Query(20, ge=1, le=200),
+) -> AdminThreadRunsResponse:
+    """List runs for a thread, newest-first by created_at.
+
+    Powers the "Cancel run" button on the conversations panel: the UI
+    sends the latest run_id from this list to the cancel endpoint. The
+    endpoint is admin-only and audited (view-thread-runs) since the
+    list of runs can be reconstructed into a private conversation timeline.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+    provider = get_local_provider()
+    if await provider.get_user(user_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if not await ThreadMetaRepository(get_session_factory()).check_access(thread_id, user_id, require_existing=True):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    from sqlalchemy import select
+
+    from deerflow.persistence.engine import get_session_factory as _sf
+    from deerflow.persistence.run.model import RunRow
+
+    sf = _sf()
+    if sf is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_NO_SQL_BACKEND_DETAIL)
+
+    async with sf() as session:
+        stmt = select(RunRow).where(RunRow.thread_id == thread_id).order_by(RunRow.created_at.desc()).limit(limit)
+        if status_filter:
+            stmt = stmt.where(RunRow.status == status_filter)
+        rows = (await session.execute(stmt)).scalars().all()
+
+    await admin_ops.record_audit(
+        actor=_actor(request),
+        action="view-thread-runs",
+        target_user_id=user_id,
+        payload={"thread_id": thread_id, "status": status_filter, "limit": limit, "rows": len(rows)},
+        request=request,
+    )
+    return AdminThreadRunsResponse(
+        thread_id=thread_id,
+        run_ids=[r.run_id for r in rows],
+        statuses=[r.status for r in rows],
+    )
 
 
 @router.get("/users/{user_id}/channels", response_model=ChannelConnectionsResponse)

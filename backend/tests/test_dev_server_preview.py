@@ -283,7 +283,7 @@ def test_ensure_host_binding():
 def test_port_alive_reflects_listening_socket():
     """dev-status liveness is judged by a real TCP connect, so a running server's
     preview persists even if the log-tail poller died."""
-    from app.gateway.routers.sandbox import _port_alive
+    from deerflow.sandbox.dev_server import port_alive as _port_alive
 
     async def _run():
         server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)

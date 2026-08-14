@@ -123,6 +123,36 @@ Defaults flipped to fp32 in `scripts/fetch-voice-models.sh`,
 `scripts/docker.sh`, `docker/docker-compose.voice.yaml`, `.env`, and the
 real-engine test's model preference order.
 
+### Sandbox outage — codified
+
+The "Docker daemon unreachable" failure mode that kept recurring had the same
+shape every time: the gateway container was started *without* the DooD overlay,
+so `unix:///var/run/docker.sock` was not mounted inside it. The container was
+healthy, the host daemon was fine, but AIO sandboxes could not spawn.
+
+Recovery now lives in `scripts/docker.sh` (called via `make docker-status` /
+`make docker-start`):
+
+- `start()` always appends `docker-compose.dood.yaml` when `sandbox.use`
+  resolves to `deerflow.community.aio_sandbox:AioSandboxProvider` and
+  `provisioner_url` is empty. There is no longer a code path that brings the
+  gateway up in `aio` mode without the socket bind.
+- `status()` (new) prints four signals in one shot: host socket present,
+  gateway container running, socket mounted inside the gateway, gateway
+  health probe. If any link is broken it names the missing piece and the
+  exact recovery command. Use this as the first check after any outage
+  report; it removes the "looks healthy but tools all 502" ambiguity.
+- The host script refuses to start in `aio` mode when the host socket is
+  missing at all — `start()` exits 1 instead of bringing the stack up in a
+  permanently broken state.
+
+If you see "sandbox is down" again, the canonical one-liner is:
+
+```bash
+make docker-status    # tells you exactly which link is broken
+make docker-start     # idempotent: appends DooD overlay, force-recreates gateway
+```
+
 ### Voice settings panel (P3) — done
 
 `Settings → Voice`. Backend `GET/PUT/DELETE /api/voice/config` plus

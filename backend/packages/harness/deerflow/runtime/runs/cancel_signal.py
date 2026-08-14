@@ -24,10 +24,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-REDIS_INSTALL = (
-    "redis is required for the redis cancel signal. Install the package extra with: "
-    "pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
-)
+REDIS_INSTALL = "redis is required for the redis cancel signal. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
 
 
 class CancelSignal(abc.ABC):

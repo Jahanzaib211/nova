@@ -397,6 +397,73 @@ stop() {
     echo -e "${GREEN}✓ Docker services stopped${NC}"
 }
 
+# Status: report whether the dev stack is healthy and the gateway can reach
+# the host Docker socket (the AioSandboxProvider's DooD mount). This is the
+# one-shot answer to "is the sandbox actually working right now?" — it catches
+# the two common failure modes:
+#   1. docker daemon down / socket missing on host
+#   2. gateway container started without the DooD overlay, so AIO sandboxes
+#      silently cannot spawn even though `docker ps` looks fine
+# Run from anywhere; resolves PROJECT_ROOT itself.
+status() {
+    local sandbox_mode
+    sandbox_mode="$(detect_sandbox_mode)"
+
+    echo "=========================================="
+    echo "  DeerFlow Docker Status"
+    echo "=========================================="
+    echo ""
+
+    if ! docker_available; then
+        echo -e "${YELLOW}✗ Docker CLI or daemon unavailable.${NC}"
+        echo "  Install/start Docker, then re-run: $0 status"
+        return 1
+    fi
+
+    echo -e "${BLUE}Sandbox mode (config.yaml): ${sandbox_mode}${NC}"
+
+    local socket="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
+    if [ -S "$socket" ]; then
+        echo -e "${GREEN}✓ Host Docker socket present: ${socket}${NC}"
+    else
+        echo -e "${YELLOW}✗ Host Docker socket missing: ${socket}${NC}"
+        echo "  Start Docker, or set DEER_FLOW_DOCKER_SOCKET to a valid path."
+    fi
+
+    local gateway_container="deer-flow-gateway"
+    local state
+    state="$(docker inspect -f '{{.State.Status}}' "$gateway_container" 2>/dev/null || echo absent)"
+    if [ "$state" = "absent" ]; then
+        echo -e "${YELLOW}✗ ${gateway_container} not running. Run: $0 start${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ ${gateway_container} container: ${state}${NC}"
+
+    if docker exec "$gateway_container" test -S /var/run/docker.sock 2>/dev/null; then
+        echo -e "${GREEN}✓ Docker socket mounted inside gateway (DooD OK).${NC}"
+    else
+        echo -e "${YELLOW}✗ Docker socket NOT mounted inside gateway.${NC}"
+        if [ "$sandbox_mode" = "aio" ]; then
+            echo "  Sandbox mode is aio but the DooD overlay is missing."
+            echo "  Run: $0 start   (it will append docker-compose.dood.yaml automatically)"
+        else
+            echo "  Sandbox mode is ${sandbox_mode}; DooD not required by config."
+        fi
+        return 1
+    fi
+
+    local health
+    health="$(docker inspect -f '{{.State.Health.Status}}' "$gateway_container" 2>/dev/null || echo none)"
+    echo -e "${BLUE}Gateway health probe: ${health}${NC}"
+
+    echo ""
+    echo -e "${BLUE}Containers:${NC}"
+    docker ps --filter "label=com.docker.compose.project=deer-flow-dev" --format "  table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null \
+        | sed 's/^/  /'
+
+    return 0
+}
+
 # Restart Docker development environment
 restart() {
     echo "========================================"
@@ -451,6 +518,9 @@ main() {
             ;;
         stop)
             stop
+            ;;
+        status)
+            status
             ;;
         help|--help|-h|"")
             help

@@ -97,3 +97,112 @@ export async function installSkill(
 
   return response.json();
 }
+
+export interface CustomSkillContent extends Skill {
+  content: string;
+}
+
+export interface CustomSkillHistoryEntry {
+  ts?: string;
+  action?: string;
+  author?: string;
+  thread_id?: string | null;
+  file_path?: string;
+  prev_content?: string | null;
+  new_content?: string | null;
+  rollback_from_ts?: string | null;
+  scanner?: { decision?: string; reason?: string };
+  [key: string]: unknown;
+}
+
+async function readDetail(response: Response, fallback: string): Promise<never> {
+  const error = (await response.json().catch(() => ({}))) as {
+    detail?: unknown;
+  };
+  const message =
+    typeof error.detail === "string" ? error.detail : fallback;
+  throw new Error(message);
+}
+
+export async function loadCustomSkill(
+  skillName: string,
+): Promise<CustomSkillContent> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/custom/${encodeURIComponent(skillName)}`,
+  );
+  if (!response.ok) {
+    await readDetail(response, "Failed to load custom skill");
+  }
+  return response.json();
+}
+
+export async function updateCustomSkill(
+  skillName: string,
+  content: string,
+): Promise<CustomSkillContent> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/custom/${encodeURIComponent(skillName)}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content }),
+    },
+  );
+  if (!response.ok) {
+    await readDetail(
+      response,
+      "Failed to save custom skill (the security scanner may have blocked the edit)",
+    );
+  }
+  return response.json();
+}
+
+export async function deleteCustomSkill(skillName: string): Promise<void> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/custom/${encodeURIComponent(skillName)}`,
+    {
+      method: "DELETE",
+    },
+  );
+  if (!response.ok) {
+    await readDetail(response, "Failed to delete custom skill");
+  }
+}
+
+export async function loadCustomSkillHistory(
+  skillName: string,
+): Promise<CustomSkillHistoryEntry[]> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/custom/${encodeURIComponent(skillName)}/history`,
+  );
+  if (!response.ok) {
+    await readDetail(response, "Failed to load skill history");
+  }
+  const json = (await response.json()) as { history?: CustomSkillHistoryEntry[] };
+  return Array.isArray(json.history) ? json.history : [];
+}
+
+export async function rollbackCustomSkill(
+  skillName: string,
+  historyIndex: number,
+): Promise<CustomSkillContent> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/skills/custom/${encodeURIComponent(skillName)}/rollback`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ history_index: historyIndex }),
+    },
+  );
+  if (!response.ok) {
+    await readDetail(
+      response,
+      "Rollback failed (the security scanner may have blocked the content)",
+    );
+  }
+  return response.json();
+}

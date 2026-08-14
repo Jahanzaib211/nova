@@ -52,3 +52,20 @@ export async function updateMCPConfig(config: MCPConfig) {
   }
   return response.json();
 }
+
+/**
+ * Drops the gateway's cached MCP tool-discovery results so a reloaded
+ * server's tool list is picked up on the next run without a restart.
+ */
+export async function resetMCPCache() {
+  const response = await fetch(`${getBackendBaseURL()}/api/mcp/cache/reset`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new MCPConfigRequestError(
+      response.status,
+      await readErrorDetail(response, "Failed to reset MCP cache"),
+    );
+  }
+  return response.json();
+}

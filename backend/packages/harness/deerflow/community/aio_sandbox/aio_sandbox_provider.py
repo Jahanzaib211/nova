@@ -415,6 +415,13 @@ class AioSandboxProvider(SandboxProvider):
                         # Re-acquired (activity updated) since the snapshot — skip.
                         logger.info(f"Sandbox {sandbox_id} was re-acquired before idle destroy, skipping")
                         continue
+                # Skip sandboxes whose thread runs a live dev-server preview: the
+                # preview proxy never calls provider.get(), so user-visible preview
+                # traffic does not refresh _last_activity — without this the reaper
+                # destroys an actively-watched preview every idle_timeout.
+                if self._thread_has_live_dev_server(sandbox_id):
+                    logger.info(f"Sandbox {sandbox_id} hosts a live dev-server preview; skipping idle destroy")
+                    continue
                 logger.info(f"Destroying idle sandbox {sandbox_id}")
                 self.destroy(sandbox_id)
             except Exception as e:
@@ -427,6 +434,24 @@ class AioSandboxProvider(SandboxProvider):
                 logger.info(f"Destroyed idle warm-pool sandbox {sandbox_id}")
             except Exception as e:
                 logger.error(f"Failed to destroy idle warm-pool sandbox {sandbox_id}: {e}")
+
+    def _thread_has_live_dev_server(self, sandbox_id: str) -> bool:
+        """True if any thread using this sandbox has a live dev-server handle.
+
+        The dev-server registry lives in the same gateway process, so this can
+        consult it directly. Lazy import keeps the module dependency acyclic
+        (dev_server imports this provider lazily, never the other way round).
+        """
+        with self._lock:
+            thread_ids = [tid for tid, sid in self._thread_sandboxes.items() if sid == sandbox_id]
+        if not thread_ids:
+            return False
+        try:
+            from deerflow.sandbox.dev_server import has_live_dev_server
+
+            return any(has_live_dev_server(tid) for tid in thread_ids)
+        except Exception:
+            return False
 
     # ── Signal handling ──────────────────────────────────────────────────
 
@@ -921,6 +946,19 @@ class AioSandboxProvider(SandboxProvider):
 
         host = urlparse(info.sandbox_url).hostname or os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
         return host, host_port
+
+    def mark_active(self, thread_id: str) -> None:
+        """Refresh the idle timer for the thread's sandbox.
+
+        Called by the gateway on user-visible sandbox traffic that does not go
+        through ``acquire``/``get`` (dev-server preview proxies, terminal/VNC
+        appview traffic) so the idle reaper does not destroy a sandbox that is
+        actively being watched.
+        """
+        with self._lock:
+            sandbox_id = self._thread_sandboxes.get(thread_id)
+            if sandbox_id is not None:
+                self._last_activity[sandbox_id] = time.time()
 
     def release(self, sandbox_id: str) -> None:
         """Release a sandbox from active use into the warm pool.

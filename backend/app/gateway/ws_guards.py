@@ -16,6 +16,33 @@ from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id
 
 
+async def ws_user(websocket: WebSocket):
+    """Authenticate a WebSocket upgrade from its session cookie.
+
+    The global auth middleware is a :class:`BaseHTTPMiddleware`, and Starlette
+    skips that class entirely for non-HTTP scope — so a WebSocket handler never
+    gets ``request.state.user`` and the user contextvar is never set. Without
+    this, every ``caller_owns_thread`` check inside a ws handler resolves to
+    ``DEFAULT_USER_ID`` and the socket is rejected for real users.
+
+    Returns the authenticated user (from the ``access_token`` cookie) or
+    ``None``. Handlers must ``set_current_user(user)`` around their body so
+    downstream ownership checks see the real caller.
+    """
+    from starlette.requests import Request
+
+    # WebSocket scope is not "http", which Request asserts on. The headers are
+    # the handshake headers (including the Cookie header), so a shallow copy
+    # with the type patched is enough to read cookies.
+    scope = dict(websocket.scope)
+    scope["type"] = "http"
+    request = Request(scope, websocket.receive, websocket.send)
+
+    from app.gateway.deps import get_optional_user_from_request
+
+    return await get_optional_user_from_request(request)
+
+
 def caller_owns_thread(thread_id: str) -> bool:
     """Does the calling user own this thread?
 

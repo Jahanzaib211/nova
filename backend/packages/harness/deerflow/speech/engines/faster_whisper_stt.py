@@ -77,8 +77,7 @@ class FasterWhisperSTT(SpeechToText):
                 # Losing speech entirely over that would be a worse outcome than
                 # running slowly, so fall back, loudly.
                 logger.warning(
-                    "faster-whisper failed to load on CUDA (%s); falling back to CPU. "
-                    "If this is the CUDA runtime, install the GPU extra: uv sync --extra voice-gpu",
+                    "faster-whisper failed to load on CUDA (%s); falling back to CPU. If this is the CUDA runtime, install the GPU extra: uv sync --extra voice-gpu",
                     e,
                 )
                 device = "cpu"

@@ -14,7 +14,7 @@
 | **Frontend UI** | Functional, missing observability + active feedback + component test coverage | Medium |
 | **Deployment** | Recoverable (docker-compose + pm2) | Medium (nginx single point of failure) |
 | **Observability** | Partial: structured logs ✅, Prometheus ✅, UI readback ❌ | Medium |
-| **Test coverage** | 822 tests across both layers, 100% green | Low |
+| **Test coverage** | Backend 6386 tests + Frontend 553 unit + 73 Playwright + 19 blocking-IO, 100% green | Low |
 | **Documentation** | Per-sprint FORK_V{3..7}.md, consolidated here | Low |
 
 ---

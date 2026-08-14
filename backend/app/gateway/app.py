@@ -36,6 +36,7 @@ from app.gateway.routers import (
     models,
     referral,
     runs,
+    sharing,
     skills,
     suggestions,
     thread_runs,
@@ -408,11 +409,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # since middleware registration happens before the app starts serving.
     _rate_limiter_stream_bridge_config = getattr(get_app_config(), "stream_bridge", None)
     rate_limiter: RateLimiter
-    if (
-        _rate_limiter_stream_bridge_config is not None
-        and _rate_limiter_stream_bridge_config.type == "redis"
-        and _rate_limiter_stream_bridge_config.redis_url
-    ):
+    if _rate_limiter_stream_bridge_config is not None and _rate_limiter_stream_bridge_config.type == "redis" and _rate_limiter_stream_bridge_config.redis_url:
         rate_limiter = RedisRateLimiter(redis_url=_rate_limiter_stream_bridge_config.redis_url)
     else:
         rate_limiter = InMemoryRateLimiter()
@@ -501,6 +498,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Stateless Runs API (stream/wait without a pre-existing thread)
     app.include_router(runs.router)
+
+    # Public read-only thread sharing (POST/DELETE /threads/{id}/share, GET /share/{token})
+    app.include_router(sharing.router)
 
     # Sandbox observation API (logs, todo, status for Agent's Computer panel)
     app.include_router(sandbox_router.router)

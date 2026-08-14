@@ -24,6 +24,7 @@ import contextlib
 import logging
 import os
 import shlex
+import socket
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -95,6 +96,26 @@ def get_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> DevServerHandl
     return _servers.get(_server_key(thread_id, label))
 
 
+async def port_alive(host: str, port: int, timeout: float = 0.4) -> bool:
+    """Fast TCP liveness check for a dev server.
+
+    This is the authority for 'running': it stays true as long as the server
+    actually listens, regardless of whether the log-tail poller is still alive
+    (fixes 'preview showed once then went blank' when the sandbox client resets
+    between turns).
+    """
+    if not host or not port:
+        return False
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+        writer.close()
+        with contextlib.suppress(Exception):
+            await writer.wait_closed()
+        return True
+    except Exception:
+        return False
+
+
 def list_dev_servers(thread_id: str) -> list[DevServerHandle]:
     """All dev servers for a thread (used by the multi-port label dropdown)."""
     prefix = f"{thread_id}::"
@@ -119,6 +140,91 @@ def allocate_container_port(thread_id: str, label: str = DEFAULT_LABEL) -> int:
         if port not in used:
             return port
     return _PREVIEW_CONTAINER_PORTS[-1]
+
+
+async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
+    """Find a live HTTP server among the thread's published preview ports.
+
+    Used when the registered handle is missing or stale but a dev server is
+    actually listening (e.g. started outside the pipeline, or the handle went
+    dead after a sandbox re-spawn). Probes each published preview port in order
+    and returns ``(container_port, host, host_port)`` for the first hit, else
+    ``None``. Liveness is the same TCP authority the status endpoint uses.
+    """
+    from deerflow.sandbox import get_sandbox_provider
+
+    provider = get_sandbox_provider()
+    getter = getattr(provider, "get_preview_endpoint", None)
+    if getter is None:
+        return None
+    for container_port in _PREVIEW_CONTAINER_PORTS:
+        try:
+            endpoint = getter(thread_id, container_port)
+        except Exception:
+            continue
+        if not endpoint:
+            continue
+        host, host_port = endpoint
+        if await port_alive(host, host_port):
+            return (container_port, host, host_port)
+    return None
+
+
+def adopt_handle(
+    thread_id: str,
+    label: str,
+    container_port: int,
+    host: str,
+    host_port: int,
+) -> DevServerHandle:
+    """Register (or refresh) a ``ready`` handle pointing at a live server.
+
+    Used by the preview proxy / status endpoints to rescue a preview when the
+    registered handle is missing or dead but a server is actually listening on a
+    published port. Idempotent: if a live handle already exists for the key it is
+    returned unchanged.
+    """
+    existing = _servers.get(_server_key(thread_id, label))
+    if existing is not None and existing.status in ("starting", "ready"):
+        return existing
+    handle = DevServerHandle(
+        thread_id=thread_id,
+        port=host_port,
+        cwd="",
+        command="",
+        label=label,
+        host=host,
+        container_port=container_port,
+        status="ready",
+        _order=_order_counter,
+    )
+    handle.log_buffer.append(f"[deerflow] adopted live dev server on {host}:{host_port}")
+    _servers[_server_key(thread_id, label)] = handle
+    return handle
+
+
+def has_live_dev_server(thread_id: str) -> bool:
+    """True if the thread has a live dev-server handle on a listening port.
+
+    Used by the sandbox idle reaper to keep an in-use sandbox alive: the preview
+    proxy never calls ``provider.get()``, so preview traffic does not refresh the
+    idle timer and an actively-watched preview would otherwise be reaped every
+    ``idle_timeout``. Sync and thread-safe (blocking socket probe), so it can be
+    called from the reaper's plain thread.
+    """
+    for handle in list_dev_servers(thread_id):
+        if handle.status not in ("starting", "ready"):
+            continue
+        if handle.status == "starting":
+            return True  # mid-boot — don't reap while it may be coming up
+        if not handle.port:
+            continue
+        try:
+            with socket.create_connection((handle.host, handle.port), timeout=0.4):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 async def run_preview_pipeline(thread_id: str, sandbox: object, label: str = DEFAULT_LABEL) -> dict:

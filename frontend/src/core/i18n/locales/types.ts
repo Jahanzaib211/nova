@@ -13,7 +13,14 @@ export interface Translations {
     delete: string;
     edit: string;
     rename: string;
+    history: string;
     share: string;
+    shareHint: string;
+    sharePlaceholder: string;
+    copyLink: string;
+    shareRevoked: string;
+    shareFailed: string;
+    revoke: string;
     openInNewWindow: string;
     close: string;
     more: string;
@@ -483,6 +490,9 @@ export interface Translations {
       created: string;
       updated: string;
       deleted: string;
+      reloadCache: string;
+      reloadCacheHint: string;
+      cacheReloaded: string;
     };
     channels: {
       title: string;
@@ -497,6 +507,30 @@ export interface Translations {
       emptyDescription: string;
       emptyButton: string;
       updateError: string;
+      editButton: string;
+      deleteButton: string;
+      editTitle: string;
+      deleteTitle: string;
+      deleteDescription: string;
+      deleteConfirm: string;
+      editorHint: string;
+      saveButton: string;
+      historyTitle: string;
+      historyEmpty: string;
+      historyAction: string;
+      historyRollbackTitle: string;
+      historyRollbackDescription: string;
+      historyRollbackConfirm: string;
+      historyAuthor: string;
+      loadError: string;
+      notCustomError: string;
+    };
+    threadHistory: {
+      title: string;
+      description: string;
+      empty: string;
+      copyId: string;
+      loadError: string;
     };
     notification: {
       title: string;
@@ -603,6 +637,7 @@ export interface Translations {
       empty: string;
       repository: string;
       running: (count: number) => string;
+      uploadLimitsHint: string;
     };
     workspace: {
       title: string;
@@ -872,5 +907,32 @@ export interface Translations {
       submitLabel: string;
       setupPrompt: string;
     };
+  };
+
+  authPasswordReset: {
+    forgotTitle: string;
+    forgotHint: string;
+    email: string;
+    sendResetLink: string;
+    sent: string;
+    disabled: string;
+    errorGeneric: string;
+    backToLogin: string;
+    resetTitle: string;
+    resetHint: string;
+    newPassword: string;
+    confirmNewPassword: string;
+    resetSubmit: string;
+    resetSuccess: string;
+    resetLinkInvalid: string;
+    passwordsDontMatch: string;
+    forgotLink: string;
+  };
+
+  sharePage: {
+    backHome: string;
+    notFound: string;
+    notFoundHint: string;
+    messagesEmpty: string;
   };
 }

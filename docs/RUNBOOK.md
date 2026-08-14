@@ -178,6 +178,30 @@ to return 200 before emitting heartbeats. This prevents P12_tunnel from
 flagging RED during the gateway's cold start. Bound to 90 s so PM2's
 `max_restarts` kicks in if nginx is genuinely broken.
 
+### One-shot sandbox health (codified)
+
+The "sandbox is down again" reports were always the same shape: gateway
+healthy, host daemon fine, but AIO sandboxes could not spawn because
+`/var/run/docker.sock` was not mounted into the gateway container. The
+canonical first check after any such report is:
+
+```bash
+make docker-status
+```
+
+It reports (1) sandbox mode detected from `config.yaml`, (2) host socket
+presence, (3) whether the socket is mounted inside the gateway container,
+(4) gateway health probe. If the socket is missing inside the gateway,
+the message names the recovery command:
+
+```bash
+make docker-start   # idempotent; appends docker-compose.dood.yaml when needed
+```
+
+`scripts/docker.sh::start` now refuses to bring the stack up in `aio` mode
+when the host socket is missing, so a broken mount cannot be created
+silently again.
+
 ---
 
 ## 4. Deployment Procedure

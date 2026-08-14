@@ -150,3 +150,90 @@ class TestWsSameOriginGuard:
     def test_absent_origin_allowed(self) -> None:
         """Non-browser clients omit Origin; the thread-ownership check still applies."""
         assert sandbox_router._ws_same_origin(self._ws(None, "nova.example")) is True
+
+
+class TestFramedCsp:
+    """Framed panes must carry the session cookie to authenticate against the gateway.
+
+    The iframed ttyd/noVNC/preview page loads its own assets (JS, websocket
+    handshake) from the gateway. With an opaque sandbox origin those
+    sub-resource requests carry no cookies, so the global auth middleware 401s
+    every asset and the ws same-origin guard rejects ``Origin: null`` — every
+    pane goes blank. ``allow-same-origin`` keeps the sandbox boundary while
+    letting the framed content authenticate like any same-origin page.
+    """
+
+    def test_framed_csp_grants_same_origin(self) -> None:
+        csp = sandbox_router._FRAMED_SANDBOX_CSP
+        assert csp.startswith("sandbox allow-scripts")
+        assert "allow-same-origin" in csp
+
+    def test_opaque_csp_keeps_absproxy_sandboxed(self) -> None:
+        csp = sandbox_router._OPAQUE_SANDBOX_CSP
+        assert csp.startswith("sandbox allow-scripts")
+        assert "allow-same-origin" not in csp
+
+    def test_framed_csp_applied_to_appview_responses(self, owned_thread, fake_provider, monkeypatch) -> None:
+        import httpx
+
+        async def fake_fetch(*a, **k):
+            return httpx.Response(200, content=b"<html><head></head><body>ui</body></html>", headers={"content-type": "text/html"})
+
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: _FakeAsyncClient(fake_fetch))
+
+        from fastapi import Request
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        request = Request(
+            {"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b"", "client": ("x", 1), "server": ("y", 2), "scheme": "http"},
+            receive=receive,
+        )
+        resp = __import__("asyncio").run(sandbox_router._proxy_appview("thread-abc", "terminal", request))
+        assert resp.headers.get("content-security-policy") == sandbox_router._FRAMED_SANDBOX_CSP
+
+
+class _FakeAsyncClient:
+    """Minimal httpx.AsyncClient replacement for proxy tests."""
+
+    def __init__(self, fetch, *args, **kwargs):
+        self._fetch = fetch
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def request(self, method, url, headers=None, content=None):
+        return await self._fetch(method, url, headers, content)
+
+
+class TestPrefixHtmlUrls:
+    def test_rewrites_root_absolute_assets_under_prefix(self) -> None:
+        html = '<html><head><link rel="stylesheet" href="/_next/static/app.css"></head><body><a href="/about">x</a><form action="/go"></form><img src="/img.png"></body></html>'
+        out = sandbox_router._prefix_html_urls(html, "/api/sandbox/appview/t1")
+        assert 'href="/api/sandbox/appview/t1/_next/static/app.css"' in out
+        assert 'href="/api/sandbox/appview/t1/about"' in out
+        assert 'action="/api/sandbox/appview/t1/go"' in out
+        assert 'src="/api/sandbox/appview/t1/img.png"' in out
+
+    def test_is_idempotent_on_a_second_pass(self) -> None:
+        """A page proxied twice (or already made prefix-relative by the browser)
+        must never be double-prefixed."""
+        html = '<html><head><script src="/_next/static/chunks/x.js"></script></head><body><a href="/foo">f</a></body></html>'
+        once = sandbox_router._prefix_html_urls(html, "/api/sandbox/appview/t1")
+        twice = sandbox_router._prefix_html_urls(once, "/api/sandbox/appview/t1")
+        assert twice == once
+        assert "/api/sandbox/appview/t1/api/sandbox/appview/t1" not in twice
+
+    def test_leaves_absolute_http_urls_alone(self) -> None:
+        html = '<a href="https://cdn.example/x.css">x</a><script src="//other.example/stat.js"></script>'
+        out = sandbox_router._prefix_html_urls(html, "/p")
+        assert "https://cdn.example/x.css" in out
+        assert "//other.example/stat.js" in out
+
+    def test_empty_and_prefixless_input_are_noops(self) -> None:
+        assert sandbox_router._prefix_html_urls("", "/p") == ""
+        assert sandbox_router._prefix_html_urls("<html/>", "") == "<html/>"

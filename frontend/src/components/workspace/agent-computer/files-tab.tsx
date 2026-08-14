@@ -23,6 +23,10 @@ import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import {
+  useUploadLimits,
+  summarizeUploadLimits,
+} from "@/core/uploads/hooks";
+import {
   useFileImpact,
   useFileSymbols,
   useWorkspaceCommands,
@@ -386,10 +390,20 @@ export function FilesPanel({
   const commands = useWorkspaceCommands(threadId, workspaceAvailable);
 
   const hasSandboxContent = files.length > 0 || artifacts.length > 0;
+  const { data: uploadLimits } = useUploadLimits(threadId);
+  const limitsSummary = summarizeUploadLimits(uploadLimits);
 
   return (
     <div className="flex flex-col gap-2 p-2">
       <WorkspaceCard state={workspaceState} />
+      {limitsSummary && (
+        <p
+          className="text-muted-foreground/60 px-1 text-[10px]"
+          title={t.agentComputer.files.uploadLimitsHint}
+        >
+          Upload limits · {limitsSummary}
+        </p>
+      )}
       {!hasSandboxContent && (
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
           <FolderIcon className="text-muted-foreground/30 h-6 w-6" />
