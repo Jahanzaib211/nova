@@ -202,7 +202,11 @@ _TEMPLATES: dict[str, dict[str, str]] = {
         "tsconfig.json": '{"compilerOptions":{"target":"es5","lib":["dom","dom.iterable","esnext"],"allowJs":true,"skipLibCheck":true,"strict":true,"noEmit":true,"esModuleInterop":true,"module":"esnext","moduleResolution":"bundler","resolveJsonModule":true,"isolatedModules":true,"jsx":"preserve","incremental":true,"paths":{"@/*":["./src/*"]}},"include":["next-env.d.ts","**/*.ts","**/*.tsx"],"exclude":["node_modules"]}',
         "tailwind.config.ts": "import type { Config } from 'tailwindcss'\nconst config: Config = {\n  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],\n  theme: { extend: {} },\n  plugins: [],\n}\nexport default config",
         "postcss.config.js": "module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }",
-        "next.config.ts": "import type { NextConfig } from 'next'\nconst nextConfig: NextConfig = {}\nexport default nextConfig",
+        # ``next.config.ts`` is not supported by Next 14 (only Next 15+). Writing
+        # ``next.config.mjs`` is the smallest config name that works for every
+        # Next 13–15 release, so the scaffold's ``npm run dev`` never crashes
+        # with ``Configuring Next.js via 'next.config.ts' is not supported``.
+        "next.config.mjs": "/** @type {import('next').NextConfig} */\nconst nextConfig = {};\nexport default nextConfig;\n",
         "src/app/globals.css": "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
         "src/app/layout.tsx": "import type { Metadata } from 'next'\nimport './globals.css'\nexport const metadata: Metadata = { title: 'My App', description: 'Built by DeerFlow' }\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return (<html lang=\"en\"><body>{children}</body></html>)\n}",
         "src/app/page.tsx": 'export default function Home() {\n  return (<main className="min-h-screen p-8"><h1 className="text-4xl font-bold">My App</h1></main>)\n}',
@@ -1456,5 +1460,78 @@ async def stop_dev_server_tool(
         stopped = await _stop(thread_id, label or "app")
         _write_sandbox_observation(sandbox_id, "stop_dev_server", None, "Dev server stopped" if stopped else "No server running")
         return "✓ Dev server stopped." if stopped else "No dev server was running."
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@tool("register_external_dev_server", parse_docstring=True)
+async def register_external_dev_server_tool(
+    runtime: Runtime,
+    description: str,
+    port: int,
+    host: str = "127.0.0.1",
+    label: str = "app",
+) -> str:
+    """Register a dev server that is already listening on ``host:port``.
+
+    Use this when you started a dev server outside the normal
+    ``start_dev_server`` pipeline (e.g. via a raw ``bash`` tool, a custom
+    ``node`` invocation, or a human-launched process). The Agent's Computer
+    Browser tab will pick the registration up on its next ``/dev-status``
+    poll and render the page through the absproxy fallback so you don't need
+    a clean retry of ``start_dev_server``.
+
+    Args:
+        description: Explain why you are wiring up an external server. ALWAYS PROVIDE THIS FIRST.
+        port: TCP port the server is listening on (e.g. 3000 for ``npm start``).
+        host: Hostname the gateway can reach (defaults to 127.0.0.1; use
+            ``host.docker.internal`` for AIO sandbox servers started on the
+            host).
+        label: Optional label to register under (default "app").
+    """
+    try:
+        import socket as _socket
+
+        from deerflow.sandbox.dev_server import (
+            DEFAULT_LABEL,
+        )
+        from deerflow.sandbox.dev_server import (
+            register_external_dev_server as _register,
+        )
+
+        try:
+            port_i = int(port)
+        except (TypeError, ValueError):
+            return f"Error: port must be an integer (got {port!r})"
+        if not (1 <= port_i <= 65535):
+            return f"Error: port must be between 1 and 65535 (got {port_i})"
+
+        # Refuse up-front if nothing is actually listening, so the panel never
+        # advertises a phantom server. Sync probe — fast (0.4 s timeout).
+        try:
+            with _socket.create_connection((host, port_i), timeout=0.4):
+                reachable = True
+        except Exception:
+            reachable = False
+        if not reachable:
+            return f"Error: port {host}:{port_i} is not reachable; nothing is listening there."
+
+        sandbox_id = _get_sandbox_id(runtime)
+        if is_local_sandbox(runtime):
+            thread_id = _thread_id_from_sandbox_id(sandbox_id)
+        else:
+            thread_id = _extract_thread_id_from_thread_data(get_thread_data(runtime))
+        if not thread_id:
+            return "Error: could not resolve thread id from runtime config"
+
+        effective_label = label or DEFAULT_LABEL
+        handle = _register(thread_id, port_i, host=host, label=effective_label)
+        _write_sandbox_observation(
+            sandbox_id,
+            "register_external_dev_server",
+            None,
+            f"Registered external dev server at {host}:{port_i}",
+        )
+        return f"✓ Registered external dev server at {host}:{port_i} (label={effective_label}, status={handle.status}). The Browser tab will render it on the next /dev-status poll."
     except Exception as e:
         return f"Error: {e}"

@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import io
 import logging
+import socket
 import zipfile
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from deerflow.sandbox.dev_server import (
     get_dev_server,
     list_dev_servers,
     port_alive,
+    register_external_dev_server,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,21 @@ _FRAMED_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-moda
 # The generic absproxy is not framed by the app shell, so it keeps the stricter
 # opaque-origin CSP (defense in depth for arbitrary in-container ports).
 _OPAQUE_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+
+
+def _is_port_open(host: str, port: int, timeout: float = 0.4) -> bool:
+    """Sync TCP liveness probe used at registration time.
+
+    Mirrors ``dev_server.port_alive`` but stays synchronous so the endpoint can
+    fail-fast (HTTP 400) when a caller advertises a port nothing is bound to.
+    """
+    if not host or not port:
+        return False
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
 
 
 def _caller_owns_thread(thread_id: str) -> bool:
@@ -516,7 +533,14 @@ def _mark_sandbox_active(thread_id: str) -> None:
 async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     """Return the live dev server status for a thread (optionally a labeled one)."""
     if not _caller_owns_thread(thread_id):
-        return {"running": False, "status": "stopped", "port": None, "url": None}
+        return {
+            "running": False,
+            "status": "stopped",
+            "port": None,
+            "host": None,
+            "url": None,
+            "absproxy_url": None,
+        }
     handle = get_dev_server(thread_id, label)
     if handle is None or handle.status not in ("starting", "ready"):
         # Missing/stale handle — adopt a live server on the published ports if
@@ -526,7 +550,14 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
             container_port, host, host_port = found
             handle = adopt_handle(thread_id, label, container_port, host, host_port)
     if handle is None:
-        return {"running": False, "status": "stopped", "port": None, "url": None}
+        return {
+            "running": False,
+            "status": "stopped",
+            "port": None,
+            "host": None,
+            "url": None,
+            "absproxy_url": None,
+        }
     # Liveness is the port, not the poller: a reachable port means the preview
     # works even if the log tail died. While still "starting", trust the status
     # so the UI shows "compiling…" before the port is up.
@@ -538,10 +569,20 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     return {
         "running": running,
         "status": status,
+        "host": handle.host,
         "port": handle.port,
         "label": handle.label,
         "compiles": handle.compiles,
         "url": f"{_preview_prefix(thread_id, handle.label)}/" if running else None,
+        # Generic absproxy URL is the safety net the Browser tab can fall back
+        # to when the canonical preview proxy fails (e.g. a dev server started
+        # outside ``start_dev_server`` whose host:port the gateway cannot
+        # reach via the in-container preview port).
+        "absproxy_url": (
+            f"/api/sandbox/absproxy/{thread_id}/{handle.port}/"
+            if running and handle.port
+            else None
+        ),
     }
 
 
@@ -574,6 +615,48 @@ async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     except Exception as e:
         logger.warning("dev-start failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
         return {"started": False, "reason": "internal error"}
+
+
+@router.post("/dev-external")
+async def dev_external(
+    thread_id: str,
+    port: int,
+    host: str = "127.0.0.1",
+    label: str = DEFAULT_LABEL,
+) -> dict:
+    """Register a dev server that is already listening on ``host:port``.
+
+    Used when a dev server was started outside the ``start_dev_server`` /
+    ``run_preview_pipeline`` path (e.g. an agent launched a Node server via a
+    raw ``bash`` tool, or an operator started one manually). The panel's
+    ``/dev-status`` poll picks this handle up exactly like a server the runtime
+    spawned, and the Browser tab can fall back to the absproxy URL when the
+    canonical preview proxy cannot reach ``host:port``.
+
+    Refuses (HTTP 400) if the advertised host:port is not actually listening,
+    so the UI never advertises a phantom server.
+    """
+    label = label.replace("\n", "").replace("\r", "")
+    host = host.replace("\n", "").replace("\r", "")
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if not (1 <= int(port) <= 65535):
+        raise HTTPException(status_code=400, detail="port must be 1..65535")
+    if not _is_port_open(host, int(port)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"port {host}:{port} is not reachable; nothing is listening there",
+        )
+    handle = register_external_dev_server(thread_id, int(port), host=host, label=label)
+    return {
+        "thread_id": handle.thread_id,
+        "label": handle.label,
+        "host": handle.host,
+        "port": handle.port,
+        "status": handle.status,
+        "url": f"{_preview_prefix(thread_id, handle.label)}/",
+        "absproxy_url": f"/api/sandbox/absproxy/{thread_id}/{handle.port}/",
+    }
 
 
 @router.get("/dev-servers")

@@ -318,9 +318,17 @@ export function useBrowserCheck(threadId: string | null) {
 
 export type DevServerStatus = {
   running: boolean;
-  status: string; // starting | ready | error | stopped
+  status: string; // starting | ready | error | stopped | crashed
+  host: string | null;
   port: number | null;
   url: string | null;
+  /**
+   * Absolute (gateway-origin) URL to the generic absproxy endpoint for the
+   * same host:port. Falls back to this when the canonical preview proxy cannot
+   * be reached (e.g. a dev server started outside ``start_dev_server`` whose
+   * host the gateway can't route via the in-container preview port).
+   */
+  absproxyUrl: string | null;
   label?: string;
   compiles?: number; // increments on recompile → preview auto-reloads
 };
@@ -336,8 +344,10 @@ export function useDevServerStatus(
         return {
           running: false,
           status: "stopped",
+          host: null,
           port: null,
           url: null,
+          absproxyUrl: null,
           compiles: 0,
         };
       const res = await fetch(
@@ -350,7 +360,16 @@ export function useDevServerStatus(
     refetchInterval: 2000,
     refetchIntervalInBackground: false,
   });
-  return data ?? { running: false, status: "stopped", port: null, url: null };
+  return (
+    data ?? {
+      running: false,
+      status: "stopped",
+      host: null,
+      port: null,
+      url: null,
+      absproxyUrl: null,
+    }
+  );
 }
 
 // ── useDevServers ──────────────────────────────────────────

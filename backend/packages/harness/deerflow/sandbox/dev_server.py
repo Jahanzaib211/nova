@@ -27,6 +27,7 @@ import shlex
 import socket
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from deerflow.execution.supervisor import SpawnedProcess
 
@@ -43,6 +44,9 @@ _AIO_POLL_INTERVAL = 1.5
 # Stop tailing after this many consecutive empty/error reads (~_AIO_POLL_INTERVAL
 # each) so a dead/never-started dev server can't spin the poller forever.
 _MAX_AIO_MISSES = 60
+# Read short, well-known constant names for the new "crashed" terminal state.
+_STATUS_CRASHED = "crashed"
+_READINESS_TIMEOUT_S = 12.0  # panel flips starting → ready/crashed inside this window
 
 
 @dataclass
@@ -56,13 +60,14 @@ class DevServerHandle:
     container_port: int = DEFAULT_CONTAINER_PORT  # in-container port (AIO only)
     process: SpawnedProcess | None = None  # local mode only (kernel-supervised)
     log_buffer: deque[str] = field(default_factory=lambda: deque(maxlen=_LOG_BUFFER_MAX))
-    status: str = "starting"  # starting | ready | error | stopped
+    status: str = "starting"  # starting | ready | error | stopped | crashed
     compiles: int = 0  # increments on each recompile → frontend auto-reloads
     _order: int = 0
     # AIO-mode bookkeeping (None in local mode).
     _sandbox: object | None = None
     _logpath: str | None = None
     _poller_task: asyncio.Task | None = None
+    _watchdog_task: asyncio.Task | None = None  # port-readiness watchdog (local + AIO)
 
 
 _servers: dict[str, DevServerHandle] = {}
@@ -168,6 +173,42 @@ async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
         if await port_alive(host, host_port):
             return (container_port, host, host_port)
     return None
+
+
+def register_external_dev_server(
+    thread_id: str,
+    port: int,
+    *,
+    host: str = "127.0.0.1",
+    label: str = DEFAULT_LABEL,
+) -> DevServerHandle:
+    """Register a dev server that is already listening on ``host:port``.
+
+    Used by ``POST /api/sandbox/dev-external`` when a dev server was started
+    outside the ``start_dev_server`` / ``run_preview_pipeline`` path (e.g. a
+    raw ``bash`` tool launched a Node server, or an operator started one
+    manually). The handle is marked ``ready`` immediately; no readiness
+    watchdog is needed because the caller proved the port is listening at
+    registration time. Idempotent: replacing a live handle with a new
+    registration is allowed.
+    """
+    global _order_counter
+    _order_counter += 1
+    handle = DevServerHandle(
+        thread_id=thread_id,
+        port=port,
+        cwd="",
+        command="(external)",
+        label=label,
+        host=host,
+        _order=_order_counter,
+    )
+    handle.status = "ready"
+    handle.log_buffer.append(
+        f"[deerflow] registered external dev server at {host}:{port}"
+    )
+    _servers[_server_key(thread_id, label)] = handle
+    return handle
 
 
 def adopt_handle(
@@ -361,6 +402,52 @@ def _ingest_line(handle: DevServerHandle, text: str) -> None:
         handle.compiles += 1
 
 
+async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _READINESS_TIMEOUT_S) -> None:
+    """Flip the handle to ``ready`` once the port is live, or to ``crashed`` if the
+    dev server never binds before *timeout* seconds.
+
+    Without this the panel can sit on ``status: "starting"`` forever when the
+    child process dies immediately (typo'd command, missing binary, container-side
+    exec that never wrote the log file). The 12 s grace is shorter than the 40 s
+    ``_auto_verify_preview`` wait so the user sees the failure first.
+    """
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout
+    try:
+        while True:
+            # Bail out if anything else already settled the handle (pump_output on
+            # early exit, /stop, the readiness-marker scan).
+            if handle.status in ("ready", "error", "stopped", _STATUS_CRASHED):
+                return
+            if handle.host and handle.port and await port_alive(handle.host, handle.port):
+                if handle.status == "starting":
+                    handle.status = "ready"
+                    logger.info(
+                        "Dev server for thread %s (%s) bound %s:%s within readiness window",
+                        handle.thread_id,
+                        handle.label,
+                        handle.host,
+                        handle.port,
+                    )
+                return
+            if loop.time() >= deadline:
+                if handle.status == "starting":
+                    handle.status = _STATUS_CRASHED
+                    msg = (
+                        f"dev server crashed: did not bind {handle.host}:{handle.port} "
+                        f"within {timeout:g}s"
+                    )
+                    handle.log_buffer.append(f"[deerflow] {msg}")
+                    _append_devlog_to_sandbox_log(handle.thread_id, msg)
+                    logger.warning(msg)
+                return
+            await asyncio.sleep(0.5)
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("dev server readiness watchdog ended", exc_info=True)
+
+
 async def _pump_output(handle: DevServerHandle) -> None:
     """Read the (local) process stdout line-by-line into the ring buffer."""
     proc = handle.process
@@ -539,6 +626,7 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
     handle.process = proc
     _servers[_server_key(thread_id, label)] = handle
     asyncio.create_task(_pump_output(handle))
+    handle._watchdog_task = asyncio.create_task(_watch_dev_server_start(handle))
     return handle
 
 
@@ -584,6 +672,18 @@ async def _start_dev_server_aio(
     logpath = f"/mnt/user-data/workspace/.deerflow-dev-{container_port}.log"
     handle._logpath = logpath
 
+    # Ensure the log/pid files exist BEFORE the child runs so the SSE tail at
+    # /api/sandbox/logs always has something to read — even when the child
+    # crashes immediately and never writes a single line. The wrapper's PID file
+    # is overwritten by the `echo $! > …` in the inner command; this touch just
+    # creates the inode so the file is present on the first poll.
+    try:
+        Path(logpath).touch(exist_ok=True)
+        Path(logpath + ".pid").touch(exist_ok=True)
+    except Exception:
+        # Touching must never block startup; the poller handles missing files.
+        logger.debug("failed to touch dev-server log files before launch", exc_info=True)
+
     # Background the dev server inside the container, binding 0.0.0.0 so the
     # published port reaches it (HOSTNAME covers Next.js; the host flag covers
     # Vite). Launch under `setsid` so the server is its own process-group leader:
@@ -615,6 +715,7 @@ async def _start_dev_server_aio(
 
     _servers[_server_key(thread_id, label)] = handle
     handle._poller_task = asyncio.create_task(_pump_output_aio(handle))
+    handle._watchdog_task = asyncio.create_task(_watch_dev_server_start(handle))
     return handle
 
 
@@ -630,6 +731,13 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
         poller.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             _ = await poller
+
+    # Cancel the readiness watchdog (only fires while status == "starting").
+    watchdog = handle._watchdog_task
+    if watchdog is not None and not watchdog.done():
+        watchdog.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            _ = await watchdog
 
     # AIO mode: kill the WHOLE process group + free the port. The recorded PID is
     # the setsid group leader, so `kill -- -<pid>` (negative = process group)

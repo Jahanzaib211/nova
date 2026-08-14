@@ -921,6 +921,15 @@ sandbox:
   read_file_output_max_chars: 50000
   ls_output_max_chars: 20000
 
+  # Auto-detect external dev servers started outside ``start_dev_server``.
+  # When True, the Browser tab's /dev-status poll scans a small set of well-known
+  # ports (3000, 5173, 8080, …) and registers any server it finds, so an agent
+  # that launched a dev server via a raw ``bash`` tool still gets a preview
+  # without an explicit register_external_dev_server call. Off by default to
+  # avoid surprising the user with a phantom preview when nothing was actually
+  # launched.
+  auto_detect_external_dev_server: false
+
 # Option 2: Container-based AIO Sandbox
 # Executes commands in isolated containers (Docker or Apple Container)
 # On macOS: Automatically prefers Apple Container if available, falls back to Docker

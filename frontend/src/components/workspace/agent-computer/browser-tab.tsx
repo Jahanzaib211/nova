@@ -24,6 +24,31 @@ import {
 } from "@/core/sandbox/hooks";
 import { cn } from "@/lib/utils";
 
+/**
+ * Build the iframe ``src`` for the Browser-tab preview, choosing between the
+ * canonical preview proxy (fast path) and the generic absproxy (safety net for
+ * dev servers started outside ``start_dev_server`` whose host the gateway
+ * cannot reach via the in-container preview port).
+ *
+ * Exported so the fallback logic is unit-testable without rendering React.
+ */
+export function buildPreviewSrc(
+  baseURL: string,
+  previewPath: string | null,
+  absproxyPath: string | null,
+  route: string,
+  srcMode: "preview" | "absproxy",
+): string | null {
+  const previewSrc = previewPath
+    ? `${baseURL}${previewPath.replace(/\/$/, "")}${route}`
+    : null;
+  const absproxySrc = absproxyPath
+    ? `${baseURL}${absproxyPath}${route === "/" ? "" : route.replace(/^\//, "")}`
+    : null;
+  if (srcMode === "preview") return previewSrc;
+  return absproxySrc ?? previewSrc;
+}
+
 // Tab 3: Browser — rendered HTML preview
 // ──────────────────────────────────────────────────────────
 export function Browser({
@@ -44,8 +69,13 @@ export function Browser({
   devServer: {
     running: boolean;
     status: string;
+    host?: string | null;
     port: number | null;
     url: string | null;
+    /** Generic absproxy URL the Browser tab falls back to when the
+     * canonical preview proxy is unreachable (e.g. a dev server started
+     * outside ``start_dev_server``). */
+    absproxyUrl?: string | null;
     compiles?: number;
   };
   devServers?: { label: string; running: boolean }[];
@@ -119,7 +149,23 @@ export function Browser({
   );
   const canBack = navIdx > 0;
   const canFwd = navIdx < navStack.length - 1;
-  const liveSrc = `${getBackendBaseURL()}${prefix}${route}`;
+  // `preview` → `absproxy` if the canonical iframe fails to load. Reset to
+  // `preview` whenever a fresh server comes up so the user always retries the
+  // fast path first.
+  const [srcMode, setSrcMode] = useState<"preview" | "absproxy">("preview");
+  useEffect(() => {
+    setSrcMode("preview");
+  }, [devServer.url, devServer.port, devServer.status]);
+  const liveSrc = buildPreviewSrc(
+    getBackendBaseURL(),
+    devServer.url ?? null,
+    devServer.absproxyUrl ?? null,
+    route,
+    srcMode,
+  );
+  const onPreviewError = useCallback(() => {
+    if (srcMode === "preview" && devServer.absproxyUrl) setSrcMode("absproxy");
+  }, [srcMode, devServer.absproxyUrl]);
 
   // Live VNC view of the sandbox's real browser (watch the agent browse).
   const [showVnc, setShowVnc] = useState(false);
@@ -181,7 +227,7 @@ export function Browser({
   // and can navigate it (reverse tabnabbing), undermining the sandboxing already
   // applied to the equivalent iframe below.
   const openLiveInNewTab = useCallback(() => {
-    if (devServer.url) window.open(liveSrc, "_blank", "noopener,noreferrer");
+    if (devServer.url && liveSrc) window.open(liveSrc, "_blank", "noopener,noreferrer");
   }, [devServer.url, liveSrc]);
 
   // Pseudo-HMR: auto-reload the preview iframe each time the dev server recompiles.
@@ -331,6 +377,14 @@ export function Browser({
               ))}
             </select>
           )}
+          {srcMode === "absproxy" && devServer.absproxyUrl ? (
+            <span
+              className="border-amber-500/40 bg-amber-500/10 text-amber-300 shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px]"
+              title="Preview proxy was unreachable; rendering via the generic absproxy instead."
+            >
+              Showing via absproxy
+            </span>
+          ) : null}
           <div className="flex shrink-0 items-center gap-0.5">
             <button
               onClick={triggerSelfTest}
@@ -482,15 +536,16 @@ export function Browser({
             viewMode === "mobile" ? "py-2" : "",
           )}
         >
-          {devServer.status === "ready" ? (
+          {devServer.status === "ready" && liveSrc ? (
             <iframe
-              key={`${reloadKey}-${navIdx}`}
+              key={`${reloadKey}-${navIdx}-${srcMode}`}
               src={liveSrc}
               title={t.agentComputer.browser.livePreview}
               // No allow-same-origin: the preview is served on the app origin, so an
               // opaque-origin sandbox prevents the agent-built app from reaching the
               // parent app's cookies / localStorage / auth.
               sandbox="allow-scripts allow-forms allow-popups allow-modals"
+              onError={onPreviewError}
               className={cn(
                 "border-0 bg-white",
                 viewMode === "mobile"

@@ -79,9 +79,18 @@ export function messagesToActivityEvents(
     const tm = m;
     if (!tm.tool_call_id) continue;
     const output = toolResultText(tm);
-    const isError =
-      (tm as { status?: string }).status === "error" ||
-      output.startsWith("Error:");
+    // Trust the tool's own status field. The upstream LangGraph SDK classifies
+    // terminal state the same way (``SubagentManager`` reads ``tm.status``
+    // only). The old ``output.startsWith("Error:")`` heuristic was wrong: 40+
+    // sandbox tools legitimately return ``f"Error: …"`` on success paths
+    // (policy refusals, missing-target reads, etc.), and the heuristic
+    // painted every such tool step red, made the Activity-tab card flash
+    // "failed" while the chat card stayed green, and dropped a running event
+    // out of the "running" set — the Agent's Computer went idle mid-task.
+    // Real errors come from ``ToolErrorHandlingMiddleware._build_error_message``
+    // and arrive with ``status: "error"`` already set; the prefix fallback
+    // is redundant.
+    const isError = (tm as { status?: string }).status === "error";
     resultById.set(tm.tool_call_id, { output, isError });
   }
 
