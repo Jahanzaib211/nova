@@ -459,7 +459,32 @@ for full onboarding.
 
 ---
 
-## 10. Contact / Escalation
+## 10. Write-File Integrity (Self-Probe)
+
+The 2026-08-14 self-probe reported that a 102 810 B payload was truncated
+to 68 909 B on disk. Investigation confirmed:
+
+- **`LocalSandbox.write_file`** round-trips all payloads correctly (tested).
+- The AIO (Docker) sandbox was the likely truncation path (not yet reproduced).
+
+### Running the integrity gate
+
+```bash
+cd backend && PYTHONPATH=. uv run pytest tests/test_write_file_no_truncation.py -v
+```
+
+8 cases cover: 102 KB probe payload, under/over auto-chunk threshold, mid-chunk,
+UTF-8 boundary splits, append round-trip, emoji-only payload, and overwrite.
+
+### If truncation is observed
+
+1. Check `config.yaml:sandbox.use` — local vs AIO
+2. For AIO: `scripts/docker.sh status` → restart if unhealthy
+3. For local: the test suite above will catch it
+
+---
+
+## 11. Contact / Escalation
 
 - Cloudflare status: <https://www.cloudflarestatus.com>
 - Tunnel documentation: <https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/>

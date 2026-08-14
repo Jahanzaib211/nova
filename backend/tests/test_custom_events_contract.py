@@ -2,7 +2,7 @@
 
 Pinned by the 2026-08-14 audit: the subagent_status family already has its own
 contract fixture; the other three custom events did not. This test loads
-``backend/contracts/custom_events_contract.json`` and asserts the canonical
+``contracts/custom_events_contract.json`` and asserts the canonical
 sample payloads (the ones each producer in the codebase is expected to emit)
 conform. If a future refactor drops a field or changes a type, this test
 fails before the frontend's matching parser does.
@@ -24,7 +24,7 @@ if str(_BACKEND) not in sys.path:
 
 @pytest.fixture(scope="module")
 def contract():
-    return json.loads((_BACKEND / "contracts" / "custom_events_contract.json").read_text(encoding="utf-8"))
+    return json.loads((_BACKEND.parent / "contracts" / "custom_events_contract.json").read_text(encoding="utf-8"))
 
 
 def _check(contract: dict, event_name: str, payload: dict) -> list[str]:

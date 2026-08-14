@@ -4,7 +4,7 @@
 Pinned by the 2026-08-14 audit: the four custom-event payloads (task_progress,
 verify_result, llm_error, task_running) flow backend → SSE → frontend
 ``onCustomEvent`` → React parser. The contract fixture
-``backend/contracts/custom_events_contract.json`` pins each payload's *shape*;
+``contracts/custom_events_contract.json`` pins each payload's *shape*;
 this test pins the wire *frame* that carries it (``event: custom``, ``data: <json>``,
 ``id: <seq>``, blank line) so any future format drift in ``format_sse``
 breaks the build instead of the frontend.

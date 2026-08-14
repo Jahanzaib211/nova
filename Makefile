@@ -14,7 +14,8 @@
 .PHONY: help setup doctor config config-upgrade check install setup-sandbox \
 	dev dev-daemon start start-daemon stop \
 	docker-init docker-start docker-stop docker-logs up down \
-	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate
+	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate \
+	self-audit self-audit-clean
 
 COMPOSE := docker compose -f docker/monitoring/docker-compose.yaml
 COMPOSE_DIR := docker/monitoring
@@ -271,3 +272,38 @@ monitoring-verify:
 	@pm2 ls | grep -q "nova-monitoring" && echo "PASS" || echo "NOT REGISTERED (run: pm2 start ecosystem.config.js --only nova-monitoring)"
 	@echo ""
 	@echo "=== Gate complete. Fix FAILs before declaring done. ==="
+
+# ── Self-audit ──────────────────────────────────────────────────────────────
+
+.PHONY: self-audit self-audit-clean
+
+self-audit: ## Run full-stack self-audit and write timestamped report
+	@REPORT="docs/audit/$$(date +%Y-%m-%d)-self-probe.md"; \
+	echo "=== Self-audit starting ($$REPORT) ==="; \
+	mkdir -p docs/audit .nova/self-audit; \
+	(echo "# Self-probe $$(date -Iseconds)" > "$$REPORT"; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Backend hermetic gate" >> "$$REPORT"; \
+	 (cd backend && PYTHONPATH=. uv run pytest tests/ -x -q --tb=line 2>&1 | tee -a "../$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Frontend hermetic gate" >> "$$REPORT"; \
+	 (cd frontend && pnpm check 2>&1 | tee -a "../$$REPORT"; pnpm test 2>&1 | tee -a "../$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Playwright mocked E2E" >> "$$REPORT"; \
+	 (cd frontend && pnpm test:e2e 2>&1 | tee -a "../$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Blocking-IO gate" >> "$$REPORT"; \
+	 (cd backend && make test-blocking-io 2>&1 | tee -a "../$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Docker sandbox status" >> "$$REPORT"; \
+	 (scripts/docker.sh status 2>&1 | tee -a "$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Write-file integrity" >> "$$REPORT"; \
+	 (cd backend && PYTHONPATH=. uv run pytest tests/test_write_file_no_truncation.py -v 2>&1 | tee -a "../$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "=== Self-audit complete ===" >> "$$REPORT") && \
+	echo "Report written to $$REPORT"
+
+self-audit-clean: ## Remove self-audit outputs
+	@rm -rf .nova/self-audit/Novaselfprobe-*.zip
+	@echo "Self-audit outputs cleaned."
