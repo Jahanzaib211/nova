@@ -95,7 +95,23 @@ check:
 
 install:
 	@cd backend && uv sync
+	@cd backend && uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 2>/dev/null || true
 	@cd frontend && pnpm install
+
+# Voice real-engine tests need the ``nvidia-cublas-cu12`` and ``nvidia-cudnn-cu12``
+# wheels to find ``libcublas.so.12`` / ``libcudnn.so.9`` at runtime. They are
+# installed by ``make install``; to run just the voice tests with the right
+# environment:
+#
+#   export LD_LIBRARY_PATH="$(pwd)/backend/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:$(pwd)/backend/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:$$LD_LIBRARY_PATH"
+#   cd backend && uv run pytest tests/test_voice_engines_real.py -v
+#
+# (Or run ``make test-voice`` once the target is wired.)
+voice-libs:
+	@cd backend && uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+
+test-voice:
+	@cd backend && LD_LIBRARY_PATH="$(pwd)/.venv/lib/python3.12/site-packages/nvidia/cublas/lib:$(pwd)/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:$$LD_LIBRARY_PATH" uv run pytest tests/test_voice_engines_real.py -v || echo "Voice real-engine tests require nvidia-cublas-cu12 + nvidia-cudnn-cu12; run 'make voice-libs' first."
 
 setup-sandbox:
 	@./scripts/docker.sh init

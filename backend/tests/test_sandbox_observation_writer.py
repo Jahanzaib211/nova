@@ -100,56 +100,6 @@ def fake_paths(tmp_path, monkeypatch):
     return paths, thread_dir, runtime
 
 
-@pytest.fixture
-def writer(fake_paths):
-    """Return the ``_write_sandbox_observation`` callable extracted from the
-    sandbox-tools module, sidestepping the pre-existing circular import in
-    ``workspace_tools.py`` by loading the file directly with ``exec``.
-    The runtime stubs (``get_paths``, ``get_effective_user_id``,
-    ``get_sandbox_provider``) are passed in as exec globals.
-    """
-    _paths, _thread_dir, runtime = fake_paths
-    ns: dict = {
-        "datetime": __import__("datetime"),
-        "json": __import__("json"),
-        "get_paths": runtime.get_paths,
-        "get_effective_user_id": runtime.get_effective_user_id,
-        "get_sandbox_provider": runtime.get_sandbox_provider,
-    }
-    exec(
-        "def _thread_id_for_observation(sandbox_id):\n"
-        "    if sandbox_id.startswith('local:'):\n"
-        "        return sandbox_id[len('local:'):] or None\n"
-        "    if not sandbox_id or sandbox_id == 'local':\n"
-        "        return None\n"
-        "    try:\n"
-        "        thread_sandboxes = getattr(get_sandbox_provider(), '_thread_sandboxes', None) or {}\n"
-        "        for thread_id, sid in thread_sandboxes.items():\n"
-        "            if sid == sandbox_id:\n"
-        "                return thread_id\n"
-        "    except Exception:\n"
-        "        pass\n"
-        "    return None\n",
-        ns,
-    )
-    exec(
-        "def _write_sandbox_observation(sandbox_id, tool, path, summary, output=''):\n"
-        "    thread_id = _thread_id_for_observation(sandbox_id)\n"
-        "    if not thread_id:\n"
-        "        return\n"
-        "    user_id = get_effective_user_id()\n"
-        "    thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)\n"
-        "    thread_dir.mkdir(parents=True, exist_ok=True)\n"
-        "    ts = datetime.datetime.now().strftime('%H:%M:%S')\n"
-        "    entry = json.dumps({'ts': ts, 'type': tool, 'path': path, 'summary': summary, 'output': output[:2000] if output else ''})\n"
-        "    log_path = thread_dir / 'sandbox.log'\n"
-        "    with open(log_path, 'a', encoding='utf-8') as fh:\n"
-        "        fh.write(entry + '\\n')\n",
-        ns,
-    )
-    return ns["_write_sandbox_observation"], ns["_thread_id_for_observation"]
-
-
 def test_per_thread_local_sandbox_appends_json_line(writer, fake_paths):
     write, _ = writer
     _, thread_dir, ns = fake_paths
