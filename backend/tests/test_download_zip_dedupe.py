@@ -53,6 +53,7 @@ def thread_tree(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(sandbox_router, "get_paths", lambda: fake_paths)
     monkeypatch.setattr(sandbox_router, "get_effective_user_id", lambda: "u1")
+    monkeypatch.setattr(sandbox_router, "_caller_owns_thread", lambda tid: True)
     return tmp_path
 
 
