@@ -11,7 +11,10 @@
 
 ---
 
-## Current Platform Status (consolidated from CONSOLIDATION.md + ROADMAP.md)
+## Current Platform Status
+
+> Formerly consolidated from `CONSOLIDATION.md` + `ROADMAP.md` (both absorbed
+> into this changelog as of 2026-08-14).
 
 | Phase | Title | Status | Key Deliverables |
 |-------|-------|--------|------------------|
@@ -433,7 +436,7 @@ The full backend suite had been hanging at ~47% and carrying 41 pre-existing fai
 
 - `tests/test_execution_pty.py`: 23 tests covering PTYManager, TerminalSize, SessionRegistry, heartbeat, two-phase cancellation, ExecutionStatus state machine.
 - `tests/test_execution_guardrails.py`: guardrail updated to whitelist `interactive_shell.py` as sanctioned Popen site.
-- All 5656 backend tests pass; 457 frontend tests pass; cross-ref check clean.
+- All 6,430 backend tests pass; 565 frontend tests pass; cross-ref check clean.
 
 ### Known debt
 

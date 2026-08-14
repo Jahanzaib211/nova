@@ -107,6 +107,7 @@ src/
 ├── core/                   # Core business logic
 │   ├── api/                # API client & data fetching
 │   ├── artifacts/          # Artifact management
+│   ├── channels/           # IM channel connections (providers, connect flow)
 │   ├── config/              # App configuration
 │   ├── i18n/               # Internationalization
 │   ├── mcp/                # MCP integration
@@ -116,7 +117,8 @@ src/
 │   ├── skills/             # Skills system
 │   ├── threads/            # Thread management
 │   ├── todos/              # Todo system
-│   └── utils/              # Utility functions
+│   ├── utils/              # Utility functions
+│   └── voice/              # Voice system (STT/TTS, VAD, WebSocket session)
 ├── hooks/                  # Custom React hooks
 ├── lib/                    # Shared libraries & utilities
 ├── server/                 # Server-side code

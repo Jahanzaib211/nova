@@ -31,7 +31,7 @@ Nova is a full-stack refactor of DeerFlow 2.0 — **+35,738 lines across 338 fil
 - **Ops layer** — 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery.
 - **Local + free models via LiteLLM** — an Ollama preset in settings and a PM2-managed LiteLLM proxy expose four free Ollama cloud models (MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B) alongside paid providers.
 - **8,112 lines of new tests** across 37 new backend test files.
-  **All tests green**: 5,656 backend tests · 457 frontend tests · 48 WIK kernel tests · 5 security hardening tests · cross-ref check clean.
+  **All tests green**: 6,430 backend tests · 565 frontend tests · 48 WIK kernel tests · 5 security hardening tests · cross-ref check clean.
 
 Upstream DeerFlow provides the agent harness (sub-agents, memory, LangGraph runtime), the skills system, and per-thread Docker sandboxes — credit where due. The complete, reproducible attribution map is in **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)**.
 
@@ -72,6 +72,7 @@ Nova serves its inference on **AMD Instinct** GPUs, and makes that a first-class
     - [Long-Term Memory](#long-term-memory)
   - [Recommended Models](#recommended-models)
   - [Embedded Python Client](#embedded-python-client)
+  - [CI/CD & Testing](#cicd--testing)
   - [Documentation](#documentation)
   - [⚠️ Security Notice](#️-security-notice)
     - [Improper Deployment May Introduce Security Risks](#improper-deployment-may-introduce-security-risks)
@@ -751,12 +752,39 @@ client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": 
 
 All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/packages/harness/deerflow/client.py` for full API documentation.
 
+## CI/CD & Testing
+
+### Test Counts
+
+| Suite | Count | Command |
+|---|---|---|
+| Backend unit tests | 6,430 | `cd backend && make test` |
+| Frontend unit tests | 565 | `cd frontend && pnpm test` |
+| Playwright E2E | 73 | `cd frontend && pnpm test:e2e` |
+| Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
+
+### Local CI
+
+```bash
+make ci          # full local CI (all gates)
+make ci-fast     # lint + tests only
+make ci-gate     # gate summary only
+make coverage    # backend test coverage
+make self-audit  # full self-probe
+```
+
+Requires [nektos/act](https://github.com/nektos/act) for local GitHub Actions execution. See [docs/CI_CD.md](docs/CI_CD.md) for the full workflow architecture.
+
 ## Documentation
 
 - [Contributing Guide](CONTRIBUTING.md) - Development environment setup and workflow
 - [Configuration Guide](backend/docs/CONFIGURATION.md) - Setup and configuration instructions
 - [Architecture Overview](backend/CLAUDE.md) - Technical architecture details
 - [Backend Architecture](backend/README.md) - Backend architecture and API reference
+- [CI/CD Pipeline](docs/CI_CD.md) - GitHub Actions workflows and local CI
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common failure modes and fixes
+- [Security](docs/SECURITY.md) - Auth, CSP, secrets, sandbox isolation
+- [Voice System](docs/VOICE.md) - STT/TTS setup, architecture, troubleshooting
 
 ## ⚠️ Security Notice
 

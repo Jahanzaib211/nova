@@ -44,7 +44,7 @@ Nova is a LangGraph-based AI super agent with sandbox execution, persistent memo
 The single LangGraph agent (`lead_agent`) is the runtime entry point, created via `make_lead_agent(config)`. It combines:
 
 - **Dynamic model selection** with thinking and vision support
-- **Middleware chain** for cross-cutting concerns (9 middlewares)
+- **Middleware chain** for cross-cutting concerns (19 middlewares)
 - **Tool system** with sandbox, MCP, community, and built-in tools
 - **Subagent delegation** for parallel task execution
 - **System prompt** with skills injection, memory context, and working directory guidance
@@ -213,7 +213,7 @@ backend/
 ├── src/
 │   ├── agents/                  # Agent system
 │   │   ├── lead_agent/         # Main agent (factory, prompts)
-│   │   ├── middlewares/        # 9 middleware components
+│   │   ├── middlewares/        # 19 middleware components
 │   │   ├── memory/             # Memory extraction & storage
 │   │   └── thread_state.py    # ThreadState schema
 │   ├── gateway/                # FastAPI Gateway API

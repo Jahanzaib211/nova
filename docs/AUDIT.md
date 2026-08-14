@@ -56,7 +56,7 @@
 
 ```
 backend/packages/harness/deerflow/    252 Python files, ~32K LOC
-├── agents/                Lead agent factory + 10 middlewares + memory + thread state
+├── agents/                Lead agent factory + 19 middlewares + memory + thread state
 ├── community/             3rd-party provider integrations (browserless, tavily, jina, ...)
 ├── config/                Typed config (AppConfig, ModelConfig, SandboxConfig, ...)
 ├── guardrails/            Output safety filters
@@ -141,7 +141,7 @@ frontend/src/
          │
          │ LLM returns AIMessage with tool_calls[]
          ▼
-[5] AgentMiddleware chain fires (10 middlewares):
+[5] AgentMiddleware chain fires (19 middlewares):
     - thread_data       ← injects manifest into state
     - observe_adjust    ← writes todo.md, emits task_progress
     - title             ← generates thread title

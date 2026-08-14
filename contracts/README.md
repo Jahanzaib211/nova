@@ -7,7 +7,6 @@ Wire contracts and schema definitions used by Nova's backend.
 | File | Description |
 |---|---|
 | `custom_events_contract.json` | SSE custom event schema (`task_started`, `task_completed`, etc.) |
-| `subagent_status.json` | Subagent lifecycle event shape |
 
 ## Adding a new contract
 
