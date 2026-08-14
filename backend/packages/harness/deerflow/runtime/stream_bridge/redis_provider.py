@@ -26,10 +26,7 @@ from .base import END_SENTINEL, HEARTBEAT_SENTINEL, StreamBridge, StreamEvent
 
 logger = logging.getLogger(__name__)
 
-REDIS_INSTALL = (
-    "redis is required for the redis stream bridge. Install the package extra with: "
-    "pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
-)
+REDIS_INSTALL = "redis is required for the redis stream bridge. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
 
 _END_EVENT_NAME = "__end__"
 _READ_COUNT = 100

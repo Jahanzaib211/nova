@@ -860,11 +860,7 @@ class RunManager:
                     except Exception:
                         logger.warning("Failed to check store for cross-replica inflight runs on thread %s", thread_id, exc_info=True)
                         store_rows = []
-                    remote_inflight = [
-                        row
-                        for row in store_rows
-                        if row.get("status") in (RunStatus.pending.value, RunStatus.running.value) and row.get("run_id") not in local_ids
-                    ]
+                    remote_inflight = [row for row in store_rows if row.get("status") in (RunStatus.pending.value, RunStatus.running.value) and row.get("run_id") not in local_ids]
                     if remote_inflight:
                         raise ConflictError(f"Thread {thread_id} already has an active run on another replica")
 

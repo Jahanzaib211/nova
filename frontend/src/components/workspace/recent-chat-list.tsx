@@ -4,6 +4,7 @@ import {
   Download,
   FileJson,
   FileText,
+  History,
   MoreHorizontal,
   Pencil,
   Share2,
@@ -43,8 +44,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { resetThreadChatAfterDelete } from "@/components/workspace/chats/use-thread-chat";
+import { ShareDialog } from "@/components/workspace/share-dialog";
+import { ThreadHistoryDialog } from "@/components/workspace/thread-history-dialog";
 import { getAPIClient } from "@/core/api";
-import { writeTextToClipboard } from "@/core/clipboard";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   exportThreadAsJSON,
@@ -112,6 +114,12 @@ export function RecentChatList() {
   const [renameThreadId, setRenameThreadId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  // Thread history dialog state
+  const [historyThreadId, setHistoryThreadId] = useState<string | null>(null);
+
+  // Share dialog state
+  const [shareThreadId, setShareThreadId] = useState<string | null>(null);
+
   const handleDelete = useCallback(
     (thread: AgentThread) => {
       const currentPathname =
@@ -168,23 +176,9 @@ export function RecentChatList() {
     }
   }, [renameThread, renameThreadId, renameValue]);
 
-  const handleShare = useCallback(
-    async (thread: AgentThread) => {
-      const shareUrl = `${window.location.origin}${pathOfThread(thread)}`;
-      try {
-        const didCopy = await writeTextToClipboard(shareUrl);
-        if (!didCopy) {
-          toast.error(t.clipboard.failedToCopyToClipboard);
-          return;
-        }
-
-        toast.success(t.clipboard.linkCopied);
-      } catch {
-        toast.error(t.clipboard.failedToCopyToClipboard);
-      }
-    },
-    [t],
-  );
+  const handleShare = useCallback((thread: AgentThread) => {
+    setShareThreadId(thread.thread_id);
+  }, []);
 
   const handleExport = useCallback(
     async (thread: AgentThread, format: "markdown" | "json") => {
@@ -287,6 +281,14 @@ export function RecentChatList() {
                                 <Share2 className="text-muted-foreground" />
                                 <span>{t.common.share}</span>
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={() =>
+                                  setHistoryThreadId(thread.thread_id)
+                                }
+                              >
+                                <History className="text-muted-foreground" />
+                                <span>{t.common.history}</span>
+                              </DropdownMenuItem>
                               <DropdownMenuSub>
                                 <DropdownMenuSubTrigger>
                                   <Download className="text-muted-foreground" />
@@ -386,6 +388,24 @@ export function RecentChatList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Thread history dialog */}
+      <ThreadHistoryDialog
+        threadId={historyThreadId}
+        open={historyThreadId !== null}
+        onOpenChange={(open) => {
+          if (!open) setHistoryThreadId(null);
+        }}
+      />
+
+      {/* Share dialog */}
+      <ShareDialog
+        threadId={shareThreadId}
+        open={shareThreadId !== null}
+        onOpenChange={(open) => {
+          if (!open) setShareThreadId(null);
+        }}
+      />
     </>
   );
 }

@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 18
+config_version: 19
 
 # ============================================================================
 # Logging
@@ -921,6 +921,15 @@ sandbox:
   read_file_output_max_chars: 50000
   ls_output_max_chars: 20000
 
+  # Auto-detect external dev servers started outside ``start_dev_server``.
+  # When True, the Browser tab's /dev-status poll scans a small set of well-known
+  # ports (3000, 5173, 8080, …) and registers any server it finds, so an agent
+  # that launched a dev server via a raw ``bash`` tool still gets a preview
+  # without an explicit register_external_dev_server call. Off by default to
+  # avoid surprising the user with a phantom preview when nothing was actually
+  # launched.
+  auto_detect_external_dev_server: false
+
 # Option 2: Container-based AIO Sandbox
 # Executes commands in isolated containers (Docker or Apple Container)
 # On macOS: Automatically prefers Apple Container if available, falls back to Docker
@@ -1522,6 +1531,27 @@ run_events:
 #   failure_threshold: 5
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
+
+# ============================================================
+# Email (self-service password reset)
+# ============================================================
+# Outbound SMTP for the forgot-password flow. When enabled, POST
+# /api/v1/auth/forgot-password emails a one-time reset link
+# (GET /reset-password?token=...) that expires after 30 minutes.
+# When disabled (default), forgot-password reports
+# password_reset_disabled so operators know the flow is inert.
+# password: is resolved as an environment variable when it starts with `$`.
+# email:
+#   enabled: false
+#   host: smtp.example.com
+#   port: 587
+#   use_tls: true        # STARTTLS (port 587); set false with use_ssl for 465
+#   use_ssl: false       # implicit TLS
+#   username: nova
+#   password: $SMTP_PASSWORD
+#   from_email: no-reply@example.com
+#   from_name: Nova
+#   reset_link_base_url: ""  # empty = use the request's own base URL
 
 # ============================================================
 # Workspace Intelligence (Phase C9/C10)

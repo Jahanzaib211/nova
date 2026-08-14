@@ -89,12 +89,41 @@ describe("messagesToActivityEvents", () => {
     expect(events[0]?.status).toBe("error");
   });
 
-  test("an 'Error:'-prefixed result is treated as an error", () => {
+  // The next four tests pin the 2026-08-14 fix: many sandbox tools legitimately
+  // return ``f"Error: …"`` strings on success paths. The heuristic that
+  // marked every "Error:"-prefixed result as an error painted the Activity
+  // tab red mid-task; we now trust ``tm.status`` only.
+
+  test("an 'Error:'-prefixed SUCCESS ToolMessage stays 'done'", () => {
     const events = messagesToActivityEvents([
       ai([{ id: "t1", name: "read_file", args: { path: "/x" } }]),
-      tool("t1", "Error: no such file"),
+      tool("t1", "Error: no such file"), // status omitted → success
     ]);
-    expect(events[0]?.status).toBe("error");
+    expect(events[0]?.status).toBe("done");
+  });
+
+  test("bash_tool's host-bash refusal (Error: …) stays 'done'", () => {
+    const events = messagesToActivityEvents([
+      ai([{ id: "t1", name: "bash", args: { command: "true" } }]),
+      tool("t1", "Error: This host bash is disabled"),
+    ]);
+    expect(events[0]?.status).toBe("done");
+  });
+
+  test("search_files' 'Workspace not found' (Error: …) stays 'done'", () => {
+    const events = messagesToActivityEvents([
+      ai([{ id: "t1", name: "search_files", args: { pattern: "*.html" } }]),
+      tool("t1", "Error: Workspace not found at /mnt/user-data/workspace"),
+    ]);
+    expect(events[0]?.status).toBe("done");
+  });
+
+  test("read_file's 'File not found' (Error: …) stays 'done'", () => {
+    const events = messagesToActivityEvents([
+      ai([{ id: "t1", name: "read_file", args: { path: "/missing" } }]),
+      tool("t1", "Error: File not found: /missing"),
+    ]);
+    expect(events[0]?.status).toBe("done");
   });
 
   test("multiple tool calls across messages preserve order", () => {

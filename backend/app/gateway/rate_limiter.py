@@ -22,10 +22,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-REDIS_INSTALL = (
-    "redis is required for the redis rate limiter. Install the package extra with: "
-    "pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
-)
+REDIS_INSTALL = "redis is required for the redis rate limiter. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
 
 
 class RateLimiter(abc.ABC):

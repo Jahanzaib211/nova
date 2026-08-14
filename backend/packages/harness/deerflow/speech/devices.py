@@ -87,9 +87,7 @@ def resolve_onnx_providers(device: str = "auto", *, subsystem: str = "onnx") -> 
     if want == "cuda":
         _warn_once(
             f"{subsystem}:no-cuda",
-            f"{subsystem}: device='cuda' was requested but onnxruntime exposes no {CUDA_PROVIDER} "
-            f"(the CPU-only 'onnxruntime' wheel is probably installed instead of 'onnxruntime-gpu'). "
-            f"Falling back to CPU — speech will work but stay slow.",
+            f"{subsystem}: device='cuda' was requested but onnxruntime exposes no {CUDA_PROVIDER} (the CPU-only 'onnxruntime' wheel is probably installed instead of 'onnxruntime-gpu'). Falling back to CPU — speech will work but stay slow.",
         )
     return [CPU_PROVIDER], "cpu"
 

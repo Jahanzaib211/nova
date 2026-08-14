@@ -245,26 +245,9 @@ def test_import_hygiene_no_top_level_redis_import():
     import ast
     from pathlib import Path
 
-    source_path = (
-        Path(__file__).parent.parent
-        / "packages"
-        / "harness"
-        / "deerflow"
-        / "runtime"
-        / "stream_bridge"
-        / "redis_provider.py"
-    )
+    source_path = Path(__file__).parent.parent / "packages" / "harness" / "deerflow" / "runtime" / "stream_bridge" / "redis_provider.py"
     tree = ast.parse(source_path.read_text())
-    top_level_imports = {
-        alias.name.split(".")[0]
-        for node in tree.body
-        if isinstance(node, ast.Import)
-        for alias in node.names
-    } | {
-        node.module.split(".")[0]
-        for node in tree.body
-        if isinstance(node, ast.ImportFrom) and node.module
-    }
+    top_level_imports = {alias.name.split(".")[0] for node in tree.body if isinstance(node, ast.Import) for alias in node.names} | {node.module.split(".")[0] for node in tree.body if isinstance(node, ast.ImportFrom) and node.module}
     assert "redis" not in top_level_imports
 
 
@@ -295,9 +278,7 @@ async def test_make_stream_bridge_redis_yields_redis_bridge(monkeypatch: pytest.
 
     monkeypatch.setattr(redis.asyncio, "from_url", fake_from_url)
 
-    config = AppConfig.model_construct(
-        stream_bridge=StreamBridgeConfig(type="redis", redis_url="redis://example-test-host:6379/0")
-    )
+    config = AppConfig.model_construct(stream_bridge=StreamBridgeConfig(type="redis", redis_url="redis://example-test-host:6379/0"))
     async with make_stream_bridge(config) as bridge:
         assert isinstance(bridge, RedisStreamBridge)
         # Prove it's actually wired to a working client, not just the right type.

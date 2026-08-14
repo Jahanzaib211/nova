@@ -108,9 +108,7 @@ class KokoroTTS(TextToSpeech):
             # plain CPU** (RTF 2.18 vs 0.39). Falling back properly is not just
             # cosmetic here — the broken middle state is the worst option.
             logger.warning(
-                "kokoro-tts: onnxruntime advertised CUDA but the session fell back to %s "
-                "(usually a CUDA runtime version mismatch — see stderr). Rebuilding CPU-only, "
-                "because a partially-CUDA graph is slower than CPU.",
+                "kokoro-tts: onnxruntime advertised CUDA but the session fell back to %s (usually a CUDA runtime version mismatch — see stderr). Rebuilding CPU-only, because a partially-CUDA graph is slower than CPU.",
                 active,
             )
             session = ort.InferenceSession(self._model_path, sess_options=opts, providers=[CPU_PROVIDER])

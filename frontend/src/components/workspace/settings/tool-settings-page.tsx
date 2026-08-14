@@ -43,6 +43,7 @@ import {
   useDeleteMCPServer,
   useEnableMCPServer,
   useMCPConfig,
+  useResetMCPCache,
   useUpdateMCPServer,
 } from "@/core/mcp/hooks";
 import type { MCPServerConfig } from "@/core/mcp/types";
@@ -353,6 +354,7 @@ export function ToolSettingsPage() {
   const { config, isLoading, error } = useMCPConfig();
   const adminRequired =
     error instanceof MCPConfigRequestError && error.isAdminRequired;
+  const resetCache = useResetMCPCache();
   return (
     <SettingsSection
       title={t.settings.tools.title}
@@ -367,9 +369,60 @@ export function ToolSettingsPage() {
       ) : error ? (
         <div>Error: {error.message}</div>
       ) : (
-        <MCPServerList servers={config?.mcp_servers} />
+        <div className="flex w-full flex-col gap-4">
+          <MCPServerList servers={config?.mcp_servers} />
+          <ReloadCacheButton
+            onReload={() =>
+              resetCache.mutate(undefined, {
+                onSuccess: () => toast.success(t.settings.tools.cacheReloaded),
+                onError: (reseterror) =>
+                  toast.error(
+                    reseterror instanceof Error
+                      ? reseterror.message
+                      : "Failed to reload MCP cache.",
+                  ),
+              })
+            }
+            busy={resetCache.isPending}
+            hint={t.settings.tools.reloadCacheHint}
+          />
+        </div>
       )}
     </SettingsSection>
+  );
+}
+
+function ReloadCacheButton({
+  onReload,
+  busy,
+  hint,
+}: {
+  onReload: () => void;
+  busy: boolean;
+  hint: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex w-full items-center justify-between gap-4 rounded-lg border p-3">
+      <div className="min-w-0 text-sm">
+        <div className="font-medium">{t.settings.tools.reloadCache}</div>
+        <p className="text-muted-foreground text-xs">{hint}</p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={onReload}
+        disabled={busy}
+      >
+        {busy ? (
+          <LoaderCircleIcon className="size-4 animate-spin" />
+        ) : (
+          <LoaderCircleIcon className="size-4" />
+        )}
+        {t.settings.tools.reloadCache}
+      </Button>
+    </div>
   );
 }
 

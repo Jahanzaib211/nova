@@ -311,6 +311,21 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
           </Link>
         </div>
 
+        {isLogin && (
+          <div className="text-center text-xs">
+            <Link
+              href={`/forgot-password${
+                validateNextParam(nextParam)
+                  ? `?next=${encodeURIComponent(nextParam!)}`
+                  : ""
+              }`}
+              className="text-blue-500 hover:underline"
+            >
+              Forgot your password?
+            </Link>
+          </div>
+        )}
+
         <div className="text-muted-foreground text-center text-xs">
           <Link href="/" className="hover:underline">
             ← Back to home

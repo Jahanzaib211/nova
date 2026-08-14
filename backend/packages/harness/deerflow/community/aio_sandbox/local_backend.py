@@ -277,6 +277,33 @@ class LocalContainerBackend(SandboxBackend):
         adapter = DockerAdapter(service_container.execution_kernel(), runtime=self._runtime)
         return adapter.cli(*args, timeout=timeout, intent=intent)
 
+    def probe_daemon(self) -> tuple[bool, str]:
+        """Return ``(reachable, detail)`` for the container runtime daemon.
+
+        In pure DooD mode the gateway reaches the host daemon through the
+        Docker socket mounted by the docker-compose.dood.yaml overlay. When the
+        stack is started without that overlay the CLI exists inside the gateway
+        but the daemon is unreachable, and every later ``docker run`` fails
+        with a generic "Cannot connect to the Docker daemon" — the failure mode
+        of the 2026-08-10 sandbox outage. Probing up front lets create() fail
+        with an actionable error instead of a confusing generic one.
+
+        Apple Container needs no daemon handshake, so it always reports ready.
+        """
+        if self._runtime == "container":
+            return True, "Apple Container (no daemon handshake required)"
+        result = self._cli(
+            "version",
+            "--format",
+            "{{.Server.Version}}",
+            timeout=10.0,
+            intent="docker daemon reachability probe",
+        )
+        if result.ok:
+            return True, f"Docker {result.stdout.strip()}"
+        detail = (result.stderr or result.stdout or "").strip()
+        return False, detail or "docker daemon unreachable"
+
     # ── SandboxBackend interface ──────────────────────────────────────────
 
     def create(self, thread_id: str | None, sandbox_id: str, extra_mounts: list[tuple[str, str, bool]] | None = None) -> SandboxInfo:
@@ -294,6 +321,27 @@ class LocalContainerBackend(SandboxBackend):
             RuntimeError: If the container fails to start.
         """
         container_name = f"{self._container_prefix}-{sandbox_id}"
+
+        # DooD guard: in aio mode the gateway talks to the host daemon through
+        # the socket mounted by docker-compose.dood.yaml. If that overlay was
+        # dropped at stack start, the CLI answers but the daemon does not, and
+        # every sandbox tool call dies with a generic daemon error. Fail here
+        # with the exact remediation instead.
+        if self._runtime == "docker":
+            daemon_ok, daemon_detail = self.probe_daemon()
+            if not daemon_ok:
+                logger.error(
+                    "Sandbox daemon unreachable (%s) — aio/DooD mode needs the host Docker socket mounted into the gateway",
+                    daemon_detail,
+                )
+                raise RuntimeError(
+                    "Cannot start sandbox: the Docker daemon is unreachable from the "
+                    f"gateway ({daemon_detail}). In aio (DooD) mode the host Docker "
+                    "socket must be mounted into the gateway. Restart the stack with "
+                    "`scripts/docker.sh start` (it appends docker-compose.dood.yaml "
+                    "when aio mode is detected) or add `-f docker-compose.dood.yaml` "
+                    "to the compose command."
+                )
 
         def _rejected_host_port(error_text: str) -> int | None:
             """Extract the host port Docker refused to bind, if named.

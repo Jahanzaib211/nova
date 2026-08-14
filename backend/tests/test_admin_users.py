@@ -551,6 +551,98 @@ def test_admin_cancel_run_is_audited(app):
     assert "cancel-user-run" in actions
 
 
+# ── Per-thread run list (powers the "Cancel run" UI button) ────────────
+
+
+def _insert_run_persistent(app, *, run_id, thread_id, user_id, status="running", tokens=0):
+    """Insert a RunRow directly into the runs table. The test helper
+    ``_create_run`` instantiates runs in the in-memory RunManager, which
+    the new endpoint doesn't query — this writes the SQL row the new
+    endpoint actually reads."""
+    from deerflow.persistence.engine import get_session_factory
+    from deerflow.persistence.run.model import RunRow
+
+    async def _go():
+        async with get_session_factory()() as session:
+            async with session.begin():
+                session.add(
+                    RunRow(
+                        run_id=run_id,
+                        thread_id=thread_id,
+                        user_id=user_id,
+                        total_tokens=tokens,
+                        status=status,
+                    )
+                )
+
+    asyncio.run(_go())
+    return run_id
+
+
+def test_admin_thread_runs_returns_runs_for_a_thread(app):
+    uid = _register_get_id(app, "runner-list@example.com")
+    _make_thread(app, thread_id="th-list", user_id=uid, display_name="Run list")
+    rid_a = _insert_run_persistent(app, run_id="rid-a", thread_id="th-list", user_id=uid)
+    rid_b = _insert_run_persistent(app, run_id="rid-b", thread_id="th-list", user_id=uid)
+    admin = _admin_client(app)
+
+    resp = admin.get(f"/api/v1/admin/users/{uid}/conversations/th-list/runs")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["thread_id"] == "th-list"
+    assert rid_a in body["run_ids"]
+    assert rid_b in body["run_ids"]
+    assert len(body["statuses"]) == len(body["run_ids"])
+
+    audit = admin.get("/api/v1/admin/audit").json()
+    actions = {row["action"] for row in audit["data"]}
+    assert "view-thread-runs" in actions
+
+
+def test_admin_thread_runs_filters_by_status(app):
+    uid = _register_get_id(app, "running-vs-done@example.com")
+    _make_thread(app, thread_id="th-status", user_id=uid, display_name="Mixed")
+    _insert_run_persistent(app, run_id="rid-running", thread_id="th-status", user_id=uid, status="running")
+    _insert_run_persistent(app, run_id="rid-success", thread_id="th-status", user_id=uid, status="success")
+    admin = _admin_client(app)
+
+    resp = admin.get(
+        f"/api/v1/admin/users/{uid}/conversations/th-status/runs",
+        params={"status_filter": "running"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "rid-running" in body["run_ids"]
+    assert "rid-success" not in body["run_ids"]
+
+
+def test_admin_thread_runs_404_for_unknown_thread(app):
+    uid = _register_get_id(app, "thread-404@example.com")
+    admin = _admin_client(app)
+    resp = admin.get(f"/api/v1/admin/users/{uid}/conversations/does-not-exist/runs")
+    assert resp.status_code == 404
+
+
+def test_admin_thread_runs_403_for_regular_user(app):
+    uid = _register_get_id(app, "thread-priv@example.com")
+    _make_thread(app, thread_id="th-priv", user_id=uid, display_name="Private")
+    user = TestClient(app)
+    user.post("/api/v1/auth/register", json={"email": "intruder@example.com", "password": _PASSWORD})
+    resp = user.get(f"/api/v1/admin/users/{uid}/conversations/th-priv/runs")
+    assert resp.status_code == 403
+
+
+def test_admin_thread_runs_rejects_unknown_status_filter(app):
+    uid = _register_get_id(app, "thread-filter@example.com")
+    _make_thread(app, thread_id="th-filter", user_id=uid, display_name="Filter")
+    admin = _admin_client(app)
+    resp = admin.get(
+        f"/api/v1/admin/users/{uid}/conversations/th-filter/runs",
+        params={"status_filter": "made-up"},
+    )
+    assert resp.status_code == 422
+
+
 # ── Admin visibility into user channel connections ───────────────────────
 
 

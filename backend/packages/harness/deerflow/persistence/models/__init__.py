@@ -27,7 +27,9 @@ from deerflow.persistence.feedback.model import FeedbackRow
 from deerflow.persistence.models.agent_config_row import AgentConfigRow
 from deerflow.persistence.models.model_config_row import ModelConfigRow
 from deerflow.persistence.models.run_event import RunEventRow
+from deerflow.persistence.password_reset_token.model import PasswordResetTokenRow
 from deerflow.persistence.run.model import RunRow
+from deerflow.persistence.shared_thread.model import SharedThreadRow
 from deerflow.persistence.thread_meta.model import ThreadMetaRow
 from deerflow.persistence.user.model import UserRow
 from deerflow.persistence.user_api_key.model import UserApiKeyRow
@@ -43,8 +45,10 @@ __all__ = [
     "CreditRequestRow",
     "FeedbackRow",
     "ModelConfigRow",
+    "PasswordResetTokenRow",
     "RunEventRow",
     "RunRow",
+    "SharedThreadRow",
     "ThreadMetaRow",
     "UserApiKeyRow",
     "UserRow",

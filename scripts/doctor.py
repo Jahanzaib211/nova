@@ -655,9 +655,9 @@ def check_sandbox(config_path: Path) -> list[CheckResult]:
                 )
         elif "AioSandboxProvider" in sandbox_use:
             results.append(CheckResult("sandbox configured", "ok", "Container sandbox"))
-            if not sandbox.get("provisioner_url") and not (
-                shutil.which("docker") or shutil.which("container")
-            ):
+            has_docker = shutil.which("docker")
+            has_container = shutil.which("container")
+            if not (has_docker or has_container):
                 results.append(
                     CheckResult(
                         "container runtime available",
@@ -666,6 +666,28 @@ def check_sandbox(config_path: Path) -> list[CheckResult]:
                         fix="Install Docker Desktop / Apple Container, or switch to local sandbox",
                     )
                 )
+            elif not sandbox.get("provisioner_url"):
+                # Pure DooD mode: the gateway reaches the host daemon through the
+                # Docker socket mounted by the docker-compose.dood.yaml overlay. If
+                # the overlay is dropped at stack start, the CLI exists inside the
+                # gateway but every sandbox tool call fails with a generic
+                # "Cannot connect to the Docker daemon" (2026-08-10 outage). Surface
+                # that before users hit it.
+                runtime = "docker" if has_docker else "container"
+                probe = _run([runtime, "version", "--format", "{{.Server.Version}}"])
+                if not probe:
+                    results.append(
+                        CheckResult(
+                            "docker daemon reachable",
+                            "fail",
+                            f"`{runtime}` CLI exists but the daemon is unreachable",
+                            fix="The gateway needs the host Docker socket mounted. Restart with `scripts/docker.sh start` (it appends docker-compose.dood.yaml when aio mode is detected) or run `docker compose -f docker-compose-dev.yaml -f docker-compose.dood.yaml up -d gateway`.",
+                        )
+                    )
+                else:
+                    results.append(
+                        CheckResult("docker daemon reachable", "ok", f"{runtime} {probe.strip()}")
+                    )
         elif sandbox_use:
             results.append(CheckResult("sandbox configured", "ok", sandbox_use))
         else:

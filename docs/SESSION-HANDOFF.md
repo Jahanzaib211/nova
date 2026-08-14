@@ -123,6 +123,36 @@ Defaults flipped to fp32 in `scripts/fetch-voice-models.sh`,
 `scripts/docker.sh`, `docker/docker-compose.voice.yaml`, `.env`, and the
 real-engine test's model preference order.
 
+### Sandbox outage — codified
+
+The "Docker daemon unreachable" failure mode that kept recurring had the same
+shape every time: the gateway container was started *without* the DooD overlay,
+so `unix:///var/run/docker.sock` was not mounted inside it. The container was
+healthy, the host daemon was fine, but AIO sandboxes could not spawn.
+
+Recovery now lives in `scripts/docker.sh` (called via `make docker-status` /
+`make docker-start`):
+
+- `start()` always appends `docker-compose.dood.yaml` when `sandbox.use`
+  resolves to `deerflow.community.aio_sandbox:AioSandboxProvider` and
+  `provisioner_url` is empty. There is no longer a code path that brings the
+  gateway up in `aio` mode without the socket bind.
+- `status()` (new) prints four signals in one shot: host socket present,
+  gateway container running, socket mounted inside the gateway, gateway
+  health probe. If any link is broken it names the missing piece and the
+  exact recovery command. Use this as the first check after any outage
+  report; it removes the "looks healthy but tools all 502" ambiguity.
+- The host script refuses to start in `aio` mode when the host socket is
+  missing at all — `start()` exits 1 instead of bringing the stack up in a
+  permanently broken state.
+
+If you see "sandbox is down" again, the canonical one-liner is:
+
+```bash
+make docker-status    # tells you exactly which link is broken
+make docker-start     # idempotent: appends DooD overlay, force-recreates gateway
+```
+
 ### Voice settings panel (P3) — done
 
 `Settings → Voice`. Backend `GET/PUT/DELETE /api/voice/config` plus
@@ -398,3 +428,78 @@ helm template nova k8s/charts/nova -f k8s/charts/nova/values-staging.yaml >/dev/
    here. `tests/test_nginx_preview_headers.py` is the guard — extend it.
 5. **Negative-test every guard.** Break the fix, confirm exactly the intended
    tests fail, restore. Several "passing" tests were passing vacuously.
+
+### Frontend / dev-server regression sweep — 2026-08-14
+
+A second sweep of failures surfaced while exercising the Browser tab:
+
+1. **UI "substep failed and finished" misclassification** —
+   `frontend/src/core/threads/activity.ts` treated every `ToolMessage` whose
+   content started with the literal substring `"Error:"` as an error. 40+
+   sandbox tools (bash policy refusal, search_files/read_file missing-target
+   returns, etc.) legitimately return `f"Error: …"` on success paths. The
+   heuristic painted every such step red and dropped the running event out of
+   the "running" set. Fix: trust `ToolMessage.status` only (matches the
+   upstream LangGraph SDK). Tests inverted the wrong-direction assertion and
+   added four success cases (`bash_tool` policy refusal, `search_files`,
+   `read_file`, `grep_files`).
+2. **Terminal tab empty for non-bash runs** — `TERMINAL_TOOLS` was
+   `{bash, execute_command, search_files, grep_files}`. A run that only
+   edited files (write_file / str_replace / read_file) left the tab empty.
+   Fix: extended the set, plus added `terminalOutputClass(status)` helper
+   with a regression test that asserts `done` events whose output starts
+   with `Error:` render emerald, not red.
+3. **Dev server watchdog** — `_start_dev_server_aio` / `_start_dev_server_local`
+   returned a handle in `status: "starting"` forever when the child never
+   bound a port. Added `_watch_dev_server_start` that flips to a new
+   `crashed` state within 12 s. `stop_dev_server` cancels the watchdog.
+   `tests/test_dev_server_watchdog.py` (3 cases).
+4. **External dev server registration** — agents that started a dev server
+   via a raw `bash` tool (e.g. `nohup node /tmp/srv.cjs`) had no way to wire
+   the panel to it. Added `POST /api/sandbox/dev-external` (refuses HTTP
+   400 if the advertised port isn't actually listening) and
+   `register_external_dev_server_tool`. `/dev-status` now returns `host`
+   and `absproxy_url` so the Browser tab can fall back.
+5. **Browser tab absproxy fallback** — `useDevServerStatus` returns both
+   `url` and `absproxyUrl`; `browser-tab.tsx` iframes the canonical
+   preview URL and flips to the absproxy URL on iframe `onError`. A small
+   amber "Showing via absproxy" badge makes the fallback visible.
+6. **Next.js scaffold config** — `scaffold_project_template` was writing
+   `next.config.ts`, which Next 14 does not support. Changed to
+   `next.config.mjs`; the test pins the choice and refuses to regress to a
+   `.ts` config for Next < 15.
+7. **Next.js dev-mode chunk rewrite** — `_prefix_html_urls` only rewrote
+   `href="/..."`/`src="/..."` attributes. Dev mode emits chunk URLs inside
+   the streaming payload `self.__next_f.push([1, "...\"/_next/static/..."])`,
+   which the naive replace missed. Test
+   `tests/test_next_dev_chunk_rewrite.py` pins the contract (4 cases).
+8. **Custom-events wire contract** — `backend/contracts/custom_events_contract.json`
+   is the shared schema for `task_progress` / `verify_result` /
+   `llm_error` / `task_running`. Backend and frontend parsers will both
+   load it; `tests/test_custom_events_contract.py` (6 cases) and
+   `tests/test_custom_event_sse_shape.py` (3 cases) pin the shape and the
+   SSE frame.
+9. **Sandbox observation writer round-trip** — `tests/test_sandbox_observation_writer.py`
+   (4 cases) asserts `_write_sandbox_observation` actually appends a JSON
+   line for per-thread local, AIO `_thread_sandboxes`, and the legacy
+   `local` (skip) paths. Sidesteps the pre-existing circular import in
+   `workspace_tools.py` by exec-ing the function source directly.
+10. **CDP URL rewriter** — `tests/test_cdp_url_for_gateway.py` (5 cases)
+    pins the loopback-to-routable rewrite for the k3s/provisioner path
+    that previously silently burned three retries.
+11. **Voice real-engine env codify** — `make install` now installs
+    `nvidia-cublas-cu12` + `nvidia-cudnn-cu12` so the host venv finds
+    `libcublas.so.12` for the real-engine voice tests. `make test-voice`
+    sets the right `LD_LIBRARY_PATH`.
+
+### Hermetic gates on this commit
+
+- backend pytest (excluding the flaky `test_sandbox_orphan_reconciliation_e2e`
+  which races on shared Docker state): **6422 passed, 23 skipped, 0 failed**
+- backend blocking-IO: 19 passed
+- backend ruff: all checks passed
+- frontend `pnpm test`: **565 passed**
+- frontend `pnpm check`: 0 errors
+- frontend Playwright mocked: **73 passed, 3 skipped**
+
+Branch: `audit/codify-sandbox-2026-08-14`. Ready to merge to `main`.

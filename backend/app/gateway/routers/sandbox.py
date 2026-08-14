@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import io
 import logging
+import socket
 import zipfile
 from pathlib import Path
 
@@ -23,8 +24,16 @@ from fastapi.responses import Response, StreamingResponse
 
 from app.gateway.deps import get_checkpointer
 from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.sandbox.dev_server import DEFAULT_LABEL, get_dev_server, list_dev_servers
+from deerflow.runtime.user_context import get_effective_user_id, reset_current_user, set_current_user
+from deerflow.sandbox.dev_server import (
+    DEFAULT_LABEL,
+    adopt_handle,
+    discover_live_preview,
+    get_dev_server,
+    list_dev_servers,
+    port_alive,
+    register_external_dev_server,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +41,35 @@ router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
 
 _KEEPALIVE_INTERVAL = 15  # seconds between keepalive pings
 _POLL_INTERVAL = 0.5  # seconds between log-file tail polls
+
+# CSP for the sandbox's framed panes (ttyd/noVNC at /appview and agent-built dev
+# servers at /preview). They are iframed same-origin by the app shell, and must
+# load their own assets AND authenticate against the gateway. An opaque sandbox
+# origin cannot do either: its sub-resource requests arrive cookie-less, so the
+# global auth middleware 401s every asset and the ws same-origin guard rejects
+# `Origin: null` — blank terminal/VNC/preview on every deployment, invisible
+# under `make dev` where auth is disabled. `allow-same-origin` keeps the sandbox
+# boundary (script cannot reach the parent frame's DOM) while letting the framed
+# content carry the session cookie like any other same-origin page.
+_FRAMED_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-same-origin"
+# The generic absproxy is not framed by the app shell, so it keeps the stricter
+# opaque-origin CSP (defense in depth for arbitrary in-container ports).
+_OPAQUE_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+
+
+def _is_port_open(host: str, port: int, timeout: float = 0.4) -> bool:
+    """Sync TCP liveness probe used at registration time.
+
+    Mirrors ``dev_server.port_alive`` but stays synchronous so the endpoint can
+    fail-fast (HTTP 400) when a caller advertises a port nothing is bound to.
+    """
+    if not host or not port:
+        return False
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
 
 
 def _caller_owns_thread(thread_id: str) -> bool:
@@ -468,35 +506,62 @@ def _preview_prefix(thread_id: str, label: str) -> str:
     return f"/api/sandbox/lpreview/{thread_id}/{label}"
 
 
-async def _port_alive(host: str, port: int, timeout: float = 0.4) -> bool:
-    """Fast TCP liveness check for a dev server. This is the authority for
-    'running' — it stays true as long as the server actually listens, regardless
-    of whether the log-tail poller is still alive (fixes 'preview showed once
-    then went blank' when the sandbox client resets between turns)."""
-    if not host or not port:
-        return False
+# Liveness authority for dev servers: `port_alive` (imported from dev_server).
+# It stays true as long as the server actually listens, regardless of whether the
+# log-tail poller is still alive (fixes 'preview showed once then went blank').
+
+
+def _mark_sandbox_active(thread_id: str) -> None:
+    """Refresh the sandbox's idle timer for user-visible traffic.
+
+    The preview/appview proxies are hot paths that must not block on the
+    provider, so this is best-effort: a sandbox being actively watched (dev
+    server preview, terminal/VNC pane) should not be reaped by the idle checker,
+    whose timer is only bumped by acquire/get otherwise.
+    """
     try:
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
-        writer.close()
-        with contextlib.suppress(Exception):
-            await writer.wait_closed()
-        return True
+        from deerflow.sandbox import get_sandbox_provider
+
+        mark = getattr(get_sandbox_provider(), "mark_active", None)
+        if mark is not None:
+            mark(thread_id)
     except Exception:
-        return False
+        pass
 
 
 @router.get("/dev-status")
 async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     """Return the live dev server status for a thread (optionally a labeled one)."""
     if not _caller_owns_thread(thread_id):
-        return {"running": False, "status": "stopped", "port": None, "url": None}
+        return {
+            "running": False,
+            "status": "stopped",
+            "port": None,
+            "host": None,
+            "url": None,
+            "absproxy_url": None,
+        }
     handle = get_dev_server(thread_id, label)
+    if handle is None or handle.status not in ("starting", "ready"):
+        # Missing/stale handle — adopt a live server on the published ports if
+        # one exists, so the preview recovers without the agent restarting it.
+        found = await discover_live_preview(thread_id)
+        if found is not None:
+            container_port, host, host_port = found
+            handle = adopt_handle(thread_id, label, container_port, host, host_port)
     if handle is None:
-        return {"running": False, "status": "stopped", "port": None, "url": None}
+        return {
+            "running": False,
+            "status": "stopped",
+            "port": None,
+            "host": None,
+            "url": None,
+            "absproxy_url": None,
+        }
     # Liveness is the port, not the poller: a reachable port means the preview
     # works even if the log tail died. While still "starting", trust the status
     # so the UI shows "compiling…" before the port is up.
-    alive = await _port_alive(handle.host, handle.port)
+    alive = await port_alive(handle.host, handle.port)
     running = alive or handle.status == "starting"
     status = handle.status
     if alive and status not in ("ready", "starting"):
@@ -504,10 +569,20 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     return {
         "running": running,
         "status": status,
+        "host": handle.host,
         "port": handle.port,
         "label": handle.label,
         "compiles": handle.compiles,
         "url": f"{_preview_prefix(thread_id, handle.label)}/" if running else None,
+        # Generic absproxy URL is the safety net the Browser tab can fall back
+        # to when the canonical preview proxy fails (e.g. a dev server started
+        # outside ``start_dev_server`` whose host:port the gateway cannot
+        # reach via the in-container preview port).
+        "absproxy_url": (
+            f"/api/sandbox/absproxy/{thread_id}/{handle.port}/"
+            if running and handle.port
+            else None
+        ),
     }
 
 
@@ -540,6 +615,48 @@ async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     except Exception as e:
         logger.warning("dev-start failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
         return {"started": False, "reason": "internal error"}
+
+
+@router.post("/dev-external")
+async def dev_external(
+    thread_id: str,
+    port: int,
+    host: str = "127.0.0.1",
+    label: str = DEFAULT_LABEL,
+) -> dict:
+    """Register a dev server that is already listening on ``host:port``.
+
+    Used when a dev server was started outside the ``start_dev_server`` /
+    ``run_preview_pipeline`` path (e.g. an agent launched a Node server via a
+    raw ``bash`` tool, or an operator started one manually). The panel's
+    ``/dev-status`` poll picks this handle up exactly like a server the runtime
+    spawned, and the Browser tab can fall back to the absproxy URL when the
+    canonical preview proxy cannot reach ``host:port``.
+
+    Refuses (HTTP 400) if the advertised host:port is not actually listening,
+    so the UI never advertises a phantom server.
+    """
+    label = label.replace("\n", "").replace("\r", "")
+    host = host.replace("\n", "").replace("\r", "")
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if not (1 <= int(port) <= 65535):
+        raise HTTPException(status_code=400, detail="port must be 1..65535")
+    if not _is_port_open(host, int(port)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"port {host}:{port} is not reachable; nothing is listening there",
+        )
+    handle = register_external_dev_server(thread_id, int(port), host=host, label=label)
+    return {
+        "thread_id": handle.thread_id,
+        "label": handle.label,
+        "host": handle.host,
+        "port": handle.port,
+        "status": handle.status,
+        "url": f"{_preview_prefix(thread_id, handle.label)}/",
+        "absproxy_url": f"/api/sandbox/absproxy/{thread_id}/{handle.port}/",
+    }
 
 
 @router.get("/dev-servers")
@@ -806,7 +923,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     if location and location.startswith("/") and not location.startswith(prefix):
         resp_headers["location"] = f"{prefix}{location}"
     resp_headers.pop("set-cookie", None)
-    resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+    resp_headers["Content-Security-Policy"] = _OPAQUE_SANDBOX_CSP
     return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers, media_type=upstream.headers.get("content-type") or None)
 
 
@@ -846,6 +963,30 @@ return x.href}catch(e){return u}}
 function W(u,p){return p===undefined?new Orig(rw(u)):new Orig(rw(u),p)}
 W.prototype=Orig.prototype;W.CONNECTING=0;W.OPEN=1;W.CLOSING=2;W.CLOSED=3;
 window.WebSocket=W})();</script>"""
+
+# Null bytes are not valid in HTML, so this cannot collide with real content.
+_PREFIX_HIDDEN = "\x00prefix\x00"
+
+
+def _prefix_html_urls(html: str, prefix: str) -> str:
+    """Rewrite root-absolute URLs in HTML to stay under the proxy prefix.
+
+    Idempotent: any URL that is *already* under ``prefix`` is temporarily hidden
+    (``\x00`` placeholder), the naive root-absolute rewrite runs, and the hidden
+    URLs are restored — so a page proxied twice, or one the browser already made
+    prefix-relative, is never double-prefixed.
+    """
+    if not html or not prefix:
+        return html
+    hidden = html.replace(f"{prefix}/", _PREFIX_HIDDEN)
+    rewritten = (
+        hidden.replace('href="/', f'href="{prefix}/')
+        .replace('src="/', f'src="{prefix}/')
+        .replace('action="/', f'action="{prefix}/')
+        # Next.js inlines its asset base (`"/_next/...`) without an attribute.
+        .replace('"/_next/', f'"{prefix}/_next/')
+    )
+    return rewritten.replace(_PREFIX_HIDDEN, f"{prefix}/")
 
 
 async def _proxy_appview(thread_id: str, path: str, request: Request) -> Response:
@@ -888,7 +1029,7 @@ async def _proxy_appview(thread_id: str, path: str, request: Request) -> Respons
                 html = html.replace("<head>", injected, 1)
             else:
                 html = shim + html
-            html = html.replace('href="/', f'href="{prefix}/').replace('src="/', f'src="{prefix}/').replace('action="/', f'action="{prefix}/')
+            html = _prefix_html_urls(html, prefix)
             content = html.encode("utf-8")
         except Exception:
             pass
@@ -898,7 +1039,7 @@ async def _proxy_appview(thread_id: str, path: str, request: Request) -> Respons
         resp_headers.pop("Content-Length", None)
 
     resp_headers.pop("set-cookie", None)
-    resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+    resp_headers["Content-Security-Policy"] = _FRAMED_SANDBOX_CSP
     return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=content_type or None)
 
 
@@ -1042,7 +1183,16 @@ for _method in _PROXY_METHODS:
 async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Request):
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
+    _mark_sandbox_active(thread_id)
     handle = get_dev_server(thread_id, label)
+    if handle is None or handle.status not in ("starting", "ready"):
+        # Missing or stale handle (e.g. the registered server died but another is
+        # live on a different published port, or the sandbox re-spawned): discover
+        # and adopt a live server so the preview recovers instead of 503ing.
+        found = await discover_live_preview(thread_id)
+        if found is not None:
+            container_port, host, host_port = found
+            handle = adopt_handle(thread_id, label, container_port, host, host_port)
     if handle is None or handle.status not in ("starting", "ready"):
         return Response(
             content="<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>No dev server running</h3><p>Ask the agent to start the dev server.</p></body></html>",
@@ -1103,22 +1253,17 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
             # <base> makes relative URLs resolve under the prefix
             if "<head>" in html and "<base " not in html:
                 html = html.replace("<head>", f'<head><base href="{prefix}/">', 1)
-            # Absolute root references → prefixed
-            html = (
-                html.replace('href="/', f'href="{prefix}/')
-                .replace('src="/', f'src="{prefix}/')
-                .replace('action="/', f'action="{prefix}/')
-                # Next.js inlines its asset base in a few places
-                .replace('"/_next/', f'"{prefix}/_next/')
-            )
+            html = _prefix_html_urls(html, prefix)
             content = html.encode("utf-8")
         except Exception:
             pass
 
     # Defense in depth: force opaque sandbox + strip cookies so untrusted preview
     # content cannot touch the parent app's session even on direct navigation.
+    # The preview is framed same-origin and must be able to authenticate, so it
+    # gets the framed (non-opaque) sandbox CSP — see _FRAMED_SANDBOX_CSP.
     resp_headers.pop("set-cookie", None)
-    resp_headers["Content-Security-Policy"] = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+    resp_headers["Content-Security-Policy"] = _FRAMED_SANDBOX_CSP
     return Response(
         content=content,
         status_code=upstream.status_code,
@@ -1152,28 +1297,36 @@ async def proxy_appview_ws(websocket: WebSocket, thread_id: str, path: str):
     opens a same-origin socket here and the gateway relays it into the container,
     so the live terminal and VNC panes work on deployments where the container's
     published port is not reachable from the browser at all."""
-    if not _caller_owns_thread(thread_id):
-        await websocket.close(code=1008)
-        return
     if not _ws_same_origin(websocket):
         await websocket.close(code=1008)
         return
+    # The auth middleware never runs for WebSocket scope (BaseHTTPMiddleware is
+    # skipped), so authenticate from the session cookie and stamp the contextvar
+    # before the ownership check — otherwise it resolves to DEFAULT_USER_ID and
+    # every real user is rejected.
+    from app.gateway.ws_guards import ws_user
+
+    user = await ws_user(websocket)
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    token = set_current_user(user)
     try:
+        if not _caller_owns_thread(thread_id):
+            await websocket.close(code=1008)
+            return
+        _mark_sandbox_active(thread_id)
         base_url = await _sandbox_base_url(thread_id)
-    except HTTPException:
-        await websocket.close(code=1011)
-        return
-    except Exception:
-        await websocket.close(code=1011)
-        return
 
-    from urllib.parse import urlsplit
+        from urllib.parse import urlsplit
 
-    parts = urlsplit(base_url)
-    query = websocket.url.query
-    upstream_url = f"ws://{parts.netloc}/{path}" + (f"?{query}" if query else "")
-    await websocket.accept()
-    await _bridge_ws(websocket, upstream_url)
+        parts = urlsplit(base_url)
+        query = websocket.url.query
+        upstream_url = f"ws://{parts.netloc}/{path}" + (f"?{query}" if query else "")
+        await websocket.accept()
+        await _bridge_ws(websocket, upstream_url)
+    finally:
+        reset_current_user(token)
 
 
 def _ws_same_origin(websocket: WebSocket) -> bool:
@@ -1234,24 +1387,37 @@ async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:
 async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str, path: str):
     """Bridge the browser's HMR WebSocket to the dev server's WS so the live
     preview hot-reloads when the agent edits files."""
-    handle = get_dev_server(thread_id, label)
-    if handle is None or handle.status not in ("starting", "ready"):
-        await websocket.close(code=1011)
-        return
-
     if not _ws_same_origin(websocket):
         await websocket.close(code=1008)
         return
 
-    # Cross-tenant check — refuse if the caller doesn't own this thread.
-    if not _caller_owns_thread(thread_id):
+    # Authenticate (the auth middleware never runs for ws scope) and stamp the
+    # contextvar so the ownership check below sees the real caller.
+    from app.gateway.ws_guards import ws_user
+
+    user = await ws_user(websocket)
+    if user is None:
         await websocket.close(code=1008)
         return
+    token = set_current_user(user)
+    try:
+        handle = get_dev_server(thread_id, label)
+        if handle is None or handle.status not in ("starting", "ready"):
+            await websocket.close(code=1011)
+            return
 
-    await websocket.accept()
-    query = websocket.url.query
-    upstream_url = f"ws://{handle.host}:{handle.port}/{path}" + (f"?{query}" if query else "")
-    # Shared bridge: relays binary as well as text. The previous inline pump used
-    # receive_text(), which raises on a binary frame and tears the socket down —
-    # harmless for webpack/Vite HMR (text-only) but wrong in general.
-    await _bridge_ws(websocket, upstream_url)
+        # Cross-tenant check — refuse if the caller doesn't own this thread.
+        if not _caller_owns_thread(thread_id):
+            await websocket.close(code=1008)
+            return
+        _mark_sandbox_active(thread_id)
+
+        await websocket.accept()
+        query = websocket.url.query
+        upstream_url = f"ws://{handle.host}:{handle.port}/{path}" + (f"?{query}" if query else "")
+        # Shared bridge: relays binary as well as text. The previous inline pump used
+        # receive_text(), which raises on a binary frame and tears the socket down —
+        # harmless for webpack/Vite HMR (text-only) but wrong in general.
+        await _bridge_ws(websocket, upstream_url)
+    finally:
+        reset_current_user(token)

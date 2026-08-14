@@ -150,16 +150,12 @@ def test_audit_captures_actor_ip_and_user_agent(app):
     assert resp.status_code == 200
 
     # Check the audit trail saw the actor metadata.
-    from deerflow.persistence.engine import get_session_factory
     from deerflow.persistence.admin_audit.model import AdminAuditRow
+    from deerflow.persistence.engine import get_session_factory
 
     async def _rows():
         async with get_session_factory()() as session:
-            stmt = (
-                __import__("sqlalchemy").select(AdminAuditRow)
-                .order_by(AdminAuditRow.created_at.desc())
-                .limit(1)
-            )
+            stmt = __import__("sqlalchemy").select(AdminAuditRow).order_by(AdminAuditRow.created_at.desc()).limit(1)
             result = await session.execute(stmt)
             return list(result.scalars().all())
 
@@ -359,6 +355,7 @@ def test_user_byok_round_trip(app, monkeypatch):
     resp2 = admin.get(f"/api/v1/admin/users/{uid}/byok")
     assert resp2.json()["has_key"] is False
 
+
 # ── Users studio (ranked view) ──────────────────────────────────────────
 
 
@@ -442,4 +439,3 @@ def test_studio_rejects_unknown_sort(app):
     finally:
         monkey.undo()
     assert resp.status_code == 422
-

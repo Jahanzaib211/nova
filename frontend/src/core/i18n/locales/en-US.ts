@@ -24,7 +24,15 @@ export const enUS: Translations = {
     delete: "Delete",
     edit: "Edit",
     rename: "Rename",
+    history: "History",
     share: "Share",
+    shareHint:
+      "Anyone with the link can view this conversation read-only.",
+    sharePlaceholder: "Creating share link…",
+    copyLink: "Copy link",
+    shareRevoked: "Share link revoked",
+    shareFailed: "Failed to create share link",
+    revoke: "Revoke",
     openInNewWindow: "Open in new window",
     close: "Close",
     more: "More",
@@ -580,6 +588,10 @@ export const enUS: Translations = {
       created: "MCP tool added.",
       updated: "MCP tool updated.",
       deleted: "MCP tool deleted.",
+      reloadCache: "Reload MCP tool cache",
+      reloadCacheHint:
+        "Drop the cached tool list from MCP servers so newly installed tools appear without a restart.",
+      cacheReloaded: "Tool cache reloaded.",
     },
     channels: {
       title: "Channels",
@@ -598,6 +610,34 @@ export const enUS: Translations = {
         "Put your agent skill folders under the `/skills/custom` folder under the root folder of Nova.",
       emptyButton: "Create Your First Skill",
       updateError: "Failed to update skill.",
+      editButton: "Edit",
+      deleteButton: "Delete",
+      editTitle: "Edit skill",
+      deleteTitle: "Delete this skill?",
+      deleteDescription:
+        "This permanently deletes the skill markdown and its history. There is no undo.",
+      deleteConfirm: "Delete",
+      editorHint:
+        "SKILL.md content. The security scanner blocks dangerous patterns and logs every edit to the skill history.",
+      saveButton: "Save changes",
+      historyTitle: "Revision history",
+      historyEmpty: "No changes recorded yet.",
+      historyAction: "Rollback",
+      historyRollbackTitle: "Restore this revision?",
+      historyRollbackDescription:
+        "Restores the file content as it was before this saved change. The current content is kept in the history so you can restore it later.",
+      historyRollbackConfirm: "Rollback",
+      historyAuthor: "Author",
+      loadError: "Failed to load skill.",
+      notCustomError: "Only custom skills can be edited here.",
+    },
+    threadHistory: {
+      title: "Thread history",
+      description:
+        "Every message and state change is stored as a checkpoint. Expand an entry to inspect its full state snapshot.",
+      empty: "No checkpoints found for this thread.",
+      copyId: "Copy checkpoint ID",
+      loadError: "Failed to load thread history.",
     },
     notification: {
       title: "Notification",
@@ -709,6 +749,8 @@ export const enUS: Translations = {
     },
     files: {
       empty: "Files the agent creates will appear here",
+      uploadLimitsHint:
+        "Server-configured upload limits for this thread.",
       repository: "Repository",
       running: (count: number) => `${count} running`,
     },
@@ -995,5 +1037,35 @@ export const enUS: Translations = {
       submitLabel: "Sign in",
       setupPrompt: "First-time setup required",
     },
+  },
+
+  authPasswordReset: {
+    forgotTitle: "Forgot your password?",
+    forgotHint:
+      "Enter your account email and we'll send you a one-time reset link.",
+    email: "Email",
+    sendResetLink: "Send reset link",
+    sent: "Check your inbox — a reset link is on its way if the email is registered.",
+    disabled:
+      "Password reset is not enabled on this deployment. Contact your operator.",
+    errorGeneric: "Something went wrong. Please try again.",
+    backToLogin: "Back to sign in",
+    resetTitle: "Choose a new password",
+    resetHint: "Your reset link is single-use and expires in 30 minutes.",
+    newPassword: "New password",
+    confirmNewPassword: "Confirm new password",
+    resetSubmit: "Update password",
+    resetSuccess: "Password updated! Sign in with your new password.",
+    resetLinkInvalid: "This reset link is invalid, expired, or already used.",
+    passwordsDontMatch: "Passwords do not match.",
+    forgotLink: "Forgot your password?",
+  },
+
+  sharePage: {
+    backHome: "Back to home",
+    notFound: "Share link not found or revoked",
+    notFoundHint:
+      "The conversation may have been revoked by its owner, or the link is incorrect.",
+    messagesEmpty: "This conversation has no messages.",
   },
 };

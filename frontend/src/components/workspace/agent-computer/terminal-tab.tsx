@@ -11,12 +11,37 @@ import { cn } from "@/lib/utils";
 // Tab 1: Terminal — bash/search/grep events, always expanded
 // ──────────────────────────────────────────────────────────
 // Note: "task" (delegate to subagent) stays in Activity, not Terminal
+//
+// Pinned by the 2026-08-14 fix: a run that only used ``write_file`` /
+// ``str_replace`` / ``read_file`` previously left this tab empty because the
+// filter was too narrow. Those tools share the same ``sandbox.log`` SSE feed
+// as bash, so the user expects to see them here; the Activity tab still owns
+// the high-signal "Writing index.html" cards.
 export const TERMINAL_TOOLS = new Set([
   "bash",
   "execute_command",
   "search_files",
   "grep_files",
+  "read_file",
+  "write_file",
+  "str_replace",
 ]);
+
+/**
+ * Class names for the terminal output ``<pre>`` block. Extracted so it can be
+ * unit-tested without rendering React — the upstream classification fix in
+ * ``activity.ts`` is what guarantees we never see ``status: "error"`` for a
+ * tool that returned ``"Error: …"`` on a success path, but the styling here
+ * stays defensive in case any future tool emits the literal error state.
+ */
+export function terminalOutputClass(status: string): string {
+  return cn(
+    "border-l pl-4 leading-relaxed break-all whitespace-pre-wrap",
+    status === "error"
+      ? "border-red-900/50 text-red-400"
+      : "border-emerald-900/30 text-emerald-300/80",
+  );
+}
 
 export function Terminal({
   events,
@@ -156,14 +181,7 @@ export function Terminal({
             </div>
             {/* Output — always shown, no click needed */}
             {event.output ? (
-              <pre
-                className={cn(
-                  "border-l pl-4 leading-relaxed break-all whitespace-pre-wrap",
-                  event.status === "error"
-                    ? "border-red-900/50 text-red-400"
-                    : "border-emerald-900/30 text-emerald-300/80",
-                )}
-              >
+              <pre className={terminalOutputClass(event.status)}>
                 {event.output}
               </pre>
             ) : event.status === "running" ? (

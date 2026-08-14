@@ -1,6 +1,6 @@
 "use client";
 
-import { SparklesIcon } from "lucide-react";
+import { SparklesIcon, PencilIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import type { Skill } from "@/core/skills/type";
 import { env } from "@/env";
 
 import { SettingsSection } from "./settings-section";
+import { SkillEditorDialog } from "./skill-editor-dialog";
 
 export function SkillSettingsPage({ onClose }: { onClose?: () => void } = {}) {
   const { t } = useI18n();
@@ -59,6 +60,7 @@ function SkillSettingsList({
   const { t } = useI18n();
   const router = useRouter();
   const [filter, setFilter] = useState<string>("public");
+  const [editingSkill, setEditingSkill] = useState<string | null>(null);
   const { mutate: enableSkill } = useEnableSkill();
   const filteredSkills = useMemo(
     () => skills.filter((skill) => skill.category === filter),
@@ -101,6 +103,17 @@ function SkillSettingsList({
               </ItemDescription>
             </ItemContent>
             <ItemActions>
+              {skill.category === "custom" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setEditingSkill(skill.name)}
+                  aria-label={`Edit ${skill.name}`}
+                >
+                  <PencilIcon className="size-3.5" />
+                  {t.settings.skills.editButton}
+                </Button>
+              )}
               <Switch
                 checked={skill.enabled}
                 disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"}
@@ -122,6 +135,12 @@ function SkillSettingsList({
             </ItemActions>
           </Item>
         ))}
+      <SkillEditorDialog
+        skillName={editingSkill}
+        onOpenChange={(open) => {
+          if (!open) setEditingSkill(null);
+        }}
+      />
     </div>
   );
 }

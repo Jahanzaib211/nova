@@ -18,6 +18,14 @@ def _make_app() -> FastAPI:
     async def register():
         return {"ok": True}
 
+    @app.post("/api/v1/auth/forgot-password")
+    async def forgot_password():
+        return {"ok": True}
+
+    @app.post("/api/v1/auth/reset-password")
+    async def reset_password():
+        return {"ok": True}
+
     @app.post("/api/threads/abc/runs/stream")
     async def protected_mutation():
         return {"ok": True}
@@ -245,3 +253,62 @@ def test_channel_posts_require_double_submit_csrf():
 
     assert response.status_code == 403
     assert response.json()["detail"] == "CSRF token missing. Include X-CSRF-Token header."
+
+
+def test_forgot_password_allows_anonymous_without_csrf_token():
+    """Forgot-password is a logged-out bootstrap flow: no CSRF cookie yet.
+
+    Like login/register it skips the double-submit token check (the caller has
+    no token) but keeps the origin check so it can't be driven cross-site.
+    """
+    client = TestClient(_make_app(), base_url="https://deerflow.example")
+
+    response = client.post(
+        "/api/v1/auth/forgot-password",
+        headers={"Origin": "https://deerflow.example"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_forgot_password_without_origin_still_allows_non_browser_clients():
+    client = TestClient(_make_app(), base_url="https://deerflow.example")
+
+    response = client.post("/api/v1/auth/forgot-password")
+
+    assert response.status_code == 200
+
+
+def test_forgot_password_rejects_cross_origin():
+    client = TestClient(_make_app(), base_url="https://deerflow.example")
+
+    response = client.post(
+        "/api/v1/auth/forgot-password",
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cross-site auth request denied."
+
+
+def test_reset_password_allows_anonymous_without_csrf_token():
+    client = TestClient(_make_app(), base_url="https://deerflow.example")
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        headers={"Origin": "https://deerflow.example"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_reset_password_rejects_cross_origin():
+    client = TestClient(_make_app(), base_url="https://deerflow.example")
+
+    response = client.post(
+        "/api/v1/auth/reset-password",
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cross-site auth request denied."

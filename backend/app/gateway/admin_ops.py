@@ -40,7 +40,7 @@ def utc(dt: datetime | None) -> datetime | None:
     return dt.astimezone(UTC)
 
 
-def _request_actor_meta(request: "Request") -> tuple[str | None, str | None]:
+def _request_actor_meta(request: Request) -> tuple[str | None, str | None]:
     """Pull the IP/UA pair AuthMiddleware has stamped on request.state.
 
     Returns ``(None, None)`` when the request is not an HTTP request (e.g.
@@ -59,7 +59,7 @@ async def record_audit(
     action: str,
     target_user_id: str | None,
     payload: dict,
-    request: "Request | None" = None,
+    request: Request | None = None,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> None:
     """Append one operator action to the audit trail (best-effort).
@@ -212,11 +212,7 @@ async def recent_users(
     from sqlalchemy import func as sql_func
 
     async with sf() as session:
-        max_run = (
-            select(RunRow.user_id, sql_func.max(RunRow.created_at).label("last_run_at"))
-            .group_by(RunRow.user_id)
-            .subquery()
-        )
+        max_run = select(RunRow.user_id, sql_func.max(RunRow.created_at).label("last_run_at")).group_by(RunRow.user_id).subquery()
         stmt = (
             select(
                 UserRow.id,
@@ -371,30 +367,16 @@ async def studio_users(
         # Aggregate metrics — separate small queries so the page can
         # render KPI strips above the ranking table.
         total_users = await session.scalar(select(sql_func.count(UserRow.id))) or 0
-        forbidden_count = await session.scalar(
-            select(sql_func.count(UserRow.id)).where(UserRow.is_forbidden == True)  # noqa: E712
-        ) or 0
-        active_30d = await session.scalar(
-            select(sql_func.count(UserRow.id)).where(
-                UserRow.last_sign_in_at >= (datetime.now(UTC) - timedelta(days=30))
+        forbidden_count = (
+            await session.scalar(
+                select(sql_func.count(UserRow.id)).where(UserRow.is_forbidden == True)  # noqa: E712
             )
-        ) or 0
-        dormant_count = await session.scalar(
-            select(sql_func.count(UserRow.id)).where(
-                UserRow.last_sign_in_at < (datetime.now(UTC) - timedelta(days=7))
-            )
-        ) or 0
-        no_run_count = await session.scalar(
-            select(sql_func.count(UserRow.id))
-            .select_from(UserRow)
-            .outerjoin(run_agg, run_agg.c.user_id == UserRow.id)
-            .where(run_agg.c.user_id.is_(None))
-        ) or 0
-        by_plan_rows = (
-            await session.execute(
-                select(UserRow.plan, sql_func.count(UserRow.id)).group_by(UserRow.plan)
-            )
-        ).all()
+            or 0
+        )
+        active_30d = await session.scalar(select(sql_func.count(UserRow.id)).where(UserRow.last_sign_in_at >= (datetime.now(UTC) - timedelta(days=30)))) or 0
+        dormant_count = await session.scalar(select(sql_func.count(UserRow.id)).where(UserRow.last_sign_in_at < (datetime.now(UTC) - timedelta(days=7)))) or 0
+        no_run_count = await session.scalar(select(sql_func.count(UserRow.id)).select_from(UserRow).outerjoin(run_agg, run_agg.c.user_id == UserRow.id).where(run_agg.c.user_id.is_(None))) or 0
+        by_plan_rows = (await session.execute(select(UserRow.plan, sql_func.count(UserRow.id)).group_by(UserRow.plan))).all()
         by_plan = {plan: count for plan, count in by_plan_rows}
 
         return {
@@ -448,15 +430,7 @@ async def user_auth_history(
     if sf is None:
         return []
     async with sf() as session:
-        stmt = (
-            select(AdminAuditRow)
-            .where(
-                (AdminAuditRow.target_user_id == user_id)
-                | (AdminAuditRow.actor == (select(UserRow.email).where(UserRow.id == user_id).scalar_subquery()))
-            )
-            .order_by(AdminAuditRow.created_at.desc())
-            .limit(limit)
-        )
+        stmt = select(AdminAuditRow).where((AdminAuditRow.target_user_id == user_id) | (AdminAuditRow.actor == (select(UserRow.email).where(UserRow.id == user_id).scalar_subquery()))).order_by(AdminAuditRow.created_at.desc()).limit(limit)
         result = await session.execute(stmt)
         rows = result.scalars().all()
         return [

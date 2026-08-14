@@ -15,6 +15,7 @@ from deerflow.config.agents_api_config import AgentsApiConfig, load_agents_api_c
 from deerflow.config.channel_connections_config import ChannelConnectionsConfig
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from deerflow.config.database_config import DatabaseConfig
+from deerflow.config.email_config import EmailConfig
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
 from deerflow.config.loop_detection_config import LoopDetectionConfig
@@ -135,6 +136,10 @@ class AppConfig(BaseModel):
     )
     loop_detection: LoopDetectionConfig = Field(default_factory=LoopDetectionConfig, description="Loop detection middleware configuration")
     safety_finish_reason: SafetyFinishReasonConfig = Field(default_factory=SafetyFinishReasonConfig, description="Provider safety-filter finish_reason interception middleware configuration")
+    email: EmailConfig = Field(
+        default_factory=EmailConfig,
+        description=("Outbound SMTP configuration backing the self-service password-reset email. Read per-request (hot-reloads on config.yaml edits), so SMTP changes do not require a restart."),
+    )
     model_config = ConfigDict(extra="allow")
     database: DatabaseConfig = Field(
         default_factory=DatabaseConfig,

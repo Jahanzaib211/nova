@@ -16,8 +16,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp
 
-from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
 from app.gateway.auth.client_meta import get_client_ip, get_client_user_agent
+from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
 from app.gateway.auth_disabled import (
     AUTH_SOURCE_AUTH_DISABLED,
     AUTH_SOURCE_INTERNAL,
@@ -49,6 +49,8 @@ _PUBLIC_EXACT_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/logout",
         "/api/v1/auth/setup-status",
         "/api/v1/auth/initialize",
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
         # Current legal-document versions — read before/without a session so
         # the signup form and re-acceptance gate can render.
         "/api/v1/legal/terms",
@@ -161,10 +163,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # still reach the user via the ops console because admin operations
         # authenticate via the ops service token (synthetic admin user),
         # bypassing this branch.
-        if (
-            auth_source == AUTH_SOURCE_SESSION
-            and getattr(user, "is_forbidden", False)
-        ):
+        if auth_source == AUTH_SOURCE_SESSION and getattr(user, "is_forbidden", False):
             return JSONResponse(
                 status_code=403,
                 content={

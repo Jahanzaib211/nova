@@ -28,7 +28,13 @@ from starlette.types import ASGIApp
 from app.gateway.rate_limiter import InMemoryRateLimiter, RateLimiter
 
 # Auth brute-force tier (suffix match on the auth prefix).
-_AUTH_SUFFIXES = ("/auth/login/local", "/auth/register", "/auth/change-password")
+_AUTH_SUFFIXES = (
+    "/auth/login/local",
+    "/auth/register",
+    "/auth/change-password",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+)
 _AUTH_WINDOW_SECONDS = 60.0
 _AUTH_MAX_ATTEMPTS = 10
 

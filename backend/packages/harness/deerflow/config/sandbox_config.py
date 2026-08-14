@@ -92,5 +92,17 @@ class SandboxConfig(BaseModel):
         ge=0,
         description="Maximum characters to keep from ls tool output. Output exceeding this limit is head-truncated. Set to 0 to disable truncation.",
     )
+    auto_detect_external_dev_server: bool = Field(
+        default=False,
+        description=(
+            "When True, the Agent's Computer Browser tab scans a small set of well-known "
+            "ports (3000, 5173, 8080, …) on each /dev-status poll and auto-registers any "
+            "server it finds, without requiring an explicit call to "
+            "``register_external_dev_server``. Useful when an agent starts a dev server "
+            "via a raw ``bash`` tool instead of ``start_dev_server``. Default False to "
+            "avoid surprising the user with a phantom preview when nothing was actually "
+            "launched."
+        ),
+    )
 
     model_config = ConfigDict(extra="allow")

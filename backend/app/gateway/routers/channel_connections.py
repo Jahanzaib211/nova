@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from app.channels.runtime_config_store import (
     ChannelRuntimeConfigStore,
@@ -72,6 +72,14 @@ class ChannelConnectionResponse(BaseModel):
     workspace_name: str | None = None
     scopes: list[str] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    last_error_at: datetime | None = None
+
+    @field_serializer("created_at", "updated_at", "last_seen_at", "last_error_at")
+    def _ser(self, value: datetime | None) -> datetime | None:
+        return admin_ops.utc(value)
 
 
 class ChannelConnectionsResponse(BaseModel):

@@ -21,6 +21,8 @@ class AuthErrorCode(StrEnum):
     PROVIDER_NOT_FOUND = "provider_not_found"
     NOT_AUTHENTICATED = "not_authenticated"
     SYSTEM_ALREADY_INITIALIZED = "system_already_initialized"
+    PASSWORD_RESET_DISABLED = "password_reset_disabled"
+    PASSWORD_RESET_TOKEN_INVALID = "password_reset_token_invalid"
 
 
 class TokenError(StrEnum):

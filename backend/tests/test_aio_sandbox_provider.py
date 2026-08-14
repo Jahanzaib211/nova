@@ -586,3 +586,94 @@ def test_destroy_swallows_close_errors_and_still_destroys_backend(tmp_path, capl
 
     assert "Error closing sandbox sandbox-dest-err during destroy" in caplog.text
     provider._backend.destroy.assert_called_once()
+
+
+# ── mark_active / idle-reaper dev-server exemption ───────────────────────────
+
+
+def _make_provider_for_idle():
+    """Minimal AioSandboxProvider with real registries and lock (no __init__)."""
+    import threading
+
+    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
+    provider._lock = threading.Lock()
+    provider._sandboxes = {}
+    provider._sandbox_infos = {}
+    provider._thread_sandboxes = {}
+    provider._last_activity = {}
+    provider._warm_pool = {}
+    provider._config = {"idle_timeout": 600}
+    provider._backend = MagicMock()
+    return provider
+
+
+def test_mark_active_refreshes_the_idle_timer():
+    """Preview/appview proxies don't acquire() the sandbox, so mark_active is
+    their channel to bump _last_activity and keep the reaper at bay."""
+    provider = _make_provider_for_idle()
+    provider._thread_sandboxes["thread-1"] = "sandbox-1"
+    provider._last_activity["sandbox-1"] = 1000.0
+
+    provider.mark_active("thread-1")
+
+    assert provider._last_activity["sandbox-1"] > 1000.0
+
+
+def test_mark_active_unknown_thread_is_noop():
+    provider = _make_provider_for_idle()
+    provider.mark_active("nobody")  # must not raise
+
+
+def test_reaper_skips_thread_with_live_dev_server():
+    provider = _make_provider_for_idle()
+    provider._thread_sandboxes["thread-1"] = "sandbox-1"
+    provider._last_activity["sandbox-1"] = 0.0  # idle well past any timeout
+
+    destroyed = []
+
+    def fake_destroy(sandbox_id):
+        destroyed.append(sandbox_id)
+
+    provider.destroy = fake_destroy
+    provider._thread_has_live_dev_server = lambda sandbox_id: True
+
+    provider._cleanup_idle_sandboxes(600)
+
+    assert destroyed == []
+    assert "sandbox-1" in provider._last_activity
+
+
+def test_reaper_destroys_idle_thread_without_live_server():
+    provider = _make_provider_for_idle()
+    provider._thread_sandboxes["thread-1"] = "sandbox-1"
+    provider._last_activity["sandbox-1"] = 0.0
+
+    destroyed = []
+
+    def fake_destroy(sandbox_id):
+        destroyed.append(sandbox_id)
+
+    provider.destroy = fake_destroy
+    provider._thread_has_live_dev_server = lambda sandbox_id: False
+
+    provider._cleanup_idle_sandboxes(600)
+
+    assert destroyed == ["sandbox-1"]
+
+
+def test_thread_has_live_dev_server_consults_registry(monkeypatch):
+    provider = _make_provider_for_idle()
+    provider._thread_sandboxes["thread-1"] = "sandbox-1"
+    provider._thread_sandboxes["thread-2"] = "sandbox-2"
+
+    import sys
+    import types
+
+    # Point the lazy import inside _thread_has_live_dev_server at a fake module.
+    fake_mod = types.ModuleType("deerflow.sandbox.dev_server")
+    fake_mod.has_live_dev_server = lambda tid: tid == "thread-2"
+    monkeypatch.setitem(sys.modules, "deerflow.sandbox.dev_server", fake_mod)
+
+    assert provider._thread_has_live_dev_server("sandbox-1") is False
+    assert provider._thread_has_live_dev_server("sandbox-2") is True

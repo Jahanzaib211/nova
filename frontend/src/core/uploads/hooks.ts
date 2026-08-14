@@ -8,8 +8,10 @@ import { useCallback } from "react";
 import {
   deleteUploadedFile,
   listUploadedFiles,
+  loadUploadLimits,
   uploadFiles,
   type UploadedFileInfo,
+  type UploadLimits,
   type UploadResponse,
 } from "./api";
 
@@ -39,6 +41,36 @@ export function useUploadedFiles(threadId: string) {
     queryFn: () => listUploadedFiles(threadId),
     enabled: !!threadId,
   });
+}
+
+/**
+ * Hook to fetch upload limits (per-file / total size, file count).
+ */
+export function useUploadLimits(threadId: string) {
+  return useQuery({
+    queryKey: ["uploads", "limits", threadId],
+    queryFn: () => loadUploadLimits(threadId),
+    enabled: !!threadId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "-";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+export function summarizeUploadLimits(limits: UploadLimits | undefined): string {
+  if (!limits) return "";
+  const parts: string[] = [];
+  if (limits.max_files > 0) parts.push(`${limits.max_files} files max`);
+  if (limits.max_file_size > 0)
+    parts.push(`${formatBytes(limits.max_file_size)} per file`);
+  if (limits.max_total_size > 0)
+    parts.push(`${formatBytes(limits.max_total_size)} total`);
+  return parts.join(" · ");
 }
 
 /**

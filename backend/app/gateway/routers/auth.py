@@ -641,3 +641,163 @@ async def initialize_admin(request: Request, response: Response, body: Initializ
     )
 
     return UserResponse(id=str(user.id), email=user.email, system_role=user.system_role)
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Request model for the forgot-password email flow."""
+
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request model for consuming a password-reset token."""
+
+    token: str
+    new_password: str = Field(..., min_length=8)
+
+    _strong_password = field_validator("new_password")(classmethod(lambda cls, v: _validate_strong_password(v)))
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+async def forgot_password(request: Request, body: ForgotPasswordRequest) -> MessageResponse:
+    """Send a password-reset email for an existing account.
+
+    Deliberately answers the same 200 for unknown emails so the endpoint
+    cannot be used to enumerate accounts. When outbound email is disabled
+    the endpoint reports ``password_reset_disabled`` so operators know
+    the flow is inert.
+    """
+    from app.gateway.auth.password_reset import create_reset_token
+    from app.gateway.email import EmailNotConfiguredError, send_email
+    from deerflow.config.app_config import get_app_config
+    from deerflow.persistence.engine import get_session_factory
+
+    email_config = get_app_config().email
+    if not email_config.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(
+                code=AuthErrorCode.PASSWORD_RESET_DISABLED,
+                message="Password reset is not configured for this deployment.",
+            ).model_dump(),
+        )
+
+    provider = get_local_provider()
+    user = await provider.get_user_by_email(body.email)
+    if user is None or user.password_hash is None:
+        # Unknown email or OAuth-only account — burn the same work as the
+        # success path would and reply identically.
+        logger.info("forgot-password request for unknown/oauth account (email=%s)", body.email)
+        return MessageResponse(message="If the email is registered, a reset link was sent.")
+
+    token = await create_reset_token(get_session_factory(), user_id=str(user.id))
+
+    base = (email_config.reset_link_base_url or str(request.base_url)).rstrip("/")
+    reset_url = f"{base}/reset-password?token={token}"
+    html = (
+        "<html><body style='font-family:sans-serif;line-height:1.6'>"
+        "<p>Hello,</p>"
+        "<p>We received a request to reset the password for your Nova account. "
+        "Open the link below to choose a new password. It expires in 30 minutes and can be used once:</p>"
+        f'<p><a href="{reset_url}">Reset my password</a></p>'
+        "<p>If you did not request this, you can safely ignore this email.</p>"
+        "</body></html>"
+    )
+
+    try:
+        await send_email(
+            config=email_config,
+            to=body.email,
+            subject="Reset your Nova password",
+            html=html,
+        )
+    except EmailNotConfiguredError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(
+                code=AuthErrorCode.PASSWORD_RESET_DISABLED,
+                message="Password reset is not configured for this deployment.",
+            ).model_dump(),
+        )
+    except Exception:
+        logger.exception("Failed to send password-reset email to %s", body.email)
+        await _invalidate_reset_token(get_session_factory(), token)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to send the reset email. Please try again later.",
+        )
+
+    await admin_ops.record_audit(
+        actor=body.email,
+        action="forgot-password-requested",
+        target_user_id=str(user.id),
+        payload={},
+        request=request,
+    )
+
+    return MessageResponse(message="If the email is registered, a reset link was sent.")
+
+
+async def _invalidate_reset_token(sf, token: str) -> None:
+    """Best-effort invalidation of a token whose email could not be sent."""
+    from app.gateway.auth.password_reset import consume_token
+
+    try:
+        await consume_token(sf, token=token)
+    except Exception:
+        logger.debug("Could not invalidate reset token after send failure")
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(request: Request, body: ResetPasswordRequest) -> MessageResponse:
+    """Consume a reset token and set a new password.
+
+    Invalidates every existing session (``token_version`` bump) and
+    records the reset in the audit trail. OAuth-only accounts have no
+    password hash; tokens issued for them can never be requested anyway
+    (forgot-password skips them), so this only guards against manual
+    calls.
+    """
+    from app.gateway.auth.password import hash_password_async
+    from app.gateway.auth.password_reset import consume_token
+    from deerflow.persistence.engine import get_session_factory
+
+    sf = get_session_factory()
+    if sf is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Persistence not available")
+
+    user_id = await consume_token(sf, token=body.token)
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(
+                code=AuthErrorCode.PASSWORD_RESET_TOKEN_INVALID,
+                message="The reset link is invalid, expired, or has already been used.",
+            ).model_dump(),
+        )
+
+    provider = get_local_provider()
+    user = await provider.get_user(user_id)
+    if user is None or user.password_hash is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=AuthErrorResponse(
+                code=AuthErrorCode.PASSWORD_RESET_TOKEN_INVALID,
+                message="The reset link is invalid, expired, or has already been used.",
+            ).model_dump(),
+        )
+
+    user.password_hash = await hash_password_async(body.new_password)
+    user.token_version += 1
+    await provider.update_user(user)
+
+    await admin_ops.record_audit(
+        actor=user.email,
+        action="password-reset",
+        target_user_id=user_id,
+        payload={},
+        request=request,
+    )
+
+    logger.info("Password reset completed for user %s", user_id)
+    return MessageResponse(message="Password updated successfully")

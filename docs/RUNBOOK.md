@@ -178,6 +178,65 @@ to return 200 before emitting heartbeats. This prevents P12_tunnel from
 flagging RED during the gateway's cold start. Bound to 90 s so PM2's
 `max_restarts` kicks in if nginx is genuinely broken.
 
+### One-shot sandbox health (codified)
+
+The "sandbox is down again" reports were always the same shape: gateway
+healthy, host daemon fine, but AIO sandboxes could not spawn because
+`/var/run/docker.sock` was not mounted into the gateway container. The
+canonical first check after any such report is:
+
+```bash
+make docker-status
+```
+
+It reports (1) sandbox mode detected from `config.yaml`, (2) host socket
+presence, (3) whether the socket is mounted inside the gateway container,
+(4) gateway health probe. If the socket is missing inside the gateway,
+the message names the recovery command:
+
+```bash
+make docker-start   # idempotent; appends docker-compose.dood.yaml when needed
+```
+
+`scripts/docker.sh::start` now refuses to bring the stack up in `aio` mode
+when the host socket is missing, so a broken mount cannot be created
+silently again.
+
+### Browser tab stuck on "Compiling…" / wrong port
+
+The Browser tab's preview iframe is wired to the dev server by the runtime.
+If the agent started the dev server outside `start_dev_server` (e.g. via a
+raw `bash` tool, or `nohup node …`), the runtime never knew about it and
+the panel spun forever on the wrong port.
+
+There are two fixes:
+
+1. **Tell the runtime it exists** — `POST /api/sandbox/dev-external` (or the
+   agent's `register_external_dev_server` tool) registers the server and
+   surfaces it on the next `/dev-status` poll. The Browser tab then falls
+   back to the absproxy URL (the generic gateway proxy) and renders
+   `https://<host>/<path>` directly, with an amber **"Showing via
+   absproxy"** badge so the user can see the fallback is active.
+2. **Run the watchdog** — `_watch_dev_server_start` flips a stuck
+   `starting` handle to a new `crashed` state within 12 s. The Browser tab
+   then stops spinning and the Agent's Computer shows a red "Dev server
+   crashed" pill.
+
+If neither works, the panel proxy itself is broken; check
+`/api/sandbox/dev-status` directly and `make docker-status`.
+
+### Voice real-engine tests need CUDA libs
+
+`tests/test_voice_engines_real.py` instantiates `faster-whisper` which
+links `libcublas.so.12`. On a fresh host venv that library is missing; run:
+
+```bash
+make voice-libs           # uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+make test-voice           # wraps the right LD_LIBRARY_PATH
+```
+
+The first target is also wired into `make install`.
+
 ---
 
 ## 4. Deployment Procedure

@@ -674,6 +674,26 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
 @router.websocket("/session/{thread_id}")
 async def voice_session(websocket: WebSocket, thread_id: str) -> None:
     """Full-duplex voice for one thread."""
+    # The auth middleware never runs for WebSocket scope (BaseHTTPMiddleware is
+    # skipped), so authenticate from the session cookie and stamp the contextvar
+    # before any ownership check — otherwise caller_owns_thread resolves to
+    # DEFAULT_USER_ID and every real user is rejected.
+    from app.gateway.ws_guards import ws_user
+    from deerflow.runtime.user_context import reset_current_user, set_current_user
+
+    user = await ws_user(websocket)
+    if user is None:
+        await reject(websocket)
+        return
+    token = set_current_user(user)
+    try:
+        await _voice_session_after_auth(websocket, thread_id)
+    finally:
+        reset_current_user(token)
+
+
+async def _voice_session_after_auth(websocket: WebSocket, thread_id: str) -> None:
+    """The session loop, run with the authenticated user's context set."""
     if not caller_owns_thread(thread_id):
         await reject(websocket)
         return

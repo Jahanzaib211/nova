@@ -159,7 +159,9 @@ describe("autoplay refusal", () => {
         play() {
           return Promise.reject(new DOMException("blocked", "NotAllowedError"));
         }
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         pause() {}
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         addEventListener() {}
       } as unknown as typeof globalThis.Audio,
     );

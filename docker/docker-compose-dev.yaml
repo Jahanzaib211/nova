@@ -251,6 +251,31 @@ services:
       # the Claude/Codex CLI login as a model provider or ACP agent, via the
       # opt-in docker-compose.cli-auth.yaml overlay. Prefer an env token
       # (CLAUDE_CODE_OAUTH_TOKEN, see .env.example / backend/docs/CONFIGURATION.md).
+
+      # Voice model weights are NOT mounted by default: the base compose file
+      # must work on hosts that have not fetched them (see the header on
+      # docker-compose.voice.yaml). When `speech.enabled: true` and the
+      # weights exist on the host under DEERFLOW_VOICE_MODEL_DIR, the canonical
+      # entry point — `./scripts/docker.sh start` (a.k.a. `make docker-start`)
+      # — appends docker-compose.voice.yaml as an overlay. That overlay bind-
+      # mounts the host directory to /app/voice-models and rewrites the in-
+      # container DEERFLOW_*_PATH env vars to point there; `environment:`
+      # wins over `env_file:`, which is what makes the host paths in ../.env
+      # harmless inside the container.
+      #
+      # Bypassing scripts/docker.sh (e.g. by running `docker compose -f
+      # docker-compose-dev.yaml up -d --force-recreate gateway` directly to
+      # recover from a broken container) silently drops the voice overlay.
+      # The Python deps stay installed (`uv sync --extra voice` still runs),
+      # so both engines report as loaded — but the ONNX session build then
+      # fails with "Voices file not found at /home/<host-user>/.cache/..."
+      # because that path does not exist inside the container. Use the
+      # canonical command instead, or include the voice overlay explicitly:
+      #
+      #   docker compose -p deer-flow-dev \
+      #     -f docker/docker-compose-dev.yaml \
+      #     -f docker/docker-compose.voice.yaml \
+      #     up -d --force-recreate --no-deps gateway
     working_dir: /app
     environment:
       - CI=true
