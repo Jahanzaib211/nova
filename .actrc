@@ -1,0 +1,17 @@
+# Config for nektos/act — run GitHub Actions locally.
+#
+# Usage:
+#   act push                           # run all push workflows
+#   act -W .github/workflows/local-ci.yml -j lint   # run specific job
+#   act push -W .github/workflows/local-ci.yml      # full local CI
+#
+# Scope: lint, typecheck, test, build, and security audit.
+# E2E with service containers (postgres, redis, browser) needs the real runner.
+#
+-P ubuntu-latest=catthehacker/ubuntu:act-22.04
+-P apex-homelab=catthehacker/ubuntu:act-22.04
+--container-architecture linux/amd64
+
+# Secrets and variables are not in the repo. Supply them per invocation:
+#   act push --secret-file .env.act --var CI_RUNNER=apex-homelab
+# Never commit .env.act — .gitignore already covers .env*.

@@ -136,8 +136,8 @@ def _thread_id_for_observation(sandbox_id: str) -> str | None:
         for thread_id, sid in thread_sandboxes.items():
             if sid == sandbox_id:
                 return thread_id
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_find_thread_id_for_sandbox failed: %s", exc)
     return None
 
 
@@ -173,7 +173,8 @@ def _write_sandbox_observation(
 
         try:
             user_id = get_effective_user_id()
-        except Exception:
+        except Exception as exc:
+            logger.debug("get_effective_user_id failed: %s", exc)
             user_id = None
 
         paths = get_paths()
@@ -201,8 +202,8 @@ def _write_sandbox_observation(
             json.dumps({"tool": tool, "path": path, "ts": ts}),
             encoding="utf-8",
         )
-    except Exception:
-        pass  # observation failures must never propagate
+    except Exception as exc:
+        logger.debug("_write_sandbox_observation failed: %s", exc)  # observation failures must never propagate
 
 
 def _get_skills_container_path() -> str:
@@ -221,7 +222,8 @@ def _get_skills_container_path() -> str:
         value = get_app_config().skills.container_path
         _get_skills_container_path._cached = value  # type: ignore[attr-defined]
         return value
-    except Exception:
+    except Exception as exc:
+        logger.debug("_get_skills_container_path failed: %s", exc)
         return _DEFAULT_SKILLS_CONTAINER_PATH
 
 
@@ -245,8 +247,8 @@ def _get_skills_host_path() -> str | None:
             value = str(skills_path)
             _get_skills_host_path._cached = value  # type: ignore[attr-defined]
             return value
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_get_skills_host_path failed: %s", exc)
     return None
 
 
@@ -309,7 +311,8 @@ def _get_custom_mounts():
             mounts = [m for m in config.sandbox.mounts if Path(m.host_path).exists()]
         _get_custom_mounts._cached = mounts  # type: ignore[attr-defined]
         return mounts
-    except Exception:
+    except Exception as exc:
+        logger.debug("_get_custom_mounts failed: %s", exc)
         # If config loading fails, return an empty list without caching so that
         # a later call can retry once the config is available.
         return []
@@ -348,7 +351,8 @@ def _extract_thread_id_from_thread_data(thread_data: "ThreadDataState | None") -
     try:
         # {base_dir}/threads/{thread_id}/user-data/workspace → parent.parent = threads/{thread_id}
         return Path(workspace_path).parent.parent.name
-    except Exception:
+    except Exception as exc:
+        logger.debug("_extract_thread_id_from_thread_data failed: %s", exc)
         return None
 
 
@@ -371,9 +375,9 @@ def _get_acp_workspace_host_path(thread_id: str | None = None) -> str | None:
             host_path = get_paths().acp_workspace_dir(thread_id, user_id=get_effective_user_id())
             if host_path.exists():
                 return str(host_path)
-        except Exception:
-            pass
-        return None
+        except Exception as exc:
+            logger.debug("_get_acp_workspace_host_path per-thread failed: %s", exc)
+    return None
 
     cached = getattr(_get_acp_workspace_host_path, "_cached", None)
     if cached is not None:
@@ -386,8 +390,8 @@ def _get_acp_workspace_host_path(thread_id: str | None = None) -> str | None:
             value = str(host_path)
             _get_acp_workspace_host_path._cached = value  # type: ignore[attr-defined]
             return value
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_get_acp_workspace_host_path failed: %s", exc)
     return None
 
 
@@ -460,8 +464,8 @@ def _get_mcp_allowed_paths() -> list[str]:
                 if not arg.startswith("-") and arg.startswith("/"):
                     allowed_paths.append(arg.rstrip("/") + "/")
 
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_extract_allowed_paths_from_command failed: %s", exc)
 
     return allowed_paths
 
@@ -473,8 +477,8 @@ def _get_tool_config_int(name: str, key: str, default: int) -> int:
             value = tool_config.model_extra.get(key)
             if isinstance(value, int):
                 return value
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("_get_tool_config_int failed: %s", exc)
     return default
 
 
@@ -1529,7 +1533,8 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
 
                 sandbox_cfg = get_app_config().sandbox
                 max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to read bash_output_max_chars: %s", exc)
                 max_chars = 20000
             result = _truncate_bash_output(mask_local_paths_in_output(output, thread_data), max_chars)
             _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", output)
@@ -1540,7 +1545,8 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read bash_output_max_chars: %s", exc)
             max_chars = 20000
         raw_output = sandbox.execute_command(command)
         _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
@@ -1586,8 +1592,14 @@ def _extract_dev_command_and_cwd(command: str, workspace_root: str) -> tuple[str
         if target.startswith("/mnt/user-data/workspace"):
             rel = target[len("/mnt/user-data/workspace") :].lstrip("/")
             cwd = os.path.join(workspace_root, rel) if rel else workspace_root
+        elif target.startswith("/mnt/user-data/"):
+            # Other user-data subdirs (uploads, outputs) are allowed.
+            cwd = target
         elif target.startswith("/"):
-            cwd = target  # already a host absolute path
+            # Reject absolute paths outside /mnt/user-data — prevents
+            # an agent from setting cwd to /etc, /root, etc.
+            logger.warning("Rejected dev-server cwd outside user-data: %s", target)
+            cwd = workspace_root
         else:
             cwd = os.path.join(workspace_root, target)
 
@@ -1707,7 +1719,8 @@ def ls_tool(runtime: Runtime, description: str, path: str) -> str:
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.ls_output_max_chars if sandbox_cfg else 20000
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read ls_output_max_chars: %s", exc)
             max_chars = 20000
         return _truncate_ls_output(output, max_chars)
     except SandboxError as e:
@@ -1935,7 +1948,8 @@ def read_file_tool(
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.read_file_output_max_chars if sandbox_cfg else 50000
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read read_file_output_max_chars: %s", exc)
             max_chars = 50000
         result = _truncate_read_file_output(content, max_chars)
         sandbox_id = (runtime.state.get("sandbox") or {}).get("sandbox_id", "") if hasattr(runtime, "state") else ""
@@ -2216,7 +2230,31 @@ def str_replace_tool(
                 content = content.replace(old_str, new_str)
             else:
                 content = content.replace(old_str, new_str, 1)
-            sandbox.write_file(path, content)
+            # Atomic write for local sandboxes: write to temp file then rename
+            # to avoid partial writes and cross-sandbox race conditions.
+            # Falls back to sandbox.write_file for non-local (mock/Docker) sandboxes.
+            if is_local_sandbox(runtime):
+                import tempfile as _tempfile
+                import os as _os
+                _dir = _os.path.dirname(path) or "."
+                try:
+                    _fd, _tmp = _tempfile.mkstemp(dir=_dir, suffix=".str_replace.tmp")
+                    try:
+                        with _os.fdopen(_fd, "w", encoding="utf-8") as _f:
+                            _f.write(content)
+                        _os.replace(_tmp, path)
+                    except Exception:
+                        try:
+                            _os.unlink(_tmp)
+                        except OSError:
+                            pass
+                        raise
+                except OSError:
+                    # Temp file creation failed (e.g. dir doesn't exist) —
+                    # fall back to direct write via sandbox.
+                    sandbox.write_file(path, content)
+            else:
+                sandbox.write_file(path, content)
         sandbox_id = (runtime.state.get("sandbox") or {}).get("sandbox_id", "") if hasattr(runtime, "state") else ""
         count = content.count(new_str) if replace_all else 1
         _write_sandbox_observation(sandbox_id, "str_replace", requested_path, f"Replaced {count} occurrence{'s' if count != 1 else ''}")

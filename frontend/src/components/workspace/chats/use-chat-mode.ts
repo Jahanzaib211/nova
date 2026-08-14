@@ -20,14 +20,16 @@ export function useSpecificChatMode() {
   }, [threadIdFromPath, searchParams, t.inputBox.createSkillPrompt]);
   const lastInitialValueRef = useRef<string | undefined>(undefined);
   const setInputRef = useRef(promptInputController.textInput.setInput);
-  setInputRef.current = promptInputController.textInput.setInput;
+  useEffect(() => {
+    setInputRef.current = promptInputController.textInput.setInput;
+  });
   useEffect(() => {
     if (
       inputInitialValue &&
       inputInitialValue !== lastInitialValueRef.current
     ) {
       lastInitialValueRef.current = inputInitialValue;
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setInputRef.current(inputInitialValue);
         const textarea = document.querySelector("textarea");
         if (textarea) {
@@ -36,6 +38,7 @@ export function useSpecificChatMode() {
           textarea.selectionEnd = textarea.value.length;
         }
       }, 100);
+      return () => clearTimeout(timer);
     }
   }, [inputInitialValue]);
 }

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import ORJSONResponse
 
 from app.gateway.auth_disabled import warn_if_auth_disabled_enabled
 from app.gateway.auth_middleware import AuthMiddleware
@@ -313,6 +314,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="DeerFlow API Gateway",
+        default_response_class=ORJSONResponse,
         description="""
 ## DeerFlow API Gateway
 

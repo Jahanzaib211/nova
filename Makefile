@@ -15,7 +15,8 @@
 	dev dev-daemon start start-daemon stop \
 	docker-init docker-start docker-stop docker-logs up down \
 	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate \
-	self-audit self-audit-clean
+	self-audit self-audit-clean \
+	ci ci-gate ci-fast
 
 COMPOSE := docker compose -f docker/monitoring/docker-compose.yaml
 COMPOSE_DIR := docker/monitoring
@@ -307,3 +308,16 @@ self-audit: ## Run full-stack self-audit and write timestamped report
 self-audit-clean: ## Remove self-audit outputs
 	@rm -rf .nova/self-audit/Novaselfprobe-*.zip
 	@echo "Self-audit outputs cleaned."
+
+# ── Local CI (nektos/act) ──────────────────────────────────────────────────
+
+.PHONY: ci ci-gate ci-fast
+
+ci: ## Run full local CI via nektos/act (push event)
+	@act push -W .github/workflows/local-ci.yml --container-architecture linux/amd64
+
+ci-gate: ## Run local CI gate only (summary job)
+	@act push -W .github/workflows/local-ci.yml -j local-ci-gate --container-architecture linux/amd64
+
+ci-fast: ## Run lint + tests only (skip build, coverage, audit)
+	@act push -W .github/workflows/local-ci.yml -j backend-lint -j backend-tests -j frontend-lint -j frontend-tests --container-architecture linux/amd64
