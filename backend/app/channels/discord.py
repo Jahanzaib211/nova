@@ -230,7 +230,7 @@ class DiscordChannel(Channel):
                     try:
                         await channel.trigger_typing()
                     except Exception:
-                        pass
+                        logger.debug("[Discord] typing indicator failed", exc_info=True)
                     await asyncio.sleep(10)
             except asyncio.CancelledError:
                 pass
@@ -597,6 +597,7 @@ class DiscordChannel(Channel):
         try:
             return await self._client.fetch_channel(target_id)
         except Exception:
+            logger.debug("[Discord] fetch_channel failed for %s", target_id, exc_info=True)
             return None
 
     @staticmethod

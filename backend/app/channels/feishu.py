@@ -732,7 +732,7 @@ class FeishuChannel(Channel):
         except asyncio.CancelledError:
             logger.info("[Feishu] %s cancelled for msg_id=%s", name, msg_id)
         except Exception:
-            pass
+            logger.debug("[Feishu] %s inspect failed for msg_id=%s", name, msg_id, exc_info=True)
 
     async def _prepare_inbound(self, msg_id: str, inbound) -> None:
         """Kick off Feishu side effects without delaying inbound dispatch."""

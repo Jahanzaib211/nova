@@ -124,13 +124,13 @@ class WeComChannel(Channel):
             try:
                 self._ws_task.cancel()
             except Exception:
-                pass
+                logger.debug("[WeCom] failed to cancel ws_task", exc_info=True)
             self._ws_task = None
         if self._ws_client:
             try:
                 self._ws_client.disconnect()
             except Exception:
-                pass
+                logger.debug("[WeCom] failed to disconnect ws_client", exc_info=True)
         self._ws_client = None
         self._ws_frames.clear()
         self._ws_stream_ids.clear()
@@ -293,7 +293,8 @@ class WeComChannel(Channel):
             return
         try:
             from aibot import generate_req_id
-        except Exception:
+        except ImportError:
+            logger.debug("[WeCom] aibot.generate_req_id not available for _handle_ws_frame")
             return
 
         body = frame.get("body", {}) or {}
@@ -341,7 +342,7 @@ class WeComChannel(Channel):
         try:
             await self._ws_client.reply_stream(frame, stream_id, self._working_message, False)
         except Exception:
-            pass
+            logger.debug("[WeCom] initial stream reply failed for msg_id=%s", msg_id, exc_info=True)
 
         inbound = await self._attach_connection_identity(inbound)
         await self.bus.publish_inbound(inbound)
@@ -399,7 +400,8 @@ class WeComChannel(Channel):
             return
         try:
             from aibot import generate_req_id
-        except Exception:
+        except ImportError:
+            logger.debug("[WeCom] aibot.generate_req_id not available for send_ws")
             generate_req_id = None
 
         if msg.thread_ts and msg.thread_ts in self._ws_frames:
@@ -438,7 +440,8 @@ class WeComChannel(Channel):
             return None
         try:
             from aibot import generate_req_id
-        except Exception:
+        except ImportError:
+            logger.debug("[WeCom] aibot.generate_req_id not available for upload_media_ws")
             return None
 
         chunk_size = 512 * 1024

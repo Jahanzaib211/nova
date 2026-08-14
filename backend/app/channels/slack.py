@@ -163,7 +163,7 @@ class SlackChannel(Channel):
                         "x",
                     )
                 except Exception:
-                    pass
+                    logger.debug("[Slack] failed to add failure reaction", exc_info=True)
             raise
 
     async def send_file(self, msg: OutboundMessage, attachment: ResolvedAttachment) -> bool:
