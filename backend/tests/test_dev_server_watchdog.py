@@ -132,12 +132,8 @@ async def test_local_handle_flips_to_crashed_when_nothing_binds_the_port(tmp_pat
     # assertion can observe the state change before the test returns.
     await ds._watch_dev_server_start(handle)
 
-    assert handle.status == ds._STATUS_CRASHED, (
-        f"expected crashed within the readiness window, got {handle.status!r}"
-    )
-    assert any("crashed" in line for line in handle.log_buffer), (
-        f"handle.log_buffer should record the crash reason; got {list(handle.log_buffer)!r}"
-    )
+    assert handle.status == ds._STATUS_CRASHED, f"expected crashed within the readiness window, got {handle.status!r}"
+    assert any("crashed" in line for line in handle.log_buffer), f"handle.log_buffer should record the crash reason; got {list(handle.log_buffer)!r}"
 
     await ds.stop_dev_server(handle.thread_id, handle.label)
 

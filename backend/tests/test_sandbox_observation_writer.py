@@ -124,9 +124,7 @@ def test_legacy_global_local_sandbox_is_skipped(writer, fake_paths):
 def test_aio_sandbox_resolves_thread_via_provider(writer, fake_paths):
     write, _ = writer
     _, thread_dir, runtime = fake_paths
-    runtime.provider_holder["provider"] = MagicMock(
-        _thread_sandboxes={"thread-9": "hash-X"}
-    )
+    runtime.provider_holder["provider"] = MagicMock(_thread_sandboxes={"thread-9": "hash-X"})
 
     write("hash-X", "write_file", "/foo.txt", "Wrote 12 bytes")
     log = (thread_dir / "sandbox.log").read_text(encoding="utf-8")

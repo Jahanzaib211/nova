@@ -76,6 +76,4 @@ def test_scaffold_next_version_pin_supports_dot_mjs_configs(templates):
     match = re.search(r'"next"\s*:\s*"(\d+)\.', pkg_json)
     assert match, f"could not parse next version from {pkg_json!r}"
     major = int(match.group(1))
-    assert major >= 13, (
-        f"scaffold pins next major {major}; ``next.config.mjs`` requires ≥13"
-    )
+    assert major >= 13, f"scaffold pins next major {major}; ``next.config.mjs`` requires ≥13"

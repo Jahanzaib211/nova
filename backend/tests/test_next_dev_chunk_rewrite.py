@@ -46,7 +46,7 @@ def test_prefixer_rewrites_next_dev_flight_payload_chunks(prefixer):
     real shape and asserts the rewrite reaches inside the payload.
     """
     html = (
-        "<script>self.__next_f.push([1, \""
+        '<script>self.__next_f.push([1, "'
         r"\"\"/_next/static/chunks/app/page-7b3c4d.js\""
         r"\\\"\"])"
         "])</script>"
@@ -57,7 +57,7 @@ def test_prefixer_rewrites_next_dev_flight_payload_chunks(prefixer):
     assert "/api/sandbox/preview/t1/_next/static/chunks/app/page-7b3c4d.js" in out
     # The opening escape and surrounding JS structure must remain intact
     # (otherwise the streaming payload would not parse in the browser).
-    assert 'self.__next_f.push' in out
+    assert "self.__next_f.push" in out
 
 
 def test_prefixer_is_idempotent_on_a_second_pass(prefixer):

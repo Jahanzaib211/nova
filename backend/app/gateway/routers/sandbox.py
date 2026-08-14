@@ -578,11 +578,7 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
         # to when the canonical preview proxy fails (e.g. a dev server started
         # outside ``start_dev_server`` whose host:port the gateway cannot
         # reach via the in-container preview port).
-        "absproxy_url": (
-            f"/api/sandbox/absproxy/{thread_id}/{handle.port}/"
-            if running and handle.port
-            else None
-        ),
+        "absproxy_url": (f"/api/sandbox/absproxy/{thread_id}/{handle.port}/" if running and handle.port else None),
     }
 
 

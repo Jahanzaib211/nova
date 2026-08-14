@@ -24,11 +24,7 @@ if str(_BACKEND) not in sys.path:
 
 @pytest.fixture(scope="module")
 def contract():
-    return json.loads(
-        (_BACKEND / "contracts" / "custom_events_contract.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    return json.loads((_BACKEND / "contracts" / "custom_events_contract.json").read_text(encoding="utf-8"))
 
 
 def _check(contract: dict, event_name: str, payload: dict) -> list[str]:

@@ -204,9 +204,7 @@ def register_external_dev_server(
         _order=_order_counter,
     )
     handle.status = "ready"
-    handle.log_buffer.append(
-        f"[deerflow] registered external dev server at {host}:{port}"
-    )
+    handle.log_buffer.append(f"[deerflow] registered external dev server at {host}:{port}")
     _servers[_server_key(thread_id, label)] = handle
     return handle
 
@@ -433,10 +431,7 @@ async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _REA
             if loop.time() >= deadline:
                 if handle.status == "starting":
                     handle.status = _STATUS_CRASHED
-                    msg = (
-                        f"dev server crashed: did not bind {handle.host}:{handle.port} "
-                        f"within {timeout:g}s"
-                    )
+                    msg = f"dev server crashed: did not bind {handle.host}:{handle.port} within {timeout:g}s"
                     handle.log_buffer.append(f"[deerflow] {msg}")
                     _append_devlog_to_sandbox_log(handle.thread_id, msg)
                     logger.warning(msg)

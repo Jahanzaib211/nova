@@ -72,9 +72,7 @@ def test_emits_task_progress_when_todos_present():
     )
     asyncio.run(mw.aafter_tool(state, _config(writer)))
     task_progress = [e for e in events if e.get("type") == "task_progress"]
-    assert task_progress == [
-        {"type": "task_progress", "step": 1, "total": 3, "status": "in_progress"}
-    ]
+    assert task_progress == [{"type": "task_progress", "step": 1, "total": 3, "status": "in_progress"}]
 
 
 def test_emits_completed_when_all_todos_done():
@@ -89,9 +87,7 @@ def test_emits_completed_when_all_todos_done():
     )
     asyncio.run(mw.aafter_tool(state, _config(writer)))
     task_progress = [e for e in events if e.get("type") == "task_progress"]
-    assert task_progress == [
-        {"type": "task_progress", "step": 3, "total": 3, "status": "completed"}
-    ]
+    assert task_progress == [{"type": "task_progress", "step": 3, "total": 3, "status": "completed"}]
 
 
 def test_does_not_emit_task_progress_when_no_todos():
