@@ -92,7 +92,8 @@ export async function fetchFileSymbols(
     workspaceUrl(threadId, `/symbols?file=${encodeURIComponent(filePath)}`),
     { method: "GET", headers: { "Content-Type": "application/json" } },
   );
-  if (!res.ok) return [];
+  if (res.status === 403 || res.status === 404) return [];
+  if (!res.ok) throw new Error(`Failed to fetch symbols: ${res.status}`);
   const body = (await res.json()) as { symbols: WorkspaceSymbol[] };
   return body.symbols ?? [];
 }
@@ -105,7 +106,8 @@ export async function fetchWorkspaceCommands(
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) return [];
+  if (res.status === 403 || res.status === 404) return [];
+  if (!res.ok) throw new Error(`Failed to fetch commands: ${res.status}`);
   const body = (await res.json()) as { commands: WorkspaceCommand[] };
   return body.commands ?? [];
 }
@@ -124,7 +126,8 @@ export async function fetchWorkspaceMetrics(
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) return null;
+  if (res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.status}`);
   const body = (await res.json()) as { metrics: WorkspaceMetrics };
   return body.metrics ?? null;
 }
@@ -147,6 +150,7 @@ export async function fetchWorkspaceImpact(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ files }),
   });
-  if (!res.ok) return null;
+  if (res.status === 403 || res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to fetch impact: ${res.status}`);
   return (await res.json()) as WorkspaceImpact;
 }

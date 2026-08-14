@@ -118,6 +118,8 @@ async def stream_sandbox_logs(
     disconnects).  A keepalive ``[KEEPALIVE]`` comment is emitted every 15 s
     so reverse-proxies don't close idle connections.
     """
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     log_path = _sandbox_log_path(thread_id, user_id=user_id)
 
@@ -180,7 +182,7 @@ async def get_sandbox_todo(
     # Ownership guard: the checkpoint fallback reads by raw thread_id, so without
     # this a caller could read another tenant's todos. Mirrors the dev endpoints.
     if not _caller_owns_thread(thread_id):
-        return {"content": "", "todos": []}
+        raise HTTPException(status_code=404, detail="Not found")
 
     # Try to read from the sandbox todo.md file first (written by TodoMiddleware)
     user_id = get_effective_user_id()
@@ -286,6 +288,8 @@ async def get_sandbox_status(
     Reads ``sandbox_status.json`` written by the bash tool on each invocation.
     Returns ``{tool: None, label: "idle"}`` when no file exists.
     """
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     status_path = _sandbox_status_path(thread_id, user_id=user_id)
 
@@ -318,6 +322,8 @@ async def get_sandbox_file(
     Returns JSON so the frontend can use srcdoc for HTML iframe rendering
     without the XSS-protection download forced by the artifacts endpoint.
     """
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     paths = get_paths()
 
@@ -354,6 +360,8 @@ async def list_sandbox_files(
     Returns a flat list of files with virtual paths, sizes, and modified times,
     sorted newest-first. Skips hidden files and node_modules.
     """
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
     import datetime as _dt
 
     user_id = get_effective_user_id()
@@ -418,6 +426,8 @@ async def download_sandbox_zip(
     Excludes node_modules, .next, .git, and other build artifacts.
     Returns a streaming zip file response.
     """
+    if not _caller_owns_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
     import datetime as _dt
 
     user_id = get_effective_user_id()
@@ -533,14 +543,7 @@ def _mark_sandbox_active(thread_id: str) -> None:
 async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     """Return the live dev server status for a thread (optionally a labeled one)."""
     if not _caller_owns_thread(thread_id):
-        return {
-            "running": False,
-            "status": "stopped",
-            "port": None,
-            "host": None,
-            "url": None,
-            "absproxy_url": None,
-        }
+        raise HTTPException(status_code=404, detail="Not found")
     handle = get_dev_server(thread_id, label)
     if handle is None or handle.status not in ("starting", "ready"):
         # Missing/stale handle — adopt a live server on the published ports if
@@ -659,7 +662,7 @@ async def dev_external(
 async def dev_servers(thread_id: str) -> dict:
     """List all live dev servers for a thread (for the multi-port label dropdown)."""
     if not _caller_owns_thread(thread_id):
-        return {"servers": []}
+        raise HTTPException(status_code=404, detail="Not found")
     servers = [
         {
             "label": h.label,
