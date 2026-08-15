@@ -75,14 +75,16 @@ services:
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
+        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: http://192.168.200.3:8001
     container_name: deer-flow-frontend
     environment:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
+      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
     env_file:
       - ../frontend/.env
     networks:
       - deer-flow
+      - deer-flow-dev_deer-flow-dev
     restart: unless-stopped
     # v7.2 Batch 2A: USER nextjs added in Dockerfile; harden the runtime.
     security_opt:

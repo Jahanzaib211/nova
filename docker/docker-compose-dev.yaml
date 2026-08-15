@@ -182,7 +182,11 @@ services:
     # 2 GiB cap, which OOM-killed the container 155 times — each kill shows up
     # as an nginx 502 because the upstream simply vanishes. The host has 30 GiB,
     # so this is still a small share.
-    mem_limit: 4g
+    # 2026-08-15 bump: 4g was tripped overnight (2026-08-15 07:00 PKT, exit 137)
+    # after a long HMR session accumulated. 6g keeps the container healthy
+    # through sustained edit cycles without giving it free rein to take the
+    # host down.
+    mem_limit: 6g
 
   # Backend - Gateway API
   gateway:

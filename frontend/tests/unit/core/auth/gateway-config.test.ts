@@ -53,25 +53,23 @@ describe("getGatewayConfig", () => {
     restoreEnv(saved);
   });
 
-  test("returns localhost defaults when env is unset in development", async () => {
+  test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is missing (development)", async () => {
     setEnv("NODE_ENV", "development");
-
     const { getGatewayConfig } = await loadFreshConfig();
-    const cfg = getGatewayConfig();
-
-    expect(cfg.internalGatewayUrl).toBe("http://127.0.0.1:8001");
-    expect(cfg.trustedOrigins).toEqual(["http://localhost:3000"]);
+    expect(() => getGatewayConfig()).toThrow(/DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/);
   });
 
-  test("returns localhost defaults when env is unset in production (regression: issue #2705)", async () => {
+  test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is missing (production)", async () => {
     setEnv("NODE_ENV", "production");
-
     const { getGatewayConfig } = await loadFreshConfig();
+    expect(() => getGatewayConfig()).toThrow(/DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/);
+  });
 
-    expect(() => getGatewayConfig()).not.toThrow();
-    const cfg = getGatewayConfig();
-    expect(cfg.internalGatewayUrl).toBe("http://127.0.0.1:8001");
-    expect(cfg.trustedOrigins).toEqual(["http://localhost:3000"]);
+  test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is empty string", async () => {
+    setEnv("NODE_ENV", "production");
+    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "   ");
+    const { getGatewayConfig } = await loadFreshConfig();
+    expect(() => getGatewayConfig()).toThrow(/DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/);
   });
 
   test("uses env values verbatim when set, regardless of NODE_ENV", async () => {
@@ -107,5 +105,27 @@ describe("getGatewayConfig", () => {
       "https://a.example",
       "https://b.example",
     ]);
+  });
+
+  test("pins the 'gateway' hostname to 192.168.200.3 (docker-compose default)", async () => {
+    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "http://gateway:8001");
+    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "http://localhost:3000");
+
+    const { getGatewayConfig } = await loadFreshConfig();
+    const cfg = getGatewayConfig();
+
+    expect(cfg.internalGatewayUrl).toBe("http://192.168.200.3:8001");
+  });
+
+  test("respects DEER_FLOW_DEV_GATEWAY_IP override for the gateway hostname", async () => {
+    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "http://gateway:8001");
+    process.env.DEER_FLOW_DEV_GATEWAY_IP = "10.99.99.99";
+    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "http://localhost:3000");
+
+    const { getGatewayConfig } = await loadFreshConfig();
+    const cfg = getGatewayConfig();
+
+    expect(cfg.internalGatewayUrl).toBe("http://10.99.99.99:8001");
+    delete process.env.DEER_FLOW_DEV_GATEWAY_IP;
   });
 });

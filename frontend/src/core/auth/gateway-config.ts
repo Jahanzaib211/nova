@@ -39,11 +39,20 @@ function _pinHostToIp(url: string): string {
 export function getGatewayConfig(): GatewayConfig {
   if (_cached) return _cached;
 
+  // 2026-08-15: refuse to start with the empty fallback. The previous
+  // silent fallback to ``http://127.0.0.1:8001`` produced four ECONNREFUSED
+  // bursts in pm2 logs (the gateway is never reachable from inside the
+  // frontend container at 127.0.0.1) and made the chat UI show
+  // "failed to fetch" toasts. A loud failure at startup is far cheaper than
+  // a silent, hard-to-diagnose half-hour outage.
   const rawUrl = process.env.DEER_FLOW_INTERNAL_GATEWAY_BASE_URL?.trim();
-  const internalGatewayUrl =
-    rawUrl && rawUrl.length > 0
-      ? _pinHostToIp(rawUrl)
-      : "http://127.0.0.1:8001";
+  if (!rawUrl || rawUrl.length === 0) {
+    throw new Error(
+      "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is required but was empty or unset. " +
+        "Set it in docker-compose (or the frontend .env) before starting the Next.js server.",
+    );
+  }
+  const internalGatewayUrl = _pinHostToIp(rawUrl);
 
   const rawOrigins = process.env.DEER_FLOW_TRUSTED_ORIGINS?.trim();
   const trustedOrigins = rawOrigins

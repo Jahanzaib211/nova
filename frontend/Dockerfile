@@ -30,6 +30,8 @@ EXPOSE 3000
 
 # ── Builder: install + compile Next.js ───────────────────────────────────────
 FROM base AS builder
+ARG DEER_FLOW_INTERNAL_GATEWAY_BASE_URL
+ENV DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=${DEER_FLOW_INTERNAL_GATEWAY_BASE_URL}
 RUN cd /app/frontend && pnpm install --frozen-lockfile
 # Validate env at build (audit B7). The schema (src/env.js) marks all
 # NEXT_PUBLIC_* / server vars optional because runtime routing is handled by

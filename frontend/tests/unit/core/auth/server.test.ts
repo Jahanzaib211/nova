@@ -14,6 +14,8 @@ const ENV_KEYS = [
   "DEER_FLOW_ENV",
   "ENVIRONMENT",
   "NEXT_PUBLIC_STATIC_WEBSITE_ONLY",
+  "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL",
+  "DEER_FLOW_TRUSTED_ORIGINS",
 ] as const;
 
 type EnvSnapshot = Partial<
@@ -57,6 +59,8 @@ describe("getServerSideUser", () => {
     setEnv("DEER_FLOW_ENV", undefined);
     setEnv("ENVIRONMENT", undefined);
     setEnv("NEXT_PUBLIC_STATIC_WEBSITE_ONLY", undefined);
+    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", undefined);
+    setEnv("DEER_FLOW_TRUSTED_ORIGINS", undefined);
   });
 
   afterEach(() => {
@@ -114,6 +118,10 @@ describe("getServerSideUser — gateway_unavailable contract (issue #3493)", () 
     saved = snapshotEnv();
     setEnv("DEER_FLOW_AUTH_DISABLED", undefined);
     setEnv("NEXT_PUBLIC_STATIC_WEBSITE_ONLY", undefined);
+    // gateway-config.ts now requires the gateway URL — provide it so the
+    // tests reach the auth fetch path instead of throwing at config parse.
+    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "http://127.0.0.1:8001");
+    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "http://localhost:3000");
   });
 
   afterEach(() => {
