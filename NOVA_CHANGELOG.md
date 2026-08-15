@@ -48,6 +48,67 @@
 
 ---
 
+## v9.2 — full-stack audit: security, accessibility, robustness, and the Runtime config UI
+
+**Session pattern:** one big sweep across both apps to close security gaps, harden error handling, improve accessibility, and ship the new "Runtime" settings surface.
+
+### Features
+
+- **Runtime config UI** — new `Runtime` section in Settings (modal and `/settings` page). Read-only view of summarization, subagents, and guardrails settings, backed by the new `GET /api/runtime/config` endpoint. Editing requires `config.yaml` (deferred to a future write endpoint — file locking + schema validation + graceful hot-reload are out of scope for this surface).
+- **`GET /api/runtime/config`** — new router (`app/gateway/routers/runtime.py`) returning a Pydantic summary of the three operator-facing sections. Safe-get traversal means missing fields return defaults rather than 500s.
+
+### Security
+
+- **Sandbox IDOR fix (C1-C3)** — five `/api/sandbox/{logs,status,file,files,download-zip}` endpoints now verify thread ownership via `_caller_owns_thread()` and return 404 on mismatch (was returning empty data to any authenticated caller). Three more endpoints (`/todo`, `/dev-status`, `/dev-servers`) were returning empty JSON instead of 404 — now properly 404.
+- **Share token entropy (M1)** — `sharing.py` switched from `uuid.uuid4().hex` (128 bits, predictable structure) to `secrets.token_urlsafe(32)` (~256 bits, URL-safe base64). Token length in tests relaxed from 32 → 43 chars.
+- **Trusted-proxy XFF (M2)** — `auth_rate_limit_middleware._client_ip` now only honors `X-Forwarded-For` when the TCP peer matches `AUTH_TRUSTED_PROXIES` (CIDR list). Direct clients can no longer spoof their IP to bypass rate limits. Mirrors the contract already enforced by `app.gateway.auth.client_meta.get_client_ip`. 9 new tests in `test_auth_rate_limit_trusted_proxies.py`.
+- **Channel bare `except Exception` (H5)** — narrowed 9 bare `pass` blocks to `except ImportError` (where they belong) or added `logger.debug()` in 4 feishu/slack/discord/wecom sites. Audit trail improvement; nothing should change behaviorally.
+
+### Robustness
+
+- **`_bridge_ws` (H1)** — websocket bridge in sandbox router now logs exceptions rather than silently dropping them.
+- **`_is_port_open` (H2)** — wrapped in `asyncio.to_thread` to keep blocking IO off the event loop.
+- **Frontend error handling** — `api.ts` distinguishes 403/404 from 5xx (4 functions now throw on unexpected errors); `artifacts/loader.ts` checks `response.ok`; `credits-meter.tsx` shows "Credits information unavailable" on error; `billing-settings.tsx` has try/catch around redirect; `terms-gate.tsx` has `role="dialog"` + `aria-modal` + `aria-label`.
+- **Error boundary** — chat page `<main>` wrapped in `<ErrorBoundary scope="chat-main">`.
+
+### Accessibility
+
+- **`credits-meter.tsx` progress bar (M9)** — added `role="progressbar"`, `aria-valuenow`, `aria-valuemin/max`, `aria-label`, `aria-valuetext`.
+- **`todo-list.tsx` live region (M10)** — added `role="status"` + `aria-live="polite"` sr-only region announcing todo count + any in-progress task.
+- **`auth-form.tsx` (M12)** — explicit `aria-live="assertive"` on errors and `aria-live="polite"` on success.
+- **`loader.tsx`** — added `role="status"` + `aria-label="Loading"` from P4 (carried forward).
+
+### UX
+
+- **Share dialog (M11)** — explicit "Create share link" confirmation button before invoking `useCreateShareLink`. Previously the link was created immediately on dialog open with no chance to cancel.
+- **`React.memo` on `RecentChatList` and `TokenUsageIndicator` (M8)** — renamed inner functions with `_` suffix (matches the existing `message-list-item.tsx` pattern); prevents re-renders when parent state changes.
+
+### Tests
+
+- **10 new sandbox endpoint tests** in `test_sandbox_endpoints.py` covering `/logs`, `/status`, `/file`, `/files` including ownership-check enforcement on every endpoint.
+- **9 new trusted-proxy tests** in `test_auth_rate_limit_trusted_proxies.py` covering XFF allowed/denied paths, CIDR parsing, invalid entries.
+- **6 new runtime config tests** in `test_runtime_config_router.py` covering defaults, summarization trigger/model, subagents custom count, guardrails provider class, missing/None fields.
+
+### Skipped (documented)
+
+- **M3** — `RunStore.update_run_progress` noop is the documented contract (pinned by `test_update_run_progress_defaults_to_noop_for_custom_store`), not a bug.
+- **M4** — `ws_same_origin` already correct.
+- **M5** — WeCom stubs out of scope.
+- **M6** — `todo-list.tsx` add/delete/complete not in scope; the component is display-only and owned by the agent.
+- **M7** — `about-content.md` i18n is a larger translation effort.
+
+### Gate summary
+
+| | Before | After |
+|---|---|---|
+| Backend tests | 6430 | 6455 |
+| Frontend tests | 565 | 565 |
+| New tests | — | 25 |
+| Backend lint | clean | clean |
+| Frontend lint | 3 pre-existing errors | 2 pre-existing errors (fixed 1 from P5) |
+
+---
+
 ## v9.1 — ops conversation visibility + Android sandbox toolchain
 
 **Session pattern:** two independent operator-facing gaps closed together: the ops console had no way to read a user's actual conversation content (only usage/billing metadata), and the agent sandbox had no Android build toolchain, so it could write Kotlin/Gradle Android projects it could not compile.
