@@ -45,10 +45,17 @@ WORKDIR /app
 # Copy backend source code
 COPY backend ./backend
 
-# Install dependencies with cache mount
-# When UV_EXTRAS is set (e.g. "postgres"), installs optional dependencies.
+# Install dependencies with cache mount.
+#
+# The extras parsing lives in docker/uv-sync-extras.sh rather than inline here:
+# UV_EXTRAS accepts a comma- or whitespace-separated list ("trading,voice"), and
+# a shell loop written directly in a RUN cannot express that safely — the
+# Dockerfile parser expands unknown variables to the empty string, and escaping
+# them as \$name passes the backslash through to /bin/sh, where `\$(...)` is a
+# syntax error. Same rationale as docker/dev-entrypoint.sh (PR #2767).
+COPY docker/uv-sync-extras.sh /usr/local/bin/uv-sync-extras.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
-    sh -c "cd backend && UV_INDEX_URL=${UV_INDEX_URL:-https://pypi.org/simple} uv sync ${UV_EXTRAS:+--extra $UV_EXTRAS}"
+    sh /usr/local/bin/uv-sync-extras.sh /app/backend
 
 # UTF-8 locale prevents UnicodeEncodeError on Chinese/emoji content in minimal
 # containers where locale configuration may be missing and the default encoding is not UTF-8.

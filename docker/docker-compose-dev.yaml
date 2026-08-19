@@ -291,6 +291,17 @@ services:
       - DEER_FLOW_AUTH_DISABLED=${DEER_FLOW_AUTH_DISABLED:-1}
       - DEER_FLOW_PROJECT_ROOT=/app
       - DEER_FLOW_HOME=/app/backend/.deer-flow
+      # These two MUST be pinned here. ../.env carries HOST paths — it has to,
+      # because docker-compose.yaml uses ${DEER_FLOW_CONFIG_PATH} as the *source*
+      # of a bind mount — and env_file would otherwise leak them into the
+      # container, where they do not exist. The gateway then dies at import with
+      # FileNotFoundError from AppConfig.resolve_config_path(), uvicorn never
+      # binds 8001, and nginx reports "gateway could not be resolved" (Docker DNS
+      # SERVFAILs the name of a down container). Cost a full outage on 2026-08-17.
+      # Mirrors docker-compose.yaml:138-139 — but note the dev mounts land at
+      # /app/..., not /app/backend/... like prod.
+      - DEER_FLOW_CONFIG_PATH=/app/config.yaml
+      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}
       - DEER_FLOW_CHANNELS_GATEWAY_URL=${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}
       - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}

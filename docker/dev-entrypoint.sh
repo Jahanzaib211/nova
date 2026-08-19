@@ -87,6 +87,32 @@ if ! uv sync --all-packages $EXTRAS_FLAGS; then
     uv sync --all-packages $EXTRAS_FLAGS
 fi
 
+# ── Voice weights sanity check ──────────────────────────────────────────────
+#
+# The `voice` extra installs fine without the weights, so both engines report
+# as "loaded" and the failure only surfaces at first use, as
+#   Voices file not found at /home/<host-user>/.cache/nova/voice/voices-v1.0.bin
+# — a host path that does not exist inside this container. That happens
+# whenever the gateway is started without docker-compose.voice.yaml (e.g. a
+# bare `docker compose up -d --force-recreate gateway` to recover a broken
+# container), because the overlay is what bind-mounts the weights to
+# /app/voice-models and rewrites these paths. Cost a silent voice outage on
+# 2026-08-18. Warn loudly at boot instead of at first use; do not exit, since
+# a gateway without voice is still a working gateway.
+case "${UV_EXTRAS:-}" in
+    *voice*)
+        for _vw in "${DEERFLOW_TTS_VOICES_PATH:-}" "${DEERFLOW_TTS_MODEL_PATH:-}"; do
+            if [ -n "$_vw" ] && [ ! -s "$_vw" ]; then
+                echo "[startup] ⚠ voice extra is installed but '$_vw' is missing inside the container." >&2
+                echo "[startup]   The voice overlay was not applied. Restart with:" >&2
+                echo "[startup]     ./scripts/docker.sh start" >&2
+                echo "[startup]   or add -f docker/docker-compose.voice.yaml to your compose command." >&2
+            fi
+        done
+        unset _vw
+        ;;
+esac
+
 # ── Hand off to uvicorn ─────────────────────────────────────────────────────
 
 PYTHONPATH=. exec uv run uvicorn app.gateway.app:app \

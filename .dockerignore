@@ -59,6 +59,11 @@ tests/
 scripts/
 logs/
 docker/
+# …except the build-time dependency installer, which backend/Dockerfile COPYs
+# into the builder stage. docker/ is otherwise excluded because its contents are
+# runtime concerns (compose files, nginx conf, dev-entrypoint.sh — that one is
+# bind-mounted, not baked, so it never needed the context).
+!docker/uv-sync-extras.sh
 skills/
 frontend/.next
 frontend/node_modules
