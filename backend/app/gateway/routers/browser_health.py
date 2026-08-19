@@ -42,6 +42,10 @@ router = APIRouter(prefix="/api", tags=["health"])
 _MAX_CIRCUIT_STATES_IN_RESPONSE = int(os.environ.get("DEERFLOW_HEALTH_MAX_CIRCUITS", "100"))
 
 # Cache the last probe result so a dashboard refresh doesn't hammer CDP.
+# ``cdp_reachable`` is a tri-state bool|None:
+#   None  → no active sandbox to probe (idle)
+#   True  → probe succeeded
+#   False → probe failed (refused/timed out)
 _last_probe: dict[str, Any] = {
     "cdp_reachable": None,
     "latency_ms": None,
@@ -50,17 +54,23 @@ _last_probe: dict[str, Any] = {
 }
 
 
-def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool, float, str | None]:
+def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool | None, float | None, str | None]:
     """Probe a single CDP endpoint. Returns (reachable, latency_ms, cdp_url).
 
     Walks the active sandboxes (if any) and tries to read the CDP URL.
     AIO sandboxes ship with a chromium whose CDP is exposed; local
-    sandboxes don't have a browser — we return (False, ..., None).
+    sandboxes don't have a browser — we return (None, None, None) for
+    "no active thread".
 
     The probe is bounded — we don't actually open a WebSocket; just
     confirm the host:port answers (or refuses fast). For a real CDP
     websocket check the agent would call browser_check which does the
     full Playwright connect.
+
+    Returned ``reachable`` is a tri-state:
+      * ``None``  — no active sandbox to probe (idle state). ``cdp_url`` is also None.
+      * ``True``  — probe ran and the CDP endpoint is reachable.
+      * ``False`` — probe ran and the CDP endpoint refused/timed out.
     """
     start = time.monotonic()
     try:
@@ -69,6 +79,9 @@ def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool, float, str | None]:
         provider = get_sandbox_provider()
         # Iterate registered sandboxes (cheap — provider exposes ._sandboxes).
         sandboxes = getattr(provider, "_sandboxes", {}) or {}
+        if not sandboxes:
+            # No thread is currently using a sandbox — distinct from "broken".
+            return (None, None, None)
         for sid, sandbox in list(sandboxes.items())[:5]:  # probe at most 5
             client = getattr(sandbox, "_client", None)
             if client is None:
@@ -108,7 +121,9 @@ def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool, float, str | None]:
     except Exception as e:
         logger.debug("cdp health probe failed: %s", e)
 
-    return (False, None, None)
+    # Sandboxes were registered but none yielded a usable CDP URL (e.g. all
+    # local sandboxes with no browser). Treat as idle.
+    return (None, None, None)
 
 
 def _maybe_refresh_probe(min_interval_s: float = 5.0) -> None:
@@ -130,6 +145,15 @@ async def browser_health(response: Response) -> dict[str, Any]:
     Returns 200 when the subsystem is operational OR degraded-but-recoverable.
     Returns 503 only when the circuit-breaker subsystem itself has tripped for
     EVERY active thread (i.e. CDP is dead across the fleet).
+
+    When no thread is currently using a sandbox (the common idle state on a
+    single-user deployment) there is nothing to probe — ``cdp_reachable`` is
+    ``None`` and ``reason`` says ``"no_active_thread"``. The probe distinguishes
+    this from "actively broken" (``cdp_reachable: false`` with a populated
+    ``cdp_url`` that refused or timed out) so dashboards can stop flagging
+    the idle case as red. The previous behaviour reported a blanket ``false``
+    here and made the watchdog / runtime-capabilities bar show degraded
+    permanently, which is a UX bug rather than an outage.
     """
     _maybe_refresh_probe()
 
@@ -141,15 +165,33 @@ async def browser_health(response: Response) -> dict[str, Any]:
     # If every known circuit is open, the subsystem is in trouble.
     fleet_healthy = open_circuits < max(1, len(all_states))
 
+    # Distinguish "idle — nothing to probe" from "actively broken".
+    # The probe returns ``cdp_url=None`` when there were no registered
+    # sandboxes to probe (idle), and ``cdp_url="..."`` when a probe actually
+    # ran — succeeding (``cdp_reachable=True``) or failing
+    # (``cdp_reachable=False``) on a real URL. The previous implementation
+    # conflated idle with broken and made every dashboard think the Browser
+    # tab was dead.
+    last_url = _last_probe.get("cdp_url")
+    last_reachable = _last_probe.get("cdp_reachable")
+    if last_url is None:
+        reason = "no_active_thread"
+    elif last_reachable is False:
+        reason = "probe_failed"
+    else:
+        reason = "ok"
+
     payload = {
         "status": "healthy" if fleet_healthy else "degraded",
-        "cdp_reachable": _last_probe["cdp_reachable"],
+        "cdp_reachable": last_reachable,
         "latency_ms": _last_probe["latency_ms"],
         "last_check_at": _last_probe["last_check_at"],
         "open_circuits": open_circuits,
         "circuit_states": states_bounded,
         "truncated": len(all_states) > _MAX_CIRCUIT_STATES_IN_RESPONSE,
         "total_circuits": len(all_states),
+        "reason": reason,
+        "cdp_url": last_url,
     }
 
     if not fleet_healthy:

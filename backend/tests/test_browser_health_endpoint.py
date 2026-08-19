@@ -56,6 +56,8 @@ class TestBrowserHealthShape:
             "circuit_states",
             "truncated",
             "total_circuits",
+            "reason",
+            "cdp_url",
         ):
             assert key in body, f"missing field: {key}"
         assert body["status"] in ("healthy", "degraded")
@@ -73,6 +75,54 @@ class TestBrowserHealthShape:
         client = _make_test_client()
         resp = client.get("/api/health/browser")
         assert resp.status_code == 200
+
+    def test_idle_no_active_thread_sets_reason(self) -> None:
+        """When no sandbox is in use, ``cdp_reachable`` is ``None`` (not False)
+        and ``reason`` is ``no_active_thread``. Distinguishes the idle state from
+        'actively broken' so dashboards / runtime-capability bars stop showing a
+        red Browser tab when nothing is using a sandbox.
+
+        Regression for the audit finding where /api/health/browser persistently
+        reported ``cdp_reachable: false`` even though no thread was using a
+        sandbox — a UX bug, not an outage.
+        """
+        # Force a real probe run by clearing the cached timestamp.
+        bh._last_probe["last_check_at"] = 0.0
+        bh._last_probe["cdp_reachable"] = None
+        bh._last_probe["latency_ms"] = None
+        bh._last_probe["cdp_url"] = None
+        with patch.object(bh, "_probe_cdp_once", return_value=(None, None, None)):
+            client = _make_test_client()
+            resp = client.get("/api/health/browser")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["cdp_reachable"] is None
+        assert body["reason"] == "no_active_thread"
+        assert body["status"] == "healthy"
+
+    def test_probe_failed_sets_reason_and_does_not_503(self) -> None:
+        """When a CDP probe ran and failed (refused/timeout), ``reason`` is
+        ``probe_failed`` and the status is still 200 unless every circuit is
+        OPEN. ``cdp_url`` reports what was probed."""
+        bh._last_probe["last_check_at"] = 0.0
+        with patch.object(bh, "_probe_cdp_once", return_value=(False, 12.5, "ws://chromium:9222")):
+            client = _make_test_client()
+            resp = client.get("/api/health/browser")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["cdp_reachable"] is False
+        assert body["reason"] == "probe_failed"
+        assert body["cdp_url"] == "ws://chromium:9222"
+
+    def test_ok_probe_sets_reason(self) -> None:
+        bh._last_probe["last_check_at"] = 0.0
+        with patch.object(bh, "_probe_cdp_once", return_value=(True, 8.3, "ws://chromium:9222")):
+            client = _make_test_client()
+            resp = client.get("/api/health/browser")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["cdp_reachable"] is True
+        assert body["reason"] == "ok"
 
 
 class TestCircuitCounting:
@@ -172,10 +222,15 @@ class TestCircuitStateTruncation:
 
 class TestProbeCdpOnce:
     def test_probe_returns_unreachable_when_no_sandboxes(self) -> None:
+        """No registered sandboxes → ``(None, None, None)`` (idle tri-state),
+        NOT ``(False, None, None)`` (broken). Distinguishes the two so
+        dashboards / runtime capability bars don't flag idle as red.
+        """
         with patch("deerflow.sandbox.sandbox_provider.get_sandbox_provider") as mock_provider:
             mock_provider.return_value._sandboxes = {}
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
-        assert reachable is False
+        assert reachable is None
+        assert latency is None
         assert cdp_url is None
 
     def test_probe_handles_provider_exception(self) -> None:
@@ -184,7 +239,8 @@ class TestProbeCdpOnce:
             side_effect=RuntimeError("provider dead"),
         ):
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
-        assert reachable is False
+        # Provider raised — same tri-state as idle (we have no usable result).
+        assert reachable is None
         assert latency is None
         assert cdp_url is None
 
@@ -193,7 +249,8 @@ class TestProbeCdpOnce:
         provider = type("P", (), {"_sandboxes": {"t1": sandbox}})()
         with patch("deerflow.sandbox.sandbox_provider.get_sandbox_provider", return_value=provider):
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
-        assert reachable is False
+        # Sandbox registered but no usable CDP URL → idle tri-state.
+        assert reachable is None
         assert cdp_url is None
 
 

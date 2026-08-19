@@ -98,17 +98,27 @@ module.exports = {
         LITELLM_PORT: "4000",
         DIFY_HOST: "127.0.0.1",
         DIFY_PORT: "8088",
-        // Probes for services that have been retired. Left enabled they sit
-        // RED forever, which both trains the operator to ignore this
-        // dashboard and — before the repair circuit breaker existed — drove
-        // an endless auto-fix retry storm:
-        //   P9_bridge  — llama-bridge; ~/Desktop/llama-bridge does not exist
-        //   P11_dify   — nova-dify;    ~/Desktop/dify does not exist
-        //   P12_tunnel — cloudflared-nova.service is not installed; the
-        //                public hostname is served by the `tunnel-nova` pm2
-        //                app via ~/.cloudflared/nova-config.yml instead
+        // Probes for services that have been retired or are intentionally
+        // not wired on this deployment. Left enabled they sit RED forever,
+        // which both trains the operator to ignore this dashboard and —
+        // before the repair circuit breaker existed — drove an endless
+        // auto-fix retry storm:
+        //   P4_local_llm_gateway — local gateway on :9000 is not running;
+        //                          Nova routes everything through LiteLLM
+        //                          and the cloud providers (see SESSION-
+        //                          HANDOFF §3.G4). Wired = config-only
+        //                          change, but not on the production path.
+        //   P5_llama_loopback    — llama.cpp on :8081 is the local-llama
+        //                          fall-back; not used by Nova here either.
+        //   P9_bridge            — llama-bridge; ~/Desktop/llama-bridge
+        //                          does not exist
+        //   P11_dify             — nova-dify; ~/Desktop/dify does not exist
+        //   P12_tunnel           — cloudflared-nova.service is not
+        //                          installed; the public hostname is served
+        //                          by the `tunnel-nova` pm2 app via
+        //                          ~/.cloudflared/nova-config.yml instead
         // Re-enable by removing a name here once the service is back.
-        HEALTHCHECK_DISABLED_PROBES: "P9_bridge,P11_dify,P12_tunnel",
+        HEALTHCHECK_DISABLED_PROBES: "P4_local_llm_gateway,P5_llama_loopback,P9_bridge,P11_dify,P12_tunnel",
         // Binary-attestation probe — left unset by default. To enable:
         //   WATCHDOG_ATTESTATION_BINARY_PATH=/path/to/binary
         //   WATCHDOG_ATTESTATION_CONSTITUTION_PATH=/path/to/constitution

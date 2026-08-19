@@ -98,7 +98,21 @@ async def init_engine(
         from sqlalchemy import event
 
         os.makedirs(sqlite_dir or ".", exist_ok=True)
-        _engine = create_async_engine(url, echo=echo, json_serializer=_json_serializer)
+        # aiosqlite's ``timeout`` kwarg is the busy timeout in *seconds* — it
+        # tells the driver how long to wait for the SQLite write lock to clear
+        # before raising ``OperationalError: database is locked``. The python
+        # sqlite3 default is 5 s, which is too short when two ops-console
+        # requests both INSERT into ``admin_audit`` at the same moment: with
+        # WAL one of them waits for the other, but the wait is bounded by this
+        # timeout. 30 s lines up with the retry budget in app/gateway/admin_ops
+        # .py::_audit_commit_with_retry and is the standard recommendation for
+        # any busy SQLite workload (SQLite docs §5.0).
+        _engine = create_async_engine(
+            url,
+            echo=echo,
+            json_serializer=_json_serializer,
+            connect_args={"timeout": 30},
+        )
 
         # Enable WAL on every new connection. SQLite PRAGMA settings are
         # per-connection, so we wire the listener instead of running PRAGMA
@@ -107,17 +121,17 @@ async def init_engine(
         # SQLite deployment (TC-UPG-06 in AUTH_TEST_PLAN.md). The companion
         # ``synchronous=NORMAL`` is the safe-and-fast pairing — fsync only
         # at WAL checkpoint boundaries instead of every commit.
-        # Note: we do not set PRAGMA busy_timeout here — Python's sqlite3
-        # driver already defaults to a 5-second busy timeout (see the
-        # ``timeout`` kwarg of ``sqlite3.connect``), and aiosqlite /
-        # SQLAlchemy's aiosqlite dialect inherit that default.  Setting
-        # it again would be a no-op.
+        # ``busy_timeout`` is set as a belt-and-braces to the aiosqlite
+        # ``timeout`` kwarg above: aiosqlite delegates to the underlying
+        # sqlite3 driver, but PRAGMA wins over any connect-arg default and
+        # also applies to reads (BEGIN IMMEDIATE etc.). 30 s matches.
         @event.listens_for(_engine.sync_engine, "connect")
         def _enable_sqlite_wal(dbapi_conn, _record):  # noqa: ARG001 — SQLAlchemy contract
             cursor = dbapi_conn.cursor()
             try:
                 cursor.execute("PRAGMA journal_mode=WAL;")
                 cursor.execute("PRAGMA synchronous=NORMAL;")
+                cursor.execute("PRAGMA busy_timeout=30000;")
                 cursor.execute("PRAGMA foreign_keys=ON;")
             finally:
                 cursor.close()

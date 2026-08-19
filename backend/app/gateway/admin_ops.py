@@ -7,11 +7,14 @@ shared engine) and fail closed only on a genuinely missing engine.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from deerflow.persistence.admin_audit.model import AdminAuditRow
@@ -21,6 +24,65 @@ from deerflow.persistence.user.model import UserRow
 
 if TYPE_CHECKING:
     from fastapi import Request
+
+logger = logging.getLogger(__name__)
+
+# Audit-row writes go through a serialised SQLite writer under WAL; concurrent
+# ops-console requests can still lose the race for the write lock when two
+# arrive in the same millisecond. The engine now waits 30 s (engine.py
+# connect_args={"timeout": 30} + PRAGMA busy_timeout=30000), and this helper
+# adds the small retry-with-backoff loop that the rare longer-than-30s lock
+# holders need. Bounded so a real outage surfaces instead of hanging.
+_AUDIT_RETRY_ATTEMPTS = 3
+_AUDIT_RETRY_BACKOFF_S = (0.05, 0.2, 0.5)
+
+
+def _is_locked_error(exc: BaseException) -> bool:
+    """Return True for the SQLAlchemy ``OperationalError`` raised when SQLite
+    cannot acquire the database write lock within ``busy_timeout``.
+
+    The aiosqlite dialect wraps the underlying sqlite3.OperationalError, whose
+    message starts with ``"database is locked"``. Some legacy code paths used
+    ``"database table is locked"`` — handle both. Anything else (network error,
+    schema mismatch, missing column) is *not* a lock and must not be retried,
+    otherwise we'd mask real failures.
+    """
+    msg = str(exc)
+    return "database is locked" in msg or "database table is locked" in msg
+
+
+async def _commit_with_retry(session: AsyncSession) -> None:
+    """Commit the current transaction, retrying once on ``OperationalError: database
+    is locked``. Up to 3 attempts with exponential backoff (50 ms, 200 ms, 500 ms).
+    Other OperationalErrors propagate immediately so real bugs surface.
+    """
+    last_exc: BaseException | None = None
+    for attempt in range(_AUDIT_RETRY_ATTEMPTS):
+        try:
+            await session.commit()
+            return
+        except OperationalError as exc:
+            if not _is_locked_error(exc):
+                raise
+            last_exc = exc
+            # Roll back the failed transaction so the next attempt can begin
+            # a fresh one. SQLAlchemy auto-begins on next execute.
+            try:
+                await session.rollback()
+            except Exception:  # noqa: BLE001 — rollback failure is best-effort
+                pass
+            if attempt < _AUDIT_RETRY_ATTEMPTS - 1:
+                backoff = _AUDIT_RETRY_BACKOFF_S[attempt]
+                logger.warning(
+                    "admin_audit commit hit 'database is locked' (attempt %d/%d), sleeping %.0fms",
+                    attempt + 1,
+                    _AUDIT_RETRY_ATTEMPTS,
+                    backoff * 1000,
+                )
+                await asyncio.sleep(backoff)
+    # All attempts exhausted — re-raise the last OperationalError.
+    assert last_exc is not None
+    raise last_exc
 
 
 def utc(dt: datetime | None) -> datetime | None:
@@ -88,7 +150,7 @@ async def record_audit(
                 created_at=datetime.now(UTC),
             )
         )
-        await session.commit()
+        await _commit_with_retry(session)
 
 
 async def list_audit(
