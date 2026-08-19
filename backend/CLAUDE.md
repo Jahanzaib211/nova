@@ -156,6 +156,26 @@ Blocking-IO runtime gate (`tests/blocking_io/`):
 - CI: runs on every PR via `.github/workflows/backend-blocking-io-tests.yml`,
   hard-fail.
 
+Persistence engine (v9.4 — SQLite lock storm fix):
+
+- `deerflow.persistence.engine.init_engine` for `backend == "sqlite"` configures
+  a `_LockRetrySession` subclass whose `commit()` always routes through
+  `commit_with_lock_retry`. Every SQL write site (admin_audit, thread_meta,
+  credit_requests, run/sql, channel_connections, byok, sharing,
+  password_reset, referrals, events/store/db, …) gets the same 30 s busy
+  timeout + 3-attempt backoff for free, with the row re-added after each
+  rollback so the post-commit `session.refresh()` always sees a persistent
+  instance. Postgres is unaffected (no session override, original pool_size
+  honored).
+- The engine also runs the WAL/synchronous=NORMAL/busy_timeout=30000
+  PRAGMAs at startup **and** on every new connection, so a stale pool
+  inherited from a previous init can never re-introduce busy_timeout=5000.
+- The SQLite engine uses `pool_size = max(config.pool_size, 20)`,
+  `max_overflow = 10`, `pool_timeout = 5`. With nova-ops polling every
+  5 s, bursts of 6+ concurrent sessions are routine; the old
+  pool_size=5 + pool_timeout=30 s meant the sixth waiter hung for the
+  full 30 s — exactly the "Could not reach the Nova gateway" symptom.
+
 Boundary check (harness → app import firewall):
 
 - `tests/test_harness_boundary.py` — ensures `packages/harness/deerflow/` never imports from `app.*`
