@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from deerflow.persistence.engine import commit_with_lock_retry
 from deerflow.persistence.json_compat import json_match
 from deerflow.persistence.thread_meta.base import InvalidMetadataFilterError, ThreadMetaStore
 from deerflow.persistence.thread_meta.model import ThreadMetaRow
@@ -58,7 +59,7 @@ class ThreadMetaRepository(ThreadMetaStore):
         )
         async with self._sf() as session:
             session.add(row)
-            await session.commit()
+            await commit_with_lock_retry(session, logger_=logger)
             await session.refresh(row)
             return self._row_to_dict(row)
 
@@ -169,7 +170,7 @@ class ThreadMetaRepository(ThreadMetaStore):
             if not await self._check_ownership(session, thread_id, resolved_user_id):
                 return
             await session.execute(update(ThreadMetaRow).where(ThreadMetaRow.thread_id == thread_id).values(display_name=display_name, updated_at=datetime.now(UTC)))
-            await session.commit()
+            await commit_with_lock_retry(session, logger_=logger)
 
     async def update_status(
         self,
@@ -183,7 +184,7 @@ class ThreadMetaRepository(ThreadMetaStore):
             if not await self._check_ownership(session, thread_id, resolved_user_id):
                 return
             await session.execute(update(ThreadMetaRow).where(ThreadMetaRow.thread_id == thread_id).values(status=status, updated_at=datetime.now(UTC)))
-            await session.commit()
+            await commit_with_lock_retry(session, logger_=logger)
 
     async def update_metadata(
         self,
@@ -209,7 +210,7 @@ class ThreadMetaRepository(ThreadMetaStore):
             merged.update(metadata)
             row.metadata_json = merged
             row.updated_at = datetime.now(UTC)
-            await session.commit()
+            await commit_with_lock_retry(session, logger_=logger)
 
     async def update_owner(
         self,
@@ -224,7 +225,7 @@ class ThreadMetaRepository(ThreadMetaStore):
             if not await self._check_ownership(session, thread_id, resolved_user_id):
                 return
             await session.execute(update(ThreadMetaRow).where(ThreadMetaRow.thread_id == thread_id).values(user_id=owner_user_id, updated_at=datetime.now(UTC)))
-            await session.commit()
+            await commit_with_lock_retry(session, logger_=logger)
 
     async def delete(
         self,
@@ -240,4 +241,4 @@ class ThreadMetaRepository(ThreadMetaStore):
             if resolved_user_id is not None and row.user_id != resolved_user_id:
                 return
             await session.delete(row)
-            await session.commit()
+            await commit_with_lock_retry(session, logger_=logger)

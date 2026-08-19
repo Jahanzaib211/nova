@@ -6,13 +6,28 @@ repositories, disposes at shutdown.
 When database.backend="memory", init_engine is a no-op and
 get_session_factory() returns None. Repositories must check for
 None and fall back to in-memory implementations.
+
+Also exports ``commit_with_lock_retry`` — a small helper that retries
+``session.commit()`` on ``OperationalError: database is locked``. SQLite
+with WAL serialises writers; two concurrent INSERTs into any table
+(admin_audit, thread_meta, …) race for the write lock, and the loser
+raises until ``busy_timeout`` elapses. The engine now sets
+``busy_timeout=30000`` (see ``_enable_sqlite_wal`` below) which handles
+the common case via lock-wait, but a 30 s wait is still too short when
+two writes collide back-to-back across separate request handlers. This
+helper adds the small bounded retry on top — used by both
+``app.gateway.admin_ops.record_audit`` and
+``deerflow.persistence.thread_meta.sql.ThreadMetaRepository`` so all
+SQL writes share the same resilience contract.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 
@@ -218,3 +233,77 @@ async def close_engine() -> None:
         logger.info("Persistence engine closed")
     _engine = None
     _session_factory = None
+
+
+# ---------------------------------------------------------------------------
+# SQLite write-lock retry
+# ---------------------------------------------------------------------------
+
+# 3 attempts × exponential backoff gives a ~750 ms total budget — small enough
+# that a real outage surfaces fast (the last attempt re-raises), large enough
+# that two near-simultaneous writes into any hot table (admin_audit,
+# thread_meta, …) settle on the first or second attempt.
+_COMMIT_RETRY_ATTEMPTS = 3
+_COMMIT_RETRY_BACKOFF_S = (0.05, 0.2, 0.5)
+
+
+def _is_sqlite_locked_error(exc: BaseException) -> bool:
+    """True for the ``OperationalError`` raised when SQLite cannot acquire the
+    database write lock within ``busy_timeout``.
+
+    Matches the aiosqlite dialect's wrapped message (``"database is locked"``)
+    and the legacy ``"database table is locked"`` form. Anything else
+    (network error, schema mismatch, missing column) is *not* a lock and must
+    not be retried, otherwise a real bug is masked.
+    """
+    msg = str(exc)
+    return "database is locked" in msg or "database table is locked" in msg
+
+
+async def commit_with_lock_retry(
+    session: AsyncSession,
+    *,
+    logger_: logging.Logger | None = None,
+    attempts: int = _COMMIT_RETRY_ATTEMPTS,
+    backoff: tuple[float, ...] = _COMMIT_RETRY_BACKOFF_S,
+) -> None:
+    """Commit the current transaction, retrying on ``OperationalError:
+    database is locked``. Up to ``len(backoff) + 1`` attempts.
+
+    On retry, the failed transaction is rolled back so the next attempt can
+    begin a fresh one (SQLAlchemy auto-begins on the next ``execute()``).
+    Non-locked ``OperationalError``s propagate immediately so real bugs
+    surface; so does exhaustion of the retry budget.
+
+    This helper exists in the persistence engine so it can be shared across
+    every SQL write site (``admin_audit`` writes, ``thread_meta`` writes,
+    any future repository) — the same resilience contract regardless of
+    caller. The audit-specific import path lives in
+    ``app.gateway.admin_ops`` for historical reasons; new call sites should
+    use this helper directly.
+    """
+    log = logger_ or logger
+    last_exc: BaseException | None = None
+    for attempt in range(max(1, attempts)):
+        try:
+            await session.commit()
+            return
+        except OperationalError as exc:
+            if not _is_sqlite_locked_error(exc):
+                raise
+            last_exc = exc
+            try:
+                await session.rollback()
+            except Exception:  # noqa: BLE001 — rollback failure is best-effort
+                pass
+            if attempt < attempts - 1 and attempt < len(backoff):
+                wait_s = backoff[attempt]
+                log.warning(
+                    "sqlite commit hit 'database is locked' (attempt %d/%d), sleeping %dms",
+                    attempt + 1,
+                    attempts,
+                    int(wait_s * 1000),
+                )
+                await asyncio.sleep(wait_s)
+    assert last_exc is not None
+    raise last_exc
