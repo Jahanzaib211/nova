@@ -59,7 +59,16 @@ class ThreadMetaRepository(ThreadMetaStore):
         )
         async with self._sf() as session:
             session.add(row)
-            await commit_with_lock_retry(session, logger_=logger)
+            # commit_with_lock_retry may rollback and retry; on rollback the
+            # row is expunged from the session and ``session.refresh(row)``
+            # raises ``Instance … is not persistent within this Session``.
+            # Re-add on each retry — the SQLAlchemy Identity Map makes the
+            # same row object safe to add again.
+            await commit_with_lock_retry(
+                session,
+                logger_=logger,
+                on_retry=lambda: session.add(row),
+            )
             await session.refresh(row)
             return self._row_to_dict(row)
 

@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import Callable
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -286,12 +287,19 @@ async def commit_with_lock_retry(
     logger_: logging.Logger | None = None,
     attempts: int = _COMMIT_RETRY_ATTEMPTS,
     backoff: tuple[float, ...] = _COMMIT_RETRY_BACKOFF_S,
+    on_retry: Callable[[], object] | None = None,
 ) -> None:
     """Commit the current transaction, retrying on ``OperationalError:
     database is locked``. Up to ``len(backoff) + 1`` attempts.
 
     On retry, the failed transaction is rolled back so the next attempt can
     begin a fresh one (SQLAlchemy auto-begins on the next ``execute()``).
+    After rollback, any objects the caller had previously added to the
+    session are expunged — calling ``session.refresh(row)`` afterwards
+    raises ``Instance … is not persistent within this Session``. Pass
+    ``on_retry`` to re-add the row(s) between attempts (the SQLAlchemy
+    Identity Map keeps the same Python instance, so re-adding is safe).
+
     Non-locked ``OperationalError``s propagate immediately so real bugs
     surface; so does exhaustion of the retry budget.
 
@@ -316,6 +324,14 @@ async def commit_with_lock_retry(
                 await session.rollback()
             except Exception:  # noqa: BLE001 — rollback failure is best-effort
                 pass
+            # Re-add any caller objects that the rollback just expunged.
+            # Identity-map safe: re-adding the same Python instance does
+            # not duplicate the row in the database on the next flush.
+            if on_retry is not None:
+                try:
+                    on_retry()
+                except Exception:  # noqa: BLE001 — best-effort re-attach
+                    log.debug("on_retry callback raised; will rely on the next session.add()")
             if attempt < attempts - 1 and attempt < len(backoff):
                 wait_s = backoff[attempt]
                 log.warning(

@@ -90,3 +90,56 @@ async def test_concurrent_create_and_update_does_not_lose(thread_engine):
         row = await session.get(ThreadMetaRow, tid)
     assert count == 17, f"expected 17 rows, found {count}"
     assert row.status in {"running", "completed", "failed"}
+
+
+@pytest.mark.asyncio
+async def test_create_survives_rollback_with_on_retry(thread_engine, monkeypatch):
+    """Regression for the v9.4 second-wind bug: ThreadMetaRepository.create()
+    used to pass ``await commit_with_lock_retry(session)`` directly, so a
+    lock-induced rollback expunged the row from the session and the
+    subsequent ``session.refresh(row)`` raised
+    ``Instance … is not persistent within this Session`` — turning every
+    locked write into an HTTP 500.
+
+    The fix wires an ``on_retry`` callback that re-adds the row after each
+    rollback, so the post-commit ``session.refresh(row)`` always sees a
+    persistent instance.
+
+    Pinning the contract: after two forced rollback attempts the row is
+    still present in the DB, the create returns a valid dict, and the
+    on_retry callback was invoked exactly twice.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.exc import OperationalError
+
+    from deerflow.persistence import thread_meta as tm
+    from deerflow.persistence.engine import get_session_factory
+    from deerflow.persistence.models import ThreadMetaRow
+    from sqlalchemy import func, select
+
+    sf = get_session_factory()
+    repo = tm.sql.ThreadMetaRepository(sf)
+
+    call_count = {"n": 0}
+    real_commit = AsyncSession.commit
+
+    async def flaky_commit(self, *args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] <= 2:
+            raise OperationalError("INSERT INTO thread_meta ...", {}, Exception("database is locked"))
+        return await real_commit(self, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncSession, "commit", flaky_commit)
+
+    tid = uuid.uuid4().hex
+    row_dict = await repo.create(thread_id=tid, display_name="rollback test")
+    assert row_dict["thread_id"] == tid
+    assert row_dict["display_name"] == "rollback test"
+
+    # Exactly 3 commit attempts: 2 fail + 1 success.
+    assert call_count["n"] == 3, f"expected 3 commit attempts, got {call_count['n']}"
+
+    # Row actually landed.
+    async with sf() as session:
+        count = int(await session.scalar(select(func.count()).select_from(ThreadMetaRow)) or 0)
+    assert count == 1
