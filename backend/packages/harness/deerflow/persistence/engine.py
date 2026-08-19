@@ -193,15 +193,50 @@ async def init_engine(
         else:
             raise
 
-    # Belt-and-braces PRAGMA bootstrap for SQLite. The ``connect`` listener
-    # fires for every new DBAPI connection SQLAlchemy opens, but the live
-    # gateway had connections whose pool slots were checked out before
-    # init_engine ran the listener registration, and busy_timeout=5000
-    # was inherited instead of 30000. Run the PRAGMAs explicitly on a
-    # fresh connection so any pool slot that subsequently picks up this
-    # connection carries the right values. The listener handles new
-    # connections from then on. This is a no-op for non-SQLite backends.
+# Wrap every AsyncSession.commit with the lock-retry helper so every
+    # SQL write site (admin_ops, thread_meta, credit_requests, run/sql,
+    # channel_connections, byok, sharing, password_reset, referrals,
+    # events/store/db, …) gets the same resilience contract for free.
+    # Without this, the dozen+ write sites above each need their own
+    # retry loop — easy to miss one (credit_requests.submit_request
+    # was missed in v9.4 and held the write lock long enough for the
+    # next reader to wait 30 s on busy_timeout). The wrapper applies
+    # only on SQLite (no operational benefit on Postgres, which uses
+    # row-level locking).
     if backend == "sqlite":
+
+        class _LockRetrySession(AsyncSession):
+            """AsyncSession whose commit() retries on 'database is locked'.
+
+            Rollback semantics: when ``commit_with_lock_retry`` rolls back
+            the failed transaction, all objects added to the session are
+            expunged. The wrapper re-attaches them after each rollback so
+            the next attempt can flush them again. The SQLAlchemy Identity
+            Map keeps the same Python instance, so re-adding is safe — no
+            duplicate row in the database on the next flush.
+            """
+
+            async def commit(self):  # type: ignore[override]
+                # Capture pending objects before any rollback expunges them.
+                pending = list(self.identity_map.values())
+                return await commit_with_lock_retry(
+                    self,
+                    logger_=logger,
+                    on_retry=lambda: [self.add(obj) for obj in pending] or None,
+                )
+
+        _session_factory = async_sessionmaker(
+            _engine, expire_on_commit=False, class_=_LockRetrySession
+        )
+
+        # Belt-and-braces PRAGMA bootstrap for SQLite. The ``connect`` listener
+        # fires for every new DBAPI connection SQLAlchemy opens, but the live
+        # gateway had connections whose pool slots were checked out before
+        # init_engine ran the listener registration, and busy_timeout=5000
+        # was inherited instead of 30000. Run the PRAGMAs explicitly on a
+        # fresh connection so any pool slot that subsequently picks up this
+        # connection carries the right values. The listener handles new
+        # connections from then on. This is a no-op for non-SQLite backends.
         try:
             async with _engine.begin() as conn:
                 await conn.execute(text("PRAGMA journal_mode=WAL;"))
@@ -309,12 +344,21 @@ async def commit_with_lock_retry(
     caller. The audit-specific import path lives in
     ``app.gateway.admin_ops`` for historical reasons; new call sites should
     use this helper directly.
+
+    Implementation note: the engine may install a subclass of AsyncSession
+    (see ``_LockRetrySession``) whose ``commit()`` already calls this
+    helper. To avoid infinite recursion we route through the unbound
+    ``AsyncSession.commit`` here, which is the original SQLAlchemy
+    implementation that performs the actual COMMIT statement.
     """
     log = logger_ or logger
     last_exc: BaseException | None = None
     for attempt in range(max(1, attempts)):
         try:
-            await session.commit()
+            # Route through the *base class* commit, not ``session.commit``,
+            # which (when wrapped by ``_LockRetrySession``) would call back
+            # into this helper and recurse forever.
+            await AsyncSession.commit(session)
             return
         except OperationalError as exc:
             if not _is_sqlite_locked_error(exc):

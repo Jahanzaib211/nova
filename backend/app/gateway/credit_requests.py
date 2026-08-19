@@ -7,6 +7,7 @@ creates a credit grant) or decline. One active pending request per user
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -15,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.gateway.admin_ops import utc
 from deerflow.persistence.credit_request.model import CreditRequestRow
-from deerflow.persistence.engine import get_session_factory
+from deerflow.persistence.engine import commit_with_lock_retry, get_session_factory
+
+logger = logging.getLogger(__name__)
 
 
 def _row_to_dict(r: CreditRequestRow) -> dict:
@@ -66,7 +69,14 @@ async def submit_request(
                 created_at=datetime.now(UTC),
             )
             session.add(row)
-        await session.commit()
+        # commit_with_lock_retry may rollback and retry; re-attach the row
+        # after each rollback so the post-commit refresh sees a persistent
+        # instance. Same pattern as ThreadMetaRepository.create.
+        await commit_with_lock_retry(
+            session,
+            logger_=logger,
+            on_retry=lambda: session.add(row),
+        )
         return _row_to_dict(row)
 
 
@@ -138,7 +148,12 @@ async def resolve_request(
         row.status = "approved" if approve else "declined"
         row.resolved_at = datetime.now(UTC)
         row.resolved_by = resolved_by
-        await session.commit()
+        # Re-attach the row after each rollback — see commit_with_lock_retry.
+        await commit_with_lock_retry(
+            session,
+            logger_=logger,
+            on_retry=lambda: session.add(row),
+        )
         return _row_to_dict(row)
 
 
