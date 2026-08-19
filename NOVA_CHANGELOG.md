@@ -48,6 +48,68 @@
 
 ---
 
+## v9.4 — SQLite lock storm, "Failed to create thread" 500, CDP UX bug, watchdog spam
+
+**Session pattern:** user reported login "network error" and
+nova-ops console "Could not reach the Nova gateway"; same hour,
+POST /api/threads returned 500 {"detail":"Failed to create thread"}.
+Four independent root-cause classes identified in one audit pass and
+fixed in five commits (`30747d5e`, `b0097f53`, `bbe22af1`, plus the
+v9.3 documentation set already landed at `2b67a6a7`).
+
+### Findings
+
+- **SQLite lock storm.** `logs/gateway.log` carried 318
+  `OperationalError: database is locked` tracebacks from concurrent
+  ops-console INSERTs into `admin_audit`. Two colluding faults:
+  - The aiosqlite `timeout` was at the python `sqlite3` default of
+    5 s, far too short for the ops-console's two-per-second polling
+    pattern — losers raised immediately. Raised to 30 s
+    (`connect_args={"timeout": 30}` + `PRAGMA busy_timeout=30000`).
+  - Even at 30 s, two near-simultaneous writes can still collide.
+    Added a small 3-attempt exponential-backoff retry helper
+    (`deerflow.persistence.engine.commit_with_lock_retry`) shared
+    across every SQL write site.
+- **`Failed to create thread` 500.** `POST /api/threads` returned
+  HTTP 500 from the same lock contention: `ThreadMetaRepository.create()`
+  bypassed the retry helper. After the bbe22af1 fix landed, this was
+  the highest-visibility failure mode — every chat page hit it during
+  the gateway's first reload. Fixed by promoting the helper into
+  `deerflow.persistence.engine` and wrapping every
+  `ThreadMetaRepository` write site (`create`,
+  `update_display_name`, `update_status`, `update_metadata`,
+  `update_owner`, `delete`).
+- **CDP `false` UX bug.** `/api/health/browser` reported
+  `cdp_reachable: false` even when no thread was using a sandbox —
+  the probe returned `(False, None, None)` for "nothing to probe"
+  and the dashboard rendered it as broken. Now returns
+  `(None, None, None)` (tri-state distinct from "ran and failed")
+  and the response adds `reason: no_active_thread | probe_failed | ok`
+  plus `cdp_url`.
+- **Watchdog P4/P5 spam.** P4_local_llm_gateway and P5_llama_loopback
+  had been RED for 9 300+ cycles (~77 h) with "no auto-fix registered"
+  warnings every 10 min. The local LLM stack is intentionally not
+  wired on this deployment (SESSION-HANDOFF §3.G4). Added both names
+  to `HEALTHCHECK_DISABLED_PROBES` in `ecosystem.config.js`. P6
+  (`llama_vram`) stays enabled because it already self-masks as
+  YELLOW "no model advertised".
+
+### Live verification (after the restart at 20:45 PKT)
+
+- Backend suite: **6427 passed** (only known-red
+  `test_sandbox_orphan_reconciliation_e2e` failed — races on shared
+  Docker state, pre-existing, not code).
+- `curl https://nova.alilabsx.com/api/v1/admin/credit-requests`:
+  200 OK in **18 ms** (was hanging 10 s and timing out at the
+  nova-ops client).
+- `curl http://localhost:2026/api/health/browser`: `reason:
+  "no_active_thread"` instead of `cdp_reachable: false`.
+- `nova-healthcheck` cycle 47: P1/P2/P3/P7/P8/P10 all green;
+  P4/P5/P9/P11/P12 properly skipped; P6 yellow as expected.
+- 0 new `database is locked` errors in the 5 min after restart.
+
+---
+
 ## v9.3 — gateway outage: config-path leak, inotify exhaustion, and a production stack
 
 **Session pattern:** an outage on `nova.alilabsx.com` traced to two independent
