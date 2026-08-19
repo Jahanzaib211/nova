@@ -110,7 +110,7 @@ async def init_engine(
     if backend == "sqlite":
         import os
 
-        from sqlalchemy import event
+        from sqlalchemy import event, text
 
         os.makedirs(sqlite_dir or ".", exist_ok=True)
         # aiosqlite's ``timeout`` kwarg is the busy timeout in *seconds* — it
@@ -119,9 +119,9 @@ async def init_engine(
         # sqlite3 default is 5 s, which is too short when two ops-console
         # requests both INSERT into ``admin_audit`` at the same moment: with
         # WAL one of them waits for the other, but the wait is bounded by this
-        # timeout. 30 s lines up with the retry budget in app/gateway/admin_ops
-        # .py::_audit_commit_with_retry and is the standard recommendation for
-        # any busy SQLite workload (SQLite docs §5.0).
+        # timeout. 30 s lines up with the retry budget in
+        # ``commit_with_lock_retry`` and is the standard recommendation for any
+        # busy SQLite workload (SQLite docs §5.0).
         _engine = create_async_engine(
             url,
             echo=echo,
@@ -130,12 +130,13 @@ async def init_engine(
         )
 
         # Enable WAL on every new connection. SQLite PRAGMA settings are
-        # per-connection, so we wire the listener instead of running PRAGMA
-        # once at startup. WAL gives concurrent reads + writers without
-        # blocking and is the standard recommendation for any production
-        # SQLite deployment (TC-UPG-06 in AUTH_TEST_PLAN.md). The companion
-        # ``synchronous=NORMAL`` is the safe-and-fast pairing — fsync only
-        # at WAL checkpoint boundaries instead of every commit.
+        # per-connection, so we wire the listener AND apply them at startup
+        # (belt-and-braces: aiosqlite's connect listener can race with the
+        # initial schema bootstrap, and the production gateway proved this
+        # — a stale pool inherited busy_timeout=5000 even after the fix
+        # landed, so we explicitly run the PRAGMAs once after create_all).
+        # The companion ``synchronous=NORMAL`` is the safe-and-fast pairing
+        # — fsync only at WAL checkpoint boundaries instead of every commit.
         # ``busy_timeout`` is set as a belt-and-braces to the aiosqlite
         # ``timeout`` kwarg above: aiosqlite delegates to the underlying
         # sqlite3 driver, but PRAGMA wins over any connect-arg default and
@@ -190,6 +191,25 @@ async def init_engine(
                 await conn.run_sync(Base.metadata.create_all)
         else:
             raise
+
+    # Belt-and-braces PRAGMA bootstrap for SQLite. The ``connect`` listener
+    # fires for every new DBAPI connection SQLAlchemy opens, but the live
+    # gateway had connections whose pool slots were checked out before
+    # init_engine ran the listener registration, and busy_timeout=5000
+    # was inherited instead of 30000. Run the PRAGMAs explicitly on a
+    # fresh connection so any pool slot that subsequently picks up this
+    # connection carries the right values. The listener handles new
+    # connections from then on. This is a no-op for non-SQLite backends.
+    if backend == "sqlite":
+        try:
+            async with _engine.begin() as conn:
+                await conn.execute(text("PRAGMA journal_mode=WAL;"))
+                await conn.execute(text("PRAGMA synchronous=NORMAL;"))
+                await conn.execute(text("PRAGMA busy_timeout=30000;"))
+                await conn.execute(text("PRAGMA foreign_keys=ON;"))
+            logger.info("SQLite PRAGMAs applied at startup: WAL, synchronous=NORMAL, busy_timeout=30000")
+        except Exception:  # noqa: BLE001 — best-effort; the listener is still authoritative
+            logger.exception("Failed to apply SQLite PRAGMAs at startup")
 
     logger.info("Persistence engine initialized: backend=%s", backend)
 
