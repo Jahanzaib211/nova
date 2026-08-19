@@ -47,21 +47,46 @@ Gateway host port: **8000** (8001 is internal; host port 8001 returns 000 — th
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" http://localhost:2026/health   # expect 200
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health   # expect 200
-pm2 list | grep deerflow   # expect: online, restarts < 10
+pm2 list | grep -E "^\| [0-9]+ *\| nova "   # expect: online, restarts < 10
 docker ps --filter "name=deer-flow" --format "{{.Names}}\t{{.Status}}"
 # expect: deer-flow-nginx Up, deer-flow-frontend Up, deer-flow-gateway Up
 ```
 
-If gateway is crash-looping (restarts > 20 in pm2, or only nginx+frontend in `docker ps`):
+Note: the gateway does **not** publish a host port — it is reachable only from
+inside the Docker network (nginx proxies to it), so `curl localhost:8001/health`
+from the host will always fail and is not a signal. Go through :2026. The PM2
+process is `nova` (it runs `scripts/pm2-deerflow.sh`), not `deerflow`.
+
+**If the gateway is crash-looping, read its log BEFORE restarting anything.**
+`docker logs deer-flow-gateway` is empty by design on the dev stack — the
+entrypoint redirects to the host-mounted file — so an empty container log tells
+you nothing:
 
 ```bash
-pm2 stop deerflow
+docker ps -a --filter name=deer-flow-gateway --format '{{.Status}}'  # "Restarting (1)"?
+tail -100 logs/gateway.log                                           # the actual traceback
+```
+
+Two failure modes look identical from outside (nginx logs
+`gateway could not be resolved`, which just means the container is down and
+Docker DNS SERVFAILed its name) but have different fixes:
+
+| `logs/gateway.log` says | Fix |
+| --- | --- |
+| `FileNotFoundError: ... DEER_FLOW_CONFIG_PATH not found at /home/...` | A host path leaked in from `.env` via `env_file`. Pin the container path in the compose `environment:` block — recreating the container will NOT help. |
+| `WatchfilesRustInternalError: ... Too many open files (os error 24)` | Host inotify instances exhausted. `sudo sysctl fs.inotify.max_user_instances=1024`. |
+| Nothing / container never starts, and `docker ps` shows only nginx+frontend | Docker **name conflict** — see `references/diagnose.md`. This is the only one the recycle below fixes. |
+
+Only for the name-conflict case:
+
+```bash
+pm2 stop nova
 docker compose \
   -f docker/docker-compose-dev.yaml \
   -f docker/docker-compose.dood.yaml \
+  -f docker/docker-compose.prod-frontend.yaml \
   -p deer-flow-dev down --remove-orphans
-pm2 start deerflow
+pm2 start nova
 # Poll until 200: until curl -sf http://localhost:2026/health; do sleep 3; done
 ```
 

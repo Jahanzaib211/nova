@@ -62,25 +62,63 @@ If this regresses, verify `worker.py` has this line before both `agent.astream()
 
 ---
 
-## Gateway crash-loop (186+ pm2 restarts)
+## Gateway crash-loop
 
-**Symptom**: `pm2 list` shows `deerflow: online, restarts=186+, uptime=0s`. `docker ps` shows only `deer-flow-nginx` and `deer-flow-frontend`, no `deer-flow-gateway`.
+Two distinct failures present almost identically from the outside. nginx logs
+`gateway could not be resolved (2: Server failure)` in both cases — that is
+Docker's embedded DNS SERVFAILing the name of a container that is **down**, not
+a DNS problem. Tell them apart before touching anything:
 
-**Root cause**: Docker name conflict. pm2 tries to `compose up` the full stack, hits "container name already in use" on `deer-flow-frontend`, exits before the gateway starts, pm2 immediately restarts — infinite loop.
+```bash
+docker ps -a --filter name=deer-flow-gateway --format '{{.Status}}'
+```
+
+- **`Restarting (1)`** → the container exists and keeps exiting. Go to
+  variant A. **Do not** run the `down --remove-orphans` recycle; it recreates
+  the container with the same broken configuration and the loop resumes.
+- **Container absent entirely**, only `deer-flow-nginx` and
+  `deer-flow-frontend` in `docker ps` → variant B.
+
+### Variant A — the container starts and exits (exit code 1)
+
+**`docker logs deer-flow-gateway` is EMPTY and that is expected**, not evidence
+of a silent process: `docker/dev-entrypoint.sh` does
+`exec >/app/logs/gateway.log 2>&1`, so the traceback is in the host-mounted
+file. `scripts/docker.sh logs --gateway` now follows that file; plain
+`docker logs` and `docker compose logs` read the empty container stream.
+
+```bash
+tail -100 logs/gateway.log
+```
+
+| Traceback | Root cause | Fix |
+| --- | --- | --- |
+| `FileNotFoundError: Config file specified by environment variable DEER_FLOW_CONFIG_PATH not found at /home/...` | A **host** path reached the container. `../.env` legitimately holds host paths (docker-compose.yaml uses them as bind-mount *sources*), and `env_file:` leaks them in wherever the compose service does not pin the container path in `environment:`. | Add `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` to the gateway's `environment:` block — it wins over `env_file:`. Then recreate the container. |
+| `_rust_notify.WatchfilesRustInternalError: Error creating recommended watcher: Too many open files (os error 24)` | Host-wide inotify **instance** exhaustion (`fs.inotify.max_user_instances`, Ubuntu default 128). The uvicorn `--reload` supervisor is PID 1, so its death exits the container. | `sudo sysctl fs.inotify.max_user_instances=1024` (persist in `/etc/sysctl.d/`). Absent entirely on the `nova-prod` stack, which runs no reload watcher. |
+
+Both were live simultaneously in the 2026-08-17 outage.
+
+### Variant B — the container never gets created
+
+**Root cause**: Docker name conflict. pm2 tries to `compose up` the full stack,
+hits "container name already in use" on `deer-flow-frontend`, exits before the
+gateway starts, pm2 immediately restarts — infinite loop.
 
 **Fix**:
 ```bash
-pm2 stop deerflow
+pm2 stop nova
 docker compose \
   -f docker/docker-compose-dev.yaml \
   -f docker/docker-compose.dood.yaml \
+  -f docker/docker-compose.prod-frontend.yaml \
   -p deer-flow-dev down --remove-orphans
-pm2 start deerflow
+pm2 start nova
 until curl -sf http://localhost:2026/health; do sleep 3; done
 echo "healthy"
 ```
 
-**Verify**: `pm2 list | grep deerflow` → `online, restarts=0`. `docker ps | grep deer-flow` → all three Up.
+**Verify**: `pm2 list` shows `nova` → `online, restarts=0`.
+`docker ps | grep deer-flow` → all three Up.
 
 ---
 
