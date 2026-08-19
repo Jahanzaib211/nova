@@ -48,6 +48,104 @@
 
 ---
 
+## v9.3 — gateway outage: config-path leak, inotify exhaustion, and a production stack
+
+**Session pattern:** an outage on `nova.alilabsx.com` traced to two independent
+faults in the gateway container, then the structural fix that removes the class.
+
+### The outage (2026-08-17)
+
+`deer-flow-gateway` was crash-looping; nginx logged
+`gateway could not be resolved (2: Server failure)` — Docker's embedded DNS
+SERVFAILing the name of a container that is down, which reads like a DNS fault
+and is not one. The tunnel and nginx were healthy throughout
+(`readyConnections:4`, nginx answering 200 on :2026).
+
+**`docker logs deer-flow-gateway` was empty**, which is why this was slow to see:
+`docker/dev-entrypoint.sh` does `exec >/app/logs/gateway.log 2>&1`. Two unrelated
+failures were sitting in that file.
+
+- **Config-path leak (fatal).** The container's `DEER_FLOW_CONFIG_PATH` was a
+  *host* path, so `AppConfig.resolve_config_path()` raised `FileNotFoundError` at
+  import inside `create_app()` and uvicorn never bound 8001. Cause: the repo-root
+  `.env` legitimately holds host paths — `docker-compose.yaml` uses
+  `${DEER_FLOW_CONFIG_PATH}` as a bind-mount *source* — and
+  `docker-compose-dev.yaml` pinned `DEER_FLOW_PROJECT_ROOT`/`DEER_FLOW_HOME` in
+  its `environment:` block but not the two config-path vars, so `env_file:` leaked
+  them straight through. `docker-compose.yaml` had always pinned them; this was a
+  pure asymmetry between the two files. Note the inverse of the v9.2 note at the
+  "Environment leakage" entry below: `.env` used to hold `/app/...` paths and was
+  later flipped to host paths, which is correct — but it moves the burden onto
+  every compose service to override them.
+- **inotify exhaustion (secondary).** The uvicorn `--reload` supervisor died with
+  `WatchfilesRustInternalError: ... Too many open files (os error 24)` —
+  `fs.inotify.max_user_instances` at the Ubuntu default of 128, exhausted across
+  ~25 containers and ~30 PM2 processes. Because the supervisor is PID 1, its
+  death *exited the container*, converting a recoverable fault into a crash-loop.
+
+### Fixes
+
+- `docker/docker-compose-dev.yaml` — pin `DEER_FLOW_CONFIG_PATH=/app/config.yaml`
+  and `DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json` in the
+  gateway's `environment:`.
+- `/etc/sysctl.d/60-nova-inotify.conf` — `max_user_instances=1024`,
+  `max_user_watches=524288` (host change, not in-repo).
+- **`docker/docker-compose.nova-prod.yaml` (new)** — a standalone production
+  stack: final image (venv baked in, no boot-time `uv sync`), **no reload
+  watcher**, non-root, config mounted read-only, nginx still loopback-only, and
+  autoheal retained. It is *standalone rather than an overlay* because Compose
+  merges `volumes:` by appending — an overlay can override `command:` and
+  `build.target:` but can never remove the dev stack's `.venv`/source bind mounts.
+  `docker-compose.prod-frontend.yaml` demonstrates the limit: the merged frontend
+  runs the prod target yet still carries dev `frontend/src` mounts (inert there,
+  fatal for the gateway).
+- `scripts/pm2-deerflow.sh` — `NOVA_STACK=dev|prod` selects the stack; `dev`
+  remains the default and emits a byte-identical command to before.
+- `backend/Dockerfile` + **`docker/uv-sync-extras.sh` (new)** — `UV_EXTRAS` now
+  accepts a comma/whitespace list. It was interpolated as `--extra $UV_EXTRAS`,
+  so any multi-extra value produced the invalid flag `--extra trading,voice`;
+  only single-extra builds had ever worked, which would have silently dropped the
+  trading tools and voice engines from the prod image. Extracted to a script
+  because a shell loop cannot be written safely inline in a `RUN`: the Dockerfile
+  parser expands unknown variables to empty, and escaping them as `\$name` passes
+  the backslash to `/bin/sh`, where `\$(...)` is a syntax error. Also adds
+  `--all-packages`, without which the harness's own `trading`/`voice` extras are
+  skipped. `.dockerignore` gains an exception so the script reaches the context.
+
+### Docs corrected
+
+Several docs were wrong in ways that actively cost time during the outage:
+
+- `docs/TROUBLESHOOTING.md` — "Gateway won't start" pointed at `docker logs`
+  (empty by design). Now leads with `logs/gateway.log` and carries a
+  symptom→cause table for both faults above.
+- `scripts/docker.sh logs --gateway` — was `docker compose logs gateway`, i.e.
+  the same empty stream; now follows the real file when it exists.
+- `CONTRIBUTING.md` — documented `make docker-logs-frontend` /
+  `make docker-logs-gateway`; **neither target exists**. Correct form is
+  `make docker-logs ARGS=--gateway`.
+- `.opencode/skill/nova-agent/{SKILL.md,references/diagnose.md}` — the only
+  documented gateway crash-loop was a Docker *name conflict*, whose fix
+  (`down --remove-orphans` + pm2 restart) would have recreated the container with
+  the same broken env. Split into two variants keyed on
+  `docker ps -a` status. Also corrected the PM2 process name (`nova`, not
+  `deerflow`) and dropped a health check against `localhost:8000` (the gateway
+  publishes no host port at all).
+- `docs/ops/SESSION-HANDOFF.md` — stated `.env` exports a *container* path;
+  inverted since the file changed on 2026-08-15.
+- `docs/RUNBOOK.md` §7 — monitoring table cited `cloudflared-nova.service` and
+  `systemctl is-active cloudflared-nova`. **No cloudflared systemd unit and no
+  `/etc/cloudflared/` exist on this host**; the tunnels are PM2. Replaced with
+  the PM2 process names and the `/ready` metrics probe.
+- `backend/docs/CONFIGURATION.md` — had no coverage of the `environment:` vs
+  `env_file:` rule at all; new "Docker: config paths vs `env_file`" section. Also
+  fixed rebrand drift: the page documented `NOVA_CONFIG_PATH` /
+  `NOVA_PROJECT_ROOT`, **names that appear nowhere in the codebase**.
+- Config-priority lists in `backend/CLAUDE.md`, `DEVELOPMENT.md`,
+  `backend/README.md` now note the strictness of levels 1–2 and the Docker rule.
+
+---
+
 ## v9.2 — full-stack audit: security, accessibility, robustness, and the Runtime config UI
 
 **Session pattern:** one big sweep across both apps to close security gaps, harden error handling, improve accessibility, and ship the new "Runtime" settings surface.
