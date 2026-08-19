@@ -314,19 +314,79 @@ If a provider is explicitly enabled but required credentials are missing, or the
 
 ## Configuration Location
 
-The configuration file should be placed in the **project root directory** (`nova/config.yaml`). Set `NOVA_PROJECT_ROOT` when the process may start from another working directory, or set `NOVA_CONFIG_PATH` to point at a specific file.
+The configuration file should be placed in the **project root directory** (`nova/config.yaml`). Set `DEER_FLOW_PROJECT_ROOT` when the process may start from another working directory, or set `DEER_FLOW_CONFIG_PATH` to point at a specific file.
+
+> The environment variables are `DEER_FLOW_*`, not `NOVA_*`. Earlier revisions of
+> this page said `NOVA_CONFIG_PATH` / `NOVA_PROJECT_ROOT`; no such names are read
+> anywhere in the codebase (`AppConfig.resolve_config_path()` reads
+> `DEER_FLOW_CONFIG_PATH`), so setting them silently does nothing.
 
 ## Configuration Priority
 
 DeerFlow searches for configuration in this order:
 
 1. Explicit `config_path` argument
-2. `NOVA_CONFIG_PATH` environment variable
-3. `config.yaml` under `NOVA_PROJECT_ROOT`, or under the current working directory when `NOVA_PROJECT_ROOT` is unset
+2. `DEER_FLOW_CONFIG_PATH` environment variable
+3. `config.yaml` under `DEER_FLOW_PROJECT_ROOT`, or under the current working directory when `DEER_FLOW_PROJECT_ROOT` is unset
 4. `config.yaml` in parent directory (project root - **recommended location**)
+
+Note that levels 1 and 2 are **strict**: if the path is set but does not exist,
+`resolve_config_path()` raises `FileNotFoundError` rather than falling through to
+the search. That is deliberate — a silent fallback to a different config is worse
+than a loud failure — but it means a wrong `DEER_FLOW_CONFIG_PATH` stops the
+gateway at import time.
 
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
+
+### Docker: config paths vs `env_file`
+
+The repo-root `.env` is shared between host tooling and the Docker stacks, and it
+holds **host** paths:
+
+```bash
+DEER_FLOW_CONFIG_PATH=/home/you/nova/config.yaml
+DEER_FLOW_EXTENSIONS_CONFIG_PATH=/home/you/nova/extensions_config.json
+```
+
+Those values are required there — `docker-compose.yaml` uses
+`${DEER_FLOW_CONFIG_PATH}` as the **source** of a bind mount, so a container path
+in `.env` would break the mount itself.
+
+Every compose service that loads `env_file: ../.env` therefore inherits host paths
+that do not exist inside the container, and **must** override them in its own
+`environment:` block, which takes precedence over `env_file:`:
+
+```yaml
+    environment:
+      - DEER_FLOW_PROJECT_ROOT=/app
+      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - DEER_FLOW_CONFIG_PATH=/app/config.yaml            # destination of the mount
+      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+    env_file:
+      - ../.env
+```
+
+Pin them to whatever the *destinations* of that service's mounts are — they differ
+between stacks (`/app/config.yaml` in `docker-compose-dev.yaml`,
+`/app/backend/config.yaml` in `docker-compose.yaml` and
+`docker-compose.nova-prod.yaml`).
+
+Omitting the override is a silent, deferred failure: the container builds and
+starts, then the gateway dies at import with
+
+```
+FileNotFoundError: Config file specified by environment variable
+`DEER_FLOW_CONFIG_PATH` not found at /home/you/nova/config.yaml
+```
+
+and — because uvicorn never binds 8001 — nginx reports
+`gateway could not be resolved`, which reads like a DNS fault rather than a config
+one. This took the public deployment down on 2026-08-17. Not all `DEER_FLOW_*`
+path variables want container paths: `DEER_FLOW_HOST_BASE_DIR` and
+`DEER_FLOW_HOST_SKILLS_PATH` are deliberately *host* paths, because the DooD
+sandbox provider passes them to the host Docker daemon when mounting volumes into
+sibling containers.
 
 ### Extensions Configuration (`extensions_config.json`)
 

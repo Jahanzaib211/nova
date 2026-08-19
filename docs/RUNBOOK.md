@@ -389,15 +389,30 @@ the gateway container. Production should keep auth disabled=0.
 
 ## 7. Monitoring Expectations
 
+> **There is no `cloudflared` systemd unit and no `/etc/cloudflared/`.** The
+> tunnels run as PM2 processes (`tunnel-nova`, `tunnel-fox-hosting`,
+> `tunnel-whmcs`) using `~/.local/bin/cloudflared`. Earlier revisions of this
+> table listed `cloudflared-nova.service` / `systemctl is-active
+> cloudflared-nova`; those rows never matched this host and are removed.
+> Persistence across reboot is `pm2 save` → `~/.pm2/dump.pm2`.
+
 | Signal | Expected value | Action if deviates |
 | ------- | -------------- | ------------------- |
-| `pm2 nova-tunnel uptime` | should keep growing | check `nova-tunnel-error.log` |
-| `cloudflared-nova.service Active` | active (running) | follow §2 |
-| `https://nova.alilabsx.com/health` | `{"status":"healthy",...}` | follow §2 |
-| `systemctl is-active cloudflared-nova` | `active` | follow §2 |
-| `pm2 nova-healthcheck uptime` | growing, low restart count | check daemon logs |
-| `deer-flow-frontend Up` | minutes:hours, no restarts | check `logs/frontend.log` |
-| `deer-flow-gateway Up` | minutes:hours, no restarts | check `logs/gateway.log` |
+| `pm2 describe tunnel-nova` uptime | should keep growing | check `~/.pm2/logs/tunnel-nova-error.log` |
+| `curl 127.0.0.1:20001/ready` | `{"status":200,"readyConnections":4}` | `readyConnections:0` + `Unauthorized: Invalid tunnel secret` ⇒ rotated token; follow §2 |
+| `https://nova.alilabsx.com/health` | `{"status":"healthy",...}` | HTTP 530 ⇒ tunnel/token; 502 ⇒ origin down, follow the gateway rows |
+| `pm2 describe nova-healthcheck` uptime | growing, low restart count | check daemon logs |
+| `deer-flow-frontend Up` | minutes:hours, no restarts | `docker logs deer-flow-frontend` |
+| `deer-flow-gateway Up` | minutes:hours, no restarts | `logs/gateway.log` — **not** `docker logs`, see below |
+| `fs.inotify.max_user_instances` | ≥ 1024 | at the 128 default, file watchers across this host's ~25 containers exhaust it and uvicorn `--reload` dies with `Too many open files`; persist a bump in `/etc/sysctl.d/` |
+
+**Gateway logs are not in `docker logs`.** On the dev stack
+`docker/dev-entrypoint.sh` redirects stdout/stderr to the host-mounted
+`logs/gateway.log`, so `docker logs deer-flow-gateway` and
+`docker compose logs gateway` both stream an empty container log even while the
+gateway is crash-looping. Read `logs/gateway.log`, or
+`make docker-logs ARGS=--gateway`. The `nova-prod` stack does not redirect, so
+`docker logs` works there. Full triage: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
 

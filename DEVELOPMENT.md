@@ -253,6 +253,10 @@ Configuration priority:
 3. `config.yaml` in current directory (backend/)
 4. `config.yaml` in parent directory (project root - **recommended location**)
 
+Levels 1 and 2 are **strict** — a path that is set but missing raises `FileNotFoundError` instead of falling through, so a wrong `DEER_FLOW_CONFIG_PATH` stops the gateway at import.
+
+**In Docker, `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` must be pinned in the compose service's `environment:` block.** The repo-root `.env` holds *host* paths (it has to — `docker-compose.yaml` uses `${DEER_FLOW_CONFIG_PATH}` as a bind-mount source), and `env_file: ../.env` leaks them into any container that does not override them; `environment:` wins over `env_file:`. Omitting the pin is a deferred failure — the container starts, the gateway dies at import, and nginx reports `gateway could not be resolved`, which looks like DNS. Took the public deployment down on 2026-08-17. See [backend/docs/CONFIGURATION.md](backend/docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
+
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
 

@@ -308,8 +308,8 @@ MCP servers and skill states in a single file:
 
 ### Environment Variables
 
-- `DEER_FLOW_CONFIG_PATH` - Override config.yaml location
-- `DEER_FLOW_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location
+- `DEER_FLOW_CONFIG_PATH` - Override config.yaml location. Strict: if set but missing, startup fails with `FileNotFoundError` rather than falling back to the search path. In Docker this **must** be pinned to the in-container path in the compose `environment:` block — the repo-root `.env` carries host paths and `env_file:` would otherwise leak them in. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
+- `DEER_FLOW_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location (same strictness and same Docker caveat)
 - Model API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.
 - Tool API keys: `TAVILY_API_KEY`, `GITHUB_TOKEN`, etc.
 

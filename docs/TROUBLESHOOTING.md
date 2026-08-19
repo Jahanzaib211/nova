@@ -28,21 +28,44 @@ python3 backend/tests/test_no_cross_references.py
 
 ### Gateway won't start
 
-**Symptom**: `make dev` fails or gateway health returns unhealthy.
+**Symptom**: `make dev` fails or gateway health returns unhealthy. Through nginx
+this shows up as `502`, or in `logs/nova/` as
+`gateway could not be resolved (2: Server failure)` — Docker's embedded DNS
+SERVFAILs the name of a container that is down, so "could not be resolved" means
+*the gateway is not running*, not that DNS is broken.
+
+> **`docker logs deer-flow-gateway` is EMPTY on the dev stack — this is not a
+> clue, it is a dead end.** `docker/dev-entrypoint.sh` does
+> `exec >/app/logs/gateway.log 2>&1`, so everything the gateway prints goes to
+> the host-mounted **`logs/gateway.log`** instead. `scripts/docker.sh logs
+> --gateway` (`docker compose logs`) reads the same empty stream. Always read
+> the file. On the `nova-prod` stack there is no redirect and `docker logs`
+> works normally.
 
 ```bash
+# Gateway logs — THE file to read on the dev stack
+tail -100 logs/gateway.log
+
+# Is it crash-looping? "Restarting (1)" means it exits and Docker restarts it
+docker ps -a --filter name=deer-flow-gateway --format '{{.Status}}'
+
 # Check if port 8001 is in use
 lsof -i :8001
 
 # Check Docker socket
 ls -la /var/run/docker.sock
 
-# Check gateway logs
-docker logs deer-flow-gateway
-
 # Restart gateway
 scripts/docker.sh restart
 ```
+
+**Common causes**
+
+| In `logs/gateway.log` | Cause |
+| --- | --- |
+| `FileNotFoundError: Config file specified by environment variable DEER_FLOW_CONFIG_PATH not found at /home/...` | A **host** path leaked into the container from `.env` via `env_file`. Container path vars must be pinned in the compose service's `environment:` block, which wins over `env_file:`. See [backend/docs/CONFIGURATION.md](../backend/docs/CONFIGURATION.md#docker-config-paths-vs-env_file). |
+| `WatchfilesRustInternalError: Error creating recommended watcher: Too many open files (os error 24)` | inotify instances exhausted host-wide (`fs.inotify.max_user_instances`, default 128). Raise it — see [RUNBOOK.md](RUNBOOK.md). Only affects stacks that run uvicorn `--reload`. |
+| `Address already in use` | Something else holds 8001; `lsof -i :8001`. |
 
 ### Sandbox not available
 
@@ -57,7 +80,8 @@ ls -la backend/.deer-flow/users/
 
 # For Docker sandbox, check container
 docker ps | grep sandbox
-docker logs deer-flow-gateway | grep sandbox
+# NOT `docker logs` — empty on the dev stack (see "Gateway won't start" above)
+grep -i sandbox logs/gateway.log | tail -30
 ```
 
 ### Frontend can't connect to backend

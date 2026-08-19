@@ -402,12 +402,19 @@ helm template nova k8s/charts/nova -f k8s/charts/nova/values-staging.yaml >/dev/
 
 ### Environment traps that cost time this session
 
-- `.env` exports `DEER_FLOW_CONFIG_PATH=/app/config.yaml` (a *container* path)
-  into every `uv run`. Pass both explicitly outside Docker:
-  ```bash
-  DEER_FLOW_CONFIG_PATH=$PWD/../config.yaml \
-  DEER_FLOW_EXTENSIONS_CONFIG_PATH=$PWD/../extensions_config.json ...
-  ```
+- `.env` exports `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH`
+  into every `uv run`. **These now hold HOST paths** (they were container paths
+  when this was first written, hence the inverted advice that used to live
+  here). Host-side `uv run` therefore works as-is; it is the *containers* that
+  must override them, and any compose service that does not pin the container
+  path in its `environment:` block inherits the host path via `env_file:` and
+  dies at import with `FileNotFoundError`. That was the 2026-08-17 gateway
+  outage — see `docs/TROUBLESHOOTING.md`.
+
+  The host paths are not incidental: `docker-compose.yaml` uses
+  `${DEER_FLOW_CONFIG_PATH}` as the *source* of a bind mount, so a container
+  path in `.env` would break the prod stack. Don't "fix" `.env`; fix the
+  compose service.
 - Playwright: port 3000 is taken by an unrelated project and
   `reuseExistingServer` will happily test *it*. Always `E2E_PORT=3111 CI=1`.
 - `nginx -t` in a bare container fails on a missing `/var/log/nova`; `mkdir -p`

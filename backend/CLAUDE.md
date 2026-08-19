@@ -257,6 +257,10 @@ Configuration priority:
 3. `config.yaml` in current directory (backend/)
 4. `config.yaml` in parent directory (project root - **recommended location**)
 
+Levels 1 and 2 are **strict** — a path that is set but missing raises `FileNotFoundError` instead of falling through, so a wrong `DEER_FLOW_CONFIG_PATH` stops the gateway at import.
+
+**In Docker, `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` must be pinned in the compose service's `environment:` block.** The repo-root `.env` holds *host* paths (it has to — `docker-compose.yaml` uses `${DEER_FLOW_CONFIG_PATH}` as a bind-mount source), and `env_file: ../.env` leaks them into any container that does not override them; `environment:` wins over `env_file:`. Omitting the pin is a deferred failure — the container starts, the gateway dies at import, and nginx reports `gateway could not be resolved`, which looks like DNS. Took the public deployment down on 2026-08-17. Contrast `DEER_FLOW_HOST_BASE_DIR` / `DEER_FLOW_HOST_SKILLS_PATH`, which are deliberately host paths for the DooD sandbox provider. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
+
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
 
@@ -686,6 +690,28 @@ This starts all services and makes the application available at `http://localhos
 |---|---|---|---|
 | **Stop** | `./scripts/serve.sh --stop`<br/>`make stop` | `./scripts/docker.sh stop`<br/>`make docker-stop` | `./scripts/deploy.sh down`<br/>`make down` |
 | **Restart** | `./scripts/serve.sh --restart [flags]` | `./scripts/docker.sh restart` | — |
+
+**The self-hosted public deployment** (`nova.alilabsx.com`) is a fourth mode, run
+under PM2 rather than any of the above: PM2's `nova` process execs
+`scripts/pm2-deerflow.sh`, which brings up a compose stack and stays attached.
+`NOVA_STACK` selects which:
+
+| `NOVA_STACK` | Files | Gateway |
+|---|---|---|
+| `dev` (default) | `docker-compose-dev.yaml` + `docker-compose.dood.yaml` + `docker-compose.prod-frontend.yaml` | `dev` image, `uv sync` on boot, uvicorn `--reload` |
+| `prod` | `docker-compose.nova-prod.yaml` (standalone) | final image, venv baked in, **no reload watcher**, non-root |
+
+`prod` is the intended long-term shape: the reload watcher is a liability on a
+serving surface — on 2026-08-17 it died on inotify exhaustion and, being PID 1,
+took the container with it. It is standalone rather than another overlay because
+Compose merges `volumes:` by *appending*, so an overlay can override `command:`
+but can never remove the dev stack's `.venv` / source bind mounts. It requires a
+built image (the launcher runs `--no-build`):
+
+```bash
+docker compose -f docker/docker-compose.nova-prod.yaml -p deer-flow-dev build
+NOVA_STACK=prod pm2 restart nova --update-env
+```
 
 **Nginx routing**:
 

@@ -67,13 +67,19 @@ make docker-init
 make docker-start
 # Stop Docker development services
 make docker-stop
-# View Docker development logs
+# View Docker development logs (all services)
 make docker-logs
-# View Docker frontend logs
-make docker-logs-frontend
-# View Docker gateway logs
-make docker-logs-gateway
+# Per-service: pass the flag through ARGS
+make docker-logs ARGS=--frontend
+make docker-logs ARGS=--gateway
+make docker-logs ARGS=--nginx
 ```
+
+> On the dev stack the gateway's entrypoint redirects its output to the
+> host-mounted `logs/gateway.log`, so its *container* log is empty.
+> `make docker-logs ARGS=--gateway` follows the real file; a bare
+> `docker logs deer-flow-gateway` will show you nothing and is a common
+> false lead when debugging a failed start.
 
 If Docker builds are slow in your network, you can override the default package registries before running `make docker-init` or `make docker-start`:
 
