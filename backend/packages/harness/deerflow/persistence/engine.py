@@ -128,6 +128,19 @@ async def init_engine(
             echo=echo,
             json_serializer=_json_serializer,
             connect_args={"timeout": 30},
+            # Pool sizing matters here: with pool_size=5 + pool_timeout=30 s,
+            # the sixth concurrent session waits the full 30 s for a
+            # connection to free. nova-ops polls /api/v1/admin/credit-requests
+            # every 5 s; combined with user requests and audit writes,
+            # bursts of 6+ concurrent sessions are routine, so the pool
+            # exhausts and every later request waits 30 s — exactly the
+            # symptom observed on 2026-08-20. The fix is two-fold: grow the
+            # pool (max of config-driven ``pool_size`` and a SQLite floor of
+            # 20) and shrink pool_timeout to 5 s so callers fail fast with a
+            # clean error instead of hanging.
+            pool_size=max(pool_size, 20),
+            max_overflow=10,
+            pool_timeout=5,
         )
 
         # Enable WAL on every new connection. SQLite PRAGMA settings are
