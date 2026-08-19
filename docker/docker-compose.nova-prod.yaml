@@ -1,0 +1,290 @@
+# Nova — production stack for the public deployment (nova.alilabsx.com).
+#
+# Usage (via PM2, which is what actually runs it):
+#   pm2 restart nova          # → scripts/pm2-deerflow.sh
+# Directly:
+#   docker compose -f docker/docker-compose.nova-prod.yaml -p deer-flow-dev up -d
+#
+# ── Why this file exists ────────────────────────────────────────────────────
+# The public site used to be served by docker-compose-dev.yaml + the dood and
+# prod-frontend overlays. That worked, but the gateway ran uvicorn with
+# `--reload` and re-ran `uv sync` on every boot. On 2026-08-17 the reload
+# supervisor died with "Too many open files" (inotify instance exhaustion) —
+# and because it was PID 1, the container exited rather than degrading, taking
+# the site down in a crash-loop. A production serving surface has no business
+# running a filesystem watcher.
+#
+# It is a standalone file rather than another overlay because Compose merges
+# `volumes:` by APPENDING (keyed on target) — an overlay can override `command:`
+# and `build.target:` but can never REMOVE a base mount. docker-compose.prod-
+# frontend.yaml demonstrates the limit: the merged frontend runs the prod target
+# and `pnpm start`, yet still carries the dev bind mounts for frontend/src,
+# frontend/public and next.config.js. Harmless there (Next's prod server serves
+# .next/, not src/), fatal for the gateway — gateway-venv:/app/backend/.venv and
+# ../backend:/app/backend would shadow the image's baked venv and source.
+#
+# ── Deliberately carried over from the dev stack (NOT from docker-compose.yaml)
+#   * Network deer-flow-dev / 192.168.200.0/24 with the gateway pinned at
+#     192.168.200.3. The frontend hardcodes that address
+#     (DEER_FLOW_INTERNAL_GATEWAY_BASE_URL) and commit e8d3e7de made it THROW
+#     when the value is missing, so the pin is load-bearing. nginx itself is
+#     indifferent — it resolves `gateway:8001` through Docker DNS at 127.0.0.11
+#     (nginx.conf:104,161).
+#   * nginx bound to 127.0.0.1:2026 only. docker-compose.yaml publishes
+#     0.0.0.0:2026 AND :443, which on this host would expose the app to the LAN
+#     and can collide on 443. The Cloudflare tunnel connects over loopback.
+#   * autoheal — restarts the gateway when its healthcheck goes red.
+#   * skills mounted READ-WRITE. docker-compose.yaml mounts it :ro, which breaks
+#     POST /api/skills/install (it writes skills/custom/).
+#   * The DooD socket: config.yaml uses AioSandboxProvider with no
+#     provisioner_url, so the gateway starts sandbox containers on the host
+#     daemon. See docker-compose.dood.yaml for the security trade-off — the same
+#     one applies here, it is just no longer opt-in because this deployment has
+#     already made that choice.
+#
+# searxng and provisioner are absent by design: nothing in config.yaml
+# references SearXNG, and sandbox mode is aio (no provisioner_url). The dev
+# stack only ever ran them at `--scale 0` anyway.
+
+services:
+  # ── Reverse Proxy ──────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: deer-flow-nginx
+    ports:
+      # Loopback only — the Cloudflare tunnel (PM2 `tunnel-nova`) is the sole
+      # public path in. Binding 0.0.0.0 would silently expose the app to the LAN.
+      - "127.0.0.1:2026:2026"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf.template:ro
+      # Durable visitor log store (survives container recreation). nginx writes
+      # access.jsonl here; scripts/nova-visitors.py reads/prunes it.
+      - ../logs/nova:/var/log/nova
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        cp /etc/nginx/nginx.conf.template /etc/nginx/nginx.conf
+        test -e /proc/net/if_inet6 || sed -i '/^[[:space:]]*listen[[:space:]]\+\[::\]:2026;/d' /etc/nginx/nginx.conf
+        exec nginx -g 'daemon off;'
+    depends_on:
+      - frontend
+      - gateway
+    networks:
+      deer-flow-dev:
+        ipv4_address: 192.168.200.2
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2026/api/v1/auth/setup-status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    pids_limit: 256
+
+  # ── Frontend (Next.js, production build) ───────────────────────────────────
+  frontend:
+    build:
+      context: ../
+      dockerfile: frontend/Dockerfile
+      target: prod
+      args:
+        PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
+        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: http://192.168.200.3:8001
+    container_name: deer-flow-frontend
+    # `pnpm start` against the baked `next build`. No source bind mounts: the
+    # prod image is self-contained, and mounting host src over it is what made
+    # the old overlay confusing (see the header).
+    command: sh -c "cd frontend && exec pnpm start"
+    working_dir: /app
+    environment:
+      - NODE_ENV=production
+      # Direct bridge IP, not the `frontend`→`gateway` service name: SSR fetches
+      # from inside this container can fail to resolve after a container
+      # recreation (Docker DNS returns SERVFAIL until the network settles).
+      # gateway-config.ts throws when this is unset — deliberately loud.
+      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
+      # Production serving surface: auth ON. Never default this to 1 here.
+      - DEER_FLOW_AUTH_DISABLED=${DEER_FLOW_AUTH_DISABLED:-0}
+      # Heap ceiling below mem_limit so V8 collects harder instead of being
+      # OOM-killed (which surfaces to users as a bare nginx 502).
+      - NODE_OPTIONS=--max-old-space-size=1536
+    env_file:
+      - ../frontend/.env
+    networks:
+      deer-flow-dev:
+        ipv4_address: 192.168.200.4
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m
+    pids_limit: 512
+    # 2 GiB, not the dev stack's 6: that ceiling existed because `next dev` with
+    # Turbopack holds the whole module graph, source maps and HMR history
+    # resident and grows with every recompile. `next start` serves a fixed
+    # prebuilt bundle and has no such growth.
+    mem_limit: 2g
+
+  # ── Gateway API + agent runtime ────────────────────────────────────────────
+  gateway:
+    build:
+      context: ../
+      dockerfile: backend/Dockerfile
+      # No `target:` — this builds the final stage: no compiler toolchain, and
+      # the venv baked in at build time instead of `uv sync` on every boot.
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+        UV_IMAGE: ${UV_IMAGE:-ghcr.io/astral-sh/uv:0.7.20}
+        UV_INDEX_URL: ${UV_INDEX_URL:-https://pypi.org/simple}
+        # Comma-separated; parsed by docker/uv-sync-extras.sh at build time.
+        # In the dev stack this was a runtime env var consumed by
+        # dev-entrypoint.sh — here the extras must be baked into the image.
+        UV_EXTRAS: ${UV_EXTRAS:-}
+    container_name: deer-flow-gateway
+    # Pinned IP: nginx and the frontend both address the gateway here, and the
+    # bridge IP would otherwise change on every container recreation.
+    networks:
+      deer-flow-dev:
+        ipv4_address: 192.168.200.3
+    # No --reload, and no uv sync. `--no-sync` keeps uv from touching the baked
+    # venv at startup (it would need write access we deliberately do not grant).
+    # The graceful-shutdown bound stops a restart from hanging forever on the
+    # UI's long-lived SSE connections.
+    command:
+      - sh
+      - -c
+      - >-
+        cd backend &&
+        PYTHONPATH=. exec uv run --no-sync uvicorn app.gateway.app:app
+        --host 0.0.0.0 --port 8001
+        --workers ${GATEWAY_WORKERS:-1}
+        --timeout-graceful-shutdown 10
+    # Run as the host user (uid 1000) rather than the image's `app` (uid 10001).
+    # backend/.deer-flow on the host is owned by uid 1000 and holds live runtime
+    # state — sessions, run events, SQLite. Running as 10001 cannot write it
+    # (the same class as the cap_drop/DAC_OVERRIDE note in docker-compose-dev
+    # .yaml:310-320), and chowning it to 10001 would lock the host user out of
+    # their own data. HOME is redirected to the tmpfs below because uid 1000 has
+    # no home directory inside this image and uv/python want somewhere to cache.
+    user: "1000:1000"
+    # /var/run/docker.sock is root:docker mode 0660. uid 1000 gets no
+    # supplementary groups inside the container, so without this the DooD mount
+    # below is present but unreadable and every sandbox acquire fails with
+    # EACCES. The dev stack never hit this because it ran as root. Default is
+    # this host's `docker` GID — override DOCKER_GID elsewhere (`getent group
+    # docker`).
+    group_add:
+      - "${DOCKER_GID:-973}"
+    working_dir: /app
+    volumes:
+      # Config files: read-only. The runtime settings UI is deliberately
+      # read-only too (app/gateway/routers/runtime.py), so nothing needs to
+      # write these. Per-agent config.yaml files live under .deer-flow instead.
+      - ../config.yaml:/app/backend/config.yaml:ro
+      - ../extensions_config.json:/app/backend/extensions_config.json:ro
+      # Read-write: POST /api/skills/install writes skills/custom/.
+      - ../skills:/app/skills
+      # Runtime state — sessions, run events, per-user threads, SQLite.
+      - ../backend/.deer-flow:/app/backend/.deer-flow
+      # DooD: config.yaml uses AioSandboxProvider with no provisioner_url, so
+      # the gateway starts per-thread sandbox containers on the host daemon.
+      - ${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    environment:
+      - CI=true
+      # Production serving surface: auth ON.
+      - DEER_FLOW_AUTH_DISABLED=${DEER_FLOW_AUTH_DISABLED:-0}
+      - DEER_FLOW_PROJECT_ROOT=/app
+      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      # MUST be pinned to in-container paths. ../.env carries HOST paths — it
+      # has to, because docker-compose.yaml uses ${DEER_FLOW_CONFIG_PATH} as a
+      # bind-mount *source* — and env_file would otherwise leak them in here,
+      # where they do not exist. That is exactly the 2026-08-17 outage: the
+      # gateway died at import with FileNotFoundError from
+      # AppConfig.resolve_config_path(), uvicorn never bound 8001, and nginx
+      # reported "gateway could not be resolved". Note these land at
+      # /app/backend/..., matching the mounts above.
+      - DEER_FLOW_CONFIG_PATH=/app/backend/config.yaml
+      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
+      - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}
+      - DEER_FLOW_CHANNELS_GATEWAY_URL=${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}
+      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}
+      # DooD path translation: the sandbox provider mounts host directories into
+      # sibling containers, so these must be HOST paths, unlike the two above.
+      - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
+      - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
+      - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      # uid 1000 has no home in this image; give uv/python a writable cache.
+      - HOME=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - UV_CACHE_DIR=/tmp/.cache/uv
+      - PYTHONDONTWRITEBYTECODE=1
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,host.docker.internal
+    env_file:
+      - ../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    tmpfs:
+      # Writable scratch for HOME/caches above. Sized for uv metadata and
+      # tempfiles, not for user data (that goes to .deer-flow).
+      - /tmp:size=512m
+    restart: unless-stopped
+    # Detects a hung-but-"Up" gateway (the 2026-07-16 failure mode: uvicorn
+    # dead, container still Up, nginx timing out). No curl/wget in this image.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=4).status==200 else 1)"
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      # Much shorter than the dev stack's 150s: there is no startup `uv sync`.
+      start_period: 60s
+    labels:
+      - autoheal=true
+    security_opt:
+      - "no-new-privileges:true"
+    pids_limit: 512
+    mem_limit: 6g
+
+  # ── Autoheal ───────────────────────────────────────────────────────────────
+  # Restarts any container labelled autoheal=true when Docker reports it
+  # unhealthy — the auto-recovery missing during the 2026-07-16 outage.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: deer-flow-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=15
+      - AUTOHEAL_START_PERIOD=60
+      - DOCKER_SOCK=/var/run/docker.sock
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  # Same name, subnet and addressing as the dev stack so the pinned
+  # 192.168.200.3 stays valid and nothing downstream has to be re-pointed.
+  deer-flow-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.200.0/24

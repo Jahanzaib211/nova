@@ -359,6 +359,16 @@ logs() {
             echo -e "${BLUE}Viewing frontend logs...${NC}"
             ;;
         --gateway)
+            # The dev gateway's entrypoint redirects stdout/stderr into the
+            # host-mounted logs/gateway.log (docker/dev-entrypoint.sh), so
+            # `compose logs gateway` streams an empty container log and looks
+            # like "the gateway is silent" during an outage. Follow the real
+            # file when it exists; fall back to compose logs for stacks that do
+            # not redirect (docker-compose.nova-prod.yaml).
+            if [ -f "$PROJECT_ROOT/logs/gateway.log" ]; then
+                echo -e "${BLUE}Viewing gateway logs (logs/gateway.log)...${NC}"
+                exec tail -f "$PROJECT_ROOT/logs/gateway.log"
+            fi
             service="gateway"
             echo -e "${BLUE}Viewing gateway logs...${NC}"
             ;;
