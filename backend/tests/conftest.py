@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -41,6 +42,60 @@ _host_env_defaults = {
 for _var, _path in _host_env_defaults.items():
     if _path.exists():
         os.environ.setdefault(_var, str(_path))
+
+
+# Neutralize the deployment's DATABASE backend the same way.
+#
+# After the 2026-08-21 Postgres migration this box's config.yaml carries
+# `database.backend: postgres` + `postgres_url: $DATABASE_URL`. Two consequences
+# for a host-side test run, both bad:
+#
+#   1. $DATABASE_URL is not set in a plain shell, so AppConfig raises
+#      "Environment variable DATABASE_URL not found" and the WHOLE SUITE fails
+#      at collection — 8 errors, nothing runs.
+#   2. If it *were* set, every TestClient lifespan would open the live
+#      production database and tests would mutate real user data.
+#
+# CI never saw this because it does `cp config.example.yaml config.yaml`, i.e.
+# it tests against sqlite. That asymmetry — green in CI, broken for the
+# developer running the same `make test` — is the exact antipattern this
+# repo's live-test gate was introduced to kill.
+#
+# So: hand the suite a sanitized copy of the real config with the database
+# forced back to sqlite. Everything else (models, tools, skills) is preserved,
+# so tests still exercise the operator's actual configuration.
+def _sqlite_test_config(source: Path) -> Path | None:
+    try:
+        import yaml
+    except ImportError:
+        return None
+    try:
+        data = yaml.safe_load(source.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+
+    database = data.get("database") or {}
+    if database.get("backend") != "postgres":
+        return None  # already sqlite/memory — use the real file
+
+    data["database"] = {"backend": "sqlite", "sqlite_dir": database.get("sqlite_dir", ".deer-flow/data")}
+    # The LangGraph store/checkpointer section points at the same URL.
+    if (data.get("checkpointer") or {}).get("type") == "postgres":
+        data.pop("checkpointer", None)
+
+    target = Path(tempfile.gettempdir()) / f"nova-test-config-{os.getuid()}.yaml"
+    try:
+        target.write_text(yaml.safe_dump(data, sort_keys=False))
+    except OSError:
+        return None
+    return target
+
+
+_real_config = Path(os.environ.get("DEER_FLOW_CONFIG_PATH", ""))
+if _real_config.exists():
+    _sanitized = _sqlite_test_config(_real_config)
+    if _sanitized is not None:
+        os.environ["DEER_FLOW_CONFIG_PATH"] = str(_sanitized)
 
 # The .env also stamps DEER_FLOW_ENV=production (this box runs the live
 # gateway). Tests must not inherit the deployment's environment identity:
