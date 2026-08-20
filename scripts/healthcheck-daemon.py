@@ -67,6 +67,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from dataclasses import asdict, dataclass, field
@@ -170,6 +171,57 @@ class CycleReport:
             "exit_code": self.exit_code,
             "probes": [p.to_dict() for p in self.probes],
         }
+
+
+# ---------------------------------------------------------------------------
+# Status file
+# ---------------------------------------------------------------------------
+#
+# The per-cycle JSON on stdout goes to a PM2 log that nothing reads back, so
+# until now the only way to see watchdog state was `pm2 logs`. Nova Ops cannot
+# shell into the box, so it had no view of the 12 probes at all.
+#
+# Mirror every cycle into a status file instead, using the same shape and the
+# same atomic write-temp-then-rename as k8s/scripts/k3s-watchdog.py, so the
+# console can reuse one staleness rule for both watchdogs. `checked_at_epoch`
+# is the field the console ages against.
+
+
+def status_path() -> Path:
+    override = os.environ.get("HEALTHCHECK_STATUS_PATH", "").strip()
+    if override:
+        return Path(override)
+    return Path.home() / ".nova" / "gates" / "healthcheck.json"
+
+
+def write_status(report: "CycleReport", interval_sec: float) -> None:
+    """Atomically publish the cycle for Nova Ops. Never fatal.
+
+    A watchdog that dies because it could not write its own status file would
+    be worse than one that is merely unobservable, so every failure here is
+    logged and swallowed.
+    """
+    payload = report.to_dict()
+    payload["checked_at_epoch"] = time.time()
+    payload["ok"] = report.overall is not Status.RED
+    payload["interval_sec"] = interval_sec
+
+    try:
+        path = status_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Same directory as the target so the rename is atomic (a rename across
+        # filesystems is a copy, which a reader can observe half-written).
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=path.parent,
+            prefix=".healthcheck-", suffix=".tmp", delete=False,
+        ) as handle:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+            tmp = Path(handle.name)
+        tmp.replace(path)
+    except Exception:
+        log.warning("could not write status file", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1236,6 +1288,7 @@ async def main_loop(args: argparse.Namespace) -> int:
                 )
             )
             print(json.dumps(stuck_report.to_dict()), flush=True)
+            write_status(stuck_report, args.interval)
             return 1  # PM2 restart
         except Exception:
             log.exception("cycle raised")
@@ -1243,6 +1296,7 @@ async def main_loop(args: argparse.Namespace) -> int:
             continue
 
         print(json.dumps(report.to_dict()), flush=True)
+        write_status(report, args.interval)
 
         if args.once:
             return report.exit_code
