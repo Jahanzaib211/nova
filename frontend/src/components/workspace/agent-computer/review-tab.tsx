@@ -193,7 +193,7 @@ export function ReviewPanel({
               <div className="flex flex-col gap-px font-mono text-[11px]">
                 {review.files.slice(0, 200).map((f, i) => (
                   <div
-                    key={i}
+                    key={f.path || i}
                     className="hover:bg-muted/30 flex items-center gap-2 rounded px-1 py-0.5"
                   >
                     <span className="text-muted-foreground/80 min-w-0 flex-1 truncate">

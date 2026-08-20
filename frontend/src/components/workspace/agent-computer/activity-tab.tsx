@@ -27,14 +27,13 @@ import type {
 import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
+import { isActivityTool } from "@/core/threads/tool-surface";
 import type { Todo } from "@/core/todos";
 import {
   useWorkspaceEvents,
   useWorkspaceSnapshot,
 } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
-
-import { TERMINAL_TOOLS } from "./terminal-tab";
 
 // Tab 4: Activity — compact event cards + Files tree
 // ──────────────────────────────────────────────────────────
@@ -224,7 +223,7 @@ export function ActivityPanel({
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
   const timeline = useMemo(
-    () => events.filter((e) => !TERMINAL_TOOLS.has(e.type)),
+    () => events.filter((e) => isActivityTool(e.type)),
     [events],
   );
   // Workspace-indexed banner (C10 item 7); null while the flag is off.

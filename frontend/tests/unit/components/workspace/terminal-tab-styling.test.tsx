@@ -1,20 +1,20 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  TERMINAL_TOOLS,
+  isTerminalTool,
   terminalOutputClass,
 } from "@/components/workspace/agent-computer/terminal-tab";
 
 describe("TERMINAL_TOOLS", () => {
   test("includes bash, execute_command, search_files, grep_files", () => {
     for (const t of ["bash", "execute_command", "search_files", "grep_files"]) {
-      expect(TERMINAL_TOOLS.has(t)).toBe(true);
+      expect(isTerminalTool(t)).toBe(true);
     }
   });
 
   test("includes read_file, write_file, str_replace (2026-08-14 fix)", () => {
     for (const t of ["read_file", "write_file", "str_replace"]) {
-      expect(TERMINAL_TOOLS.has(t)).toBe(true);
+      expect(isTerminalTool(t)).toBe(true);
     }
   });
 });

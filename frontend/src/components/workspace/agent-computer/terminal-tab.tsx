@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/core/i18n/hooks";
 import { useSandboxTerminalUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
+import { isTerminalTool } from "@/core/threads/tool-surface";
 import { cn } from "@/lib/utils";
 
 // Tab 1: Terminal — bash/search/grep events, always expanded
@@ -17,15 +18,7 @@ import { cn } from "@/lib/utils";
 // filter was too narrow. Those tools share the same ``sandbox.log`` SSE feed
 // as bash, so the user expects to see them here; the Activity tab still owns
 // the high-signal "Writing index.html" cards.
-export const TERMINAL_TOOLS = new Set([
-  "bash",
-  "execute_command",
-  "search_files",
-  "grep_files",
-  "read_file",
-  "write_file",
-  "str_replace",
-]);
+export { isTerminalTool } from "@/core/threads/tool-surface";
 
 /**
  * Class names for the terminal output ``<pre>`` block. Extracted so it can be
@@ -55,7 +48,7 @@ export function Terminal({
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const terminalEvents = events.filter((e) => TERMINAL_TOOLS.has(e.type));
+  const terminalEvents = events.filter((e) => isTerminalTool(e.type));
   // "shell" = the sandbox's real interactive ttyd terminal (type into it live);
   // "stream" = the agent's command output log.
   const [mode, setMode] = useState<"stream" | "shell">("stream");
@@ -72,8 +65,12 @@ export function Terminal({
   const { terminal: terminalUrl } = useSandboxTerminalUrl(threadId, shellOpen);
 
   useEffect(() => {
+    // Gated on `active`: every tab stays mounted and is only hidden via CSS
+    // (see frontend/CLAUDE.md), so an ungated scroll drags a hidden subtree on
+    // every event and jolts the surrounding panel.
+    if (!active) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [terminalEvents.length, terminalEvents.at(-1)?.output]);
+  }, [active, terminalEvents.length, terminalEvents.at(-1)?.output]);
 
   const ModeToggle = (
     <div className="border-border/30 flex shrink-0 items-center gap-1 border-b bg-black/40 px-2 py-1">
@@ -158,7 +155,7 @@ export function Terminal({
       {ModeToggle}
       <div className="min-h-0 flex-1 overflow-y-auto p-3 font-mono text-xs">
         {terminalEvents.map((event, i) => (
-          <div key={i} className="mb-4">
+          <div key={event.id || `${event.type}-${i}`} className="mb-4">
             {/* Command prompt line */}
             <div className="mb-1.5 flex items-center gap-1.5">
               <span className="text-emerald-500/70 select-none">❯</span>

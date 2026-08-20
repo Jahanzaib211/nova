@@ -35,6 +35,7 @@ import {
   useStartPreview,
   type SandboxFile,
 } from "@/core/sandbox/hooks";
+import { isTerminalTool } from "@/core/threads/tool-surface";
 import { cn } from "@/lib/utils";
 
 import { ActivityPanel, LlmErrorBadge, TaskChecklist } from "./activity-tab";
@@ -46,7 +47,7 @@ import { PrivacyPanel } from "./privacy-tab";
 import { ReviewPanel } from "./review-tab";
 import { SkillLauncher } from "./skill-launcher";
 import { StatusLine } from "./status-line";
-import { Terminal, TERMINAL_TOOLS } from "./terminal-tab";
+import { Terminal } from "./terminal-tab";
 import { useWorkspaceState } from "./workspace-state";
 
 type PanelTab =
@@ -332,7 +333,7 @@ export function AgentComputerPanel({
   }, [onAgentMessage]);
 
   const terminalCount = mergedEvents.filter((e) =>
-    TERMINAL_TOOLS.has(e.type),
+    isTerminalTool(e.type),
   ).length;
 
   return (

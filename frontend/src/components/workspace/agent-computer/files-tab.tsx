@@ -22,6 +22,7 @@ import { urlOfArtifact } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
+import { isTerminalTool } from "@/core/threads/tool-surface";
 import { useUploadLimits, summarizeUploadLimits } from "@/core/uploads/hooks";
 import {
   useFileImpact,
@@ -30,7 +31,6 @@ import {
   useWorkspaceSnapshot,
 } from "@/core/workspace/hooks";
 
-import { TERMINAL_TOOLS } from "./terminal-tab";
 import { WorkspaceCard } from "./workspace-card";
 
 /** Languages the workspace indexer extracts symbols from. */
@@ -369,7 +369,7 @@ export function FilesPanel({
   );
   const tree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
   const runningCount = runningEvents.filter((e) =>
-    TERMINAL_TOOLS.has(e.type),
+    isTerminalTool(e.type),
   ).length;
   // Workspace intelligence: renders nothing while the backend flag is off.
   // `active` gates the query the same way every other tab does (see
