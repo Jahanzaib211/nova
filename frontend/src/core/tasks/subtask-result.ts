@@ -169,6 +169,7 @@ export function derivePendingSubtaskStatus(
   messages: Message[],
   isCurrentTurnLoading: boolean,
   hasActiveRun = false,
+  runStateKnown = true,
 ): SubtaskStatus {
   if (
     isCurrentTurnLoading ||
@@ -177,9 +178,27 @@ export function derivePendingSubtaskStatus(
   ) {
     return "in_progress";
   }
-  // No tool result, no live stream, and the server reports no pending/running
-  // run for this thread: the run reached a terminal state without this task
-  // ever reporting back, so "failed" is now a fact rather than a guess.
+  // `hasActiveRun === false` has two very different meanings, and only one of
+  // them justifies calling a task failed:
+  //
+  //   - the runs query has data and none are pending/running  -> a fact
+  //   - the runs query has no data at all                     -> unknown
+  //
+  // MessageList reads the runs cache with `enabled: false`, so it never
+  // fetches — on a thread whose cache was never populated, "no active run" is
+  // simply absence of information. Concluding `failed` from that marks a
+  // perfectly healthy subagent as failed.
+  //
+  // This is the same reasoning parseSubtaskResult already applies when it
+  // meets an unrecognised result shape: surface it as still-running so the
+  // operator investigates, rather than eagerly asserting a terminal state the
+  // evidence does not support.
+  if (!runStateKnown) {
+    return "in_progress";
+  }
+  // No tool result, no live stream, and the server positively reports no
+  // pending/running run for this thread: the run reached a terminal state
+  // without this task ever reporting back, so "failed" is a fact.
   return "failed";
 }
 

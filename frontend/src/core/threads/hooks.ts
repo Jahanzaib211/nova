@@ -2262,13 +2262,23 @@ export function activeRunPollInterval(args: {
  * events is handled by the caller (see ``useActiveRunWithAwareness``).
  */
 
-export function useActiveRun(
+/**
+ * Like {@link useActiveRun}, but also reports whether the answer is *known*.
+ *
+ * `useActiveRun` returns `null` both when the runs list has been fetched and
+ * contains nothing pending/running, and when it has never been fetched at all
+ * — callers using `enabled: false` only read whatever is already cached. Those
+ * two cases look identical and are not: the first is evidence, the second is
+ * absence of it. Callers that draw a terminal conclusion from "no active run"
+ * (see derivePendingSubtaskStatus) need to tell them apart.
+ */
+export function useActiveRunState(
   threadId?: string,
   {
     enabled = true,
     isStreamLoading = false,
   }: { enabled?: boolean; isStreamLoading?: boolean } = {},
-): Run | null {
+): { run: Run | null; known: boolean } {
   const apiClient = getAPIClient();
   const queryClient = useQueryClient();
   const query = useQuery<Run[]>({
@@ -2287,6 +2297,7 @@ export function useActiveRun(
         isStreamLoading,
       }),
   });
+  const knownRuns = query.data !== undefined;
   // Refetch on visibility change + online/offline transitions. The
   // hook is the single place to wire this so every consumer benefits.
   useEffect(() => {
@@ -2324,7 +2335,24 @@ export function useActiveRun(
       }
     };
   }, [enabled, threadId, queryClient]);
-  return useMemo(() => pickActiveRun(query.data), [query.data]);
+  return useMemo(
+    () => ({ run: pickActiveRun(query.data), known: knownRuns }),
+    [query.data, knownRuns],
+  );
+}
+
+/**
+ * The active run for a thread, or null.
+ *
+ * Kept as the ergonomic default for the many callers that only need the run
+ * itself. Anything that treats `null` as proof no run is in flight should use
+ * {@link useActiveRunState} and check `known` first.
+ */
+export function useActiveRun(
+  threadId?: string,
+  options: { enabled?: boolean; isStreamLoading?: boolean } = {},
+): Run | null {
+  return useActiveRunState(threadId, options).run;
 }
 
 export function useThreadMetadata(

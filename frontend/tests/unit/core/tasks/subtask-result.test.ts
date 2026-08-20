@@ -219,6 +219,27 @@ describe("derivePendingSubtaskStatus", () => {
     );
   });
 
+  it("stays in progress when the run state is unknown (false-Failed guard)", () => {
+    // MessageList reads the runs cache with `enabled: false`, so it never
+    // fetches. On a thread whose cache was never populated, "no active run" is
+    // absence of information, not evidence the run finished — concluding
+    // `failed` from it marks a healthy subagent as failed. Regression guard
+    // for the subagents-complete-but-render-failed report (2026-08-20).
+    const messages = [{ type: "ai" }] as Message[];
+
+    expect(
+      derivePendingSubtaskStatus("call_task_1", messages, false, false, false),
+    ).toBe("in_progress");
+  });
+
+  it("still fails the task when the run state is known and no run is active", () => {
+    const messages = [{ type: "ai" }] as Message[];
+
+    expect(
+      derivePendingSubtaskStatus("call_task_1", messages, false, false, true),
+    ).toBe("failed");
+  });
+
   it("does not revive an earlier unfinished task during a later turn", () => {
     const messages = [{ type: "ai" }] as Message[];
 

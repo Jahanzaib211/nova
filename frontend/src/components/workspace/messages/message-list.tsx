@@ -37,7 +37,7 @@ import {
   parseSubtaskResult,
 } from "@/core/tasks/subtask-result";
 import type { AgentThreadState } from "@/core/threads";
-import { useActiveRun } from "@/core/threads/hooks";
+import { useActiveRunState } from "@/core/threads/hooks";
 import {
   recordRender,
   recordThinkingIndicator,
@@ -241,7 +241,7 @@ export function MessageList({
   // has already put in the cache under the same key. Owning a request here made
   // the list fire GET /runs on first send, before POST /runs/stream (issue
   // #2746), and made mock threads reach the real gateway.
-  const activeRun = useActiveRun(threadId, {
+  const { run: activeRun, known: runStateKnown } = useActiveRunState(threadId, {
     enabled: false,
     isStreamLoading: thread.isLoading,
   });
@@ -470,6 +470,7 @@ export function MessageList({
                         messages,
                         groupIsLoading,
                         hasActiveRun && groupIsCurrentTurn,
+                        runStateKnown,
                       );
                     const task: Subtask = {
                       id: taskId,
