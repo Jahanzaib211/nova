@@ -113,3 +113,6 @@ config/cloudflared-nova.env
 graphify-out/cost.json
 graphify-out/cache/
 frontend/tests/_diag/
+
+# Incident captures — local forensic snapshots, not source
+.nova/incident-*/
