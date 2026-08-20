@@ -923,7 +923,33 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
         resp_headers["location"] = f"{prefix}{location}"
     resp_headers.pop("set-cookie", None)
     resp_headers["Content-Security-Policy"] = _OPAQUE_SANDBOX_CSP
-    return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers, media_type=upstream.headers.get("content-type") or None)
+
+    content = upstream.content
+    # Rewrite root-absolute asset URLs, exactly as _proxy_dev_server does.
+    #
+    # Without this the document loads and every asset 404s: the browser resolves
+    # `/_next/static/…` against the app origin instead of this proxy's prefix, so
+    # the page renders as unstyled HTML. That is precisely what a user sees in the
+    # Browser tab, because absproxy is the fallback for a dev server started
+    # outside `start_dev_server` (an agent running `npm run dev` through raw bash)
+    # — the safety net caught the request and then served it unusably.
+    #
+    # `_prefix_html_urls` is idempotent by construction (it hides already-prefixed
+    # URLs behind a placeholder first), so a page proxied twice is never
+    # double-prefixed. Content-Length is dropped because the body just changed
+    # length; Starlette recomputes it.
+    if "text/html" in (upstream.headers.get("content-type") or ""):
+        try:
+            html = content.decode("utf-8", errors="replace")
+            if "<head>" in html and "<base " not in html:
+                html = html.replace("<head>", f'<head><base href="{prefix}/">', 1)
+            content = _prefix_html_urls(html, prefix).encode("utf-8")
+            resp_headers.pop("content-length", None)
+            resp_headers.pop("Content-Length", None)
+        except Exception:
+            logger.warning("absproxy: HTML rewrite failed for thread %s port %d; serving upstream bytes", thread_id, port, exc_info=True)
+
+    return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=upstream.headers.get("content-type") or None)
 
 
 def _appview_prefix(thread_id: str) -> str:
