@@ -118,28 +118,47 @@ def _safe_skills(config: AppConfig) -> list[SkillSummary]:
 
 
 def _safe_tools(config: AppConfig) -> list[ToolSummary]:
-    """List builtin + configured tools with one-line descriptions.
+    """List the tools an agent actually binds, with one-line descriptions.
 
-    Pulls from the manifest overrides + the BUILTIN_TOOLS list. Description
-    may be empty for tools that don't have a docstring summary; the UI
-    handles empty descriptions gracefully.
+    Built through ``get_available_tools()`` — the same call the lead agent uses
+    — so this cannot drift from what the model is really given.
+
+    It used to iterate ``BUILTIN_TOOLS`` alone, despite this docstring claiming
+    "builtin + configured". That silently omitted the whole config half:
+    ``bash``, ``ls``, ``read_file``, ``glob``, ``grep``, ``write_file``,
+    ``str_replace``, the web tools, the trading group, plus ``task`` and
+    ``view_image``. On a live gateway it reported 25 where the agent had ~38, so
+    the panel an operator reads to know what Nova can do was under-reporting by
+    roughly a third — and the missing entries were the ones people most want to
+    confirm (can it run a shell? can it read my files?).
+
+    ``subagent_enabled=True`` matches the gateway's own runs, where the ``task``
+    tool is bound. MCP tools are excluded: they are reported separately, and
+    resolving them here would make a UI poll wait on remote servers.
     """
     try:
         from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
-        from deerflow.tools.tools import BUILTIN_TOOLS
+        from deerflow.tools.tools import get_available_tools
+
+        tools = get_available_tools(
+            include_mcp=False,
+            subagent_enabled=True,
+            app_config=config,
+        )
 
         out: list[ToolSummary] = []
         seen: set[str] = set()
-        # Builtins first — these are always available.
-        for tool in BUILTIN_TOOLS:
+        for tool in tools:
             name = getattr(tool, "name", "") or ""
             if not name or name in seen:
                 continue
             seen.add(name)
             desc = _TOOL_PURPOSE_OVERRIDES.get(name, "") or ((getattr(tool, "description", "") or "").splitlines()[0] if getattr(tool, "description", None) else "")
             out.append(ToolSummary(name=name, description=desc[:140]))
-        return out
+        return sorted(out, key=lambda t: t.name)
     except Exception as e:
+        # Never fail the capabilities poll over tool discovery — a config tool
+        # with a bad `use:` path would otherwise blank the whole panel.
         logger.debug("capabilities: tool discovery failed: %s", e)
         return []
 
