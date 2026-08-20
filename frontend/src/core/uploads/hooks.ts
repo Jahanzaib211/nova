@@ -62,7 +62,9 @@ function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
-export function summarizeUploadLimits(limits: UploadLimits | undefined): string {
+export function summarizeUploadLimits(
+  limits: UploadLimits | undefined,
+): string {
   if (!limits) return "";
   const parts: string[] = [];
   if (limits.max_files > 0) parts.push(`${limits.max_files} files max`);

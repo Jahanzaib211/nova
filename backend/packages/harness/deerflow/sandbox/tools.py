@@ -2234,8 +2234,9 @@ def str_replace_tool(
             # to avoid partial writes and cross-sandbox race conditions.
             # Falls back to sandbox.write_file for non-local (mock/Docker) sandboxes.
             if is_local_sandbox(runtime):
-                import tempfile as _tempfile
                 import os as _os
+                import tempfile as _tempfile
+
                 _dir = _os.path.dirname(path) or "."
                 try:
                     _fd, _tmp = _tempfile.mkstemp(dir=_dir, suffix=".str_replace.tmp")

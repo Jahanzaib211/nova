@@ -75,10 +75,7 @@ export function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-[425px]"
-        aria-describedby={undefined}
-      >
+      <DialogContent className="sm:max-w-[425px]" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-4 w-4" />
@@ -87,7 +84,11 @@ export function ShareDialog({
           <DialogDescription>{t.common.shareHint}</DialogDescription>
         </DialogHeader>
         <div className="flex items-center gap-2 py-4">
-          <Input readOnly value={shareUrl ?? ""} placeholder={t.common.sharePlaceholder} />
+          <Input
+            readOnly
+            value={shareUrl ?? ""}
+            placeholder={t.common.sharePlaceholder}
+          />
           {token !== null && (
             <Button
               variant="ghost"
@@ -133,7 +134,11 @@ export function ShareDialog({
                 )}
                 {t.common.revoke}
               </Button>
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={busy}
+              >
                 {t.common.close}
               </Button>
             </>

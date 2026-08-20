@@ -46,10 +46,11 @@ async def audit_engine(tmp_path):
 @pytest.mark.asyncio
 async def test_concurrent_record_audit_does_not_lose_rows(audit_engine):
     """N concurrent record_audit calls land exactly N rows; none raise."""
-    from app.gateway.admin_ops import record_audit
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.admin_audit.model import AdminAuditRow
     from sqlalchemy import func, select
+
+    from app.gateway.admin_ops import record_audit
+    from deerflow.persistence.admin_audit.model import AdminAuditRow
+    from deerflow.persistence.engine import get_session_factory
 
     n = 32
     coros = [
@@ -79,6 +80,7 @@ async def test_concurrent_record_audit_does_not_lose_rows(audit_engine):
 async def test_commit_with_retry_recovers_from_locked_error(audit_engine, monkeypatch):
     """_commit_with_retry retries on 'database is locked' and eventually succeeds."""
     from sqlalchemy.exc import OperationalError
+
     from app.gateway import admin_ops
 
     real_commit = admin_ops.AsyncSession.commit  # type: ignore[attr-defined]
@@ -108,6 +110,7 @@ async def test_commit_with_retry_recovers_from_locked_error(audit_engine, monkey
 async def test_commit_with_retry_propagates_non_locked_error(audit_engine, monkeypatch):
     """_commit_with_retry must NOT swallow real bugs (schema mismatch, etc.)."""
     from sqlalchemy.exc import OperationalError
+
     from app.gateway import admin_ops
 
     async def always_fail(self, *args, **kwargs):
@@ -127,8 +130,9 @@ async def test_commit_with_retry_propagates_non_locked_error(audit_engine, monke
 @pytest.mark.asyncio
 async def test_engine_has_30s_busy_timeout(audit_engine):
     """Pins the engine-level timeout setting that buys time for the retry loop."""
-    from deerflow.persistence.engine import get_engine
     from sqlalchemy import text
+
+    from deerflow.persistence.engine import get_engine
 
     eng = get_engine()
     assert eng is not None

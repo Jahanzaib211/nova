@@ -52,10 +52,7 @@ export type VoiceEvent =
   | { type: "error"; message: string }
   | { type: "closed" };
 
-export function voiceReducer(
-  state: VoiceState,
-  event: VoiceEvent,
-): VoiceState {
+export function voiceReducer(state: VoiceState, event: VoiceEvent): VoiceState {
   switch (event.type) {
     case "connecting":
       return { ...state, phase: "connecting", error: null };
@@ -84,7 +81,9 @@ export function voiceReducer(
       // so a multi-sentence answer reads correctly in the UI.
       return {
         ...state,
-        assistant: state.assistant ? `${state.assistant} ${event.text}` : event.text,
+        assistant: state.assistant
+          ? `${state.assistant} ${event.text}`
+          : event.text,
       };
 
     case "speaking":

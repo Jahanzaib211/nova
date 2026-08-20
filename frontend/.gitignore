@@ -44,3 +44,9 @@ yarn-error.log*
 
 # idea files
 .ideafrontend/screens/
+
+# Lighthouse CI reports (regenerated per run)
+.lighthouseci/
+
+# Core dumps (node SIGABRTs under a huge RLIMIT_NOFILE — see scripts/gates/ci-gate.py)
+core.*

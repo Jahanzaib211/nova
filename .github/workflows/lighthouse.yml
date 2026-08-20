@@ -1,0 +1,81 @@
+name: Lighthouse CI
+
+# Performance / accessibility / best-practices / SEO budgets for the Nova
+# frontend, asserted against a real production build.
+#
+# Runs on changes to the frontend only -- a backend-only commit cannot move
+# these numbers, and a 10-minute browser job on every push trains people to
+# ignore the result.
+#
+# `upload.target: filesystem` in lighthouserc.cjs means this needs no LHCI
+# server and no secrets. Reports are uploaded as a build artifact, and
+# scripts/gates/lighthouse-gate.sh folds the same JSON into
+# ~/.nova/gates/lighthouse.json for the Nova Ops console.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/lighthouse.yml"
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/lighthouse.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: lighthouse-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE: "22"
+  PNPM: "10.26.2"
+
+jobs:
+  lighthouse:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE }}
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      # The gated routes redirect to sign-in; without this Lighthouse would
+      # score the login page twice instead of the app. Mirrors the switch
+      # playwright.config.ts already uses.
+      - name: Build
+        run: cd frontend && pnpm build
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DEER_FLOW_AUTH_DISABLED: "1"
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Run Lighthouse CI
+        run: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DEER_FLOW_AUTH_DISABLED: "1"
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: frontend/.lighthouseci/
+          retention-days: 14

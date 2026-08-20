@@ -84,7 +84,11 @@ function parsePayload(
   }
   try {
     const parsed: unknown = JSON.parse(trimmed);
-    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
       return null;
     }
     return { data: parsed as Record<string, unknown> };
@@ -94,11 +98,9 @@ function parsePayload(
 }
 
 function contextSubtitle(data: Record<string, unknown>): string | undefined {
-  const parts = [
-    str(data.symbol),
-    str(data.interval),
-    str(data.source),
-  ].filter((part): part is string => Boolean(part));
+  const parts = [str(data.symbol), str(data.interval), str(data.source)].filter(
+    (part): part is string => Boolean(part),
+  );
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
@@ -210,7 +212,8 @@ function summarizeBacktest(data: Record<string, unknown>): TradingSummary {
     stats.push({
       label: "expectancy",
       value: `${expectancy >= 0 ? "+" : ""}${fmt(expectancy, 2)}R`,
-      tone: expectancy > 0 ? "positive" : expectancy < 0 ? "negative" : "neutral",
+      tone:
+        expectancy > 0 ? "positive" : expectancy < 0 ? "negative" : "neutral",
     });
   }
 

@@ -70,7 +70,10 @@ describe("selectTreeFiles", () => {
   });
 
   test("an artifact with no matching file on disk is harmless", () => {
-    const out = selectTreeFiles([WORKSPACE], ["/mnt/user-data/outputs/gone.pdf"]);
+    const out = selectTreeFiles(
+      [WORKSPACE],
+      ["/mnt/user-data/outputs/gone.pdf"],
+    );
     expect(out).toEqual([WORKSPACE]);
   });
 

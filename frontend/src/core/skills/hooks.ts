@@ -66,8 +66,13 @@ export function useCustomSkillHistory(skillName: string | null) {
 export function useUpdateCustomSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ skillName, content }: { skillName: string; content: string }) =>
-      updateCustomSkill(skillName, content),
+    mutationFn: ({
+      skillName,
+      content,
+    }: {
+      skillName: string;
+      content: string;
+    }) => updateCustomSkill(skillName, content),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["skills"] });
       void queryClient.invalidateQueries({
@@ -93,8 +98,13 @@ export function useDeleteCustomSkill() {
 export function useRollbackCustomSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ skillName, historyIndex }: { skillName: string; historyIndex: number }) =>
-      rollbackCustomSkill(skillName, historyIndex),
+    mutationFn: ({
+      skillName,
+      historyIndex,
+    }: {
+      skillName: string;
+      historyIndex: number;
+    }) => rollbackCustomSkill(skillName, historyIndex),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["skills"] });
       void queryClient.invalidateQueries({

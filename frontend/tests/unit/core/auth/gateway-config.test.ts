@@ -56,20 +56,26 @@ describe("getGatewayConfig", () => {
   test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is missing (development)", async () => {
     setEnv("NODE_ENV", "development");
     const { getGatewayConfig } = await loadFreshConfig();
-    expect(() => getGatewayConfig()).toThrow(/DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/);
+    expect(() => getGatewayConfig()).toThrow(
+      /DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/,
+    );
   });
 
   test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is missing (production)", async () => {
     setEnv("NODE_ENV", "production");
     const { getGatewayConfig } = await loadFreshConfig();
-    expect(() => getGatewayConfig()).toThrow(/DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/);
+    expect(() => getGatewayConfig()).toThrow(
+      /DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/,
+    );
   });
 
   test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is empty string", async () => {
     setEnv("NODE_ENV", "production");
     setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "   ");
     const { getGatewayConfig } = await loadFreshConfig();
-    expect(() => getGatewayConfig()).toThrow(/DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/);
+    expect(() => getGatewayConfig()).toThrow(
+      /DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/,
+    );
   });
 
   test("uses env values verbatim when set, regardless of NODE_ENV", async () => {

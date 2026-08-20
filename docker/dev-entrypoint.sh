@@ -28,11 +28,21 @@ if [ "${1:-}" = "--print-extras" ]; then
     PRINT_EXTRAS_ONLY=1
 fi
 
-# Mirror the legacy command's behavior: redirect both stdout and stderr to the
-# host-mounted log file (../logs/gateway.log → /app/logs/gateway.log). Skip
-# the redirect under --print-extras so the test runner can capture stdout.
+# Redirect both stdout and stderr to the host-mounted log file
+# (../logs/gateway.log → /app/logs/gateway.log). Skip the redirect under
+# --print-extras so the test runner can capture stdout.
+#
+# APPEND (>>), never truncate (>). The original truncated on every start, so
+# each restart destroyed the log of the failure that caused it — the reason
+# the 2026-08-19 degradation could not be diagnosed from the box. A crash-loop
+# is exactly when the previous boot's traceback matters most.
+#
+# Unbounded growth is handled out-of-band by scripts/rotate-logs.sh; this
+# script must never delete history it might be the only witness to.
 if [ "$PRINT_EXTRAS_ONLY" = "0" ]; then
-    exec >/app/logs/gateway.log 2>&1
+    exec >>/app/logs/gateway.log 2>&1
+    printf '\n===== gateway boot %s (pid %s) =====\n' \
+        "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$$"
 fi
 
 # ── Resolve extras ──────────────────────────────────────────────────────────

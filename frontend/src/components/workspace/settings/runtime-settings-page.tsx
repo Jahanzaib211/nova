@@ -48,7 +48,9 @@ export function RuntimeSettingsPage() {
             <span className="text-sm font-medium">
               {t.settings.runtime.summarization.enabled}
             </span>
-            <Badge variant={data.summarization.enabled ? "default" : "secondary"}>
+            <Badge
+              variant={data.summarization.enabled ? "default" : "secondary"}
+            >
               {data.summarization.enabled
                 ? t.settings.runtime.on
                 : t.settings.runtime.off}

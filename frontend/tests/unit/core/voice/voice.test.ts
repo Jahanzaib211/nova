@@ -139,7 +139,9 @@ describe("toPcm16", () => {
   });
 
   test("full scale maps to the int16 extremes without wrapping", () => {
-    const out = new Int16Array(toPcm16(new Float32Array([1, -1]), 16000, 16000));
+    const out = new Int16Array(
+      toPcm16(new Float32Array([1, -1]), 16000, 16000),
+    );
     expect(out[0]).toBe(32767);
     expect(out[1]).toBe(-32768);
   });
@@ -147,7 +149,9 @@ describe("toPcm16", () => {
   test("out-of-range input is clamped, not wrapped", () => {
     // Wrapping would turn a loud sample into a loud sample of the OPPOSITE
     // sign — audible as a nasty click.
-    const out = new Int16Array(toPcm16(new Float32Array([2, -2]), 16000, 16000));
+    const out = new Int16Array(
+      toPcm16(new Float32Array([2, -2]), 16000, 16000),
+    );
     expect(out[0]).toBe(32767);
     expect(out[1]).toBe(-32768);
   });
@@ -202,12 +206,9 @@ beforeEach(() => {
   ctx = new FakeContext();
   // Must be constructible — the player does `new AudioContext(...)`, and an
   // arrow function cannot be used with `new`.
-  vi.stubGlobal(
-    "AudioContext",
-    function AudioContextStub(this: unknown) {
-      return ctx;
-    } as unknown as typeof AudioContext,
-  );
+  vi.stubGlobal("AudioContext", function AudioContextStub(this: unknown) {
+    return ctx;
+  } as unknown as typeof AudioContext);
 });
 
 function pcm(samples: number): ArrayBuffer {

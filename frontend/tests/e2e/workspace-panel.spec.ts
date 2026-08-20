@@ -47,9 +47,9 @@ test.describe("Workspace-aware panel tabs", () => {
     // WorkspaceCard renders project_count/symbol_count/command_count from
     // the mocked /snapshot response — this is real fetch + real render,
     // not a synthetic prop.
-    await expect(filesTab.getByText("2", { exact: true }).first()).toBeVisible(
-      { timeout: 10_000 },
-    );
+    await expect(filesTab.getByText("2", { exact: true }).first()).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(filesTab.getByText(/1,234|1234/)).toBeVisible();
   });
 

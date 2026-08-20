@@ -59,7 +59,9 @@ export async function revokeShareLink(threadId: string): Promise<ShareLink> {
   return (await response.json()) as ShareLink;
 }
 
-export async function loadSharedThread(token: string): Promise<SharedThreadView> {
+export async function loadSharedThread(
+  token: string,
+): Promise<SharedThreadView> {
   const response = await fetch(`${getBackendBaseURL()}/api/share/${token}`);
   if (!response.ok) {
     throw new Error(

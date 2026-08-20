@@ -124,7 +124,9 @@ export async function loadUploadLimits(
   );
 
   if (!response.ok) {
-    throw new Error(await readErrorDetail(response, "Failed to load upload limits"));
+    throw new Error(
+      await readErrorDetail(response, "Failed to load upload limits"),
+    );
   }
 
   return response.json();

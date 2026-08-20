@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -206,7 +206,7 @@ async def init_engine(
         else:
             raise
 
-# Wrap every AsyncSession.commit with the lock-retry helper so every
+    # Wrap every AsyncSession.commit with the lock-retry helper so every
     # SQL write site (admin_ops, thread_meta, credit_requests, run/sql,
     # channel_connections, byok, sharing, password_reset, referrals,
     # events/store/db, …) gets the same resilience contract for free.
@@ -238,9 +238,7 @@ async def init_engine(
                     on_retry=lambda: [self.add(obj) for obj in pending] or None,
                 )
 
-        _session_factory = async_sessionmaker(
-            _engine, expire_on_commit=False, class_=_LockRetrySession
-        )
+        _session_factory = async_sessionmaker(_engine, expire_on_commit=False, class_=_LockRetrySession)
 
         # Belt-and-braces PRAGMA bootstrap for SQLite. The ``connect`` listener
         # fires for every new DBAPI connection SQLAlchemy opens, but the live

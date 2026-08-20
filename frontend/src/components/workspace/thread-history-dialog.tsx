@@ -92,11 +92,10 @@ export function ThreadHistoryDialog({
               checkpoint_id?: string | null;
               created_at?: string | null;
             };
-            const created = raw.created_at ?? (state.created_at ?? null);
+            const created = raw.created_at ?? state.created_at ?? null;
             return {
               checkpointId:
-                raw.checkpoint_id ??
-                (state.checkpoint?.checkpoint_id ?? "-"),
+                raw.checkpoint_id ?? state.checkpoint?.checkpoint_id ?? "-",
               createdAt: created,
               step: typeof meta.step === "number" ? meta.step : undefined,
               source: typeof meta.source === "string" ? meta.source : undefined,
@@ -146,14 +145,14 @@ export function ThreadHistoryDialog({
         </DialogHeader>
 
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex items-center justify-center gap-2 py-8 text-sm">
             <Loader2Icon className="size-4 animate-spin" />
             {t.common.loading}
           </div>
         ) : error ? (
-          <div className="py-4 text-sm text-destructive">{error}</div>
+          <div className="text-destructive py-4 text-sm">{error}</div>
         ) : checkpoints.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">
+          <p className="text-muted-foreground py-4 text-sm">
             {t.settings.threadHistory.empty}
           </p>
         ) : (
@@ -183,12 +182,12 @@ export function ThreadHistoryDialog({
                             {cp.checkpointId.slice(0, 8)}
                           </span>
                           {cp.source && (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
                               {cp.source}
                             </span>
                           )}
                         </div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
+                        <div className="text-muted-foreground mt-0.5 text-xs">
                           {cp.createdAt ? formatTimeAgo(cp.createdAt) : "—"}
                           {cp.step !== undefined && ` · step ${cp.step}`}
                           {cp.messageCount > 0 &&
@@ -199,7 +198,7 @@ export function ThreadHistoryDialog({
                       </div>
                       <ChevronsUpDownIcon
                         className={cn(
-                          "size-4 shrink-0 text-muted-foreground transition-transform",
+                          "text-muted-foreground size-4 shrink-0 transition-transform",
                           isOpen && "rotate-180",
                         )}
                       />
@@ -216,7 +215,7 @@ export function ThreadHistoryDialog({
                             {t.settings.threadHistory.copyId}
                           </Button>
                         </div>
-                        <pre className="max-h-64 overflow-auto rounded-lg bg-muted/50 p-3 font-mono text-[11px] leading-relaxed">
+                        <pre className="bg-muted/50 max-h-64 overflow-auto rounded-lg p-3 font-mono text-[11px] leading-relaxed">
                           {cp.valuesJson}
                         </pre>
                       </div>

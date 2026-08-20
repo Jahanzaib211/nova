@@ -45,13 +45,7 @@ describe("buildPreviewSrc", () => {
 
   test("falls back to preview when absproxy is missing but srcMode='absproxy'", () => {
     expect(
-      buildPreviewSrc(
-        BASE,
-        "/api/sandbox/preview/t1",
-        null,
-        "/",
-        "absproxy",
-      ),
+      buildPreviewSrc(BASE, "/api/sandbox/preview/t1", null, "/", "absproxy"),
     ).toBe("https://app.example/api/sandbox/preview/t1/");
   });
 

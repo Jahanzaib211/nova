@@ -36,7 +36,9 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold tracking-tight">
           {t.settings.title}
         </h1>
-        <p className="text-muted-foreground text-sm">{t.settings.description}</p>
+        <p className="text-muted-foreground text-sm">
+          {t.settings.description}
+        </p>
       </header>
       <div className="flex min-h-0 flex-1 p-6">
         <SettingsSectionsShell

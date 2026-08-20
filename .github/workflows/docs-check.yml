@@ -57,6 +57,7 @@ jobs:
             --ignore "frontend/public/demo/**" \
             --ignore "frontend/test-results/**" \
             --ignore "frontend/playwright-report/**" \
+            --ignore "graphify-out/**" \
             "**/*.md"
 
       - name: Check for broken internal links

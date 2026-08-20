@@ -57,7 +57,7 @@ function SharedThreadPageInner() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] text-muted-foreground">
+      <div className="text-muted-foreground flex min-h-screen items-center justify-center bg-[#0a0a0a]">
         <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
@@ -66,9 +66,9 @@ function SharedThreadPageInner() {
   if (isError || !data) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0a0a0a] p-6 text-center">
-        <Link2 className="h-10 w-10 text-muted-foreground" />
+        <Link2 className="text-muted-foreground h-10 w-10" />
         <h1 className="text-xl font-semibold">{t.sharePage.notFound}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {t.sharePage.notFoundHint}
         </p>
         <Link href="/">
@@ -95,7 +95,7 @@ function SharedThreadPageInner() {
         </div>
         {messages.length === 0 ? (
           <Card>
-            <CardContent className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <CardContent className="text-muted-foreground flex flex-col items-center gap-2 py-12">
               <MessageSquare className="h-8 w-8" />
               <p className="text-sm">{t.sharePage.messagesEmpty}</p>
             </CardContent>
@@ -121,7 +121,7 @@ function SharedThreadPageInner() {
                 </CardHeader>
                 <CardContent
                   className={
-                    "whitespace-pre-wrap break-words text-sm leading-relaxed " +
+                    "text-sm leading-relaxed break-words whitespace-pre-wrap " +
                     (isHuman ? "text-foreground" : "text-muted-foreground")
                   }
                 >

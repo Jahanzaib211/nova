@@ -22,10 +22,7 @@ import { urlOfArtifact } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
 import { type SandboxFile } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import {
-  useUploadLimits,
-  summarizeUploadLimits,
-} from "@/core/uploads/hooks";
+import { useUploadLimits, summarizeUploadLimits } from "@/core/uploads/hooks";
 import {
   useFileImpact,
   useFileSymbols,

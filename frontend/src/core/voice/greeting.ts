@@ -18,7 +18,9 @@ import { fetch as apiFetch } from "@/core/api/fetcher";
 export type GreetingKind = "signup" | "login" | "return";
 
 /** Time-of-day band, injectable so tests are not clock-dependent. */
-export function partOfDay(at: Date = new Date()): "morning" | "afternoon" | "evening" {
+export function partOfDay(
+  at: Date = new Date(),
+): "morning" | "afternoon" | "evening" {
   const h = at.getHours();
   if (h < 12) return "morning";
   if (h < 18) return "afternoon";
@@ -39,7 +41,17 @@ export function displayNameFrom(email?: string | null): string | null {
   // Split on separators, keep the first alphabetic run.
   const head = local.split(/[._+-]/)[0]?.replace(/[^a-zA-Z]/g, "") ?? "";
   if (head.length < 3) return null;
-  const generic = new Set(["admin", "info", "test", "user", "mail", "noreply", "support", "contact", "hello"]);
+  const generic = new Set([
+    "admin",
+    "info",
+    "test",
+    "user",
+    "mail",
+    "noreply",
+    "support",
+    "contact",
+    "hello",
+  ]);
   if (generic.has(head.toLowerCase())) return null;
   return head[0]!.toUpperCase() + head.slice(1).toLowerCase();
 }
@@ -79,7 +91,10 @@ export type SpeakResult =
  * That is not an error and must not be reported as one; it is the default
  * behaviour of every modern browser.
  */
-export async function speak(text: string, signal?: AbortSignal): Promise<SpeakResult> {
+export async function speak(
+  text: string,
+  signal?: AbortSignal,
+): Promise<SpeakResult> {
   let url: string | null = null;
   try {
     const res = await apiFetch("/api/voice/speak", {

@@ -55,7 +55,9 @@ async function openFilesTab(page: Page): Promise<boolean> {
   // Wait for the sandbox file list to actually land before asserting on it —
   // the panel mounts before /api/sandbox/files resolves, and every assertion
   // below is about rendered rows.
-  await expect(page.locator('[data-tab="files"] a[download]').first()).toBeVisible({
+  await expect(
+    page.locator('[data-tab="files"] a[download]').first(),
+  ).toBeVisible({
     timeout: 30_000,
   });
   return true;
@@ -153,7 +155,7 @@ test.describe("Files tab downloads", () => {
     const filesTab = page.locator('[data-tab="files"]');
     await expect(filesTab.getByText(/^Outputs/)).toBeVisible();
 
-    const links = filesTab.locator('a[download]');
+    const links = filesTab.locator("a[download]");
     // 5 tree rows + 1 Outputs row.
     await expect(links).toHaveCount(6);
 
@@ -182,8 +184,12 @@ test.describe("Files tab downloads", () => {
       .evaluateAll((els) =>
         els.map((e) => (e as HTMLAnchorElement).getAttribute("href") ?? ""),
       );
-    expect(hrefs.some((h) => h.includes("/mnt/user-data/workspace/src/index.ts"))).toBe(true);
-    expect(hrefs.some((h) => h.includes("/mnt/user-data/uploads/notes.txt"))).toBe(true);
+    expect(
+      hrefs.some((h) => h.includes("/mnt/user-data/workspace/src/index.ts")),
+    ).toBe(true);
+    expect(
+      hrefs.some((h) => h.includes("/mnt/user-data/uploads/notes.txt")),
+    ).toBe(true);
     // The presented deliverable's Outputs row links to its outputs path.
     expect(hrefs.some((h) => h.includes(PRESENTED))).toBe(true);
   });

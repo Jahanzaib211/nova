@@ -69,6 +69,33 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
+      // Keeps the Nova Ops gate status files fresh.
+      //
+      // The gate producers write JSON that the operator console reads. Without
+      // a supervisor they only ran when something invoked them by hand, so the
+      // console showed "Stale — produced 10h ago" on real-but-outdated numbers,
+      // which reads as authoritative and is not. nova-healthcheck already had
+      // this treatment and was correspondingly always fresh; this extends it to
+      // the host, drift and CI gates.
+      //
+      // Cadence lives in the daemon (host 5m, drift 15m, ci 6h) and is
+      // overridable via NOVA_GATE_*_INTERVAL below.
+      name: "nova-gates",
+      script: `${require("path").resolve(__dirname, "scripts/gates/gates-daemon.py")}`,
+      interpreter: "none",
+      autorestart: true,
+      max_restarts: 5,
+      restart_delay: 15000,
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-gates-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-gates-error.log")}`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      env: {
+        NOVA_GATE_HOST_INTERVAL: "300",
+        NOVA_GATE_DRIFT_INTERVAL: "900",
+        NOVA_GATE_CI_INTERVAL: "21600",
+      },
+    },
+    {
       // Watchdog for the whole stack — probes 11 things every 30s and
       // auto-fixes known-broken cases (binary attestation drift, missing
       // docker containers). Its own pm2 status is the operator's single

@@ -411,4 +411,3 @@ function RecentChatList_() {
 }
 
 export const RecentChatList = memo(RecentChatList_);
-

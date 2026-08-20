@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { fetch as apiFetch } from "@/core/api/fetcher";
 import { useI18n } from "@/core/i18n/hooks";
 
-
 import { AuthShell } from "../auth-shell";
 
 export default function ResetPasswordPage() {
@@ -103,10 +102,7 @@ export default function ResetPasswordPage() {
               />
             </div>
             <div className="flex flex-col space-y-1">
-              <label
-                htmlFor="confirm-password"
-                className="text-sm font-medium"
-              >
+              <label htmlFor="confirm-password" className="text-sm font-medium">
                 {t.authPasswordReset.confirmNewPassword}
               </label>
               <Input

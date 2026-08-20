@@ -16,7 +16,11 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { MOCK_THREAD_ID, mockLangGraphAPI, mockSandboxAPI } from "./utils/mock-api";
+import {
+  MOCK_THREAD_ID,
+  mockLangGraphAPI,
+  mockSandboxAPI,
+} from "./utils/mock-api";
 
 /** Serve /api/voice/status as "voice is on and ready". */
 async function mockVoiceAvailable(page: Page, available = true) {
@@ -26,7 +30,13 @@ async function mockVoiceAvailable(page: Page, available = true) {
       contentType: "application/json",
       body: JSON.stringify(
         available
-          ? { enabled: true, ready: true, sample_rate: 16000, stt: "scripted", tts: "tone" }
+          ? {
+              enabled: true,
+              ready: true,
+              sample_rate: 16000,
+              stt: "scripted",
+              tts: "tone",
+            }
           : { enabled: false },
       ),
     }),
@@ -90,7 +100,9 @@ async function waitForSocket(page: Page) {
     .poll(
       () =>
         page.evaluate(
-          () => (window as never as { __voice: { opened: boolean } }).__voice.opened,
+          () =>
+            (window as never as { __voice: { opened: boolean } }).__voice
+              .opened,
         ),
       { timeout: 15_000, message: "voice socket never opened" },
     )
@@ -135,7 +147,9 @@ test.describe("Voice", () => {
     await stubVoiceSocket(page);
   });
 
-  test("the control is visible even before voice is switched on", async ({ page }) => {
+  test("the control is visible even before voice is switched on", async ({
+    page,
+  }) => {
     // Returning null when voice was unconfigured made the entire feature
     // invisible — nobody discovers a capability that leaves no trace in the UI.
     // It now shows, and explains itself on click.
@@ -155,7 +169,9 @@ test.describe("Voice", () => {
     await expect(button).toHaveAttribute("data-voice-phase", "closed");
   });
 
-  test("the control reads as a labelled feature, not a bare icon", async ({ page }) => {
+  test("the control reads as a labelled feature, not a bare icon", async ({
+    page,
+  }) => {
     await mockVoiceAvailable(page);
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
     const button = page.getByTestId("voice-button");
@@ -177,7 +193,9 @@ test.describe("Voice", () => {
 
     // ready -> idle
     await page.evaluate(() =>
-      (window as never as { __voice: { emit: (m: unknown) => void } }).__voice.emit({
+      (
+        window as never as { __voice: { emit: (m: unknown) => void } }
+      ).__voice.emit({
         type: "ready",
         sample_rate: 16000,
       }),
@@ -191,14 +209,17 @@ test.describe("Voice", () => {
       .poll(
         () =>
           page.evaluate(
-            () => (window as never as { __voice: { sent: number } }).__voice.sent,
+            () =>
+              (window as never as { __voice: { sent: number } }).__voice.sent,
           ),
         { timeout: 15_000, message: "no PCM frames were captured and sent" },
       )
       .toBeGreaterThan(0);
   });
 
-  test("the button reflects listening, thinking and speaking", async ({ page }) => {
+  test("the button reflects listening, thinking and speaking", async ({
+    page,
+  }) => {
     await mockVoiceAvailable(page);
     if (!(await openChat(page))) return;
 
@@ -209,7 +230,9 @@ test.describe("Voice", () => {
     const emit = (msg: unknown) =>
       page.evaluate(
         (m) =>
-          (window as never as { __voice: { emit: (x: unknown) => void } }).__voice.emit(m),
+          (
+            window as never as { __voice: { emit: (x: unknown) => void } }
+          ).__voice.emit(m),
         msg,
       );
 
@@ -227,7 +250,9 @@ test.describe("Voice", () => {
     await expect(button).toHaveAttribute("data-voice-phase", "idle");
   });
 
-  test("an interrupt while speaking does not wedge the session", async ({ page }) => {
+  test("an interrupt while speaking does not wedge the session", async ({
+    page,
+  }) => {
     await mockVoiceAvailable(page);
     if (!(await openChat(page))) return;
 
@@ -238,7 +263,9 @@ test.describe("Voice", () => {
     const emit = (msg: unknown) =>
       page.evaluate(
         (m) =>
-          (window as never as { __voice: { emit: (x: unknown) => void } }).__voice.emit(m),
+          (
+            window as never as { __voice: { emit: (x: unknown) => void } }
+          ).__voice.emit(m),
         msg,
       );
 
@@ -258,7 +285,9 @@ test.describe("Voice", () => {
     await button.click();
     await waitForSocket(page);
     await page.evaluate(() =>
-      (window as never as { __voice: { emit: (m: unknown) => void } }).__voice.emit({
+      (
+        window as never as { __voice: { emit: (m: unknown) => void } }
+      ).__voice.emit({
         type: "ready",
       }),
     );
@@ -284,7 +313,9 @@ test.describe("Voice", () => {
     const emit = (msg: unknown) =>
       page.evaluate(
         (m) =>
-          (window as never as { __voice: { emit: (x: unknown) => void } }).__voice.emit(m),
+          (
+            window as never as { __voice: { emit: (x: unknown) => void } }
+          ).__voice.emit(m),
         msg,
       );
 

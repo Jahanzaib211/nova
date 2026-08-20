@@ -108,7 +108,11 @@ function normalizeConfig(raw: unknown): VoiceConfig {
   const catalog = data.catalog ?? ({} as VoiceConfig["catalog"]);
   return {
     settings: data.settings ?? {},
-    catalog: { stt: catalog.stt ?? [], tts: catalog.tts ?? [], turn: catalog.turn ?? [] },
+    catalog: {
+      stt: catalog.stt ?? [],
+      tts: catalog.tts ?? [],
+      turn: catalog.turn ?? [],
+    },
     overrides_path: data.overrides_path ?? "",
     has_overrides: Boolean(data.has_overrides),
     live: data.live,
@@ -117,11 +121,14 @@ function normalizeConfig(raw: unknown): VoiceConfig {
 
 export async function getVoiceConfig(): Promise<VoiceConfig> {
   const res = await apiFetch("/api/voice/config");
-  if (!res.ok) throw new Error(`Could not load voice settings (HTTP ${res.status})`);
+  if (!res.ok)
+    throw new Error(`Could not load voice settings (HTTP ${res.status})`);
   return normalizeConfig(await res.json());
 }
 
-export async function putVoiceConfig(settings: VoiceSettings): Promise<VoiceConfig> {
+export async function putVoiceConfig(
+  settings: VoiceSettings,
+): Promise<VoiceConfig> {
   const res = await apiFetch("/api/voice/config", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -131,14 +138,17 @@ export async function putVoiceConfig(settings: VoiceSettings): Promise<VoiceConf
     // The server validates engine class paths and explains what is wrong;
     // surfacing its message beats a generic failure.
     const detail = await res.json().catch(() => null);
-    throw new Error(detail?.detail ?? `Could not save voice settings (HTTP ${res.status})`);
+    throw new Error(
+      detail?.detail ?? `Could not save voice settings (HTTP ${res.status})`,
+    );
   }
   return normalizeConfig(await res.json());
 }
 
 export async function resetVoiceConfig(): Promise<VoiceConfig> {
   const res = await apiFetch("/api/voice/config", { method: "DELETE" });
-  if (!res.ok) throw new Error(`Could not reset voice settings (HTTP ${res.status})`);
+  if (!res.ok)
+    throw new Error(`Could not reset voice settings (HTTP ${res.status})`);
   return normalizeConfig(await res.json());
 }
 
@@ -148,7 +158,8 @@ export async function resetVoiceConfig(): Promise<VoiceConfig> {
  */
 export async function getVoiceStatus(refresh = false): Promise<VoiceStatus> {
   const res = await apiFetch(`/api/voice/status${refresh ? "?refresh=1" : ""}`);
-  if (!res.ok) throw new Error(`Could not read voice status (HTTP ${res.status})`);
+  if (!res.ok)
+    throw new Error(`Could not read voice status (HTTP ${res.status})`);
   return (await res.json()) as VoiceStatus;
 }
 
@@ -208,7 +219,10 @@ export function stopSpeaking(): void {
  * Resolves when playback finishes (or fails, or is stopped), reporting whether
  * the browser refused to start it.
  */
-function playToCompletion(url: string, signal?: AbortSignal): { done: Promise<{ blocked: boolean }>; audio: HTMLAudioElement } {
+function playToCompletion(
+  url: string,
+  signal?: AbortSignal,
+): { done: Promise<{ blocked: boolean }>; audio: HTMLAudioElement } {
   stopSpeaking();
   const audio = new Audio(url);
   current = { audio, url };
@@ -223,10 +237,14 @@ function playToCompletion(url: string, signal?: AbortSignal): { done: Promise<{ 
     };
     audio.addEventListener("ended", () => finish(), { once: true });
     audio.addEventListener("error", () => finish(), { once: true });
-    signal?.addEventListener("abort", () => {
-      audio.pause();
-      finish();
-    }, { once: true });
+    signal?.addEventListener(
+      "abort",
+      () => {
+        audio.pause();
+        finish();
+      },
+      { once: true },
+    );
 
     // Firefox blocks media autoplay by default and Chrome does on low
     // engagement. The audio arrived either way, so this is a browser policy
@@ -263,7 +281,13 @@ export async function testSpeaker(
     });
     if (!res.ok) {
       const detail = await res.json().catch(() => null);
-      return { ok: false, latencyMs: performance.now() - started, rtf: null, durationS: null, error: detail?.detail ?? `HTTP ${res.status}` };
+      return {
+        ok: false,
+        latencyMs: performance.now() - started,
+        rtf: null,
+        durationS: null,
+        error: detail?.detail ?? `HTTP ${res.status}`,
+      };
     }
 
     const buf = await res.arrayBuffer();
@@ -272,26 +296,55 @@ export async function testSpeaker(
     const url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
 
     const { done, audio } = playToCompletion(url, signal);
-    const base = { ok: true as const, latencyMs, durationS, rtf: durationS ? latencyMs / 1000 / durationS : null };
+    const base = {
+      ok: true as const,
+      latencyMs,
+      durationS,
+      rtf: durationS ? latencyMs / 1000 / durationS : null,
+    };
 
     if (!opts.awaitPlayback) {
       // Give the browser a moment to reject autoplay so the caller learns about
       // it; without this the answer always looks like "playing fine".
-      const settled = await Promise.race([done, new Promise<null>((r) => setTimeout(() => r(null), 150))]);
-      if (settled?.blocked) return { ...base, blocked: true, play: () => audio.play() };
+      const settled = await Promise.race([
+        done,
+        new Promise<null>((r) => setTimeout(() => r(null), 150)),
+      ]);
+      if (settled?.blocked)
+        return { ...base, blocked: true, play: () => audio.play() };
       return base;
     }
 
     const { blocked } = await done;
-    return blocked ? { ...base, blocked: true, play: () => audio.play() } : base;
+    return blocked
+      ? { ...base, blocked: true, play: () => audio.play() }
+      : base;
   } catch (e) {
     // An aborted fetch is a deliberate stop, not an error to shout about.
-    if (signal?.aborted) return { ok: false, latencyMs: performance.now() - started, rtf: null, durationS: null, error: "stopped" };
-    return { ok: false, latencyMs: performance.now() - started, rtf: null, durationS: null, error: e instanceof Error ? e.message : String(e) };
+    if (signal?.aborted)
+      return {
+        ok: false,
+        latencyMs: performance.now() - started,
+        rtf: null,
+        durationS: null,
+        error: "stopped",
+      };
+    return {
+      ok: false,
+      latencyMs: performance.now() - started,
+      rtf: null,
+      durationS: null,
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 
-export type MicTest = { ok: boolean; heard?: string; durationS?: number; error?: string };
+export type MicTest = {
+  ok: boolean;
+  heard?: string;
+  durationS?: number;
+  error?: string;
+};
 
 /**
  * Record a few seconds, send it to the real STT engine, show the words back.
@@ -302,17 +355,26 @@ export type MicTest = { ok: boolean; heard?: string; durationS?: number; error?:
  * PCM in a WAV wrapper: MediaRecorder's WebM would need ffmpeg server-side, and
  * ffmpeg is absent from the running gateway image.
  */
-export async function testMicrophone(seconds = 4, signal?: AbortSignal): Promise<MicTest> {
+export async function testMicrophone(
+  seconds = 4,
+  signal?: AbortSignal,
+): Promise<MicTest> {
   try {
     const { pcm, sampleRate } = await recordPcm16(seconds, signal);
     if (!pcm.length) {
-      return { ok: false, error: "No audio was captured — check the input device." };
+      return {
+        ok: false,
+        error: "No audio was captured — check the input device.",
+      };
     }
 
     const body = new FormData();
     body.append("audio", pcm16ToWav(pcm, sampleRate), "mic-test.wav");
 
-    const res = await apiFetch("/api/voice/transcribe", { method: "POST", body });
+    const res = await apiFetch("/api/voice/transcribe", {
+      method: "POST",
+      body,
+    });
     if (!res.ok) {
       const detail = await res.json().catch(() => null);
       return { ok: false, error: detail?.detail ?? `HTTP ${res.status}` };
