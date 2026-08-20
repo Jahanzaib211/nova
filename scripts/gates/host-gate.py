@@ -241,9 +241,64 @@ def check_docker_reclaimable() -> dict:
     return check("docker_reclaimable", GREEN, "; ".join(parts) or "nothing reported")
 
 
+def _jobs_state() -> dict:
+    path = os.environ.get("NOVA_GATE_JOBS_PATH", "").strip()
+    target = Path(path) if path else Path.home() / ".nova" / "gates" / "jobs.json"
+    try:
+        return json.loads(target.read_text()).get("jobs", {})
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return {}
+
+
+def _job_check(name: str, label: str, max_age_sec: float, hint: str) -> dict:
+    """Assert a scheduled maintenance job is still running and succeeding.
+
+    This exists because the failure it catches is silent by construction. The
+    checkpoint pruner not running looks exactly like the pruner running with
+    nothing to do, right up until the database is 59 GB again. The gate has to
+    go yellow when the job STOPS, not when its consequences show up -- by then
+    `database_size` is already red and the outage has happened.
+    """
+    job = _jobs_state().get(name)
+    if not job:
+        return check(label, YELLOW,
+                     f"has never run — {hint}", ran=False)
+
+    age = time.time() - (job.get("at_epoch") or 0)
+    rc = job.get("exit_code")
+    detail = job.get("detail", "")
+    age_h = age / 3600
+
+    if rc is None:
+        return check(label, RED, f"last run could not complete: {detail}",
+                     age_sec=round(age))
+    if rc != 0:
+        return check(label, RED, f"last run failed (exit {rc}): {detail}",
+                     age_sec=round(age))
+    if age > max_age_sec:
+        return check(label, YELLOW,
+                     f"last ran {age_h:.1f}h ago (expected within "
+                     f"{max_age_sec / 3600:.0f}h) — {hint}",
+                     age_sec=round(age))
+    return check(label, GREEN, f"ran {age_h:.1f}h ago — {detail}"[:160],
+                 age_sec=round(age))
+
+
+def check_prune_job() -> dict:
+    # Daily cadence; two missed days is a real problem, one is noise.
+    return _job_check("prune", "prune_job", 2 * 86_400,
+                      "is nova-gates running?")
+
+
+def check_rotate_job() -> dict:
+    return _job_check("rotate", "rotate_job", 6 * 3600,
+                      "is nova-gates running?")
+
+
 CHECKS = (
     check_disk, check_inodes, check_memory, check_swap, check_io_pressure,
     check_database, check_checkpoint_count, check_logs, check_docker_reclaimable,
+    check_prune_job, check_rotate_job,
 )
 
 

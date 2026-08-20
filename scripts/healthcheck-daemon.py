@@ -173,6 +173,55 @@ class CycleReport:
         }
 
 
+async def probe_drift() -> ProbeResult:
+    """Escalate a red deployment-drift gate into the watchdog.
+
+    drift-gate.py already detects containers built from a different commit than
+    the repo, a config_version behind the example, a stale frontend build, and
+    PM2 apps that are not running. But it only wrote a file the Nova Ops console
+    renders -- so divergence sat there until somebody happened to look.
+
+    This is the class of fault behind "I recreated the container and the project
+    started breaking on its own": the running system stopped matching the
+    repository and nothing said so. Reading the gate here puts it on the same
+    pager as nginx being down.
+
+    YELLOW rather than RED for a stale file: the gate not having run recently is
+    a nova-gates problem, not evidence of drift.
+    """
+    name = "P13_drift"
+    t0 = time.perf_counter()
+    path = os.environ.get("NOVA_DRIFT_GATE_STATUS_PATH", "").strip()
+    target = Path(path) if path else Path.home() / ".nova" / "gates" / "drift.json"
+    latency = (time.perf_counter() - t0) * 1000
+
+    try:
+        payload = json.loads(target.read_text())
+    except FileNotFoundError:
+        return ProbeResult(name, Status.YELLOW, "no drift gate status file yet", latency)
+    except (OSError, json.JSONDecodeError) as exc:
+        return ProbeResult(name, Status.YELLOW, f"unreadable: {exc}", latency)
+
+    age = time.time() - (payload.get("checked_at_epoch") or 0)
+    if age > 3 * 900:  # three drift-gate intervals
+        return ProbeResult(name, Status.YELLOW,
+                           f"drift gate is stale ({age / 60:.0f} min old)", latency)
+
+    overall = payload.get("overall")
+    failing = [c.get("name") for c in payload.get("checks", [])
+               if c.get("status") == "red"]
+    if overall == "red":
+        return ProbeResult(name, Status.RED,
+                           f"deployment drift: {', '.join(failing) or 'see drift.json'}",
+                           latency)
+    if overall == "yellow":
+        warn = [c.get("name") for c in payload.get("checks", [])
+                if c.get("status") == "yellow"]
+        return ProbeResult(name, Status.YELLOW,
+                           f"{', '.join(warn) or 'see drift.json'}", latency)
+    return ProbeResult(name, Status.GREEN, "no drift", latency)
+
+
 # ---------------------------------------------------------------------------
 # Status file
 # ---------------------------------------------------------------------------
@@ -1188,6 +1237,7 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
             lambda: probe_llama_vram(host=os.environ.get("LLAMA_HOST", "127.0.0.1")),
         ),
         ("P7_containers", probe_containers),
+        ("P13_drift", probe_drift),
         ("P8_binary_attestation", probe_binary_attestation),
         (
             "P9_bridge",

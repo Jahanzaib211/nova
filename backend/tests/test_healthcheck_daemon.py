@@ -267,6 +267,7 @@ class TestDisabledProbes:
             "probe_containers",
             "probe_binary_attestation",
             "probe_litellm",
+            "probe_drift",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
@@ -283,7 +284,7 @@ class TestDisabledProbes:
         report = await healthcheck.run_cycle(healthcheck.WatchdogState())
 
         assert ran == []
-        assert len(report.probes) == 9
+        assert len(report.probes) == 10
         assert {p.name for p in report.probes}.isdisjoint({"P9_bridge", "P11_dify", "P12_tunnel"})
 
 
@@ -339,19 +340,20 @@ class TestRunCycleSmoke:
             "probe_litellm",
             "probe_dify",
             "probe_tunnel",
+            "probe_drift",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
         state = healthcheck.WatchdogState()
         report = await healthcheck.run_cycle(state)
         assert report.overall == healthcheck.Status.GREEN
-        assert len(report.probes) == 12
+        assert len(report.probes) == 13
         assert all(p.status == healthcheck.Status.GREEN for p in report.probes)
 
     @pytest.mark.asyncio
     async def test_run_cycle_survives_single_probe_exception(self, monkeypatch):
         """A single probe raising must not kill the whole cycle — the JSON
-        status line should still emit, the other 7 probes should be GREEN,
+        status line should still emit, the other probes should be GREEN,
         and the failed probe should appear as a labeled RED."""
 
         async def fake_green(*args, **kwargs):
@@ -372,6 +374,7 @@ class TestRunCycleSmoke:
             "probe_litellm",
             "probe_dify",
             "probe_tunnel",
+            "probe_drift",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
         monkeypatch.setattr(healthcheck, "probe_binary_attestation", fake_boom)
@@ -386,11 +389,11 @@ class TestRunCycleSmoke:
         assert "P8_binary_attestation" in by_name
         assert by_name["P8_binary_attestation"].status == healthcheck.Status.RED
         assert "RuntimeError" in by_name["P8_binary_attestation"].detail
-        # The other 11 should still be GREEN and the cycle should still report.
+        # The other 12 should still be GREEN and the cycle should still report.
         assert report.overall == healthcheck.Status.RED
         assert report.exit_code == 1
         green_count = sum(1 for p in report.probes if p.status == healthcheck.Status.GREEN)
-        assert green_count == 11
+        assert green_count == 12
 
 
 class TestLogRouting:

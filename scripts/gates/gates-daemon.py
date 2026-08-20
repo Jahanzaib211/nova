@@ -42,6 +42,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -56,12 +57,65 @@ logging.basicConfig(
 log = logging.getLogger("nova-gates")
 
 
+def _summarise(output: str) -> str:
+    """One readable line from a producer's stdout.
+
+    Several of these scripts emit indented JSON, whose first line is a bare
+    "{" — which is what jobs.json recorded before this existed. Pull the
+    fields that actually say what happened, and fall back to the first line
+    of plain text.
+    """
+    text = output.strip()
+    if not text:
+        return ""
+    if text.startswith(("{", "[")):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return text.splitlines()[0][:200]
+        if isinstance(data, dict):
+            if "result" in data:  # prune-checkpoints.py
+                deleted = data.get("deleted") or {}
+                bits = [str(data["result"])]
+                if deleted:
+                    bits.append(
+                        f"{deleted.get('checkpoints', 0)} checkpoints, "
+                        f"{deleted.get('writes', 0)} writes deleted"
+                    )
+                if "after" in data:
+                    gb = (data["after"].get("db_bytes") or 0) / 1024**3
+                    bits.append(f"db {gb:.2f} GB")
+                return " — ".join(bits)[:200]
+            if "logs" in data:  # rotate-logs.sh
+                actions = [f"{l.get('log')}:{l.get('action')}" for l in data["logs"]]
+                return ", ".join(actions)[:200]
+            for key in ("overall", "detail", "status"):
+                if key in data:
+                    return str(data[key])[:200]
+        return text.splitlines()[0][:200]
+    return text.splitlines()[0][:200]
+
+
 class Producer:
-    def __init__(self, name: str, argv: list[str], interval_sec: float, timeout_sec: float):
+    """One scheduled script.
+
+    `kind` separates the two things this daemon runs:
+
+    - ``gate``  — writes its own ~/.nova/gates/<name>.json; the console reads
+                  that file directly and this daemon only has to invoke it.
+    - ``job``   — maintenance that produces no gate file of its own (the
+                  checkpoint pruner, log rotation). Their outcome is recorded
+                  in jobs.json so host-gate can assert they are still running;
+                  an unrun pruner is exactly how the 59 GB database came back.
+    """
+
+    def __init__(self, name: str, argv: list[str], interval_sec: float,
+                 timeout_sec: float, kind: str = "gate"):
         self.name = name
         self.argv = argv
         self.interval_sec = interval_sec
         self.timeout_sec = timeout_sec
+        self.kind = kind
         self.last_run = 0.0
 
     def due(self, now: float) -> bool:
@@ -70,9 +124,11 @@ class Producer:
     def run(self) -> dict:
         started = time.time()
         script = REPO_ROOT / self.argv[0]
+        # Not everything scheduled here is Python — rotate-logs.sh is bash.
+        launcher = [sys.executable] if script.suffix == ".py" else ["bash"]
         try:
             proc = subprocess.run(
-                [sys.executable, str(script), *self.argv[1:]],
+                [*launcher, str(script), *self.argv[1:]],
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
@@ -91,8 +147,7 @@ class Producer:
                 close_fds=False,
             )
             rc: int | None = proc.returncode
-            tail = (proc.stdout or proc.stderr or "").strip().splitlines()
-            detail = tail[0][:200] if tail else ""
+            detail = _summarise(proc.stdout or proc.stderr or "")
         except subprocess.TimeoutExpired:
             rc, detail = None, f"timed out after {self.timeout_sec:.0f}s"
         except (OSError, subprocess.SubprocessError) as exc:
@@ -109,7 +164,8 @@ class Producer:
         else:
             log.info("%s: exit=%s in %.1fs — %s", self.name, rc, duration, detail)
 
-        return {"gate": self.name, "exit_code": rc, "duration_sec": round(duration, 2),
+        return {"gate": self.name, "kind": self.kind, "exit_code": rc,
+                "at_epoch": self.last_run, "duration_sec": round(duration, 2),
                 "detail": detail}
 
 
@@ -127,7 +183,76 @@ def build_producers() -> list[Producer]:
                  env_float("NOVA_GATE_DRIFT_INTERVAL", 900), timeout_sec=180),
         Producer("ci", ["scripts/gates/ci-gate.py", "--tier", "fast"],
                  env_float("NOVA_GATE_CI_INTERVAL", 21_600), timeout_sec=1800),
+
+        # --- maintenance jobs -------------------------------------------------
+        # The checkpoint pruner. This is the one job whose absence recreates the
+        # original outage: LangGraph checkpoints grow without bound and took
+        # deerflow.db to 59.4 GB. Daily is ample -- the table only has to stay
+        # bounded, not minimal.
+        #
+        # Deliberately NO --vacuum here. VACUUM takes an exclusive lock and
+        # rewrites the whole file; that belongs in a maintenance window, not in
+        # a background job that could collide with a live run. Pruning keeps the
+        # row count flat, which is what stops the lock contention; reclaiming
+        # file bytes is a separate, manual concern.
+        Producer("prune", ["scripts/prune-checkpoints.py",
+                           "--keep-per-thread", "3", "--keep-days", "2",
+                           "--strategy", "rebuild", "--json"],
+                 env_float("NOVA_GATE_PRUNE_INTERVAL", 86_400),
+                 timeout_sec=3600, kind="job"),
+
+        # Log rotation. gateway.log now appends rather than truncating on every
+        # restart, so something has to bound it. Size-triggered, so an hourly
+        # run is a no-op until it matters.
+        Producer("rotate", ["scripts/rotate-logs.sh", "--json"],
+                 env_float("NOVA_GATE_ROTATE_INTERVAL", 3600),
+                 timeout_sec=300, kind="job"),
     ]
+
+
+def jobs_path() -> Path:
+    override = os.environ.get("NOVA_GATE_JOBS_PATH", "").strip()
+    if override:
+        return Path(override)
+    return Path.home() / ".nova" / "gates" / "jobs.json"
+
+
+def record_job(result: dict) -> None:
+    """Merge one job result into jobs.json. Never fatal.
+
+    Gates publish their own status file; maintenance jobs do not, so without
+    this their last run is only visible in a PM2 log nobody reads -- the same
+    blind spot that let the checkpoint table grow unnoticed.
+    """
+    if result.get("kind") != "job":
+        return
+    path = jobs_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing: dict = {}
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                existing = {}
+        jobs = existing.get("jobs", {})
+        jobs[result["gate"]] = {
+            "at_epoch": result.get("at_epoch"),
+            "exit_code": result.get("exit_code"),
+            "duration_sec": result.get("duration_sec"),
+            "detail": result.get("detail", "")[:500],
+        }
+        payload = {"checked_at_epoch": time.time(), "jobs": jobs}
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
+                                         prefix=".jobs-", suffix=".tmp",
+                                         delete=False) as handle:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+            tmp = Path(handle.name)
+        tmp.replace(path)
+    except OSError:
+        log.warning("could not write %s", path, exc_info=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,7 +275,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.once:
-        results = [p.run() for p in producers]
+        results = []
+        for producer in producers:
+            result = producer.run()
+            record_job(result)
+            results.append(result)
         print(json.dumps(results, indent=2))
         return 0
 
@@ -164,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
     # Run everything once at boot so a restart never leaves a stale file
     # sitting there for a full interval.
     for producer in producers:
-        producer.run()
+        record_job(producer.run())
 
     while not stop.is_set():
         now = time.time()
@@ -172,7 +301,7 @@ def main(argv: list[str] | None = None) -> int:
             if stop.is_set():
                 break
             if producer.due(now):
-                producer.run()
+                record_job(producer.run())
         stop.wait(args.tick)
 
     log.info("stopped")

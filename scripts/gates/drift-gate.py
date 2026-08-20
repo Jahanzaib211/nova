@@ -30,6 +30,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import os
 import re
@@ -101,46 +102,78 @@ def check_config_version() -> dict:
                  live=live, example=example)
 
 
+# Hash every file under frontend/src identically on both sides. LC_ALL=C is
+# load-bearing: the host sorts with a locale-aware collation and the container
+# with C, so `./app/[lang]/...` lands in a different position and the digests
+# differ for two byte-identical trees.
+_SRC_HASH_CMD = (
+    "export LC_ALL=C; cd {path} && find . -type f -print0 | sort -z "
+    "| xargs -0 sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1"
+)
+
+
 def check_frontend_build_freshness() -> dict:
-    """The stale-build trap.
+    """Is the running frontend actually serving the current source?
 
     docker-compose.prod-frontend.yaml runs `next start`, which serves the
-    `.next` build baked into the image. The dev stack's `volumes:` still
-    bind-mounts frontend/src over it, and Compose merges volumes by appending,
-    so the override cannot remove the mount. The result is a container that
-    *looks* like it is running your source while actually serving a build from
-    whenever the image was last made -- every edit silently invisible.
+    `.next` build baked into the image, while the dev stack's `volumes:` still
+    bind-mounts frontend/src over it (compose merges volumes by appending, so
+    the override cannot remove the mount). The container therefore *looks* like
+    it is running your source while serving a build from whenever the image was
+    last made — every edit silently invisible. That trap cost a full debugging
+    cycle this session.
+
+    Compare content, not timestamps. Earlier revisions of this check used file
+    mtimes and then last-commit time; both fire spuriously after a `git
+    checkout` or a merge, which rewrite the working tree without changing a
+    byte. Two false positives in a row is how a gate gets ignored.
+
+    The image bakes its own copy of frontend/src, so hashing that (via `docker
+    run`, which bypasses the bind mount that `docker exec` would see) against
+    the working tree answers the question exactly, and needs no build-pipeline
+    change or recorded marker.
     """
-    rc, out, err = _run(
+    rc, image, _ = _run(
+        ["docker", "inspect", "deer-flow-frontend", "--format", "{{.Config.Image}}"],
+        timeout=30,
+    )
+    if rc != 0 or not image:
+        return check("frontend_build", YELLOW, "frontend container not running")
+
+    src = REPO_ROOT / "frontend" / "src"
+    if not src.is_dir():
+        return check("frontend_build", YELLOW, "frontend/src not found")
+
+    rc_h, host_hash, _ = _run(
+        ["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120
+    )
+    if rc_h != 0 or not host_hash:
+        return check("frontend_build", YELLOW, "could not hash frontend/src")
+
+    rc_i, image_hash, err = _run(
+        ["docker", "run", "--rm", "--entrypoint", "sh", "-e", "LC_ALL=C", image,
+         "-c", _SRC_HASH_CMD.format(path="/app/frontend/src")],
+        timeout=180,
+    )
+    if rc_i != 0 or not image_hash:
+        return check("frontend_build", YELLOW,
+                     f"could not hash the image's source: {err[:100] or 'unknown'}")
+
+    rc_b, build_id, _ = _run(
         ["docker", "exec", "deer-flow-frontend", "cat", "/app/frontend/.next/BUILD_ID"],
         timeout=30,
     )
-    if rc != 0:
-        return check("frontend_build", YELLOW, f"could not read BUILD_ID: {err or 'container down?'}")
+    build = build_id.strip() or "unknown"
 
-    rc2, mtime_out, _ = _run(
-        ["docker", "exec", "deer-flow-frontend", "stat", "-c", "%Y",
-         "/app/frontend/.next/BUILD_ID"], timeout=30,
-    )
-    if rc2 != 0 or not mtime_out.isdigit():
-        return check("frontend_build", YELLOW, f"build {out}, mtime unavailable")
-    built_at = int(mtime_out)
-
-    newest_src = 0
-    src = REPO_ROOT / "frontend" / "src"
-    for path in src.rglob("*"):
-        if path.is_file():
-            newest_src = max(newest_src, int(path.stat().st_mtime))
-
-    if newest_src <= built_at:
+    if host_hash.strip() == image_hash.strip():
         return check("frontend_build", GREEN,
-                     f"build {out} is newer than all of frontend/src")
-    age_h = (newest_src - built_at) / 3600
-    status = RED if age_h > 24 else YELLOW
-    return check("frontend_build", status,
-                 f"frontend/src is {age_h:.1f}h newer than the served build "
-                 f"({out}) — those edits are NOT live; rebuild the image",
-                 build_id=out, built_at=built_at, newest_src_mtime=newest_src)
+                     f"served build {build} matches frontend/src exactly",
+                     build_id=build)
+    return check("frontend_build", RED,
+                 f"frontend/src differs from the source baked into the served "
+                 f"build ({build}) — those changes are NOT live; rebuild the image",
+                 build_id=build, host_hash=host_hash.strip()[:16],
+                 image_hash=image_hash.strip()[:16])
 
 
 def check_compose_chain() -> dict:
@@ -224,9 +257,80 @@ def check_pm2_apps() -> dict:
                  declared=sorted(declared))
 
 
+def check_restart_storm() -> dict:
+    """Catch autoheal masking a crash instead of fixing one.
+
+    docker-compose-dev.yaml runs a `willfarrell/autoheal` sidecar that restarts
+    the gateway when its healthcheck fails. That converts a hung gateway into a
+    ~15s blip, which is the point -- but it also means a gateway crashing every
+    few minutes looks healthy from outside while quietly losing every in-flight
+    run. A restart is a symptom; a stream of them is an outage wearing a
+    disguise.
+
+    RestartCount is cumulative for the life of the container, so it is read
+    against container uptime rather than as an absolute: three restarts over a
+    week is noise, three in an hour is not.
+    """
+    findings = []
+    worst = GREEN
+
+    for name in NOVA_SERVICES:
+        rc, out, _ = _run(
+            ["docker", "inspect", name, "--format",
+             "{{.RestartCount}}|{{.State.StartedAt}}|{{.State.OOMKilled}}"],
+            timeout=30,
+        )
+        if rc != 0 or not out:
+            continue
+        parts = out.split("|")
+        if len(parts) < 3:
+            continue
+        try:
+            restarts = int(parts[0])
+        except ValueError:
+            continue
+        oom = parts[2].strip().lower() == "true"
+
+        started = parts[1].strip()
+        hours = None
+        try:
+            # Docker emits RFC3339 with nanoseconds, which %f cannot parse.
+            cleaned = re.sub(r"\.(\d{6})\d*", r".\1", started).replace("Z", "+00:00")
+            hours = (
+                _dt.datetime.now(_dt.timezone.utc)
+                - _dt.datetime.fromisoformat(cleaned)
+            ).total_seconds() / 3600
+        except (ValueError, TypeError):
+            pass
+
+        if oom:
+            findings.append(f"{name}: OOM-killed")
+            worst = RED
+            continue
+        if restarts == 0:
+            continue
+
+        if hours is not None and hours > 0:
+            rate = restarts / hours
+            if rate >= 2:
+                findings.append(f"{name}: {restarts} restarts in {hours:.1f}h")
+                worst = RED
+            elif restarts >= 3:
+                findings.append(f"{name}: {restarts} restarts over {hours:.1f}h")
+                worst = YELLOW if worst == GREEN else worst
+        elif restarts >= 3:
+            findings.append(f"{name}: {restarts} restarts")
+            worst = YELLOW if worst == GREEN else worst
+
+    if not findings:
+        return check("restart_storm", GREEN, "no repeated restarts")
+    return check("restart_storm", worst,
+                 "; ".join(findings) + " — autoheal may be masking a crash loop")
+
+
 CHECKS = (
     check_git_clean, check_config_version, check_frontend_build_freshness,
-    check_compose_chain, check_pm2_apps,
+    check_compose_chain, check_pm2_apps, check_restart_storm,
 )
 
 
