@@ -75,7 +75,19 @@ swap-priority = 100
 CONF
 
 systemctl daemon-reload
-systemctl start /dev/zram0 2>/dev/null || systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
+# The generator materialises dev-zram0.swap on daemon-reload; starting the
+# setup service is what actually creates and swaps on the device.
+systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
+systemctl start dev-zram0.swap 2>/dev/null || true
+
+# Activation is asynchronous: the unit returns before `swapon` reflects it.
+# The first version of this script printed `swapon --show` immediately and
+# reported success unconditionally, so a run where zram had not come up yet
+# looked identical to one where it had. Wait for the device, then verify.
+for _ in $(seq 1 20); do
+    grep -q "^/dev/zram0 " /proc/swaps && break
+    sleep 0.5
+done
 
 # ── 2. earlyoom thresholds ─────────────────────────────────────────────────
 echo "==> raising earlyoom thresholds"
@@ -112,5 +124,47 @@ echo
 echo "==> result"
 swapon --show
 echo
-systemctl --no-pager -p ActiveState show earlyoom | head -1
-echo "done. zram is now the primary swap tier; earlyoom acts at 12% instead of 6%."
+
+# Verify rather than assert. Each check below is something that silently did
+# not happen in an earlier revision of this script.
+failed=0
+
+if grep -q "^/dev/zram0 " /proc/swaps; then
+    prio="$(awk '$1=="/dev/zram0" {print $5}' /proc/swaps)"
+    echo "  [ok]   zram active (priority ${prio:-?})"
+    if [ "${prio:-0}" -le 0 ] 2>/dev/null; then
+        echo "  [WARN] zram priority is not above the disk swap file;" >&2
+        echo "         the kernel will still prefer /swap.img." >&2
+        failed=1
+    fi
+else
+    echo "  [FAIL] /dev/zram0 is not in /proc/swaps — zram did NOT activate." >&2
+    echo "         Check: systemctl status systemd-zram-setup@zram0.service" >&2
+    failed=1
+fi
+
+if pgrep -af '[e]arlyoom' | grep -q -- '-m 12'; then
+    echo "  [ok]   earlyoom running with the raised thresholds"
+else
+    echo "  [FAIL] earlyoom is not running with -m 12; check the unit." >&2
+    failed=1
+fi
+
+swappiness="$(sysctl -n vm.swappiness 2>/dev/null || echo '?')"
+if [ "$swappiness" = "180" ]; then
+    echo "  [ok]   vm.swappiness=180"
+else
+    echo "  [FAIL] vm.swappiness is '$swappiness', expected 180." >&2
+    failed=1
+fi
+
+echo
+if [ "$failed" -eq 0 ]; then
+    echo "done. zram is the primary swap tier; earlyoom acts at 12% instead of 6%."
+    echo "Note: pages already paged out to /swap.img stay there and drain over"
+    echo "time. To reclaim them now (only with enough free RAM to absorb them):"
+    echo "    sudo swapoff /swap.img && sudo swapon /swap.img"
+else
+    echo "FAILED — one or more changes did not take effect (see above)." >&2
+    exit 1
+fi
