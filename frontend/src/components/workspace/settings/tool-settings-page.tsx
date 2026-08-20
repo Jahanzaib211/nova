@@ -435,9 +435,7 @@ function MCPServerList({
   const strings = t.settings.tools;
   const { mutate: enableMCPServer } = useEnableMCPServer();
   const deleteServer = useDeleteMCPServer();
-  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(
-    null,
-  );
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingName, setEditingName] = useState<string | null>(null);
   const [initialForm, setInitialForm] = useState<FormState>(emptyForm());
@@ -460,7 +458,8 @@ function MCPServerList({
     if (confirmingDelete !== name) {
       setConfirmingDelete(name);
       setTimeout(
-        () => setConfirmingDelete((current) => (current === name ? null : current)),
+        () =>
+          setConfirmingDelete((current) => (current === name ? null : current)),
         3000,
       );
       return;

@@ -84,23 +84,17 @@ class TestSandboxStatus:
 
 class TestSandboxFile:
     def test_returns_file_content(self, sandbox_tree):
-        result = asyncio.run(
-            sandbox_router.get_sandbox_file("t1", "/mnt/user-data/workspace/hello.txt", request=None)
-        )
+        result = asyncio.run(sandbox_router.get_sandbox_file("t1", "/mnt/user-data/workspace/hello.txt", request=None))
         assert result["content"] == "hello world"
         assert result["exists"] is True
         assert result["size"] > 0
 
     def test_returns_empty_for_nonexistent(self, sandbox_tree):
-        result = asyncio.run(
-            sandbox_router.get_sandbox_file("t1", "/mnt/user-data/workspace/nope.txt", request=None)
-        )
+        result = asyncio.run(sandbox_router.get_sandbox_file("t1", "/mnt/user-data/workspace/nope.txt", request=None))
         assert result["exists"] is False
 
     def test_rejects_outside_user_data(self, sandbox_tree):
-        result = asyncio.run(
-            sandbox_router.get_sandbox_file("t1", "/etc/passwd", request=None)
-        )
+        result = asyncio.run(sandbox_router.get_sandbox_file("t1", "/etc/passwd", request=None))
         assert result["exists"] is False
 
     def test_ownership_check_blocks(self, sandbox_tree, monkeypatch):
@@ -108,9 +102,7 @@ class TestSandboxFile:
 
         monkeypatch.setattr(sandbox_router, "_caller_owns_thread", lambda tid: False)
         with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(
-                sandbox_router.get_sandbox_file("t1", "/mnt/user-data/workspace/hello.txt", request=None)
-            )
+            asyncio.run(sandbox_router.get_sandbox_file("t1", "/mnt/user-data/workspace/hello.txt", request=None))
         assert exc_info.value.status_code == 404
 
 

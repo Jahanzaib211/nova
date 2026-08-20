@@ -227,7 +227,8 @@ export function Browser({
   // and can navigate it (reverse tabnabbing), undermining the sandboxing already
   // applied to the equivalent iframe below.
   const openLiveInNewTab = useCallback(() => {
-    if (devServer.url && liveSrc) window.open(liveSrc, "_blank", "noopener,noreferrer");
+    if (devServer.url && liveSrc)
+      window.open(liveSrc, "_blank", "noopener,noreferrer");
   }, [devServer.url, liveSrc]);
 
   // Pseudo-HMR: auto-reload the preview iframe each time the dev server recompiles.
@@ -379,7 +380,7 @@ export function Browser({
           )}
           {srcMode === "absproxy" && devServer.absproxyUrl ? (
             <span
-              className="border-amber-500/40 bg-amber-500/10 text-amber-300 shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px]"
+              className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
               title="Preview proxy was unreachable; rendering via the generic absproxy instead."
             >
               Showing via absproxy

@@ -55,8 +55,12 @@ export function useVoiceSession(threadId: string | null): UseVoiceSession {
       try {
         const res = await fetch(`${getBackendBaseURL()}/api/voice/status`);
         if (!res.ok) return;
-        const body = (await res.json()) as { enabled?: boolean; ready?: boolean };
-        if (!cancelled) setAvailable(Boolean(body.enabled && body.ready !== false));
+        const body = (await res.json()) as {
+          enabled?: boolean;
+          ready?: boolean;
+        };
+        if (!cancelled)
+          setAvailable(Boolean(body.enabled && body.ready !== false));
       } catch {
         if (!cancelled) setAvailable(false);
       }

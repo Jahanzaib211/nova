@@ -39,7 +39,8 @@ export function pcm16ToWav(pcm: Uint8Array, sampleRate: number): Blob {
   const header = new ArrayBuffer(44);
   const view = new DataView(header);
   const put = (offset: number, text: string) => {
-    for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    for (let i = 0; i < text.length; i++)
+      view.setUint8(offset + i, text.charCodeAt(i));
   };
   put(0, "RIFF");
   view.setUint32(4, 36 + pcm.length, true);
@@ -63,9 +64,16 @@ export function pcm16ToWav(pcm: Uint8Array, sampleRate: number): Blob {
  * would need ffmpeg to decode — and ffmpeg is absent from the running gateway
  * image. Raw PCM keeps the diagnostic working wherever the live session works.
  */
-export async function recordPcm16(seconds: number, signal?: AbortSignal): Promise<{ pcm: Uint8Array; sampleRate: number }> {
+export async function recordPcm16(
+  seconds: number,
+  signal?: AbortSignal,
+): Promise<{ pcm: Uint8Array; sampleRate: number }> {
   const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
   });
 
   const ctx = new AudioContext({ sampleRate: CAPTURE_RATE });
@@ -73,7 +81,9 @@ export async function recordPcm16(seconds: number, signal?: AbortSignal): Promis
   const chunks: Uint8Array[] = [];
 
   try {
-    blobUrl = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: "application/javascript" }));
+    blobUrl = URL.createObjectURL(
+      new Blob([WORKLET_SOURCE], { type: "application/javascript" }),
+    );
     await ctx.audioWorklet.addModule(blobUrl);
 
     const source = ctx.createMediaStreamSource(stream);
@@ -86,7 +96,15 @@ export async function recordPcm16(seconds: number, signal?: AbortSignal): Promis
       merged.set(ev.data, carry.length);
       let offset = 0;
       while (merged.length - offset >= FRAME_SAMPLES) {
-        chunks.push(new Uint8Array(toPcm16(merged.subarray(offset, offset + FRAME_SAMPLES), ctx.sampleRate, CAPTURE_RATE)));
+        chunks.push(
+          new Uint8Array(
+            toPcm16(
+              merged.subarray(offset, offset + FRAME_SAMPLES),
+              ctx.sampleRate,
+              CAPTURE_RATE,
+            ),
+          ),
+        );
         offset += FRAME_SAMPLES;
       }
       carry = merged.slice(offset);

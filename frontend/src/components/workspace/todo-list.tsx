@@ -43,7 +43,7 @@ export function TodoList({
   return (
     <div
       className={cn(
-        "flex h-fit w-full origin-bottom translate-y-4 flex-col overflow-hidden rounded-t-xl border border-b-0 bg-background backdrop-blur-sm transition-all duration-200 ease-out",
+        "bg-background flex h-fit w-full origin-bottom translate-y-4 flex-col overflow-hidden rounded-t-xl border border-b-0 backdrop-blur-sm transition-all duration-200 ease-out",
         hidden ? "pointer-events-none translate-y-8 opacity-0" : "",
         className,
       )}
@@ -77,7 +77,10 @@ export function TodoList({
       >
         <div role="status" aria-live="polite" className="sr-only">
           {`${todos.length} ${t.a11y.todos}${
-            todos.some((todo) => todo.status === "in_progress") ? ", " + (todos.find((td) => td.status === "in_progress")?.content ?? "") : ""
+            todos.some((todo) => todo.status === "in_progress")
+              ? ", " +
+                (todos.find((td) => td.status === "in_progress")?.content ?? "")
+              : ""
           }`}
         </div>
         <QueueList className="bg-background mt-0 w-full rounded-t-xl">

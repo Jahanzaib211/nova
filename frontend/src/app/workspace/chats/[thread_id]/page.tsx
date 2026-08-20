@@ -338,104 +338,106 @@ export default function ChatPage() {
                   tokenUsageInlineMode={tokenUsageInlineMode}
                 />
               </div>
-            <div
-              className={cn(
-                "right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4",
-                isWelcomeMode ? "absolute" : "relative shrink-0 pb-4",
-              )}
-            >
               <div
                 className={cn(
-                  "relative w-full",
-                  isWelcomeMode &&
-                    "-translate-y-[calc(50vh-48px)] sm:-translate-y-[calc(50vh-96px)]",
-                  isWelcomeMode
-                    ? "max-w-(--container-width-sm)"
-                    : "max-w-(--container-width-md)",
+                  "right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4",
+                  isWelcomeMode ? "absolute" : "relative shrink-0 pb-4",
                 )}
               >
-                {hasTodos && (
-                  <div
-                    className={cn(
-                      "right-0 left-0 z-0",
-                      isWelcomeMode ? "absolute -top-4" : "relative",
-                    )}
-                  >
+                <div
+                  className={cn(
+                    "relative w-full",
+                    isWelcomeMode &&
+                      "-translate-y-[calc(50vh-48px)] sm:-translate-y-[calc(50vh-96px)]",
+                    isWelcomeMode
+                      ? "max-w-(--container-width-sm)"
+                      : "max-w-(--container-width-md)",
+                  )}
+                >
+                  {hasTodos && (
                     <div
                       className={cn(
-                        "right-0 bottom-0 left-0",
-                        isWelcomeMode ? "absolute" : "relative",
+                        "right-0 left-0 z-0",
+                        isWelcomeMode ? "absolute -top-4" : "relative",
                       )}
                     >
-                      <TodoList
-                        className="bg-background/5"
-                        todos={thread.values.todos ?? []}
-                        hidden={false}
-                      />
+                      <div
+                        className={cn(
+                          "right-0 bottom-0 left-0",
+                          isWelcomeMode ? "absolute" : "relative",
+                        )}
+                      >
+                        <TodoList
+                          className="bg-background/5"
+                          todos={thread.values.todos ?? []}
+                          hidden={false}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-                {mountedRef.current ? (
-                  <InputBox
-                    className={cn(
-                      "bg-background/5 w-full",
-                      isWelcomeMode && "-translate-y-2 sm:-translate-y-4",
-                    )}
-                    isWelcomeMode={isWelcomeMode}
-                    threadId={threadId}
-                    autoFocus={isWelcomeMode}
-                    initialValue={composerInitialValue}
-                    status={(() => {
-                      const s: "streaming" | "ready" | "error" =
-                        composerShouldStream({
-                          threadIsLoading: thread.isLoading,
-                          hasActiveRun: activeRun !== null,
-                          activeRunId: activeRun?.run_id ?? null,
-                          dismissedRunId,
-                          threadError: thread.error,
-                        });
-                      recordComposer(
-                        isNewThread || isMock ? null : threadId,
-                        activeRun?.run_id ?? null,
-                        s,
-                        activeRun !== null,
-                      );
-                      return s;
-                    })()}
-                    context={settings.context}
-                    extraHeader={
-                      isWelcomeMode && <Welcome mode={settings.context.mode} />
-                    }
-                    disabled={
-                      isMock ||
-                      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
-                      isUploading
-                    }
-                    onContextChange={(context) =>
-                      setSettings("context", context)
-                    }
-                    onSubmit={handleSubmit}
-                    onStop={handleStop}
-                    onForceDisconnect={forceDisconnect}
-                    stopState={stopState}
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className={cn(
-                      "bg-background/5 h-32 w-full rounded-2xl",
-                      isWelcomeMode && "-translate-y-2 sm:-translate-y-4",
-                    )}
-                  />
-                )}
-                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
-                  <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
-                    {t.common.notAvailableInDemoMode}
-                  </div>
-                )}
+                  )}
+                  {mountedRef.current ? (
+                    <InputBox
+                      className={cn(
+                        "bg-background/5 w-full",
+                        isWelcomeMode && "-translate-y-2 sm:-translate-y-4",
+                      )}
+                      isWelcomeMode={isWelcomeMode}
+                      threadId={threadId}
+                      autoFocus={isWelcomeMode}
+                      initialValue={composerInitialValue}
+                      status={(() => {
+                        const s: "streaming" | "ready" | "error" =
+                          composerShouldStream({
+                            threadIsLoading: thread.isLoading,
+                            hasActiveRun: activeRun !== null,
+                            activeRunId: activeRun?.run_id ?? null,
+                            dismissedRunId,
+                            threadError: thread.error,
+                          });
+                        recordComposer(
+                          isNewThread || isMock ? null : threadId,
+                          activeRun?.run_id ?? null,
+                          s,
+                          activeRun !== null,
+                        );
+                        return s;
+                      })()}
+                      context={settings.context}
+                      extraHeader={
+                        isWelcomeMode && (
+                          <Welcome mode={settings.context.mode} />
+                        )
+                      }
+                      disabled={
+                        isMock ||
+                        env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
+                        isUploading
+                      }
+                      onContextChange={(context) =>
+                        setSettings("context", context)
+                      }
+                      onSubmit={handleSubmit}
+                      onStop={handleStop}
+                      onForceDisconnect={forceDisconnect}
+                      stopState={stopState}
+                    />
+                  ) : (
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        "bg-background/5 h-32 w-full rounded-2xl",
+                        isWelcomeMode && "-translate-y-2 sm:-translate-y-4",
+                      )}
+                    />
+                  )}
+                  {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
+                    <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
+                      {t.common.notAvailableInDemoMode}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </main>
+            </main>
           </ErrorBoundary>
         </div>
       </ChatBox>

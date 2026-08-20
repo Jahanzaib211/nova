@@ -723,7 +723,12 @@ export function mockSandboxAPI(
     files?: MockSandboxFile[];
     fileContent?: string;
     fileExists?: boolean;
-    devStatus?: { running: boolean; status: string; port: number | null; url: string | null };
+    devStatus?: {
+      running: boolean;
+      status: string;
+      port: number | null;
+      url: string | null;
+    };
   },
 ) {
   const files = options?.files ?? [];

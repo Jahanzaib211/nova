@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { fetch as apiFetch } from "@/core/api/fetcher";
 import { useI18n } from "@/core/i18n/hooks";
 
-
 import { AuthShell } from "../auth-shell";
 
 export default function ForgotPasswordPage() {
@@ -93,9 +92,7 @@ export default function ForgotPasswordPage() {
             )}
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading
-                ? "…"
-                : t.authPasswordReset.sendResetLink}
+              {loading ? "…" : t.authPasswordReset.sendResetLink}
             </Button>
           </form>
         </>

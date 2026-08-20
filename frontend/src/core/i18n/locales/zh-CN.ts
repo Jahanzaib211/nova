@@ -411,9 +411,11 @@ export const zhCN: Translations = {
     },
     runtime: {
       title: "运行时",
-      description: "运行时行为相关配置区的只读视图。需要修改 config.yaml 来变更这些值。",
+      description:
+        "运行时行为相关配置区的只读视图。需要修改 config.yaml 来变更这些值。",
       unavailable: "无法加载运行时配置。请确认网关正在运行且您已登录。",
-      editHint: "变更这些值需要编辑 config.yaml 并重新加载网关。部分配置区需要重启。",
+      editHint:
+        "变更这些值需要编辑 config.yaml 并重新加载网关。部分配置区需要重启。",
       on: "已启用",
       off: "未启用",
       yes: "是",
@@ -578,7 +580,8 @@ export const zhCN: Translations = {
       addButton: "添加 MCP 工具",
       addTitle: "添加 MCP 工具",
       editTitle: "编辑 MCP 工具",
-      formDescription: "通过 stdio(本地命令)或远程 SSE/HTTP 端点连接 MCP 服务器。",
+      formDescription:
+        "通过 stdio(本地命令)或远程 SSE/HTTP 端点连接 MCP 服务器。",
       fieldName: "名称",
       fieldDescription: "描述",
       fieldType: "传输方式",
@@ -602,7 +605,8 @@ export const zhCN: Translations = {
       updated: "MCP 工具已更新。",
       deleted: "MCP 工具已删除。",
       reloadCache: "重新加载 MCP 工具缓存",
-      reloadCacheHint: "丢弃 MCP 服务器的缓存工具列表，使新安装的工具无需重启即可生效。",
+      reloadCacheHint:
+        "丢弃 MCP 服务器的缓存工具列表，使新安装的工具无需重启即可生效。",
       cacheReloaded: "工具缓存已重新加载。",
     },
     channels: {
@@ -624,7 +628,8 @@ export const zhCN: Translations = {
       deleteButton: "删除",
       editTitle: "编辑技能",
       deleteTitle: "删除此技能？",
-      deleteDescription: "这将永久删除技能的 markdown 文件和全部历史记录，无法撤销。",
+      deleteDescription:
+        "这将永久删除技能的 markdown 文件和全部历史记录，无法撤销。",
       deleteConfirm: "删除",
       editorHint:
         "SKILL.md 内容。安全扫描器会拦截危险模式，并将每次编辑记入技能历史。",
@@ -642,7 +647,8 @@ export const zhCN: Translations = {
     },
     threadHistory: {
       title: "线程历史",
-      description: "每条消息和状态变更都会保存为一个检查点。展开条目可查看完整的状态快照。",
+      description:
+        "每条消息和状态变更都会保存为一个检查点。展开条目可查看完整的状态快照。",
       empty: "该线程没有找到检查点。",
       copyId: "复制检查点 ID",
       loadError: "加载线程历史失败。",

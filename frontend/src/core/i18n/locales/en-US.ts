@@ -27,8 +27,7 @@ export const enUS: Translations = {
     history: "History",
     share: "Share",
     createShareLink: "Create share link",
-    shareHint:
-      "Anyone with the link can view this conversation read-only.",
+    shareHint: "Anyone with the link can view this conversation read-only.",
     sharePlaceholder: "Creating share link…",
     copyLink: "Copy link",
     shareRevoked: "Share link revoked",
@@ -452,8 +451,7 @@ export const enUS: Translations = {
       },
       subagents: {
         title: "Subagents",
-        description:
-          "Delegated task execution by the lead agent.",
+        description: "Delegated task execution by the lead agent.",
         timeout: "Default timeout",
         maxTurns: "Default max turns",
         customAgents: "Custom agents",
@@ -791,8 +789,7 @@ export const enUS: Translations = {
     },
     files: {
       empty: "Files the agent creates will appear here",
-      uploadLimitsHint:
-        "Server-configured upload limits for this thread.",
+      uploadLimitsHint: "Server-configured upload limits for this thread.",
       repository: "Repository",
       running: (count: number) => `${count} running`,
     },

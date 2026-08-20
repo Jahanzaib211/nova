@@ -91,7 +91,9 @@ export function Editor({
   // yanked back to "Diff" a fraction of a second later, every time — the toggle
   // was effectively unusable during streaming. The path+kind key still resets
   // the view when the agent moves to a genuinely different edit.
-  const editKey = editForFile ? `${editForFile.path}:${editForFile.kind}` : null;
+  const editKey = editForFile
+    ? `${editForFile.path}:${editForFile.kind}`
+    : null;
   const [mode, setMode] = useState<"diff" | "file">("diff");
   useEffect(() => {
     if (editKey) setMode("diff");

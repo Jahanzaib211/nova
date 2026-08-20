@@ -276,12 +276,22 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
           )}
 
           {error && (
-            <p role="alert" aria-live="assertive" aria-atomic="true" className="text-sm text-red-500">
+            <p
+              role="alert"
+              aria-live="assertive"
+              aria-atomic="true"
+              className="text-sm text-red-500"
+            >
               {error}
             </p>
           )}
           {success && (
-            <p role="status" aria-live="polite" aria-atomic="true" className="text-sm text-green-600">
+            <p
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="text-sm text-green-600"
+            >
               {isLogin
                 ? "Signed in! Redirecting to your workspace…"
                 : "Account created! Redirecting to your workspace…"}

@@ -31,7 +31,12 @@ describe("displayNameFrom", () => {
   });
 
   it("declines role addresses rather than greeting an alias", () => {
-    for (const alias of ["admin@x.com", "no-reply@x.com", "support@x.com", "info@x.com"]) {
+    for (const alias of [
+      "admin@x.com",
+      "no-reply@x.com",
+      "support@x.com",
+      "info@x.com",
+    ]) {
       expect(displayNameFrom(alias)).toBeNull();
     }
   });

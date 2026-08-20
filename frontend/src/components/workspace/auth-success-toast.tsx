@@ -4,7 +4,12 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/core/auth/AuthProvider";
-import { displayNameFrom, greetingFor, speak, type GreetingKind } from "@/core/voice/greeting";
+import {
+  displayNameFrom,
+  greetingFor,
+  speak,
+  type GreetingKind,
+} from "@/core/voice/greeting";
 
 /**
  * One-shot success toast after login/signup — and Nova's spoken hello.

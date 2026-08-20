@@ -115,12 +115,14 @@ export interface CustomSkillHistoryEntry {
   [key: string]: unknown;
 }
 
-async function readDetail(response: Response, fallback: string): Promise<never> {
+async function readDetail(
+  response: Response,
+  fallback: string,
+): Promise<never> {
   const error = (await response.json().catch(() => ({}))) as {
     detail?: unknown;
   };
-  const message =
-    typeof error.detail === "string" ? error.detail : fallback;
+  const message = typeof error.detail === "string" ? error.detail : fallback;
   throw new Error(message);
 }
 
@@ -180,7 +182,9 @@ export async function loadCustomSkillHistory(
   if (!response.ok) {
     await readDetail(response, "Failed to load skill history");
   }
-  const json = (await response.json()) as { history?: CustomSkillHistoryEntry[] };
+  const json = (await response.json()) as {
+    history?: CustomSkillHistoryEntry[];
+  };
   return Array.isArray(json.history) ? json.history : [];
 }
 

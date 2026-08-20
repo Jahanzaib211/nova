@@ -23,9 +23,8 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from deerflow.config.app_config import AppConfig
-
 from app.gateway.deps import get_config
+from deerflow.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 

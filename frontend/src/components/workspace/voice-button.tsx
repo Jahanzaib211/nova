@@ -39,7 +39,9 @@ export function VoiceButton({
       <style>{VOICE_KEYFRAMES}</style>
 
       {live && <VoicePanel state={state} onStop={stop} />}
-      {hint && !available && !live && <VoiceSetupHint onClose={() => setHint(false)} />}
+      {hint && !available && !live && (
+        <VoiceSetupHint onClose={() => setHint(false)} />
+      )}
 
       <Tooltip
         content={
@@ -84,7 +86,9 @@ export function VoiceButton({
             <span
               aria-hidden
               className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/25 to-transparent motion-reduce:hidden"
-              style={{ animation: "nova-voice-shimmer 3.4s ease-in-out infinite" }}
+              style={{
+                animation: "nova-voice-shimmer 3.4s ease-in-out infinite",
+              }}
             />
           )}
 

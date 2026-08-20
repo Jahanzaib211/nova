@@ -40,10 +40,11 @@ async def thread_engine(tmp_path):
 
 @pytest.mark.asyncio
 async def test_concurrent_thread_create_does_not_lose_rows(thread_engine):
+    from sqlalchemy import func, select
+
     from deerflow.persistence.engine import get_session_factory
     from deerflow.persistence.models import ThreadMetaRow
     from deerflow.persistence.thread_meta.sql import ThreadMetaRepository
-    from sqlalchemy import func, select
 
     repo = ThreadMetaRepository(get_session_factory())
     n = 32
@@ -65,10 +66,11 @@ async def test_concurrent_create_and_update_does_not_lose(thread_engine):
     """Real production shape: one caller creates a thread while another
     updates its status / display_name in parallel. Without the retry, the
     status updater loses the race and the user sees an HTTP 500."""
+    from sqlalchemy import func, select
+
     from deerflow.persistence.engine import get_session_factory
     from deerflow.persistence.models import ThreadMetaRow
     from deerflow.persistence.thread_meta.sql import ThreadMetaRepository
-    from sqlalchemy import func, select
 
     repo = ThreadMetaRepository(get_session_factory())
     # Create one thread first.
@@ -109,13 +111,13 @@ async def test_create_survives_rollback_with_on_retry(thread_engine, monkeypatch
     still present in the DB, the create returns a valid dict, and the
     on_retry callback was invoked exactly twice.
     """
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy import func, select
     from sqlalchemy.exc import OperationalError
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from deerflow.persistence import thread_meta as tm
     from deerflow.persistence.engine import get_session_factory
     from deerflow.persistence.models import ThreadMetaRow
-    from sqlalchemy import func, select
 
     sf = get_session_factory()
     repo = tm.sql.ThreadMetaRepository(sf)

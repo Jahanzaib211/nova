@@ -122,9 +122,7 @@ def test_returns_guardrails_provider_class():
 def test_handles_missing_subagent_fields_gracefully():
     from types import SimpleNamespace
 
-    cfg = _build_config(
-        subagents=SimpleNamespace(timeout_seconds=600)
-    )
+    cfg = _build_config(subagents=SimpleNamespace(timeout_seconds=600))
     client = TestClient(_make_app(cfg))
     body = client.get("/api/runtime/config").json()
     assert body["subagents"]["default_timeout_seconds"] == 600

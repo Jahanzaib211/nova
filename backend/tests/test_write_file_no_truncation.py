@@ -74,9 +74,7 @@ def test_write_file_round_trips_102810_bytes(local_sandbox, resolved_ws):
     payload = "x" * 102_810
     local_sandbox.write_file(_VIRTUAL_OUT, payload)
     actual = resolved_ws.joinpath("out.txt").read_bytes()
-    assert actual == payload.encode("utf-8"), (
-        f"truncation reproduced: sent {len(payload):,} B, got {len(actual):,} B"
-    )
+    assert actual == payload.encode("utf-8"), f"truncation reproduced: sent {len(payload):,} B, got {len(actual):,} B"
 
 
 def test_write_file_round_trips_just_under_auto_chunk_threshold(local_sandbox, resolved_ws):
@@ -112,9 +110,7 @@ def test_write_file_round_trips_two_chunks_with_utf8_boundary(local_sandbox, res
     payload = chunk * 40_000 + "x" * 50_000  # 210 000 bytes total
     local_sandbox.write_file(_VIRTUAL_OUT, payload)
     actual = resolved_ws.joinpath("out.txt").read_bytes()
-    assert actual == payload.encode("utf-8"), (
-        f"byte count mismatch: sent {len(payload):,} B, got {len(actual):,} B"
-    )
+    assert actual == payload.encode("utf-8"), f"byte count mismatch: sent {len(payload):,} B, got {len(actual):,} B"
     text = actual.decode("utf-8")
     assert "\ufffd" not in text, "UTF-8 boundary broken — replacement char present"
 

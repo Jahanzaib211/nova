@@ -17,7 +17,6 @@
 import type { VoicePhase } from "@/core/voice/state";
 import { cn } from "@/lib/utils";
 
-
 export const VOICE_KEYFRAMES = `
 @keyframes nova-voice-ripple {
   0%   { transform: scale(0.85); opacity: 0.55; }
@@ -62,18 +61,20 @@ export function VoiceOrb({
   const thinking = phase === "thinking";
   const live = listening || speaking || thinking || phase === "idle";
 
-  const tint =
-    listening
-      ? "from-rose-400/90 to-red-500/90"
-      : speaking
-        ? "from-emerald-300/90 to-teal-500/90"
-        : thinking
-          ? "from-amber-300/90 to-orange-500/90"
-          : "from-sky-300/80 to-indigo-500/80";
+  const tint = listening
+    ? "from-rose-400/90 to-red-500/90"
+    : speaking
+      ? "from-emerald-300/90 to-teal-500/90"
+      : thinking
+        ? "from-amber-300/90 to-orange-500/90"
+        : "from-sky-300/80 to-indigo-500/80";
 
   return (
     <span
-      className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
+      className={cn(
+        "relative inline-flex shrink-0 items-center justify-center",
+        className,
+      )}
       style={{ width: size, height: size }}
       aria-hidden
     >
@@ -108,11 +109,17 @@ export function VoiceOrb({
         style={{
           width: size * 0.72,
           height: size * 0.72,
-          animation: live && !speaking ? "nova-voice-breathe 2.6s ease-in-out infinite" : undefined,
+          animation:
+            live && !speaking
+              ? "nova-voice-breathe 2.6s ease-in-out infinite"
+              : undefined,
         }}
       >
         {speaking ? (
-          <span className="flex items-end gap-[2px]" style={{ height: size * 0.36 }}>
+          <span
+            className="flex items-end gap-[2px]"
+            style={{ height: size * 0.36 }}
+          >
             {BARS.map((scale, i) => (
               <span
                 key={i}

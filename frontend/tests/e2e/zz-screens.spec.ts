@@ -35,7 +35,9 @@ async function setup(page: Page, voice = true) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        voice ? { enabled: true, ready: true, sample_rate: 16000 } : { enabled: false },
+        voice
+          ? { enabled: true, ready: true, sample_rate: 16000 }
+          : { enabled: false },
       ),
     }),
   );
@@ -43,7 +45,10 @@ async function setup(page: Page, voice = true) {
 
 // Opt-in: this writes PNGs and is for eyeballing the UI, not for gating.
 //   CAPTURE_SCREENS=1 E2E_PORT=3111 CI=1 pnpm exec playwright test tests/e2e/zz-screens.spec.ts
-test.skip(!process.env.CAPTURE_SCREENS, "set CAPTURE_SCREENS=1 to capture UI screenshots");
+test.skip(
+  !process.env.CAPTURE_SCREENS,
+  "set CAPTURE_SCREENS=1 to capture UI screenshots",
+);
 
 test.use({
   viewport: { width: 1440, height: 900 },
@@ -110,7 +115,8 @@ test("capture the live voice panel in each phase", async ({ page }) => {
     w.__voice = { sent: 0, opened: false };
     class StubSocket extends EventTarget {
       static readonly OPEN = 1;
-      readyState = 1; binaryType = "arraybuffer";
+      readyState = 1;
+      binaryType = "arraybuffer";
       onopen: (() => void) | null = null;
       onmessage: ((e: { data: string }) => void) | null = null;
       onerror: (() => void) | null = null;
@@ -118,11 +124,17 @@ test("capture the live voice panel in each phase", async ({ page }) => {
       constructor(_u: string) {
         super();
         w.__voice.opened = true;
-        w.__voice.emit = (m: unknown) => this.onmessage?.({ data: JSON.stringify(m) });
+        w.__voice.emit = (m: unknown) =>
+          this.onmessage?.({ data: JSON.stringify(m) });
         setTimeout(() => this.onopen?.(), 0);
       }
-      send(d: unknown) { if (d instanceof ArrayBuffer) w.__voice.sent += 1; }
-      close() { this.readyState = 3; this.onclose?.(); }
+      send(d: unknown) {
+        if (d instanceof ArrayBuffer) w.__voice.sent += 1;
+      }
+      close() {
+        this.readyState = 3;
+        this.onclose?.();
+      }
     }
     w.WebSocket = StubSocket;
   });
@@ -132,14 +144,18 @@ test("capture the live voice panel in each phase", async ({ page }) => {
   await mic.waitFor({ state: "visible", timeout: 20_000 });
   await mic.click();
   await page.waitForFunction(
-    () => (window as never as { __voice?: { opened: boolean } }).__voice?.opened === true,
+    () =>
+      (window as never as { __voice?: { opened: boolean } }).__voice?.opened ===
+      true,
     { timeout: 15_000 },
   );
 
   const emit = (m: unknown) =>
     page.evaluate(
       (x) =>
-        (window as never as { __voice: { emit: (y: unknown) => void } }).__voice.emit(x),
+        (
+          window as never as { __voice: { emit: (y: unknown) => void } }
+        ).__voice.emit(x),
       m,
     );
   const shot = async (name: string) => {
@@ -152,21 +168,30 @@ test("capture the live voice panel in each phase", async ({ page }) => {
   await shot("10-voice-idle.png");
 
   await emit({ type: "listening" });
-  await emit({ type: "transcript", text: "what's the status of the deploy", final: true });
+  await emit({
+    type: "transcript",
+    text: "what's the status of the deploy",
+    final: true,
+  });
   await shot("11-voice-listening.png");
 
   await emit({ type: "thinking" });
   await shot("12-voice-thinking.png");
 
   await emit({ type: "speaking", sample_rate: 24000 });
-  await emit({ type: "assistant", text: "The deploy is live on both origins and all tests are green." });
+  await emit({
+    type: "assistant",
+    text: "The deploy is live on both origins and all tests are green.",
+  });
   await shot("13-voice-speaking.png");
 
   await page.screenshot({ path: "screens/14-voice-composer-full.png" });
 });
 
 // The pill still renders when voice is off — it just offers the setup hint.
-test("capture the voice pill in its not-yet-enabled state", async ({ page }) => {
+test("capture the voice pill in its not-yet-enabled state", async ({
+  page,
+}) => {
   await setup(page, false);
   await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
   await page.waitForTimeout(3000);

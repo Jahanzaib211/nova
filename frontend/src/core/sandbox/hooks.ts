@@ -506,48 +506,46 @@ export function useSandboxFile(
     content: string;
     exists: boolean;
     size: number;
-  }>(
-    {
-      queryKey: ["sandbox", "file", threadId, path],
-      queryFn: async () => {
-        if (!threadId || !path) return { content: "", exists: false, size: 0 };
-        const res = await fetch(
-          `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
-          { method: "GET", headers: { "Content-Type": "application/json" } },
-        );
-        if (!res.ok) {
-          // Surface transport failures as "missing" instead of letting
-          // res.json() throw and leave the query stuck on stale data.
-          const warnKey = `${threadId}:${path}:${res.status}`;
-          if (!warnedFilePaths.has(warnKey)) {
-            warnedFilePaths.add(warnKey);
-            console.warn(
-              `[nova] sandbox file read failed (${res.status}) for ${path}`,
-            );
-          }
-          return { content: "", exists: false, size: 0 };
+  }>({
+    queryKey: ["sandbox", "file", threadId, path],
+    queryFn: async () => {
+      if (!threadId || !path) return { content: "", exists: false, size: 0 };
+      const res = await fetch(
+        `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
+        { method: "GET", headers: { "Content-Type": "application/json" } },
+      );
+      if (!res.ok) {
+        // Surface transport failures as "missing" instead of letting
+        // res.json() throw and leave the query stuck on stale data.
+        const warnKey = `${threadId}:${path}:${res.status}`;
+        if (!warnedFilePaths.has(warnKey)) {
+          warnedFilePaths.add(warnKey);
+          console.warn(
+            `[nova] sandbox file read failed (${res.status}) for ${path}`,
+          );
         }
-        return res.json() as Promise<{
-          content: string;
-          exists: boolean;
-          size: number;
-        }>;
-      },
-      // `enabled` lets callers stop the 2s poll when the result is not being
-      // shown. `refetchIntervalInBackground: false` only covers a backgrounded
-      // *window* — it does nothing for a tab that is merely `hidden` via CSS
-      // while staying mounted, which is how the Agent's Computer works. Without
-      // this the panel re-downloaded the whole deliverable 30x/minute forever,
-      // including while the live dev-server preview made the result unused.
-      enabled: Boolean(threadId) && Boolean(path) && enabled,
-      refetchInterval: 2000,
-      refetchIntervalInBackground: false,
-      // Keep the previous file's data while a new path loads. Changing `path`
-      // changes the query key, so without this `data` is briefly undefined and
-      // the UI flashed "file is missing" for one round-trip on every click.
-      placeholderData: (prev) => prev,
+        return { content: "", exists: false, size: 0 };
+      }
+      return res.json() as Promise<{
+        content: string;
+        exists: boolean;
+        size: number;
+      }>;
     },
-  );
+    // `enabled` lets callers stop the 2s poll when the result is not being
+    // shown. `refetchIntervalInBackground: false` only covers a backgrounded
+    // *window* — it does nothing for a tab that is merely `hidden` via CSS
+    // while staying mounted, which is how the Agent's Computer works. Without
+    // this the panel re-downloaded the whole deliverable 30x/minute forever,
+    // including while the live dev-server preview made the result unused.
+    enabled: Boolean(threadId) && Boolean(path) && enabled,
+    refetchInterval: 2000,
+    refetchIntervalInBackground: false,
+    // Keep the previous file's data while a new path loads. Changing `path`
+    // changes the query key, so without this `data` is briefly undefined and
+    // the UI flashed "file is missing" for one round-trip on every click.
+    placeholderData: (prev) => prev,
+  });
 
   return {
     ...(data ?? { content: "", exists: false, size: 0 }),

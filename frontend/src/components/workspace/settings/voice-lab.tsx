@@ -15,24 +15,49 @@
  * about, and mixing them made the page hard to follow.
  */
 
-import { GaugeIcon, Loader2Icon, MicIcon, PlayIcon, SquareIcon } from "lucide-react";
+import {
+  GaugeIcon,
+  Loader2Icon,
+  MicIcon,
+  PlayIcon,
+  SquareIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { stopSpeaking, testMicrophone, testSpeaker, type MicTest, type SpeakerTest } from "@/core/voice/config";
+import {
+  stopSpeaking,
+  testMicrophone,
+  testSpeaker,
+  type MicTest,
+  type SpeakerTest,
+} from "@/core/voice/config";
 import { cn } from "@/lib/utils";
 
 /** Long enough to be a fair timing sample, short enough not to be a wait. */
-const DEFAULT_TEXT = "Nova is online. All systems are green, and the deploy finished successfully.";
+const DEFAULT_TEXT =
+  "Nova is online. All systems are green, and the deploy finished successfully.";
 
 type VoiceSample = { voice: string; result: SpeakerTest };
 
-function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function Metric({
+  label,
+  value,
+  warn,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+}) {
   return (
     <div className="min-w-0">
-      <div className="text-muted-foreground text-[10px] tracking-wide uppercase">{label}</div>
-      <div className={cn("font-mono text-sm", warn && "text-amber-500")}>{value}</div>
+      <div className="text-muted-foreground text-[10px] tracking-wide uppercase">
+        {label}
+      </div>
+      <div className={cn("font-mono text-sm", warn && "text-amber-500")}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -70,17 +95,22 @@ export function VoiceLab({
 
   // Leaving the panel (or the dialog closing) must not leave a voice talking
   // to an empty room.
-  useEffect(() => () => {
-    abort.current?.abort();
-    stopSpeaking();
-  }, []);
+  useEffect(
+    () => () => {
+      abort.current?.abort();
+      stopSpeaking();
+    },
+    [],
+  );
 
   const speak = useCallback(async () => {
     if (!text.trim()) return;
     setSpeaking(true);
     setLast(null);
     abort.current = new AbortController();
-    setLast(await testSpeaker(text, abort.current.signal, { awaitPlayback: true }));
+    setLast(
+      await testSpeaker(text, abort.current.signal, { awaitPlayback: true }),
+    );
     setSpeaking(false);
   }, [text]);
 
@@ -101,7 +131,11 @@ export function VoiceLab({
       // awaitPlayback is what makes this an audition rather than a pile-up:
       // play() resolves when audio *starts*, so without it all eight voices
       // speak at once.
-      const result = await testSpeaker(`This is ${voice.replace(/^[abm]{1,2}_/, "")}. ${text}`, signal, { awaitPlayback: true });
+      const result = await testSpeaker(
+        `This is ${voice.replace(/^[abm]{1,2}_/, "")}. ${text}`,
+        signal,
+        { awaitPlayback: true },
+      );
       setSamples((prev) => [...prev, { voice, result }]);
     }
     setBenching(false);
@@ -124,7 +158,8 @@ export function VoiceLab({
         <h3 className="text-sm font-semibold">Voice lab</h3>
       </div>
       <p className="text-muted-foreground mb-3 text-xs">
-        Drive the real engines and see what they actually do. Numbers are measured end to end, including the network hop.
+        Drive the real engines and see what they actually do. Numbers are
+        measured end to end, including the network hop.
       </p>
 
       <Textarea
@@ -137,16 +172,42 @@ export function VoiceLab({
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={speak} disabled={!enabled || busy || !text.trim()}>
-          {speaking ? <Loader2Icon className="size-3.5 animate-spin" /> : <PlayIcon className="size-3.5" />}
+        <Button
+          size="sm"
+          onClick={speak}
+          disabled={!enabled || busy || !text.trim()}
+        >
+          {speaking ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <PlayIcon className="size-3.5" />
+          )}
           Speak it
         </Button>
-        <Button size="sm" variant="outline" onClick={auditionAll} disabled={!enabled || busy || voices.length === 0}>
-          {benching ? <Loader2Icon className="size-3.5 animate-spin" /> : <GaugeIcon className="size-3.5" />}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={auditionAll}
+          disabled={!enabled || busy || voices.length === 0}
+        >
+          {benching ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <GaugeIcon className="size-3.5" />
+          )}
           Audition every voice
         </Button>
-        <Button size="sm" variant="outline" onClick={listen} disabled={!enabled || busy}>
-          {recording ? <Loader2Icon className="size-3.5 animate-spin" /> : <MicIcon className="size-3.5" />}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={listen}
+          disabled={!enabled || busy}
+        >
+          {recording ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <MicIcon className="size-3.5" />
+          )}
           Speak to Nova
         </Button>
         {busy && (
@@ -161,8 +222,15 @@ export function VoiceLab({
         <div className="bg-muted/30 mb-3 rounded-md px-3 py-2">
           {last.ok ? (
             <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <Metric label="first audio" value={`${Math.round(last.latencyMs)} ms`} warn={last.latencyMs > 1000} />
-              <Metric label="audio length" value={last.durationS ? `${last.durationS.toFixed(2)} s` : "—"} />
+              <Metric
+                label="first audio"
+                value={`${Math.round(last.latencyMs)} ms`}
+                warn={last.latencyMs > 1000}
+              />
+              <Metric
+                label="audio length"
+                value={last.durationS ? `${last.durationS.toFixed(2)} s` : "—"}
+              />
               {/* RTF above 1 means synthesis is slower than playback — it
                   stutters rather than failing, so naming it matters. */}
               <Metric
@@ -172,15 +240,23 @@ export function VoiceLab({
               />
               {last.blocked && (
                 <div className="flex w-full items-center gap-2 text-xs text-amber-500">
-                  <span>Your browser blocked autoplay — the audio arrived fine.</span>
-                  <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => void last.play?.()}>
+                  <span>
+                    Your browser blocked autoplay — the audio arrived fine.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs"
+                    onClick={() => void last.play?.()}
+                  >
                     Play it
                   </Button>
                 </div>
               )}
               {(last.rtf ?? 0) > 1 && (
                 <p className="text-xs text-amber-500">
-                  Slower than real time — audio cannot keep up with playback. Check the device setting above.
+                  Slower than real time — audio cannot keep up with playback.
+                  Check the device setting above.
                 </p>
               )}
             </div>
@@ -199,7 +275,10 @@ export function VoiceLab({
                 <span className="font-medium">“{heard.heard}”</span>
               </>
             ) : (
-              <span className="text-amber-500">Recorded {heard.durationS ?? 0}s but recognised no words — check the input device or speak louder.</span>
+              <span className="text-amber-500">
+                Recorded {heard.durationS ?? 0}s but recognised no words — check
+                the input device or speak louder.
+              </span>
             )
           ) : (
             <span className="text-destructive">{heard.error}</span>
@@ -219,12 +298,16 @@ export function VoiceLab({
               onClick={() => onPickVoice(voice)}
               className={cn(
                 "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-                voice === activeVoice ? "bg-sky-500/10 text-sky-300" : "hover:bg-muted/50",
+                voice === activeVoice
+                  ? "bg-sky-500/10 text-sky-300"
+                  : "hover:bg-muted/50",
               )}
             >
               <span className="font-mono">{voice}</span>
               <span className="text-muted-foreground">
-                {result.ok ? `${Math.round(result.latencyMs)} ms · ${result.rtf?.toFixed(2) ?? "—"}×` : "failed"}
+                {result.ok
+                  ? `${Math.round(result.latencyMs)} ms · ${result.rtf?.toFixed(2) ?? "—"}×`
+                  : "failed"}
               </span>
             </button>
           ))}

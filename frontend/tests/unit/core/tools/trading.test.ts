@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isTradingTool,
-  summarizeTradingResult,
-} from "@/core/tools/trading";
+import { isTradingTool, summarizeTradingResult } from "@/core/tools/trading";
 
 function labels(summary: ReturnType<typeof summarizeTradingResult>) {
   return summary?.stats.map((s) => s.label) ?? [];
@@ -132,9 +129,9 @@ describe("summarizeTradingResult — compute_indicators", () => {
   });
 
   it("shows the last close first", () => {
-    expect(labels(summarizeTradingResult("compute_indicators", payload))[0]).toBe(
-      "close",
-    );
+    expect(
+      labels(summarizeTradingResult("compute_indicators", payload))[0],
+    ).toBe("close");
   });
 
   it("takes the latest value of each series, not the first", () => {
@@ -144,7 +141,9 @@ describe("summarizeTradingResult — compute_indicators", () => {
   });
 
   it("orders indicators deterministically so the row does not reshuffle", () => {
-    const forward = labels(summarizeTradingResult("compute_indicators", payload));
+    const forward = labels(
+      summarizeTradingResult("compute_indicators", payload),
+    );
     const reordered = JSON.stringify({
       ...JSON.parse(payload),
       studies: {
@@ -249,9 +248,9 @@ describe("summarizeTradingResult — backtest_signals", () => {
   });
 
   it("shows open trades only when there are any", () => {
-    expect(labels(summarizeTradingResult("backtest_signals", winning))).not.toContain(
-      "open",
-    );
+    expect(
+      labels(summarizeTradingResult("backtest_signals", winning)),
+    ).not.toContain("open");
     const withOpen = JSON.stringify({
       symbol: "X",
       signals_evaluated: 3,

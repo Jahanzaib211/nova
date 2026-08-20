@@ -1,6 +1,12 @@
 "use client";
 
-import { HistoryIcon, Loader2Icon, SaveIcon, Trash2Icon, Undo2Icon } from "lucide-react";
+import {
+  HistoryIcon,
+  Loader2Icon,
+  SaveIcon,
+  Trash2Icon,
+  Undo2Icon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -124,20 +130,25 @@ export function SkillEditorDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? undefined : onOpenChange(false))}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => (next ? undefined : onOpenChange(false))}
+    >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{t.settings.skills.editTitle}: {skillName}</DialogTitle>
+          <DialogTitle>
+            {t.settings.skills.editTitle}: {skillName}
+          </DialogTitle>
           <DialogDescription>{t.settings.skills.editorHint}</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <div className="text-muted-foreground flex items-center justify-center gap-2 py-8 text-sm">
             <Loader2Icon className="size-4 animate-spin" />
             {t.common.loading}
           </div>
         ) : error ? (
-          <div className="py-4 text-sm text-destructive">
+          <div className="text-destructive py-4 text-sm">
             {extractMessage(error, t.settings.skills.loadError)}
           </div>
         ) : (
@@ -151,17 +162,23 @@ export function SkillEditorDialog({
               rows={16}
               className="font-mono text-xs leading-relaxed"
               spellCheck={false}
-              placeholder={"---\nname: my-skill\ndescription: ...\nenabled: true\n---\n\n## Instructions\n"}
+              placeholder={
+                "---\nname: my-skill\ndescription: ...\nenabled: true\n---\n\n## Instructions\n"
+              }
             />
 
             <div>
               <div className="mb-2 flex items-center gap-2 text-sm font-medium">
                 <HistoryIcon className="size-4" />
                 {t.settings.skills.historyTitle}
-                <span className="text-xs font-normal text-muted-foreground">({history.length})</span>
+                <span className="text-muted-foreground text-xs font-normal">
+                  ({history.length})
+                </span>
               </div>
               {history.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t.settings.skills.historyEmpty}</p>
+                <p className="text-muted-foreground text-xs">
+                  {t.settings.skills.historyEmpty}
+                </p>
               ) : (
                 <ScrollArea className="max-h-56">
                   <ul className="space-y-1.5 pr-2">
@@ -180,12 +197,15 @@ export function SkillEditorDialog({
                           <div className="min-w-0">
                             <span className="font-medium">{action}</span>
                             {ts && (
-                              <span className="ml-2 text-muted-foreground" title={ts}>
+                              <span
+                                className="text-muted-foreground ml-2"
+                                title={ts}
+                              >
                                 {formatTimeAgo(ts)}
                               </span>
                             )}
                             {reason && (
-                              <span className="block truncate text-[11px] text-muted-foreground">
+                              <span className="text-muted-foreground block truncate text-[11px]">
                                 {reason}
                               </span>
                             )}
@@ -214,13 +234,18 @@ export function SkillEditorDialog({
               >
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>{t.settings.skills.historyRollbackTitle}</DialogTitle>
+                    <DialogTitle>
+                      {t.settings.skills.historyRollbackTitle}
+                    </DialogTitle>
                     <DialogDescription>
                       {t.settings.skills.historyRollbackDescription}
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setRollbackIndex(null)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setRollbackIndex(null)}
+                    >
                       {t.common.cancel}
                     </Button>
                     <Button
@@ -237,7 +262,10 @@ export function SkillEditorDialog({
             )}
 
             {confirmDelete && (
-              <Dialog open onOpenChange={(next) => !next && setConfirmDelete(false)}>
+              <Dialog
+                open
+                onOpenChange={(next) => !next && setConfirmDelete(false)}
+              >
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>{t.settings.skills.deleteTitle}</DialogTitle>

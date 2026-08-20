@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { CAPTURE_RATE, FRAME_SAMPLES, WORKLET_SOURCE, pcm16ToWav } from "@/core/voice/capture";
+import {
+  CAPTURE_RATE,
+  FRAME_SAMPLES,
+  WORKLET_SOURCE,
+  pcm16ToWav,
+} from "@/core/voice/capture";
 
 /** Read a WAV header field without assuming the helper is correct. */
 async function header(blob: Blob) {
   const view = new DataView(await blob.arrayBuffer());
   const ascii = (off: number, len: number) =>
-    String.fromCharCode(...Array.from({ length: len }, (_, i) => view.getUint8(off + i)));
+    String.fromCharCode(
+      ...Array.from({ length: len }, (_, i) => view.getUint8(off + i)),
+    );
   return {
     riff: ascii(0, 4),
     riffSize: view.getUint32(4, true),

@@ -71,7 +71,11 @@ function installFakes() {
 
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => wav })),
+    vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => wav,
+    })),
   );
 }
 
@@ -114,7 +118,9 @@ describe("test playback has a single owner", () => {
 describe("awaitPlayback", () => {
   it("resolves only after the clip ends", async () => {
     let settled = false;
-    const pending = testSpeaker("a sentence", undefined, { awaitPlayback: true }).then((r) => {
+    const pending = testSpeaker("a sentence", undefined, {
+      awaitPlayback: true,
+    }).then((r) => {
       settled = true;
       return r;
     });
@@ -137,7 +143,9 @@ describe("awaitPlayback", () => {
   });
 
   it("measures latency to first audio, not to the end of playback", async () => {
-    const result = await testSpeaker("a sentence", undefined, { awaitPlayback: false });
+    const result = await testSpeaker("a sentence", undefined, {
+      awaitPlayback: false,
+    });
     // 1.0s of audio; a latency anywhere near that would mean we timed playback.
     expect(result.durationS).toBeCloseTo(1.0, 1);
     expect(result.latencyMs).toBeLessThan(500);
@@ -166,7 +174,9 @@ describe("autoplay refusal", () => {
       } as unknown as typeof globalThis.Audio,
     );
 
-    const result = await testSpeaker("hello", undefined, { awaitPlayback: true });
+    const result = await testSpeaker("hello", undefined, {
+      awaitPlayback: true,
+    });
 
     expect(result.ok).toBe(true); // the audio arrived — that part worked
     expect(result.blocked).toBe(true);

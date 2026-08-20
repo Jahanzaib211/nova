@@ -46,13 +46,14 @@ test.describe("Model selector", () => {
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole("button", { name: /MiniMax M3/i }).first().click();
+    await page
+      .getByRole("button", { name: /MiniMax M3/i })
+      .first()
+      .click();
 
     await expect(
       page.getByRole("option", { name: "MiniMax M3" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("option", { name: /Fireworks/i }),
-    ).toBeHidden();
+    await expect(page.getByRole("option", { name: /Fireworks/i })).toBeHidden();
   });
 });
