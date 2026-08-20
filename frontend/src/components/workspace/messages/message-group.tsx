@@ -448,6 +448,49 @@ function ToolCall({
       fallback
     );
 
+  // Auto-open the artifact panel for a streaming write_file/str_replace.
+  //
+  // This hook MUST stay at the top level of ToolCall. It used to live inside
+  // the `else if (name === "write_file" || name === "str_replace")` branch,
+  // which made it a conditional hook: `name` arrives incrementally while a
+  // tool call streams, so the same component instance would render once
+  // without this hook and then again with it, and React would throw
+  // "Rendered more hooks than during the previous render" mid-stream.
+  // The branch condition now guards the effect body instead of its call site.
+  const isWriteTool = name === "write_file" || name === "str_replace";
+  const writePath: string | undefined = isWriteTool
+    ? (args as { path?: string })?.path
+    : undefined;
+  useEffect(() => {
+    if (!isWriteTool) return;
+    if (isLoading && isLast && autoOpen && autoSelect && writePath && !result) {
+      const url = new URL(
+        `write-file:${writePath}?message_id=${messageId}&tool_call_id=${id}`,
+      ).toString();
+      if (selectedArtifact === url) {
+        return;
+      }
+      const timer = setTimeout(() => {
+        select(url, true);
+        setOpen(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    isWriteTool,
+    isLoading,
+    isLast,
+    autoOpen,
+    autoSelect,
+    writePath,
+    result,
+    selectedArtifact,
+    id,
+    messageId,
+    select,
+    setOpen,
+  ]);
+
   if (name === "web_search") {
     let label: React.ReactNode = t.toolCalls.searchForRelatedInfo;
     if (typeof args.query === "string") {
@@ -596,21 +639,6 @@ function ToolCall({
       description = t.toolCalls.writeFile;
     }
     const path: string | undefined = (args as { path: string })?.path;
-    useEffect(() => {
-      if (isLoading && isLast && autoOpen && autoSelect && path && !result) {
-        const url = new URL(
-          `write-file:${path}?message_id=${messageId}&tool_call_id=${id}`,
-        ).toString();
-        if (selectedArtifact === url) {
-          return;
-        }
-        const timer = setTimeout(() => {
-          select(url, true);
-          setOpen(true);
-        }, 100);
-        return () => clearTimeout(timer);
-      }
-    }, [isLoading, isLast, autoOpen, autoSelect, path, result, selectedArtifact, id, messageId, select, setOpen]);
 
     return (
       <ChainOfThoughtStep

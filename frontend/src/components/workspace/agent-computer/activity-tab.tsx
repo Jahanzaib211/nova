@@ -363,7 +363,12 @@ export function TaskChecklist({
           const isInProgress = todo.status === "in_progress";
           return (
             <div
-              key={todo.content || i}
+              // Index-prefixed so the key is unique even when two todos share
+              // the same text, or when content is absent entirely (it is
+              // `content?: string`, so both undefined and "" are possible).
+              // A bare `todo.content` collided on duplicates; a bare `??`
+              // would make every empty-content todo share the key "".
+              key={`${i}:${todo.content ?? ""}`}
               className={cn(
                 "flex items-start gap-1.5 rounded px-1 py-0.5 text-xs",
                 isInProgress && "bg-muted/40",
