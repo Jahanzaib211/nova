@@ -32,6 +32,15 @@ services:
       # `environment:` wins over `env_file:` in compose. Without the override
       # the container would inherit paths like /home/<user>/.cache/... which do
       # not exist inside it, and the status probe would report voice unavailable.
+      # WARNING: this OVERRIDES UV_EXTRAS from ../.env, because compose's
+      # `environment:` always beats `env_file:`. Adding an extra to .env has no
+      # effect while this overlay is applied — it is silently discarded, and the
+      # only symptom is an ImportError at gateway startup for the missing
+      # package. Cost a confused debugging cycle when `postgres` was added to
+      # .env on 2026-08-21 and never reached the container.
+      #
+      # Set DEERFLOW_VOICE_UV_EXTRAS in .env to change the set; it must repeat
+      # every extra you want, not just the new one.
       - UV_EXTRAS=${DEERFLOW_VOICE_UV_EXTRAS:-trading,voice}
       - DEERFLOW_VOICE_MODEL_DIR=/app/voice-models
       - DEERFLOW_TTS_MODEL_PATH=/app/voice-models/${DEERFLOW_TTS_MODEL_FILE:-kokoro-v1.0.onnx}

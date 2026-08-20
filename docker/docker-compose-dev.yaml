@@ -208,6 +208,14 @@ services:
     networks:
       deer-flow-dev:
         ipv4_address: 192.168.200.3
+    depends_on:
+      postgres:
+        # `service_healthy`, not the default `service_started`. The gateway
+        # opens the database during create_app(); a Postgres that is up but
+        # still running initdb refuses the connection, and the resulting
+        # FileNotFoundError-shaped crash at import is exactly the crash-loop
+        # shape that made the 2026-08-17 outage hard to read.
+        condition: service_healthy
     # Startup logic lives in docker/dev-entrypoint.sh — UV_EXTRAS validation,
     # `uv sync --all-packages`, .venv self-heal, and uvicorn handoff. Keeps
     # this file readable and lets the script be linted (shellcheck-clean).
@@ -302,6 +310,12 @@ services:
       # /app/..., not /app/backend/... like prod.
       - DEER_FLOW_CONFIG_PATH=/app/config.yaml
       - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      # Database URL, built here rather than taken from ../.env so the host and
+      # container forms cannot diverge: from inside the network the host is the
+      # `postgres` service, from the host it is 127.0.0.1 on a different port.
+      # config.yaml references this as $DATABASE_URL (see database_config.py's
+      # $VAR convention). Pinned for the same reason as the config paths above.
+      - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
       - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}
       - DEER_FLOW_CHANNELS_GATEWAY_URL=${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}
       - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}
@@ -343,6 +357,58 @@ services:
   # directly; only the gateway container (on the same docker network) can
   # reach it via the service name. Operators on the host use SSH tunnel
   # (`ssh -L 8088:localhost:8088 host`) if they need direct access.
+  # ── Postgres ────────────────────────────────────────────────────────────
+  #
+  # Nova's own database. NOT shared with the other Postgres instances on this
+  # host (chatwoot, hyperswitch, twenty): a shared instance means one project's
+  # migration, restore or `DROP DATABASE` is every project's outage, and the
+  # credentials would have to be handed around.
+  #
+  # pgvector rather than plain postgres:16 so the relational store and any
+  # future embedding/semantic work live in one engine — one thing to run, back
+  # up and keep upgraded, instead of a second service the day vectors are
+  # wanted.
+  #
+  # This replaces SQLite, which reached 59.4 GB of unbounded LangGraph
+  # checkpoints and held the write lock long enough that concurrent writers
+  # timed out (`database is locked`, HTTP 500 on POST /api/threads). Postgres
+  # removes that failure class outright; the retention job stays because
+  # unbounded growth is still unbounded growth.
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: deer-flow-postgres
+    environment:
+      - POSTGRES_DB=${NOVA_PG_DB:-nova}
+      - POSTGRES_USER=${NOVA_PG_USER:-nova}
+      - POSTGRES_PASSWORD=${NOVA_PG_PASSWORD:?Set NOVA_PG_PASSWORD in .env}
+      # Nova stores UTF-8 conversation text; the image default is fine but
+      # pinning it stops a host-locale surprise on a rebuild.
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    ports:
+      # Loopback only. Nothing outside this machine has any business reaching
+      # it, and the gateway talks to it over the compose network.
+      - "127.0.0.1:${NOVA_PG_PORT:-5433}:5432"
+    volumes:
+      - nova-postgres-data:/var/lib/postgresql/data
+    networks:
+      deer-flow-dev:
+        # Pinned like the gateway (.3) and frontend (.4): Docker's embedded DNS
+        # has SERVFAILed on service names after a container recreation on this
+        # host (see the frontend's note), and a database the gateway cannot
+        # resolve is indistinguishable from a database that is down.
+        ipv4_address: 192.168.200.5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOVA_PG_USER:-nova} -d ${NOVA_PG_DB:-nova}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 2g
+    mem_reservation: 512m
+    security_opt:
+      - no-new-privileges:true
+
   searxng:
     image: searxng/searxng:latest
     container_name: deer-flow-searxng
@@ -395,6 +461,9 @@ volumes:
   # image build are not shadowed by the host backend/ directory mount.
   gateway-venv:
   gateway-uv-cache:
+  # Nova's database. A named volume, not a bind mount: the SQLite file lived
+  # under backend/.deer-flow and was one careless `git clean` from deletion.
+  nova-postgres-data:
 
 networks:
   deer-flow-dev:

@@ -160,6 +160,69 @@ def check_io_pressure() -> dict:
     return check("io_pressure", GREEN, "unavailable (no PSI)")
 
 
+def _active_backend() -> tuple[str, str | None]:
+    """Which engine holds the live data, per config.yaml.
+
+    After the 2026-08-21 Postgres migration the SQLite file is a stale rollback
+    copy. A size gate still pointed at it would sit green forever while the real
+    database grew — the same silent-decay failure this gate exists to catch,
+    reintroduced by the migration itself.
+    """
+    config = REPO_ROOT / "config.yaml"
+    backend, url = "sqlite", None
+    try:
+        text = config.read_text()
+    except OSError:
+        return backend, None
+    in_db = False
+    for line in text.splitlines():
+        if line.startswith("database:"):
+            in_db = True
+            continue
+        if in_db:
+            if line and not line[0].isspace():
+                break
+            stripped = line.strip()
+            if stripped.startswith("backend:"):
+                backend = stripped.split(":", 1)[1].strip()
+            elif stripped.startswith("postgres_url:"):
+                url = stripped.split(":", 1)[1].strip()
+    if url and url.startswith("$"):
+        url = os.environ.get(url[1:], "")
+    return backend, (url or os.environ.get("DATABASE_URL") or None)
+
+
+def _psql(query: str, timeout_s: float = 30) -> str | None:
+    """Run one query via the postgres container.
+
+    Uses `docker exec psql` rather than a Python driver on purpose: this gate
+    runs under the system interpreter from the gates daemon, where psycopg is
+    not importable. Shelling into the container keeps the gate dependency-free.
+    """
+    try:
+        out = subprocess.run(
+            [
+                "docker",
+                "exec",
+                os.environ.get("NOVA_PG_CONTAINER", "deer-flow-postgres"),
+                "psql",
+                "-U",
+                os.environ.get("NOVA_PG_USER", "nova"),
+                "-d",
+                os.environ.get("NOVA_PG_DB", "nova"),
+                "-tAc",
+                query,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            close_fds=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
 def check_database() -> dict:
     """The check that would have caught the incident.
 
@@ -168,6 +231,25 @@ def check_database() -> dict:
     timed out, surfacing as `database is locked` and HTTP 500s on thread
     creation. Bounding the file size turns that silent decay into a gate.
     """
+    backend, _ = _active_backend()
+    if backend == "postgres":
+        raw = _psql("SELECT pg_database_size(current_database())")
+        if raw is None or not raw.isdigit():
+            return check(
+                "database_size",
+                YELLOW,
+                "postgres backend, but the database is not reachable",
+            )
+        size = int(raw)
+        gb = size / 1024**3
+        warn = float(os.environ.get("NOVA_DB_WARN_GB", "5"))
+        fail = float(os.environ.get("NOVA_DB_FAIL_GB", "15"))
+        status = RED if gb >= fail else YELLOW if gb >= warn else GREEN
+        detail = f"{gb:.2f} GB (postgres)"
+        if status != GREEN:
+            detail += "  — run scripts/prune-checkpoints.py"
+        return check("database_size", status, detail, bytes=size, backend="postgres")
+
     db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
     if not db.exists():
         return check("database_size", GREEN, "sqlite not in use (postgres backend?)")
@@ -186,6 +268,28 @@ def check_database() -> dict:
 
 def check_checkpoint_count() -> dict:
     """Row count is the leading indicator; file size is the lagging one."""
+    backend, _ = _active_backend()
+    if backend == "postgres":
+        raw = _psql("SELECT COUNT(*), COUNT(DISTINCT thread_id) FROM checkpoints")
+        if not raw or "|" not in raw:
+            return check(
+                "checkpoint_rows",
+                YELLOW,
+                "postgres backend, but the database is not reachable",
+            )
+        rows_s, threads_s = raw.split("|", 1)
+        rows, threads = int(rows_s or 0), int(threads_s or 0)
+        per_thread = rows / threads if threads else 0
+        return check(
+            "checkpoint_rows",
+            _band(per_thread, 50, 200),
+            f"{rows:,} checkpoints across {threads:,} threads "
+            f"({per_thread:.0f}/thread, postgres)",
+            rows=rows,
+            threads=threads,
+            backend="postgres",
+        )
+
     db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
     if not db.exists():
         return check("checkpoint_rows", GREEN, "sqlite not in use")

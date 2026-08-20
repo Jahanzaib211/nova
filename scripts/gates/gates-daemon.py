@@ -131,7 +131,17 @@ class Producer:
         started = time.time()
         script = REPO_ROOT / self.argv[0]
         # Not everything scheduled here is Python — rotate-logs.sh is bash.
-        launcher = [sys.executable] if script.suffix == ".py" else ["bash"]
+        #
+        # Prefer the backend venv's interpreter when it exists. Since the
+        # Postgres migration the pruner needs psycopg, which is installed there
+        # and not in the system interpreter PM2 launches this daemon with —
+        # without this the scheduled prune fails on Postgres and the checkpoint
+        # table silently regrows, which is the whole thing this daemon exists
+        # to prevent. The scripts stay importable under either interpreter, so
+        # falling back is safe.
+        venv_python = REPO_ROOT / "backend" / ".venv" / "bin" / "python"
+        interpreter = str(venv_python) if venv_python.exists() else sys.executable
+        launcher = [interpreter] if script.suffix == ".py" else ["bash"]
         try:
             proc = subprocess.run(
                 [*launcher, str(script), *self.argv[1:]],

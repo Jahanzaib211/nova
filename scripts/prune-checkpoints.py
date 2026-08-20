@@ -56,6 +56,7 @@ import base64
 import datetime as _dt
 import gzip
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -89,6 +90,190 @@ def uuid6_unix_seconds(value: str) -> float | None:
     time_low = (packed >> 64) & 0x0FFF
     ticks = (time_high << 28) | (time_mid << 12) | time_low
     return (ticks - _GREGORIAN_TO_UNIX_TICKS) / 10_000_000
+
+
+# ── Postgres ────────────────────────────────────────────────────────────────
+#
+# After the 2026-08-21 migration the live checkpoints are in Postgres, under
+# LangGraph's own schema (checkpoints / checkpoint_blobs / checkpoint_writes),
+# which is NOT the SQLite saver's shape. A pruner that only speaks SQLite would
+# have kept reporting success against the stale rollback file while the real
+# table grew without bound — the exact failure this script exists to prevent,
+# reintroduced silently by the migration.
+#
+# Postgres needs no rebuild trick: it has no single writer to starve, and a
+# bounded DELETE is cheap. The retention predicate is identical, because
+# checkpoint_id is the same time-ordered UUIDv6 in both engines.
+
+_PG_DELETE = """
+WITH ranked AS (
+    SELECT thread_id, checkpoint_ns, checkpoint_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY thread_id, checkpoint_ns
+               ORDER BY checkpoint_id DESC
+           ) AS recency_rank
+    FROM checkpoints
+),
+doomed AS (
+    SELECT thread_id, checkpoint_ns, checkpoint_id
+    FROM ranked
+    WHERE recency_rank > %(keep)s
+      AND checkpoint_id < %(cutoff_uuid)s
+)
+"""
+
+
+def uuid6_for_epoch(epoch: float) -> str:
+    """Smallest UUIDv6 at a given time, for comparing against checkpoint_id.
+
+    Doing the retention window as a string comparison keeps the whole delete in
+    one SQL statement. UUIDv6 is big-endian time-first, so lexical order is
+    chronological order — the same property this module already relies on when
+    it sorts by checkpoint_id.
+    """
+    ticks = int(epoch * 10_000_000) + _GREGORIAN_TO_UNIX_TICKS
+    time_high = (ticks >> 28) & 0xFFFFFFFF
+    time_mid = (ticks >> 12) & 0xFFFF
+    time_low = ticks & 0x0FFF
+    return f"{time_high:08x}-{time_mid:04x}-6{time_low:03x}-0000-000000000000"
+
+
+def prune_postgres(
+    url: str, keep_per_thread: int, cutoff_epoch: float, dry_run: bool
+) -> dict:
+    try:
+        import psycopg
+    except ImportError:
+        return {
+            "result": "psycopg missing — install the postgres extra "
+            "(cd backend && uv sync --extra postgres)",
+            "ok": False,
+        }
+
+    cutoff_uuid = uuid6_for_epoch(cutoff_epoch)
+    params = {"keep": keep_per_thread, "cutoff_uuid": cutoff_uuid}
+    summary: dict = {
+        "backend": "postgres",
+        "keep_per_thread": keep_per_thread,
+        "cutoff_uuid": cutoff_uuid,
+    }
+
+    with psycopg.connect(url) as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM checkpoints")
+        summary["before_checkpoints"] = cur.fetchone()[0]
+        cur.execute(_PG_DELETE + "SELECT COUNT(*) FROM doomed", params)
+        doomed = cur.fetchone()[0]
+        summary["doomed"] = doomed
+
+        if dry_run or doomed == 0:
+            summary["result"] = "dry-run" if dry_run else "nothing to prune"
+            summary["ok"] = True
+            return summary
+
+        # Children first: checkpoint_writes and checkpoint_blobs reference a
+        # checkpoint, and deleting the parent first would orphan them.
+        for child in ("checkpoint_writes", "checkpoint_blobs"):
+            cur.execute(
+                _PG_DELETE + f"DELETE FROM {child} c USING doomed d "
+                "WHERE c.thread_id = d.thread_id "
+                "AND c.checkpoint_ns = d.checkpoint_ns "
+                "AND c.checkpoint_id = d.checkpoint_id",
+                params,
+            )
+            summary[f"deleted_{child}"] = cur.rowcount
+
+        cur.execute(
+            _PG_DELETE + "DELETE FROM checkpoints c USING doomed d "
+            "WHERE c.thread_id = d.thread_id "
+            "AND c.checkpoint_ns = d.checkpoint_ns "
+            "AND c.checkpoint_id = d.checkpoint_id",
+            params,
+        )
+        summary["deleted_checkpoints"] = cur.rowcount
+        conn.commit()
+
+        cur.execute("SELECT COUNT(*) FROM checkpoints")
+        summary["after_checkpoints"] = cur.fetchone()[0]
+        cur.execute("SELECT pg_database_size(current_database())")
+        summary["db_bytes"] = cur.fetchone()[0]
+
+    summary["result"] = "pruned"
+    summary["ok"] = True
+    return summary
+
+
+def resolve_backend() -> tuple[str, str | None]:
+    """Read database.backend (and its URL) from config.yaml.
+
+    Deliberately a small hand-parse rather than importing the app's config
+    loader: this script must keep working when the backend venv is not on the
+    path, which is how the gates daemon invokes it.
+    """
+    config = Path(__file__).resolve().parent.parent / "config.yaml"
+    backend, url = "sqlite", None
+    try:
+        text = config.read_text()
+    except OSError:
+        return backend, None
+
+    in_database = False
+    for line in text.splitlines():
+        if line.startswith("database:"):
+            in_database = True
+            continue
+        if in_database:
+            if line and not line[0].isspace():
+                break
+            stripped = line.strip()
+            if stripped.startswith("backend:"):
+                backend = stripped.split(":", 1)[1].strip()
+            elif stripped.startswith("postgres_url:"):
+                url = stripped.split(":", 1)[1].strip()
+
+    if url and url.startswith("$"):
+        url = os.environ.get(url[1:]) or _url_from_dotenv(url[1:])
+    return backend, (
+        url or os.environ.get("DATABASE_URL") or _url_from_dotenv() or None
+    )
+
+
+def _url_from_dotenv(var: str = "DATABASE_URL") -> str | None:
+    """Resolve the database URL from the repo .env.
+
+    PM2 does not load .env, so the scheduled prune would otherwise have no way
+    to reach Postgres and would silently do nothing — exactly the regrowth this
+    job exists to prevent, restored by an environment gap rather than a bug.
+
+    Reads .env rather than taking a secret in ecosystem.config.js, which is
+    committed; .env is not.
+    """
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    try:
+        lines = env_file.read_text().splitlines()
+    except OSError:
+        return None
+
+    values: dict[str, str] = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip().strip('"').strip("'")
+
+    if values.get(var):
+        return values[var]
+
+    # Fall back to the component vars the compose file uses, so a deployment
+    # that never spells out DATABASE_URL still works. Host-side, so 127.0.0.1
+    # and the published port rather than the compose service name.
+    password = values.get("NOVA_PG_PASSWORD")
+    if not password:
+        return None
+    user = values.get("NOVA_PG_USER", "nova")
+    db = values.get("NOVA_PG_DB", "nova")
+    port = values.get("NOVA_PG_PORT", "5433")
+    return f"postgresql://{user}:{password}@127.0.0.1:{port}/{db}"
 
 
 def default_db_path() -> Path:
@@ -504,6 +689,27 @@ def main(argv: list[str] | None = None) -> int:
     archive_dir = args.archive_dir or args.db.parent / "checkpoint-archive"
     stamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     cutoff = _dt.datetime.now(_dt.timezone.utc).timestamp() - args.keep_days * 86400
+
+    # Which engine actually holds the live checkpoints? Reading config.yaml
+    # rather than assuming SQLite: after the Postgres migration the .db file is
+    # a stale rollback copy, and pruning it would report success while the real
+    # table grew unbounded.
+    backend, pg_url = resolve_backend()
+    if backend == "postgres":
+        if not pg_url:
+            print(
+                "prune-checkpoints: database.backend is postgres but no "
+                "connection URL resolved (is DATABASE_URL set?)",
+                file=sys.stderr,
+            )
+            return 2
+        summary = prune_postgres(pg_url, args.keep_per_thread, cutoff, args.dry_run)
+        if args.json:
+            print(json.dumps(summary, indent=2))
+        else:
+            for key, value in summary.items():
+                print(f"{key:<24}: {value}")
+        return 0 if summary.get("ok") else 1
 
     conn = sqlite3.connect(args.db)
     conn.row_factory = None
