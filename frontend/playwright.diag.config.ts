@@ -18,7 +18,21 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: {
+        ...devices["Desktop Chrome"],
+        // Playwright publishes no chromium build for Ubuntu 26.04, and the
+        // pinned revision may not match whatever is in ~/.cache/ms-playwright
+        // if another project installed a different Playwright version. Allow an
+        // explicit binary so diagnostics stay runnable on this host:
+        //   PLAYWRIGHT_CHROME_PATH=~/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome
+        ...(process.env.PLAYWRIGHT_CHROME_PATH
+          ? {
+              launchOptions: {
+                executablePath: process.env.PLAYWRIGHT_CHROME_PATH,
+              },
+            }
+          : {}),
+      },
     },
   ],
 });
