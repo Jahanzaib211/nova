@@ -5,7 +5,7 @@ import {
   terminalOutputClass,
 } from "@/components/workspace/agent-computer/terminal-tab";
 
-describe("TERMINAL_TOOLS", () => {
+describe("isTerminalTool", () => {
   test("includes bash, execute_command, search_files, grep_files", () => {
     for (const t of ["bash", "execute_command", "search_files", "grep_files"]) {
       expect(isTerminalTool(t)).toBe(true);

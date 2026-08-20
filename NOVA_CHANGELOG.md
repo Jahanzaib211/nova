@@ -48,6 +48,93 @@
 
 ---
 
+## v9.6 — Agent's Computer: the panel that is Nova's face
+
+**Session pattern:** the agent built a site correctly and the product looked
+broken. The Browser tab rendered it as **unstyled HTML** — default-blue links,
+no layout — while the same site was perfect in an external browser. The
+Terminal tab showed nothing while its backend stream was healthy.
+
+Both were transport/UI faults, not agent faults, which is what makes them
+expensive: the work was right and the surface lied about it.
+
+### Browser tab: two proxies, one rewriter
+
+There are two HTTP paths into a sandbox dev server. `_proxy_dev_server` (the
+`preview`/`lpreview` path) injects `<base href="{prefix}/">` and runs
+`_prefix_html_urls`. `_absproxy_impl` rewrote only the `Location` **header** —
+so the document loaded and every `/_next/static/...` request resolved against
+the app origin instead of the proxy prefix and 404'd.
+
+That path is not exotic. The Browser tab falls back to absproxy whenever the
+canonical preview proxy cannot reach the server, which is the normal case for a
+dev server the agent started with raw `bash` rather than `start_dev_server`. The
+safety net caught the request and then served it unusably.
+
+Verified against the real broken page: 8 root-absolute assets before, **0
+unprefixed after**, `<base>` injected, transformation idempotent.
+
+### Terminal tab: a name list that had rotted twice
+
+Terminal and Activity render a *partition* of one event stream, decided by a
+hand-maintained list of tool names. It was missing the entire `shell_*` family
+— the AIO-SDK wrappers that are the modern execution path — so an agent working
+through `shell_session` put nothing in Terminal and everything in Activity.
+
+The same list had already drifted on 2026-08-14 (`write_file`/`str_replace`/
+`read_file` missing, file-only runs left the tab empty). It rots on every tool
+addition and it rots **silently**: a misclassified event lands in the other tab
+rather than disappearing, so nothing errors.
+
+Now one `isTerminalTool`/`isActivityTool` pair in `core/threads/tool-surface.ts`
+with a `shell_` **prefix** rule, so the next member classifies itself.
+Extracting it made TypeScript surface **two more consumers** of the stale list —
+`files-tab`'s running count and the panel's terminal badge — so the miscount was
+wider than the tab itself.
+
+### The capabilities panel was understating Nova by a third
+
+`/api/runtime/capabilities` iterated `BUILTIN_TOOLS` alone despite documenting
+itself as "builtin + configured". Live it reported **25 tools where the agent
+binds 40**, and the missing half was `bash`, `read_file`, `write_file`, `ls`,
+`glob`, `grep`, the web tools, the trading group, `task` and `view_image` —
+exactly the entries someone checks to answer "can it run a shell? can it read my
+files?". Now built through `get_available_tools()`, the same call the agent uses.
+
+### Two regressions v9.5 introduced, found here
+
+- **The post-migration test suite had never run.** `config.yaml` gained
+  `postgres_url: $DATABASE_URL`; that variable is unset in a plain shell, so
+  `AppConfig` raised during collection — 8 errors, nothing executed — and the
+  pre-migration numbers were reported as if they were post-migration ones. CI
+  missed it because CI tests against `config.example.yaml` (sqlite). Setting the
+  variable would have been worse: every `TestClient` lifespan would have opened
+  the **live production database**. `conftest.py` now hands the suite a
+  sqlite-forced copy of the real config.
+- **`uv sync --all-packages` pruned the CUDA voice wheels.** They are installed
+  by the root Makefile via `uv pip install`, not declared as dependencies, so
+  `test_voice_engines_real.py` started failing with `libcublas.so.12 is not
+  found`. Restored with `make voice-libs`; all 10 pass.
+
+### Also fixed
+
+- Terminal auto-scroll was ungated on `active`. Tabs stay mounted and are only
+  CSS-hidden, so a hidden Terminal dragged a hidden subtree on every event. The
+  ttyd iframe stays deliberately ungated — tearing it down would lose the user's
+  shell — but that reasoning never extended to effects.
+- Terminal events now key on the tool-call id, review files on their path.
+  `editor-tab`'s line list keeps index keys, where position genuinely is identity.
+
+### Checked and NOT broken
+
+Recorded so nobody re-investigates: thread-scoped `/api/sandbox/*` returning 404
+to a non-owner is `_caller_owns_thread` working, not an outage; `editor-tab` not
+taking an `active` prop is fine because that prop is on the tab *button* and
+Editor does not poll. The sandbox container still gets no `--gpus` and no
+`/dev/dri` while the host has both — a known gap, deliberately not changed.
+
+---
+
 ## v9.5 — the 59 GB database behind v9.4, and the gates that make it visible
 
 **Session pattern:** user reported that after recreating the containers on
