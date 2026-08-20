@@ -58,8 +58,15 @@ def _status_path() -> Path:
 
 
 class Check:
-    def __init__(self, name: str, tier: str, cwd: Path, cmd: list[str],
-                 timeout: float = 600, summarise=None):
+    def __init__(
+        self,
+        name: str,
+        tier: str,
+        cwd: Path,
+        cmd: list[str],
+        timeout: float = 600,
+        summarise=None,
+    ):
         self.name = name
         self.tier = tier
         self.cwd = cwd
@@ -91,16 +98,17 @@ class Check:
             if result.get("exit_code") == 0:
                 result["detail"] = f"{result['detail']} (retried after signal {-rc})"
             else:
-                result["detail"] = (
-                    f"{first['detail']} — died with signal {-rc} twice"
-                )
+                result["detail"] = f"{first['detail']} — died with signal {-rc} twice"
         return result
 
     def _run_once(self) -> dict:
         started = time.time()
         try:
             proc = subprocess.run(
-                self.cmd, cwd=self.cwd, capture_output=True, text=True,
+                self.cmd,
+                cwd=self.cwd,
+                capture_output=True,
+                text=True,
                 timeout=self.timeout,
                 # close_fds=False is load-bearing, not an optimisation.
                 #
@@ -131,11 +139,16 @@ class Check:
             )
             rc, out, err = proc.returncode, proc.stdout, proc.stderr
         except subprocess.TimeoutExpired:
-            return self._result(YELLOW, f"timed out after {self.timeout:.0f}s",
-                                time.time() - started, None)
+            return self._result(
+                YELLOW,
+                f"timed out after {self.timeout:.0f}s",
+                time.time() - started,
+                None,
+            )
         except (OSError, subprocess.SubprocessError) as exc:
-            return self._result(YELLOW, f"could not run: {exc}",
-                                time.time() - started, None)
+            return self._result(
+                YELLOW, f"could not run: {exc}", time.time() - started, None
+            )
 
         duration = time.time() - started
         detail = None
@@ -155,18 +168,27 @@ class Check:
             # an unhandled rejection after the suite passed, a missing binary).
             # Without the raw tail those cases are indistinguishable from a real
             # failure, so keep enough to tell them apart.
-            result["output_tail"] = "\n".join(
-                (err or out).strip().splitlines()[-40:]
-            )[:4000]
+            result["output_tail"] = "\n".join((err or out).strip().splitlines()[-40:])[
+                :4000
+            ]
         return result
 
-    def _result(self, status: str, detail: str, duration: float, rc: int | None) -> dict:
-        return {"name": self.name, "tier": self.tier, "status": status,
-                "detail": detail, "duration_sec": round(duration, 2),
-                "exit_code": rc, "command": " ".join(self.cmd)}
+    def _result(
+        self, status: str, detail: str, duration: float, rc: int | None
+    ) -> dict:
+        return {
+            "name": self.name,
+            "tier": self.tier,
+            "status": status,
+            "detail": detail,
+            "duration_sec": round(duration, 2),
+            "exit_code": rc,
+            "command": " ".join(self.cmd),
+        }
 
 
 # ── summarisers: prefer each tool's native JSON over scraping text ──────────
+
 
 def _ruff_check(rc, out, err):
     try:
@@ -178,7 +200,9 @@ def _ruff_check(rc, out, err):
     codes: dict[str, int] = {}
     for i in items:
         codes[i.get("code") or "?"] = codes.get(i.get("code") or "?", 0) + 1
-    top = ", ".join(f"{c}×{n}" for c, n in sorted(codes.items(), key=lambda kv: -kv[1])[:4])
+    top = ", ".join(
+        f"{c}×{n}" for c, n in sorted(codes.items(), key=lambda kv: -kv[1])[:4]
+    )
     return f"{len(items)} violation(s): {top}"
 
 
@@ -229,47 +253,149 @@ def _tsc(rc, out, err):
 
 def build_checks() -> list[Check]:
     return [
-        Check("backend:ruff-check", FAST, BACKEND,
-              ["uvx", "ruff@0.16.3", "check", ".", "--output-format", "json"],
-              timeout=300, summarise=_ruff_check),
-        Check("backend:ruff-format", FAST, BACKEND,
-              ["uvx", "ruff@0.16.3", "format", "--check", "."],
-              timeout=300, summarise=_ruff_format),
-        Check("backend:cross-ref", FAST, REPO_ROOT,
-              ["python3", "backend/tests/test_no_cross_references.py"], timeout=180),
-        Check("backend:guardrails", FAST, REPO_ROOT,
-              ["python3", "scripts/check_platform_guardrails.py"], timeout=180),
-        Check("frontend:tsc", FAST, FRONTEND,
-              ["pnpm", "exec", "tsc", "--noEmit"], timeout=600, summarise=_tsc),
-        Check("frontend:eslint", FAST, FRONTEND,
-              ["pnpm", "exec", "eslint", ".", "--ext", ".ts,.tsx", "-f", "json"],
-              timeout=600, summarise=_eslint),
-        Check("frontend:prettier", FAST, FRONTEND,
-              # NB: --check and --list-different cannot be combined (prettier
-              # errors "Cannot use --check and --list-different together"),
-              # which made this gate fail while reporting 0 offending files.
-              ["pnpm", "exec", "prettier", "--list-different", "."],
-              timeout=400, summarise=_prettier),
-        Check("frontend:vitest", FAST, FRONTEND,
-              ["pnpm", "exec", "vitest", "run"], timeout=600, summarise=_vitest),
-
-        Check("backend:pytest", SLOW, BACKEND,
-              ["uv", "run", "pytest", "tests/", "-q",
-               "--ignore=tests/test_sandbox_orphan_reconciliation_e2e.py"],
-              timeout=1800, summarise=_pytest),
-        Check("backend:blocking-io", SLOW, BACKEND,
-              ["uv", "run", "pytest", "tests/blocking_io", "-q", "--tb=short"],
-              timeout=900, summarise=_pytest),
-        Check("frontend:build", SLOW, FRONTEND,
-              ["pnpm", "build"], timeout=1800),
+        Check(
+            "backend:ruff-check",
+            FAST,
+            BACKEND,
+            ["uvx", "ruff@0.16.3", "check", ".", "--output-format", "json"],
+            timeout=300,
+            summarise=_ruff_check,
+        ),
+        Check(
+            "backend:ruff-format",
+            FAST,
+            BACKEND,
+            ["uvx", "ruff@0.16.3", "format", "--check", "."],
+            timeout=300,
+            summarise=_ruff_format,
+        ),
+        Check(
+            "backend:cross-ref",
+            FAST,
+            REPO_ROOT,
+            ["python3", "backend/tests/test_no_cross_references.py"],
+            timeout=180,
+        ),
+        Check(
+            "backend:guardrails",
+            FAST,
+            REPO_ROOT,
+            ["python3", "scripts/check_platform_guardrails.py"],
+            timeout=180,
+        ),
+        Check(
+            "frontend:tsc",
+            FAST,
+            FRONTEND,
+            ["pnpm", "exec", "tsc", "--noEmit"],
+            timeout=600,
+            summarise=_tsc,
+        ),
+        Check(
+            "frontend:eslint",
+            FAST,
+            FRONTEND,
+            ["pnpm", "exec", "eslint", ".", "--ext", ".ts,.tsx", "-f", "json"],
+            timeout=600,
+            summarise=_eslint,
+        ),
+        Check(
+            "frontend:prettier",
+            FAST,
+            FRONTEND,
+            # NB: --check and --list-different cannot be combined (prettier
+            # errors "Cannot use --check and --list-different together"),
+            # which made this gate fail while reporting 0 offending files.
+            ["pnpm", "exec", "prettier", "--list-different", "."],
+            timeout=400,
+            summarise=_prettier,
+        ),
+        Check(
+            "frontend:vitest",
+            FAST,
+            FRONTEND,
+            ["pnpm", "exec", "vitest", "run"],
+            timeout=600,
+            summarise=_vitest,
+        ),
+        Check(
+            "backend:pytest",
+            SLOW,
+            BACKEND,
+            [
+                "uv",
+                "run",
+                "pytest",
+                "tests/",
+                "-q",
+                "--ignore=tests/test_sandbox_orphan_reconciliation_e2e.py",
+            ],
+            timeout=1800,
+            summarise=_pytest,
+        ),
+        Check(
+            "backend:blocking-io",
+            SLOW,
+            BACKEND,
+            ["uv", "run", "pytest", "tests/blocking_io", "-q", "--tb=short"],
+            timeout=900,
+            summarise=_pytest,
+        ),
+        Check("frontend:build", SLOW, FRONTEND, ["pnpm", "build"], timeout=1800),
+        # Collects three suites (--collect-only / list, never executing them),
+        # so it is closer to a minute than a second — slow tier.
+        Check(
+            "docs:sync",
+            SLOW,
+            REPO_ROOT,
+            ["python3", "scripts/check_docs_sync.py"],
+            timeout=900,
+        ),
+        # The front<->back contract. contracts/*.json are loaded by BOTH sides'
+        # tests, so a change to either that breaks the agreement fails here —
+        # this is the gate that catches "nova apps not in sync", which nothing
+        # else in the fast tier can see.
+        Check(
+            "contracts",
+            FAST,
+            BACKEND,
+            [
+                "uv",
+                "run",
+                "pytest",
+                "tests/test_custom_events_contract.py",
+                "tests/test_subagent_status_contract.py",
+                "tests/test_browser_sdk_contract.py",
+                "-q",
+            ],
+            timeout=600,
+            summarise=_pytest,
+        ),
+        # Layer 1 of replay-e2e: asserts the backend's SSE event sequence still
+        # matches a committed golden, with no API key and no model call. Layer 2
+        # (the real-backend Playwright render) stays in CI — it needs two
+        # servers and several minutes.
+        Check(
+            "replay:golden",
+            SLOW,
+            BACKEND,
+            ["uv", "run", "pytest", "tests/test_replay_golden.py", "-q"],
+            timeout=900,
+            summarise=_pytest,
+        ),
     ]
 
 
 def write_atomic(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                     prefix=".ci-gate-", suffix=".tmp",
-                                     delete=False) as h:
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".ci-gate-",
+        suffix=".tmp",
+        delete=False,
+    ) as h:
         json.dump(payload, h, indent=2)
         h.flush()
         os.fsync(h.fileno())
@@ -278,10 +404,13 @@ def write_atomic(path: Path, payload: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--tier", choices=(FAST, SLOW, "all"), default=FAST)
-    ap.add_argument("--only", default="", help="comma-separated substrings of check names")
+    ap.add_argument(
+        "--only", default="", help="comma-separated substrings of check names"
+    )
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--print", dest="print_only", action="store_true")
     ap.add_argument("--status-path", type=Path, default=_status_path())
@@ -305,8 +434,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  running {check.name} ...", file=sys.stderr, flush=True)
         results.append(check.run())
 
-    overall = RED if any(r["status"] == RED for r in results) else (
-        YELLOW if any(r["status"] == YELLOW for r in results) else GREEN
+    overall = (
+        RED
+        if any(r["status"] == RED for r in results)
+        else (YELLOW if any(r["status"] == YELLOW for r in results) else GREEN)
     )
     report = {
         "gate": "ci",
@@ -327,22 +458,34 @@ def main(argv: list[str] | None = None) -> int:
             merged = {r["name"]: r for r in existing.get("checks", [])}
             merged.update({r["name"]: r for r in results})
             report["checks"] = list(merged.values())
-            report["overall"] = RED if any(c["status"] == RED for c in report["checks"]) else (
-                YELLOW if any(c["status"] == YELLOW for c in report["checks"]) else GREEN
+            report["overall"] = (
+                RED
+                if any(c["status"] == RED for c in report["checks"])
+                else (
+                    YELLOW
+                    if any(c["status"] == YELLOW for c in report["checks"])
+                    else GREEN
+                )
             )
             report["ok"] = report["overall"] != RED
             write_atomic(args.status_path, report)
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"ci-gate: could not write {args.status_path}: {exc}", file=sys.stderr)
+            print(
+                f"ci-gate: could not write {args.status_path}: {exc}", file=sys.stderr
+            )
 
     if args.json:
         print(json.dumps(report, indent=2))
     else:
         icon = {GREEN: "OK  ", YELLOW: "WARN", RED: "FAIL"}
-        print(f"\nci gate ({args.tier}): {report['overall'].upper()} "
-              f"in {report['duration_sec']}s")
+        print(
+            f"\nci gate ({args.tier}): {report['overall'].upper()} "
+            f"in {report['duration_sec']}s"
+        )
         for r in sorted(results, key=lambda x: x["name"]):
-            print(f"  [{icon[r['status']]}] {r['name']:<26} {r['duration_sec']:>7.1f}s  {r['detail']}")
+            print(
+                f"  [{icon[r['status']]}] {r['name']:<26} {r['duration_sec']:>7.1f}s  {r['detail']}"
+            )
     return 0 if overall != RED else 1
 
 

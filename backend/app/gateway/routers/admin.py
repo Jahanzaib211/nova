@@ -1148,3 +1148,63 @@ async def revoke_user_byok(user_id: str, request: Request) -> MessageResponse:
         request=request,
     )
     return MessageResponse(message="BYOK key revoked")
+
+
+# ---------------------------------------------------------------------------
+# Gates — application-level health for the Nova Ops console
+# ---------------------------------------------------------------------------
+
+
+class GateProbe(BaseModel):
+    """One dependency's health, as reported from inside the gateway."""
+
+    name: str
+    healthy: bool
+    message: str = ""
+    latency_ms: float | None = None
+
+
+class GateHealthResponse(BaseModel):
+    healthy: bool
+    probe_count: int
+    healthy_count: int
+    probes: list[GateProbe]
+
+
+@router.get("/gates/health", response_model=GateHealthResponse)
+async def gates_health(request: Request) -> GateHealthResponse:
+    """Can the gateway actually do its job right now?
+
+    Distinct from the host-level gates the Nova Ops console reads off disk
+    (disk, drift, CI) and from the watchdog's black-box HTTP probes. Those
+    check the system around the app; this checks the app's own dependencies
+    from the inside — the database it can really query, the checkpointer and
+    store it was built with, the SSE bridge, the sandbox provider, channels.
+
+    Read-only and not audit-logged: it exposes no user data, only whether
+    subsystems are up, and the ops console polls it.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+
+    service = getattr(request.app.state, "health_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Health service is not initialised.",
+        )
+
+    report = await service.check_all()
+    return GateHealthResponse(
+        healthy=report.healthy,
+        probe_count=report.probe_count,
+        healthy_count=report.healthy_count,
+        probes=[
+            GateProbe(
+                name=p.name,
+                healthy=p.healthy,
+                message=getattr(p, "message", "") or "",
+                latency_ms=round(getattr(p, "latency_ms", 0.0) or 0.0, 2),
+            )
+            for p in report.probes
+        ],
+    )

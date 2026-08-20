@@ -257,7 +257,7 @@ def build_report(
 
     return {
         "schema_version": 1,
-        "captured_at": datetime.now(timezone.utc).isoformat(),  # noqa: UP017 - keep Python 3.10 compatibility.
+        "captured_at": datetime.now(timezone.utc).isoformat(),
         "namespace": namespace,
         "selector": selector,
         "sample": sample,

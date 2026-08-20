@@ -109,8 +109,14 @@ class Producer:
                   an unrun pruner is exactly how the 59 GB database came back.
     """
 
-    def __init__(self, name: str, argv: list[str], interval_sec: float,
-                 timeout_sec: float, kind: str = "gate"):
+    def __init__(
+        self,
+        name: str,
+        argv: list[str],
+        interval_sec: float,
+        timeout_sec: float,
+        kind: str = "gate",
+    ):
         self.name = name
         self.argv = argv
         self.interval_sec = interval_sec
@@ -164,9 +170,14 @@ class Producer:
         else:
             log.info("%s: exit=%s in %.1fs — %s", self.name, rc, duration, detail)
 
-        return {"gate": self.name, "kind": self.kind, "exit_code": rc,
-                "at_epoch": self.last_run, "duration_sec": round(duration, 2),
-                "detail": detail}
+        return {
+            "gate": self.name,
+            "kind": self.kind,
+            "exit_code": rc,
+            "at_epoch": self.last_run,
+            "duration_sec": round(duration, 2),
+            "detail": detail,
+        }
 
 
 def build_producers() -> list[Producer]:
@@ -177,13 +188,24 @@ def build_producers() -> list[Producer]:
             return default
 
     return [
-        Producer("host", ["scripts/gates/host-gate.py"],
-                 env_float("NOVA_GATE_HOST_INTERVAL", 300), timeout_sec=180),
-        Producer("drift", ["scripts/gates/drift-gate.py"],
-                 env_float("NOVA_GATE_DRIFT_INTERVAL", 900), timeout_sec=180),
-        Producer("ci", ["scripts/gates/ci-gate.py", "--tier", "fast"],
-                 env_float("NOVA_GATE_CI_INTERVAL", 21_600), timeout_sec=1800),
-
+        Producer(
+            "host",
+            ["scripts/gates/host-gate.py"],
+            env_float("NOVA_GATE_HOST_INTERVAL", 300),
+            timeout_sec=180,
+        ),
+        Producer(
+            "drift",
+            ["scripts/gates/drift-gate.py"],
+            env_float("NOVA_GATE_DRIFT_INTERVAL", 900),
+            timeout_sec=180,
+        ),
+        Producer(
+            "ci",
+            ["scripts/gates/ci-gate.py", "--tier", "fast"],
+            env_float("NOVA_GATE_CI_INTERVAL", 21_600),
+            timeout_sec=1800,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took
@@ -195,18 +217,32 @@ def build_producers() -> list[Producer]:
         # a background job that could collide with a live run. Pruning keeps the
         # row count flat, which is what stops the lock contention; reclaiming
         # file bytes is a separate, manual concern.
-        Producer("prune", ["scripts/prune-checkpoints.py",
-                           "--keep-per-thread", "3", "--keep-days", "2",
-                           "--strategy", "rebuild", "--json"],
-                 env_float("NOVA_GATE_PRUNE_INTERVAL", 86_400),
-                 timeout_sec=3600, kind="job"),
-
+        Producer(
+            "prune",
+            [
+                "scripts/prune-checkpoints.py",
+                "--keep-per-thread",
+                "3",
+                "--keep-days",
+                "2",
+                "--strategy",
+                "rebuild",
+                "--json",
+            ],
+            env_float("NOVA_GATE_PRUNE_INTERVAL", 86_400),
+            timeout_sec=3600,
+            kind="job",
+        ),
         # Log rotation. gateway.log now appends rather than truncating on every
         # restart, so something has to bound it. Size-triggered, so an hourly
         # run is a no-op until it matters.
-        Producer("rotate", ["scripts/rotate-logs.sh", "--json"],
-                 env_float("NOVA_GATE_ROTATE_INTERVAL", 3600),
-                 timeout_sec=300, kind="job"),
+        Producer(
+            "rotate",
+            ["scripts/rotate-logs.sh", "--json"],
+            env_float("NOVA_GATE_ROTATE_INTERVAL", 3600),
+            timeout_sec=300,
+            kind="job",
+        ),
     ]
 
 
@@ -243,9 +279,14 @@ def record_job(result: dict) -> None:
             "detail": result.get("detail", "")[:500],
         }
         payload = {"checked_at_epoch": time.time(), "jobs": jobs}
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                         prefix=".jobs-", suffix=".tmp",
-                                         delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".jobs-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
             json.dump(payload, handle, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
@@ -256,14 +297,18 @@ def record_job(result: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--once", action="store_true",
-                    help="run every producer once and exit")
-    ap.add_argument("--only", default="",
-                    help="comma-separated gate names (host, drift, ci)")
-    ap.add_argument("--tick", type=float, default=15.0,
-                    help="seconds between due-checks")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--once", action="store_true", help="run every producer once and exit"
+    )
+    ap.add_argument(
+        "--only", default="", help="comma-separated gate names (host, drift, ci)"
+    )
+    ap.add_argument(
+        "--tick", type=float, default=15.0, help="seconds between due-checks"
+    )
     args = ap.parse_args(argv)
 
     producers = build_producers()
@@ -287,8 +332,10 @@ def main(argv: list[str] | None = None) -> int:
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stop.set())
 
-    log.info("started; cadence: %s",
-             ", ".join(f"{p.name}={p.interval_sec:.0f}s" for p in producers))
+    log.info(
+        "started; cadence: %s",
+        ", ".join(f"{p.name}={p.interval_sec:.0f}s" for p in producers),
+    )
 
     # Run everything once at boot so a restart never leaves a stale file
     # sitting there for a full interval.

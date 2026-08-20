@@ -60,6 +60,12 @@ jobs:
             --ignore "graphify-out/**" \
             "**/*.md"
 
+      - name: Verify documented counts match reality
+        # docs/CI_CD.md's canonical test-count table and workflow count had
+        # both silently drifted from the code they describe. Nothing checked
+        # them, so they rotted until an audit counted by hand.
+        run: python3 scripts/check_docs_sync.py
+
       - name: Check for broken internal links
         run: |
           # Simple internal link checker for markdown files

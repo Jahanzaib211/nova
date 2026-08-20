@@ -56,7 +56,7 @@ import base64
 import datetime as _dt
 import gzip
 import json
-import os
+import re
 import sqlite3
 import sys
 import uuid
@@ -65,7 +65,9 @@ from pathlib import Path
 # UUIDv6 counts 100-nanosecond intervals from the Gregorian epoch.
 _GREGORIAN_EPOCH = _dt.datetime(1582, 10, 15, tzinfo=_dt.timezone.utc)
 _UNIX_EPOCH = _dt.datetime(1970, 1, 1, tzinfo=_dt.timezone.utc)
-_GREGORIAN_TO_UNIX_TICKS = int((_UNIX_EPOCH - _GREGORIAN_EPOCH).total_seconds() * 10_000_000)
+_GREGORIAN_TO_UNIX_TICKS = int(
+    (_UNIX_EPOCH - _GREGORIAN_EPOCH).total_seconds() * 10_000_000
+)
 
 
 def uuid6_unix_seconds(value: str) -> float | None:
@@ -109,7 +111,9 @@ def db_bytes(conn: sqlite3.Connection) -> int:
     return page_size * page_count
 
 
-def build_doomed_set(conn: sqlite3.Connection, keep_per_thread: int, cutoff_epoch: float) -> int:
+def build_doomed_set(
+    conn: sqlite3.Connection, keep_per_thread: int, cutoff_epoch: float
+) -> int:
     """Populate a temp table of checkpoints to delete. Returns the row count.
 
     Both retention rules are applied here rather than in Python because the
@@ -140,7 +144,9 @@ def build_doomed_set(conn: sqlite3.Connection, keep_per_thread: int, cutoff_epoc
         """,
         (keep_per_thread, cutoff_epoch),
     )
-    conn.execute("CREATE INDEX temp.doomed_idx ON doomed(thread_id, checkpoint_ns, checkpoint_id)")
+    conn.execute(
+        "CREATE INDEX temp.doomed_idx ON doomed(thread_id, checkpoint_ns, checkpoint_id)"
+    )
     return conn.execute("SELECT COUNT(*) FROM temp.doomed").fetchone()[0]
 
 
@@ -154,8 +160,9 @@ def measure(conn: sqlite3.Connection, exact: bool = False) -> dict:
     size is extrapolated from a bounded sample.
     """
     if not exact:
-        avg = conn.execute(
-            """
+        avg = (
+            conn.execute(
+                """
             SELECT AVG(LENGTH(c.checkpoint) + LENGTH(COALESCE(c.metadata, '')))
             FROM (SELECT * FROM temp.doomed LIMIT 300) d
             JOIN checkpoints c
@@ -163,7 +170,9 @@ def measure(conn: sqlite3.Connection, exact: bool = False) -> dict:
              AND c.checkpoint_ns = d.checkpoint_ns
              AND c.checkpoint_id = d.checkpoint_id
             """
-        ).fetchone()[0] or 0
+            ).fetchone()[0]
+            or 0
+        )
         rows = conn.execute("SELECT COUNT(*) FROM temp.doomed").fetchone()[0]
         writes_rows = conn.execute(
             """
@@ -173,8 +182,12 @@ def measure(conn: sqlite3.Connection, exact: bool = False) -> dict:
              AND w.checkpoint_id = d.checkpoint_id
             """
         ).fetchone()[0]
-        return {"checkpoint_bytes": int(avg * rows), "writes_rows": writes_rows,
-                "writes_bytes": 0, "estimated": True}
+        return {
+            "checkpoint_bytes": int(avg * rows),
+            "writes_rows": writes_rows,
+            "writes_bytes": 0,
+            "estimated": True,
+        }
 
     checkpoint_bytes = conn.execute(
         """
@@ -228,7 +241,9 @@ def write_manifest(conn: sqlite3.Connection, path: Path) -> int:
                         "type": ctype,
                         "bytes": size,
                         "created_at": (
-                            _dt.datetime.fromtimestamp(epoch, _dt.timezone.utc).isoformat()
+                            _dt.datetime.fromtimestamp(
+                                epoch, _dt.timezone.utc
+                            ).isoformat()
                             if epoch is not None
                             else None
                         ),
@@ -305,9 +320,33 @@ def rebuild_tables(conn: sqlite3.Connection, progress=None) -> tuple[int, int]:
         ).fetchone()[0]
 
         # Reuse the original DDL verbatim, only renaming the table it creates.
+        #
+        # The name must be matched with a regex, not a literal. After this
+        # function's own ALTER TABLE ... RENAME, SQLite rewrites the stored DDL
+        # with the name quoted -- `CREATE TABLE "writes" (` rather than
+        # `CREATE TABLE writes (`. A literal replace silently fails to match on
+        # the second run, the unmodified CREATE executes, and it dies with
+        # 'table "writes" already exists'. Latent until the first re-prune.
         tmp = f"{table}__pruned"
         conn.execute(f"DROP TABLE IF EXISTS {tmp}")
-        conn.execute(ddl.replace(f"TABLE {table}", f"TABLE {tmp}", 1))
+        renamed, count = re.subn(
+            # \b belongs only on the bare form: after a closing quote both
+            # sides are non-word characters, so a word boundary cannot match
+            # and the quoted alternative would never fire.
+            rf'(CREATE\s+TABLE\s+)(?:"{table}"|`{table}`|\[{table}\]|{table}\b)',
+            rf'\g<1>"{tmp}"',
+            ddl,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if count != 1:
+            # Never execute a CREATE we failed to rewrite: it would recreate the
+            # original table and destroy nothing, or error out mid-rebuild.
+            raise RuntimeError(
+                f"could not rewrite the table name in {table}'s DDL; refusing to "
+                f"run it unchanged. DDL starts: {ddl[:80]!r}"
+            )
+        conn.execute(renamed)
 
         conn.execute(
             f"""
@@ -338,8 +377,9 @@ def rebuild_tables(conn: sqlite3.Connection, progress=None) -> tuple[int, int]:
     return kept_checkpoints, kept_writes
 
 
-def delete_doomed(conn: sqlite3.Connection, batch: int = 2000,
-                  progress=None) -> tuple[int, int]:
+def delete_doomed(
+    conn: sqlite3.Connection, batch: int = 2000, progress=None
+) -> tuple[int, int]:
     """Delete the doomed set in bounded batches.
 
     Deleting ~55 GB of blob rows in one transaction would grow the WAL to hold
@@ -400,28 +440,61 @@ def delete_doomed(conn: sqlite3.Connection, batch: int = 2000,
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--db", type=Path, default=default_db_path())
-    parser.add_argument("--keep-per-thread", type=int, default=20,
-                        help="newest N checkpoints to keep per (thread, namespace)")
-    parser.add_argument("--keep-days", type=float, default=7.0,
-                        help="keep everything younger than this many days")
-    parser.add_argument("--archive-dir", type=Path, default=None,
-                        help="where manifests/blob archives go (default <db dir>/checkpoint-archive)")
-    parser.add_argument("--no-archive-blobs", action="store_true",
-                        help="write only the manifest, no blob archive")
-    parser.add_argument("--vacuum", action="store_true",
-                        help="VACUUM after deleting (needs an exclusive lock and free space)")
-    parser.add_argument("--measure-bytes", action="store_true",
-                        help="exact byte totals (reads every doomed blob; slow)")
-    parser.add_argument("--batch", type=int, default=2000,
-                        help="rows deleted per committed batch (bounds WAL growth)")
-    parser.add_argument("--strategy", choices=("rebuild", "delete"), default="rebuild",
-                        help="rebuild: copy survivors into a fresh table and drop the "
-                             "original (fast). delete: row-by-row DELETE (slow, but "
-                             "leaves the table object identity untouched).")
+    parser.add_argument(
+        "--keep-per-thread",
+        type=int,
+        default=20,
+        help="newest N checkpoints to keep per (thread, namespace)",
+    )
+    parser.add_argument(
+        "--keep-days",
+        type=float,
+        default=7.0,
+        help="keep everything younger than this many days",
+    )
+    parser.add_argument(
+        "--archive-dir",
+        type=Path,
+        default=None,
+        help="where manifests/blob archives go (default <db dir>/checkpoint-archive)",
+    )
+    parser.add_argument(
+        "--no-archive-blobs",
+        action="store_true",
+        help="write only the manifest, no blob archive",
+    )
+    parser.add_argument(
+        "--vacuum",
+        action="store_true",
+        help="VACUUM after deleting (needs an exclusive lock and free space)",
+    )
+    parser.add_argument(
+        "--measure-bytes",
+        action="store_true",
+        help="exact byte totals (reads every doomed blob; slow)",
+    )
+    parser.add_argument(
+        "--batch",
+        type=int,
+        default=2000,
+        help="rows deleted per committed batch (bounds WAL growth)",
+    )
+    parser.add_argument(
+        "--strategy",
+        choices=("rebuild", "delete"),
+        default="rebuild",
+        help="rebuild: copy survivors into a fresh table and drop the "
+        "original (fast). delete: row-by-row DELETE (slow, but "
+        "leaves the table object identity untouched).",
+    )
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--json", action="store_true", help="emit a machine-readable summary")
+    parser.add_argument(
+        "--json", action="store_true", help="emit a machine-readable summary"
+    )
     args = parser.parse_args(argv)
 
     if not args.db.exists():
@@ -438,7 +511,9 @@ def main(argv: list[str] | None = None) -> int:
         conn.execute("PRAGMA busy_timeout = 60000")
 
         before_bytes = db_bytes(conn)
-        before_checkpoints = conn.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0]
+        before_checkpoints = conn.execute(
+            "SELECT COUNT(*) FROM checkpoints"
+        ).fetchone()[0]
         before_writes = conn.execute("SELECT COUNT(*) FROM writes").fetchone()[0]
 
         doomed = build_doomed_set(conn, args.keep_per_thread, cutoff)
@@ -449,7 +524,9 @@ def main(argv: list[str] | None = None) -> int:
             "dry_run": args.dry_run,
             "keep_per_thread": args.keep_per_thread,
             "keep_days": args.keep_days,
-            "cutoff_utc": _dt.datetime.fromtimestamp(cutoff, _dt.timezone.utc).isoformat(),
+            "cutoff_utc": _dt.datetime.fromtimestamp(
+                cutoff, _dt.timezone.utc
+            ).isoformat(),
             "before": {
                 "db_bytes": before_bytes,
                 "checkpoints": before_checkpoints,
@@ -493,7 +570,10 @@ def main(argv: list[str] | None = None) -> int:
                     conn, batch=args.batch, progress=tick
                 )
             conn.commit()
-            summary["deleted"] = {"checkpoints": deleted_checkpoints, "writes": deleted_writes}
+            summary["deleted"] = {
+                "checkpoints": deleted_checkpoints,
+                "writes": deleted_writes,
+            }
 
             if args.vacuum:
                 conn.isolation_level = None
@@ -515,14 +595,18 @@ def main(argv: list[str] | None = None) -> int:
 
             summary["after"] = {
                 "db_bytes": db_bytes(conn),
-                "checkpoints": conn.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0],
+                "checkpoints": conn.execute(
+                    "SELECT COUNT(*) FROM checkpoints"
+                ).fetchone()[0],
                 "writes": conn.execute("SELECT COUNT(*) FROM writes").fetchone()[0],
             }
             summary["integrity_check"] = conn.execute(
                 "PRAGMA integrity_check"
             ).fetchone()[0]
             summary["result"] = (
-                "pruned" if summary["integrity_check"] == "ok" else "pruned-with-integrity-error"
+                "pruned"
+                if summary["integrity_check"] == "ok"
+                else "pruned-with-integrity-error"
             )
     finally:
         conn.close()
@@ -533,22 +617,34 @@ def main(argv: list[str] | None = None) -> int:
         b = summary["before"]
         d = summary["doomed"]
         print(f"database        : {summary['db']}")
-        print(f"retention       : keep newest {args.keep_per_thread}/thread, or younger than {args.keep_days}d")
-        print(f"before          : {human_bytes(b['db_bytes'])}  "
-              f"({b['checkpoints']:,} checkpoints, {b['writes']:,} writes)")
-        print(f"to delete       : {d['checkpoints']:,} checkpoints ({human_bytes(d['checkpoint_bytes'])}), "
-              f"{d['writes']:,} writes ({human_bytes(d['writes_bytes'])})")
+        print(
+            f"retention       : keep newest {args.keep_per_thread}/thread, or younger than {args.keep_days}d"
+        )
+        print(
+            f"before          : {human_bytes(b['db_bytes'])}  "
+            f"({b['checkpoints']:,} checkpoints, {b['writes']:,} writes)"
+        )
+        print(
+            f"to delete       : {d['checkpoints']:,} checkpoints ({human_bytes(d['checkpoint_bytes'])}), "
+            f"{d['writes']:,} writes ({human_bytes(d['writes_bytes'])})"
+        )
         if "after" in summary:
             a = summary["after"]
-            print(f"after           : {human_bytes(a['db_bytes'])}  "
-                  f"({a['checkpoints']:,} checkpoints, {a['writes']:,} writes)")
+            print(
+                f"after           : {human_bytes(a['db_bytes'])}  "
+                f"({a['checkpoints']:,} checkpoints, {a['writes']:,} writes)"
+            )
             print(f"reclaimed       : {human_bytes(b['db_bytes'] - a['db_bytes'])}")
         if "manifest" in summary:
-            print(f"manifest        : {summary['manifest']} ({summary['manifest_rows']:,} rows)")
+            print(
+                f"manifest        : {summary['manifest']} ({summary['manifest_rows']:,} rows)"
+            )
         if "blob_archive" in summary:
-            print(f"blob archive    : {summary['blob_archive']} "
-                  f"({summary['blob_archive_rows']:,} threads, "
-                  f"{human_bytes(summary['blob_archive_file_bytes'])})")
+            print(
+                f"blob archive    : {summary['blob_archive']} "
+                f"({summary['blob_archive_rows']:,} threads, "
+                f"{human_bytes(summary['blob_archive_file_bytes'])})"
+            )
         print(f"result          : {summary['result']}")
     return 0
 

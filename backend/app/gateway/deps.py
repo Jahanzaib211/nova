@@ -281,7 +281,12 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.browser_service = BrowserServiceImpl()
         app.state.terminal_service = TerminalServiceImpl()
         app.state.artifact_service = ArtifactServiceImpl()
-        app.state.health_service = HealthServiceImpl()
+        # Wire real probes. Constructed bare, HealthServiceImpl iterates an
+        # empty dict and reports healthy=True/probe_count=0 — a report that
+        # cannot fail, which is worse than none because it reads as evidence.
+        from deerflow.services.health_probes import default_probes
+
+        app.state.health_service = HealthServiceImpl(probes=default_probes(app.state))
         app.state.recovery_service = RecoveryServiceImpl()
         # Execution kernel (Phase C7) — the single execution architecture.
         # Resolved through the container so embedded/test callers share the

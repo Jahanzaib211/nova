@@ -69,10 +69,10 @@ import subprocess
 import sys
 import tempfile
 import time
-from pathlib import Path
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Awaitable, Callable, Optional
+from pathlib import Path
 
 import httpx
 
@@ -243,7 +243,7 @@ def status_path() -> Path:
     return Path.home() / ".nova" / "gates" / "healthcheck.json"
 
 
-def write_status(report: "CycleReport", interval_sec: float) -> None:
+def write_status(report: CycleReport, interval_sec: float) -> None:
     """Atomically publish the cycle for Nova Ops. Never fatal.
 
     A watchdog that dies because it could not write its own status file would
@@ -288,7 +288,7 @@ def _http_probe(
     *,
     expected_status: tuple[int, ...] = (200,),
     timeout: float = 3.0,
-    body_validator: Optional[Callable[[dict], bool]] = None,
+    body_validator: Callable[[dict], bool] | None = None,
 ) -> ProbeResult:
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
@@ -788,7 +788,7 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
         return ProbeResult(
             "P12_tunnel",
             Status.GREEN,
-            f"systemd=active (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
+            "systemd=active (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -867,7 +867,7 @@ def _ecosystem_file() -> str:
     )
 
 
-def _pm2_script_path(described_stdout: str) -> Optional[str]:
+def _pm2_script_path(described_stdout: str) -> str | None:
     """Pull the 'script path' cell out of `pm2 describe` table output."""
     for line in described_stdout.splitlines():
         if "script path" in line and "│" in line:

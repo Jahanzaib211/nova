@@ -47,7 +47,9 @@ NOVA_SERVICES = ("deer-flow-gateway", "deer-flow-frontend", "deer-flow-nginx")
 
 def _status_path() -> Path:
     override = os.environ.get("NOVA_DRIFT_GATE_STATUS_PATH", "").strip()
-    return Path(override) if override else Path.home() / ".nova" / "gates" / "drift.json"
+    return (
+        Path(override) if override else Path.home() / ".nova" / "gates" / "drift.json"
+    )
 
 
 def check(name: str, status: str, detail: str, **extra) -> dict:
@@ -71,14 +73,18 @@ def check_git_clean() -> dict:
     changed = [line for line in out.splitlines() if line.strip()]
     if not changed:
         return check("git_worktree", GREEN, "clean")
-    return check("git_worktree", YELLOW,
-                 f"{len(changed)} uncommitted change(s) — running code is not "
-                 "reproducible from any commit",
-                 files=[c[3:] for c in changed[:20]])
+    return check(
+        "git_worktree",
+        YELLOW,
+        f"{len(changed)} uncommitted change(s) — running code is not "
+        "reproducible from any commit",
+        files=[c[3:] for c in changed[:20]],
+    )
 
 
 def check_config_version() -> dict:
     """config.yaml is gitignored, so nothing else can catch it falling behind."""
+
     def version_of(path: Path) -> int | None:
         try:
             for line in path.read_text().splitlines():
@@ -96,10 +102,14 @@ def check_config_version() -> dict:
     if live == example:
         return check("config_version", GREEN, f"v{live}, matches example")
     status = RED if example - live >= 3 else YELLOW
-    return check("config_version", status,
-                 f"config.yaml is v{live}, config.example.yaml is v{example} "
-                 "— run `make config-upgrade`",
-                 live=live, example=example)
+    return check(
+        "config_version",
+        status,
+        f"config.yaml is v{live}, config.example.yaml is v{example} "
+        "— run `make config-upgrade`",
+        live=live,
+        example=example,
+    )
 
 
 # Hash every file under frontend/src identically on both sides. LC_ALL=C is
@@ -151,13 +161,26 @@ def check_frontend_build_freshness() -> dict:
         return check("frontend_build", YELLOW, "could not hash frontend/src")
 
     rc_i, image_hash, err = _run(
-        ["docker", "run", "--rm", "--entrypoint", "sh", "-e", "LC_ALL=C", image,
-         "-c", _SRC_HASH_CMD.format(path="/app/frontend/src")],
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "sh",
+            "-e",
+            "LC_ALL=C",
+            image,
+            "-c",
+            _SRC_HASH_CMD.format(path="/app/frontend/src"),
+        ],
         timeout=180,
     )
     if rc_i != 0 or not image_hash:
-        return check("frontend_build", YELLOW,
-                     f"could not hash the image's source: {err[:100] or 'unknown'}")
+        return check(
+            "frontend_build",
+            YELLOW,
+            f"could not hash the image's source: {err[:100] or 'unknown'}",
+        )
 
     rc_b, build_id, _ = _run(
         ["docker", "exec", "deer-flow-frontend", "cat", "/app/frontend/.next/BUILD_ID"],
@@ -166,14 +189,21 @@ def check_frontend_build_freshness() -> dict:
     build = build_id.strip() or "unknown"
 
     if host_hash.strip() == image_hash.strip():
-        return check("frontend_build", GREEN,
-                     f"served build {build} matches frontend/src exactly",
-                     build_id=build)
-    return check("frontend_build", RED,
-                 f"frontend/src differs from the source baked into the served "
-                 f"build ({build}) — those changes are NOT live; rebuild the image",
-                 build_id=build, host_hash=host_hash.strip()[:16],
-                 image_hash=image_hash.strip()[:16])
+        return check(
+            "frontend_build",
+            GREEN,
+            f"served build {build} matches frontend/src exactly",
+            build_id=build,
+        )
+    return check(
+        "frontend_build",
+        RED,
+        f"frontend/src differs from the source baked into the served "
+        f"build ({build}) — those changes are NOT live; rebuild the image",
+        build_id=build,
+        host_hash=host_hash.strip()[:16],
+        image_hash=image_hash.strip()[:16],
+    )
 
 
 def check_compose_chain() -> dict:
@@ -186,7 +216,7 @@ def check_compose_chain() -> dict:
     speech_on = False
     try:
         text = (REPO_ROOT / "config.yaml").read_text()
-        m = re.search(r"^speech:\s*$\s+enabled:\s*(\w+)", text, re.M)
+        m = re.search(r"^speech:\s*$\s+enabled:\s*(\w+)", text, re.MULTILINE)
         speech_on = bool(m and m.group(1).lower() == "true")
     except OSError:
         pass
@@ -197,8 +227,13 @@ def check_compose_chain() -> dict:
     missing_containers = []
     for name in NOVA_SERVICES:
         rc, out, _ = _run(
-            ["docker", "inspect", name, "--format",
-             '{{index .Config.Labels "com.docker.compose.project.config_files"}}'],
+            [
+                "docker",
+                "inspect",
+                name,
+                "--format",
+                '{{index .Config.Labels "com.docker.compose.project.config_files"}}',
+            ],
             timeout=30,
         )
         if rc != 0 or not out:
@@ -210,18 +245,23 @@ def check_compose_chain() -> dict:
         return check("compose_chain", YELLOW, "no Nova containers running")
 
     if seen == canonical:
-        return check("compose_chain", GREEN,
-                     f"{len(seen)} overlay(s) match the canonical chain")
+        return check(
+            "compose_chain", GREEN, f"{len(seen)} overlay(s) match the canonical chain"
+        )
     extra, absent = seen - canonical, canonical - seen
     bits = []
     if absent:
         bits.append(f"missing {sorted(absent)}")
     if extra:
         bits.append(f"unexpected {sorted(extra)}")
-    return check("compose_chain", YELLOW,
-                 "; ".join(bits) + " — containers were not brought up by "
-                 "scripts/pm2-deerflow.sh",
-                 seen=sorted(seen), canonical=sorted(canonical))
+    return check(
+        "compose_chain",
+        YELLOW,
+        "; ".join(bits) + " — containers were not brought up by "
+        "scripts/pm2-deerflow.sh",
+        seen=sorted(seen),
+        canonical=sorted(canonical),
+    )
 
 
 def check_pm2_apps() -> dict:
@@ -253,8 +293,12 @@ def check_pm2_apps() -> dict:
         bits.append(f"not registered: {absent}")
     if stopped:
         bits.append(f"not online: {stopped}")
-    return check("pm2_apps", RED if absent else YELLOW, "; ".join(bits),
-                 declared=sorted(declared))
+    return check(
+        "pm2_apps",
+        RED if absent else YELLOW,
+        "; ".join(bits),
+        declared=sorted(declared),
+    )
 
 
 def check_restart_storm() -> dict:
@@ -276,8 +320,13 @@ def check_restart_storm() -> dict:
 
     for name in NOVA_SERVICES:
         rc, out, _ = _run(
-            ["docker", "inspect", name, "--format",
-             "{{.RestartCount}}|{{.State.StartedAt}}|{{.State.OOMKilled}}"],
+            [
+                "docker",
+                "inspect",
+                name,
+                "--format",
+                "{{.RestartCount}}|{{.State.StartedAt}}|{{.State.OOMKilled}}",
+            ],
             timeout=30,
         )
         if rc != 0 or not out:
@@ -297,8 +346,7 @@ def check_restart_storm() -> dict:
             # Docker emits RFC3339 with nanoseconds, which %f cannot parse.
             cleaned = re.sub(r"\.(\d{6})\d*", r".\1", started).replace("Z", "+00:00")
             hours = (
-                _dt.datetime.now(_dt.timezone.utc)
-                - _dt.datetime.fromisoformat(cleaned)
+                _dt.datetime.now(_dt.timezone.utc) - _dt.datetime.fromisoformat(cleaned)
             ).total_seconds() / 3600
         except (ValueError, TypeError):
             pass
@@ -324,13 +372,20 @@ def check_restart_storm() -> dict:
 
     if not findings:
         return check("restart_storm", GREEN, "no repeated restarts")
-    return check("restart_storm", worst,
-                 "; ".join(findings) + " — autoheal may be masking a crash loop")
+    return check(
+        "restart_storm",
+        worst,
+        "; ".join(findings) + " — autoheal may be masking a crash loop",
+    )
 
 
 CHECKS = (
-    check_git_clean, check_config_version, check_frontend_build_freshness,
-    check_compose_chain, check_pm2_apps, check_restart_storm,
+    check_git_clean,
+    check_config_version,
+    check_frontend_build_freshness,
+    check_compose_chain,
+    check_pm2_apps,
+    check_restart_storm,
 )
 
 
@@ -340,10 +395,13 @@ def build_report() -> dict:
         try:
             results.append(fn())
         except Exception as exc:  # noqa: BLE001 - a gate must not crash the console
-            results.append(check(fn.__name__.replace("check_", ""), YELLOW,
-                                 f"check raised: {exc}"))
-    overall = RED if any(r["status"] == RED for r in results) else (
-        YELLOW if any(r["status"] == YELLOW for r in results) else GREEN
+            results.append(
+                check(fn.__name__.replace("check_", ""), YELLOW, f"check raised: {exc}")
+            )
+    overall = (
+        RED
+        if any(r["status"] == RED for r in results)
+        else (YELLOW if any(r["status"] == YELLOW for r in results) else GREEN)
     )
     return {
         "gate": "drift",
@@ -356,9 +414,14 @@ def build_report() -> dict:
 
 def write_atomic(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent,
-                                     prefix=".drift-gate-", suffix=".tmp",
-                                     delete=False) as h:
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".drift-gate-",
+        suffix=".tmp",
+        delete=False,
+    ) as h:
         json.dump(payload, h, indent=2)
         h.flush()
         os.fsync(h.fileno())
@@ -367,8 +430,9 @@ def write_atomic(path: Path, payload: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--print", dest="print_only", action="store_true")
     ap.add_argument("--status-path", type=Path, default=_status_path())
@@ -379,7 +443,10 @@ def main(argv: list[str] | None = None) -> int:
         try:
             write_atomic(args.status_path, report)
         except OSError as exc:
-            print(f"drift-gate: could not write {args.status_path}: {exc}", file=sys.stderr)
+            print(
+                f"drift-gate: could not write {args.status_path}: {exc}",
+                file=sys.stderr,
+            )
 
     if args.json:
         print(json.dumps(report, indent=2))

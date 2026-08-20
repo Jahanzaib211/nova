@@ -69,9 +69,12 @@ def check_disk() -> dict:
     # 85/95: at 95% the box is minutes from failing writes, and SQLite VACUUM
     # (the repair for the DB-size check below) needs headroom to run at all.
     return check(
-        "disk", _band(pct, 85, 95),
+        "disk",
+        _band(pct, 85, 95),
         f"{pct:.1f}% used on / ({free_gb:.0f} GiB free)",
-        percent_used=round(pct, 1), free_bytes=usage.free, total_bytes=usage.total,
+        percent_used=round(pct, 1),
+        free_bytes=usage.free,
+        total_bytes=usage.total,
     )
 
 
@@ -83,8 +86,12 @@ def check_inodes() -> dict:
     if st.f_files == 0:
         return check("inodes", GREEN, "not applicable on this filesystem")
     pct = (st.f_files - st.f_ffree) / st.f_files * 100
-    return check("inodes", _band(pct, 85, 95), f"{pct:.1f}% of inodes used",
-                 percent_used=round(pct, 1))
+    return check(
+        "inodes",
+        _band(pct, 85, 95),
+        f"{pct:.1f}% of inodes used",
+        percent_used=round(pct, 1),
+    )
 
 
 def _meminfo() -> dict[str, int]:
@@ -104,9 +111,12 @@ def check_memory() -> dict:
     if not total:
         return check("memory", YELLOW, "unavailable")
     used_pct = (total - available) / total * 100
-    return check("memory", _band(used_pct, 85, 95),
-                 f"{available / 1024**3:.1f} GiB available of {total / 1024**3:.1f} GiB",
-                 percent_used=round(used_pct, 1))
+    return check(
+        "memory",
+        _band(used_pct, 85, 95),
+        f"{available / 1024**3:.1f} GiB available of {total / 1024**3:.1f} GiB",
+        percent_used=round(used_pct, 1),
+    )
 
 
 def check_swap() -> dict:
@@ -121,9 +131,12 @@ def check_swap() -> dict:
     if total == 0:
         return check("swap", GREEN, "no swap configured")
     used_pct = (total - free) / total * 100
-    return check("swap", _band(used_pct, 50, 80),
-                 f"{(total - free) / 1024**3:.1f} GiB of {total / 1024**3:.1f} GiB used",
-                 percent_used=round(used_pct, 1))
+    return check(
+        "swap",
+        _band(used_pct, 50, 80),
+        f"{(total - free) / 1024**3:.1f} GiB of {total / 1024**3:.1f} GiB used",
+        percent_used=round(used_pct, 1),
+    )
 
 
 def check_io_pressure() -> dict:
@@ -132,10 +145,16 @@ def check_io_pressure() -> dict:
         for line in Path("/proc/pressure/io").read_text().splitlines():
             if line.startswith("full"):
                 avg60 = float(
-                    next(p for p in line.split() if p.startswith("avg60=")).split("=")[1]
+                    next(p for p in line.split() if p.startswith("avg60=")).split("=")[
+                        1
+                    ]
                 )
-                return check("io_pressure", _band(avg60, 10, 30),
-                             f"full avg60={avg60:.2f}%", avg60=avg60)
+                return check(
+                    "io_pressure",
+                    _band(avg60, 10, 30),
+                    f"full avg60={avg60:.2f}%",
+                    avg60=avg60,
+                )
     except (OSError, ValueError, StopIteration):
         pass
     return check("io_pressure", GREEN, "unavailable (no PSI)")
@@ -160,8 +179,9 @@ def check_database() -> dict:
     detail = f"{gb:.2f} GB"
     if status != GREEN:
         detail += "  — run scripts/prune-checkpoints.py"
-    return check("database_size", status, detail, bytes=size,
-                 warn_gb=warn, fail_gb=fail)
+    return check(
+        "database_size", status, detail, bytes=size, warn_gb=warn, fail_gb=fail
+    )
 
 
 def check_checkpoint_count() -> dict:
@@ -187,10 +207,14 @@ def check_checkpoint_count() -> dict:
     # Retention keeps 3 per thread plus a 2-day window; a sustained average
     # above ~50 means the pruner is not running.
     status = _band(per_thread, 50, 200)
-    return check("checkpoint_rows", status,
-                 f"{rows:,} checkpoints across {threads:,} threads "
-                 f"({per_thread:.0f}/thread)",
-                 rows=rows, threads=threads, per_thread=round(per_thread, 1))
+    return check(
+        "checkpoint_rows",
+        status,
+        f"{rows:,} checkpoints across {threads:,} threads ({per_thread:.0f}/thread)",
+        rows=rows,
+        threads=threads,
+        per_thread=round(per_thread, 1),
+    )
 
 
 def check_logs() -> dict:
@@ -225,17 +249,25 @@ def check_docker_reclaimable() -> dict:
     try:
         out = subprocess.run(
             ["docker", "system", "df", "--format", "{{.Type}}\t{{.Reclaimable}}"],
-            capture_output=True, text=True, timeout=timeout_s,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
         )
     except subprocess.TimeoutExpired:
-        return check("docker_reclaimable", YELLOW,
-                     f"docker system df exceeded {timeout_s:.0f}s "
-                     "(daemon is up but slow — many images/volumes)")
+        return check(
+            "docker_reclaimable",
+            YELLOW,
+            f"docker system df exceeded {timeout_s:.0f}s "
+            "(daemon is up but slow — many images/volumes)",
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         return check("docker_reclaimable", YELLOW, f"docker unavailable: {exc}")
     if out.returncode != 0:
-        return check("docker_reclaimable", YELLOW,
-                     f"docker error: {out.stderr.strip()[:120] or 'unknown'}")
+        return check(
+            "docker_reclaimable",
+            YELLOW,
+            f"docker error: {out.stderr.strip()[:120] or 'unknown'}",
+        )
 
     parts = [line for line in out.stdout.strip().splitlines() if line.strip()]
     return check("docker_reclaimable", GREEN, "; ".join(parts) or "nothing reported")
@@ -261,8 +293,7 @@ def _job_check(name: str, label: str, max_age_sec: float, hint: str) -> dict:
     """
     job = _jobs_state().get(name)
     if not job:
-        return check(label, YELLOW,
-                     f"has never run — {hint}", ran=False)
+        return check(label, YELLOW, f"has never run — {hint}", ran=False)
 
     age = time.time() - (job.get("at_epoch") or 0)
     rc = job.get("exit_code")
@@ -270,35 +301,47 @@ def _job_check(name: str, label: str, max_age_sec: float, hint: str) -> dict:
     age_h = age / 3600
 
     if rc is None:
-        return check(label, RED, f"last run could not complete: {detail}",
-                     age_sec=round(age))
+        return check(
+            label, RED, f"last run could not complete: {detail}", age_sec=round(age)
+        )
     if rc != 0:
-        return check(label, RED, f"last run failed (exit {rc}): {detail}",
-                     age_sec=round(age))
+        return check(
+            label, RED, f"last run failed (exit {rc}): {detail}", age_sec=round(age)
+        )
     if age > max_age_sec:
-        return check(label, YELLOW,
-                     f"last ran {age_h:.1f}h ago (expected within "
-                     f"{max_age_sec / 3600:.0f}h) — {hint}",
-                     age_sec=round(age))
-    return check(label, GREEN, f"ran {age_h:.1f}h ago — {detail}"[:160],
-                 age_sec=round(age))
+        return check(
+            label,
+            YELLOW,
+            f"last ran {age_h:.1f}h ago (expected within "
+            f"{max_age_sec / 3600:.0f}h) — {hint}",
+            age_sec=round(age),
+        )
+    return check(
+        label, GREEN, f"ran {age_h:.1f}h ago — {detail}"[:160], age_sec=round(age)
+    )
 
 
 def check_prune_job() -> dict:
     # Daily cadence; two missed days is a real problem, one is noise.
-    return _job_check("prune", "prune_job", 2 * 86_400,
-                      "is nova-gates running?")
+    return _job_check("prune", "prune_job", 2 * 86_400, "is nova-gates running?")
 
 
 def check_rotate_job() -> dict:
-    return _job_check("rotate", "rotate_job", 6 * 3600,
-                      "is nova-gates running?")
+    return _job_check("rotate", "rotate_job", 6 * 3600, "is nova-gates running?")
 
 
 CHECKS = (
-    check_disk, check_inodes, check_memory, check_swap, check_io_pressure,
-    check_database, check_checkpoint_count, check_logs, check_docker_reclaimable,
-    check_prune_job, check_rotate_job,
+    check_disk,
+    check_inodes,
+    check_memory,
+    check_swap,
+    check_io_pressure,
+    check_database,
+    check_checkpoint_count,
+    check_logs,
+    check_docker_reclaimable,
+    check_prune_job,
+    check_rotate_job,
 )
 
 
@@ -308,10 +351,13 @@ def build_report() -> dict:
         try:
             results.append(fn())
         except Exception as exc:  # noqa: BLE001
-            results.append(check(fn.__name__.replace("check_", ""), YELLOW,
-                                 f"check raised: {exc}"))
-    overall = RED if any(r["status"] == RED for r in results) else (
-        YELLOW if any(r["status"] == YELLOW for r in results) else GREEN
+            results.append(
+                check(fn.__name__.replace("check_", ""), YELLOW, f"check raised: {exc}")
+            )
+    overall = (
+        RED
+        if any(r["status"] == RED for r in results)
+        else (YELLOW if any(r["status"] == YELLOW for r in results) else GREEN)
     )
     return {
         "gate": "host",
@@ -325,8 +371,12 @@ def build_report() -> dict:
 def write_atomic(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
-        "w", encoding="utf-8", dir=path.parent,
-        prefix=".host-gate-", suffix=".tmp", delete=False,
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".host-gate-",
+        suffix=".tmp",
+        delete=False,
     ) as handle:
         json.dump(payload, handle, indent=2)
         handle.flush()
@@ -336,11 +386,16 @@ def write_atomic(path: Path, payload: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--json", action="store_true", help="echo the JSON document")
-    parser.add_argument("--print", dest="print_only", action="store_true",
-                        help="print only; do not write the status file")
+    parser.add_argument(
+        "--print",
+        dest="print_only",
+        action="store_true",
+        help="print only; do not write the status file",
+    )
     parser.add_argument("--status-path", type=Path, default=_default_status_path())
     args = parser.parse_args(argv)
 
@@ -349,7 +404,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             write_atomic(args.status_path, report)
         except OSError as exc:
-            print(f"host-gate: could not write {args.status_path}: {exc}", file=sys.stderr)
+            print(
+                f"host-gate: could not write {args.status_path}: {exc}", file=sys.stderr
+            )
 
     if args.json:
         print(json.dumps(report, indent=2))
