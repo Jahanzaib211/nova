@@ -361,6 +361,8 @@ export const enUS: Translations = {
     in_progress: "Running subtask",
     completed: "Subtask completed",
     failed: "Subtask failed",
+    interrupted:
+      "No result recorded — the run was interrupted before this subtask reported back",
   },
 
   // Token Usage

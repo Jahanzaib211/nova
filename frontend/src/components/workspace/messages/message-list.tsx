@@ -481,10 +481,27 @@ export function MessageList({
                       ...(parsed?.result !== undefined
                         ? { result: parsed.result }
                         : {}),
+                      // A `failed` status has two very different origins, and
+                      // saying "Subtask failed" for both misreads the second as
+                      // an agent error:
+                      //
+                      //   parsed  — a real ToolMessage said the task failed
+                      //   derived — no ToolMessage exists at all
+                      //
+                      // The derived case means the run was cut off before the
+                      // subtask reported back; verified on a live thread where
+                      // five orphaned task calls had neither a ToolMessage nor
+                      // an llm.tool.result event, i.e. no result was ever
+                      // produced. Calling that "failed" sends people hunting a
+                      // subagent bug that is not there.
                       ...(parsed?.error !== undefined
                         ? { error: parsed.error }
                         : status === "failed"
-                          ? { error: t.subtasks.failed }
+                          ? {
+                              error: parsed
+                                ? t.subtasks.failed
+                                : t.subtasks.interrupted,
+                            }
                           : {}),
                     };
                     updateSubtask(task, parsed ? "result" : "derived");

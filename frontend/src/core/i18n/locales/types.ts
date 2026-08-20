@@ -278,6 +278,8 @@ export interface Translations {
     in_progress: string;
     completed: string;
     failed: string;
+    /** No result was ever recorded — distinct from a subagent that ran and errored. */
+    interrupted: string;
   };
 
   // Token Usage

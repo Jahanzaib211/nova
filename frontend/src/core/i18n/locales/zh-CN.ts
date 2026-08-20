@@ -345,6 +345,7 @@ export const zhCN: Translations = {
     in_progress: "子任务运行中",
     completed: "子任务已完成",
     failed: "子任务失败",
+    interrupted: "未记录结果 — 运行在该子任务回报前被中断",
   },
 
   // Token Usage
