@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, text
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, false, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from deerflow.persistence.base import Base
@@ -82,7 +82,14 @@ class UserRow(Base):
     # Operator "forbid" toggle. When True, AuthMiddleware rejects the user
     # before any password / OAuth flow runs; the user keeps their data so
     # an admin can audit and unforbid without a destructive delete.
-    is_forbidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("0"))
+    # server_default=false(), not text("0"). SQLite has no real boolean type and
+    # accepts the integer; Postgres rejects it outright —
+    #   column "is_forbidden" is of type boolean but default expression is of
+    #   type integer
+    # — so create_all() failed against Postgres and the "postgres is a
+    # first-class backend" claim was never actually exercised. false() renders
+    # per-dialect (0 on SQLite, false on Postgres).
+    is_forbidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
 
     __table_args__ = (
         Index(

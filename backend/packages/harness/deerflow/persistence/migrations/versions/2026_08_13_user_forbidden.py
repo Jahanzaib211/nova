@@ -45,7 +45,9 @@ def upgrade() -> None:
                     "is_forbidden",
                     sa.Boolean(),
                     nullable=False,
-                    server_default=sa.text("0"),
+                    # sa.false() renders per-dialect; sa.text("0") is a
+                    # DatatypeMismatchError on Postgres for a boolean column.
+                    server_default=sa.false(),
                 )
             )
         else:
