@@ -1208,3 +1208,63 @@ async def gates_health(request: Request) -> GateHealthResponse:
             for p in report.probes
         ],
     )
+
+
+class GateSandboxResponse(BaseModel):
+    """Sandbox + browser subsystem state, as a gate."""
+
+    status: str
+    cdp_reachable: bool | None = None
+    reason: str = ""
+    cdp_url: str | None = None
+    latency_ms: float | None = None
+    open_circuits: int = 0
+    total_circuits: int = 0
+    running_sandboxes: int | None = None
+    backend: str = ""
+
+
+@router.get("/gates/sandbox", response_model=GateSandboxResponse)
+async def gates_sandbox(request: Request) -> GateSandboxResponse:
+    """Sandbox subsystem state for the Nova Ops console.
+
+    The console cannot call ``/api/health/browser`` directly — its BFF maps
+    ``/api/ops/*`` onto ``/api/v1/admin/*`` only — so this republishes that
+    payload under the admin prefix, alongside the sandbox provider's own view.
+
+    The tri-state matters and is preserved verbatim: ``cdp_reachable`` is
+    ``None`` when no thread is using a sandbox (nothing to probe), ``False``
+    only when a probe actually ran against a real CDP URL and failed. Flattening
+    those two into "false" is what made every dashboard report the idle case as
+    broken, which is a UX bug rather than an outage.
+    """
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
+
+    from app.gateway.routers.browser_health import browser_health
+
+    probe = await browser_health(Response())
+
+    running: int | None = None
+    backend = ""
+    try:
+        from deerflow.sandbox import get_sandbox_provider
+
+        provider = get_sandbox_provider()
+        backend = type(getattr(provider, "_backend", provider)).__name__
+        lister = getattr(getattr(provider, "_backend", None), "list_running", None)
+        if callable(lister):
+            running = len(lister() or [])
+    except Exception:  # noqa: BLE001 - a gate must not fail because a probe did
+        pass
+
+    return GateSandboxResponse(
+        status=str(probe.get("status", "unknown")),
+        cdp_reachable=probe.get("cdp_reachable"),
+        reason=str(probe.get("reason", "")),
+        cdp_url=probe.get("cdp_url"),
+        latency_ms=probe.get("latency_ms"),
+        open_circuits=int(probe.get("open_circuits") or 0),
+        total_circuits=int(probe.get("total_circuits") or 0),
+        running_sandboxes=running,
+        backend=backend,
+    )
