@@ -85,15 +85,27 @@ See `docs/RUNBOOK.md` §8 for full migration workflow.
 
 ## PM2 Processes
 
-| Process | Script | Purpose |
-|---------|--------|---------|
-| nova | ecosystem.config.js | Main gateway (managed via Docker) |
-| llama-bridge | ecosystem.config.js | Local LLM bridge |
-| nova-litellm | ecosystem.config.js | LiteLLM proxy for free models |
-| nova-dify | ecosystem.config.js | Dify stack |
-| nova-healthcheck | ecosystem.config.js | 12-probe watchdog daemon |
-| nova-tunnel | ecosystem.config.js | Cloudflare tunnel wrapper |
-| nova-monitoring | ecosystem.config.js | Monitoring stack |
+`ecosystem.config.js` defines **four** apps:
+
+| Process | Purpose |
+|---------|---------|
+| `nova` | The Docker compose stack (gateway, frontend, nginx, autoheal) |
+| `nova-litellm` | LiteLLM proxy for free models |
+| `nova-healthcheck` | 13-probe watchdog daemon |
+| `nova-gates` | Refreshes the Nova Ops gate status files, and runs the checkpoint pruner and log rotation |
+
+Four more are documented in `ecosystem.config.js`'s header as **deliberately
+removed** on 2026-08-13, because every unstartable entry turned the watchdog's
+"heal missing app" logic into an infinite repair loop:
+
+| Removed | Why |
+|---------|-----|
+| `llama-bridge` | `~/Desktop/llama-bridge` does not exist |
+| `nova-dify` | `~/Desktop/dify` does not exist |
+| `nova-tunnel` | `cloudflared-nova.service` is not installed; the public hostname is served by the separate `tunnel-nova` PM2 app |
+| `nova-monitoring` | Duplicates the live k3s `monitoring` namespace — see the note in `scripts/pm2-monitoring.sh` before re-enabling |
+
+Do not re-add one without first making it actually startable.
 
 Restart via:
 

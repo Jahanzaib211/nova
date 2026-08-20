@@ -48,6 +48,124 @@
 
 ---
 
+## v9.5 — the 59 GB database behind v9.4, and the gates that make it visible
+
+**Session pattern:** user reported that after recreating the containers on
+2026-08-18 "the whole project started regressing, breaking on its own", with
+no idea what had changed. The evidence was on the box; nothing was looking
+at it.
+
+### The actual root cause
+
+v9.4 correctly identified `database is locked`, the `POST /api/threads` 500s
+and the login failures — and fixed them at the wrong layer. The 30 s
+`busy_timeout`, `commit_with_lock_retry` and the larger pool are all correct
+and stay, but they treat contention, not its cause.
+
+`backend/.deer-flow/data/deerflow.db` had reached **59.4 GB**:
+
+```
+checkpoints.checkpoint   56,489 rows  ->  57.3 GB   (avg ~1 MB, largest 58 MB)
+writes.value             70,755 rows  ->   1.6 GB
+everything else (73 users, 140 threads, 927 runs, 35k audit) -> ~0.5 GB
+freelist: 455 pages — the space is LIVE DATA; VACUUM alone reclaims nothing
+```
+
+LangGraph's checkpointer serialises the entire accumulated graph state on
+every step, and **nothing in the codebase ever deleted a checkpoint** — no
+retention, no pruning, no vacuum anywhere under `backend/`. 140 threads
+produced 56k checkpoints. Writes to a file that size hold the write lock long
+enough that concurrent writers time out; that is what v9.4 was retrying
+around. Disk was at 97%.
+
+nginx's own log dates the regression precisely:
+
+| Date | Requests | 200 | 502 | Error rate |
+|---|---|---|---|---|
+| ≤ 08-15 | — | — | — | ≤ 0.4% |
+| 08-16 | 2093 | 23 | 2015 | **98.6%** (the v9.3 outage) |
+| 08-17 | 3986 | 184 | 3740 | **95.3%** |
+| 08-18 | 184 | 160 | 1 | 0.5% ← the container recreation fixed *that* one |
+| 08-19 | 778 | 601 | 63 | **12.6%** ← a second, unrelated regression |
+
+Top failing path: `/api/v1/auth/me`, 5,683 × 502 — which is why login and then
+everything else appeared broken.
+
+Pruned to **0.50 GB** (`scripts/prune-checkpoints.py`, keep 3/thread + 2 days).
+Disk 97% → 71%. Users, threads and runs untouched; `integrity_check` ok.
+
+### Why it took a day to see
+
+`docker/dev-entrypoint.sh` opened the log with `exec >/app/logs/gateway.log`,
+**truncating on every start**. A crash-loop therefore destroyed the record of
+the crash that caused it. `logs/gateway.log` held only the last boot. Now
+appends, with a dated boot banner, bounded by `scripts/rotate-logs.sh`.
+
+The two are a matched pair: the rotation copy-truncates, which is only safe
+because the log is opened `O_APPEND` (the next write lands at offset 0 instead
+of recreating a sparse NUL hole). The script detects and reports that NUL-hole
+state explicitly — it caught exactly that on a container started before the fix.
+
+### "CI passed" was not true either
+
+`local-ci.yml`'s `backend-format` job ran `make format-check`, **a target that
+did not exist**, so `local-ci-gate` — the repo's only aggregate verdict — could
+never pass. Underneath it: 10 ruff errors, 7 unformatted files, 3 eslint errors,
+59 prettier files, and 1912 markdownlint violations of which 1876 came from one
+git-tracked generated file.
+
+One of the eslint errors was real: a **conditional `useEffect`** in
+`message-group.tsx` — a tool call's `name` arrives incrementally while it
+streams, so the same component rendered once without the hook and again with
+it, and React throws "Rendered more hooks than during the previous render"
+mid-stream.
+
+### The gates
+
+Four producers now publish machine-readable status to `~/.nova/gates/*.json`,
+read by the Nova Ops `/gates` console: **host** (disk, swap, IO pressure, DB
+size, checkpoints-per-thread, and whether the pruner and rotation still run),
+**drift** (is what is running what the repo says), **ci** (a ~35 s fast tier
+plus a slow tier), and the **watchdog**, which already emitted per-cycle JSON
+into a PM2 log nothing read back. Plus Lighthouse budgets and a
+`/api/v1/admin/gates/health` endpoint for the gateway's view of its own
+dependencies — `HealthServiceImpl` was constructed bare, so `check_all()`
+returned `healthy=True, probe_count=0`: a report that could not fail.
+
+`nova-gates` (PM2) keeps them fresh and runs the pruner daily. Without a
+supervisor the console showed "Stale — produced 10h ago" on real-but-outdated
+numbers, which reads as authoritative and is not.
+
+### Things that turned out not to be true
+
+Worth recording, because each was a plausible reading of real evidence:
+
+- **Compose overlay "drift" was not drift.** `com.docker.compose.project.config_files`
+  records a per-service *subset* of the `-f` chain, not the whole chain, so the
+  gateway showing `dev,dood,voice` while the frontend shows `dev,dood,prod-frontend`
+  is one normal `docker compose up`. Verified by running exactly one.
+- **The four SIGABRT'd CI checks were not a memory, io_uring or RLIMIT_NOFILE
+  problem.** All three were measured and ruled out. It is CPython's `close_fds`,
+  and it must be `False` at *every* level of the spawn chain — one `close_fds=True`
+  above a node process makes it abort at teardown, after it has already produced
+  correct output.
+- **The frontend-build drift check gave two false positives** before it was
+  right: mtime and then last-commit time are both rewritten by `git checkout`
+  and `git merge` without a byte changing. It now hashes the source baked into
+  the image against the working tree.
+
+### Host
+
+The desktop froze with ~2 GB RAM and ~1.4 GB swap still free, load average 30.
+Nothing was OOM-killed because nothing reached a kill threshold — a freeze from
+thrash happens *before* an OOM event. `earlyoom` was running the whole time
+with `-m 6 -s 6`: act below 6% of 30 GiB, i.e. under 1.9 GiB, long after the
+machine is unusable. `scripts/host/harden-memory.sh` adds zram as the primary
+swap tier (8 G zstd, ~3.7× compression), raises the thresholds to 12%, and sets
+a zram-appropriate `vm.swappiness`. Swap 92% → 46%; IO pressure 34.9% → 1.3%.
+
+---
+
 ## v9.4 — SQLite lock storm, "Failed to create thread" 500, CDP UX bug, watchdog spam
 
 **Session pattern:** user reported login "network error" and
