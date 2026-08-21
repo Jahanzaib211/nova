@@ -97,6 +97,40 @@ if ! uv sync --all-packages $EXTRAS_FLAGS; then
     uv sync --all-packages $EXTRAS_FLAGS
 fi
 
+# ── readabilipy's Node extractor ────────────────────────────────────────────
+#
+# readabilipy shells out to `node ExtractArticle.js`, which needs npm packages
+# that pip does not install. The shipped tree here had `node_modules/tldts`
+# with its dist/ and src/ but **no package.json**, so Node could not resolve an
+# entry point and every extraction died with `Cannot find module 'tldts'`.
+#
+# The failure is invisible: `web_fetch` catches it and returns the raw page, so
+# callers get plausible-looking output and nobody notices that article
+# extraction has been off. Paired with an expired Jina key it meant both
+# extraction paths were down at once while the tool still "worked".
+#
+# Repaired at boot rather than in the image because .venv is a named volume:
+# a rebuilt image would not fix an already-broken volume, and this check is a
+# no-op once the deps resolve.
+# The health check runs the extractor itself rather than probing for a module.
+# The tree was corrupt in more than one place -- tldts and undici both had a
+# directory but no resolvable entry point -- so "is package X importable" kept
+# reporting fixed while the next require down still failed. Only the real
+# invocation tells the truth, and a corrupt tree needs a clean reinstall, not
+# an npm install layered on top of it.
+READABILIPY_JS="$(find .venv -type d -path '*readabilipy/javascript' 2>/dev/null | head -1)"
+if [ -n "$READABILIPY_JS" ] && command -v npm >/dev/null 2>&1; then
+    _probe=/tmp/readabilipy-probe.html
+    printf '<html><body><article><p>probe body text</p></article></body></html>' >"$_probe"
+    if ! (cd "$READABILIPY_JS" && node ExtractArticle.js -i "$_probe" -o "${_probe}.json" >/dev/null 2>&1); then
+        echo "[startup] readabilipy's Node extractor is broken; reinstalling its JS deps"
+        (cd "$READABILIPY_JS" && rm -rf node_modules package-lock.json \
+            && npm install --no-audit --no-fund --silent) \
+            || echo "[startup] npm install failed; article extraction falls back to raw HTML" >&2
+    fi
+    rm -f "$_probe" "${_probe}.json"
+fi
+
 # ── Voice weights sanity check ──────────────────────────────────────────────
 #
 # The `voice` extra installs fine without the weights, so both engines report

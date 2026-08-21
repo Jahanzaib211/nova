@@ -39,6 +39,34 @@ export function PrivacyPanel({
     );
   }
 
+  // When iGIN0 is off the status endpoint returns `{enabled: false}` and
+  // nothing else, so every field below reads as undefined: SearXNG rendered
+  // "unhealthy", and cache/audit rendered real-looking zeros. A switched-off
+  // feature looked like a broken one. The endpoint has always documented this
+  // shape as the cue for a "feature off" state -- this is that state.
+  if (!status.enabled) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <ShieldIcon className="text-muted-foreground h-5 w-5" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">
+            {t.agentComputer.privacy.disabledTitle}
+          </p>
+          <p className="text-muted-foreground max-w-sm text-xs">
+            {t.agentComputer.privacy.disabledBody}
+          </p>
+        </div>
+        <Switch
+          checked={false}
+          onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+          disabled={toggleMutation.isPending}
+          aria-label={t.agentComputer.privacy.toggleLabel}
+          data-testid="igino-toggle"
+        />
+      </div>
+    );
+  }
+
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4">

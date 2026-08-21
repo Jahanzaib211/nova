@@ -939,6 +939,9 @@ export const enUS: Translations = {
       errors: "Errors",
       torUsage: "TOR",
       toggleLabel: "Toggle iGIN0 privacy search",
+      disabledTitle: "Privacy search is off",
+      disabledBody:
+        "iGIN0 routes web search through a private SearXNG instance and records an audit trail. Turn it on to see source health, cache and audit figures for this thread.",
     },
     skillLauncher: {
       runSkill: "Run a skill on this workspace",

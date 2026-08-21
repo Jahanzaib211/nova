@@ -225,6 +225,34 @@ class SearxngClient:
                 context={"query": query},
             ) from exc
 
+    async def health(self) -> bool:
+        """Is the configured SearXNG instance actually answering?
+
+        The status endpoint used to hardcode ``searxng_healthy: True``, so the
+        Privacy panel could report a green SearXNG that did not exist and could
+        never report a real outage. A health flag that cannot go false is worse
+        than no flag: it is a permanently reassuring light.
+
+        Probes ``/healthz`` (what the container's own healthcheck uses) and
+        falls back to the root path, because a SearXNG behind a proxy that only
+        forwards ``/search`` still serves searches. Short timeout: this runs
+        behind a UI poll, so a hung instance must read as unhealthy quickly
+        rather than stalling the panel.
+        """
+        timeout = min(self._timeout, 5.0)
+        for path in ("/healthz", "/"):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.get(
+                        f"{self._base_url}{path}",
+                        headers={"User-Agent": "Mozilla/5.0 (compatible; Nova/2.1)"},
+                    )
+                if resp.status_code < 400:
+                    return True
+            except Exception:  # noqa: BLE001 - any failure means "not healthy"
+                continue
+        return False
+
     @property
     def base_url(self) -> str:
         return self._base_url

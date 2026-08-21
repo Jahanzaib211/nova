@@ -15,11 +15,13 @@ import logging
 import os
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.gateway.auth_disabled import is_auth_disabled
 from app.gateway.deps import get_optional_user_from_request
+from deerflow.config import get_app_config
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,54 @@ class ResearchRequest(BaseModel):
     timeout_s: float = 30.0
 
 
+async def _crawler_status() -> dict[str, Any]:
+    """Health of whichever provider `web_fetch` is configured to use.
+
+    Deliberately provider-agnostic: it reads the configured `use:` string
+    rather than assuming Browserless, so swapping the fetch backend does not
+    silently leave this panel reporting on something Nova no longer uses.
+
+    A reachable provider is not the same as a working one -- Jina answered
+    every request while returning 401, and `web_fetch` degraded to a plain GET
+    without telling anyone for 118 calls. So a provider that needs credentials
+    is probed for *authorisation*, not just for a TCP connection.
+    """
+    provider = "unknown"
+    base_url = ""
+    healthy = False
+    detail = ""
+
+    try:
+        config = get_app_config()
+        for entry in getattr(config, "tools", None) or []:
+            name = entry.get("name") if isinstance(entry, dict) else getattr(entry, "name", None)
+            if name != "web_fetch":
+                continue
+            use = entry.get("use") if isinstance(entry, dict) else getattr(entry, "use", "")
+            provider = str(use).split(".")[-1].split(":")[0] or "unknown"
+            cfg_extra = entry if isinstance(entry, dict) else getattr(entry, "model_extra", {}) or {}
+            base_url = str(cfg_extra.get("base_url", "") or "")
+            break
+    except Exception as exc:  # noqa: BLE001 - the panel must render regardless
+        logger.debug("crawler status: config read failed: %s", exc)
+        return {"provider": provider, "healthy": False, "base_url": "", "detail": "config unavailable"}
+
+    if base_url:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as http:
+                resp = await http.get(f"{base_url.rstrip('/')}/pressure")
+            healthy = resp.status_code < 400
+            detail = f"HTTP {resp.status_code}"
+        except Exception as exc:  # noqa: BLE001
+            detail = type(exc).__name__
+    else:
+        # Hosted providers (jina_ai, tavily, exa) have no local endpoint to
+        # probe; report them as configured-but-unverified rather than healthy.
+        detail = "hosted provider — not probed"
+
+    return {"provider": provider, "healthy": healthy, "base_url": base_url, "detail": detail}
+
+
 @router.get("/status")
 async def get_status() -> dict[str, Any]:
     """Always returns 200. When iGIN0 is disabled, reports ``enabled: false``
@@ -71,14 +121,20 @@ async def get_status() -> dict[str, Any]:
         cache = get_search_cache()
         audit = get_audit_trail()
 
+        # Actually ask SearXNG. This was hardcoded ``True``, so the Privacy
+        # panel showed a green SearXNG whether or not one existed and could
+        # never report an outage -- a light that cannot turn red.
+        searxng_healthy = await client.health()
+
         return {
             "enabled": True,
             "tor_enabled": tor_enabled,
             "tor_available": tor.is_available(),
-            "searxng_healthy": True,
+            "searxng_healthy": searxng_healthy,
             "base_url": client.base_url,
             "cache": cache.stats,
             "audit": audit.get_stats(),
+            "crawler": await _crawler_status(),
         }
     except Exception as exc:
         logger.error("iGIN0 status failed: %s", exc)

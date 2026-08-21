@@ -811,6 +811,9 @@ export interface Translations {
       errors: string;
       torUsage: string;
       toggleLabel: string;
+      /** Shown instead of fake zeros when iGIN0 is switched off. */
+      disabledTitle: string;
+      disabledBody: string;
     };
     skillLauncher: {
       runSkill: string;

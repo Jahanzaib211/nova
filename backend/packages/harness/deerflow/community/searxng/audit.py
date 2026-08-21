@@ -130,16 +130,34 @@ class AuditTrail:
             return [r.to_dict() for r in self._records[-limit:]]
 
     def get_stats(self) -> dict[str, Any]:
+        """Aggregate counters for the Privacy panel.
+
+        Search and fetch are broken out separately because they fail for
+        different reasons and are served by different components: a dead
+        SearXNG and a dead crawler both showed up only as a bump in the single
+        ``errors`` number, which told an operator nothing about which half was
+        down. ``fetch()`` has existed on this class for a while with no caller,
+        so these fetch counters read zero until the web_fetch tool records
+        through it.
+        """
         with self._lock:
             total = len(self._records)
             errors = sum(1 for r in self._records if r.error)
             tor_count = sum(1 for r in self._records if r.tor_used)
+
+            fetches = [r for r in self._records if "fetch" in (r.compliance_tags or [])]
+            fetch_errors = sum(1 for r in fetches if r.error)
+            fetch_durations = [r.duration_ms for r in fetches if r.duration_ms]
+
             return {
                 "total_records": total,
                 "errors": errors,
                 "tor_usage": tor_count,
                 "enabled": self._enabled,
                 "redacted": _REDACT,
+                "fetches": len(fetches),
+                "fetch_errors": fetch_errors,
+                "avg_fetch_ms": (round(sum(fetch_durations) / len(fetch_durations), 1) if fetch_durations else 0.0),
             }
 
     def clear(self) -> None:

@@ -37,6 +37,12 @@ voice-gpu = ["deerflow-harness[voice-gpu]"]
 
 [dependency-groups]
 dev = [
+    # uv builds venvs without pip, which is normally fine -- uv installs things
+    # itself. It stops being fine inside the gateway container, where trying a
+    # package to see if it helps dies on "No module named pip" and the only
+    # route left is an image rebuild. Cheap to carry, and it keeps the running
+    # container debuggable.
+    "pip>=25.0",
     "blockbuster>=1.5.26,<1.6",
     "fakeredis>=2.26.0",
     "prompt-toolkit>=3.0.0",

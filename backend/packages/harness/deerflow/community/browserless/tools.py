@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from langchain.tools import tool
 
@@ -63,6 +64,7 @@ async def web_fetch_tool(url: str) -> str:
             wait_for_timeout_ms = int(raw_wait) if not isinstance(raw_wait, int) else raw_wait
             wait_for_selector = cfg.get("wait_for_selector", wait_for_selector)
 
+        start = time.monotonic()
         client = _get_browserless_client()
         html = await client.fetch_html(
             url=url,
@@ -74,12 +76,39 @@ async def web_fetch_tool(url: str) -> str:
             reject_request_pattern=reject_request_pattern,
         )
 
+        elapsed_ms = (time.monotonic() - start) * 1000
+
         if html.startswith("Error:"):
+            _record_fetch(url, success=False, duration_ms=elapsed_ms, error=html[:200])
             return html
 
         article = await asyncio.to_thread(_readability_extractor.extract_article, html)
+        _record_fetch(url, success=True, duration_ms=elapsed_ms)
         return article.to_markdown()[:4096]
 
     except Exception as e:
         logger.error(f"Error in web_fetch_tool: {e}")
+        _record_fetch(url, success=False, duration_ms=0.0, error=str(e)[:200])
         return f"Error: {str(e)}"
+
+
+def _record_fetch(url: str, *, success: bool, duration_ms: float, error: str | None = None) -> None:
+    """Record the fetch in the shared audit trail. Never fatal.
+
+    The trail has carried a ``fetch()`` method with no caller, which is why the
+    Privacy panel's crawler figures were always zero -- the facility existed and
+    nothing wrote to it. Bookkeeping must never break a fetch that succeeded, so
+    every failure here is swallowed.
+    """
+    try:
+        from deerflow.community.searxng.audit import get_audit_trail
+
+        get_audit_trail().fetch(
+            url=url,
+            source="browserless",
+            success=success,
+            duration_ms=duration_ms,
+            error=error,
+        )
+    except Exception:  # noqa: BLE001 - never let auditing break the tool
+        logger.debug("fetch audit failed for %s", url, exc_info=True)

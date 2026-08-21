@@ -409,6 +409,43 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Self-hosted headless Chrome for web_fetch. Nova's fetch path was Jina's
+  # hosted API, whose key expired -- and because the tool silently falls back to
+  # a plain HTTP GET, it kept returning plausible output while article
+  # extraction was off, for 118 logged 401s. Self-hosting removes the key, the
+  # quota and the silent-degradation mode in one move.
+  #
+  # Chosen over the firecrawl module already in the tree because that one
+  # constructs FirecrawlApp(api_key=...) with no base_url, so it can only talk
+  # to the cloud service; browserless takes a base_url and self-hosts as-is.
+  # It renders JS/SPAs, and the gateway extracts the article from the returned
+  # HTML with readabilipy -- so keep that path healthy (dev-entrypoint.sh
+  # repairs it at boot) or this returns whole pages instead of articles.
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: deer-flow-browserless
+    ports:
+      - "127.0.0.1:3032:3000"
+    environment:
+      - CONCURRENT=2
+      - TIMEOUT=30000
+      - TOKEN=${BROWSERLESS_TOKEN:-}
+    networks:
+      - deer-flow-dev
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/pressure"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Chrome is memory-hungry and this box has an OOM history; two concurrent
+    # sessions inside 1.5g is enough for fetch-a-page work without competing
+    # with the gateway.
+    mem_limit: 1500m
+    mem_reservation: 512m
+    shm_size: 1gb
+    security_opt:
+      - "no-new-privileges:true"
+
   searxng:
     image: searxng/searxng:latest
     container_name: deer-flow-searxng

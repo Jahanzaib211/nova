@@ -905,6 +905,9 @@ export const zhCN: Translations = {
       errors: "错误",
       torUsage: "TOR",
       toggleLabel: "切换 iGIN0 隐私搜索",
+      disabledTitle: "隐私搜索已关闭",
+      disabledBody:
+        "iGIN0 通过私有 SearXNG 实例进行网络搜索并记录审计轨迹。开启后可查看此线程的来源健康状况、缓存与审计数据。",
     },
     skillLauncher: {
       runSkill: "在此工作区运行技能",
