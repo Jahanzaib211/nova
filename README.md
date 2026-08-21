@@ -339,6 +339,12 @@ Nova supports multiple sandbox execution modes:
 
 For Docker development, service startup follows `config.yaml` sandbox mode. In Local/Docker modes, `provisioner` is not started.
 
+The Docker sandbox image is built locally as a layer chain — `base` → `tools` →
+`dind` → `android` — with `make sandbox-image`. The base is pinned by digest so
+rebuilds are reproducible, and `tools` carries the agent's working toolchain
+(Go, Rust, `uv`, pandoc, `psql`, `redis-cli`, tesseract, Playwright, and more).
+See [`docker/sandbox/README.md`](docker/sandbox/README.md).
+
 See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
 
 #### MCP Server
