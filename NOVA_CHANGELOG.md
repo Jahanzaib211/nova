@@ -154,6 +154,43 @@ Enabling that on this host would have been reckless without limits.
 `sandbox.pids_limit` (default `2048`) now bound a runaway build to its own
 container.
 
+### Limits that are layered, because one is never enough
+
+Enabling a Docker daemon inside the sandbox raises the stakes on every limit
+around it, and two were missing outright.
+
+**CPU** was unbounded. Memory and PID caps bound what a runaway build can
+*allocate*, not how much CPU it burns — a parallel compile sits comfortably
+inside `8g`/`2048` while using every core and starving the gateway, frontend and
+Postgres on a single-box deployment. `sandbox.cpu_limit` → `--cpus`.
+
+**Nothing enforced a wall-clock ceiling.** `idle_timeout` reaps sandboxes that go
+*quiet*, and it deliberately exempts one hosting a live dev-server preview. Both
+are right for an idle rule and both are holes in a deadline: a watch loop, a dev
+server, or a test that never converges keeps a container alive indefinitely
+while looking perfectly healthy. `sandbox.max_lifetime` is a separate check that
+refreshes nothing and exempts nothing, backed by a `_first_seen` clock that is
+never updated — kept out of the idle path rather than special-cased inside it,
+because the two rules disagree about the dev-server exemption on purpose.
+
+Both reach the containers the *agent* starts, which is the usual hole in an
+otherwise-good sandbox, and by two different mechanisms. Resources nest: inner
+containers get cgroups under the sandbox's own, so `--memory`, `--cpus` and
+`--pids-limit` bound the sum of everything the agent launches — `docker compose
+up` with fifteen services cannot exceed what the one sandbox was given — and
+`--default-ulimit` stops a single inner container exhausting that shared budget.
+Lifetime nests because destroying the sandbox tears down its PID namespace,
+taking every inner container with it.
+
+| Limit | Config | Catches |
+|---|---|---|
+| Memory | `memory_limit` | allocating until the host OOMs |
+| PIDs | `pids_limit` | fork bombs, runaway parallelism |
+| CPU | `cpu_limit` | starving the host while inside its memory cap |
+| `/dev/shm` | `shm_size` | Chromium hanging mid-render |
+| Idle | `idle_timeout` | a sandbox nobody is using |
+| Lifetime | `max_lifetime` | a sandbox that never goes idle |
+
 ### Chromium was hanging on a 64 MB /dev/shm
 
 Verifying Playwright against the image's own Chromium turned up a fault that
