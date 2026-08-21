@@ -30,7 +30,17 @@ def _provisioner_url() -> str:
     sandbox_config = get_app_config().sandbox
     url = getattr(sandbox_config, "provisioner_url", None)
     if not url:
-        raise HTTPException(status_code=503, detail="No sandbox provisioner is configured (sandbox.provisioner_url).")
+        # 501, not 503. A provisioner is optional: most deployments run sandboxes
+        # locally and never set sandbox.provisioner_url, and for them this whole
+        # feature simply does not exist. 503 is what a *configured* provisioner
+        # returns when it is down (see the InfraClientError path below), so
+        # reusing it here made the console unable to tell "you never set this up"
+        # apart from "your cluster is broken" — and it rendered the former as a
+        # red alarm on every Nova install that has no cluster at all.
+        raise HTTPException(
+            status_code=501,
+            detail="No sandbox provisioner is configured (sandbox.provisioner_url).",
+        )
     return url
 
 

@@ -475,3 +475,74 @@ class TestPreviewPortCollisionQuarantine:
             # Drop any reservations this test introduced (quarantined 4100 +
             # allocated ports) so the global allocator stays clean for others.
             allocator._reserved_ports.intersection_update(reserved_before)
+
+
+# ── Resource caps and privileged mode ────────────────────────────────────────
+#
+# Sandbox containers ran with no memory limit, no pids limit and no way to ask
+# for --privileged. The caps matter because an unbounded container on a host
+# that already over-commits memory takes the whole machine down instead of just
+# itself; --privileged matters because it is what the nested Docker daemon in
+# the dind image layer needs, and it must never follow the image silently.
+
+
+def test_start_container_applies_default_resource_caps(monkeypatch):
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        memory_limit="8g",
+        pids_limit=2048,
+    )
+
+    cmd = _capture_start_container_command(monkeypatch, backend)
+
+    assert "--memory" in cmd
+    assert cmd[cmd.index("--memory") + 1] == "8g"
+    assert "--pids-limit" in cmd
+    assert cmd[cmd.index("--pids-limit") + 1] == "2048"
+
+
+def test_start_container_omits_caps_when_unset(monkeypatch):
+    """None means unlimited — the flag must be absent, not passed as "None"."""
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        memory_limit=None,
+        pids_limit=None,
+    )
+
+    cmd = _capture_start_container_command(monkeypatch, backend)
+
+    assert "--memory" not in cmd
+    assert "--pids-limit" not in cmd
+
+
+def test_start_container_is_unprivileged_by_default(monkeypatch):
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+    )
+
+    assert "--privileged" not in _capture_start_container_command(monkeypatch, backend)
+
+
+def test_start_container_adds_privileged_when_enabled(monkeypatch):
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        privileged=True,
+    )
+
+    assert "--privileged" in _capture_start_container_command(monkeypatch, backend)

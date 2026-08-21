@@ -11,7 +11,7 @@
 #
 # DO NOT commit monitoring.env to git.
 
-.PHONY: help setup doctor config config-upgrade check install setup-sandbox \
+.PHONY: help setup doctor config config-upgrade check install setup-sandbox sandbox-image \
 	dev dev-daemon start start-daemon stop \
 	docker-init docker-start docker-stop docker-logs up down \
 	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate \
@@ -49,6 +49,7 @@ help:
 	@echo "  check                  Verify required tooling is installed (node, pnpm, uv, nginx)"
 	@echo "  install                Install backend (uv) + frontend (pnpm) dependencies"
 	@echo "  setup-sandbox          Pull the AIO sandbox image (only if sandbox.use isn't 'local')"
+	@echo "  sandbox-image [LAYER=]  Build the sandbox image chain (base/tools/dind/android)"
 	@echo ""
 	@echo "Run (local, non-Docker):"
 	@echo "  dev / dev-daemon       Foreground / daemonized dev server (./scripts/serve.sh --dev)"
@@ -117,6 +118,13 @@ test-voice:
 
 setup-sandbox:
 	@./scripts/docker.sh init
+
+# Build the sandbox image chain (base -> tools -> dind -> android).
+# Reuses this machine's Go/Rust/uv/docker binaries where they are ABI-compatible
+# with the image, and downloads only what the host lacks. Pass LAYER= to stop
+# partway, e.g. `make sandbox-image LAYER=tools`.
+sandbox-image:
+	@./docker/sandbox/build.sh $(or $(LAYER),android)
 
 dev:
 	@./scripts/serve.sh --dev

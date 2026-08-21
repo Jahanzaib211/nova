@@ -116,3 +116,4 @@ frontend/tests/_diag/
 
 # Incident captures — local forensic snapshots, not source
 .nova/incident-*/
+docker/sandbox/vendor/

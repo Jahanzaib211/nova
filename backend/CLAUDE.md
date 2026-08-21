@@ -344,6 +344,14 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 
 **External dev server registration** (`sandbox/dev_server.py::register_external_dev_server`, `app/gateway/routers/sandbox.py::/dev-external`). When a dev server is started outside `start_dev_server` (raw `bash`, manual `node` invocation), the runtime has no handle to surface to the panel. `POST /api/sandbox/dev-external` (refuses HTTP 400 if the advertised host:port is not actually listening) registers a `ready` handle and returns `host` / `port` / `url` / `absproxy_url`. The agent-facing tool is `register_external_dev_server_tool` in `workspace_tools.py`. `/api/sandbox/dev-status` now also returns `host` and `absproxy_url` so the Browser tab can fall back to the generic absproxy URL when the canonical preview proxy cannot reach the host. Pinned by `tests/test_dev_server_external_registration.py` and `tests/test_dev_status_absproxy_fallback.py`.
 
+**Sandbox image chain** (`docker/sandbox/`). Four layers — `base` → `tools` → `dind` → `android` — built by `make sandbox-image`. `Dockerfile.base` pins the upstream by **digest**, not `:latest`; every layer used to build off the floating tag, so two builds could differ with no repo change. `config.yaml`'s `sandbox.image` selects a rung.
+
+**Never copy a host binary into the sandbox without checking glibc.** The build host is Ubuntu 26.04 (glibc 2.43); the image is 22.04 (**2.35**). glibc is backward- but *not* forward-compatible, so a binary linked against 2.38 copies in, resolves on `PATH`, and dies at exec with `GLIBC_2.38 not found` — a failure that looks like a broken tool, not a broken build. Check with `readelf -V <bin> | grep GLIBC_ | sort -V | tail -1` first. Go (static), rustup toolchains (2.17), `uv` (2.17) and the Docker engine (2.34) are safe; `jq`, `btop`, `ninja`, `dig` and `tcpdump` are not and must be `apt`-installed instead. `build.sh` stages the safe ones into `vendor/`, and each Dockerfile step falls back to a pinned download when `vendor/` is empty.
+
+**Use Python 3.12 in the sandbox.** The base image carries three interpreters with divergent package sets and `python3` resolves to the *least* equipped: 3.10 has 171 packages, 3.11 has 34, 3.12 has 216. `pip install X` followed by `python3.12 script.py` fails with `ImportError`, and so does the reverse.
+
+**`sandbox.privileged`** (default off) is what makes the `dind` layer's nested daemon work; the image alone grants nothing. A privileged container is effectively host root. `sandbox.memory_limit` (`8g`) and `sandbox.pids_limit` (`2048`) bound a runaway build to its own container — sandboxes ran with neither until 2026-08-21, on a host already committing 175% of its memory.
+
 **Virtual Path System**:
 
 - Agent sees: `/mnt/user-data/{workspace,uploads,outputs}`, `/mnt/skills`

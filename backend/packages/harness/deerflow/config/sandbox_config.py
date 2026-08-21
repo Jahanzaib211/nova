@@ -36,6 +36,10 @@ class SandboxConfig(BaseModel):
         replicas: Maximum number of concurrent sandbox containers (default: 3). When the limit is reached the least-recently-used sandbox is evicted to make room.
         container_prefix: Prefix for container names (default: deer-flow-sandbox)
         idle_timeout: Idle timeout in seconds before sandbox is released (default: 600 = 10 minutes). Set to 0 to disable.
+        privileged: Run containers with --privileged so the agent gets a nested Docker
+            daemon. Effectively grants host root; off by default.
+        memory_limit: Per-container --memory cap (default: 8g). None for unlimited.
+        pids_limit: Per-container --pids-limit (default: 2048). None for unlimited.
         mounts: List of volume mounts to share directories with the container
         environment: Environment variables to inject into the container (values starting with $ are resolved from host env)
     """
@@ -67,6 +71,29 @@ class SandboxConfig(BaseModel):
     idle_timeout: int | None = Field(
         default=None,
         description="Idle timeout in seconds before sandbox is released (default: 600 = 10 minutes). Set to 0 to disable.",
+    )
+    privileged: bool = Field(
+        default=False,
+        description=(
+            "Run sandbox containers with --privileged, enabling the nested Docker daemon "
+            "in the nova-sandbox-dind image layer. A privileged container is effectively "
+            "host root: anything that escapes the sandbox reaches every other service on "
+            "the host. Off by default; enable only when the agent genuinely needs to build "
+            "or run containers, and only on a host you are willing to expose."
+        ),
+    )
+    memory_limit: str | None = Field(
+        default="8g",
+        description=(
+            "Per-container memory cap passed to --memory (e.g. '8g'). Set to null for no "
+            "limit. Sandboxes ran unlimited until 2026-08-21, which on a box already "
+            "committing more memory than it has meant one runaway build could take the "
+            "whole machine down rather than just its own container."
+        ),
+    )
+    pids_limit: int | None = Field(
+        default=2048,
+        description=("Per-container process cap passed to --pids-limit. Set to null for no limit. Bounds fork bombs and runaway build parallelism, which matters more once the sandbox can start containers of its own."),
     )
     mounts: list[VolumeMountConfig] = Field(
         default_factory=list,

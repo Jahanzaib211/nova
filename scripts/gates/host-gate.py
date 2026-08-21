@@ -399,6 +399,47 @@ def check_checkpoint_count() -> dict:
     return check("checkpoint_backlog", status, detail, total=total, backlog=backlog)
 
 
+def check_workspace_backlog() -> dict:
+    """Regenerable build output sitting in idle thread workspaces.
+
+    Thread workspaces grow without bound the same way checkpoints did, but the
+    fix is different because the contents are different. A workspace holds the
+    agent's actual deliverables, which must never be deleted on a timer. When
+    this was first measured (2026-08-21) it was 7.3 GB — and 99% of that was
+    ``node_modules``, ``.next`` and ``.venv``. The deliverables were ~90 MB.
+
+    So the number worth watching is not workspace size, it is how much
+    *regenerable* weight is parked in workspaces nobody has touched — exactly
+    what ``scripts/prune-workspaces.py`` would remove. Reported the same way as
+    checkpoint_backlog: a growing figure means the pruner stopped running.
+    """
+    script = REPO_ROOT / "scripts" / "prune-workspaces.py"
+    if not script.exists():
+        return check("workspace_backlog", YELLOW, "prune-workspaces.py is missing")
+    try:
+        out = subprocess.run(
+            [sys.executable, str(script), "--dry-run", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if out.returncode != 0:
+            return check("workspace_backlog", YELLOW, f"probe failed: {out.stderr.strip()[:120]}")
+        data = json.loads(out.stdout)
+    except Exception as exc:  # noqa: BLE001 - a gate must not crash the console
+        return check("workspace_backlog", YELLOW, f"unreadable: {exc}")
+
+    gib = data.get("removed_bytes", 0) / 1024**3
+    dirs = data.get("removed_dirs", 0)
+    detail = f"{gib:.2f} GB prunable in {dirs} dirs, {data.get('skipped_active_workspaces', 0)} active workspaces"
+    if dirs == 0:
+        return check("workspace_backlog", GREEN, "0 prunable", backlog_bytes=0)
+    status = _band(gib, 5, 20)
+    if status != GREEN:
+        detail += "  — is the workspace prune job running?"
+    return check("workspace_backlog", status, detail, backlog_bytes=data.get("removed_bytes", 0))
+
+
 def check_logs() -> dict:
     """Unbounded logs are the other way this disk fills."""
     logs = REPO_ROOT / "logs"
@@ -536,6 +577,7 @@ CHECKS = (
     check_io_pressure,
     check_database,
     check_checkpoint_count,
+    check_workspace_backlog,
     check_logs,
     check_docker_reclaimable,
     check_prune_job,

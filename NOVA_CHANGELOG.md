@@ -48,6 +48,122 @@
 
 ---
 
+## v9.7 — Room to work, and a sandbox that stops moving
+
+Two problems that turned out to be the same problem: nothing bounded what Nova
+wrote to disk, and nothing pinned what Nova ran inside.
+
+### 88 GB back
+
+The disk was at 84% with 73 GB free, which is not enough headroom to add a
+toolchain to a 10 GB image. Reclaimed, in order of how safe it was:
+
+- **6.2 GB** — a pre-Postgres SQLite backup dated 2026-07-16.
+- **775 MB** — `deerflow.db` and its WAL, superseded by the Postgres migration.
+  Verified superseded rather than assumed: Postgres is ahead on every table
+  (checkpoints 2,477 vs 1,032; runs 962 vs 941). Kept as a 255 MB compressed
+  rollback rather than deleted outright.
+- **~11 GB** — three orphan images (`docker-gateway`, `deer-flow-gateway`,
+  `deer-flow-frontend`), all `used_by: NONE`, left behind by compose
+  **project-name drift**: the running stack is project `deer-flow-dev`, so a
+  build run from `docker/` tags `docker-*` instead and orphans the result.
+- **49 GB** — regenerable Stremio stream cache.
+- **11 GB** — local llama GGUFs, dead since Nova moved to Ollama and the
+  llama probes were retired.
+- **6.4 GB** — build output in idle thread workspaces (below).
+
+Swap fell from 6.8 GB of 8 to 0.2 GB as a side effect, and the host gate went
+green for the first time since it was written.
+
+### Thread workspaces: prune the build output, never the work
+
+Thread workspaces were the other unbounded store — 7.3 GB and no retention, the
+same shape as the checkpoint growth that caused the 59 GB outage. But the fix
+could not be the same, because the contents are not the same: a workspace holds
+the deliverables Nova produced for a user, and deleting those on a timer is
+unacceptable.
+
+Measuring first changed the design. **99% of the bytes were regenerable** —
+`node_modules`, `.next`, `.venv`. The actual work product was ~90 MB of 7.3 GB.
+So `scripts/prune-workspaces.py` never deletes a workspace; it deletes
+rebuildable trees inside workspaces idle for `--keep-days`, and a user returning
+to an old thread finds their files and reruns `npm install`. Idleness is the
+newest mtime anywhere in the tree, not the directory's own — that would have
+deleted the dependencies of work still in progress.
+
+Scheduled daily beside the checkpoint pruner, with a `workspace_backlog` check
+in the host gate that reports what the pruner *would* remove.
+
+### The sandbox stopped moving
+
+Every sandbox layer built `FROM …/all-in-one-sandbox:latest`. A floating tag
+means two builds a week apart can produce two different sandboxes with no change
+in this repo and nothing to point at when behaviour drifts. The base is now
+pinned by digest (`sha256:742062f9…`), and the single Android Dockerfile is a
+chain of four: **base → tools → dind → android**, each one concern, sharing
+layers so the intermediate tags cost no disk.
+
+The build was also not reproducible: no `make` target, no CI, and
+`setup-sandbox.sh` could only *pull* — so it could not produce
+`nova-sandbox-android:latest`, the locally-built tag `config.yaml` had pointed
+at for weeks. Now `make sandbox-image` builds the chain, and `setup-sandbox.sh`
+builds rather than failing when the configured tag is local.
+
+### The toolchain, reusing the machine
+
+An audit from inside the sandbox found no pandoc, psql, redis-cli, tesseract,
+Go, Rust or Playwright. None of it was lost — nobody had added it.
+
+The rule for adding it: reuse what the build host has, download only what it
+lacks. The limit is **glibc**. The host is Ubuntu 26.04 (2.43); the image is
+22.04 (**2.35**), and glibc is backward- but not forward-compatible, so a host
+binary linked against 2.38 copies in, resolves on `PATH`, and dies at exec.
+Every candidate was checked with `readelf -V`:
+
+- **Copied** — Go (static), Rust (rustup builds against 2.17 on purpose), `uv`
+  (2.17), and the whole Docker engine except one piece (2.34).
+- **Downloaded** — pandoc, wkhtmltopdf, tesseract, psql, redis-cli (absent from
+  the host too); jq, btop, ninja, dig, tcpdump (present, but 2.38); and `runc`,
+  the single gap in the otherwise-copyable DinD stack.
+
+Two things cost nothing: `pnpm` via `corepack`, which ships with Node 22, and
+Playwright driving the Chromium already in the base image — about 400 MB saved
+and one browser instead of two. Both had been reported missing by the audit.
+
+`build.sh` stages the copyable ones into `vendor/`; when it is empty each step
+falls back to a pinned download, so the image still builds on a machine that has
+none of this.
+
+Also recorded: the base image ships **three Pythons with divergent package
+sets**, and `python3` resolves to the least equipped (3.10 with 171 packages,
+against 3.12's 216). `pip install X` then `python3.12 script.py` fails with
+`ImportError`. 3.12 is now documented as canonical.
+
+### Docker-in-Docker, and the caps it made necessary
+
+The `dind` layer gives the agent a real daemon, gated behind
+`sandbox.privileged` (default **off**) because a privileged container is
+effectively host root. `dind-entrypoint.sh` wraps the base image's own
+`/opt/gem/run.sh` rather than replacing it, and a daemon that fails to start is
+logged and skipped — a sandbox without Docker is still a working sandbox.
+
+Enabling that on this host would have been reckless without limits.
+`Committed_AS` was **54.5 GB against a 31.1 GB CommitLimit** — the box promising
+175% of the memory it has, after two crashes — and sandbox containers ran with
+`--memory 0` and no pids limit. `sandbox.memory_limit` (default `8g`) and
+`sandbox.pids_limit` (default `2048`) now bound a runaway build to its own
+container.
+
+### Ops console: "not configured" is not an alarm
+
+The Infra tab showed a red *"Could not reach the provisioner's infra API"* on
+every Nova that simply has no cluster. The gateway returned 503 for both "you
+never configured this" and "your provisioner is down", so the console could not
+tell them apart. Unconfigured is now **501** — an absent optional feature — and
+renders as a neutral note, while a configured-but-unreachable provisioner keeps
+503 and keeps the alarm.
+
+
 ## v9.6 — Agent's Computer: the panel that is Nova's face
 
 **Session pattern:** the agent built a site correctly and the product looked

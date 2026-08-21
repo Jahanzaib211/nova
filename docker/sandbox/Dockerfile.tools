@@ -1,0 +1,117 @@
+# Layer 2/4 — the toolchain an agent actually needs.
+#
+# An audit run from inside the sandbox found no pandoc, no psql, no redis-cli,
+# no tesseract, no Go, no Rust and no Playwright. None of it was lost; nobody
+# had ever added it. This layer adds it, and does so under one rule:
+#
+#   Reuse what the build host already has; download only what it lacks.
+#
+# The rule has a hard limit, and it is the reason this file is split the way it
+# is. The build host is Ubuntu 26.04 (glibc 2.43); this image is Ubuntu 22.04
+# (glibc 2.35). glibc is backward- but NOT forward-compatible, so a binary
+# linked against 2.38 copied in from the host resolves fine on PATH and then
+# dies at exec with `GLIBC_2.38 not found`. Every host binary below was checked
+# with `readelf -V` first:
+#
+#   COPYABLE   go (static) · rust (built for glibc 2.17) · uv (2.17)
+#              dockerd/containerd/docker/docker-proxy (2.34) · shim (static)
+#   NOT        jq · btop · ninja · dig · tcpdump  (all need 2.38 → apt instead)
+#
+# `build.sh` stages the copyable ones into vendor/. When vendor/ is empty — a
+# clean checkout, CI, another machine — each step falls back to a version-pinned
+# download, so this image is reproducible anywhere and merely *faster* here.
+ARG BASE=nova-sandbox-base:latest
+FROM ${BASE}
+
+LABEL org.nova.sandbox.layer="tools"
+
+ARG GO_VERSION=1.23.4
+ARG RUST_CHANNEL=stable
+ARG UV_VERSION=0.11.33
+ARG DEBIAN_FRONTEND=noninteractive
+
+# --- Downloaded: absent from the host, or too new for glibc 2.35 -------------
+# pandoc/wkhtmltopdf/tesseract/psql/redis-cli are on neither side; jq, btop,
+# ninja, dig and tcpdump exist on the host but are linked against glibc 2.38.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pandoc \
+        wkhtmltopdf \
+        ghostscript \
+        tesseract-ocr libtesseract-dev \
+        postgresql-client \
+        redis-tools \
+        sqlite3 \
+        dnsutils iputils-ping tcpdump \
+        jq ninja-build \
+        neovim btop \
+        zstd unzip \
+        iptables \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Vendored-or-downloaded ---------------------------------------------------
+# COPY needs the directory to exist; build.sh guarantees it (with a .keep).
+COPY vendor/ /vendor/
+
+# Go: the host toolchain is statically linked, so the whole GOROOT transplants.
+RUN set -eux; \
+    if [ -f /vendor/go.tar ]; then \
+        tar -xf /vendor/go.tar -C /usr/local && echo "go: vendored from host"; \
+    else \
+        curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local && echo "go: downloaded"; \
+    fi; \
+    ln -sf /usr/local/go/bin/go /usr/local/bin/go; \
+    ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+
+# Rust: rustup ships toolchains built against glibc 2.17 precisely so they run
+# on old distros, which is why the host's copy works here when jq's does not.
+RUN set -eux; \
+    if [ -f /vendor/rust.tar ]; then \
+        mkdir -p /usr/local/rust && tar -xf /vendor/rust.tar -C /usr/local/rust --strip-components=1 && echo "rust: vendored from host"; \
+    else \
+        curl -fsSL https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain "${RUST_CHANNEL}" --profile minimal \
+        && mv /root/.rustup/toolchains/*/ /usr/local/rust && echo "rust: downloaded"; \
+    fi; \
+    for b in /usr/local/rust/bin/*; do ln -sf "$b" "/usr/local/bin/$(basename "$b")"; done
+
+# uv: the base image ships 0.8.9; the host has a much newer build that is
+# glibc-2.17-linked and therefore safe to lift straight in.
+RUN set -eux; \
+    if [ -f /vendor/uv ]; then \
+        install -m 0755 /vendor/uv /usr/local/bin/uv && echo "uv: vendored from host"; \
+    else \
+        curl -fsSL "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" \
+          | tar -xz -C /tmp && install -m 0755 /tmp/uv-x86_64-unknown-linux-gnu/uv /usr/local/bin/uv && echo "uv: downloaded"; \
+    fi
+
+# --- Already in the image: cost nothing ---------------------------------------
+# corepack ships with Node 22, so pnpm and yarn need no install and no network.
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Playwright drives the Chromium the base image already carries (135.x at
+# /usr/bin/chromium-browser). Skipping the bundled download avoids ~400 MB and
+# keeps one browser in the image instead of two.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Installed into 3.12 specifically, not via `pip3`. The base image ships three
+# interpreters and `pip3` targets 3.10 — the one with the *fewest* packages —
+# so installing there would put playwright somewhere the richest interpreter
+# cannot import it, which is exactly the split this image documents against.
+#
+# --timeout/--retries because a bare `pip install` here hung indefinitely
+# during the first build: sleeping, no sockets open, no progress for 40
+# minutes. A build step that cannot finish must fail rather than stall.
+RUN python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
+        playwright pytest ruff mypy
+
+# Point the unversioned `python` at 3.12 so an agent that types `python` lands
+# on the interpreter that actually has the packages. Deliberately NOT touching
+# `python3`: the base image's own supervisord services and apt's tooling resolve
+# through it, and repointing that has broken images before. `python3` stays 3.10;
+# `python` and `python3.12` are the ones to use.
+RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python
+
+RUN rm -rf /vendor
+
+ENV PATH="/usr/local/go/bin:/usr/local/rust/bin:${PATH}" \
+    GOPATH=/root/go \
+    CARGO_HOME=/root/.cargo

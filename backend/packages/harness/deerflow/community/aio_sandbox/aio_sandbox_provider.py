@@ -196,6 +196,9 @@ class AioSandboxProvider(SandboxProvider):
             config_mounts=self._config["mounts"],
             environment=self._config["environment"],
             preview_container_ports=self._config["preview_ports"],
+            privileged=self._config["privileged"],
+            memory_limit=self._config["memory_limit"],
+            pids_limit=self._config["pids_limit"],
         )
 
     # ── Configuration ────────────────────────────────────────────────────
@@ -226,6 +229,9 @@ class AioSandboxProvider(SandboxProvider):
             "idle_timeout": idle_timeout if idle_timeout is not None else DEFAULT_IDLE_TIMEOUT,
             "replicas": replicas if replicas is not None else DEFAULT_REPLICAS,
             "mounts": sandbox_config.mounts or [],
+            "privileged": getattr(sandbox_config, "privileged", False),
+            "memory_limit": getattr(sandbox_config, "memory_limit", None),
+            "pids_limit": getattr(sandbox_config, "pids_limit", None),
             "environment": environment,
             "preview_ports": list(preview_ports) if preview_ports else list(DEFAULT_PREVIEW_PORTS),
             # provisioner URL for dynamic pod management (e.g. http://provisioner:8002)

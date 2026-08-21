@@ -8,11 +8,21 @@
 # would install but never boot. This image can assemble/build APKs, not run
 # them on a virtual device.
 #
-# Build:
-#   docker build -t nova-sandbox-android:latest -f docker/sandbox/Dockerfile.android docker/sandbox/
-# Then point config.yaml's `sandbox.image` at the tag you built.
+# Build (whole chain, reusing host toolchains where ABI allows):
+#   ./docker/sandbox/build.sh
+# Then point config.yaml's `sandbox.image` at the tag it produced.
 
-FROM enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+# Layer 4/4 — Android/Kotlin build toolchain.
+#
+# Was `FROM …all-in-one-sandbox:latest`, i.e. straight off a floating upstream
+# tag. It now sits on top of the pinned chain (base → tools → dind), so the JDK
+# it installs lands beside Go, Rust, pandoc and the rest instead of on a bare
+# base — and the whole stack rebuilds identically. Override BASE to build this
+# layer directly onto a different rung of the chain.
+ARG BASE=nova-sandbox-dind:latest
+FROM ${BASE}
+
+LABEL org.nova.sandbox.layer="android"
 
 ARG CMDLINE_TOOLS_VERSION=11076708
 ARG ANDROID_PLATFORM=android-34

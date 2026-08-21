@@ -29,6 +29,23 @@ if command -v container >/dev/null 2>&1 && [ "$(uname)" = "Darwin" ]; then
     container image pull "$IMAGE" || echo "⚠ Apple Container pull failed, will try Docker"
 fi
 
+# A locally-built tag (the nova-sandbox-* chain) exists in no registry, so
+# pulling it can only fail. config.yaml has pointed at one since the Android
+# layer was introduced, which meant this script could not produce the image the
+# app was configured to use. Build instead.
+case "$IMAGE" in
+    nova-sandbox-*)
+        LAYER="${IMAGE#nova-sandbox-}"; LAYER="${LAYER%%:*}"
+        echo "Configured image '$IMAGE' is built locally, not pulled."
+        if [ -x "$(dirname "$0")/../docker/sandbox/build.sh" ]; then
+            echo "Building the sandbox chain up to '$LAYER'..."
+            exec "$(dirname "$0")/../docker/sandbox/build.sh" "$LAYER"
+        fi
+        echo "✗ docker/sandbox/build.sh not found; cannot build $IMAGE"
+        exit 1
+        ;;
+esac
+
 if command -v docker >/dev/null 2>&1; then
     echo "Pulling image using Docker..."
     if docker pull "$IMAGE"; then

@@ -213,6 +213,9 @@ class LocalContainerBackend(SandboxBackend):
         config_mounts: list,
         environment: dict[str, str],
         preview_container_ports: list[int] | None = None,
+        privileged: bool = False,
+        memory_limit: str | None = None,
+        pids_limit: int | None = None,
     ):
         """Initialize the local container backend.
 
@@ -227,6 +230,11 @@ class LocalContainerBackend(SandboxBackend):
                 gets mapped to a free host port so the gateway can HTTP-proxy a
                 dev server running inside the sandbox. Empty disables preview
                 publishing.
+            privileged: Run containers with --privileged, which the nested Docker
+                daemon in the dind image layer requires. Grants effective host
+                root to anything that escapes the sandbox.
+            memory_limit: Value for --memory (e.g. "8g"); None for unlimited.
+            pids_limit: Value for --pids-limit; None for unlimited.
         """
         self._image = image
         self._base_port = base_port
@@ -234,6 +242,9 @@ class LocalContainerBackend(SandboxBackend):
         self._config_mounts = config_mounts
         self._environment = environment
         self._preview_container_ports = list(preview_container_ports or [])
+        self._privileged = privileged
+        self._memory_limit = memory_limit
+        self._pids_limit = pids_limit
         self._runtime = self._detect_runtime()
 
     @property
@@ -638,9 +649,24 @@ class LocalContainerBackend(SandboxBackend):
         """
         cmd = [self._runtime, "run"]
 
+        # Resource caps. Sandboxes ran with no limit at all until 2026-08-21,
+        # on a host whose Committed_AS already exceeded its CommitLimit — so a
+        # single runaway build took the machine down instead of just its own
+        # container. These bound the blast radius, and matter more now that the
+        # dind layer lets the sandbox start containers of its own.
+        if self._memory_limit:
+            cmd.extend(["--memory", str(self._memory_limit)])
+        if self._pids_limit:
+            cmd.extend(["--pids-limit", str(self._pids_limit)])
+
         # Docker-specific security options
         if self._runtime == "docker":
             cmd.extend(["--security-opt", "seccomp=unconfined"])
+            # --privileged is what makes the dind layer's nested daemon work.
+            # It is effectively host root, so it stays behind an explicit
+            # config flag that defaults to off rather than following the image.
+            if self._privileged:
+                cmd.append("--privileged")
             # Make host services reachable from inside the sandbox at
             # host.docker.internal (Linux needs the explicit host-gateway
             # mapping; Docker Desktop provides it natively). Without this,

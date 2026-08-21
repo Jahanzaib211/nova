@@ -309,3 +309,26 @@ def test_admin_infra_endpoints_accept_ops_console_token(app):
     matching = [r for r in audit if r["action"] == "view-infra-pods"]
     assert matching
     assert matching[0]["actor"] == "ops-console"
+
+
+def test_admin_infra_returns_501_when_no_provisioner_configured(app):
+    """Unconfigured must be distinguishable from unreachable.
+
+    A provisioner is optional. Most deployments run sandboxes locally and never
+    set ``sandbox.provisioner_url``; for them the infra endpoints describe a
+    feature that does not exist, which is 501. A *configured* provisioner that
+    is down returns 503 (see ``..._returns_502_on_provisioner_error``), and the
+    Ops console renders the two differently — a neutral note versus a red alarm.
+    """
+    from types import SimpleNamespace
+
+    from app.gateway.routers import admin_infra
+
+    admin = _admin_client(app)
+    stub = SimpleNamespace(sandbox=SimpleNamespace(provisioner_url=None))
+
+    with patch.object(admin_infra, "get_app_config", lambda: stub):
+        resp = admin.get("/api/v1/admin/infra/pods")
+
+    assert resp.status_code == 501
+    assert "provisioner_url" in resp.json()["detail"]

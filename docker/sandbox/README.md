@@ -1,49 +1,128 @@
 # Sandbox images
 
-Nova's default sandbox execution image (`sandbox.image` in `config.yaml`, used
-by `AioSandboxProvider`) is a pre-built third-party image pulled by tag —
-there is no local Dockerfile for it in this repo. `config.example.yaml`
-documents that custom images should extend that default image or implement
-the same AIO sandbox HTTP API.
+The sandbox is the agent's entire world: its shell, its filesystem, its browser,
+its toolchain. What is missing from this image is missing from Nova.
 
-## `Dockerfile.android`
+It is built as a **chain of four layers**, each one concern. Chained tags share
+layers, so the intermediate tags cost essentially no extra disk — and
+`config.yaml`'s `sandbox.image` can point at whichever rung you want.
 
-Extends the default sandbox image with an Android build toolchain: OpenJDK
-17, Android SDK cmdline-tools + platform-tools + build-tools + platform,
-Gradle, and the Kotlin compiler. Without this, the agent can still write
-Android/Kotlin source into the sandbox, but has no `java`, `sdkmanager`,
-`gradle`, `kotlinc`, or `adb` to actually build an APK.
+| Layer | Tag | What it adds |
+|---|---|---|
+| 1 | `nova-sandbox-base` | The pinned upstream image. Nothing else. |
+| 2 | `nova-sandbox-tools` | pandoc, wkhtmltopdf, tesseract, psql, redis-cli, Go, Rust, uv, pnpm, Playwright, ghostscript, jq, dig, … |
+| 3 | `nova-sandbox-dind` | A Docker daemon the agent can use (requires `sandbox.privileged`) |
+| 4 | `nova-sandbox-android` | OpenJDK 17, Android SDK, Gradle, Kotlin |
 
-The Android emulator is intentionally not installed — it needs KVM hardware
-acceleration unavailable in a plain Docker container, so it would install but
-never run. This image supports `./gradlew assemble*` / `./gradlew build`,
-not booting a virtual device.
-
-### Build
+## Build
 
 ```bash
-docker build -t nova-sandbox-android:latest -f docker/sandbox/Dockerfile.android docker/sandbox/
+make sandbox-image              # whole chain
+make sandbox-image LAYER=tools  # stop after layer 2
 ```
 
-Adds ~1.6GB on top of the ~10.2GB base image. Build-verified: `java`,
-`javac`, `sdkmanager`, `gradle`, `kotlinc`, and `adb` all resolve inside the
-built image, and a real minimal Android project builds end-to-end —
-`gradle assembleDebug` (`--entrypoint bash`, since the base image's own
-entrypoint boots the full sandbox supervisord stack otherwise) produced
-`app/build/outputs/apk/debug/app-debug.apk`.
-
-### Use it
-
-Point `config.yaml`'s sandbox section at the tag you built:
+Then point `config.yaml` at the tag you built:
 
 ```yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
   image: nova-sandbox-android:latest
 ```
 
-Sandbox containers are created via Docker-outside-of-Docker
-(`aio_sandbox_provider.py`), so once the image exists in the local Docker
-daemon, no push to a registry is required for local/dev use. For a
-multi-host or provisioner (Kubernetes) deployment, push the tag to a
-registry every host can pull from and reference that instead.
+Sandbox containers are created via Docker-outside-of-Docker, so once the image
+exists in the local daemon no registry push is needed. For a multi-host or
+Kubernetes deployment, push the tag and reference that instead.
+
+## The base image is pinned by digest
+
+`Dockerfile.base` pins
+`all-in-one-sandbox@sha256:742062f9…` rather than `:latest`.
+
+This is the whole reason the chain exists. Every layer used to build straight
+off the floating upstream tag, so two builds a week apart could produce two
+different sandboxes with no change in this repo and nothing to point at when
+behaviour drifted. To adopt a new upstream, re-pull the tag, read its digest and
+change that one line deliberately:
+
+```bash
+docker pull enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+docker inspect --format '{{index .RepoDigests 0}}' enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
+```
+
+## Reused from the build host vs downloaded
+
+`build.sh` stages toolchains from the machine doing the build into `vendor/`
+(gitignored) so the image copies them instead of downloading them. When
+`vendor/` is empty — a clean checkout, CI, someone else's laptop — every step
+falls back to a version-pinned download, so the image still builds anywhere and
+is merely *faster* here.
+
+**The constraint that decides this is glibc.** The build host is Ubuntu 26.04
+(glibc 2.43); the image is Ubuntu 22.04 (glibc **2.35**). glibc is backward- but
+not forward-compatible, so a host binary linked against 2.38 copied in here
+resolves fine on `PATH` and then dies at exec with `GLIBC_2.38 not found`. Every
+candidate was checked with `readelf -V` before being staged.
+
+| Reused from host | Why it is safe |
+|---|---|
+| Go (whole `GOROOT`) | statically linked |
+| Rust (`~/.rustup` toolchain) | rustup builds against glibc 2.17 on purpose |
+| `uv` | glibc 2.17 |
+| `dockerd`, `containerd`, `docker`, `docker-proxy` | need glibc 2.34 |
+| `containerd-shim-runc-v2` | static |
+
+| Downloaded | Why |
+|---|---|
+| pandoc, wkhtmltopdf, tesseract, psql, redis-cli | not on the host either |
+| jq, btop, ninja, dig, tcpdump | on the host, but linked against glibc 2.38 |
+| `runc` | the one gap in the DinD stack — host build needs 2.38 |
+
+Two things cost nothing at all: `pnpm` comes from `corepack`, which ships with
+Node 22, and Playwright drives the Chromium already in the base image
+(`/usr/bin/chromium-browser`) rather than downloading its own — about 400 MB
+saved and one browser in the image instead of two.
+
+## Python: use 3.12
+
+The base image carries three interpreters with **divergent** package sets, and
+`python3` resolves to the *least* equipped of them:
+
+| Interpreter | Packages |
+|---|---|
+| `python3` → 3.10 | 171 |
+| 3.11 | 34 |
+| **3.12** | **216** |
+
+So `pip install X` followed by `python3.12 script.py` fails with `ImportError`,
+and the reverse fails too. Treat **3.12** as canonical for agent work.
+
+## Docker-in-Docker
+
+Layer 3 installs a real daemon, but installing it grants nothing on its own —
+the container must also run with `--privileged`, which is gated behind
+`sandbox.privileged` in `config.yaml` and defaults to **off**.
+
+Leave it off unless the agent genuinely needs to build images or run services.
+A privileged container is effectively host root: anything that escapes the
+sandbox reaches every other service on the machine.
+
+`dind-entrypoint.sh` starts the daemon and then `exec`s the base image's own
+`/opt/gem/run.sh`, which boots the supervisord stack the gateway talks to.
+Replacing that entrypoint would take the sandbox offline, so the daemon is
+wrapped around it rather than substituted for it — and a daemon that fails to
+start is logged and skipped, because a sandbox without Docker is still a working
+sandbox for everything else.
+
+## Resource caps
+
+Sandbox containers ran with no memory limit and no pids limit until 2026-08-21.
+On a host whose `Committed_AS` already exceeded its `CommitLimit`, that meant one
+runaway build took the entire machine down instead of just its own container.
+`sandbox.memory_limit` (default `8g`) and `sandbox.pids_limit` (default `2048`)
+bound the blast radius, and matter more now that the sandbox can start
+containers of its own.
+
+## The Android layer
+
+Deliberately no emulator/AVD: it needs KVM acceleration a plain container does
+not have, so it would install but never boot. This image assembles and builds
+APKs (`./gradlew assembleDebug`), it does not run them on a virtual device.

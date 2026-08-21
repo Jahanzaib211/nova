@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 19
+config_version: 20
 
 # ============================================================================
 # Logging
@@ -957,6 +957,22 @@ sandbox:
 #
 #   # Optional: Prefix for container names (default: deer-flow-sandbox)
 #   # container_prefix: deer-flow-sandbox
+#
+#   # Run sandbox containers with --privileged. Required by the nested Docker
+#   # daemon in the `nova-sandbox-dind` image layer, which is what lets the
+#   # agent build images and start real services (Postgres, Redis, ...) for
+#   # itself. Off by default and worth leaving off: a privileged container is
+#   # effectively host root, so anything escaping the sandbox reaches every
+#   # other service on the machine. Turn it on only when the agent genuinely
+#   # needs containers, on a host you accept exposing.
+#   # privileged: false
+#
+#   # Per-container resource caps. Sandboxes ran with neither until 2026-08-21;
+#   # on a host already committing more memory than it has, one runaway build
+#   # took the whole machine down rather than just its own container. Set either
+#   # to null for no limit.
+#   # memory_limit: 8g
+#   # pids_limit: 2048
 #
 #   # Optional: Additional mount directories from host to container
 #   # NOTE: Skills directory is automatically mounted from skills.path to skills.container_path

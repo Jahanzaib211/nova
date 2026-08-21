@@ -1,0 +1,40 @@
+# Layer 3/4 — a real Docker daemon inside the sandbox.
+#
+# This is the capability that turns the sandbox from "somewhere to run scripts"
+# into "somewhere to stand up a Postgres and test against it". It requires the
+# container to run with --privileged, which is gated behind `sandbox.privileged`
+# in config.yaml and is OFF by default: a privileged container is effectively
+# host root, and this layer being present in the image does not by itself grant
+# anything — the flag does.
+#
+# The daemon binaries are copied from the build host rather than installed from
+# Docker's apt repo, because they are already here and ABI-compatible: dockerd,
+# containerd, docker and docker-proxy need glibc 2.34 against this image's 2.35,
+# and containerd-shim-runc-v2 is static. runc is the single exception — the
+# host's build needs glibc 2.38 — so it is the one piece downloaded, as an
+# official static binary of a few megabytes.
+ARG BASE=nova-sandbox-tools:latest
+FROM ${BASE}
+
+LABEL org.nova.sandbox.layer="dind"
+
+ARG RUNC_VERSION=v1.2.3
+
+COPY vendor/ /vendor/
+
+RUN set -eux; \
+    if [ -d /vendor/docker ]; then \
+        install -m 0755 /vendor/docker/* /usr/local/bin/ && echo "docker engine: vendored from host"; \
+    else \
+        curl -fsSL "https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz" \
+          | tar -xz -C /tmp && install -m 0755 /tmp/docker/* /usr/local/bin/ && echo "docker engine: downloaded"; \
+    fi; \
+    curl -fsSL -o /usr/local/bin/runc \
+        "https://github.com/opencontainers/runc/releases/download/${RUNC_VERSION}/runc.amd64"; \
+    chmod 0755 /usr/local/bin/runc; \
+    rm -rf /vendor
+
+COPY dind-entrypoint.sh /usr/local/bin/dind-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/dind-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/dind-entrypoint.sh"]

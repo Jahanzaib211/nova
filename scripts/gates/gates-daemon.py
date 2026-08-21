@@ -86,6 +86,14 @@ def _summarise(output: str) -> str:
                     gb = (data["after"].get("db_bytes") or 0) / 1024**3
                     bits.append(f"db {gb:.2f} GB")
                 return " — ".join(bits)[:200]
+            if "removed_dirs" in data:  # prune-workspaces.py
+                gb = (data.get("removed_bytes") or 0) / 1024**3
+                if not data.get("removed_dirs"):
+                    return f"nothing to prune — {data.get('skipped_active_workspaces', 0)} active workspaces"
+                return (
+                    f"{data['removed_dirs']} regenerable dirs, {gb:.2f} GB — "
+                    f"{data.get('skipped_active_workspaces', 0)} active workspaces untouched"
+                )[:200]
             if "logs" in data:  # rotate-logs.sh
                 actions = [f"{l.get('log')}:{l.get('action')}" for l in data["logs"]]
                 return ", ".join(actions)[:200]
@@ -241,6 +249,25 @@ def build_producers() -> list[Producer]:
             ],
             env_float("NOVA_GATE_PRUNE_INTERVAL", 86_400),
             timeout_sec=3600,
+            kind="job",
+        ),
+        # Workspace build output. Thread workspaces are the other unbounded
+        # store, but they hold the agent's actual deliverables, so this never
+        # deletes a workspace -- only the regenerable trees inside idle ones
+        # (node_modules, .next, .venv), which were 99% of the 7.3 GB measured
+        # on 2026-08-21. Daily, matching the checkpoint pruner.
+        Producer(
+            "prune_workspaces",
+            [
+                "scripts/prune-workspaces.py",
+                "--keep-days",
+                "14",
+                "--manifest",
+                str(Path.home() / ".nova" / "prune-workspaces.jsonl"),
+                "--json",
+            ],
+            env_float("NOVA_GATE_WORKSPACE_INTERVAL", 86_400),
+            timeout_sec=1800,
             kind="job",
         ),
         # Log rotation. gateway.log now appends rather than truncating on every
