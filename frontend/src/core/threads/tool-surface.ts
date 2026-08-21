@@ -43,7 +43,21 @@ const TERMINAL_TOOL_NAMES: ReadonlySet<string> = new Set([
  */
 const TERMINAL_TOOL_PREFIXES: readonly string[] = ["shell_"];
 
+/**
+ * `name` is typed `string`, but this classifies events decoded from a live
+ * network stream, and a streaming tool call carries no `name` until enough
+ * deltas have arrived — the same partial-tool-call window that broke the hook
+ * order in `message-group.tsx`. TypeScript cannot enforce a type across that
+ * boundary, so treat anything non-string as "not a terminal tool" and let the
+ * event land in Activity until the name resolves.
+ *
+ * The list this replaced was consulted as `TERMINAL_TOOLS.has(e.type)`, and
+ * `Set.has(undefined)` is simply `false`. Adding the prefix rule turned that
+ * silent no-op into `undefined.startsWith(...)`, which throws and takes out the
+ * whole Agent's Computer subtree via its error boundary. Hence the guard.
+ */
 export function isTerminalTool(name: string): boolean {
+  if (typeof name !== "string") return false;
   if (TERMINAL_TOOL_NAMES.has(name)) return true;
   return TERMINAL_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix));
 }

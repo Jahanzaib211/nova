@@ -36,15 +36,18 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Keep the dev-tools error stream the source of truth — no console
-    // duplication here. The error overlay picks this up automatically.
-    if (process.env.NODE_ENV !== "production") {
-      console.error(
-        `[ErrorBoundary${this.props.scope ? `:${this.props.scope}` : ""}]`,
-        error,
-        info.componentStack,
-      );
-    }
+    // Log in *every* environment, production included. This used to be gated
+    // on NODE_ENV !== "production" on the reasoning that the React error
+    // overlay is the source of truth — but that overlay only exists in dev.
+    // In the deployed build a caught error was written nowhere and shown
+    // nowhere, so a crash left no trace at all: the 2026-08-21 report of a
+    // TypeError from a partial tool call had to be reproduced from first
+    // principles because this boundary had swallowed it silently.
+    console.error(
+      `[ErrorBoundary${this.props.scope ? `:${this.props.scope}` : ""}]`,
+      error,
+      info.componentStack,
+    );
   }
 
   reset = (): void => {
@@ -78,8 +81,8 @@ function DefaultErrorPanel({ error, reset }: ErrorPanelProps): ReactNode {
           Something went wrong
         </h2>
         <p className="text-muted-foreground max-w-md text-sm">
-          An unexpected error occurred. The team has been notified. You can
-          retry the action, or refresh the page to start fresh.
+          {error.name || "Error"} — you can retry the action, or refresh the
+          page to start fresh. Details are in the browser console.
         </p>
         {process.env.NODE_ENV !== "production" && (
           <pre className="bg-muted/40 text-muted-foreground mx-auto mt-4 max-w-2xl overflow-auto rounded-md p-3 text-left text-xs">

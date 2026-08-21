@@ -115,3 +115,21 @@ describe("tool surface partition", () => {
     expect(isTerminalTool("my_shell_helper")).toBe(false);
   });
 });
+
+describe("partial tool calls", () => {
+  // A streaming tool call has no `name` until enough deltas arrive. The list
+  // this module replaced was read via `Set.has()`, which tolerates that;
+  // the prefix rule introduced an unguarded `.startsWith()` that threw and
+  // unmounted the Agent's Computer behind its error boundary.
+  const notNames = [undefined, null, "", 0, {}] as unknown[];
+
+  it.each(notNames)("does not throw on a missing name: %p", (value) => {
+    expect(() => isTerminalTool(value as string)).not.toThrow();
+    expect(() => isActivityTool(value as string)).not.toThrow();
+  });
+
+  it("routes an unnamed call to Activity, not Terminal", () => {
+    expect(isTerminalTool(undefined as unknown as string)).toBe(false);
+    expect(isActivityTool(undefined as unknown as string)).toBe(true);
+  });
+});
