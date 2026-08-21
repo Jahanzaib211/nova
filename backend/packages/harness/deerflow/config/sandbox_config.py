@@ -40,6 +40,7 @@ class SandboxConfig(BaseModel):
             daemon. Effectively grants host root; off by default.
         memory_limit: Per-container --memory cap (default: 8g). None for unlimited.
         pids_limit: Per-container --pids-limit (default: 2048). None for unlimited.
+        shm_size: Size of /dev/shm (default: 1g). Docker's 64 MB default hangs Chromium.
         mounts: List of volume mounts to share directories with the container
         environment: Environment variables to inject into the container (values starting with $ are resolved from host env)
     """
@@ -94,6 +95,16 @@ class SandboxConfig(BaseModel):
     pids_limit: int | None = Field(
         default=2048,
         description=("Per-container process cap passed to --pids-limit. Set to null for no limit. Bounds fork bombs and runaway build parallelism, which matters more once the sandbox can start containers of its own."),
+    )
+    shm_size: str | None = Field(
+        default="1g",
+        description=(
+            "Size of /dev/shm in sandbox containers, passed to --shm-size. Docker's "
+            "default is 64 MB, which is too small for Chromium: it loads a page fine "
+            "and then hangs forever on screenshot or renderer work. The sandbox image "
+            "ships a browser stack and Playwright, so this affects the agent's own "
+            "browsing, not just test scripts. Set to null to use the Docker default."
+        ),
     )
     mounts: list[VolumeMountConfig] = Field(
         default_factory=list,

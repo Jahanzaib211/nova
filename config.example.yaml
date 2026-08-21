@@ -974,6 +974,12 @@ sandbox:
 #   # memory_limit: 8g
 #   # pids_limit: 2048
 #
+#   # Size of /dev/shm. Docker's 64 MB default is too small for Chromium: a page
+#   # loads and then screenshot/renderer work hangs until it times out. The
+#   # sandbox image ships a browser stack and Playwright, so this is the agent's
+#   # own browsing, not just test tooling. null uses the Docker default.
+#   # shm_size: 1g
+#
 #   # Optional: Additional mount directories from host to container
 #   # NOTE: Skills directory is automatically mounted from skills.path to skills.container_path
 #   # mounts:

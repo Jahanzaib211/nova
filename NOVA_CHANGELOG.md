@@ -154,6 +154,18 @@ Enabling that on this host would have been reckless without limits.
 `sandbox.pids_limit` (default `2048`) now bound a runaway build to its own
 container.
 
+### Chromium was hanging on a 64 MB /dev/shm
+
+Verifying Playwright against the image's own Chromium turned up a fault that
+predates this work: Docker defaults `/dev/shm` to 64 MB, and Chromium responds
+by loading a page normally and then blocking forever on `screenshot` — a
+timeout, not an error, which is why it reads as "the browser is slow" rather
+than "the browser is misconfigured". The image carries both a browser stack and
+Playwright, so this is the agent's own browsing.
+
+`sandbox.shm_size` (default `1g`) fixes it at the container rather than
+requiring `--disable-dev-shm-usage` in every script that launches a browser.
+
 ### Ops console: "not configured" is not an alarm
 
 The Infra tab showed a red *"Could not reach the provisioner's infra API"* on

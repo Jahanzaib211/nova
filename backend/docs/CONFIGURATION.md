@@ -193,6 +193,7 @@ sandbox:
    image: nova-sandbox-android:latest   # built by `make sandbox-image`
    memory_limit: 8g                     # per-container --memory; null for unlimited
    pids_limit: 2048                     # per-container --pids-limit; null for unlimited
+   shm_size: 1g                         # /dev/shm; Docker's 64 MB default hangs Chromium
    privileged: false                    # nested Docker daemon; see below
 ```
 
@@ -206,6 +207,11 @@ adds and which toolchains are copied from the build host versus downloaded.
 Sandboxes ran with neither until 2026-08-21; on a host already committing more
 memory than it has, one bad `npm install` took the whole machine down instead of
 just its own sandbox. Set either to `null` to opt out.
+
+`shm_size` sets `/dev/shm`. Docker's 64 MB default is too small for Chromium,
+which loads a page fine and then hangs on screenshot or renderer work rather
+than erroring. The sandbox image ships a browser stack and Playwright, so this
+affects the agent's own browsing.
 
 `privileged` runs containers with `--privileged`, which is what the nested
 Docker daemon in the `dind` layer needs — with it the agent can build images and

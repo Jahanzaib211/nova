@@ -112,6 +112,18 @@ wrapped around it rather than substituted for it — and a daemon that fails to
 start is logged and skipped, because a sandbox without Docker is still a working
 sandbox for everything else.
 
+## /dev/shm and Chromium
+
+Docker defaults `/dev/shm` to **64 MB**, and Chromium treats that as fatal in a
+way that looks like a hang rather than an error: a page loads normally, then
+`screenshot` — or any renderer work — blocks until it times out. This image
+ships both a browser stack and Playwright, so it is the agent's own browsing
+that breaks, not just test tooling.
+
+`sandbox.shm_size` (default `1g`) fixes it at the container, which is the right
+place: the alternative is remembering `--disable-dev-shm-usage` in every script
+that ever launches a browser.
+
 ## Resource caps
 
 Sandbox containers ran with no memory limit and no pids limit until 2026-08-21.

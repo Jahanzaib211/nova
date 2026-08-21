@@ -546,3 +546,38 @@ def test_start_container_adds_privileged_when_enabled(monkeypatch):
     )
 
     assert "--privileged" in _capture_start_container_command(monkeypatch, backend)
+
+
+def test_start_container_sets_shm_size(monkeypatch):
+    """Docker's 64 MB /dev/shm default hangs Chromium mid-render.
+
+    The failure is not an error but a timeout: the page loads, then screenshot
+    or renderer work blocks. The sandbox image carries a browser stack and
+    Playwright, so this is the agent's own browsing.
+    """
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        shm_size="1g",
+    )
+
+    cmd = _capture_start_container_command(monkeypatch, backend)
+
+    assert "--shm-size" in cmd
+    assert cmd[cmd.index("--shm-size") + 1] == "1g"
+
+
+def test_start_container_omits_shm_size_when_unset(monkeypatch):
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        shm_size=None,
+    )
+
+    assert "--shm-size" not in _capture_start_container_command(monkeypatch, backend)

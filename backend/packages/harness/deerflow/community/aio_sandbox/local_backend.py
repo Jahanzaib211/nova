@@ -216,6 +216,7 @@ class LocalContainerBackend(SandboxBackend):
         privileged: bool = False,
         memory_limit: str | None = None,
         pids_limit: int | None = None,
+        shm_size: str | None = None,
     ):
         """Initialize the local container backend.
 
@@ -235,6 +236,7 @@ class LocalContainerBackend(SandboxBackend):
                 root to anything that escapes the sandbox.
             memory_limit: Value for --memory (e.g. "8g"); None for unlimited.
             pids_limit: Value for --pids-limit; None for unlimited.
+            shm_size: Value for --shm-size; None for the Docker default (64 MB).
         """
         self._image = image
         self._base_port = base_port
@@ -245,6 +247,7 @@ class LocalContainerBackend(SandboxBackend):
         self._privileged = privileged
         self._memory_limit = memory_limit
         self._pids_limit = pids_limit
+        self._shm_size = shm_size
         self._runtime = self._detect_runtime()
 
     @property
@@ -658,6 +661,13 @@ class LocalContainerBackend(SandboxBackend):
             cmd.extend(["--memory", str(self._memory_limit)])
         if self._pids_limit:
             cmd.extend(["--pids-limit", str(self._pids_limit)])
+        # Docker defaults /dev/shm to 64 MB. Chromium treats that as fatal in a
+        # way that looks like a hang rather than an error: the page loads, and
+        # then screenshot/renderer work blocks until it times out. The sandbox
+        # image carries both a browser stack and Playwright, so this is the
+        # agent's own browsing, not just test tooling.
+        if self._shm_size:
+            cmd.extend(["--shm-size", str(self._shm_size)])
 
         # Docker-specific security options
         if self._runtime == "docker":
