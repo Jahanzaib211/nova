@@ -146,116 +146,59 @@ def _create_summarization_middleware(*, app_config: AppConfig | None = None) -> 
     )
 
 
-def _create_todo_list_middleware(is_plan_mode: bool) -> TodoMiddleware | None:
-    """Create and configure the TodoList middleware.
+def _create_todo_list_middleware(is_plan_mode: bool) -> TodoMiddleware:
+    """Create the TodoList middleware.
 
-    Args:
-        is_plan_mode: Whether to enable plan mode with TodoList middleware.
+    Always enabled. It used to return ``None`` unless ``is_plan_mode`` was set,
+    which meant ``write_todos`` did not exist outside Plan Mode — so a long
+    autonomous run, exactly where a user most wants to see progress, had no
+    progress tracking at all and the UI's todo panel simply never appeared.
+    That read as "the todo panel is broken" rather than "the tool was never
+    bound".
 
-    Returns:
-        TodoMiddleware instance if plan mode is enabled, None otherwise.
+    ``is_plan_mode`` is kept in the signature because callers and several tests
+    still pass it, and because it stays a useful hint: in Plan Mode the user has
+    explicitly asked to see a plan, so the guidance leans harder on writing one.
+
+    The prompts are deliberately short. When the tool was Plan-Mode-only its
+    ~75 lines of guidance were paid for rarely; now that it is always bound,
+    both the system prompt and the tool description ride on every single
+    request. The previous text said the same "3+ steps, not for trivial work"
+    rule three times across the two strings, so the rule survives and the
+    repetition does not.
     """
-    if not is_plan_mode:
-        return None
+    plan_mode_hint = "\nThe user has asked for a plan, so write the todo list before starting work." if is_plan_mode else ""
 
-    # Custom prompts matching DeerFlow's style
-    system_prompt = """
+    system_prompt = f"""
 <todo_list_system>
-You have access to the `write_todos` tool to help you manage and track complex multi-step objectives.
+Use `write_todos` to track work the user should be able to watch progress on:
+3+ distinct steps, a multi-part request, or when they ask for a plan. Skip it
+for anything you can just do — a short answer or an obvious one-tool task is
+faster without it, and a todo list for trivial work is noise.
 
-**CRITICAL RULES:**
-- Mark todos as completed IMMEDIATELY after finishing each step - do NOT batch completions
-- Keep EXACTLY ONE task as `in_progress` at any time (unless tasks can run in parallel)
-- Update the todo list in REAL-TIME as you work - this gives users visibility into your progress
-- DO NOT use this tool for simple tasks (< 3 steps) - just complete them directly
-
-**When to Use:**
-This tool is designed for complex objectives that require systematic tracking:
-- Complex multi-step tasks requiring 3+ distinct steps
-- Non-trivial tasks needing careful planning and execution
-- User explicitly requests a todo list
-- User provides multiple tasks (numbered or comma-separated list)
-- The plan may need revisions based on intermediate results
-
-**When NOT to Use:**
-- Single, straightforward tasks
-- Trivial tasks (< 3 steps)
-- Purely conversational or informational requests
-- Simple tool calls where the approach is obvious
-
-**Best Practices:**
-- Break down complex tasks into smaller, actionable steps
-- Use clear, descriptive task names
-- Remove tasks that become irrelevant
-- Add new tasks discovered during implementation
-- Don't be afraid to revise the todo list as you learn more
-
-**Task Management:**
-Writing todos takes time and tokens - use it when helpful for managing complex problems, not for simple requests.
+Keep it live while you work: mark a task `in_progress` before you start it,
+`completed` the moment it is done, and never batch those updates. The list is
+what the user sees, so a stale list is worse than no list.{plan_mode_hint}
 </todo_list_system>
 """
 
-    tool_description = """Use this tool to create and manage a structured task list for complex work sessions.
+    tool_description = """Create and maintain a task list for multi-step work.
 
-**IMPORTANT: Only use this tool for complex tasks (3+ steps). For simple requests, just do the work directly.**
+Use it for 3+ distinct steps, multi-part requests, or when the user asks for a
+plan. Do not use it when you can simply do the work — if a couple of tool calls
+finish the job, just finish the job.
 
-## When to Use
+States: `pending`, `in_progress`, `completed`.
 
-Use this tool in these scenarios:
-1. **Complex multi-step tasks**: When a task requires 3 or more distinct steps or actions
-2. **Non-trivial tasks**: Tasks requiring careful planning or multiple operations
-3. **User explicitly requests todo list**: When the user directly asks you to track tasks
-4. **Multiple tasks**: When users provide a list of things to be done
-5. **Dynamic planning**: When the plan may need updates based on intermediate results
-
-## When NOT to Use
-
-Skip this tool when:
-1. The task is straightforward and takes less than 3 steps
-2. The task is trivial and tracking provides no benefit
-3. The task is purely conversational or informational
-4. It's clear what needs to be done and you can just do it
-
-## How to Use
-
-1. **Starting a task**: Mark it as `in_progress` BEFORE beginning work
-2. **Completing a task**: Mark it as `completed` IMMEDIATELY after finishing
-3. **Updating the list**: Add new tasks, remove irrelevant ones, or update descriptions as needed
-4. **Multiple updates**: You can make several updates at once (e.g., complete one task and start the next)
-
-## Task States
-
-- `pending`: Task not yet started
-- `in_progress`: Currently working on (can have multiple if tasks run in parallel)
-- `completed`: Task finished successfully
-
-## Task Completion Requirements
-
-**CRITICAL: Only mark a task as completed when you have FULLY accomplished it.**
-
-Never mark a task as completed if:
-- There are unresolved issues or errors
-- Work is partial or incomplete
-- You encountered blockers preventing completion
-- You couldn't find necessary resources or dependencies
-- Quality standards haven't been met
-
-If blocked, keep the task as `in_progress` and create a new task describing what needs to be resolved.
-
-## Best Practices
-
-- Create specific, actionable items
-- Break complex tasks into smaller, manageable steps
-- Use clear, descriptive task names
-- Update task status in real-time as you work
-- Mark tasks complete IMMEDIATELY after finishing (don't batch completions)
-- Remove tasks that are no longer relevant
-- **IMPORTANT**: When you write the todo list, mark your first task(s) as `in_progress` immediately
-- **IMPORTANT**: Unless all tasks are completed, always have at least one task `in_progress` to show progress
-
-Being proactive with task management demonstrates thoroughness and ensures all requirements are completed successfully.
-
-**Remember**: If you only need a few tool calls to complete a task and it's clear what to do, it's better to just do the task directly and NOT use this tool at all.
+Rules:
+- Mark a task `in_progress` before starting it; keep exactly one in progress
+  unless steps genuinely run in parallel.
+- Mark `completed` immediately on finishing. Never batch completions.
+- Only mark `completed` when it is actually done. If you hit an error, a
+  blocker, or a partial result, leave it `in_progress` and add a task for what
+  has to be resolved — a list that claims success it did not achieve is worse
+  than no list.
+- Revise as you learn: add steps you discover, drop ones that stop mattering.
 """
 
     return TodoMiddleware(system_prompt=system_prompt, tool_description=tool_description)
@@ -321,12 +264,11 @@ def build_middlewares(
     if summarization_middleware is not None:
         middlewares.append(summarization_middleware)
 
-    # Add TodoList middleware if plan mode is enabled
+    # TodoList middleware. Always added -- plan mode only changes how strongly
+    # the prompt pushes the agent to write the list, not whether the tool exists.
     cfg = _get_runtime_config(config)
     is_plan_mode = cfg.get("is_plan_mode", False)
-    todo_list_middleware = _create_todo_list_middleware(is_plan_mode)
-    if todo_list_middleware is not None:
-        middlewares.append(todo_list_middleware)
+    middlewares.append(_create_todo_list_middleware(is_plan_mode))
 
     # Add TokenUsageMiddleware when token_usage tracking is enabled
     if resolved_app_config.token_usage.enabled:

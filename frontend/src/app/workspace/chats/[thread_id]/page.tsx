@@ -357,7 +357,11 @@ export default function ChatPage() {
                   {hasTodos && (
                     <div
                       className={cn(
-                        "right-0 left-0 z-0",
+                        // z-10, not z-0: the composer is the next sibling in DOM order, so at
+                        // equal stacking level it paints over the todo panel and swallows
+                        // the clicks on its header -- it renders but cannot be collapsed.
+                        // Stays below the z-30 chrome above it.
+                        "right-0 left-0 z-10",
                         isWelcomeMode ? "absolute -top-4" : "relative",
                       )}
                     >
