@@ -49,11 +49,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Vendored-or-downloaded ---------------------------------------------------
-# COPY needs the directory to exist; build.sh guarantees it (with a .keep).
-COPY vendor/ /vendor/
+# vendor/ is bind-mounted per RUN rather than COPYed. A `COPY vendor/ /vendor/`
+# writes a ~1.9 GB layer, and the later `rm -rf /vendor` cannot reclaim it:
+# layers are immutable, so the delete only adds a whiteout marker that hides the
+# files while the bytes still ship with the image. Chained, that reached 3 dead
+# layers (~5.8 GB) in the final image — invisible inside the container, but paid
+# for in disk, in every registry push, and in build time on every rebuild.
+# --mount=type=bind leaves no layer at all and copies nothing.
 
 # Go: the host toolchain is statically linked, so the whole GOROOT transplants.
-RUN set -eux; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     if [ -f /vendor/go.tar ]; then \
         tar -xf /vendor/go.tar -C /usr/local && echo "go: vendored from host"; \
     else \
@@ -64,7 +69,7 @@ RUN set -eux; \
 
 # Rust: rustup ships toolchains built against glibc 2.17 precisely so they run
 # on old distros, which is why the host's copy works here when jq's does not.
-RUN set -eux; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     if [ -f /vendor/rust.tar ]; then \
         mkdir -p /usr/local/rust && tar -xf /vendor/rust.tar -C /usr/local/rust --strip-components=1 && echo "rust: vendored from host"; \
     else \
@@ -75,7 +80,7 @@ RUN set -eux; \
 
 # uv: the base image ships 0.8.9; the host has a much newer build that is
 # glibc-2.17-linked and therefore safe to lift straight in.
-RUN set -eux; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     if [ -f /vendor/uv ]; then \
         install -m 0755 /vendor/uv /usr/local/bin/uv && echo "uv: vendored from host"; \
     else \
@@ -104,7 +109,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
 # takes PyPI off the critical path entirely — it is ~50x slower from this
 # network than any other CDN. Falls back to the network when the cache is empty
 # so a clean checkout still builds.
-RUN set -eux; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     if ls /vendor/wheels/*.whl >/dev/null 2>&1; then \
         python3.12 -m pip install --no-cache-dir --no-index --find-links=/vendor/wheels \
             playwright pytest ruff mypy && echo "python tools: vendored wheels"; \
@@ -120,7 +125,6 @@ RUN set -eux; \
 # `python` and `python3.12` are the ones to use.
 RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python
 
-RUN rm -rf /vendor
 
 ENV PATH="/usr/local/go/bin:/usr/local/rust/bin:${PATH}" \
     GOPATH=/root/go \

@@ -29,9 +29,15 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends nftables \
     && rm -rf /var/lib/apt/lists/*
 
-COPY vendor/ /vendor/
+# vendor/ is bind-mounted per RUN rather than COPYed. A `COPY vendor/ /vendor/`
+# writes a ~1.9 GB layer, and the later `rm -rf /vendor` cannot reclaim it:
+# layers are immutable, so the delete only adds a whiteout marker that hides the
+# files while the bytes still ship with the image. Chained, that reached 3 dead
+# layers (~5.8 GB) in the final image — invisible inside the container, but paid
+# for in disk, in every registry push, and in build time on every rebuild.
+# --mount=type=bind leaves no layer at all and copies nothing.
 
-RUN set -eux; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     if [ -d /vendor/docker ]; then \
         install -m 0755 /vendor/docker/* /usr/local/bin/ && echo "docker engine: vendored from host"; \
     else \
@@ -40,8 +46,7 @@ RUN set -eux; \
     fi; \
     curl -fsSL -o /usr/local/bin/runc \
         "https://github.com/opencontainers/runc/releases/download/${RUNC_VERSION}/runc.amd64"; \
-    chmod 0755 /usr/local/bin/runc; \
-    rm -rf /vendor
+    chmod 0755 /usr/local/bin/runc
 
 # The inner daemon's storage must NOT live on the sandbox's own overlayfs.
 # containerd creates its snapshots as overlay mounts, and overlay-on-overlay

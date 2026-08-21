@@ -48,9 +48,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # shape as PyPI. build.sh therefore lifts all three out of a previously built
 # android image when one exists on the machine, and the download stays as the
 # fallback for a host with no donor.
-COPY vendor/ /vendor/
+# vendor/ is bind-mounted per RUN rather than COPYed. A `COPY vendor/ /vendor/`
+# writes a ~1.9 GB layer, and the later `rm -rf /vendor` cannot reclaim it:
+# layers are immutable, so the delete only adds a whiteout marker that hides the
+# files while the bytes still ship with the image. Chained, that reached 3 dead
+# layers (~5.8 GB) in the final image — invisible inside the container, but paid
+# for in disk, in every registry push, and in build time on every rebuild.
+# --mount=type=bind leaves no layer at all and copies nothing.
 
-RUN set -eux; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     if [ -d /vendor/android/gradle ]; then \
         cp -a /vendor/android/gradle "${GRADLE_HOME}" && echo "gradle: vendored"; \
     else \
@@ -77,5 +83,4 @@ RUN set -eux; \
         && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
             "platform-tools" "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" \
         && echo "android-sdk: downloaded"; \
-    fi; \
-    rm -rf /vendor
+    fi
