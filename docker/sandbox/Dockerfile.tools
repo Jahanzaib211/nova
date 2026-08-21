@@ -100,8 +100,18 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
 # --timeout/--retries because a bare `pip install` here hung indefinitely
 # during the first build: sleeping, no sockets open, no progress for 40
 # minutes. A build step that cannot finish must fail rather than stall.
-RUN python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
-        playwright pytest ruff mypy
+# Installs from the vendored wheel cache when build.sh populated one, which
+# takes PyPI off the critical path entirely — it is ~50x slower from this
+# network than any other CDN. Falls back to the network when the cache is empty
+# so a clean checkout still builds.
+RUN set -eux; \
+    if ls /vendor/wheels/*.whl >/dev/null 2>&1; then \
+        python3.12 -m pip install --no-cache-dir --no-index --find-links=/vendor/wheels \
+            playwright pytest ruff mypy && echo "python tools: vendored wheels"; \
+    else \
+        python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
+            playwright pytest ruff mypy && echo "python tools: downloaded"; \
+    fi
 
 # Point the unversioned `python` at 3.12 so an agent that types `python` lands
 # on the interpreter that actually has the packages. Deliberately NOT touching

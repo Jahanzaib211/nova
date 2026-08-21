@@ -190,7 +190,29 @@ sandbox:
 ```yaml
 sandbox:
    use: deerflow.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
+   image: nova-sandbox-android:latest   # built by `make sandbox-image`
+   memory_limit: 8g                     # per-container --memory; null for unlimited
+   pids_limit: 2048                     # per-container --pids-limit; null for unlimited
+   privileged: false                    # nested Docker daemon; see below
 ```
+
+The image is built locally as a **chain** — `base` → `tools` → `dind` →
+`android` — by `make sandbox-image`, and `sandbox.image` selects how far up the
+chain you want. The base is pinned by digest rather than tracking `:latest`, so
+rebuilds are reproducible. See `docker/sandbox/README.md` for what each layer
+adds and which toolchains are copied from the build host versus downloaded.
+
+`memory_limit` and `pids_limit` bound a runaway build to its own container.
+Sandboxes ran with neither until 2026-08-21; on a host already committing more
+memory than it has, one bad `npm install` took the whole machine down instead of
+just its own sandbox. Set either to `null` to opt out.
+
+`privileged` runs containers with `--privileged`, which is what the nested
+Docker daemon in the `dind` layer needs — with it the agent can build images and
+start real services (Postgres, Redis) for itself. It defaults to **off** and
+should stay off unless you need that: a privileged container is effectively host
+root, so anything escaping the sandbox reaches every other service on the
+machine.
 
 **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service):
 

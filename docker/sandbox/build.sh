@@ -24,10 +24,63 @@ TARGET="${1:-android}"
 
 log() { printf '  %s\n' "$*"; }
 
+readonly WHEELS="${VENDOR}/wheels"
+
+# Python wheels pinned here rather than in the Dockerfile so the host download
+# and the in-image install agree on one list.
+readonly PY_PACKAGES=(playwright pytest ruff mypy)
+
+stage_wheels() {
+    # PyPI is the one slow dependency in this build. Measured on this host:
+    # Ubuntu archive 5.6 MB/s, Cloudflare 3.7 MB/s, files.pythonhosted.org
+    # (Fastly) 0.07 MB/s — about 50x slower, so four wheels took 17 minutes
+    # while the entire apt layer took 162 seconds. That is a route between this
+    # ISP and Fastly, not something a Dockerfile can fix.
+    #
+    # So the wheels are cached on disk and survive everything that would
+    # otherwise force a re-download: a Dockerfile edit, `docker builder prune`,
+    # a fresh layer. Downloaded once, reused forever. Deliberately NOT wiped
+    # with the rest of vendor/.
+    mkdir -p "$WHEELS"
+    if compgen -G "${WHEELS}/*.whl" >/dev/null; then
+        log "wheels: reusing $(ls "${WHEELS}"/*.whl | wc -l) cached (skipping PyPI)"
+        return
+    fi
+    log "wheels: cache empty — downloading once from PyPI (slow here; cached after this)"
+    # Platform pinned to the image, not this host: the host is glibc 2.43 and
+    # the image is 2.35, so an unconstrained download can pick a wheel the
+    # image cannot load.
+    # /usr/bin/python3 explicitly: a bare `python3` here resolves to whatever
+    # venv is active (Nova's is uv-managed and ships no pip), which fails with
+    # a "No module named pip" that has nothing to do with the download.
+    #
+    # All three manylinux tags, because they are not interchangeable and the
+    # set in use varies per project: playwright publishes manylinux1_x86_64,
+    # ruff and mypy publish manylinux_2_17/2014. Listing only the newer two
+    # silently skipped playwright and failed the whole batch.
+    if /usr/bin/python3 -m pip download \
+            --only-binary=:all: \
+            --python-version 3.12 \
+            --platform manylinux1_x86_64 \
+            --platform manylinux2014_x86_64 \
+            --platform manylinux_2_17_x86_64 \
+            --dest "$WHEELS" \
+            "${PY_PACKAGES[@]}" >"${VENDOR}/wheels-download.log" 2>&1; then
+        log "wheels: cached $(ls "${WHEELS}"/*.whl 2>/dev/null | wc -l) for future builds"
+    else
+        log "wheels: host download failed (see vendor/wheels-download.log) — the image will fetch from PyPI instead"
+        rm -f "${WHEELS}"/*.whl 2>/dev/null || true
+    fi
+}
+
 stage_vendor() {
+    # Preserve the wheel cache; wipe everything else.
+    local keep=""
+    if [ -d "$WHEELS" ]; then keep="$(mktemp -d)"; mv "$WHEELS" "${keep}/wheels"; fi
     rm -rf "$VENDOR"
     mkdir -p "$VENDOR"
     : >"${VENDOR}/.keep"
+    if [ -n "$keep" ]; then mv "${keep}/wheels" "$WHEELS"; rmdir "$keep"; fi
 
     # Go — statically linked, so the whole GOROOT transplants as-is.
     local goroot
@@ -81,6 +134,7 @@ build_layer() {
 
 echo "Staging host toolchains into vendor/"
 stage_vendor
+stage_wheels
 echo
 echo "Building chain up to: ${TARGET}"
 
