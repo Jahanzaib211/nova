@@ -288,7 +288,21 @@ def record_job(result: dict) -> None:
             "duration_sec": result.get("duration_sec"),
             "detail": result.get("detail", "")[:500],
         }
-        payload = {"checked_at_epoch": time.time(), "jobs": jobs}
+        # Every other gate file carries overall/ok, and the console keys its
+        # rendering and its staleness rule off them. jobs.json shipped without
+        # either, so it rendered as an unknown -- a maintenance job failing
+        # looked exactly like one that had never run. Derive both from the
+        # recorded exit codes so this file answers the same question the
+        # others do.
+        failed = [n for n, j in jobs.items() if j.get("exit_code") not in (0, None)]
+        overall = "red" if failed else "green"
+        payload = {
+            "checked_at_epoch": time.time(),
+            "overall": overall,
+            "ok": not failed,
+            "failed_jobs": failed,
+            "jobs": jobs,
+        }
         with tempfile.NamedTemporaryFile(
             "w",
             encoding="utf-8",

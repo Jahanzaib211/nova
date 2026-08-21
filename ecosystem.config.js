@@ -137,6 +137,16 @@ module.exports = {
         //                          change, but not on the production path.
         //   P5_llama_loopback    — llama.cpp on :8081 is the local-llama
         //                          fall-back; not used by Nova here either.
+        //   P6_llama_vram        — same dead :8081 as P5, and it was left
+        //                          out of this list when P5 was disabled.
+        //                          Nothing of Nova's listens there now, but
+        //                          another project's `hsproxy` container
+        //                          does, so the probe was reading a
+        //                          payments proxy's error body and calling
+        //                          it "no model advertised" — a permanent
+        //                          yellow describing a service Nova does
+        //                          not own. Nova's local models go through
+        //                          Ollama on :11434 via nova-litellm.
         //   P9_bridge            — llama-bridge; ~/Desktop/llama-bridge
         //                          does not exist
         //   P11_dify             — nova-dify; ~/Desktop/dify does not exist
@@ -145,7 +155,8 @@ module.exports = {
         //                          by the `tunnel-nova` pm2 app via
         //                          ~/.cloudflared/nova-config.yml instead
         // Re-enable by removing a name here once the service is back.
-        HEALTHCHECK_DISABLED_PROBES: "P4_local_llm_gateway,P5_llama_loopback,P9_bridge,P11_dify,P12_tunnel",
+        HEALTHCHECK_DISABLED_PROBES:
+          "P4_local_llm_gateway,P5_llama_loopback,P6_llama_vram,P9_bridge,P11_dify,P12_tunnel",
         // Binary-attestation probe — left unset by default. To enable:
         //   WATCHDOG_ATTESTATION_BINARY_PATH=/path/to/binary
         //   WATCHDOG_ATTESTATION_CONSTITUTION_PATH=/path/to/constitution
