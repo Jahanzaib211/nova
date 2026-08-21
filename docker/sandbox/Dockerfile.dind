@@ -19,6 +19,15 @@ FROM ${BASE}
 LABEL org.nova.sandbox.layer="dind"
 
 ARG RUNC_VERSION=v1.2.3
+ARG DEBIAN_FRONTEND=noninteractive
+
+# nftables is the daemon's own dependency, not general tooling, which is why it
+# lives here rather than in the tools layer — putting it there would invalidate
+# every layer below it for a package only dockerd uses. Without `nft` the daemon
+# starts but logs "Failed to find nft tool" and falls back to legacy iptables
+# for every rule it manages.
+RUN apt-get update && apt-get install -y --no-install-recommends nftables \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY vendor/ /vendor/
 

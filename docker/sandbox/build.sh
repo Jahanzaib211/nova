@@ -115,6 +115,12 @@ stage_vendor() {
     for bin in "${need[@]}"; do
         if command -v "$bin" >/dev/null 2>&1; then have+=("$(command -v "$bin")"); else missing+=("$bin"); fi
     done
+    # docker-init lives in libexec, off PATH, so the loop above never finds it.
+    # Without it the daemon logs "Failed to find docker-init" and `docker run
+    # --init` cannot reap zombies in inner containers.
+    for candidate in /usr/libexec/docker/docker-init /usr/bin/docker-init; do
+        [ -x "$candidate" ] && { have+=("$candidate"); break; }
+    done
     if [ ${#missing[@]} -eq 0 ]; then
         mkdir -p "${VENDOR}/docker"
         cp "${have[@]}" "${VENDOR}/docker/"
