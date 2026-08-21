@@ -418,6 +418,18 @@ class LocalContainerBackend(SandboxBackend):
                     existing = self.discover(sandbox_id)
                     if existing is not None:
                         return existing
+                    # Nothing adoptable, but the name is taken -- so the holder
+                    # is a container that is not running. `docker ps` (no -a)
+                    # cannot see those, which is exactly how a create that was
+                    # interrupted before start wedges a thread permanently: the
+                    # shell sits in state "Created" holding the deterministic
+                    # name, discover() reports nothing to adopt, and every
+                    # subsequent turn fails the same way with no path out.
+                    # A non-running container with our deterministic name is by
+                    # definition a leftover, so clear it and retry once.
+                    if self._remove_stale_container(container_name):
+                        logger.warning(f"Removed stale container {container_name}; retrying create")
+                        continue
                 raise
         else:
             raise RuntimeError("Could not start sandbox container: all candidate ports are already allocated by Docker")
@@ -515,6 +527,36 @@ class LocalContainerBackend(SandboxBackend):
             container_name=container_name,
             preview_ports=self._get_container_preview_ports(container_name),
         )
+
+    def _remove_stale_container(self, container_name: str) -> bool:
+        """Remove a same-named container that is not running. Returns True if removed.
+
+        Deliberately refuses to touch a *running* container: that would be
+        another process's live sandbox, and stealing its name mid-run is worse
+        than failing this create.
+        """
+        probe = self._cli(
+            "inspect",
+            "--format",
+            "{{.State.Running}}",
+            container_name,
+            timeout=10,
+            intent="check whether the name-holding container is running",
+        )
+        if not probe.ok:
+            return False
+        if probe.stdout.strip().lower() == "true":
+            logger.warning(f"Container {container_name} is running; refusing to remove it")
+            return False
+
+        removed = self._cli(
+            "rm",
+            "-f",
+            container_name,
+            timeout=30,
+            intent="remove stale sandbox container holding the name",
+        )
+        return removed.ok
 
     def list_running(self) -> list[SandboxInfo]:
         """Enumerate all running containers matching the configured prefix.

@@ -1,5 +1,6 @@
 import logging
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -632,3 +633,58 @@ def test_start_container_omits_cpu_flags_when_unset(monkeypatch):
 
     assert "--cpus" not in cmd
     assert "--cpu-shares" not in cmd
+
+
+# ── stale-name recovery ──────────────────────────────────────────────────────
+#
+# A create that is interrupted before start leaves a container in state
+# "Created" holding the deterministic per-thread name. `docker ps` without -a
+# cannot see it, so discover() finds nothing to adopt and every later turn for
+# that thread fails identically -- "the container name is already in use" --
+# with no path out except a human running `docker rm` on the host. This wedged
+# a live thread on 2026-08-22.
+
+
+def test_remove_stale_container_removes_a_non_running_holder(monkeypatch):
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+    )
+    calls: list[list[str]] = []
+
+    def fake_cli(*args, **kwargs):
+        calls.append(list(args))
+        if args[0] == "inspect":
+            return SimpleNamespace(ok=True, stdout="false\n", stderr="", error=None, exit_code=0)
+        return SimpleNamespace(ok=True, stdout="", stderr="", error=None, exit_code=0)
+
+    monkeypatch.setattr(backend, "_cli", fake_cli)
+
+    assert backend._remove_stale_container("sandbox-abc") is True
+    assert ["rm", "-f", "sandbox-abc"] in calls, "the stale container must actually be removed"
+
+
+def test_remove_stale_container_refuses_to_touch_a_running_one(monkeypatch):
+    """Stealing a live sandbox's name mid-run is worse than failing the create."""
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+    )
+    calls: list[list[str]] = []
+
+    def fake_cli(*args, **kwargs):
+        calls.append(list(args))
+        if args[0] == "inspect":
+            return SimpleNamespace(ok=True, stdout="true\n", stderr="", error=None, exit_code=0)
+        return SimpleNamespace(ok=True, stdout="", stderr="", error=None, exit_code=0)
+
+    monkeypatch.setattr(backend, "_cli", fake_cli)
+
+    assert backend._remove_stale_container("sandbox-live") is False
+    assert not any(c[:2] == ["rm", "-f"] for c in calls), "a running container must never be removed"
