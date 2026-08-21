@@ -267,58 +267,67 @@ def check_database() -> dict:
 
 
 def check_checkpoint_count() -> dict:
-    """Row count is the leading indicator; file size is the lagging one."""
+    """How many checkpoints the pruner would delete right now.
+
+    This measures *backlog*, not volume. An earlier version reported
+    checkpoints-per-thread against a fixed threshold, which is meaningless at
+    small thread counts: one agent mid-session legitimately produced 538
+    checkpoints across a single thread and tripped a RED that described nothing
+    wrong. Volume is supposed to be high while work is happening — retention
+    keeps everything inside the recency window on purpose.
+
+    What actually indicates a problem is rows surviving *past* that window: if
+    the pruner is running, almost nothing should be older than
+    NOVA_PRUNE_KEEP_DAYS beyond the newest few per thread. A growing backlog is
+    the 59 GB failure returning, and it shows here days before database_size
+    notices.
+    """
+    keep_days = float(os.environ.get("NOVA_PRUNE_KEEP_DAYS", "2"))
+    keep_per_thread = int(os.environ.get("NOVA_PRUNE_KEEP_PER_THREAD", "3"))
+    cutoff = _uuid6_at(time.time() - keep_days * 86400)
+
     backend, _ = _active_backend()
     if backend == "postgres":
-        raw = _psql("SELECT COUNT(*), COUNT(DISTINCT thread_id) FROM checkpoints")
-        if not raw or "|" not in raw:
-            return check(
-                "checkpoint_rows",
-                YELLOW,
-                "postgres backend, but the database is not reachable",
-            )
-        rows_s, threads_s = raw.split("|", 1)
-        rows, threads = int(rows_s or 0), int(threads_s or 0)
-        per_thread = rows / threads if threads else 0
-        return check(
-            "checkpoint_rows",
-            _band(per_thread, 50, 200),
-            f"{rows:,} checkpoints across {threads:,} threads "
-            f"({per_thread:.0f}/thread, postgres)",
-            rows=rows,
-            threads=threads,
-            backend="postgres",
+        raw = _psql(
+            "WITH ranked AS (SELECT checkpoint_id, ROW_NUMBER() OVER "
+            "(PARTITION BY thread_id, checkpoint_ns ORDER BY checkpoint_id DESC) rn "
+            "FROM checkpoints) "
+            f"SELECT (SELECT COUNT(*) FROM checkpoints), COUNT(*) FROM ranked "
+            f"WHERE rn > {keep_per_thread} AND checkpoint_id < '{cutoff}'"
         )
-
-    db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
-    if not db.exists():
-        return check("checkpoint_rows", GREEN, "sqlite not in use")
-    try:
-        import sqlite3
-
-        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+        if not raw or "|" not in raw:
+            return check("checkpoint_backlog", YELLOW,
+                         "postgres backend, but the database is not reachable")
+        total_s, backlog_s = raw.split("|", 1)
+        total, backlog = int(total_s or 0), int(backlog_s or 0)
+    else:
+        db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
+        if not db.exists():
+            return check("checkpoint_backlog", GREEN, "sqlite not in use")
         try:
-            rows = conn.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0]
-            threads = conn.execute(
-                "SELECT COUNT(DISTINCT thread_id) FROM checkpoints"
-            ).fetchone()[0]
-        finally:
-            conn.close()
-    except Exception as exc:  # noqa: BLE001 - a gate must never crash the console
-        return check("checkpoint_rows", YELLOW, f"unreadable: {exc}")
+            import sqlite3
 
-    per_thread = rows / threads if threads else 0
-    # Retention keeps 3 per thread plus a 2-day window; a sustained average
-    # above ~50 means the pruner is not running.
-    status = _band(per_thread, 50, 200)
-    return check(
-        "checkpoint_rows",
-        status,
-        f"{rows:,} checkpoints across {threads:,} threads ({per_thread:.0f}/thread)",
-        rows=rows,
-        threads=threads,
-        per_thread=round(per_thread, 1),
-    )
+            conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+            try:
+                total = conn.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0]
+                backlog = conn.execute(
+                    "SELECT COUNT(*) FROM (SELECT checkpoint_id, ROW_NUMBER() OVER "
+                    "(PARTITION BY thread_id, checkpoint_ns ORDER BY checkpoint_id DESC) rn "
+                    "FROM checkpoints) WHERE rn > ? AND checkpoint_id < ?",
+                    (keep_per_thread, cutoff),
+                ).fetchone()[0]
+            finally:
+                conn.close()
+        except Exception as exc:  # noqa: BLE001 - a gate must not crash the console
+            return check("checkpoint_backlog", YELLOW, f"unreadable: {exc}")
+
+    detail = f"{backlog:,} prunable of {total:,} total ({backend})"
+    if backlog == 0:
+        return check("checkpoint_backlog", GREEN, detail, total=total, backlog=0)
+    status = _band(backlog, 500, 5000)
+    if status != GREEN:
+        detail += "  — is the prune job running?"
+    return check("checkpoint_backlog", status, detail, total=total, backlog=backlog)
 
 
 def check_logs() -> dict:
@@ -375,6 +384,22 @@ def check_docker_reclaimable() -> dict:
 
     parts = [line for line in out.stdout.strip().splitlines() if line.strip()]
     return check("docker_reclaimable", GREEN, "; ".join(parts) or "nothing reported")
+
+
+_GREGORIAN_TO_UNIX_TICKS = 122_192_928_000_000_000
+
+
+def _uuid6_at(epoch: float) -> str:
+    """Smallest UUIDv6 at a given time, for comparing against checkpoint_id.
+
+    LangGraph mints checkpoint_id as UUIDv6, which is big-endian time-first, so
+    lexical order is chronological order and a retention window can be expressed
+    as a single string comparison. Deliberately duplicated from
+    scripts/prune-checkpoints.py rather than imported: this gate runs under the
+    system interpreter from the gates daemon, with no package on the path.
+    """
+    ticks = int(epoch * 10_000_000) + _GREGORIAN_TO_UNIX_TICKS
+    return f"{(ticks >> 28) & 0xFFFFFFFF:08x}-{(ticks >> 12) & 0xFFFF:04x}-6{ticks & 0x0FFF:03x}-0000-000000000000"
 
 
 def _jobs_state() -> dict:
