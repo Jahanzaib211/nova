@@ -431,7 +431,13 @@ services:
       - TIMEOUT=30000
       - TOKEN=${BROWSERLESS_TOKEN:-}
     networks:
-      - deer-flow-dev
+      # Pinned. This network hands out fixed addresses to nginx/gateway/
+      # frontend/postgres, and an unpinned service just takes the next free
+      # one -- which, while the gateway happened to be down, was the gateway's
+      # own 192.168.200.3. The gateway then could not restart at all:
+      # "failed to set up container networking: Address already in use".
+      deer-flow-dev:
+        ipv4_address: 192.168.200.7
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/pressure"]
       interval: 30s
@@ -441,6 +447,46 @@ services:
     # sessions inside 1.5g is enough for fetch-a-page work without competing
     # with the gateway.
     mem_limit: 1500m
+    mem_reservation: 512m
+    shm_size: 1gb
+    security_opt:
+      - "no-new-privileges:true"
+
+  # Self-hosted Crawl4AI. Distinct from browserless, which renders one URL the
+  # agent already names -- this follows links, so "read this docs site" is one
+  # tool call instead of the agent hand-rolling a crawl a fetch at a time.
+  #
+  # Runs as a service rather than a gateway dependency: the library ships its
+  # own Playwright browser download, which would put a second headless-Chrome
+  # stack inside the gateway image next to the one browserless already is.
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: deer-flow-crawl4ai
+    ports:
+      - "127.0.0.1:11235:11235"
+    volumes:
+      # Upstream binds 127.0.0.1 inside the container, so the published port
+      # reaches nothing and the gateway cannot see it at all. This override
+      # only changes the bind address.
+      - ./crawl4ai/config.yml:/app/config.yml:ro
+    environment:
+      # Required for the non-loopback bind above; without it the server refuses
+      # to start on 0.0.0.0, which is the correct default for a crawler.
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:?Set CRAWL4AI_API_TOKEN in .env}
+    networks:
+      # Pinned like everything else here. An unpinned service takes the next
+      # free address, and when the gateway was briefly down that was the
+      # gateway's own .3 -- which then could not restart at all.
+      deer-flow-dev:
+        ipv4_address: 192.168.200.8
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Chrome again, and a crawler drives several tabs at once. Bounded for the
+    # same reason browserless is.
+    mem_limit: 2g
     mem_reservation: 512m
     shm_size: 1gb
     security_opt:

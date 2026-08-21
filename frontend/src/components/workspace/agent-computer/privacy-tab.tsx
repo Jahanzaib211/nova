@@ -1,13 +1,26 @@
 "use client";
 
 import { LoaderCircleIcon, ShieldIcon } from "lucide-react";
+import { useState } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/core/i18n/hooks";
-import { useIGINOStatus, useToggleIGINO } from "@/core/igino/hooks";
+import { useIGINOStatus, useTestIGINOCapability } from "@/core/igino/hooks";
 import { useWorkspaceMetrics } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
+
+/** The request path, in the order it actually runs. Named for what each step
+    does rather than for its provider: the provider is an implementation detail
+    that changed twice in one day, the job did not. */
+const PIPELINE: Array<{ tool: string; label: string; hint: string }> = [
+  { tool: "web_search", label: "Search", hint: "finds pages" },
+  { tool: "web_fetch", label: "Fetch", hint: "reads one page" },
+  {
+    tool: "web_fetch_many",
+    label: "Fetch many",
+    hint: "reads several pages at once",
+  },
+];
 
 export function PrivacyPanel({
   threadId,
@@ -19,7 +32,34 @@ export function PrivacyPanel({
 }) {
   const { t } = useI18n();
   const { data: status, isLoading } = useIGINOStatus(active);
-  const toggleMutation = useToggleIGINO();
+  const testMutation = useTestIGINOCapability();
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<
+    Record<string, { ok: boolean; detail: string; duration_ms: number }>
+  >({});
+
+  const runTest = (tool: string) => {
+    setTesting(tool);
+    testMutation.mutate(tool, {
+      onSuccess: (r) =>
+        setTestResults((prev) => ({
+          ...prev,
+          [tool]: { ok: r.ok, detail: r.detail, duration_ms: r.duration_ms },
+        })),
+      // A failed request is itself a result worth showing -- the panel exists
+      // to surface breakage, so swallowing the error would defeat the button.
+      onError: (e: unknown) =>
+        setTestResults((prev) => ({
+          ...prev,
+          [tool]: {
+            ok: false,
+            detail: e instanceof Error ? e.message : "request failed",
+            duration_ms: 0,
+          },
+        })),
+      onSettled: () => setTesting(null),
+    });
+  };
   // Workspace kernel metrics (C10 item 10); null while the flag is off.
   const workspaceMetrics = useWorkspaceMetrics(threadId ?? null, active);
 
@@ -56,13 +96,6 @@ export function PrivacyPanel({
             {t.agentComputer.privacy.disabledBody}
           </p>
         </div>
-        <Switch
-          checked={false}
-          onCheckedChange={(checked) => toggleMutation.mutate(checked)}
-          disabled={toggleMutation.isPending}
-          aria-label={t.agentComputer.privacy.toggleLabel}
-          data-testid="igino-toggle"
-        />
       </div>
     );
   }
@@ -78,13 +111,6 @@ export function PrivacyPanel({
               {t.agentComputer.privacy.title}
             </span>
           </div>
-          <Switch
-            checked={status.enabled}
-            onCheckedChange={(checked) => toggleMutation.mutate(checked)}
-            disabled={toggleMutation.isPending}
-            aria-label={t.agentComputer.privacy.toggleLabel}
-            data-testid="igino-toggle"
-          />
         </div>
 
         {/* Source Health */}
@@ -102,15 +128,31 @@ export function PrivacyPanel({
               }
               healthy={status.searxng_healthy}
             />
-            <StatusCard
-              label={t.agentComputer.privacy.tor}
-              status={
-                status.tor_available
-                  ? t.agentComputer.privacy.available
-                  : t.agentComputer.privacy.unavailable
-              }
-              healthy={status.tor_available}
-            />
+            {/* One card per web capability, named by the job it does. These
+                are three different things that fail independently:
+                  search      finds pages                 (SearXNG)
+                  fetch       reads one named page        (Browserless)
+                  fetch_many  reads many named pages      (Crawl4AI)
+                A single "crawler" row hid which of them was down. None of them
+                follows links: Browserless renders one URL, and Crawl4AI's REST
+                API refuses deep_crawl_strategy from an untrusted request. The
+                labels say what each one does rather than what we wish it did. */}
+            {(status.web ?? []).map((cap) => (
+              <StatusCard
+                key={cap.tool}
+                label={
+                  cap.tool === "web_fetch"
+                    ? t.agentComputer.privacy.fetch
+                    : t.agentComputer.privacy.crawl
+                }
+                status={`${cap.provider} · ${
+                  cap.healthy
+                    ? t.agentComputer.privacy.healthy
+                    : t.agentComputer.privacy.unhealthy
+                }`}
+                healthy={cap.healthy}
+              />
+            ))}
           </div>
         </div>
 
@@ -150,11 +192,129 @@ export function PrivacyPanel({
               value={status.audit?.errors ?? 0}
             />
             <MetricCard
-              label={t.agentComputer.privacy.torUsage}
-              value={status.audit?.tor_usage ?? 0}
+              label={t.agentComputer.privacy.fetches}
+              value={status.audit?.fetches ?? 0}
             />
           </div>
         </div>
+
+        {/* Crawler — the fetch half of the pipeline, broken out from search.
+            Both used to collapse into one `errors` number, which said nothing
+            about which half was down. */}
+        <div className="space-y-2">
+          <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            {t.agentComputer.privacy.crawler}
+          </h3>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <MetricCard
+              label={t.agentComputer.privacy.fetches}
+              value={status.audit?.fetches ?? 0}
+            />
+            <MetricCard
+              label={t.agentComputer.privacy.errors}
+              value={status.audit?.fetch_errors ?? 0}
+            />
+            <MetricCard
+              label={t.agentComputer.privacy.avgFetch}
+              value={`${status.audit?.avg_fetch_ms ?? 0}ms`}
+            />
+          </div>
+          {/* Pipeline, in the order a request actually flows through it, with
+              a self-test per step. The internal base URLs used to be printed
+              here: they leak the compose topology to anyone with the panel
+              open, and a user cannot act on "http://browserless:3000" anyway.
+              A button that performs a real search or fetch answers the question
+              the URL was standing in for. */}
+          <div className="space-y-1">
+            {PIPELINE.map((step, i) => {
+              const cap = (status.web ?? []).find((c) => c.tool === step.tool);
+              const healthy =
+                step.tool === "web_search"
+                  ? status.searxng_healthy
+                  : (cap?.healthy ?? false);
+              const result = testResults[step.tool];
+              return (
+                <div
+                  key={step.tool}
+                  className="flex items-center gap-2 rounded-md border px-2 py-1.5"
+                >
+                  <span className="text-muted-foreground w-4 shrink-0 text-[10px]">
+                    {i + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-medium">
+                      {step.label}
+                    </div>
+                    <div className="text-muted-foreground truncate text-[10px]">
+                      {result
+                        ? `${result.ok ? "ok" : "failed"} · ${result.detail} · ${result.duration_ms}ms`
+                        : step.hint}
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[10px]",
+                      healthy ? "text-emerald-400" : "text-amber-400",
+                    )}
+                  >
+                    ●
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => runTest(step.tool)}
+                    disabled={testing === step.tool}
+                    className="hover:bg-muted shrink-0 rounded border px-2 py-0.5 text-[10px] disabled:opacity-50"
+                  >
+                    {testing === step.tool
+                      ? t.common.loading
+                      : t.agentComputer.privacy.test}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Capabilities. Replaces a master on/off switch that wrote nothing:
+            each of these is configured independently by environment and fails
+            independently, so one aggregate "enabled" could never describe the
+            real state. Read-only on purpose -- four controls that also did
+            nothing would be a worse lie than the one they replace. */}
+        {status.features?.length ? (
+          <div className="space-y-2">
+            <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+              {t.agentComputer.privacy.capabilities}
+            </h3>
+            <div className="space-y-1">
+              {status.features.map((f) => (
+                <div
+                  key={f.key}
+                  className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-medium">
+                      {f.label}
+                    </div>
+                    <div className="text-muted-foreground truncate text-[10px]">
+                      {f.env}
+                      {f.detail ? ` — ${f.detail}` : ""}
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[10px] font-medium tracking-wide uppercase",
+                      f.enabled ? "text-emerald-400" : "text-muted-foreground",
+                    )}
+                  >
+                    {f.enabled
+                      ? t.agentComputer.privacy.on
+                      : t.agentComputer.privacy.off}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* Workspace kernel (C10) — hidden until the backend flag is on */}
         {workspaceMetrics && (

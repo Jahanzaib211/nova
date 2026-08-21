@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   fetchIGINOStatus,
-  toggleIGINO,
+  testIGINOCapability,
   runIGINOResearch,
   fetchIGINOCacheStats,
 } from "./api";
@@ -15,17 +15,6 @@ export function useIGINOStatus(enabled = true) {
     refetchInterval: enabled ? 15000 : false,
     retry: 1,
     staleTime: 10000,
-  });
-}
-
-export function useToggleIGINO() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (enabled: boolean) => toggleIGINO(enabled),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["igino", "status"] });
-      void qc.invalidateQueries({ queryKey: ["runtime", "capabilities"] });
-    },
   });
 }
 
@@ -47,5 +36,13 @@ export function useIGINOCacheStats() {
     queryFn: fetchIGINOCacheStats,
     refetchInterval: 30000,
     retry: 1,
+  });
+}
+
+/** Self-test one capability. Not a query: it must only run when clicked, since
+    it performs a real search or fetch rather than reading cached state. */
+export function useTestIGINOCapability() {
+  return useMutation({
+    mutationFn: (tool: string) => testIGINOCapability(tool),
   });
 }

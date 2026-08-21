@@ -1,6 +1,7 @@
 """Tests for iGIN0 REST endpoints."""
 
 import asyncio
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -117,10 +118,27 @@ class TestAuthMiddleware(unittest.TestCase):
     def test_igino_status_returns_enabled_false_when_disabled(self):
         from app.gateway.routers.igino import get_status
 
-        # ``DEERFLOW_IGINO_ENABLED`` is unset in the test env, so the
-        # status endpoint must report ``enabled: false`` with HTTP 200.
-        result = asyncio.run(get_status())
+        # Force the flag off rather than assuming the ambient environment has
+        # it unset. This assertion silently depended on the developer's .env,
+        # so simply switching the feature on in a running deployment turned a
+        # green suite red -- the test was measuring the machine, not the code.
+        with patch.dict(os.environ, {"DEERFLOW_IGINO_ENABLED": "false"}, clear=False):
+            result = asyncio.run(get_status())
+
         self.assertFalse(result["enabled"])
+
+    def test_igino_status_reports_enabled_when_switched_on(self):
+        """The other half of the contract, which nothing covered."""
+        from app.gateway.routers.igino import get_status
+
+        with patch.dict(os.environ, {"DEERFLOW_IGINO_ENABLED": "true"}, clear=False):
+            result = asyncio.run(get_status())
+
+        self.assertTrue(result["enabled"])
+        # A switched-on iGIN0 must describe each capability separately; a single
+        # aggregate flag is what made a disabled feature look like a broken one.
+        self.assertIn("features", result)
+        self.assertIn("crawler", result)
 
     def test_igino_research_requires_user(self):
         """The research endpoint must call ``get_optional_user_from_request``

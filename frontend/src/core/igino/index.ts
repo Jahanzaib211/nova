@@ -12,15 +12,10 @@ export type {
 
 export {
   fetchIGINOStatus,
-  toggleIGINO,
+  testIGINOCapability,
   runIGINOResearch,
   fetchIGINOCacheStats,
   IGINORequestError,
 } from "./api";
 
-export {
-  useIGINOStatus,
-  useToggleIGINO,
-  useIGINOResearch,
-  useIGINOCacheStats,
-} from "./hooks";
+export { useIGINOStatus, useIGINOResearch, useIGINOCacheStats } from "./hooks";

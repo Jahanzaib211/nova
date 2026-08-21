@@ -34,15 +34,6 @@ export async function fetchIGINOStatus(): Promise<IGINOStatus> {
   return iginoFetch<IGINOStatus>("/status");
 }
 
-export async function toggleIGINO(
-  enabled: boolean,
-): Promise<IGINOToggleResponse> {
-  return iginoFetch<IGINOToggleResponse>("/toggle", {
-    method: "POST",
-    body: JSON.stringify({ enabled }),
-  });
-}
-
 export async function runIGINOResearch(params: {
   query: string;
   max_results?: number;
@@ -58,4 +49,15 @@ export async function runIGINOResearch(params: {
 
 export async function fetchIGINOCacheStats(): Promise<IGINOCacheStats> {
   return iginoFetch<IGINOCacheStats>("/cache");
+}
+
+/** Run one capability's self-test. GET because it is read-only with a fixed
+    target, so a button can call it without a CSRF round-trip. */
+export async function testIGINOCapability(tool: string): Promise<{
+  tool: string;
+  ok: boolean;
+  detail: string;
+  duration_ms: number;
+}> {
+  return iginoFetch(`/test/${encodeURIComponent(tool)}`);
 }

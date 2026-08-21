@@ -797,11 +797,17 @@ export interface Translations {
       title: string;
       sourceHealth: string;
       searxng: string;
-      tor: string;
+      crawler: string;
+      test: string;
+      fetch: string;
+      crawl: string;
+      fetches: string;
+      avgFetch: string;
+      capabilities: string;
+      on: string;
+      off: string;
       healthy: string;
       unhealthy: string;
-      available: string;
-      unavailable: string;
       cache: string;
       size: string;
       hitRate: string;
@@ -809,7 +815,6 @@ export interface Translations {
       audit: string;
       total: string;
       errors: string;
-      torUsage: string;
       toggleLabel: string;
       /** Shown instead of fake zeros when iGIN0 is switched off. */
       disabledTitle: string;

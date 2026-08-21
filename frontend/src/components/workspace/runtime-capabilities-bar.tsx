@@ -334,9 +334,12 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
             <span className="text-foreground/80">
               {t.runtimeBar.igino.label}
             </span>
-            {status.tor_enabled && (
-              <span className="bg-primary/20 text-primary rounded px-1 text-[9px]">
-                {t.a11y.tor}
+            {/* Was a TOR badge, which is off by design and so never rendered.
+                The crawler runs on every fetch, so a red dot here is the thing
+                actually worth surfacing in the bar. */}
+            {status.crawler && !status.crawler.healthy && (
+              <span className="rounded bg-amber-500/20 px-1 text-[9px] text-amber-400">
+                {t.agentComputer.privacy.crawler}
               </span>
             )}
           </span>
@@ -348,9 +351,13 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
               status.searxng_healthy
                 ? t.agentComputer.privacy.healthy
                 : t.agentComputer.privacy.unhealthy,
-              status.tor_available
-                ? t.agentComputer.privacy.available
-                : t.agentComputer.privacy.unavailable,
+              status.crawler
+                ? `${status.crawler.provider} ${
+                    status.crawler.healthy
+                      ? t.agentComputer.privacy.healthy
+                      : t.agentComputer.privacy.unhealthy
+                  }`
+                : t.agentComputer.privacy.unhealthy,
               `${status.cache.size}/${status.cache.max_size}`,
             )}
           </p>

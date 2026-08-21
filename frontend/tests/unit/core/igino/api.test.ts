@@ -3,7 +3,9 @@
  *
  * Covers:
  *   - fetchIGINOStatus returns status on 200
- *   - toggleIGINO sends POST with enabled flag
+ *   - toggleIGINO is gone: the endpoint never wrote any state, so the
+ *     switch it backed did nothing while appearing to work. Capabilities
+ *     are configured per-feature by environment and reported by /status.
  *   - runIGINOResearch sends query params
  *   - fetchIGINOCacheStats returns cache stats
  *   - IGINORequestError thrown on non-OK responses
@@ -18,7 +20,6 @@ vi.mock("@/core/api/fetcher", () => ({
 import { fetch as fetcher } from "@/core/api/fetcher";
 import {
   fetchIGINOStatus,
-  toggleIGINO,
   runIGINOResearch,
   fetchIGINOCacheStats,
   IGINORequestError,
@@ -68,24 +69,6 @@ describe("fetchIGINOStatus", () => {
 
     await expect(fetchIGINOStatus()).rejects.toThrow(IGINORequestError);
     await expect(fetchIGINOStatus()).rejects.toMatchObject({ status: 500 });
-  });
-});
-
-describe("toggleIGINO", () => {
-  test("sends POST with enabled flag", async () => {
-    const payload = { enabled: true, message: "Toggle successful" };
-    mockedFetch.mockResolvedValue(jsonResponse(200, payload));
-
-    const result = await toggleIGINO(true);
-
-    expect(result).toEqual(payload);
-    expect(mockedFetch).toHaveBeenCalledWith(
-      "/api/igino/toggle",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ enabled: true }),
-      }),
-    );
   });
 });
 

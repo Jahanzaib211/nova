@@ -3,6 +3,31 @@ export interface IGINOStatus {
   tor_enabled: boolean;
   tor_available: boolean;
   searxng_healthy: boolean;
+  crawler?: {
+    provider: string;
+    healthy: boolean;
+    base_url: string;
+    detail: string;
+  };
+  /** Per-capability state. Each is configured independently by environment and
+      fails independently, so one aggregate `enabled` never described reality. */
+  /** One entry per web capability, named by the job it does: web_fetch reads a
+      page the agent already named, web_crawl follows links. They fail
+      independently, so they are reported independently. */
+  web?: Array<{
+    tool: string;
+    provider: string;
+    healthy: boolean;
+    base_url: string;
+    detail: string;
+  }>;
+  features?: Array<{
+    key: string;
+    label: string;
+    enabled: boolean;
+    env: string;
+    detail: string;
+  }>;
   base_url: string;
   cache: IGINOCacheStats;
   audit: IGINOAuditStats;
@@ -20,6 +45,11 @@ export interface IGINOCacheStats {
 
 export interface IGINOAuditStats {
   total_records: number;
+  /** Fetch-side counters, broken out from search so a dead crawler and a dead
+      search backend are distinguishable rather than one shared error count. */
+  fetches?: number;
+  fetch_errors?: number;
+  avg_fetch_ms?: number;
   errors: number;
   tor_usage: number;
   enabled: boolean;
