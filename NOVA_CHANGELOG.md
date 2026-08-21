@@ -135,6 +135,36 @@ Editor does not poll. The sandbox container still gets no `--gpus` and no
 
 ---
 
+### Two gates that were measuring the wrong number
+
+Both fired on healthy states, which is the failure mode that teaches an owner
+to ignore a console.
+
+**`checkpoint_rows` → `checkpoint_backlog`.** The old check averaged checkpoints
+over threads. At small thread counts that average describes nothing: one agent
+mid-session produced `538 checkpoints across 1 threads` and tripped RED with no
+problem behind it. High volume *inside* the retention window is retention
+working as designed. The signal that actually means the v9.5 database is coming
+back is rows surviving *past* the window, so the check now counts exactly what
+the pruner would delete right now — older than `keep_days`, beyond
+`keep_per_thread` — on both SQLite and Postgres. Currently 0 of 538.
+
+**`swap` counted zram and the swapfile as one pool.** `/proc/meminfo`'s
+`SwapTotal` sums every swap device, so after the v9.5 zram hardening this box's
+8 GiB swapfile and 8 GiB zram device were added together. They are not
+comparable: zram is RAM-backed and compressed, and 5 GiB of pages there occupy
+~1.8 GiB of real memory at no IO cost. The sum reported "11.7 GiB of 16.0 GiB"
+for a host whose real pressure was 6.8 GiB of 8 GiB on disk — understating the
+number that matters while inventing headroom that does not exist.
+
+Banding on occupancy alone was also wrong. Cold pages of idle services parked in
+swap are swap doing its job, and this box legitimately runs a long tail of them
+(mysqld, mariadbd, ruby/bundle, an editor, litellm). What preceded the 2026-08-20
+freeze was a full swapfile *while pages were moving*. The check now samples
+`pswpin`/`pswpout` over 2 s and separates the two: a quiet full swapfile is the
+warning it is, and only sustained paging is the emergency it is not yet.
+
+
 ## v9.5 — the 59 GB database behind v9.4, and the gates that make it visible
 
 **Session pattern:** user reported that after recreating the containers on
@@ -211,7 +241,7 @@ mid-stream.
 
 Four producers now publish machine-readable status to `~/.nova/gates/*.json`,
 read by the Nova Ops `/gates` console: **host** (disk, swap, IO pressure, DB
-size, checkpoints-per-thread, and whether the pruner and rotation still run),
+size, checkpoint backlog, and whether the pruner and rotation still run),
 **drift** (is what is running what the repo says), **ci** (a ~35 s fast tier
 plus a slow tier), and the **watchdog**, which already emitted per-cycle JSON
 into a PM2 log nothing read back. Plus Lighthouse budgets and a

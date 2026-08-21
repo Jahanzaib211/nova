@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -120,23 +121,91 @@ def check_memory() -> dict:
 
 
 def check_swap() -> dict:
-    """Swap exhaustion is the thrash signal.
+    """Disk-swap exhaustion is the thrash signal.
 
     The 2026-08-20 freeze happened with swap at 6.6 GiB of 8 GiB. The box was
     never OOM-killed; it simply could not make progress. Sustained swap use is
     the earliest cheap indicator of that state.
+
+    /proc/meminfo's SwapTotal sums *every* swap device, which since the zram
+    hardening means this box's 8 GiB disk swapfile and its 8 GiB zram device are
+    added together as if they were one resource. They are not comparable. zram
+    is RAM-backed and compressed — 4.8 GiB of pages there occupy ~1.8 GiB of
+    actual memory and cost no IO — so a full zram device is the design working,
+    while a full swapfile is the box about to stall. Summing them reported
+    "11.7 GiB of 16.0 GiB" for a host whose real pressure was 6.8 GiB of 8 GiB
+    on disk, understating the number that matters while inventing headroom that
+    does not exist.
+
+    So: band on the disk swapfile alone, and report zram separately as context.
     """
-    mem = _meminfo()
-    total, free = mem.get("SwapTotal", 0), mem.get("SwapFree", 0)
-    if total == 0:
-        return check("swap", GREEN, "no swap configured")
-    used_pct = (total - free) / total * 100
+    zram_used = 0
+    disk_total = disk_used = 0
+    try:
+        for line in pathlib.Path("/proc/swaps").read_text().splitlines()[1:]:
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            name, total_kb, used_kb = parts[0], int(parts[2]), int(parts[3])
+            if name.startswith("/dev/zram"):
+                zram_used += used_kb * 1024
+            else:
+                disk_total += total_kb * 1024
+                disk_used += used_kb * 1024
+    except OSError:
+        mem = _meminfo()
+        disk_total, disk_used = mem.get("SwapTotal", 0), mem.get("SwapTotal", 0) - mem.get("SwapFree", 0)
+
+    zram_note = f", zram {zram_used / 1024**3:.1f} GiB (compressed, RAM-backed)" if zram_used else ""
+    if disk_total == 0:
+        return check("swap", GREEN, f"no disk swap configured{zram_note}", zram_bytes=zram_used)
+    used_pct = disk_used / disk_total * 100
+
+    # Occupancy alone is a bad thrash signal: cold pages of idle services parked
+    # in swap are swap doing its job, and this box legitimately runs a long tail
+    # of them. What actually preceded the freeze was a full swapfile *while
+    # pages were moving* — the box spending its time refaulting rather than
+    # working. So escalate on paging rate, and treat a quiet full swapfile as
+    # the warning it is rather than the emergency it is not.
+    rate_kbs = _swap_page_rate()
+    if used_pct < 50:
+        status, note = GREEN, ""
+    elif rate_kbs >= 2048:
+        status, note = RED, f"  — thrashing, {rate_kbs:.0f} KB/s paging"
+    else:
+        status, note = YELLOW, f"  — parked, not thrashing ({rate_kbs:.0f} KB/s paging)"
+
     return check(
         "swap",
-        _band(used_pct, 50, 80),
-        f"{(total - free) / 1024**3:.1f} GiB of {total / 1024**3:.1f} GiB used",
+        status,
+        f"{disk_used / 1024**3:.1f} GiB of {disk_total / 1024**3:.1f} GiB swapfile used{zram_note}{note}",
         percent_used=round(used_pct, 1),
+        zram_bytes=zram_used,
+        page_rate_kbs=round(rate_kbs, 1),
     )
+
+
+def _swap_page_rate(window: float = 2.0) -> float:
+    """Swap traffic in KB/s, sampled over a short window.
+
+    /proc/vmstat's pswpin/pswpout are cumulative pages since boot, so a rate
+    needs two samples. Two seconds is enough to separate an idle box from a
+    refaulting one and is affordable in a gate that runs on a schedule.
+    """
+    def sample() -> int:
+        v = {}
+        for line in pathlib.Path("/proc/vmstat").read_text().splitlines():
+            k, _, val = line.partition(" ")
+            if k in ("pswpin", "pswpout"):
+                v[k] = int(val)
+        return v.get("pswpin", 0) + v.get("pswpout", 0)
+
+    try:
+        first = sample()
+        time.sleep(window)
+        return (sample() - first) * 4 / window  # pages -> KB at 4 KiB/page
+    except (OSError, ValueError):
+        return 0.0
 
 
 def check_io_pressure() -> dict:
