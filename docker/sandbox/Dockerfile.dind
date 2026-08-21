@@ -43,6 +43,14 @@ RUN set -eux; \
     chmod 0755 /usr/local/bin/runc; \
     rm -rf /vendor
 
+# The inner daemon's storage must NOT live on the sandbox's own overlayfs.
+# containerd creates its snapshots as overlay mounts, and overlay-on-overlay
+# fails with a bare "invalid argument": the daemon starts, reports healthy, and
+# then every `docker run` dies at mount time. Declaring the volume makes Docker
+# back this path with a real filesystem instead, which is why the official
+# docker:dind image does the same thing.
+VOLUME /var/lib/docker
+
 COPY dind-entrypoint.sh /usr/local/bin/dind-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/dind-entrypoint.sh
 

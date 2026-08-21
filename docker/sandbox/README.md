@@ -105,6 +105,19 @@ Leave it off unless the agent genuinely needs to build images or run services.
 A privileged container is effectively host root: anything that escapes the
 sandbox reaches every other service on the machine.
 
+Two things about the base image had to be worked around, and both fail in the
+same misleading way — the daemon starts, reports healthy, and then every
+`docker run` inside it dies:
+
+- **`/var/lib/docker` is a declared volume.** containerd creates its snapshots
+  as overlay mounts, and overlay-on-overlay fails with a bare `invalid
+  argument`. Backing that path with a real filesystem is what the official
+  `docker:dind` image does for the same reason.
+- **`XDG_RUNTIME_DIR` is created at startup.** The base image bakes
+  `XDG_RUNTIME_DIR=/tmp/runtime-gem` into the environment but never creates the
+  directory, and neither does `/opt/gem/run.sh`. dockerd inherits it and fails
+  container creation with `failed to create temp dir`.
+
 `dind-entrypoint.sh` starts the daemon and then `exec`s the base image's own
 `/opt/gem/run.sh`, which boots the supervisord stack the gateway talks to.
 Replacing that entrypoint would take the sandbox offline, so the daemon is

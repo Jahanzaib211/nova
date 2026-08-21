@@ -18,12 +18,32 @@ readonly ORIGINAL_ENTRYPOINT=/opt/gem/run.sh
 readonly DOCKERD_LOG=/var/log/dind.log
 
 start_dockerd() {
-    if [ ! -w /proc/sys ]; then
-        echo "dind: /proc/sys is read-only — container is not privileged; skipping dockerd" >&2
+    # Detect --privileged by capability, not by poking the filesystem. The
+    # obvious test, `[ -w /proc/sys ]`, is wrong: that directory is not writable
+    # even in a privileged container (only the files under it are), so it
+    # reports "unprivileged" always and silently skips dockerd — the daemon
+    # never starts and the only symptom is `docker: command not found`-shaped
+    # confusion later.
+    #
+    # CAP_SYS_ADMIN is capability 21, so bit 0x200000 of the effective set.
+    local caps
+    caps=$(awk '/^CapEff:/ {print $2}' /proc/self/status 2>/dev/null)
+    if [ -z "$caps" ] || [ $(( 0x${caps} & 0x200000 )) -eq 0 ]; then
+        echo "dind: no CAP_SYS_ADMIN — container is not privileged; skipping dockerd" >&2
         return 1
     fi
 
     mkdir -p /var/lib/docker /var/log
+
+    # The base image bakes XDG_RUNTIME_DIR=/tmp/runtime-gem into the environment
+    # but never creates it, and nothing in /opt/gem/run.sh does either. dockerd
+    # inherits the variable and then fails every container creation with
+    # "failed to create temp dir: stat /tmp/runtime-gem: no such file or
+    # directory" — the daemon starts and reports healthy, so it looks like a
+    # working Docker right up until the agent tries to run something.
+    if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+        mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
+    fi
 
     # An inner daemon on its own address space. The default bridge subnet would
     # be a coin-flip against the host's, and a collision silently breaks either
