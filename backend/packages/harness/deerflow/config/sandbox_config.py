@@ -41,6 +41,8 @@ class SandboxConfig(BaseModel):
         memory_limit: Per-container --memory cap (default: 8g). None for unlimited.
         pids_limit: Per-container --pids-limit (default: 2048). None for unlimited.
         shm_size: Size of /dev/shm (default: 1g). Docker's 64 MB default hangs Chromium.
+        cpu_limit: Per-container --cpus cap. None for uncapped.
+        max_lifetime: Hard ceiling in seconds on container age, regardless of activity.
         mounts: List of volume mounts to share directories with the container
         environment: Environment variables to inject into the container (values starting with $ are resolved from host env)
     """
@@ -95,6 +97,27 @@ class SandboxConfig(BaseModel):
     pids_limit: int | None = Field(
         default=2048,
         description=("Per-container process cap passed to --pids-limit. Set to null for no limit. Bounds fork bombs and runaway build parallelism, which matters more once the sandbox can start containers of its own."),
+    )
+    cpu_limit: str | None = Field(
+        default=None,
+        description=(
+            "Per-container CPU cap passed to --cpus (e.g. '4'). None means uncapped. "
+            "Memory and PID limits bound what a runaway build can allocate, but not "
+            "how much CPU it burns: a parallel compile can still starve the host's "
+            "own services without ever tripping those. Sized to leave headroom for "
+            "the gateway and frontend rather than to the core count."
+        ),
+    )
+    max_lifetime: int | None = Field(
+        default=None,
+        description=(
+            "Hard ceiling in seconds on how long a sandbox container may live, "
+            "regardless of activity. None disables it. `idle_timeout` only reaps "
+            "sandboxes that go quiet; a container that keeps producing output — a "
+            "watch loop, a dev server, a test that never converges — stays alive "
+            "forever under an idle rule alone. This is the deadline that does not "
+            "care whether the work looks busy."
+        ),
     )
     shm_size: str | None = Field(
         default="1g",

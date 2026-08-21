@@ -152,6 +152,7 @@ async def test_acquire_async_uses_async_readiness_polling(monkeypatch):
     provider._sandbox_infos = {}
     provider._thread_sandboxes = {}
     provider._last_activity = {}
+    provider._first_seen = {}
     provider._lock = aio_mod.threading.Lock()
     provider._backend = SimpleNamespace(
         create=MagicMock(return_value=aio_mod.SandboxInfo(sandbox_id="sandbox-async", sandbox_url="http://sandbox")),
@@ -195,6 +196,7 @@ async def test_discover_or_create_with_lock_async_offloads_lock_file_open_and_cl
     provider._thread_sandboxes = {"thread-async-lock": "sandbox-async-lock"}
     provider._sandboxes = {"sandbox-async-lock": aio_mod.AioSandbox(id="sandbox-async-lock", base_url="http://sandbox")}
     provider._last_activity = {}
+    provider._first_seen = {}
     provider._lock = aio_mod.threading.Lock()
     provider._backend = SimpleNamespace(discover=MagicMock(return_value=None))
 
@@ -243,6 +245,7 @@ async def test_acquire_async_cancellation_does_not_leak_thread_lock(tmp_path):
     provider._sandbox_infos = {}
     provider._thread_sandboxes = {}
     provider._last_activity = {}
+    provider._first_seen = {}
     provider._lock = aio_mod.threading.Lock()
 
     thread_id = "thread-cancel-lock"
@@ -280,6 +283,7 @@ async def test_acquire_async_cancelled_waiter_does_not_block_successor(tmp_path,
     provider._sandbox_infos = {}
     provider._thread_sandboxes = {}
     provider._last_activity = {}
+    provider._first_seen = {}
     provider._lock = aio_mod.threading.Lock()
 
     async def fake_acquire_internal_async(thread_id: str | None) -> str:
@@ -386,6 +390,7 @@ def _make_provider_with_active_sandbox(tmp_path, sandbox_id: str):
     }
     provider._thread_sandboxes = {}
     provider._last_activity = {sandbox_id: 0.0}
+    provider._first_seen = {sandbox_id: 0.0}
     provider._shutdown_called = False
     provider._idle_checker_thread = None
     provider._backend = SimpleNamespace(destroy=MagicMock())
@@ -536,6 +541,7 @@ def test_acquire_skips_dead_warm_pool_sandbox(tmp_path, monkeypatch):
     provider._sandbox_infos = {}
     provider._thread_sandboxes = {}
     provider._last_activity = {}
+    provider._first_seen = {}
     provider._warm_pool = {
         "sandbox-warm-dead": (
             aio_mod.SandboxInfo(
@@ -602,6 +608,7 @@ def _make_provider_for_idle():
     provider._sandbox_infos = {}
     provider._thread_sandboxes = {}
     provider._last_activity = {}
+    provider._first_seen = {}
     provider._warm_pool = {}
     provider._config = {"idle_timeout": 600}
     provider._backend = MagicMock()
@@ -677,3 +684,58 @@ def test_thread_has_live_dev_server_consults_registry(monkeypatch):
 
     assert provider._thread_has_live_dev_server("sandbox-1") is False
     assert provider._thread_has_live_dev_server("sandbox-2") is True
+
+
+# ── max_lifetime ─────────────────────────────────────────────────────────────
+#
+# The deadline that does not care whether the work looks busy. idle_timeout
+# only reaps sandboxes that go quiet, and it deliberately exempts one hosting a
+# live dev-server preview — right for an idle rule, and both are holes in a
+# deadline. A watch loop or a test that never converges keeps a container alive
+# indefinitely while looking healthy.
+
+
+def _provider_with_lifetime(max_lifetime):
+    """A provider with its __init__ bypassed, carrying just the reaper's state."""
+    from deerflow.community.aio_sandbox.aio_sandbox_provider import AioSandboxProvider
+
+    provider = AioSandboxProvider.__new__(AioSandboxProvider)
+    provider._config = {"max_lifetime": max_lifetime}
+    provider._first_seen = {}
+    provider._lock = __import__("threading").RLock()
+    provider.destroy = MagicMock()
+    return provider
+
+
+def test_max_lifetime_destroys_an_over_age_sandbox():
+    import time
+
+    provider = _provider_with_lifetime(60)
+    provider._first_seen["sandbox-old"] = time.time() - 600
+
+    provider._enforce_max_lifetime()
+
+    provider.destroy.assert_called_once_with("sandbox-old")
+
+
+def test_max_lifetime_spares_a_young_sandbox():
+    import time
+
+    provider = _provider_with_lifetime(600)
+    provider._first_seen["sandbox-young"] = time.time() - 5
+
+    provider._enforce_max_lifetime()
+
+    provider.destroy.assert_not_called()
+
+
+def test_max_lifetime_disabled_by_default():
+    """None must mean no deadline, not a deadline of zero."""
+    import time
+
+    provider = _provider_with_lifetime(None)
+    provider._first_seen["sandbox-ancient"] = time.time() - 10_000_000
+
+    provider._enforce_max_lifetime()
+
+    provider.destroy.assert_not_called()

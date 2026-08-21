@@ -217,6 +217,7 @@ class LocalContainerBackend(SandboxBackend):
         memory_limit: str | None = None,
         pids_limit: int | None = None,
         shm_size: str | None = None,
+        cpu_limit: str | None = None,
     ):
         """Initialize the local container backend.
 
@@ -237,6 +238,7 @@ class LocalContainerBackend(SandboxBackend):
             memory_limit: Value for --memory (e.g. "8g"); None for unlimited.
             pids_limit: Value for --pids-limit; None for unlimited.
             shm_size: Value for --shm-size; None for the Docker default (64 MB).
+            cpu_limit: Value for --cpus; None for uncapped.
         """
         self._image = image
         self._base_port = base_port
@@ -248,6 +250,7 @@ class LocalContainerBackend(SandboxBackend):
         self._memory_limit = memory_limit
         self._pids_limit = pids_limit
         self._shm_size = shm_size
+        self._cpu_limit = cpu_limit
         self._runtime = self._detect_runtime()
 
     @property
@@ -668,6 +671,11 @@ class LocalContainerBackend(SandboxBackend):
         # agent's own browsing, not just test tooling.
         if self._shm_size:
             cmd.extend(["--shm-size", str(self._shm_size)])
+        # CPU is the limit the other two do not cover. A parallel compile stays
+        # well inside its memory and PID caps while burning every core, which
+        # starves the gateway and frontend on a single-box deployment.
+        if self._cpu_limit:
+            cmd.extend(["--cpus", str(self._cpu_limit)])
 
         # Docker-specific security options
         if self._runtime == "docker":

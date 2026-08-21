@@ -124,14 +124,48 @@ that breaks, not just test tooling.
 place: the alternative is remembering `--disable-dev-shm-usage` in every script
 that ever launches a browser.
 
-## Resource caps
+## Resource caps and deadlines
 
-Sandbox containers ran with no memory limit and no pids limit until 2026-08-21.
-On a host whose `Committed_AS` already exceeded its `CommitLimit`, that meant one
-runaway build took the entire machine down instead of just its own container.
-`sandbox.memory_limit` (default `8g`) and `sandbox.pids_limit` (default `2048`)
-bound the blast radius, and matter more now that the sandbox can start
-containers of its own.
+Sandbox containers ran with no memory limit, no pids limit and no deadline until
+2026-08-21. On a host whose `Committed_AS` already exceeded its `CommitLimit`,
+one runaway build took the entire machine down instead of just its own
+container. These matter more now that the sandbox can start containers of its
+own.
+
+The limits are layered on purpose — no single one of them is sufficient:
+
+| Limit | Config | Default | Catches |
+|---|---|---|---|
+| Memory | `memory_limit` | `8g` | a build that allocates until the host OOMs |
+| PIDs | `pids_limit` | `2048` | fork bombs, runaway build parallelism |
+| CPU | `cpu_limit` | unset (`"6"` here) | a parallel compile that starves the host's own services while staying inside its memory cap |
+| `/dev/shm` | `shm_size` | `1g` | Chromium hanging mid-render |
+| Idle | `idle_timeout` | `3600` | a sandbox nobody is using any more |
+| **Lifetime** | `max_lifetime` | unset (`14400` here) | **a sandbox that never goes idle** |
+
+The last row is the one that is easy to leave out. `idle_timeout` only reaps
+sandboxes that go *quiet*, and it deliberately exempts one hosting a live
+dev-server preview — correct for an idle rule, and both are holes in a deadline.
+A watch loop, a dev server, or a test that never converges keeps a container
+alive indefinitely while looking perfectly healthy. `max_lifetime` refreshes
+nothing and exempts nothing.
+
+### Does this reach the containers the agent starts?
+
+Yes, by two different mechanisms, and it is worth being explicit because the
+usual failure here is assuming a timeout on the *agent* reaches the containers
+the agent launched.
+
+**Resources** nest. Inner containers get cgroups underneath this container's own
+cgroup, so `--memory`, `--cpus` and `--pids-limit` bound the *sum* of everything
+the agent starts — `docker compose up` with fifteen services cannot exceed what
+the one sandbox was given. `dind-entrypoint.sh` adds `--default-ulimit` on top so
+a single inner container cannot exhaust that shared budget by itself.
+
+**Lifetime** nests too, but for a different reason: destroying the sandbox tears
+down its PID namespace, which takes every inner container with it. That is what
+makes `max_lifetime` a real deadline rather than one that stops the agent and
+leaves its containers running.
 
 ## The Android layer
 

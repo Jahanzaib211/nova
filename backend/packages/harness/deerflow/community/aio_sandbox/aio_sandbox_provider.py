@@ -139,6 +139,10 @@ class AioSandboxProvider(SandboxProvider):
         self._thread_sandboxes: dict[str, str] = {}  # thread_id -> sandbox_id
         self._thread_locks: dict[str, threading.Lock] = {}  # thread_id -> in-process lock
         self._last_activity: dict[str, float] = {}  # sandbox_id -> last activity timestamp
+        # sandbox_id -> when we first saw it. Distinct from _last_activity: this
+        # one is never refreshed, because it backs the deadline that does not
+        # care how busy the sandbox looks.
+        self._first_seen: dict[str, float] = {}
         # Warm pool: released sandboxes whose containers are still running.
         # Maps sandbox_id -> (SandboxInfo, release_timestamp).
         # Containers here can be reclaimed quickly (no cold-start) or destroyed
@@ -200,6 +204,7 @@ class AioSandboxProvider(SandboxProvider):
             memory_limit=self._config["memory_limit"],
             pids_limit=self._config["pids_limit"],
             shm_size=self._config["shm_size"],
+            cpu_limit=self._config["cpu_limit"],
         )
 
     # ── Configuration ────────────────────────────────────────────────────
@@ -234,6 +239,8 @@ class AioSandboxProvider(SandboxProvider):
             "memory_limit": getattr(sandbox_config, "memory_limit", None),
             "pids_limit": getattr(sandbox_config, "pids_limit", None),
             "shm_size": getattr(sandbox_config, "shm_size", None),
+            "cpu_limit": getattr(sandbox_config, "cpu_limit", None),
+            "max_lifetime": getattr(sandbox_config, "max_lifetime", None),
             "environment": environment,
             "preview_ports": list(preview_ports) if preview_ports else list(DEFAULT_PREVIEW_PORTS),
             # provisioner URL for dynamic pod management (e.g. http://provisioner:8002)
@@ -383,8 +390,42 @@ class AioSandboxProvider(SandboxProvider):
         while not self._idle_checker_stop.wait(timeout=IDLE_CHECK_INTERVAL):
             try:
                 self._cleanup_idle_sandboxes(idle_timeout)
+                self._enforce_max_lifetime()
             except Exception as e:
                 logger.error(f"Error in idle checker loop: {e}")
+
+    def _enforce_max_lifetime(self) -> None:
+        """Destroy sandboxes older than ``max_lifetime``, however busy they look.
+
+        ``idle_timeout`` only reaps sandboxes that go quiet, and it deliberately
+        exempts one that hosts a live dev-server preview. Both are right for an
+        idle rule and both are holes in a deadline: a watch loop, a dev server,
+        or a test that never converges keeps a container alive indefinitely
+        while looking perfectly healthy.
+
+        So this check refreshes nothing and exempts nothing. It is the layer
+        that answers "the agent does not get to run forever", and it is
+        deliberately separate from the idle path rather than a special case
+        inside it.
+        """
+        max_lifetime = self._config.get("max_lifetime")
+        if not max_lifetime:
+            return
+
+        now = time.time()
+        with self._lock:
+            expired = [
+                (sandbox_id, now - first_seen)
+                for sandbox_id, first_seen in self._first_seen.items()
+                if now - first_seen > max_lifetime
+            ]
+
+        for sandbox_id, age in expired:
+            try:
+                logger.warning(f"Sandbox {sandbox_id} exceeded max_lifetime ({age:.0f}s > {max_lifetime}s); destroying")
+                self.destroy(sandbox_id)
+            except Exception as e:
+                logger.error(f"Failed to destroy over-age sandbox {sandbox_id}: {e}")
 
     def _cleanup_idle_sandboxes(self, idle_timeout: float) -> None:
         current_time = time.time()
@@ -543,6 +584,7 @@ class AioSandboxProvider(SandboxProvider):
             suffix = " (post-lock check)" if post_lock else ""
             logger.info(f"Reusing in-process sandbox {existing_id} for thread {thread_id}{suffix}")
             self._last_activity[existing_id] = time.time()
+            self._first_seen.setdefault(existing_id, time.time())
             return existing_id
 
     def _reclaim_warm_pool_sandbox(self, thread_id: str | None, sandbox_id: str, *, post_lock: bool = False) -> str | None:
@@ -574,6 +616,7 @@ class AioSandboxProvider(SandboxProvider):
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
             self._last_activity[sandbox_id] = time.time()
+            self._first_seen.setdefault(sandbox_id, time.time())
             self._thread_sandboxes[thread_id] = sandbox_id
 
         suffix = " (post-lock check)" if post_lock else f" at {info.sandbox_url}"
@@ -591,6 +634,7 @@ class AioSandboxProvider(SandboxProvider):
             self._sandboxes[info.sandbox_id] = sandbox
             self._sandbox_infos[info.sandbox_id] = info
             self._last_activity[info.sandbox_id] = time.time()
+            self._first_seen.setdefault(info.sandbox_id, time.time())
             self._thread_sandboxes[thread_id] = info.sandbox_id
 
         logger.info(f"Discovered existing sandbox {info.sandbox_id} for thread {thread_id} at {info.sandbox_url}")
@@ -603,6 +647,7 @@ class AioSandboxProvider(SandboxProvider):
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
             self._last_activity[sandbox_id] = time.time()
+            self._first_seen.setdefault(sandbox_id, time.time())
             if thread_id:
                 self._thread_sandboxes[thread_id] = sandbox_id
 
@@ -645,6 +690,7 @@ class AioSandboxProvider(SandboxProvider):
             for tid in thread_ids_to_remove:
                 del self._thread_sandboxes[tid]
             self._last_activity.pop(sandbox_id, None)
+            self._first_seen.pop(sandbox_id, None)
             if info is None and sandbox_id in self._warm_pool:
                 info, _ = self._warm_pool.pop(sandbox_id)
             else:
@@ -927,6 +973,7 @@ class AioSandboxProvider(SandboxProvider):
             sandbox = self._sandboxes.get(sandbox_id)
             if sandbox is not None:
                 self._last_activity[sandbox_id] = time.time()
+                self._first_seen.setdefault(sandbox_id, time.time())
             return sandbox
 
     def get_preview_endpoint(self, thread_id: str, container_port: int = 4100) -> tuple[str, int] | None:
@@ -967,6 +1014,7 @@ class AioSandboxProvider(SandboxProvider):
             sandbox_id = self._thread_sandboxes.get(thread_id)
             if sandbox_id is not None:
                 self._last_activity[sandbox_id] = time.time()
+                self._first_seen.setdefault(sandbox_id, time.time())
 
     def release(self, sandbox_id: str) -> None:
         """Release a sandbox from active use into the warm pool.
@@ -994,6 +1042,7 @@ class AioSandboxProvider(SandboxProvider):
             for tid in thread_ids_to_remove:
                 del self._thread_sandboxes[tid]
             self._last_activity.pop(sandbox_id, None)
+            self._first_seen.pop(sandbox_id, None)
             # Park in warm pool — container keeps running
             if info and sandbox_id not in self._warm_pool:
                 self._warm_pool[sandbox_id] = (info, time.time())

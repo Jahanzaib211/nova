@@ -581,3 +581,37 @@ def test_start_container_omits_shm_size_when_unset(monkeypatch):
     )
 
     assert "--shm-size" not in _capture_start_container_command(monkeypatch, backend)
+
+
+def test_start_container_sets_cpu_limit(monkeypatch):
+    """CPU is the limit memory and PIDs do not cover.
+
+    A parallel compile stays well inside an 8g/2048 cap while burning every
+    core, which starves the gateway and frontend on a single-box deployment.
+    """
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        cpu_limit="4",
+    )
+
+    cmd = _capture_start_container_command(monkeypatch, backend)
+
+    assert "--cpus" in cmd
+    assert cmd[cmd.index("--cpus") + 1] == "4"
+
+
+def test_start_container_omits_cpu_limit_when_unset(monkeypatch):
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        cpu_limit=None,
+    )
+
+    assert "--cpus" not in _capture_start_container_command(monkeypatch, backend)

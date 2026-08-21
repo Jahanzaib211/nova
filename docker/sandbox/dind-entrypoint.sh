@@ -28,12 +28,30 @@ start_dockerd() {
     # An inner daemon on its own address space. The default bridge subnet would
     # be a coin-flip against the host's, and a collision silently breaks either
     # the inner containers' networking or the sandbox's own route to the gateway.
+    #
+    # On the inner daemon's own limits. The common hole in an agent sandbox is
+    # assuming a timeout on the agent process reaches the containers the agent
+    # started. Two things close it here, and they are different mechanisms:
+    #
+    #   Resources — inner containers get cgroups nested *under* this container's
+    #   own cgroup, so the outer --memory / --cpus / --pids-limit already bound
+    #   the sum of everything the agent starts. `docker compose up` with fifteen
+    #   services cannot exceed what this one container was given. The
+    #   --default-ulimit below adds a per-inner-container floor on top of that,
+    #   so one inner container cannot exhaust the shared budget by itself.
+    #
+    #   Lifetime — killing this container tears down its PID namespace, which
+    #   takes every inner container with it. That is what makes
+    #   `sandbox.max_lifetime` a real deadline rather than one that only stops
+    #   the agent and leaves its containers running.
     dockerd \
         --host=unix:///var/run/docker.sock \
         --data-root=/var/lib/docker \
         --bridge=none \
         --iptables=true \
         --default-address-pool base=172.31.0.0/16,size=24 \
+        --default-ulimit nproc=512:512 \
+        --default-ulimit nofile=1024:4096 \
         >>"$DOCKERD_LOG" 2>&1 &
 
     for _ in $(seq 1 30); do

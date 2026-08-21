@@ -980,6 +980,17 @@ sandbox:
 #   # own browsing, not just test tooling. null uses the Docker default.
 #   # shm_size: 1g
 #
+#   # Per-container CPU cap (--cpus). Memory and PID limits bound what a runaway
+#   # build can allocate but not how much CPU it burns, and a parallel compile
+#   # can starve the host's own services without tripping either. null = uncapped.
+#   # cpu_limit: "6"
+#
+#   # Hard ceiling in seconds on how long a sandbox may live, however busy it
+#   # looks. `idle_timeout` only reaps sandboxes that go quiet and deliberately
+#   # exempts one hosting a live dev-server preview; both are right for an idle
+#   # rule and both are holes in a deadline. null disables it.
+#   # max_lifetime: 14400
+#
 #   # Optional: Additional mount directories from host to container
 #   # NOTE: Skills directory is automatically mounted from skills.path to skills.container_path
 #   # mounts:
