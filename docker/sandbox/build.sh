@@ -73,14 +73,51 @@ stage_wheels() {
     fi
 }
 
+stage_android() {
+    # Gradle, Kotlin and the Android SDK are ~700 MB of downloads from
+    # services.gradle.org and dl.google.com. services.gradle.org currently
+    # answers HTTP 200 and then transfers nothing from this network — the same
+    # stalled-CDN shape as PyPI — so the layer hangs forever rather than failing.
+    #
+    # A previously built android image on this machine already contains all
+    # three, so lift them out of it. Same rule as every other toolchain here:
+    # reuse what the machine has, download only what it lacks. The Dockerfile
+    # keeps the download path for a host with no donor image.
+    local donor="${NOVA_ANDROID_DONOR:-nova-sandbox-android:preserved-20260821}"
+    if ! docker image inspect "$donor" >/dev/null 2>&1; then
+        log "android: no donor image ($donor) — Dockerfile will download the SDK"
+        return
+    fi
+    if [ -d "${VENDOR}/android/gradle" ]; then
+        log "android: reusing already-staged SDK/Gradle/Kotlin"
+        return
+    fi
+    log "android: extracting Gradle/Kotlin/SDK from ${donor} ..."
+    mkdir -p "${VENDOR}/android"
+    local cid
+    cid=$(docker create "$donor" 2>/dev/null) || { log "android: could not create donor container"; return; }
+    for d in gradle kotlin android-sdk; do
+        docker cp "${cid}:/opt/${d}" "${VENDOR}/android/${d}" >/dev/null 2>&1 || log "android: /opt/${d} not in donor"
+    done
+    docker rm -f "$cid" >/dev/null 2>&1 || true
+    log "android: staged $(du -sh "${VENDOR}/android" 2>/dev/null | cut -f1) from the donor image"
+}
+
 stage_vendor() {
     # Preserve the wheel cache; wipe everything else.
+    # Both caches are expensive to rebuild and cheap to keep, so they survive
+    # the wipe: wheels because PyPI is ~50x slower than any other CDN here, and
+    # android because services.gradle.org stalls outright.
     local keep=""
-    if [ -d "$WHEELS" ]; then keep="$(mktemp -d)"; mv "$WHEELS" "${keep}/wheels"; fi
+    keep="$(mktemp -d)"
+    [ -d "$WHEELS" ] && mv "$WHEELS" "${keep}/wheels"
+    [ -d "${VENDOR}/android" ] && mv "${VENDOR}/android" "${keep}/android"
     rm -rf "$VENDOR"
     mkdir -p "$VENDOR"
     : >"${VENDOR}/.keep"
-    if [ -n "$keep" ]; then mv "${keep}/wheels" "$WHEELS"; rmdir "$keep"; fi
+    [ -d "${keep}/wheels" ] && mv "${keep}/wheels" "$WHEELS"
+    [ -d "${keep}/android" ] && mv "${keep}/android" "${VENDOR}/android"
+    rm -rf "$keep"
 
     # Go — statically linked, so the whole GOROOT transplants as-is.
     local goroot
@@ -141,6 +178,7 @@ build_layer() {
 echo "Staging host toolchains into vendor/"
 stage_vendor
 stage_wheels
+stage_android
 echo
 echo "Building chain up to: ${TARGET}"
 
