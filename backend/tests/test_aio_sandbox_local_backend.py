@@ -583,12 +583,27 @@ def test_start_container_omits_shm_size_when_unset(monkeypatch):
     assert "--shm-size" not in _capture_start_container_command(monkeypatch, backend)
 
 
-def test_start_container_sets_cpu_limit(monkeypatch):
-    """CPU is the limit memory and PIDs do not cover.
+def test_start_container_sets_cpu_shares_by_default(monkeypatch):
+    """Shares, not a quota. --cpus deschedules the container once its quota is
+    spent even on an idle machine, which on long agent work reads as a stall.
+    Shares only bind under real contention."""
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        cpu_shares=512,
+    )
 
-    A parallel compile stays well inside an 8g/2048 cap while burning every
-    core, which starves the gateway and frontend on a single-box deployment.
-    """
+    cmd = _capture_start_container_command(monkeypatch, backend)
+
+    assert "--cpu-shares" in cmd
+    assert cmd[cmd.index("--cpu-shares") + 1] == "512"
+    assert "--cpus" not in cmd
+
+
+def test_start_container_applies_hard_cpu_quota_only_when_asked(monkeypatch):
     backend = LocalContainerBackend(
         image="sandbox:latest",
         base_port=8080,
@@ -604,14 +619,16 @@ def test_start_container_sets_cpu_limit(monkeypatch):
     assert cmd[cmd.index("--cpus") + 1] == "4"
 
 
-def test_start_container_omits_cpu_limit_when_unset(monkeypatch):
+def test_start_container_omits_cpu_flags_when_unset(monkeypatch):
     backend = LocalContainerBackend(
         image="sandbox:latest",
         base_port=8080,
         container_prefix="sandbox",
         config_mounts=[],
         environment={},
-        cpu_limit=None,
     )
 
-    assert "--cpus" not in _capture_start_container_command(monkeypatch, backend)
+    cmd = _capture_start_container_command(monkeypatch, backend)
+
+    assert "--cpus" not in cmd
+    assert "--cpu-shares" not in cmd

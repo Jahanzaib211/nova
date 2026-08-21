@@ -138,17 +138,30 @@ The limits are layered on purpose — no single one of them is sufficient:
 |---|---|---|---|
 | Memory | `memory_limit` | `8g` | a build that allocates until the host OOMs |
 | PIDs | `pids_limit` | `2048` | fork bombs, runaway build parallelism |
-| CPU | `cpu_limit` | unset (`"6"` here) | a parallel compile that starves the host's own services while staying inside its memory cap |
+| CPU | `cpu_shares` | `512` | a parallel compile starving the host — **without capping anything** |
 | `/dev/shm` | `shm_size` | `1g` | Chromium hanging mid-render |
 | Idle | `idle_timeout` | `3600` | a sandbox nobody is using any more |
-| **Lifetime** | `max_lifetime` | unset (`14400` here) | **a sandbox that never goes idle** |
+| **Lifetime** | `max_lifetime` | unset (`21600` here) | **a sandbox that never goes idle** |
 
-The last row is the one that is easy to leave out. `idle_timeout` only reaps
+**Nothing here throttles the CPU, on purpose.** `cpu_shares` sets no ceiling: an
+idle machine lets a sandbox use every core, and shares only decide who wins when
+the CPU is genuinely contended — under contention something has to yield or the
+whole box thrashes. The hard-quota alternative, `cpu_limit` (`--cpus`), is off by
+default and should stay off: the kernel enforces it by descheduling the
+container's threads once the quota is spent *within each period, even when every
+other core is idle*, so long agent work stalls rather than merely slowing. It
+matters more than it looks because subagents share their parent thread's
+sandbox — a quota there throttles an entire fan-out, not one worker.
+
+Which leaves the clock as the only thing that can end a task that will not end
+itself. The last row is the one that is easy to leave out. `idle_timeout` only reaps
 sandboxes that go *quiet*, and it deliberately exempts one hosting a live
 dev-server preview — correct for an idle rule, and both are holes in a deadline.
 A watch loop, a dev server, or a test that never converges keeps a container
 alive indefinitely while looking perfectly healthy. `max_lifetime` refreshes
-nothing and exempts nothing.
+nothing and exempts nothing — and because subagents share one sandbox, it ends a
+whole fan-out at once, so size it for the longest task the deployment should
+ever allow.
 
 ### Does this reach the containers the agent starts?
 

@@ -4,6 +4,7 @@ import logging
 import shlex
 import threading
 import uuid
+from collections.abc import Callable
 
 from agent_sandbox import Sandbox as AioSandboxClient
 
@@ -26,13 +27,27 @@ class AioSandbox(Sandbox):
     from corrupting the container's single persistent session (see #1433).
     """
 
-    def __init__(self, id: str, base_url: str, home_dir: str | None = None):
+    def __init__(
+        self,
+        id: str,
+        base_url: str,
+        home_dir: str | None = None,
+        busy_tracker: "Callable[[str, int], None] | None" = None,
+    ):
         """Initialize the AIO sandbox.
 
         Args:
             id: Unique identifier for this sandbox instance.
             base_url: URL of the sandbox API (e.g., http://localhost:8080).
             home_dir: Home directory inside the sandbox. If None, will be fetched from the sandbox.
+            busy_tracker: Called with ``(sandbox_id, +1)`` when a command starts
+                and ``(sandbox_id, -1)`` when it finishes, so the provider's idle
+                reaper can tell "nothing has touched this sandbox in an hour"
+                apart from "a build has been running in it for an hour". Without
+                it a long command is invisible to the reaper: the tool call
+                blocks inside ``execute_command`` and refreshes nothing, so a
+                build outlasting ``idle_timeout`` gets its own sandbox destroyed
+                mid-run unless someone happens to have the panel open.
         """
         super().__init__(id)
         self._base_url = base_url
@@ -40,6 +55,7 @@ class AioSandbox(Sandbox):
         self._home_dir = home_dir
         self._lock = threading.Lock()
         self._closed = False
+        self._busy_tracker = busy_tracker
 
     @property
     def base_url(self) -> str:
@@ -126,6 +142,25 @@ class AioSandbox(Sandbox):
         Returns:
             The output of the command.
         """
+        # Held for the whole call, not pulsed at the start: a build can run for
+        # hours inside this one blocking request, and the idle reaper measures
+        # elapsed time, not intent.
+        self._mark_busy(1)
+        try:
+            return self._execute_command_locked(command)
+        finally:
+            self._mark_busy(-1)
+
+    def _mark_busy(self, delta: int) -> None:
+        """Tell the provider a command is in flight. Never fatal."""
+        if self._busy_tracker is None:
+            return
+        try:
+            self._busy_tracker(self.id, delta)
+        except Exception:  # noqa: BLE001 - bookkeeping must not break execution
+            logger.debug("busy tracker failed for sandbox %s", self.id, exc_info=True)
+
+    def _execute_command_locked(self, command: str) -> str:
         with self._lock:
             try:
                 result = self._client.shell.exec_command(command=command, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)

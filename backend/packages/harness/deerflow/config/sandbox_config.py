@@ -41,7 +41,8 @@ class SandboxConfig(BaseModel):
         memory_limit: Per-container --memory cap (default: 8g). None for unlimited.
         pids_limit: Per-container --pids-limit (default: 2048). None for unlimited.
         shm_size: Size of /dev/shm (default: 1g). Docker's 64 MB default hangs Chromium.
-        cpu_limit: Per-container --cpus cap. None for uncapped.
+        cpu_shares: Relative CPU weight (--cpu-shares, default 512). Never throttles.
+        cpu_limit: Hard --cpus quota. Off by default; throttles, so prefer cpu_shares.
         max_lifetime: Hard ceiling in seconds on container age, regardless of activity.
         mounts: List of volume mounts to share directories with the container
         environment: Environment variables to inject into the container (values starting with $ are resolved from host env)
@@ -98,14 +99,29 @@ class SandboxConfig(BaseModel):
         default=2048,
         description=("Per-container process cap passed to --pids-limit. Set to null for no limit. Bounds fork bombs and runaway build parallelism, which matters more once the sandbox can start containers of its own."),
     )
+    cpu_shares: int | None = Field(
+        default=512,
+        description=(
+            "Relative CPU weight passed to --cpu-shares. This is the knob to reach for, "
+            "not cpu_limit. Shares only matter when the CPU is actually contended: an "
+            "idle machine lets a sandbox use every core, and under load the scheduler "
+            "simply prefers whoever has more shares. Nothing is ever throttled. "
+            "Default 512 is half Docker's 1024, so Nova's own gateway and frontend win "
+            "contention while a sandbox still runs flat out whenever they are idle. "
+            "This matters because subagents share their parent thread's sandbox — an "
+            "entire fan-out lives in one container, so a quota there would throttle the "
+            "whole task."
+        ),
+    )
     cpu_limit: str | None = Field(
         default=None,
         description=(
-            "Per-container CPU cap passed to --cpus (e.g. '4'). None means uncapped. "
-            "Memory and PID limits bound what a runaway build can allocate, but not "
-            "how much CPU it burns: a parallel compile can still starve the host's "
-            "own services without ever tripping those. Sized to leave headroom for "
-            "the gateway and frontend rather than to the core count."
+            "Hard per-container CPU quota passed to --cpus. Off by default and usually "
+            "the wrong tool: --cpus is a ceiling the kernel enforces by descheduling the "
+            "container's threads once the quota is spent within each period, even when "
+            "every other core is idle. On long-running agent work that shows up as "
+            "stalls, not as slowness. Prefer cpu_shares. Set this only when a hard "
+            "ceiling genuinely matters (shared tenancy, thermal limits)."
         ),
     )
     max_lifetime: int | None = Field(

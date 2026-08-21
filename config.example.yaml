@@ -980,10 +980,19 @@ sandbox:
 #   # own browsing, not just test tooling. null uses the Docker default.
 #   # shm_size: 1g
 #
-#   # Per-container CPU cap (--cpus). Memory and PID limits bound what a runaway
-#   # build can allocate but not how much CPU it burns, and a parallel compile
-#   # can starve the host's own services without tripping either. null = uncapped.
-#   # cpu_limit: "6"
+#   # Relative CPU weight (--cpu-shares). This is the CPU knob to use. It sets no
+#   # ceiling: an idle machine lets a sandbox use every core, and shares only
+#   # decide who wins when the CPU is actually contended. Default 512 against
+#   # Docker's 1024 lets Nova's gateway and frontend win that tie-break.
+#   # cpu_shares: 512
+#
+#   # Hard CPU quota (--cpus). OFF by default and usually the wrong tool: the
+#   # kernel deschedules the container once the quota is spent within each
+#   # period, even when every other core is idle, so long-running agent work
+#   # stalls rather than merely slowing. Subagents share their parent thread's
+#   # sandbox, so this throttles an entire fan-out. Use only when a hard ceiling
+#   # genuinely matters (shared tenancy, thermal limits).
+#   # cpu_limit: "4"
 #
 #   # Hard ceiling in seconds on how long a sandbox may live, however busy it
 #   # looks. `idle_timeout` only reaps sandboxes that go quiet and deliberately

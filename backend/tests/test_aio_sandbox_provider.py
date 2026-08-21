@@ -153,6 +153,7 @@ async def test_acquire_async_uses_async_readiness_polling(monkeypatch):
     provider._thread_sandboxes = {}
     provider._last_activity = {}
     provider._first_seen = {}
+    provider._busy = {}
     provider._lock = aio_mod.threading.Lock()
     provider._backend = SimpleNamespace(
         create=MagicMock(return_value=aio_mod.SandboxInfo(sandbox_id="sandbox-async", sandbox_url="http://sandbox")),
@@ -197,6 +198,7 @@ async def test_discover_or_create_with_lock_async_offloads_lock_file_open_and_cl
     provider._sandboxes = {"sandbox-async-lock": aio_mod.AioSandbox(id="sandbox-async-lock", base_url="http://sandbox")}
     provider._last_activity = {}
     provider._first_seen = {}
+    provider._busy = {}
     provider._lock = aio_mod.threading.Lock()
     provider._backend = SimpleNamespace(discover=MagicMock(return_value=None))
 
@@ -246,6 +248,7 @@ async def test_acquire_async_cancellation_does_not_leak_thread_lock(tmp_path):
     provider._thread_sandboxes = {}
     provider._last_activity = {}
     provider._first_seen = {}
+    provider._busy = {}
     provider._lock = aio_mod.threading.Lock()
 
     thread_id = "thread-cancel-lock"
@@ -284,6 +287,7 @@ async def test_acquire_async_cancelled_waiter_does_not_block_successor(tmp_path,
     provider._thread_sandboxes = {}
     provider._last_activity = {}
     provider._first_seen = {}
+    provider._busy = {}
     provider._lock = aio_mod.threading.Lock()
 
     async def fake_acquire_internal_async(thread_id: str | None) -> str:
@@ -391,6 +395,7 @@ def _make_provider_with_active_sandbox(tmp_path, sandbox_id: str):
     provider._thread_sandboxes = {}
     provider._last_activity = {sandbox_id: 0.0}
     provider._first_seen = {sandbox_id: 0.0}
+    provider._busy = {}
     provider._shutdown_called = False
     provider._idle_checker_thread = None
     provider._backend = SimpleNamespace(destroy=MagicMock())
@@ -542,6 +547,7 @@ def test_acquire_skips_dead_warm_pool_sandbox(tmp_path, monkeypatch):
     provider._thread_sandboxes = {}
     provider._last_activity = {}
     provider._first_seen = {}
+    provider._busy = {}
     provider._warm_pool = {
         "sandbox-warm-dead": (
             aio_mod.SandboxInfo(
@@ -609,6 +615,7 @@ def _make_provider_for_idle():
     provider._thread_sandboxes = {}
     provider._last_activity = {}
     provider._first_seen = {}
+    provider._busy = {}
     provider._warm_pool = {}
     provider._config = {"idle_timeout": 600}
     provider._backend = MagicMock()
@@ -702,6 +709,7 @@ def _provider_with_lifetime(max_lifetime):
     provider = AioSandboxProvider.__new__(AioSandboxProvider)
     provider._config = {"max_lifetime": max_lifetime}
     provider._first_seen = {}
+    provider._busy = {}
     provider._lock = __import__("threading").RLock()
     provider.destroy = MagicMock()
     return provider
@@ -716,6 +724,22 @@ def test_max_lifetime_destroys_an_over_age_sandbox():
     provider._enforce_max_lifetime()
 
     provider.destroy.assert_called_once_with("sandbox-old")
+
+
+def test_max_lifetime_ignores_activity():
+    """The deadline is the only limit that terminates work, so it must not be
+    negotiable. CPU is never capped, so a clock is the only thing that can end a
+    task that will not end itself — a watch loop or a dev server looks busy
+    forever and would survive any activity-based rule."""
+    import time
+
+    provider = _provider_with_lifetime(60)
+    provider._first_seen["sandbox-busy"] = time.time() - 600
+    provider._last_activity = {"sandbox-busy": time.time()}  # active right now
+
+    provider._enforce_max_lifetime()
+
+    provider.destroy.assert_called_once_with("sandbox-busy")
 
 
 def test_max_lifetime_spares_a_young_sandbox():
@@ -739,3 +763,84 @@ def test_max_lifetime_disabled_by_default():
     provider._enforce_max_lifetime()
 
     provider.destroy.assert_not_called()
+
+
+# ── busy sandboxes survive the idle reaper ───────────────────────────────────
+#
+# A long build blocks inside AioSandbox.execute_command for its whole duration
+# and refreshes nothing, so elapsed idle time says nothing about whether the
+# sandbox is in use. Before this, a build outlasting idle_timeout had its own
+# sandbox destroyed underneath it unless someone had the panel open.
+
+
+def test_track_busy_counts_commands_in_flight():
+    provider = _provider_with_lifetime(None)
+    provider._busy = {}
+    provider._last_activity = {}
+
+    provider._track_busy("sandbox-a", 1)
+    provider._track_busy("sandbox-a", 1)
+    assert provider._busy["sandbox-a"] == 2
+
+    provider._track_busy("sandbox-a", -1)
+    assert provider._busy["sandbox-a"] == 1
+
+    provider._track_busy("sandbox-a", -1)
+    assert "sandbox-a" not in provider._busy, "counter must clear, not sit at 0"
+
+
+def test_track_busy_refreshes_the_idle_clock_on_completion():
+    """A finishing command is activity too, so a sandbox is not reaped in the
+    moment right after a long build ends."""
+    provider = _provider_with_lifetime(None)
+    provider._busy = {}
+    provider._last_activity = {"sandbox-b": 0.0}
+
+    provider._track_busy("sandbox-b", -1)
+
+    assert provider._last_activity["sandbox-b"] > 0.0
+
+
+def test_reaper_spares_a_sandbox_with_a_command_in_flight():
+    """The build-killer this closes.
+
+    A long build blocks inside execute_command for its whole duration and
+    refreshes nothing, so the sandbox looks perfectly idle to the reaper. It
+    would be destroyed underneath its own build unless someone happened to have
+    the Agent's Computer panel open, which is the only other thing that calls
+    mark_active.
+    """
+    provider = _make_provider_for_idle()
+    provider._thread_sandboxes["thread-1"] = "sandbox-1"
+    provider._last_activity["sandbox-1"] = 0.0
+    provider._busy["sandbox-1"] = 1  # a build is running
+
+    destroyed = []
+    provider.destroy = destroyed.append
+    provider._thread_has_live_dev_server = lambda sandbox_id: False
+
+    provider._cleanup_idle_sandboxes(600)
+
+    assert destroyed == [], "a sandbox running a command must survive the idle reaper"
+
+
+def test_reaper_destroys_it_once_the_command_finishes():
+    provider = _make_provider_for_idle()
+    provider._thread_sandboxes["thread-1"] = "sandbox-1"
+    provider._last_activity["sandbox-1"] = 0.0
+    provider._busy["sandbox-1"] = 1
+
+    destroyed = []
+    provider.destroy = destroyed.append
+    provider._thread_has_live_dev_server = lambda sandbox_id: False
+
+    provider._cleanup_idle_sandboxes(600)
+    assert destroyed == []
+
+    # Command completes. _track_busy clears the counter and refreshes activity,
+    # so the sandbox has to go idle again on its own terms before it is reaped.
+    provider._track_busy("sandbox-1", -1)
+    provider._last_activity["sandbox-1"] = 0.0
+
+    provider._cleanup_idle_sandboxes(600)
+    assert destroyed == ["sandbox-1"]

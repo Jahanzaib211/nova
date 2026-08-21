@@ -143,6 +143,11 @@ class AioSandboxProvider(SandboxProvider):
         # one is never refreshed, because it backs the deadline that does not
         # care how busy the sandbox looks.
         self._first_seen: dict[str, float] = {}
+        # sandbox_id -> number of commands currently executing in it. A long
+        # build blocks inside AioSandbox.execute_command and refreshes nothing,
+        # so without this the idle reaper cannot tell a busy sandbox from an
+        # abandoned one and destroys builds that outlast idle_timeout.
+        self._busy: dict[str, int] = {}
         # Warm pool: released sandboxes whose containers are still running.
         # Maps sandbox_id -> (SandboxInfo, release_timestamp).
         # Containers here can be reclaimed quickly (no cold-start) or destroyed
@@ -205,6 +210,7 @@ class AioSandboxProvider(SandboxProvider):
             pids_limit=self._config["pids_limit"],
             shm_size=self._config["shm_size"],
             cpu_limit=self._config["cpu_limit"],
+            cpu_shares=self._config["cpu_shares"],
         )
 
     # ── Configuration ────────────────────────────────────────────────────
@@ -240,6 +246,7 @@ class AioSandboxProvider(SandboxProvider):
             "pids_limit": getattr(sandbox_config, "pids_limit", None),
             "shm_size": getattr(sandbox_config, "shm_size", None),
             "cpu_limit": getattr(sandbox_config, "cpu_limit", None),
+            "cpu_shares": getattr(sandbox_config, "cpu_shares", None),
             "max_lifetime": getattr(sandbox_config, "max_lifetime", None),
             "environment": environment,
             "preview_ports": list(preview_ports) if preview_ports else list(DEFAULT_PREVIEW_PORTS),
@@ -397,16 +404,20 @@ class AioSandboxProvider(SandboxProvider):
     def _enforce_max_lifetime(self) -> None:
         """Destroy sandboxes older than ``max_lifetime``, however busy they look.
 
-        ``idle_timeout`` only reaps sandboxes that go quiet, and it deliberately
-        exempts one that hosts a live dev-server preview. Both are right for an
-        idle rule and both are holes in a deadline: a watch loop, a dev server,
-        or a test that never converges keeps a container alive indefinitely
-        while looking perfectly healthy.
+        This is the only limit in the sandbox that terminates work rather than
+        shaping it, and that is deliberate: CPU is never capped (see
+        ``cpu_shares`` — shares set no ceiling), so the answer to "a task must
+        not run forever" has to be a clock, not a throttle.
 
-        So this check refreshes nothing and exempts nothing. It is the layer
-        that answers "the agent does not get to run forever", and it is
-        deliberately separate from the idle path rather than a special case
-        inside it.
+        It refreshes nothing and exempts nothing. ``idle_timeout`` reaps
+        sandboxes that go quiet and deliberately spares one hosting a live
+        dev-server preview; both are correct for an idle rule and both are holes
+        in a deadline. A watch loop, a dev server, or a test that never
+        converges stays alive indefinitely under an idle rule alone.
+
+        Because subagents share their parent thread's sandbox, this ends an
+        entire fan-out at once. Size ``max_lifetime`` for the longest task the
+        deployment should ever allow, and set it to ``None`` to disable.
         """
         max_lifetime = self._config.get("max_lifetime")
         if not max_lifetime:
@@ -414,11 +425,7 @@ class AioSandboxProvider(SandboxProvider):
 
         now = time.time()
         with self._lock:
-            expired = [
-                (sandbox_id, now - first_seen)
-                for sandbox_id, first_seen in self._first_seen.items()
-                if now - first_seen > max_lifetime
-            ]
+            expired = [(sandbox_id, now - first_seen) for sandbox_id, first_seen in self._first_seen.items() if now - first_seen > max_lifetime]
 
         for sandbox_id, age in expired:
             try:
@@ -470,6 +477,16 @@ class AioSandboxProvider(SandboxProvider):
                 # destroys an actively-watched preview every idle_timeout.
                 if self._thread_has_live_dev_server(sandbox_id):
                     logger.info(f"Sandbox {sandbox_id} hosts a live dev-server preview; skipping idle destroy")
+                    continue
+                # A command is still running in it. The tool call blocks inside
+                # execute_command for as long as the build takes and refreshes
+                # nothing, so elapsed idle time says nothing about whether the
+                # sandbox is in use — destroying it here kills the build it is
+                # running.
+                with self._lock:
+                    in_flight = self._busy.get(sandbox_id, 0)
+                if in_flight > 0:
+                    logger.info(f"Sandbox {sandbox_id} has {in_flight} command(s) in flight; skipping idle destroy")
                     continue
                 logger.info(f"Destroying idle sandbox {sandbox_id}")
                 self.destroy(sandbox_id)
@@ -612,7 +629,7 @@ class AioSandboxProvider(SandboxProvider):
             if warm_item is None:
                 return None
             info, _ = warm_item
-            sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url)
+            sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
             self._last_activity[sandbox_id] = time.time()
@@ -629,7 +646,7 @@ class AioSandboxProvider(SandboxProvider):
 
     def _register_discovered_sandbox(self, thread_id: str, info: SandboxInfo) -> str:
         """Track a sandbox discovered through the backend."""
-        sandbox = AioSandbox(id=info.sandbox_id, base_url=info.sandbox_url)
+        sandbox = AioSandbox(id=info.sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
         with self._lock:
             self._sandboxes[info.sandbox_id] = sandbox
             self._sandbox_infos[info.sandbox_id] = info
@@ -642,7 +659,7 @@ class AioSandboxProvider(SandboxProvider):
 
     def _register_created_sandbox(self, thread_id: str | None, sandbox_id: str, info: SandboxInfo) -> str:
         """Track a newly-created sandbox in the active maps."""
-        sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url)
+        sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
         with self._lock:
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
@@ -691,6 +708,7 @@ class AioSandboxProvider(SandboxProvider):
                 del self._thread_sandboxes[tid]
             self._last_activity.pop(sandbox_id, None)
             self._first_seen.pop(sandbox_id, None)
+            self._busy.pop(sandbox_id, None)
             if info is None and sandbox_id in self._warm_pool:
                 info, _ = self._warm_pool.pop(sandbox_id)
             else:
@@ -1002,6 +1020,18 @@ class AioSandboxProvider(SandboxProvider):
         host = urlparse(info.sandbox_url).hostname or os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
         return host, host_port
 
+    def _track_busy(self, sandbox_id: str, delta: int) -> None:
+        """Record that a command started (+1) or finished (-1) in a sandbox."""
+        with self._lock:
+            count = self._busy.get(sandbox_id, 0) + delta
+            if count > 0:
+                self._busy[sandbox_id] = count
+            else:
+                self._busy.pop(sandbox_id, None)
+            # A finishing command is also activity: refresh the idle clock so a
+            # sandbox is not reaped in the moment right after a long build ends.
+            self._last_activity[sandbox_id] = time.time()
+
     def mark_active(self, thread_id: str) -> None:
         """Refresh the idle timer for the thread's sandbox.
 
@@ -1043,6 +1073,7 @@ class AioSandboxProvider(SandboxProvider):
                 del self._thread_sandboxes[tid]
             self._last_activity.pop(sandbox_id, None)
             self._first_seen.pop(sandbox_id, None)
+            self._busy.pop(sandbox_id, None)
             # Park in warm pool — container keeps running
             if info and sandbox_id not in self._warm_pool:
                 self._warm_pool[sandbox_id] = (info, time.time())
