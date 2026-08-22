@@ -422,7 +422,8 @@ services:
   # HTML with readabilipy -- so keep that path healthy (dev-entrypoint.sh
   # repairs it at boot) or this returns whole pages instead of articles.
   browserless:
-    image: ghcr.io/browserless/chromium:latest
+    # Digest-pinned; see the crawl4ai service below for the reasoning.
+    image: ghcr.io/browserless/chromium@sha256:c0886239e4eaa102e214acbbde5345f5b2a55a7ccbb52456048afd374defbabb
     container_name: deer-flow-browserless
     ports:
       - "127.0.0.1:3032:3000"
@@ -460,7 +461,10 @@ services:
   # own Playwright browser download, which would put a second headless-Chrome
   # stack inside the gateway image next to the one browserless already is.
   crawl4ai:
-    image: unclecode/crawl4ai:latest
+    # Pinned by digest, not :latest. A floating tag means two `up -d` runs
+    # a week apart can differ with no change in this repo — the same
+    # reproducibility hole Dockerfile.base closed for the sandbox.
+    image: unclecode/crawl4ai@sha256:bd36741e7bdd35ddc1a05d9183e1d6d8cefb61dd640d944a25d026b76e917690
     container_name: deer-flow-crawl4ai
     ports:
       - "127.0.0.1:11235:11235"
@@ -493,7 +497,8 @@ services:
       - "no-new-privileges:true"
 
   searxng:
-    image: searxng/searxng:latest
+    # Digest-pinned; see the crawl4ai service above for the reasoning.
+    image: searxng/searxng@sha256:f4c8e59de166ed71f6380c0847c312ca51f0d41996e31d0559163b6b09ecde52
     container_name: deer-flow-searxng
     ports:
       - "127.0.0.1:8088:8080"
@@ -528,7 +533,8 @@ services:
   # notices. Watches the Docker socket read-only-ish (needs it to issue the
   # restart); no ports, minimal footprint.
   autoheal:
-    image: willfarrell/autoheal:latest
+    # Digest-pinned; see the crawl4ai service above for the reasoning.
+    image: willfarrell/autoheal@sha256:2ae2ff2c4047be936db416005262978b0d20d98d8f8dbfd2bc8bb97bbfc1a7b5
     container_name: deer-flow-autoheal
     restart: unless-stopped
     environment:
