@@ -37,11 +37,23 @@ const MAX_EVENTS = 200;
 // ── useSandboxLogs ─────────────────────────────────────────
 // SSE stream; parses each line as a JSON SandboxEvent.
 
-export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
+// How many times to let the browser reconnect before we conclude the stream
+// is never going to open. `/api/sandbox/logs` 404s for any thread whose
+// directory does not exist yet, and an EventSource left to its own devices
+// retries that forever, logging a console error on every attempt. A thread
+// that starts producing output resets the counter, so a genuine mid-run drop
+// still reconnects indefinitely.
+const MAX_OPEN_FAILURES = 3;
+
+export function useSandboxLogs(
+  threadId: string | null,
+  enabled = true,
+): SandboxEvent[] {
   const [events, setEvents] = useState<SandboxEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
   const pendingRef = useRef<SandboxEvent[]>([]);
   const rafRef = useRef<number | null>(null);
+  const failuresRef = useRef(0);
   const flush = () => {
     if (pendingRef.current.length === 0) return;
     setEvents((prev) => {
@@ -65,9 +77,10 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
   }, [threadId]);
 
   useEffect(() => {
-    if (!threadId || typeof EventSource === "undefined") return;
+    if (!threadId || !enabled || typeof EventSource === "undefined") return;
 
     esRef.current?.close();
+    failuresRef.current = 0;
 
     const url = `${getBackendBaseURL()}/api/sandbox/logs?thread_id=${encodeURIComponent(threadId)}`;
     const es = new EventSource(url, { withCredentials: true });
@@ -76,6 +89,8 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
     es.onmessage = (event) => {
       const raw = event.data as string;
       if (!raw || raw === "[KEEPALIVE]") return;
+      // The stream is alive, so any earlier failures were transient.
+      failuresRef.current = 0;
       try {
         const parsed = JSON.parse(raw) as SandboxEvent;
         if (parsed.type && parsed.ts !== undefined) {
@@ -88,7 +103,13 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
     };
 
     es.onerror = () => {
-      // SSE reconnects automatically; suppress noise
+      // SSE reconnects on its own, but only up to a point: give up once the
+      // stream has failed to open repeatedly without ever delivering a line.
+      failuresRef.current += 1;
+      if (failuresRef.current >= MAX_OPEN_FAILURES) {
+        es.close();
+        esRef.current = null;
+      }
     };
 
     return () => {
@@ -100,7 +121,7 @@ export function useSandboxLogs(threadId: string | null): SandboxEvent[] {
       }
       pendingRef.current = [];
     };
-  }, [threadId]);
+  }, [threadId, enabled]);
 
   return events;
 }
@@ -565,21 +586,41 @@ export type SandboxTodoResult = {
   todos: SandboxTodo[];
 };
 
+const EMPTY_TODO_RESULT: SandboxTodoResult = { content: "", todos: [] };
+
+// The endpoint is typed, not validated. Trust the shape only after checking
+// it, and hand back one shared empty value so callers' dependency arrays stay
+// referentially stable across polls.
+function normalizeTodoResult(body: unknown): SandboxTodoResult {
+  const raw = body as Partial<SandboxTodoResult> | null;
+  if (!Array.isArray(raw?.todos)) return EMPTY_TODO_RESULT;
+  return {
+    content: typeof raw?.content === "string" ? raw.content : "",
+    todos: raw.todos,
+  };
+}
+
 export function useSandboxTodo(threadId: string | null): SandboxTodoResult {
   const { data } = useQuery<SandboxTodoResult>({
     queryKey: ["sandbox", "todo", threadId],
     queryFn: async () => {
-      if (!threadId) return { content: "", todos: [] };
+      if (!threadId) return EMPTY_TODO_RESULT;
       const res = await fetch(
         `${getBackendBaseURL()}/api/sandbox/todo?thread_id=${encodeURIComponent(threadId)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
-      return res.json() as Promise<SandboxTodoResult>;
+      // A 404 here is routine, not exceptional: the ownership guard rejects
+      // any thread whose directory does not exist yet, which is every
+      // brand-new chat. Without this check FastAPI's `{detail: "Not found"}`
+      // body parsed as a successful result and left `todos` undefined for
+      // the caller to crash on. Same reason as useSandboxLiveFile above.
+      if (!res.ok) return EMPTY_TODO_RESULT;
+      return normalizeTodoResult(await res.json());
     },
     enabled: Boolean(threadId),
     refetchInterval: 2000,
     refetchIntervalInBackground: false,
   });
 
-  return data ?? { content: "", todos: [] };
+  return data ?? EMPTY_TODO_RESULT;
 }

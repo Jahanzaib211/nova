@@ -96,7 +96,7 @@ export function WorkspaceStateProvider({
   const sandboxTodo = useSandboxTodo(streamTodos.length > 0 ? null : threadId);
   const todos = useMemo<Todo[]>(() => {
     if (streamTodos.length > 0) return streamTodos;
-    return sandboxTodo.todos.map((todo) => ({
+    return (sandboxTodo.todos ?? []).map((todo) => ({
       content: todo.description,
       status: todo.status === "done" ? "completed" : todo.status,
     }));
