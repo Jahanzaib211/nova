@@ -18,7 +18,7 @@ Requires [nektos/act](https://github.com/nektos/act) installed. Configuration is
 
 | Workflow | Trigger | What it validates |
 |---|---|---|
-| `backend-unit-tests.yml` | push/PR to main | 6,514 backend unit tests (`make test`) |
+| `backend-unit-tests.yml` | push/PR to main | 6,537 backend unit tests (`make test`) |
 | `backend-blocking-io-tests.yml` | push/PR to main | Blockbuster runtime gate on async blocking IO |
 | `frontend-unit-tests.yml` | push/PR to main | 581 frontend unit tests (`pnpm test`) |
 | `frontend-build.yml` | push/PR to main | Next.js production build (`pnpm build`) |
@@ -71,7 +71,7 @@ The `.actrc` file configures act with appropriate defaults for Nova's Docker-bas
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 6,514 | `cd backend && make test` |
+| Backend unit tests | 6,537 | `cd backend && make test` |
 | Frontend unit tests | 581 | `cd frontend && pnpm test` |
 | Playwright E2E | 80 | `cd frontend && pnpm test:e2e` |
 | Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
