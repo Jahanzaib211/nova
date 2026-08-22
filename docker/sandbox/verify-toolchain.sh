@@ -63,7 +63,6 @@ CHECKS=(
     "figlet:figlet -v"
     "soffice:soffice --version"
     "cwebp:cwebp -version"
-    "heif-convert:heif-convert 2>&1 | grep -q USAGE"
     "magick:magick -version"
     "kubectl:kubectl version --client"
     "helm:helm version --short"
@@ -82,6 +81,20 @@ check_playwright_browsers() {
     # A headless-shell or full chrome binary, executable by whoever is running.
     find "$root" -type f \( -name 'chrome' -o -name 'chrome-headless-shell' \) -perm -u+x 2>/dev/null \
         | grep -q . || { echo "no chrome binary under $root"; return 1; }
+}
+
+# libheif 1.12's heif-convert has no --version and no --help: every invocation
+# exits 1, including a bare one, so exit code cannot be the signal. Its usage
+# banner is the proof that matters -- the binary loaded, its shared libraries
+# resolved, and it ran.
+#
+# It is a function rather than a CHECKS entry because `heif-convert | grep -q`
+# still fails under `set -o pipefail`, which takes the pipeline's status from
+# the failing left-hand side. Capturing first sidesteps that.
+check_heif_convert() {
+    local out
+    out="$(heif-convert 2>&1 || true)"
+    printf '%s' "$out" | grep -q USAGE || { echo "no usage banner — binary did not run"; return 1; }
 }
 
 # Corepack ships shims; the package managers behind them are fetched on first
@@ -110,6 +123,7 @@ check_shared_dirs_readable() {
 }
 
 EXTRA_CHECKS=(
+    "heif-convert:check_heif_convert"
     "playwright-browsers:check_playwright_browsers"
     "corepack-cache:check_corepack_cache"
     "shared-dirs-readable:check_shared_dirs_readable"
