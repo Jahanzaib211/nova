@@ -89,14 +89,40 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     fi
 
 # --- Already in the image: cost nothing ---------------------------------------
-# corepack ships with Node 22, so pnpm and yarn need no install and no network.
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# corepack ships with Node 22, so pnpm and yarn need no download at image-build
+# time -- but `corepack enable` only installs *shims*. /usr/bin/pnpm is a
+# symlink into corepack/dist/pnpm.js, and the shim fetches the real package
+# manager from the registry on first invocation, into COREPACK_HOME.
+#
+# That default is per-user (~/.cache/node/corepack), and the sandbox runs as
+# `gem`, not root. So `corepack prepare` as root warmed a cache nobody used,
+# and the first `pnpm install` inside a sandbox still went to the network --
+# exactly the failure this image exists to avoid, and exactly what a self-probe
+# reported ("Corepack is about to download pnpm-11.22.0.tgz").
+#
+# COREPACK_HOME is therefore a shared, world-readable location, warmed here for
+# both managers. Same shape as PLAYWRIGHT_BROWSERS_PATH below: one install,
+# every user.
+ENV COREPACK_HOME=/opt/corepack
+RUN set -eux; \
+    corepack enable; \
+    corepack prepare pnpm@latest yarn@stable --activate; \
+    chmod -R a+rX /opt/corepack
 
-# Playwright drives the Chromium the base image already carries (135.x at
-# /usr/bin/chromium-browser). Skipping the bundled download avoids ~400 MB and
-# keeps one browser in the image instead of two.
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Playwright gets its own browser, and the earlier attempt to avoid that was
+# simply wrong. This layer used to set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 plus
+# PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser, on the theory
+# that Playwright would drive the Chromium the base image already carries.
+# Playwright reads no such variable — executable_path is a launch() argument,
+# not an environment setting — so every p.chromium.launch() in the sandbox died
+# with "Executable doesn't exist at .../chromium_headless_shell-1234/...".
+# The saving was real (~350 MB) and the capability it bought was zero.
+#
+# BROWSERS_PATH is set to a system location rather than the default
+# ~/.cache/ms-playwright so root and the `gem` user resolve the same install;
+# the per-user default would have left whichever account did not run the build
+# with no browser at all.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 # Installed into 3.12 specifically, not via `pip3`. The base image ships three
 # interpreters and `pip3` targets 3.10 — the one with the *fewest* packages —
 # so installing there would put playwright somewhere the richest interpreter
@@ -125,7 +151,135 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
 # `python` and `python3.12` are the ones to use.
 RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python
 
+# The browsers themselves, plus their system libraries. `--with-deps` pulls the
+# shared objects headless Chromium needs; the base image's chromium-browser
+# package covers most of them, but not all, and a missing libnss3 surfaces as
+# the same opaque launch failure as a missing binary. Full chromium, not
+# --only-shell: launch() uses the headless shell, launch(headless=False) needs
+# the full browser, and an agent that hits the second path should not discover
+# a half-install. `playwright` is symlinked onto PATH because it installs into
+# /opt/python3.12/bin, which is on root's PATH and not on the `gem` user's.
+RUN set -eux; \
+    ln -sf /opt/python3.12/bin/playwright /usr/local/bin/playwright; \
+    playwright install --with-deps chromium; \
+    chmod -R a+rX /opt/ms-playwright
+
+# --- The rest of the toolchain an agent reaches for --------------------------
+# Every entry below was confirmed absent by running `command -v` inside a live
+# sandbox, not inferred. LibreOffice is the one heavy item (~600 MB) and the
+# one with no substitute: pandoc, wkhtmltopdf and weasyprint above between them
+# render Markdown, HTML and PDF, and none of them opens a .docx, .pptx or
+# .xlsx. `soffice --headless --convert-to` is the whole reason it is here, so
+# the -core/-writer/-calc/-impress split is deliberate — no Base, no Draw, no
+# Java stack.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libreoffice-core libreoffice-writer libreoffice-calc libreoffice-impress \
+        fd-find bat figlet \
+        webp libheif-examples \
+    && rm -rf /var/lib/apt/lists/*
+
+# Debian renames two of those to avoid collisions (fd -> fdfind because of
+# fdclone, bat -> batcat because of bacula-console). Agents and scripts type
+# the upstream names, so both resolve. `chromium` and `magick` are the same
+# class of problem from the other direction: the base image ships
+# chromium-browser and ImageMagick 6, while everything written in the last few
+# years invokes `chromium` and `magick`.
+RUN set -eux; \
+    ln -sf "$(command -v fdfind)" /usr/local/bin/fd; \
+    ln -sf "$(command -v batcat)" /usr/local/bin/bat; \
+    ln -sf /usr/bin/chromium-browser /usr/local/bin/chromium; \
+    ln -sf /usr/bin/convert /usr/local/bin/magick
+
+# yq, deno and xh are single static binaries from GitHub — no glibc question,
+# and no apt package in jammy worth having (yq there is the unrelated Python
+# one).
+#
+# xh replaces httpie, which this layer installed from apt until the build-time
+# verification caught it dead on arrival: jammy ships httpie 2.6.0, which does
+# `from urllib3.util.ssl_ import DEFAULT_CIPHERS`, and the image's newer
+# urllib3 removed that name. `apt-get install httpie` succeeded, `http` was on
+# PATH, and every invocation ended in an ImportError traceback. xh is the Rust
+# reimplementation with the same CLI, shipped as a musl-static binary — no
+# Python, no dependency to drift out from under it. `http` is symlinked to it
+# because that is the name people and scripts type.
+ARG YQ_VERSION=4.44.6
+ARG DENO_VERSION=2.1.4
+ARG XH_VERSION=0.24.0
+RUN set -eux; \
+    curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
+        -o /usr/local/bin/yq && chmod 0755 /usr/local/bin/yq; \
+    curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
+        -o /tmp/deno.zip && unzip -q /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip; \
+    chmod 0755 /usr/local/bin/deno; \
+    curl -fsSL "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+        | tar -xz -C /tmp; \
+    install -m 0755 /tmp/xh-v${XH_VERSION}-x86_64-unknown-linux-musl/xh /usr/local/bin/xh; \
+    rm -rf /tmp/xh-v${XH_VERSION}-x86_64-unknown-linux-musl; \
+    ln -sf /usr/local/bin/xh /usr/local/bin/http
+
+# kubectl, helm and terraform are static Go binaries, ~200 MB together, and
+# useful without credentials — reading manifests, `helm template`, `terraform
+# validate` and `fmt` all work offline. The credential-bound cloud CLIs (aws,
+# gcloud, vercel, wrangler, supabase) are deliberately NOT here: gcloud alone
+# is over a gigabyte, none of them does anything without secrets this image
+# must not carry, and the deploy path Nova actually uses goes through the
+# vercel skill's API rather than its binary.
+ARG KUBECTL_VERSION=1.31.4
+ARG HELM_VERSION=3.16.3
+ARG TERRAFORM_VERSION=1.10.3
+RUN set -eux; \
+    curl -fsSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+        -o /usr/local/bin/kubectl && chmod 0755 /usr/local/bin/kubectl; \
+    curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+        | tar -xz -C /tmp && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && rm -rf /tmp/linux-amd64; \
+    curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+        -o /tmp/tf.zip && unzip -q /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip; \
+    chmod 0755 /usr/local/bin/terraform
+
 
 ENV PATH="/usr/local/go/bin:/usr/local/rust/bin:${PATH}" \
     GOPATH=/root/go \
     CARGO_HOME=/root/.cargo
+
+# --- The build asserts its own claims ---------------------------------------
+# Everything above is an intention until something checks it. Two failures made
+# that concrete: the Playwright browsers were never installed because this file
+# set an environment variable Playwright does not read, and the corepack warm-up
+# above targeted a cache the sandbox user never consults. Both shipped green.
+# Both were eventually found by an agent auditing its own container -- far too
+# late, and it took two rounds of apt-log forensics to establish.
+#
+# So the toolchain layer ends by running every binary it claims to install, and
+# FAILS THE BUILD if one does not resolve. `command -v` is not enough: a
+# dangling symlink resolves and then dies at exec, so each one is executed.
+# A broken toolchain can no longer become an image.
+#
+# Deliberately checked UNPRIVILEGED. Both bugs above were root-works/user-fails,
+# so a root-only check would have caught neither. The sandbox's own user is
+# `gem`, but it does not exist yet at build time -- the base image creates it
+# when supervisord boots -- so this runs as `nobody`, which is present in every
+# Debian-derived image and owns nothing. Anything readable by nobody is
+# readable by gem, so this is the stricter test.
+#
+# HOME is pointed at a writable directory: `nobody`'s home is `/`, and a tool
+# failing because it cannot write a cache there would be a false alarm about
+# the wrong thing.
+COPY verify-toolchain.sh /usr/local/bin/verify-toolchain.sh
+RUN chmod 0755 /usr/local/bin/verify-toolchain.sh \
+    && su -s /bin/bash -c 'HOME=/tmp /usr/local/bin/verify-toolchain.sh' nobody
+
+# --- The image says what it is ----------------------------------------------
+# Nothing in the image identified the build, so an agent asking "which image am
+# I and what is in it" had to reconstruct the answer from /var/log/apt/history
+# -- and got it wrong twice. One `cat /etc/nova-sandbox.json` now answers it.
+ARG NOVA_BUILD_ID=unknown
+ARG NOVA_UPSTREAM_DIGEST=unknown
+LABEL org.nova.sandbox.build-id="${NOVA_BUILD_ID}"
+RUN set -eux; \
+    printf '{\n  "build_id": "%s",\n  "layer": "tools",\n  "upstream_digest": "%s",\n  "built_at": "%s",\n  "toolchain": %s\n}\n' \
+        "${NOVA_BUILD_ID}" "${NOVA_UPSTREAM_DIGEST}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "$(/usr/local/bin/verify-toolchain.sh --manifest)" \
+        > /etc/nova-sandbox.json; \
+    chmod 0644 /etc/nova-sandbox.json; \
+    cat /etc/nova-sandbox.json
+ENV NOVA_SANDBOX_BUILD="${NOVA_BUILD_ID}"

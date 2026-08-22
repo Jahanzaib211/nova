@@ -17,6 +17,14 @@ ARG BASE=nova-sandbox-tools:latest
 FROM ${BASE}
 
 LABEL org.nova.sandbox.layer="dind"
+# Consumed so the build id reaches every rung, not just tools. An
+# unconsumed --build-arg is silently dropped, which would leave the top
+# layer -- the one config.yaml actually runs -- unable to say what it is.
+ARG NOVA_BUILD_ID=unknown
+ARG NOVA_UPSTREAM_DIGEST=unknown
+LABEL org.nova.sandbox.build-id="${NOVA_BUILD_ID}"
+RUN sed -i 's/"layer": "[a-z]*"/"layer": "dind"/' /etc/nova-sandbox.json 2>/dev/null || true
+ENV NOVA_SANDBOX_BUILD="${NOVA_BUILD_ID}"
 
 ARG RUNC_VERSION=v1.2.3
 ARG DEBIAN_FRONTEND=noninteractive

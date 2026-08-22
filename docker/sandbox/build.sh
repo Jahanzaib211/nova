@@ -167,10 +167,25 @@ stage_vendor() {
     fi
 }
 
+# A build id every layer carries, so an agent inside the container can answer
+# "which image am I" without reconstructing it from /var/log/apt/history.log --
+# which is what actually happened, twice, and produced the wrong answer both
+# times. Commit sha plus a UTC timestamp: the sha says what code built it, the
+# timestamp distinguishes two builds of the same commit.
+NOVA_BUILD_ID="$(git -C "$HERE" rev-parse --short HEAD 2>/dev/null || echo nogit)-$(date -u +%Y%m%dT%H%M%SZ)"
+readonly NOVA_BUILD_ID
+
+# The digest Dockerfile.base pins, read from the file rather than duplicated
+# here, so the manifest cannot claim a different upstream than the build used.
+NOVA_UPSTREAM_DIGEST="$(grep -oE 'all-in-one-sandbox@sha256:[0-9a-f]{64}' "${HERE}/Dockerfile.base" | head -1 | cut -d@ -f2)"
+readonly NOVA_UPSTREAM_DIGEST
+
 build_layer() {
     local name="$1" dockerfile="$2" base="${3:-}"
     local args=(-t "nova-sandbox-${name}:latest" -f "${HERE}/${dockerfile}")
     [ -n "$base" ] && args+=(--build-arg "BASE=${base}")
+    args+=(--build-arg "NOVA_BUILD_ID=${NOVA_BUILD_ID}")
+    args+=(--build-arg "NOVA_UPSTREAM_DIGEST=${NOVA_UPSTREAM_DIGEST}")
     log "building nova-sandbox-${name} …"
     docker build "${args[@]}" "$HERE"
 }
@@ -181,6 +196,7 @@ stage_wheels
 stage_android
 echo
 echo "Building chain up to: ${TARGET}"
+log "build id: ${NOVA_BUILD_ID}"
 
 build_layer base Dockerfile.base
 [ "$TARGET" = "base" ] && exit 0
