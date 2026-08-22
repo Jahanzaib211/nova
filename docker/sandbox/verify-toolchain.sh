@@ -44,7 +44,14 @@ CHECKS=(
     "rustc:rustc --version"
     "cargo:cargo --version"
     "uv:uv --version"
-    "python:python -c 'import sys; assert sys.version_info[:2] == (3, 12)'"
+    "python:python -c 'import sys; assert sys.version_info[:2] == (3, 12); print(sys.version.split()[0])'"
+    # Recorded, not pinned. `python3` is the base image's 3.10 and is left that
+    # way on purpose (see Dockerfile.tools, above the `python` symlink). Listing
+    # it here puts both interpreters side by side in /etc/nova-sandbox.json, so
+    # an agent reading the manifest sees the split instead of discovering it by
+    # running `python3 -m playwright` and getting an ImportError. A self-probe
+    # hit exactly that and reported Playwright as broken.
+    "python3:python3 --version"
     "playwright:playwright --version"
     "chromium:chromium --version"
     "pandoc:pandoc --version"
@@ -62,6 +69,12 @@ CHECKS=(
     "http:http --version"
     "figlet:figlet -v"
     "soffice:soffice --version"
+    "pdftotext:pdftotext -v"
+    "pdfinfo:pdfinfo -v"
+    "qpdf:qpdf --version"
+    "unoconv:unoconv --version"
+    "fzf:fzf --version"
+    "httpie:httpie --version"
     "cwebp:cwebp -version"
     "magick:magick -version"
     "kubectl:kubectl version --client"

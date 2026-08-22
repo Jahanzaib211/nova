@@ -41,6 +41,7 @@ class SandboxConfig(BaseModel):
         memory_limit: Per-container --memory cap (default: 8g). None for unlimited.
         pids_limit: Per-container --pids-limit (default: 2048). None for unlimited.
         shm_size: Size of /dev/shm (default: 1g). Docker's 64 MB default hangs Chromium.
+        nofile_limit: Per-container open-file cap (--ulimit nofile, default 65535).
         cpu_shares: Relative CPU weight (--cpu-shares, default 512). Never throttles.
         cpu_limit: Hard --cpus quota. Off by default; throttles, so prefer cpu_shares.
         max_lifetime: Hard ceiling in seconds on container age, regardless of activity.
@@ -143,6 +144,16 @@ class SandboxConfig(BaseModel):
             "and then hangs forever on screenshot or renderer work. The sandbox image "
             "ships a browser stack and Playwright, so this affects the agent's own "
             "browsing, not just test scripts. Set to null to use the Docker default."
+        ),
+    )
+    nofile_limit: int | None = Field(
+        default=65535,
+        description=(
+            "Per-container open-file limit, passed to --ulimit nofile. Docker "
+            "inherits the daemon's soft limit, which is 1024 here -- low enough "
+            "that Chromium and parallel Node builds exhaust it and fail with "
+            "EMFILE, which surfaces as an unrelated-looking crash rather than a "
+            "resource error. Set to null to inherit the daemon default."
         ),
     )
     mounts: list[VolumeMountConfig] = Field(

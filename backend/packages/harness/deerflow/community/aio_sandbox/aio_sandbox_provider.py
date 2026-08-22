@@ -234,6 +234,7 @@ class AioSandboxProvider(SandboxProvider):
             memory_limit=self._config["memory_limit"],
             pids_limit=self._config["pids_limit"],
             shm_size=self._config["shm_size"],
+            nofile_limit=self._config["nofile_limit"],
             cpu_limit=self._config["cpu_limit"],
             cpu_shares=self._config["cpu_shares"],
         )
@@ -270,6 +271,7 @@ class AioSandboxProvider(SandboxProvider):
             "memory_limit": getattr(sandbox_config, "memory_limit", None),
             "pids_limit": getattr(sandbox_config, "pids_limit", None),
             "shm_size": getattr(sandbox_config, "shm_size", None),
+            "nofile_limit": getattr(sandbox_config, "nofile_limit", None),
             "cpu_limit": getattr(sandbox_config, "cpu_limit", None),
             "cpu_shares": getattr(sandbox_config, "cpu_shares", None),
             "max_lifetime": getattr(sandbox_config, "max_lifetime", None),

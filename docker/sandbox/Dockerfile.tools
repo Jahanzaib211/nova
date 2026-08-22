@@ -241,6 +241,55 @@ ENV PATH="/usr/local/go/bin:/usr/local/rust/bin:${PATH}" \
     GOPATH=/root/go \
     CARGO_HOME=/root/.cargo
 
+# --- Documents: PDF tooling and the LibreOffice Java bridge ------------------
+# A separate, late apt layer on purpose. Appending these to the LibreOffice
+# block above would invalidate it and the 857 MB Playwright layer beneath it on
+# every future edit; here they cost one small layer and rebuild in seconds.
+#
+# poppler-utils is the real gap an in-container audit found: the image could
+# render a PDF (ghostscript, wkhtmltopdf) and not read one. pdftotext,
+# pdfinfo, pdftoppm and pdfimages are what an agent reaches for when handed a
+# PDF, and none of them was present.
+#
+# unoconv is thin -- `soffice --headless --convert-to` does the same job -- but
+# it is one apt package, it is what scripts and docs reference by name, and its
+# absence kept being reported as a gap. Cheaper to install than to keep
+# explaining. (pdf2htmlEX is genuinely not in jammy and is not installed;
+# nothing here pretends otherwise.)
+#
+# NOT installed: libreoffice-java-common. It was added here to silence
+# `failed to launch javaldx - java may not function correctly`, tested against
+# the built image, and did not -- the warning simply became `javaldx failed!`.
+# LibreOffice does not pick up the android layer's JDK without further wiring.
+# Conversions work regardless, so this is a cosmetic warning, and shipping a
+# package whose only justification turned out to be false is worse than the
+# warning. Left out deliberately so nobody re-adds it for the same reason.
+#
+# fzf and httpie close the last two gaps the same audit reported. fzf is a
+# single apt package and is what interactive-filter idioms reach for.
+#
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        poppler-utils qpdf unoconv fzf \
+    && rm -rf /var/lib/apt/lists/*
+
+# httpie needs care on two counts.
+#
+# First, `http` is deliberately xh above (a faster, flag-compatible clone), and
+# repointing it would silently change behaviour for anything already depending
+# on it. So the real implementation is exposed under its own name, `httpie`,
+# and `http` stays xh as designed.
+#
+# Second, it cannot come from apt. Jammy ships httpie 2.6.0, which does
+# `from urllib3.util.ssl_ import DEFAULT_CIPHERS` -- a name urllib3 removed in
+# 2.x, and this image already carries urllib3 2.x pip-installed into
+# /usr/local/lib/python3.10, which shadows the apt copy. The distro package
+# therefore ImportErrors on every invocation. The build caught this: the
+# verify gate failed on `httpie --version` and the apt version never shipped.
+# Installing into 3.12 gets httpie 3.x, which is urllib3-2-clean.
+RUN set -eux; \
+    python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 httpie; \
+    ln -sf /opt/python3.12/bin/httpie /usr/local/bin/httpie
+
 # --- The build asserts its own claims ---------------------------------------
 # Everything above is an intention until something checks it. Two failures made
 # that concrete: the Playwright browsers were never installed because this file

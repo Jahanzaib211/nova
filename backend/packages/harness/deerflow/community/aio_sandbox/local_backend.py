@@ -217,6 +217,7 @@ class LocalContainerBackend(SandboxBackend):
         memory_limit: str | None = None,
         pids_limit: int | None = None,
         shm_size: str | None = None,
+        nofile_limit: int | None = None,
         cpu_limit: str | None = None,
         cpu_shares: int | None = None,
     ):
@@ -239,6 +240,7 @@ class LocalContainerBackend(SandboxBackend):
             memory_limit: Value for --memory (e.g. "8g"); None for unlimited.
             pids_limit: Value for --pids-limit; None for unlimited.
             shm_size: Value for --shm-size; None for the Docker default (64 MB).
+            nofile_limit: Value for --ulimit nofile; None to inherit the daemon default.
             cpu_limit: Value for --cpus (a hard quota); None for uncapped.
             cpu_shares: Value for --cpu-shares (relative weight); None for the default.
         """
@@ -252,6 +254,7 @@ class LocalContainerBackend(SandboxBackend):
         self._memory_limit = memory_limit
         self._pids_limit = pids_limit
         self._shm_size = shm_size
+        self._nofile_limit = nofile_limit
         self._cpu_limit = cpu_limit
         self._cpu_shares = cpu_shares
         self._runtime = self._detect_runtime()
@@ -716,6 +719,13 @@ class LocalContainerBackend(SandboxBackend):
         # agent's own browsing, not just test tooling.
         if self._shm_size:
             cmd.extend(["--shm-size", str(self._shm_size)])
+        # Docker hands the container the daemon's soft nofile limit, 1024 here.
+        # Chromium opens file descriptors per tab, renderer and socket, and a
+        # parallel Node build opens more; both hit the ceiling and fail with
+        # EMFILE, which reads as a crash in whatever happened to be running
+        # rather than as a resource limit.
+        if self._nofile_limit:
+            cmd.extend(["--ulimit", f"nofile={self._nofile_limit}:{self._nofile_limit}"])
         # CPU is the limit the other two do not cover: a parallel compile stays
         # well inside its memory and PID caps while burning every core.
         #
