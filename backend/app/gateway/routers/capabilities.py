@@ -68,9 +68,11 @@ class CircuitEntry(BaseModel):
 
 
 class IGINOSummary(BaseModel):
+    """Recon status for the runtime bar. No TOR fields: it was removed from the
+    panel, the config and the capability list, and a payload that still carries
+    it invites the next reader to wire it back up."""
+
     enabled: bool = False
-    tor_enabled: bool = False
-    tor_available: bool = False
     searxng_healthy: bool = False
     circuit_states: dict[str, str] = Field(default_factory=dict)
     cache_stats: dict[str, Any] = Field(default_factory=dict)
@@ -170,29 +172,20 @@ def _middleware_hook_name(cls_name: str) -> str:
 
 
 # Served only if building the real chain fails (e.g. config half-loaded).
-_FALLBACK_HOOK_NAMES = (
-    "thread_data",
-    "uploads",
-    "title",
-    "observe_adjust",
-    "llm_error_handling",
-    "preflight_quota",
-    "strip_error_fallback",
-    "loop_detection",
-    "subagent_limit",
-    "reflect_fix_budget",
-    "skill_activation",
-)
-
-
 def _safe_hooks(config: AppConfig) -> list[HookSummary]:
     """List active middlewares by building the real lead-agent chain.
 
-    Previously a hardcoded 11-name list that silently drifted from the
-    actual chain (~19 middlewares) — the UI showed fiction. Constructors
-    are cheap (`lazy_init=True` path); heavy resources initialize on first
-    agent run, not here. Pinned against the real chain by
-    ``test_hooks_reflect_real_middleware_chain``.
+    Constructors are cheap (the `lazy_init=True` path); heavy resources
+    initialize on the first agent run, not here. Pinned against the real chain
+    by ``test_hooks_reflect_real_middleware_chain``.
+
+    On failure this returns **nothing**, and that is the point. It used to fall
+    back to an 11-name literal, which the bar rendered identically to eleven
+    real hooks -- so a broken chain looked like a working one, and the operator
+    reading the bar to find out what is loaded was told a confident lie. Eleven
+    invented hooks are worse than a gap: the gap is legible. Logged at warning
+    rather than debug for the same reason -- this is the only path that makes
+    the count wrong, so it should not be silent.
     """
     try:
         from deerflow.agents.lead_agent.agent import build_middlewares
@@ -206,8 +199,8 @@ def _safe_hooks(config: AppConfig) -> list[HookSummary]:
         if names:
             return [HookSummary(name=n, kind="middleware") for n in names]
     except Exception as e:
-        logger.debug("capabilities: middleware chain build failed, serving static fallback: %s", e)
-    return [HookSummary(name=n, kind="middleware") for n in _FALLBACK_HOOK_NAMES]
+        logger.warning("capabilities: middleware chain build failed; reporting no hooks: %s", e)
+    return []
 
 
 def _safe_subagents(config: AppConfig) -> list[SubagentSummary]:
@@ -267,19 +260,9 @@ def _safe_server_info() -> dict[str, Any]:
 
 
 async def _safe_igino() -> IGINOSummary:
-    """Read-only iGIN0 status snapshot."""
+    """Read-only Recon status snapshot."""
     try:
         enabled = os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
-        tor_enabled = os.environ.get("DEERFLOW_IGINO_TOR_ENABLED", "false").lower() in ("true", "1", "yes")
-
-        tor_available = False
-        if tor_enabled:
-            try:
-                from deerflow.community.searxng.tor import get_tor_proxy
-
-                tor_available = get_tor_proxy().is_available()
-            except Exception:
-                pass
 
         searxng_healthy = False
         try:
@@ -313,8 +296,6 @@ async def _safe_igino() -> IGINOSummary:
 
         return IGINOSummary(
             enabled=enabled,
-            tor_enabled=tor_enabled,
-            tor_available=tor_available,
             searxng_healthy=searxng_healthy,
             circuit_states=circuit_states,
             cache_stats=cache_stats,

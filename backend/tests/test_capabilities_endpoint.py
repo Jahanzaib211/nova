@@ -91,15 +91,19 @@ class TestToolsInventory:
 
 
 class TestHooksInventory:
-    def test_known_middlewares_listed(self) -> None:
-        # This module's config is a MagicMock (hermetic CI), so the chain
-        # build fails inside _safe_hooks and the endpoint serves the static
-        # fallback — this test pins that fallback contract over HTTP.
+    def test_a_failed_chain_build_reports_no_hooks(self) -> None:
+        """A broken chain must read as broken, not as eleven healthy hooks.
+
+        This module's config is a MagicMock (hermetic CI), so the chain build
+        fails inside `_safe_hooks`. It used to serve an 11-name literal in that
+        case, which the runtime bar rendered identically to eleven real hooks --
+        so the operator reading the bar to learn what is loaded was told a
+        confident lie, and this test pinned the lie in place. An empty list is
+        legible; invented names are not.
+        """
         client = _make_test_client()
         resp = client.get("/api/runtime/capabilities")
-        names = {h["name"] for h in resp.json()["hooks"]}
-        for expected in cap._FALLBACK_HOOK_NAMES:
-            assert expected in names, f"missing middleware hook: {expected}"
+        assert resp.json()["hooks"] == []
 
     def test_hooks_reflect_real_middleware_chain(self) -> None:
         """Drift pin: _safe_hooks derives names from the REAL lead-agent chain.
