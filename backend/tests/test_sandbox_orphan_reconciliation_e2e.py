@@ -19,10 +19,20 @@ import time
 
 import pytest
 
+# One timeout for every `docker` call in this file, generous on purpose.
+#
+# These are real daemon round-trips, and under full-suite load the daemon is
+# contended: this file failed `test_multiple_orphans_all_cleaned` on one run and
+# `test_list_running_ignores_unrelated_containers` on the next, while each
+# passed in isolation. The bug was never in the code under test — 15s was
+# simply not enough for `docker stop` on a busy host. A flaky suite teaches
+# people to re-run rather than read, which is how a real failure gets ignored.
+_DOCKER_TIMEOUT_S = 90
+
 
 def _docker_available() -> bool:
     try:
-        result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+        result = subprocess.run(["docker", "info"], capture_output=True, timeout=_DOCKER_TIMEOUT_S)
         return result.returncode == 0
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
@@ -33,13 +43,31 @@ def _container_running(container_name: str) -> bool:
         ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=_DOCKER_TIMEOUT_S,
     )
     return result.returncode == 0 and result.stdout.strip().lower() == "true"
 
 
+def _wait_until_stopped(container_name: str, timeout_s: float = 30.0) -> bool:
+    """Poll until the container is no longer running, or give up.
+
+    Replaces `time.sleep(1); assert not _container_running(...)`. That fixed
+    sleep is a claim about how quickly `docker stop` completes, and on a host
+    running the rest of the suite it is simply wrong -- which is why this file
+    failed a different test on each of two consecutive full runs while every
+    test passed in isolation. Polling is not slower in the common case: it
+    returns as soon as the container is actually gone.
+    """
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if not _container_running(container_name):
+            return True
+        time.sleep(0.1)
+    return not _container_running(container_name)
+
+
 def _stop_container(container_name: str) -> None:
-    subprocess.run(["docker", "stop", container_name], capture_output=True, timeout=15)
+    subprocess.run(["docker", "stop", container_name], capture_output=True, timeout=_DOCKER_TIMEOUT_S)
 
 
 # Use a lightweight image for testing to avoid pulling the heavy sandbox image
@@ -56,12 +84,12 @@ def cleanup_test_containers():
         ["docker", "ps", "-a", "--filter", f"name={E2E_PREFIX}-", "--format", "{{.Names}}"],
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=_DOCKER_TIMEOUT_S,
     )
     for name in result.stdout.strip().splitlines():
         name = name.strip()
         if name:
-            subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=10)
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=_DOCKER_TIMEOUT_S)
 
 
 @pytest.mark.skipif(not _docker_available(), reason="Docker not available")
@@ -84,7 +112,7 @@ class TestOrphanReconciliationE2E:
             ["docker", "run", "--rm", "-d", "--name", container_name, E2E_TEST_IMAGE, "sleep", "3600"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=_DOCKER_TIMEOUT_S,
         )
         assert result.returncode == 0, f"Failed to start test container: {result.stderr}"
 
@@ -115,11 +143,7 @@ class TestOrphanReconciliationE2E:
             # Destroy it (simulating what _reconcile_orphans does for old containers)
             backend.destroy(orphan_info)
 
-            # Give Docker a moment to stop the container
-            time.sleep(1)
-
-            # Verify container is gone
-            assert not _container_running(container_name), "Orphan container should be stopped after destroy"
+            assert _wait_until_stopped(container_name), "Orphan container should be stopped after destroy"
 
         finally:
             # Safety cleanup
@@ -136,7 +160,7 @@ class TestOrphanReconciliationE2E:
                     ["docker", "run", "--rm", "-d", "--name", name, E2E_TEST_IMAGE, "sleep", "3600"],
                     capture_output=True,
                     text=True,
-                    timeout=30,
+                    timeout=_DOCKER_TIMEOUT_S,
                 )
                 assert result.returncode == 0, f"Failed to start {name}: {result.stderr}"
                 containers.append(name)
@@ -162,11 +186,9 @@ class TestOrphanReconciliationE2E:
             for info in running:
                 backend.destroy(info)
 
-            time.sleep(1)
-
             # Verify all gone
             for name in containers:
-                assert not _container_running(name), f"{name} should be stopped"
+                assert _wait_until_stopped(name), f"{name} should be stopped"
 
         finally:
             for name in containers:
@@ -182,13 +204,13 @@ class TestOrphanReconciliationE2E:
             subprocess.run(
                 ["docker", "run", "--rm", "-d", "--name", unrelated_name, E2E_TEST_IMAGE, "sleep", "3600"],
                 capture_output=True,
-                timeout=30,
+                timeout=_DOCKER_TIMEOUT_S,
             )
             # Start our container
             subprocess.run(
                 ["docker", "run", "--rm", "-d", "--name", our_name, E2E_TEST_IMAGE, "sleep", "3600"],
                 capture_output=True,
-                timeout=30,
+                timeout=_DOCKER_TIMEOUT_S,
             )
 
             from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
