@@ -14,7 +14,7 @@ import { fetch } from "@/core/api/fetcher";
 
 import { isStaticWebsiteOnly } from "../static-mode";
 
-import { type User, buildLoginUrl } from "./types";
+import { type User, buildLoginUrl, userSchema } from "./types";
 
 // Re-export for consumers
 export type { User };
@@ -76,8 +76,19 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
       // "Unauthorized", so the catch below clears local state in that case
       // without us needing to re-handle the redirect here.
       const res = await fetch("/api/v1/auth/me");
-      const data = await res.json();
-      setUser(data);
+      // Validate before trusting. The comment above reasons only about 401,
+      // which the wrapped fetcher handles -- but a 403 or 5xx returns a
+      // {"detail": ...} body that parses fine and became the user object.
+      // terms-gate then read user.tos_accepted_version off it, found undefined,
+      // and showed a blocking full-screen consent modal to someone who had
+      // already accepted. Both sibling call sites already parse with this
+      // schema; this one did not.
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+      const parsed = userSchema.safeParse(await res.json());
+      setUser(parsed.success ? parsed.data : null);
     } catch (err) {
       // 401 → wrapped fetcher already navigated to /login. Clear local state.
       setUser(null);

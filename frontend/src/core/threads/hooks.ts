@@ -2494,22 +2494,16 @@ export function useDeleteThread() {
       threadId: string;
       onRemoteDeleted?: () => void;
     }) => {
+      // One delete, not two. `apiClient.threads.delete` issues
+      // DELETE /api/langgraph/threads/{id}, which next.config.js rewrites to
+      // ${gateway}/api/threads/{id} -- the very route the second call hit. The
+      // handler is @require_permission(..., require_existing=True), so with the
+      // row already gone the second call 404'd, the mutation threw, onSuccess
+      // never ran, and the thread was never evicted from the caches below. The
+      // call site uses `mutate` with no onError, so the only symptom was a
+      // deleted chat that stayed in the sidebar.
       await apiClient.threads.delete(threadId);
       onRemoteDeleted?.();
-
-      const response = await fetch(
-        `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}`,
-        {
-          method: "DELETE",
-        },
-      );
-
-      if (!response.ok) {
-        const error = await response
-          .json()
-          .catch(() => ({ detail: "Failed to delete local thread data." }));
-        throw new Error(error.detail ?? "Failed to delete local thread data.");
-      }
     },
     onSuccess(_, { threadId }) {
       queryClient.setQueriesData(

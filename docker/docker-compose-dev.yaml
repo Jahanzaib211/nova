@@ -322,6 +322,18 @@ services:
       - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
       - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
       - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      # Publish sandbox ports on loopback only. DEER_FLOW_SANDBOX_HOST is not a
+      # loopback address, so _resolve_docker_bind_host fell through to 0.0.0.0
+      # and every sandbox was reachable from the LAN -- the one service on all
+      # interfaces, while postgres/crawl4ai/browserless/nginx are all bound to
+      # 127.0.0.1, and the only one that runs --privileged with ttyd and noVNC.
+      - DEER_FLOW_SANDBOX_BIND_HOST=${DEER_FLOW_SANDBOX_BIND_HOST:-127.0.0.1}
+      # Without this the auth rate limiter cannot see past nginx: _client_ip()
+      # returns the peer, so every request shares one bucket and the 10
+      # attempts/60s auth limit applies globally -- one person mistyping a
+      # password can 429 everyone. Evidence: 73,265 of 73,349 admin_audit rows
+      # carry actor_ip 192.168.200.2, only 2 distinct values in the whole table.
+      - AUTH_TRUSTED_PROXIES=${AUTH_TRUSTED_PROXIES:-192.168.200.0/24}
       # Proxy values (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY) are inherited from ../.env via env_file.
       # Only NO_PROXY is declared here so internal service hostnames are always exempt from the proxy.
       - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,host.docker.internal

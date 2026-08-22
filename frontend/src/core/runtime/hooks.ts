@@ -37,5 +37,10 @@ export function useCapabilities() {
 export function useOpenCircuitCount(): number {
   const { capabilities } = useCapabilities();
   if (!capabilities) return 0;
-  return capabilities.circuits.filter((c) => c.state === "open").length;
+  // `?? []`, because loadCapabilities bare-casts the response and every list
+  // consumer in runtime-capabilities-bar already guards the same way. This hook
+  // runs in that component's prologue -- before its own `!capabilities` bailout
+  // -- and the bar mounts ABOVE ErrorBoundary scope="chat-main", so a missing
+  // field here blanked the entire workspace rather than one panel.
+  return (capabilities.circuits ?? []).filter((c) => c.state === "open").length;
 }

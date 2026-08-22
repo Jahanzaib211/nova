@@ -152,6 +152,7 @@ export function useSandboxAudit(
         `${getBackendBaseURL()}/api/sandbox/audit?thread_id=${encodeURIComponent(threadId)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
+      if (!res.ok) return { events: [] };
       return res.json() as Promise<{ events: AuditEvent[] }>;
     },
     enabled: Boolean(threadId) && enabled,
@@ -186,13 +187,16 @@ export type SandboxReview = {
 };
 
 export function useSandboxReview(threadId: string | null, enabled = true) {
-  const query = useQuery<SandboxReview>({
+  const query = useQuery<SandboxReview | null>({
     queryKey: ["sandbox", "review", threadId],
     queryFn: async () => {
       const res = await fetch(
         `${getBackendBaseURL()}/api/sandbox/review?thread_id=${encodeURIComponent(threadId!)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
+      // review-tab.tsx reads review.files.length and review.checks; an
+      // error body is truthy and would take the Review tab down with it.
+      if (!res.ok) return null;
       return res.json() as Promise<SandboxReview>;
     },
     enabled: Boolean(threadId) && enabled,
@@ -271,13 +275,16 @@ export type BrowserCheckResult = {
 // Polls the latest self-test (auto-run on every preview, or a manual run) so the
 // Browser tab shows results without anyone clicking. Enable only when a server is up.
 export function useLastBrowserCheck(threadId: string | null, enabled: boolean) {
-  const { data } = useQuery<BrowserCheckResult>({
+  const { data } = useQuery<BrowserCheckResult | null>({
     queryKey: ["sandbox", "browser-check-last", threadId],
     queryFn: async () => {
       const res = await fetch(
         `${getBackendBaseURL()}/api/sandbox/browser-check-last?thread_id=${encodeURIComponent(threadId!)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
+      // browser-tab.tsx reads autoTest.routes.length; `data ?? null` does
+      // not rescue a {detail} body, only a missing one.
+      if (!res.ok) return null;
       return res.json() as Promise<BrowserCheckResult>;
     },
     enabled: Boolean(threadId) && enabled,
@@ -354,6 +361,16 @@ export type DevServerStatus = {
   compiles?: number; // increments on recompile → preview auto-reloads
 };
 
+const STOPPED_DEV_SERVER: DevServerStatus = {
+  running: false,
+  status: "stopped",
+  host: null,
+  port: null,
+  url: null,
+  absproxyUrl: null,
+  compiles: 0,
+};
+
 export function useDevServerStatus(
   threadId: string | null,
   label = "app",
@@ -375,7 +392,26 @@ export function useDevServerStatus(
         `${getBackendBaseURL()}/api/sandbox/dev-status?thread_id=${encodeURIComponent(threadId)}&label=${encodeURIComponent(label)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
-      return res.json() as Promise<DevServerStatus>;
+      if (!res.ok) return STOPPED_DEV_SERVER;
+      // The gateway speaks snake_case (`absproxy_url`, routers/sandbox.py:584);
+      // this type is camelCase. The bare cast meant absproxyUrl was ALWAYS
+      // undefined, so the documented preview fallback at browser-tab.tsx:167
+      // could never fire and a failed preview proxy showed a blank iframe
+      // forever. TypeScript could not catch it -- nothing validated the shape.
+      const raw = (await res.json()) as Record<string, unknown>;
+      return {
+        running: Boolean(raw.running),
+        status: (raw.status as DevServerStatus["status"]) ?? "stopped",
+        host: (raw.host as string | null) ?? null,
+        port: (raw.port as number | null) ?? null,
+        url: (raw.url as string | null) ?? null,
+        absproxyUrl:
+          (raw.absproxy_url as string | null) ??
+          (raw.absproxyUrl as string | null) ??
+          null,
+        ...(typeof raw.label === "string" ? { label: raw.label } : {}),
+        ...(typeof raw.compiles === "number" ? { compiles: raw.compiles } : {}),
+      };
     },
     enabled: Boolean(threadId),
     refetchInterval: 2000,
@@ -435,6 +471,7 @@ export function useDevServers(threadId: string | null): DevServerEntry[] {
         `${getBackendBaseURL()}/api/sandbox/dev-servers?thread_id=${encodeURIComponent(threadId)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
+      if (!res.ok) return { servers: [] };
       return res.json() as Promise<{ servers: DevServerEntry[] }>;
     },
     enabled: Boolean(threadId),
@@ -453,6 +490,7 @@ export function useSandboxFiles(threadId: string | null): SandboxFile[] {
         `${getBackendBaseURL()}/api/sandbox/files?thread_id=${encodeURIComponent(threadId)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
+      if (!res.ok) return { files: [] };
       return res.json() as Promise<{ files: SandboxFile[] }>;
     },
     enabled: Boolean(threadId),

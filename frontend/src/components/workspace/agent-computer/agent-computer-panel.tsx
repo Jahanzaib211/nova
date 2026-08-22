@@ -607,7 +607,7 @@ export function AgentComputerPanel({
           >
             <ReviewPanel
               threadId={threadId}
-              review={reviewQuery.data}
+              review={reviewQuery.data ?? undefined}
               isFetching={reviewQuery.isFetching}
               onRegenerate={() => void reviewQuery.refetch()}
               active={activeTab === "review"}

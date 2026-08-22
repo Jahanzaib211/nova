@@ -559,7 +559,7 @@ export function RuntimeCapabilitiesBar({
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          {capabilities.server.version &&
+          {capabilities.server?.version &&
             capabilities.server.version !== "dev" && (
               <span className="text-muted-foreground/60 font-mono text-[10px] tracking-wider uppercase">
                 v{capabilities.server.version}
