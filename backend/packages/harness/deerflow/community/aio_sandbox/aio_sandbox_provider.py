@@ -41,6 +41,17 @@ from .sandbox_info import SandboxInfo
 
 logger = logging.getLogger(__name__)
 
+
+def _under_pytest() -> bool:
+    """True while a pytest run is in progress.
+
+    Checked at provider construction, not import: PYTEST_CURRENT_TEST is set
+    per-test by pytest itself, so it is present exactly when a test builds a
+    provider and absent in every deployment.
+    """
+    return "PYTEST_CURRENT_TEST" in os.environ
+
+
 # Default configuration
 DEFAULT_IMAGE = "enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest"
 DEFAULT_PORT = 8080
@@ -160,12 +171,26 @@ class AioSandboxProvider(SandboxProvider):
         self._config = self._load_config()
         self._backend: SandboxBackend = self._create_backend()
 
-        # Register shutdown handler
-        atexit.register(self.shutdown)
-        self._register_signal_handlers()
-
-        # Reconcile orphaned containers from previous process lifecycles
-        self._reconcile_orphans()
+        # Both of the next two steps are destructive, and they are skipped
+        # under pytest for the same reason.
+        #
+        # `_reconcile_orphans` assumes every container matching the configured
+        # prefix belongs to this process -- true for a deployment restarting
+        # after a crash, false for a test suite running on a developer's
+        # machine while Nova is up. A full-suite run adopted the live
+        # `deer-flow-sandbox-*` containers, and the atexit handler below then
+        # destroyed them at interpreter shutdown, killing a running session
+        # mid-work. The symptom was a lone "Failed to stop container ... timed
+        # out after 60s" printed after pytest's own summary, which is exactly
+        # where an atexit handler lands.
+        #
+        # Reconciliation itself is still covered: the unit tests drive it
+        # explicitly against a mocked backend, and the e2e tests use their own
+        # container prefix so they can only ever reap their own containers.
+        if not _under_pytest():
+            atexit.register(self.shutdown)
+            self._register_signal_handlers()
+            self._reconcile_orphans()
 
         # Start idle checker if enabled
         if self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0:

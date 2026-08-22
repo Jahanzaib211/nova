@@ -523,3 +523,44 @@ def test_sighup_handler_registered():
         signal.signal(signal.SIGHUP, original_sighup)
         signal.signal(signal.SIGTERM, original_sigterm)
         signal.signal(signal.SIGINT, original_sigint)
+
+
+class TestPytestGuard:
+    """The provider must not reap real containers while a test suite runs.
+
+    A full-suite run on a machine with Nova up used to adopt the live
+    `deer-flow-sandbox-*` containers through `_reconcile_orphans` and then
+    destroy them from the atexit handler, killing a running session. The only
+    visible trace was a "Failed to stop container ... timed out after 60s"
+    line printed after pytest's summary.
+    """
+
+    def test_under_pytest_is_true_during_a_test(self):
+        from deerflow.community.aio_sandbox.aio_sandbox_provider import _under_pytest
+
+        assert _under_pytest() is True
+
+    def test_under_pytest_is_false_without_the_env_var(self, monkeypatch):
+        from deerflow.community.aio_sandbox.aio_sandbox_provider import _under_pytest
+
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        assert _under_pytest() is False
+
+    def test_construction_skips_orphan_reconciliation_and_atexit(self, monkeypatch):
+        import atexit
+
+        from deerflow.community.aio_sandbox import aio_sandbox_provider as mod
+
+        registered: list = []
+        monkeypatch.setattr(atexit, "register", lambda fn, *a, **k: registered.append(fn))
+        monkeypatch.setattr(
+            mod.AioSandboxProvider,
+            "_reconcile_orphans",
+            lambda self: pytest.fail("reconciliation ran under pytest"),
+        )
+        monkeypatch.setattr(mod.AioSandboxProvider, "_load_config", lambda self: {"idle_timeout": 0})
+        monkeypatch.setattr(mod.AioSandboxProvider, "_create_backend", lambda self: object())
+
+        provider = mod.AioSandboxProvider()
+
+        assert provider.shutdown not in registered
