@@ -995,6 +995,50 @@ export function useThreadStream({
         }
       }
 
+      // A second, independent "this subagent finished" signal, emitted by
+      // observe_adjust_middleware for the task tool only. Redundant with
+      // task_completed by design: if either arrives the card settles.
+      if (
+        typeof event === "object" &&
+        event !== null &&
+        "type" in event &&
+        event.type === "task_activity" &&
+        "tool_call_id" in event
+      ) {
+        const e = event as {
+          type: "task_activity";
+          tool_call_id: string;
+          status?: string;
+        };
+        if (e.tool_call_id && e.status === "done") {
+          updateSubtask({ id: e.tool_call_id, status: "completed" }, "result");
+        }
+        return;
+      }
+
+      // The model stopped on a safety finish_reason and its tool calls were
+      // dropped. Nothing surfaced this, so the run simply stopped with no
+      // explanation -- the user had no way to tell it apart from a hang.
+      if (
+        typeof event === "object" &&
+        event !== null &&
+        "type" in event &&
+        event.type === "safety_termination"
+      ) {
+        const e = event as {
+          type: "safety_termination";
+          suppressed_tool_call_count?: number;
+          reason_value?: string;
+        };
+        const suppressed = e.suppressed_tool_call_count ?? 0;
+        toast(
+          suppressed > 0
+            ? `Stopped for safety (${e.reason_value ?? "unknown"}) — ${suppressed} tool call${suppressed === 1 ? "" : "s"} were not run.`
+            : `Stopped for safety (${e.reason_value ?? "unknown"}).`,
+        );
+        return;
+      }
+
       if (
         typeof event === "object" &&
         event !== null &&
