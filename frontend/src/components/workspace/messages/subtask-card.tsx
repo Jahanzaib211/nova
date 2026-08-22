@@ -43,16 +43,25 @@ export function SubtaskCard({
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState(true);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
-  const task = useSubtask(taskId)!;
+  // Not `useSubtask(taskId)!`. The render loop in MessageList iterates
+  // `tool_calls` independently of the loop that populates the store, so the
+  // entry can genuinely be absent for a render -- and the non-null assertion
+  // turned that into a TypeError on `task.status` rather than a blank card.
+  const task = useSubtask(taskId);
   const icon = useMemo(() => {
-    if (task.status === "completed") {
+    if (task?.status === "completed") {
       return <CheckCircleIcon className="size-3" />;
-    } else if (task.status === "failed") {
+    } else if (task?.status === "failed") {
       return <XCircleIcon className="size-3 text-red-500" />;
-    } else if (task.status === "in_progress") {
+    } else if (task?.status === "in_progress") {
       return <Loader2Icon className="size-3 animate-spin" />;
     }
-  }, [task.status]);
+  }, [task?.status]);
+
+  // A card with no store entry has nothing to render; bail before the JSX so
+  // every access below stays on the non-optional `task`.
+  if (!task) return null;
+
   return (
     <ChainOfThought
       className={cn("relative w-full gap-2 rounded-lg border py-0", className)}
@@ -72,7 +81,14 @@ export function SubtaskCard({
           />
         </>
       )}
-      <div className="bg-background/95 flex w-full flex-col rounded-lg">
+      {/* Stable seam for tests. The visible status lives inside FlipDisplay,
+          which animates between values by splitting text across elements, so
+          asserting on the rendered label is inherently racy. */}
+      <div
+        className="bg-background/95 flex w-full flex-col rounded-lg"
+        data-testid="subtask-card"
+        data-status={task.status}
+      >
         <div className="flex w-full items-center justify-between p-0.5">
           <Button
             className="w-full items-start justify-start text-left"

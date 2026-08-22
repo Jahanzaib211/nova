@@ -1,8 +1,9 @@
 import {
   createContext,
+  type Dispatch,
+  type SetStateAction,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -41,6 +42,14 @@ export function nextSubtaskStatus(
 ): { status: Subtask["status"] | undefined; accepted: boolean } {
   if (incoming === undefined || incoming === previous) {
     return { status: previous, accepted: incoming !== undefined };
+  }
+  // A guess may never overwrite something the backend actually reported, even
+  // when the reported state is non-terminal. Without this, a streamed
+  // `in_progress` from task_running was still clobbered by the derived
+  // "no active run -> failed" pass, which is precisely how a healthy subagent
+  // got painted red while its messages were still arriving.
+  if (incomingSource === "derived" && previousSource === "result") {
+    return { status: previous, accepted: false };
   }
   if (!isTerminalSubtaskStatus(previous)) {
     return { status: incoming, accepted: true };
@@ -81,15 +90,20 @@ function logSubtaskTransition(entry: {
 
 export interface SubtaskContextValue {
   tasks: Record<string, Subtask>;
-  setTasks: (tasks: Record<string, Subtask>) => void;
+  // A full Dispatch, not a value-only setter: writers must be able to use the
+  // functional form so an update always applies to current state rather than
+  // to whatever `tasks` their render captured.
+  setTasks: Dispatch<SetStateAction<Record<string, Subtask>>>;
 }
 
-export const SubtaskContext = createContext<SubtaskContextValue>({
-  tasks: {},
-  setTasks: () => {
-    /* noop */
-  },
-});
+// Deliberately no default value. A concrete default made the `undefined` check
+// in useSubtaskContext provably dead, so a consumer rendering outside the
+// provider silently received an empty store and a no-op setter -- writes were
+// accepted and dropped depending on mount order, which reads as flakiness
+// rather than as the wiring error it is.
+export const SubtaskContext = createContext<SubtaskContextValue | undefined>(
+  undefined,
+);
 
 export function SubtasksProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Record<string, Subtask>>({});
@@ -116,73 +130,88 @@ export function useSubtask(id: string) {
 }
 
 export function useUpdateSubtask() {
-  const { tasks, setTasks } = useSubtaskContext();
-  const shouldNotifyAfterRenderRef = useRef(false);
+  const { setTasks } = useSubtaskContext();
   // Per-task authority of the stored status. Kept outside the Subtask shape
-  // so the FSM's source rules don't leak into render props.
+  // so the FSM's source rules don't leak into render props. A ref, so it is
+  // never stale regardless of which render captured the callback.
   const sourcesRef = useRef<Record<string, SubtaskUpdateSource>>({});
-  // No deps: must run after every render to check the ref set during render.
-  useEffect(() => {
-    if (!shouldNotifyAfterRenderRef.current) {
-      return;
-    }
-    shouldNotifyAfterRenderRef.current = false;
-    setTasks({ ...tasks });
-  });
 
   const updateSubtask = useCallback(
     (
       task: Partial<Subtask> & { id: string },
       source: SubtaskUpdateSource = "derived",
     ) => {
-      const previous = tasks[task.id];
-      const previousStatus = previous?.status;
-      const previousSource = sourcesRef.current[task.id];
+      // Functional update, not a mutation of a captured `tasks` object.
+      //
+      // The previous version read and wrote `tasks` from the enclosing render
+      // and memoised on `[tasks, setTasks]`, so any listener still holding an
+      // earlier callback mutated an object React had already replaced -- the
+      // write was accepted by the FSM and then silently lost. That is exactly
+      // how a streamed `task_completed` landed and vanished before the next
+      // event, leaving the card on its stale status. The updater form always
+      // receives current state, so no writer can be stale.
+      setTasks((current) => {
+        const previous = current[task.id];
+        const previousStatus = previous?.status;
+        const previousSource = sourcesRef.current[task.id];
 
-      const { status: storedStatus, accepted } = nextSubtaskStatus(
-        previousStatus,
-        task.status,
-        previousSource,
-        source,
-      );
+        const { status: storedStatus, accepted } = nextSubtaskStatus(
+          previousStatus,
+          task.status,
+          previousSource,
+          source,
+        );
 
-      logSubtaskTransition({
-        id: task.id,
-        previous: previousStatus,
-        incoming: task.status,
-        stored: storedStatus,
-        source,
-        accepted,
+        logSubtaskTransition({
+          id: task.id,
+          previous: previousStatus,
+          incoming: task.status,
+          stored: storedStatus,
+          source,
+          accepted,
+        });
+
+        const next = {
+          ...previous,
+          ...task,
+          ...(storedStatus !== undefined ? { status: storedStatus } : {}),
+        } as Subtask;
+        // A rejected status update must not smuggle in its result/error either
+        // (e.g. a derived "failed" placeholder error overwriting a real result).
+        if (!accepted && task.status !== undefined) {
+          if (previous?.result !== undefined) next.result = previous.result;
+          if (previous?.error !== undefined) next.error = previous.error;
+        }
+
+        if (accepted && task.status !== undefined) {
+          sourcesRef.current[task.id] = source;
+        }
+
+        // Identity matters: returning a fresh object every call re-renders,
+        // which makes MessageList's derived pass call straight back in — an
+        // unbounded render loop. Hand back the same reference when nothing
+        // observable changed so React bails out instead.
+        // Note `previous` really can be undefined at runtime: indexing a
+        // Record<string, Subtask> is not `| undefined` without
+        // noUncheckedIndexedAccess, so TypeScript will not catch a bare
+        // dereference here.
+        if (previous === undefined) {
+          return { ...current, [task.id]: next };
+        }
+
+        const unchanged =
+          next.status === previous.status &&
+          next.result === previous.result &&
+          next.error === previous.error &&
+          next.latestMessage === previous.latestMessage &&
+          next.description === previous.description &&
+          next.subagent_type === previous.subagent_type &&
+          next.prompt === previous.prompt;
+
+        return unchanged ? current : { ...current, [task.id]: next };
       });
-
-      const next = {
-        ...previous,
-        ...task,
-        ...(storedStatus !== undefined ? { status: storedStatus } : {}),
-      } as Subtask;
-      // A rejected status update must not smuggle in its result/error either
-      // (e.g. a derived "failed" placeholder error overwriting a real result).
-      if (!accepted && task.status !== undefined) {
-        if (previous?.result !== undefined) next.result = previous.result;
-        if (previous?.error !== undefined) next.error = previous.error;
-      }
-
-      if (accepted && task.status !== undefined) {
-        sourcesRef.current[task.id] = source;
-      }
-
-      const becameTerminal =
-        isTerminalSubtaskStatus(next.status) && previousStatus !== next.status;
-
-      tasks[task.id] = next;
-
-      if (task.latestMessage) {
-        setTasks({ ...tasks });
-      } else if (becameTerminal) {
-        shouldNotifyAfterRenderRef.current = true;
-      }
     },
-    [tasks, setTasks],
+    [setTasks],
   );
 
   return updateSubtask;

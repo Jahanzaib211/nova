@@ -661,8 +661,25 @@ export function mockWorkspaceAPI(page: Page) {
  * Build a minimal SSE stream that the LangGraph SDK can parse.
  * The stream returns a single AI message: "Hello from DeerFlow!".
  */
-export function handleRunStream(route: Route) {
-  const events = [
+/**
+ * A LangGraph `custom` stream frame — what `writer({...})` produces backend-side.
+ *
+ * Until this existed the mock could only emit `metadata`/`values`/`end`, so no
+ * test could express a bug in a custom-event handler. Five subagent-status bugs
+ * shipped past 89 specs for exactly that reason: the handlers were not missed by
+ * the suite, they were invisible to it.
+ */
+export type MockCustomEvent = Record<string, unknown> & { type: string };
+
+export type RunStreamOptions = {
+  /** Emitted as `event: custom`, in order, after `values` and before `end`. */
+  custom?: MockCustomEvent[];
+  /** Override the message list carried on the `values` frame. */
+  messages?: unknown[];
+};
+
+export function handleRunStream(route: Route, options?: RunStreamOptions) {
+  const events: Array<{ event: string; data: unknown }> = [
     {
       event: "metadata",
       data: { run_id: MOCK_RUN_ID, thread_id: MOCK_THREAD_ID },
@@ -670,9 +687,10 @@ export function handleRunStream(route: Route) {
     {
       event: "values",
       data: {
-        messages: mockStreamMessages(),
+        messages: options?.messages ?? mockStreamMessages(),
       },
     },
+    ...(options?.custom ?? []).map((data) => ({ event: "custom", data })),
     { event: "end", data: {} },
   ];
 

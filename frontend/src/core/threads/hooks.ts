@@ -912,19 +912,87 @@ export function useThreadStream({
       }
     },
     onCustomEvent(event: unknown) {
+      // The backend emits six task lifecycle events (task_tool.py:335-415);
+      // this listened for exactly one of them. The other five had no handler
+      // anywhere, so subtask status never came from the stream at all and fell
+      // through to a liveness guess that reports "failed" whenever the runs
+      // cache looks empty -- painting finished subagents red.
+      //
+      // All six carry "result" authority: the writer(...) call and the
+      // ToolMessage string are built from the same result object in the same
+      // branch, so they cannot disagree, and a result-sourced status outranks
+      // the derived guess in nextSubtaskStatus.
+      //
+      // Guarded on `task_id` so sibling task-prefixed events with a different
+      // shape (task_progress, task_activity) fall through to their own handlers.
       if (
         typeof event === "object" &&
         event !== null &&
         "type" in event &&
-        event.type === "task_running"
+        typeof event.type === "string" &&
+        event.type.startsWith("task_") &&
+        "task_id" in event
       ) {
         const e = event as {
-          type: "task_running";
+          type: string;
           task_id: string;
-          message: AIMessage;
+          message?: AIMessage;
+          description?: string;
+          result?: string;
+          error?: string;
         };
-        updateSubtask({ id: e.task_id, latestMessage: e.message });
-        return;
+        switch (e.type) {
+          case "task_started":
+            updateSubtask(
+              {
+                id: e.task_id,
+                status: "in_progress",
+                ...(e.description !== undefined
+                  ? { description: e.description }
+                  : {}),
+              },
+              "result",
+            );
+            return;
+          case "task_running":
+            updateSubtask(
+              {
+                id: e.task_id,
+                status: "in_progress",
+                ...(e.message !== undefined
+                  ? { latestMessage: e.message }
+                  : {}),
+              },
+              "result",
+            );
+            return;
+          case "task_completed":
+            updateSubtask(
+              {
+                id: e.task_id,
+                status: "completed",
+                ...(e.result !== undefined ? { result: e.result } : {}),
+              },
+              "result",
+            );
+            return;
+          // Cancelled and timed-out are failures as far as the card is
+          // concerned; the error string is what distinguishes them.
+          case "task_failed":
+          case "task_cancelled":
+          case "task_timed_out":
+            updateSubtask(
+              {
+                id: e.task_id,
+                status: "failed",
+                ...(e.error ? { error: e.error } : {}),
+              },
+              "result",
+            );
+            return;
+          default:
+            break;
+        }
       }
 
       if (
