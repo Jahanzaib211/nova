@@ -797,9 +797,11 @@ export interface Translations {
       title: string;
       sourceHealth: string;
       searxng: string;
-      crawler: string;
+      pipeline: string;
+      fetchHealth: string;
       test: string;
       fetch: string;
+      fetchMany: string;
       crawl: string;
       fetches: string;
       avgFetch: string;
@@ -815,8 +817,7 @@ export interface Translations {
       audit: string;
       total: string;
       errors: string;
-      toggleLabel: string;
-      /** Shown instead of fake zeros when iGIN0 is switched off. */
+      /** Shown instead of fake zeros when Recon is switched off server-side. */
       disabledTitle: string;
       disabledBody: string;
     };
@@ -854,7 +855,7 @@ export interface Translations {
     igino: {
       label: string;
       title: string;
-      tooltip: (searxng: string, tor: string, cache: string) => string;
+      tooltip: (searxng: string, fetch: string, cache: string) => string;
     };
     circuits: {
       open: (count: number) => string;
@@ -931,7 +932,6 @@ export interface Translations {
     panels: string;
     artifacts: string;
     todos: string;
-    tor: string;
     open: string;
     thinking: string;
   };

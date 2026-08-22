@@ -21,10 +21,7 @@ describe("iGIN0 types compile", () => {
   test("IGINOStatus conforms to shape", () => {
     const status: IGINOStatus = {
       enabled: true,
-      tor_enabled: false,
-      tor_available: true,
       searxng_healthy: true,
-      base_url: "http://localhost:8080",
       cache: {
         size: 10,
         max_size: 100,
@@ -49,10 +46,7 @@ describe("iGIN0 types compile", () => {
   test("IGINOStatus optional error field", () => {
     const status: IGINOStatus = {
       enabled: false,
-      tor_enabled: false,
-      tor_available: false,
       searxng_healthy: false,
-      base_url: "",
       cache: {
         size: 0,
         max_size: 0,
@@ -160,8 +154,6 @@ describe("iGIN0 types compile", () => {
   test("IGINOCapabilities conforms to shape", () => {
     const caps: IGINOCapabilities = {
       enabled: true,
-      tor_enabled: false,
-      tor_available: false,
       searxng_healthy: true,
       circuit_states: { default: "closed" },
       cache_stats: {

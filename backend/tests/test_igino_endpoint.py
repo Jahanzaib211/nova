@@ -50,10 +50,7 @@ class TestIGINOEndpoints(unittest.TestCase):
         async def fake_status() -> dict:
             return {
                 "enabled": True,
-                "tor_enabled": False,
-                "tor_available": False,
                 "searxng_healthy": False,
-                "base_url": "http://searxng:8080",
                 "cache": {"size": 0, "max_size": 1024, "hits": 0, "misses": 0, "hit_rate": 0.0, "ttl_s": 300},
                 "audit": {"total_records": 0, "errors": 0, "tor_usage": 0, "enabled": True, "redacted": False},
             }
@@ -61,7 +58,10 @@ class TestIGINOEndpoints(unittest.TestCase):
         with patch.object(igino_router, "igino_status", new=fake_status):
             result = _run(igino_router.igino_status())
         self.assertTrue(result["enabled"])
-        self.assertFalse(result["tor_enabled"])
+        self.assertFalse(result["searxng_healthy"])
+        # No base_url. The panel stopped rendering internal URLs, and a value
+        # in the network tab is exposed just as surely as one on screen.
+        self.assertNotIn("base_url", result)
 
     def test_toggle_response_shape(self):
         from app.gateway.routers import igino as igino_router
@@ -85,15 +85,17 @@ class TestCapabilitiesIginoField(unittest.TestCase):
 
         igino = IGINOSummary(
             enabled=False,
-            tor_enabled=False,
-            tor_available=False,
             searxng_healthy=False,
             circuit_states={},
             cache_stats={"size": 0, "max_size": 0, "hits": 0, "misses": 0, "hit_rate": 0.0, "ttl_s": 0},
             audit_stats={"total_records": 0, "errors": 0, "tor_usage": 0, "enabled": False, "redacted": False},
         )
         self.assertFalse(igino.enabled)
-        self.assertFalse(igino.tor_enabled)
+        self.assertFalse(igino.searxng_healthy)
+        # TOR is gone from the model on purpose: it was removed from the panel,
+        # the config and the capability list, and a payload still carrying it
+        # invites the next reader to wire it back up.
+        self.assertFalse(hasattr(igino, "tor_enabled"))
 
 
 class TestAuthMiddleware(unittest.TestCase):
@@ -138,7 +140,12 @@ class TestAuthMiddleware(unittest.TestCase):
         # A switched-on iGIN0 must describe each capability separately; a single
         # aggregate flag is what made a disabled feature look like a broken one.
         self.assertIn("features", result)
-        self.assertIn("crawler", result)
+        # "fetch", not "crawler": this reports web_fetch's provider, which
+        # renders one URL and follows nothing. The real crawler is web_crawl,
+        # reported in `web` alongside the other tools.
+        self.assertIn("fetch", result)
+        tools = {c["tool"] for c in result.get("web", [])}
+        self.assertIn("web_crawl", tools)
 
     def test_igino_research_requires_user(self):
         """The research endpoint must call ``get_optional_user_from_request``

@@ -74,7 +74,7 @@ async def _web_capability(tool_name: str, health_path: str) -> dict[str, Any]:
         config = get_app_config()
         entry = config.get_tool_config(tool_name)
         if entry is None:
-            return {"tool": tool_name, "provider": "unconfigured", "healthy": False, "base_url": "", "detail": "not in config.yaml"}
+            return {"tool": tool_name, "provider": "unconfigured", "healthy": False, "detail": "not in config.yaml"}
         use = getattr(entry, "use", "") or ""
         module = str(use).split(":")[0]
         parts = [p for p in module.split(".") if p]
@@ -82,14 +82,14 @@ async def _web_capability(tool_name: str, health_path: str) -> dict[str, Any]:
         base_url = str((entry.model_extra or {}).get("base_url", "") or "")
     except Exception as exc:  # noqa: BLE001 - the panel must render regardless
         logger.debug("web capability %s: config read failed: %s", tool_name, exc)
-        return {"tool": tool_name, "provider": provider, "healthy": False, "base_url": "", "detail": "config unavailable"}
+        return {"tool": tool_name, "provider": provider, "healthy": False, "detail": "config unavailable"}
 
     if base_url:
         try:
             async with httpx.AsyncClient(timeout=5.0) as http:
                 resp = await http.get(f"{base_url.rstrip('/')}{health_path}")
             healthy = resp.status_code < 400
-            detail = f"HTTP {resp.status_code}"
+            detail = "reachable" if healthy else f"refused (HTTP {resp.status_code})"
         except Exception as exc:  # noqa: BLE001
             detail = type(exc).__name__
     else:
@@ -98,11 +98,16 @@ async def _web_capability(tool_name: str, health_path: str) -> dict[str, Any]:
         # report unverified rather than healthy.
         detail = "hosted provider — not probed"
 
-    return {"tool": tool_name, "provider": provider, "healthy": healthy, "base_url": base_url, "detail": detail}
+    return {"tool": tool_name, "provider": provider, "healthy": healthy, "detail": detail}
 
 
-async def _crawler_status() -> dict[str, Any]:
+async def _fetch_status() -> dict[str, Any]:
     """Health of whichever provider `web_fetch` is configured to use.
+
+    Named for the tool, not for a job it does not do. This was `_crawler_status`
+    while `web_fetch` pointed at Browserless, which renders a single URL and
+    follows nothing -- so the panel said "Crawler: browserless - healthy" and
+    described a capability Nova did not have.
 
     Deliberately provider-agnostic: it reads the configured `use:` string
     rather than assuming Browserless, so swapping the fetch backend does not
@@ -136,14 +141,14 @@ async def _crawler_status() -> dict[str, Any]:
             break
     except Exception as exc:  # noqa: BLE001 - the panel must render regardless
         logger.debug("crawler status: config read failed: %s", exc)
-        return {"provider": provider, "healthy": False, "base_url": "", "detail": "config unavailable"}
+        return {"provider": provider, "healthy": False, "detail": "config unavailable"}
 
     if base_url:
         try:
             async with httpx.AsyncClient(timeout=5.0) as http:
                 resp = await http.get(f"{base_url.rstrip('/')}/pressure")
             healthy = resp.status_code < 400
-            detail = f"HTTP {resp.status_code}"
+            detail = "reachable" if healthy else f"refused (HTTP {resp.status_code})"
         except Exception as exc:  # noqa: BLE001
             detail = type(exc).__name__
     else:
@@ -151,35 +156,32 @@ async def _crawler_status() -> dict[str, Any]:
         # probe; report them as configured-but-unverified rather than healthy.
         detail = "hosted provider — not probed"
 
-    return {"provider": provider, "healthy": healthy, "base_url": base_url, "detail": detail}
+    return {"provider": provider, "healthy": healthy, "detail": detail}
 
 
-def _feature_states(*, tor_enabled: bool, audit: Any, cache: Any) -> list[dict[str, Any]]:
-    """Per-capability state, so the panel can stop pretending one switch covers it.
+def _feature_states(*, audit: Any, cache: Any) -> list[dict[str, Any]]:
+    """The cross-cutting features, and only those.
 
-    Each of these is configured independently by environment, and they fail
-    independently too -- audit can be off while search works, cache can be
-    disabled while both work. Reporting one aggregate "enabled" hid all of
-    that. Read-only on purpose: the switch this replaces wrote nothing, and
-    four controls that also write nothing would be a worse lie than one.
+    This used to also list "Private search" and "Crawler". Both were dropped:
+    the Pipeline section reports search and fetch with live health and a
+    self-test button, so repeating them here said the same thing twice and
+    said it worse -- a static `enabled: True` cannot go red. "Crawler" was
+    also the wrong word for what web_fetch does; Browserless renders one URL
+    and follows nothing.
+
+    TOR is gone entirely rather than reported as off. It costs seconds per
+    fetch, nothing here routes through it, and a permanently-off row invites
+    someone to turn on a latency tax for a privacy property this deployment
+    does not claim.
+
+    What remains is configured independently by environment and fails
+    independently -- audit can be off while search works, cache can be
+    disabled while both work. Read-only on purpose: the switch this replaces
+    wrote nothing, and controls that also write nothing would be a worse lie.
     """
     audit_stats = audit.get_stats() if audit is not None else {}
     cache_stats = getattr(cache, "stats", {}) or {}
     return [
-        {
-            "key": "search",
-            "label": "Private search",
-            "enabled": True,
-            "env": "DEERFLOW_IGINO_SEARXNG_URL",
-            "detail": "SearXNG",
-        },
-        {
-            "key": "crawler",
-            "label": "Crawler",
-            "enabled": True,
-            "env": "tools.web_fetch.use",
-            "detail": "configured in config.yaml",
-        },
         {
             "key": "cache",
             "label": "Result cache",
@@ -193,13 +195,6 @@ def _feature_states(*, tor_enabled: bool, audit: Any, cache: Any) -> list[dict[s
             "enabled": bool(audit_stats.get("enabled")),
             "env": "DEERFLOW_IGINO_AUDIT_ENABLED",
             "detail": "redacted" if audit_stats.get("redacted") else "full URLs",
-        },
-        {
-            "key": "tor",
-            "label": "TOR routing",
-            "enabled": bool(tor_enabled),
-            "env": "DEERFLOW_IGINO_TOR_ENABLED",
-            "detail": "off by default — adds seconds per fetch",
         },
     ]
 
@@ -215,11 +210,8 @@ async def get_status() -> dict[str, Any]:
         from deerflow.community.searxng.audit import get_audit_trail
         from deerflow.community.searxng.search_cache import get_search_cache
         from deerflow.community.searxng.searxng_client import SearxngClient
-        from deerflow.community.searxng.tor import get_tor_proxy
 
-        tor_enabled = os.environ.get("DEERFLOW_IGINO_TOR_ENABLED", "false").lower() in ("true", "1", "yes")
-        tor = get_tor_proxy()
-        client = SearxngClient(tor_enabled=tor_enabled)
+        client = SearxngClient()
         cache = get_search_cache()
         audit = get_audit_trail()
 
@@ -230,18 +222,20 @@ async def get_status() -> dict[str, Any]:
 
         return {
             "enabled": True,
-            "tor_enabled": tor_enabled,
-            "tor_available": tor.is_available(),
             "searxng_healthy": searxng_healthy,
-            "base_url": client.base_url,
             "cache": cache.stats,
             "audit": audit.get_stats(),
-            "crawler": await _crawler_status(),
+            "fetch": await _fetch_status(),
             "web": [
                 await _web_capability("web_fetch", "/pressure"),
                 await _web_capability("web_fetch_many", "/health"),
+                # web_crawl runs Nova's own BFS over the crawl4ai service, so
+                # its health is that service's health -- but it is reported
+                # separately because the two fail for different reasons: the
+                # service being down, versus a crawl that robots.txt refused.
+                await _web_capability("web_crawl", "/health"),
             ],
-            "features": _feature_states(tor_enabled=tor_enabled, audit=audit, cache=cache),
+            "features": _feature_states(audit=audit, cache=cache),
         }
     except Exception as exc:
         logger.error("iGIN0 status failed: %s", exc)
@@ -286,11 +280,24 @@ async def test_capability(tool: str, user: Any | None = Depends(get_optional_use
             ok = bool(out) and not out.startswith("Error:")
             detail = f"{len(out)} chars" if ok else out[:120]
         elif tool == "web_fetch_many":
-            from deerflow.community.crawl4ai.tools import web_crawl_tool
+            from deerflow.community.crawl4ai.tools import web_fetch_many_tool
 
-            out = await web_crawl_tool.ainvoke({"urls": [probe_url], "max_pages": 1})
+            out = await web_fetch_many_tool.ainvoke({"urls": [probe_url], "max_pages": 1})
             ok = bool(out) and not out.startswith("Error:")
             detail = f"{len(out)} chars" if ok else out[:120]
+        elif tool == "web_crawl":
+            from deerflow.community.crawl4ai.crawl_tool import crawl_site
+
+            # crawl_site rather than the tool wrapper: the wrapper returns
+            # markdown, and "1200 chars" is exactly the kind of number that
+            # looks like success whether or not a single link was followed.
+            # Pages and links are the two figures that can only be non-trivial
+            # if the crawl actually crawled.
+            result = await crawl_site(probe_url, max_pages=3, max_depth=1)
+            pages = len(result["pages"])
+            links = sum(len(v) for v in result["graph"].values())
+            ok = pages > 0 and not result["stopped"].startswith("error:")
+            detail = f"{pages} page(s), {links} link(s), stopped: {result['stopped']}"
         else:
             raise HTTPException(status_code=404, detail=f"Unknown capability '{tool}'.")
 

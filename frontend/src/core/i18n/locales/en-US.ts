@@ -925,10 +925,12 @@ export const enUS: Translations = {
       title: "Recon — private web access",
       sourceHealth: "Source Health",
       searxng: "SearXNG",
-      crawler: "Pipeline",
+      pipeline: "Pipeline",
+      fetchHealth: "Fetch",
       test: "Test",
       fetch: "Fetch · one page",
-      crawl: "Fetch many · parallel",
+      fetchMany: "Fetch many · parallel",
+      crawl: "Crawl · follows links",
       fetches: "Fetches",
       avgFetch: "Avg fetch",
       capabilities: "Capabilities",
@@ -943,10 +945,9 @@ export const enUS: Translations = {
       audit: "Audit",
       total: "Total",
       errors: "Errors",
-      toggleLabel: "Toggle private web access",
-      disabledTitle: "Privacy search is off",
+      disabledTitle: "Recon is off",
       disabledBody:
-        "iGIN0 routes web search through a private SearXNG instance and records an audit trail. Turn it on to see source health, cache and audit figures for this thread.",
+        "Web search, page fetching and the audit trail are switched off for this deployment. Nothing in this panel can turn them on \u2014 the server decides, and it decided before the page loaded.",
     },
     skillLauncher: {
       runSkill: "Run a skill on this workspace",
@@ -988,8 +989,8 @@ export const enUS: Translations = {
     igino: {
       label: "Recon",
       title: "Recon — private web access",
-      tooltip: (searxng: string, tor: string, cache: string) =>
-        `SearXNG: ${searxng} \u00b7 Crawler: ${tor} \u00b7 Cache: ${cache}`,
+      tooltip: (searxng: string, fetch: string, cache: string) =>
+        `Search: ${searxng} \u00b7 Fetch: ${fetch} \u00b7 Cache: ${cache}`,
     },
     circuits: {
       open: (count: number) => `${count} circuit${count === 1 ? "" : "s"} open`,
@@ -1065,7 +1066,6 @@ export const enUS: Translations = {
     panels: "Panels",
     artifacts: "Artifacts",
     todos: "To-dos",
-    tor: "TOR",
     open: "OPEN",
     thinking: "Thinking...",
   },

@@ -1,26 +1,34 @@
 export interface IGINOStatus {
   enabled: boolean;
-  tor_enabled: boolean;
-  tor_available: boolean;
   searxng_healthy: boolean;
-  crawler?: {
+  /** Health of whichever provider `web_fetch` is bound to. Named `fetch`, not
+      `crawler`: it renders one URL and follows nothing, and there is now a real
+      crawler in `web` to confuse it with. */
+  fetch?: {
     provider: string;
     healthy: boolean;
-    base_url: string;
     detail: string;
   };
-  /** Per-capability state. Each is configured independently by environment and
-      fails independently, so one aggregate `enabled` never described reality. */
-  /** One entry per web capability, named by the job it does: web_fetch reads a
-      page the agent already named, web_crawl follows links. They fail
-      independently, so they are reported independently. */
+  /** One entry per web capability, named by the job it does: `web_fetch` reads
+      one page the agent already named, `web_fetch_many` reads several at once,
+      and `web_crawl` starts at one URL and follows its links. Only the last is
+      a crawler: Browserless renders a single URL, and Crawl4AI's REST API
+      refuses a deep-crawl strategy from an untrusted caller, so the BFS lives
+      in Nova instead. They fail independently and are reported independently.
+
+      No `base_url`. The panel used to print `http://browserless:3000` and its
+      neighbours; that publishes the compose topology to every viewer and a
+      user cannot act on it. The Test buttons answer the question it stood in
+      for, and the server no longer sends the field at all. */
   web?: Array<{
     tool: string;
     provider: string;
     healthy: boolean;
-    base_url: string;
     detail: string;
   }>;
+  /** The cross-cutting features -- cache and audit. Search and fetch are not
+      repeated here: the pipeline reports them with live health, and a static
+      `enabled: true` cannot go red. */
   features?: Array<{
     key: string;
     label: string;
@@ -28,7 +36,6 @@ export interface IGINOStatus {
     env: string;
     detail: string;
   }>;
-  base_url: string;
   cache: IGINOCacheStats;
   audit: IGINOAuditStats;
   error?: string;
@@ -106,8 +113,6 @@ export interface IGINOAuditRecord {
 
 export interface IGINOCapabilities {
   enabled: boolean;
-  tor_enabled: boolean;
-  tor_available: boolean;
   searxng_healthy: boolean;
   circuit_states: Record<string, string>;
   cache_stats: IGINOCacheStats;

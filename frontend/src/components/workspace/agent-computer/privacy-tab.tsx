@@ -11,14 +11,24 @@ import { cn } from "@/lib/utils";
 
 /** The request path, in the order it actually runs. Named for what each step
     does rather than for its provider: the provider is an implementation detail
-    that changed twice in one day, the job did not. */
+    that changed twice in one day, the job did not.
+
+    The hints are the whole point of this list. The first three read pages
+    somebody already named; only the last one discovers a page you did not
+    know about, and for most of this panel's life the UI called one of the
+    others "Crawler" and described a capability Nova did not have. */
 const PIPELINE: Array<{ tool: string; label: string; hint: string }> = [
   { tool: "web_search", label: "Search", hint: "finds pages" },
   { tool: "web_fetch", label: "Fetch", hint: "reads one page" },
   {
     tool: "web_fetch_many",
     label: "Fetch many",
-    hint: "reads several pages at once",
+    hint: "reads several pages you name, at once",
+  },
+  {
+    tool: "web_crawl",
+    label: "Crawl",
+    hint: "starts at one page and follows its links",
   },
 ];
 
@@ -79,7 +89,7 @@ export function PrivacyPanel({
     );
   }
 
-  // When iGIN0 is off the status endpoint returns `{enabled: false}` and
+  // When Recon is off the status endpoint returns `{enabled: false}` and
   // nothing else, so every field below reads as undefined: SearXNG rendered
   // "unhealthy", and cache/audit rendered real-looking zeros. A switched-off
   // feature looked like a broken one. The endpoint has always documented this
@@ -129,21 +139,27 @@ export function PrivacyPanel({
               healthy={status.searxng_healthy}
             />
             {/* One card per web capability, named by the job it does. These
-                are three different things that fail independently:
-                  search      finds pages                 (SearXNG)
-                  fetch       reads one named page        (Browserless)
-                  fetch_many  reads many named pages      (Crawl4AI)
-                A single "crawler" row hid which of them was down. None of them
-                follows links: Browserless renders one URL, and Crawl4AI's REST
-                API refuses deep_crawl_strategy from an untrusted request. The
-                labels say what each one does rather than what we wish it did. */}
+                are four different things that fail independently:
+                  search      finds pages                  (SearXNG)
+                  fetch       reads one named page         (Browserless)
+                  fetch_many  reads many named pages       (Crawl4AI)
+                  crawl       follows links from one page  (Nova's BFS)
+                A single "crawler" row hid which of them was down, and named
+                the wrong one: Browserless renders a single URL and follows
+                nothing, and Crawl4AI's REST API refuses deep_crawl_strategy
+                from an untrusted request, which is every request we can make.
+                Only the last row follows links, and it does so in Nova's own
+                loop -- which is also where its page/depth/domain caps and its
+                robots.txt check live. */}
             {(status.web ?? []).map((cap) => (
               <StatusCard
                 key={cap.tool}
                 label={
                   cap.tool === "web_fetch"
                     ? t.agentComputer.privacy.fetch
-                    : t.agentComputer.privacy.crawl
+                    : cap.tool === "web_fetch_many"
+                      ? t.agentComputer.privacy.fetchMany
+                      : t.agentComputer.privacy.crawl
                 }
                 status={`${cap.provider} · ${
                   cap.healthy
@@ -203,7 +219,7 @@ export function PrivacyPanel({
             about which half was down. */}
         <div className="space-y-2">
           <h3 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-            {t.agentComputer.privacy.crawler}
+            {t.agentComputer.privacy.pipeline}
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <MetricCard

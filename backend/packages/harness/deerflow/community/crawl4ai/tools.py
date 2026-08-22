@@ -1,18 +1,23 @@
-"""`web_crawl` — follow links from a starting URL.
+"""`web_fetch_many` — read several pages you already named, in parallel.
 
 This is the third and last of Nova's web capabilities, and they are genuinely
 different jobs, which is why they are separate tools rather than one:
 
-  web_search  SearXNG      "what pages exist about X?"   -> a list of URLs
-  web_fetch   Browserless  "read this one page"          -> one article
-  web_fetch_many Crawl4AI  "read all of these pages"     -> many articles
+  web_search      SearXNG      "what pages exist about X?"  -> a list of URLs
+  web_fetch       Browserless  "read this one page"         -> one article
+  web_fetch_many  Crawl4AI     "read all of these pages"    -> many articles
+  web_crawl       (this + BFS) "start here and follow links" -> a site subtree
 
-The third is batch retrieval, NOT link-following, and the name says so. Crawl4AI
+This one is batch retrieval, NOT link-following, and the name says so. Crawl4AI
 can follow links as a library, but its REST API validates every config under an
 untrusted trust boundary and rejects `deep_crawl_strategy` outright -- an
 HTTP-reachable link-following crawler is an SSRF amplifier, so upstream forbids
 it with no opt-in. Calling this tool "crawl" would have promised the agent a
 capability the server refuses to perform.
+
+Link-following lives in `crawl_tool.py` instead, where Nova owns the loop and
+therefore owns the limits: the BFS, the caps and the robots.txt check are all
+ours, and it drives this same batch client one depth at a time.
 
 What it does buy: search returns ten URLs, and reading them was ten sequential
 web_fetch calls. This is one call, fetched in parallel, returned as markdown.
@@ -48,7 +53,7 @@ def _get_tool_config(tool_name: str) -> dict | None:
 
 
 def _get_client() -> Crawl4aiClient:
-    cfg = _get_tool_config("web_crawl") or {}
+    cfg = _get_tool_config("web_fetch_many") or {}
     return Crawl4aiClient(
         base_url=cfg.get("base_url", DEFAULT_BASE_URL),
         token=cfg.get("token", ""),
@@ -73,7 +78,7 @@ def _record(url: str, *, pages: int, success: bool, duration_ms: float, error: s
 
 
 @tool("web_fetch_many", parse_docstring=True)
-async def web_crawl_tool(urls: list[str], max_pages: int = 10) -> str:
+async def web_fetch_many_tool(urls: list[str], max_pages: int = 10) -> str:
     """Fetch several web pages in one call and return them as markdown.
 
     Use this after web_search, when you want to read most of the results: it
@@ -129,4 +134,4 @@ async def web_crawl_tool(urls: list[str], max_pages: int = 10) -> str:
         return f"Error: {exc}"
 
 
-__all__ = ["web_crawl_tool"]
+__all__ = ["web_fetch_many_tool"]

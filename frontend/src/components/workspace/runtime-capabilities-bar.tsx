@@ -335,11 +335,13 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
               {t.runtimeBar.igino.label}
             </span>
             {/* Was a TOR badge, which is off by design and so never rendered.
-                The crawler runs on every fetch, so a red dot here is the thing
-                actually worth surfacing in the bar. */}
-            {status.crawler && !status.crawler.healthy && (
+                Fetching happens on every web call, so a red dot here is the
+                thing actually worth surfacing in the bar. Labelled "Fetch",
+                not "Pipeline": the badge names the broken step, and the whole
+                pipeline is not down when one step is. */}
+            {status.fetch && !status.fetch.healthy && (
               <span className="rounded bg-amber-500/20 px-1 text-[9px] text-amber-400">
-                {t.agentComputer.privacy.crawler}
+                {t.agentComputer.privacy.fetchHealth}
               </span>
             )}
           </span>
@@ -351,9 +353,9 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
               status.searxng_healthy
                 ? t.agentComputer.privacy.healthy
                 : t.agentComputer.privacy.unhealthy,
-              status.crawler
-                ? `${status.crawler.provider} ${
-                    status.crawler.healthy
+              status.fetch
+                ? `${status.fetch.provider} ${
+                    status.fetch.healthy
                       ? t.agentComputer.privacy.healthy
                       : t.agentComputer.privacy.unhealthy
                   }`

@@ -891,10 +891,12 @@ export const zhCN: Translations = {
       title: "Recon — 私有网络访问",
       sourceHealth: "来源健康状态",
       searxng: "SearXNG",
-      crawler: "流水线",
+      pipeline: "流水线",
+      fetchHealth: "抓取",
       test: "测试",
       fetch: "抓取 · 单页",
-      crawl: "批量抓取 · 并行",
+      fetchMany: "批量抓取 · 并行",
+      crawl: "爬取 · 跟随链接",
       fetches: "抓取次数",
       avgFetch: "平均抓取",
       capabilities: "功能",
@@ -909,10 +911,9 @@ export const zhCN: Translations = {
       audit: "审计",
       total: "总计",
       errors: "错误",
-      toggleLabel: "切换私有网络访问",
-      disabledTitle: "隐私搜索已关闭",
+      disabledTitle: "Recon 已关闭",
       disabledBody:
-        "iGIN0 通过私有 SearXNG 实例进行网络搜索并记录审计轨迹。开启后可查看此线程的来源健康状况、缓存与审计数据。",
+        "此部署已关闭网络搜索、页面抓取与审计轨迹。此面板无法开启它们 \u2014 这由服务端决定，且在页面加载前就已决定。",
     },
     skillLauncher: {
       runSkill: "在此工作区运行技能",
@@ -949,8 +950,8 @@ export const zhCN: Translations = {
     igino: {
       label: "Recon",
       title: "Recon — 私有网络访问",
-      tooltip: (searxng: string, tor: string, cache: string) =>
-        `SearXNG: ${searxng} \u00b7 TOR: ${tor} \u00b7 缓存: ${cache}`,
+      tooltip: (searxng: string, fetch: string, cache: string) =>
+        `搜索: ${searxng} \u00b7 抓取: ${fetch} \u00b7 缓存: ${cache}`,
     },
     circuits: {
       open: (count: number) => `${count} 个断路器已开启`,
@@ -1024,7 +1025,6 @@ export const zhCN: Translations = {
     panels: "面板",
     artifacts: "产物",
     todos: "待办事项",
-    tor: "TOR",
     open: "已开启",
     thinking: "思考中...",
   },
