@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   handleRunStream,
@@ -117,7 +117,7 @@ const taskCallMessages = [
  * event is ever delivered. Mount for the card, send for the events.
  */
 async function streamLifecycle(
-  page: import("@playwright/test").Page,
+  page: Page,
   custom: Array<Record<string, unknown> & { type: string }>,
 ) {
   mockLangGraphAPI(page, {
