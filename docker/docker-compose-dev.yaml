@@ -322,12 +322,19 @@ services:
       - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
       - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
       - DEER_FLOW_SANDBOX_HOST=host.docker.internal
-      # Publish sandbox ports on loopback only. DEER_FLOW_SANDBOX_HOST is not a
-      # loopback address, so _resolve_docker_bind_host fell through to 0.0.0.0
-      # and every sandbox was reachable from the LAN -- the one service on all
-      # interfaces, while postgres/crawl4ai/browserless/nginx are all bound to
-      # 127.0.0.1, and the only one that runs --privileged with ttyd and noVNC.
-      - DEER_FLOW_SANDBOX_BIND_HOST=${DEER_FLOW_SANDBOX_BIND_HOST:-127.0.0.1}
+      # Publish sandbox ports on the Docker bridge, not on every interface.
+      # _resolve_docker_bind_host falls through to 0.0.0.0 whenever
+      # DEER_FLOW_SANDBOX_HOST is non-loopback, which made the sandbox the only
+      # service reachable from the LAN -- while postgres, crawl4ai, browserless
+      # and nginx are all on 127.0.0.1 -- and it is the one that runs
+      # --privileged with ttyd and noVNC.
+      #
+      # 127.0.0.1 is NOT usable here: the gateway reaches sandboxes through
+      # host.docker.internal, which resolves to the bridge address, so a
+      # loopback bind makes them unreachable and every sandbox times out
+      # waiting to become ready. The bridge address is reachable from
+      # containers and not published on enp4s0, which is the property we want.
+      - DEER_FLOW_SANDBOX_BIND_HOST=${DEER_FLOW_SANDBOX_BIND_HOST:-172.17.0.1}
       # Without this the auth rate limiter cannot see past nginx: _client_ip()
       # returns the peer, so every request shares one bucket and the 10
       # attempts/60s auth limit applies globally -- one person mistyping a
