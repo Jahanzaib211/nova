@@ -27,12 +27,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+from deerflow.execution.models import now_iso
 
 logger = logging.getLogger(__name__)
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _new_session_id() -> str:
@@ -85,7 +82,7 @@ class ShellSession:
 
     # Lifecycle
     state: SessionState = SessionState.ALLOCATED
-    created_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=now_iso)
     started_at: str = ""
     last_heartbeat: float = field(default_factory=time.monotonic)
 
@@ -210,7 +207,7 @@ class SessionRegistry:
             session.state = state
             session.error = error
             if state == SessionState.RUNNING and not session.started_at:
-                session.started_at = _now_iso()
+                session.started_at = now_iso()
 
     def heartbeat(
         self,

@@ -42,6 +42,30 @@ describe("nextSubtaskStatus", () => {
     ).toEqual({ status: "failed", accepted: false });
   });
 
+  it("will not let a guess overwrite a NON-terminal backend report", () => {
+    // Regression: run b236208c — three subagents completed and the run
+    // recorded success, while the UI showed "Subtask failed" throughout.
+    //
+    // Every other case here has a terminal `previous`, and the old rule only
+    // protected terminal states — so a streamed `in_progress` from
+    // task_running was still clobbered by the derived "no active run ->
+    // failed" pass on the next render. That is the shape that painted a
+    // healthy, actively-streaming subagent red.
+    expect(
+      nextSubtaskStatus("in_progress", "failed", "result", "derived"),
+    ).toEqual({ status: "in_progress", accepted: false });
+
+    // The same guard must not block a real backend terminal state.
+    expect(
+      nextSubtaskStatus("in_progress", "completed", "result", "result"),
+    ).toEqual({ status: "completed", accepted: true });
+
+    // And a derived update is still fine when nothing authoritative exists.
+    expect(
+      nextSubtaskStatus("in_progress", "failed", "derived", "derived"),
+    ).toEqual({ status: "failed", accepted: true });
+  });
+
   it("lets a real ToolMessage correct a derived failed guess (false-Failed bug)", () => {
     // Regression: run 01984062 — stream dropped, UI derived "failed"; the
     // ToolMessage later replayed with "Task Succeeded".

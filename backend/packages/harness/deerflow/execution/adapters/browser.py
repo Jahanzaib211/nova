@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 
 from deerflow.execution.adapters.base import BaseAdapter
 from deerflow.execution.models import (
+    now_iso,
     ExecutionClass,
     ExecutionRequest,
     ExecutionResult,
@@ -32,10 +33,6 @@ from deerflow.execution.models import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class BrowserAdapter(BaseAdapter):
@@ -68,7 +65,7 @@ class BrowserAdapter(BaseAdapter):
             thread_id=thread_id,
         )
         started = time.monotonic()
-        started_at = _now_iso()
+        started_at = now_iso()
         status = ExecutionStatus.FAILED
         error: str | None = None
         try:
@@ -95,7 +92,7 @@ class BrowserAdapter(BaseAdapter):
                 exit_code=0 if status is ExecutionStatus.SUCCEEDED else None,
                 duration_ms=duration_ms,
                 started_at=started_at,
-                finished_at=_now_iso(),
+                finished_at=now_iso(),
                 error=error,
                 execution_class=ExecutionClass.BROWSER,
                 correlation_id=correlation_id,

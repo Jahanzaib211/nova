@@ -25,16 +25,13 @@ from typing import Any
 from deerflow.execution.audit import AuditEngine
 from deerflow.execution.metrics import ExecutionMetrics
 from deerflow.execution.models import (
+    now_iso,
     ExecutionRequest,
     ExecutionResult,
     ExecutionStatus,
 )
 
 Handler = Callable[[ExecutionRequest], "tuple[int, str, str] | ExecutionResult"]
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class FakeExecutionKernel:
@@ -64,8 +61,8 @@ class FakeExecutionKernel:
                 exit_code=exit_code,
                 stdout=stdout,
                 stderr=stderr,
-                started_at=_now_iso(),
-                finished_at=_now_iso(),
+                started_at=now_iso(),
+                finished_at=now_iso(),
                 error=None if exit_code == 0 else f"exit code {exit_code}",
                 execution_class=request.execution_class,
                 correlation_id=request.correlation_id,
@@ -99,8 +96,8 @@ def timeout_result(request: ExecutionRequest, timeout: float = 5.0) -> Execution
         execution_id=request.execution_id,
         status=ExecutionStatus.TIMED_OUT,
         exit_code=None,
-        started_at=_now_iso(),
-        finished_at=_now_iso(),
+        started_at=now_iso(),
+        finished_at=now_iso(),
         error=f"timed out after {timeout}s",
         execution_class=request.execution_class,
         correlation_id=request.correlation_id,

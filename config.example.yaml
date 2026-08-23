@@ -634,6 +634,27 @@ tools:
     group: web
     use: deerflow.community.jina_ai.tools:web_fetch_tool
     timeout: 10
+
+  # Crawl4AI, as batch page retrieval. Declared here — not only in a private
+  # config.yaml — because config.yaml is gitignored, so CI copies THIS file over
+  # it before running the suite. Anything the example omits is a provider path
+  # that no gate ever resolves: these two were live in production and unchecked.
+  # NOT link-following: Crawl4AI's REST API refuses `deep_crawl_strategy` from an
+  # untrusted caller, so the tool is named for what it actually does.
+  - name: web_fetch_many
+    group: web
+    use: deerflow.community.crawl4ai.tools:web_fetch_many_tool
+    base_url: http://crawl4ai:11235
+    timeout_s: 90
+
+  # BFS from a start URL, one depth at a time. max_pages, max_depth,
+  # same_domain, the wall-clock deadline and the robots.txt check all live in
+  # crawl_tool.py rather than in a service that refuses to honour them.
+  - name: web_crawl
+    group: web
+    use: deerflow.community.crawl4ai.crawl_tool:web_crawl_tool
+    base_url: http://crawl4ai:11235
+    timeout_s: 60
     # Optional proxy for restricted networks / Docker / WSL.
     # Use host.docker.internal instead of 127.0.0.1 when the proxy runs on the host.
     # proxy: $HTTPS_PROXY

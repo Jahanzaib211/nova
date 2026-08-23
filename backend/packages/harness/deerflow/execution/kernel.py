@@ -67,12 +67,9 @@ from deerflow.execution.policy import PolicyEngine
 from deerflow.execution.resources import ResourceManager
 from deerflow.execution.scheduler import Admission, Scheduler
 from deerflow.execution.supervisor import ProcessHeartbeat, SpawnedProcess, Supervisor
+from deerflow.execution.models import now_iso
 
 logger = logging.getLogger(__name__)
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 class ExecutionKernel:
@@ -122,13 +119,13 @@ class ExecutionKernel:
                     error=admission.reason,
                     execution_class=request.execution_class,
                     correlation_id=request.correlation_id,
-                    started_at=_now_iso(),
-                    finished_at=_now_iso(),
+                    started_at=now_iso(),
+                    finished_at=now_iso(),
                 ),
             )
 
         started_monotonic = time.monotonic()
-        started_at = _now_iso()
+        started_at = now_iso()
         status = ExecutionStatus.FAILED
         exit_code: int | None = None
         stdout = ""
@@ -233,7 +230,7 @@ class ExecutionKernel:
                 stderr=_truncate(stderr, max_bytes),
                 duration_ms=duration_ms,
                 started_at=started_at,
-                finished_at=_now_iso(),
+                finished_at=now_iso(),
                 error=error,
                 execution_class=request.execution_class,
                 correlation_id=request.correlation_id,
@@ -343,7 +340,7 @@ class ExecutionKernel:
             exit_code=exit_code,
             duration_ms=duration_ms,
             started_at=request.created_at,
-            finished_at=_now_iso(),
+            finished_at=now_iso(),
             error=None if exit_code == 0 else f"exit code {exit_code}",
             execution_class=request.execution_class,
             correlation_id=request.correlation_id,

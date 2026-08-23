@@ -20,12 +20,25 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "config.yaml"
+EXAMPLE_PATH = REPO_ROOT / "config.example.yaml"
+
+# Both files, deliberately. CI does `cp config.example.yaml config.yaml` before
+# running the suite (.github/workflows/backend-unit-tests.yml), so a gate that
+# reads only config.yaml validates the example in CI and the real file locally.
+# The two diverge: the live config declares 19 `use:` targets, the example 16 --
+# and the three it omits include the crawl4ai providers, which are exactly the
+# dynamically-resolved kind this exists to catch. Reading both means the union
+# is checked wherever it runs.
+_CONFIG_PATHS = [CONFIG_PATH, EXAMPLE_PATH]
 
 
 def _use_paths() -> list[str]:
-    if not CONFIG_PATH.exists():
-        return []
-    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    raw: dict = {}
+    for path in _CONFIG_PATHS:
+        if not path.exists():
+            continue
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        raw[path.name] = loaded
 
     found: list[str] = []
 
@@ -44,10 +57,13 @@ def _use_paths() -> list[str]:
     return sorted(set(found))
 
 
-@pytest.mark.skipif(not CONFIG_PATH.exists(), reason="no config.yaml in this checkout")
+@pytest.mark.skipif(
+    not (CONFIG_PATH.exists() or EXAMPLE_PATH.exists()),
+    reason="no config.yaml or config.example.yaml in this checkout",
+)
 def test_config_declares_use_paths() -> None:
     # Guards the guard: an empty list would make the test below pass vacuously.
-    assert _use_paths(), "config.yaml declares no `use:` targets — parser broken?"
+    assert _use_paths(), "no `use:` targets found in either config — parser broken?"
 
 
 @pytest.mark.parametrize("dotted", _use_paths())

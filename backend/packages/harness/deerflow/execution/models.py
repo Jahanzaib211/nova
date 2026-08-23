@@ -25,8 +25,11 @@ from enum import Enum
 from typing import Any
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+# Re-exported so the four sibling modules keep a short import. The canonical
+# definition is deerflow.utils.time.now_iso, whose docstring states that all
+# timestamp generation should funnel through it -- execution/ had five
+# byte-identical private copies instead, none of which funnelled anywhere.
+from deerflow.utils.time import now_iso  # noqa: F401
 
 
 def _new_execution_id() -> str:
@@ -171,7 +174,7 @@ class ExecutionRequest:
     session_id: str = ""  # Phase C8: associated shell session
     intent: str = ""  # human-readable purpose, recorded in the audit trail
     labels: dict[str, str] = field(default_factory=dict)
-    created_at: str = field(default_factory=_now_iso)
+    created_at: str = field(default_factory=now_iso)
 
     def __post_init__(self) -> None:
         if isinstance(self.argv, list):  # tolerate list input, store tuple
