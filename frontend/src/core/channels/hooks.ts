@@ -104,6 +104,7 @@ export function useConfigureChannelProvider() {
   });
 }
 
+/** Unwired: the channels UI has no disconnect control yet. Route is live. */
 export function useDisconnectChannelConnection() {
   const queryClient = useQueryClient();
   return useMutation({

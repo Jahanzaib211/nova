@@ -133,8 +133,14 @@ class InteractiveShellAdapter:
             stderr=slave_fd,
             cwd=cwd or os.getcwd(),
             env=env,
+            # start_new_session already performs setsid() in the child. Passing
+            # preexec_fn=os.setsid as well called it a second time, which fails
+            # with EPERM because the process is a session leader by then, so
+            # Popen raised "Exception occurred in preexec_fn" and every session
+            # creation died. That is the "known Phase C8 issue" the tests below
+            # were skipped for. The rest of the codebase already uses the kwarg
+            # alone (kernel.py, protocols.py).
             start_new_session=True,
-            preexec_fn=os.setsid,
         )
 
         # Close slave in parent — child has it duped

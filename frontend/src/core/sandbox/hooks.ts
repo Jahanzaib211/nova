@@ -170,6 +170,10 @@ export type AuditEvent = {
   output?: string;
 };
 
+/**
+ * Unwired: there is no Audit tab component. /api/sandbox/audit is live and
+ * this polls it every 4s, but nothing renders the result.
+ */
 export function useSandboxAudit(
   threadId: string | null,
   enabled = true,
@@ -257,6 +261,8 @@ export type SandboxTerminalUrls = {
   reason?: string;
 };
 
+const EMPTY_TERMINAL_URLS: SandboxTerminalUrls = { terminal: null, vnc: null };
+
 export function useSandboxTerminalUrl(
   threadId: string | null,
   enabled: boolean,
@@ -268,6 +274,11 @@ export function useSandboxTerminalUrl(
         `${getBackendBaseURL()}/api/sandbox/terminal-url?thread_id=${encodeURIComponent(threadId!)}`,
         { method: "GET", headers: { "Content-Type": "application/json" } },
       );
+      // Without this an error body becomes `{detail: ...}`, `raw.terminal` is
+      // undefined, abs() returns undefined, and the object is still truthy --
+      // so `data ?? {terminal: null, vnc: null}` below never fires and the
+      // terminal and VNC panes spin on a loader forever with no error shown.
+      if (!res.ok) return EMPTY_TERMINAL_URLS;
       const raw = (await res.json()) as SandboxTerminalUrls;
       // Prefix root-relative paths so split-origin deployments (where
       // NEXT_PUBLIC_BACKEND_BASE_URL is set) still reach the gateway.
@@ -280,7 +291,7 @@ export function useSandboxTerminalUrl(
     staleTime: STALE.SANDBOX_URLS_MS,
     refetchOnWindowFocus: false,
   });
-  return data ?? { terminal: null, vnc: null };
+  return data ?? EMPTY_TERMINAL_URLS;
 }
 
 // ── useBrowserCheck ────────────────────────────────────────
@@ -654,12 +665,12 @@ export type SandboxTodoResult = {
   todos: SandboxTodo[];
 };
 
-const EMPTY_TODO_RESULT: SandboxTodoResult = { content: "", todos: [] };
+export const EMPTY_TODO_RESULT: SandboxTodoResult = { content: "", todos: [] };
 
 // The endpoint is typed, not validated. Trust the shape only after checking
 // it, and hand back one shared empty value so callers' dependency arrays stay
 // referentially stable across polls.
-function normalizeTodoResult(body: unknown): SandboxTodoResult {
+export function normalizeTodoResult(body: unknown): SandboxTodoResult {
   const raw = body as Partial<SandboxTodoResult> | null;
   if (!Array.isArray(raw?.todos)) return EMPTY_TODO_RESULT;
   return {

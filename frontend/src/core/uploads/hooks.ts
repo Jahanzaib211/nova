@@ -35,6 +35,7 @@ export function useUploadFiles(threadId: string) {
 /**
  * Hook to list uploaded files
  */
+/** Unwired: no attachment list UI. GET /api/uploads is live. */
 export function useUploadedFiles(threadId: string) {
   return useQuery({
     queryKey: ["uploads", "list", threadId],
@@ -78,6 +79,7 @@ export function summarizeUploadLimits(
 /**
  * Hook to delete an uploaded file
  */
+/** Unwired: no attachment list UI, so nothing offers deletion. Route is live. */
 export function useDeleteUploadedFile(threadId: string) {
   const queryClient = useQueryClient();
 
@@ -95,6 +97,12 @@ export function useDeleteUploadedFile(threadId: string) {
 /**
  * Hook to handle file uploads in submit flow
  * Returns a function that uploads files and returns their info
+ */
+/**
+ * Unwired: this is the attach-a-file-to-your-message path, complete and
+ * never called -- the composer has no attachment control. Kept because the
+ * API layer and types below it exist only to serve this; deleting it would
+ * strand them rather than remove dead weight.
  */
 export function useUploadFilesOnSubmit(threadId: string) {
   const uploadMutation = useUploadFiles(threadId);

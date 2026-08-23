@@ -37,6 +37,7 @@ export function useAgent(name: string | null | undefined) {
   return { agent: data ?? null, isLoading, error };
 }
 
+/** Unwired: no create-agent UI exists yet. POST /api/agents is live. */
 export function useCreateAgent() {
   const queryClient = useQueryClient();
   return useMutation({

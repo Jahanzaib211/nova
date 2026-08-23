@@ -42,11 +42,6 @@ import {
   recordStateMerge,
   shouldArmWatchdog,
 } from "./stream-trace";
-import {
-  buildThreadsSearchQueryOptions,
-  DEFAULT_THREAD_SEARCH_PARAMS,
-  type ThreadSearchParams,
-} from "./thread-search-query";
 import { threadTokenUsageQueryKey } from "./token-usage";
 import type {
   AgentThread,
@@ -2213,15 +2208,6 @@ export function useThreadHistory(
   };
 }
 
-export function useThreads(
-  params: ThreadSearchParams = DEFAULT_THREAD_SEARCH_PARAMS,
-) {
-  const apiClient = getAPIClient();
-  return useQuery<AgentThread[]>({
-    ...buildThreadsSearchQueryOptions(apiClient, params),
-  });
-}
-
 export const INFINITE_THREADS_PAGE_SIZE = 50;
 
 export const INFINITE_THREADS_QUERY_KEY_PREFIX = [
@@ -2519,18 +2505,6 @@ export function useThreadTokenUsage(
     },
     enabled: enabled && Boolean(threadId),
     retry: false,
-    refetchOnWindowFocus: false,
-  });
-}
-
-export function useRunDetail(threadId: string, runId: string) {
-  const apiClient = getAPIClient();
-  return useQuery<Run>({
-    queryKey: ["thread", threadId, "run", runId],
-    queryFn: async () => {
-      const response = await apiClient.runs.get(threadId, runId);
-      return response;
-    },
     refetchOnWindowFocus: false,
   });
 }

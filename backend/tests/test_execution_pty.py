@@ -162,25 +162,29 @@ class TestSessionRegistry:
 
 @pytest.mark.skipif(os.name != "posix", reason="PTY requires POSIX")
 class TestInteractiveShellAdapter:
-    @pytest.mark.skip(reason="interactive_shell preexec_fn conflict with start_new_session — known Phase C8 issue")
     def test_create_and_close_session(self):
         adapter = InteractiveShellAdapter()
         session_id = adapter.create_session(run_id="r1", execution_id="e1")
         assert session_id is not None
         adapter.close_session(session_id)
 
-    @pytest.mark.skip(reason="interactive_shell preexec_fn conflict with start_new_session — known Phase C8 issue")
     def test_write_and_read(self):
         adapter = InteractiveShellAdapter()
         session_id = adapter.create_session(run_id="r1", execution_id="e1")
         try:
             adapter.write(session_id, "echo hello_phase_c8\n")
-            output = adapter.read(session_id, timeout=3.0)
-            assert "hello_phase_c8" in output or output == ""
+            # read() returns a ReadResult, not a str. The assertion below was
+            # written against an older signature and never corrected, because
+            # the whole class was skipped -- the stale test was invisible.
+            result = adapter.read(session_id, timeout=3.0)
+            assert isinstance(result.data, str)
+            assert result.bytes_read >= 0
+            # A PTY echoes asynchronously; an empty first read is legitimate,
+            # so assert the shape and, when data did arrive, that it is ours.
+            assert result.data == "" or "hello_phase_c8" in result.data
         finally:
             adapter.close_session(session_id)
 
-    @pytest.mark.skip(reason="interactive_shell preexec_fn conflict with start_new_session — known Phase C8 issue")
     def test_resize(self):
         adapter = InteractiveShellAdapter()
         session_id = adapter.create_session(run_id="r1", execution_id="e1")
