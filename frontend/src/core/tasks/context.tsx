@@ -1,6 +1,7 @@
 import {
   createContext,
   type Dispatch,
+  type MutableRefObject,
   type SetStateAction,
   useCallback,
   useContext,
@@ -90,6 +91,17 @@ function logSubtaskTransition(entry: {
 
 export interface SubtaskContextValue {
   tasks: Record<string, Subtask>;
+  /**
+   * Per-task authority of the stored status, shared by every writer.
+   *
+   * This lives on the context, not inside useUpdateSubtask, because the hook
+   * has more than one caller: the stream in useThreadStream and the derived
+   * pass in MessageList. A ref per hook instance meant each writer kept its own
+   * idea of who last wrote, so MessageList never saw that the stream had
+   * recorded a "result" status and happily overwrote it with a guess -- the
+   * FSM's authority rule was silently only half in force.
+   */
+  sourcesRef: MutableRefObject<Record<string, SubtaskUpdateSource>>;
   // A full Dispatch, not a value-only setter: writers must be able to use the
   // functional form so an update always applies to current state rather than
   // to whatever `tasks` their render captured.
@@ -107,8 +119,9 @@ export const SubtaskContext = createContext<SubtaskContextValue | undefined>(
 
 export function SubtasksProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Record<string, Subtask>>({});
+  const sourcesRef = useRef<Record<string, SubtaskUpdateSource>>({});
   return (
-    <SubtaskContext.Provider value={{ tasks, setTasks }}>
+    <SubtaskContext.Provider value={{ tasks, setTasks, sourcesRef }}>
       {children}
     </SubtaskContext.Provider>
   );
@@ -130,11 +143,7 @@ export function useSubtask(id: string) {
 }
 
 export function useUpdateSubtask() {
-  const { setTasks } = useSubtaskContext();
-  // Per-task authority of the stored status. Kept outside the Subtask shape
-  // so the FSM's source rules don't leak into render props. A ref, so it is
-  // never stale regardless of which render captured the callback.
-  const sourcesRef = useRef<Record<string, SubtaskUpdateSource>>({});
+  const { setTasks, sourcesRef } = useSubtaskContext();
 
   const updateSubtask = useCallback(
     (
@@ -211,7 +220,7 @@ export function useUpdateSubtask() {
         return unchanged ? current : { ...current, [task.id]: next };
       });
     },
-    [setTasks],
+    [setTasks, sourcesRef],
   );
 
   return updateSubtask;
