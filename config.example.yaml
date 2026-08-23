@@ -1036,6 +1036,11 @@ sandbox:
 # Subagents are background workers delegated tasks by the lead agent
 
 # subagents:
+#   # How many task tool calls may run in parallel (2-4, default 3). Until this
+#   # existed the limit could only be changed by editing MAX_CONCURRENT_SUBAGENTS
+#   # in source, and the Agent's Computer bar reported that constant while a run
+#   # used a separate value -- so the two could disagree.
+#   max_concurrent: 3
 #   # Default timeout (seconds) for built-in subagents (default: 1800 = 30 min).
 #   # Custom agents use their own timeout_seconds (default 900) unless overridden.
 #   timeout_seconds: 1800

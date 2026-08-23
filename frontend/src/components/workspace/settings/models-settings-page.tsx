@@ -58,6 +58,16 @@ const OPENAI_COMPATIBLE = "langchain_openai:ChatOpenAI";
 const ANTHROPIC = "langchain_anthropic:ChatAnthropic";
 const CUSTOM = "__custom__";
 
+// llama.cpp's own default is :8080, and this preset has long used :8081.
+// Neither is free on the Nova host: mailcow's nginx holds 127.0.0.1:8080 and
+// hsproxy holds 127.0.0.1:8081 (the same collision that made the sandbox base
+// port move to 8180). A user who clicks this preset without changing the port
+// therefore reaches hsproxy and gets `{"error":"Unrecognized request URL"}`,
+// which looks like a Nova bug rather than a wrong address.
+//
+// Left at the convention rather than invented: llama-server is not running
+// here at all, so any port would be a guess. The placeholder below matches, and
+// the point of a preset is that it is edited.
 const LLAMA_CPP_PRESET: FormState = {
   name: "",
   display_name: "",

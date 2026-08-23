@@ -81,6 +81,24 @@ class SubagentsAppConfig(BaseModel):
         ge=1,
         description="Optional default max-turn override for all subagents (None = keep builtin defaults)",
     )
+    max_concurrent: int = Field(
+        # Literal, not an import of MAX_CONCURRENT_SUBAGENTS. deerflow.config
+        # importing deerflow.subagents.config re-enters the executor's own
+        # import of deerflow.config and breaks the module graph -- the exact
+        # cycle that file's header warns about and test_import_hygiene.py
+        # guards. Keep the two in step by hand; they are both 3.
+        default=3,
+        ge=2,
+        le=4,
+        description=(
+            "How many task tool calls may run in parallel. Previously reachable "
+            "only by editing MAX_CONCURRENT_SUBAGENTS in source: the value the "
+            "Agent's Computer bar reports came from that constant while the "
+            "value a run actually used came from the runtime configurable, so "
+            "the two could disagree. Bounds match SubagentLimitMiddleware's "
+            "clamp, which is the component that enforces this."
+        ),
+    )
     agents: dict[str, SubagentOverrideConfig] = Field(
         default_factory=dict,
         description="Per-agent configuration overrides keyed by agent name",

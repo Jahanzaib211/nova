@@ -241,7 +241,7 @@ def _safe_circuits(config: AppConfig) -> list[CircuitEntry]:
         return []
 
 
-def _safe_server_info() -> dict[str, Any]:
+def _safe_server_info(config: AppConfig) -> dict[str, Any]:
     """Lightweight server-side metadata for the UI footer."""
     info: dict[str, Any] = {
         "process": "deer-flow-gateway",
@@ -253,7 +253,16 @@ def _safe_server_info() -> dict[str, Any]:
 
         # The subagents pill shows "N types"; the tooltip needs the run
         # concurrency too, or users read "2" as the number of running tasks.
-        info["max_concurrent_subagents"] = MAX_CONCURRENT_SUBAGENTS
+        #
+        # Report the CONFIGURED value. This used to report the source constant
+        # unconditionally, while a run actually used config.subagents
+        # .max_concurrent -- so the bar could confidently state a number the
+        # runtime was not using.
+        info["max_concurrent_subagents"] = getattr(
+            getattr(config, "subagents", None),
+            "max_concurrent",
+            MAX_CONCURRENT_SUBAGENTS,
+        )
     except Exception:  # pragma: no cover - constant import cannot realistically fail
         pass
     return info
@@ -327,5 +336,5 @@ async def get_runtime_capabilities(
         subagents=_safe_subagents(config),
         circuits=_safe_circuits(config),
         igino=await _safe_igino(),
-        server=_safe_server_info(),
+        server=_safe_server_info(config),
     )

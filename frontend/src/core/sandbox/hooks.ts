@@ -6,6 +6,36 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
+/**
+ * Poll and freshness intervals, named rather than scattered as literals.
+ *
+ * These were nine bare numbers spread through the file, written inconsistently
+ * (`30_000` in one place, `30000` elsewhere in the codebase), so the cost of
+ * the Agent's Computer panel — several polls per thread, running the whole time
+ * it is open — was not visible anywhere. Grouping them makes that legible and
+ * gives one place to tune it. The values are unchanged.
+ */
+const POLL = {
+  /** Live output; the panel feels laggy above this. */
+  FAST_MS: 2_000,
+  /** Dev-server list — changes only when the agent starts or stops one. */
+  DEV_SERVERS_MS: 3_000,
+  /** Audit trail; append-only, so staleness is cheap. */
+  AUDIT_MS: 4_000,
+  /** Browser-check result, written once per verification run. */
+  BROWSER_CHECK_MS: 5_000,
+  /** File listing — the most expensive of these, and the least urgent. */
+  FILES_MS: 10_000,
+} as const;
+
+const STALE = {
+  /** Review payload; regenerating is explicit, so this can sit. */
+  REVIEW_MS: 30_000,
+  /** Terminal/VNC URLs are stable for the life of the sandbox. */
+  SANDBOX_URLS_MS: 60_000,
+} as const;
+
+
 // ── Event types ────────────────────────────────────────────
 
 export type SandboxEventType =
@@ -156,7 +186,7 @@ export function useSandboxAudit(
       return res.json() as Promise<{ events: AuditEvent[] }>;
     },
     enabled: Boolean(threadId) && enabled,
-    refetchInterval: 4000,
+    refetchInterval: POLL.AUDIT_MS,
     refetchIntervalInBackground: false,
   });
   return data?.events ?? [];
@@ -200,7 +230,7 @@ export function useSandboxReview(threadId: string | null, enabled = true) {
       return res.json() as Promise<SandboxReview>;
     },
     enabled: Boolean(threadId) && enabled,
-    staleTime: 30_000,
+    staleTime: STALE.REVIEW_MS,
     refetchOnWindowFocus: false,
   });
   return query;
@@ -247,7 +277,7 @@ export function useSandboxTerminalUrl(
       return { ...raw, terminal: abs(raw.terminal), vnc: abs(raw.vnc) };
     },
     enabled: Boolean(threadId) && enabled,
-    staleTime: 60_000,
+    staleTime: STALE.SANDBOX_URLS_MS,
     refetchOnWindowFocus: false,
   });
   return data ?? { terminal: null, vnc: null };
@@ -288,7 +318,7 @@ export function useLastBrowserCheck(threadId: string | null, enabled: boolean) {
       return res.json() as Promise<BrowserCheckResult>;
     },
     enabled: Boolean(threadId) && enabled,
-    refetchInterval: 5000,
+    refetchInterval: POLL.BROWSER_CHECK_MS,
     refetchIntervalInBackground: false,
   });
   return data ?? null;
@@ -414,7 +444,7 @@ export function useDevServerStatus(
       };
     },
     enabled: Boolean(threadId),
-    refetchInterval: 2000,
+    refetchInterval: POLL.FAST_MS,
     refetchIntervalInBackground: false,
   });
   return (
@@ -475,7 +505,7 @@ export function useDevServers(threadId: string | null): DevServerEntry[] {
       return res.json() as Promise<{ servers: DevServerEntry[] }>;
     },
     enabled: Boolean(threadId),
-    refetchInterval: 3000,
+    refetchInterval: POLL.DEV_SERVERS_MS,
     refetchIntervalInBackground: false,
   });
   return data?.servers ?? [];
@@ -494,7 +524,7 @@ export function useSandboxFiles(threadId: string | null): SandboxFile[] {
       return res.json() as Promise<{ files: SandboxFile[] }>;
     },
     enabled: Boolean(threadId),
-    refetchInterval: 10_000,
+    refetchInterval: POLL.FILES_MS,
     refetchIntervalInBackground: false,
   });
 
@@ -598,7 +628,7 @@ export function useSandboxFile(
     // this the panel re-downloaded the whole deliverable 30x/minute forever,
     // including while the live dev-server preview made the result unused.
     enabled: Boolean(threadId) && Boolean(path) && enabled,
-    refetchInterval: 2000,
+    refetchInterval: POLL.FAST_MS,
     refetchIntervalInBackground: false,
     // Keep the previous file's data while a new path loads. Changing `path`
     // changes the query key, so without this `data` is briefly undefined and
@@ -656,7 +686,7 @@ export function useSandboxTodo(threadId: string | null): SandboxTodoResult {
       return normalizeTodoResult(await res.json());
     },
     enabled: Boolean(threadId),
-    refetchInterval: 2000,
+    refetchInterval: POLL.FAST_MS,
     refetchIntervalInBackground: false,
   });
 
