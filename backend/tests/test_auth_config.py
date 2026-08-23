@@ -23,13 +23,29 @@ def test_auth_config_token_expiry_range():
 
 
 def test_auth_config_from_env():
-    env = {"AUTH_JWT_SECRET": "test-jwt-secret-from-env"}
+    # >= 32 bytes: get_auth_config now rejects a short AUTH_JWT_SECRET, since
+    # PyJWT only warns about one. The length is incidental to what this test
+    # asserts -- that an explicitly-set secret is the one that gets used.
+    secret = "test-jwt-secret-from-env-padded-to-32+"
+    env = {"AUTH_JWT_SECRET": secret}
     with patch.dict(os.environ, env, clear=False):
         old = cfg._auth_config
         cfg._auth_config = None
         try:
             config = cfg.get_auth_config()
-            assert config.jwt_secret == "test-jwt-secret-from-env"
+            assert config.jwt_secret == secret
+        finally:
+            cfg._auth_config = old
+
+
+def test_auth_config_rejects_short_env_secret():
+    """A hand-set secret below the RFC 7518 minimum must fail loudly."""
+    with patch.dict(os.environ, {"AUTH_JWT_SECRET": "too-short"}, clear=False):
+        old = cfg._auth_config
+        cfg._auth_config = None
+        try:
+            with pytest.raises(RuntimeError, match="AUTH_JWT_SECRET"):
+                cfg.get_auth_config()
         finally:
             cfg._auth_config = old
 

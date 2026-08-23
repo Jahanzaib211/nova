@@ -64,13 +64,18 @@ export function Terminal({
   const shellOpen = mode === "shell";
   const { terminal: terminalUrl } = useSandboxTerminalUrl(threadId, shellOpen);
 
+  // Extracted so the dependency is a plain value the linter can check. Inline,
+  // `terminalEvents.at(-1)?.output` is a complex expression that exhaustive-deps
+  // cannot verify, which is how a dependency silently goes stale.
+  const lastTerminalOutput = terminalEvents.at(-1)?.output;
+
   useEffect(() => {
     // Gated on `active`: every tab stays mounted and is only hidden via CSS
     // (see frontend/CLAUDE.md), so an ungated scroll drags a hidden subtree on
     // every event and jolts the surrounding panel.
     if (!active) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [active, terminalEvents.length, terminalEvents.at(-1)?.output]);
+  }, [active, terminalEvents.length, lastTerminalOutput]);
 
   const ModeToggle = (
     <div className="border-border/30 flex shrink-0 items-center gap-1 border-b bg-black/40 px-2 py-1">

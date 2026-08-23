@@ -37,22 +37,37 @@ HEX32 = re.compile(r"^[0-9a-f]{32}$")
 
 @pytest.fixture
 def _harness():
-    """Lazy import the runtime_lifecycle harness — it's the canonical
-    real-app TestClient setup, including a fake scripted agent.
+    """Always None today. This test has never run — see below.
+
+    It was written to reuse the runtime_lifecycle harness, but two things stop
+    it, and the bare ``except ImportError: return None`` hid both behind a skip
+    that reads like an optional dependency:
+
+    1. ``tests.support.test_runtime_lifecycle_harness`` does not exist. The real
+       ``isolated_app`` lives in ``tests/test_runtime_lifecycle_e2e.py`` (line
+       254) and is a **pytest fixture**, so importing it would not work anyway —
+       fixtures in a test module are local to that module.
+    2. This file's other imports use ``from tests.X import ...``. ``tests/`` is
+       not a package and pytest is configured with no ``pythonpath``, so that
+       form does not resolve here either. No other test in the suite uses it.
+
+    Making this run means sharing ``isolated_app`` (and its
+    ``isolated_deer_flow_home`` dependency) properly — both are currently
+    duplicated in two e2e modules — and fixing the helper imports. That is a
+    real piece of work, not a typo, and it is deliberately not bundled into an
+    unrelated change. Recorded here so the skip stops looking intentional.
     """
-    try:
-        from tests.support.test_runtime_lifecycle_harness import (  # type: ignore[import-not-found]
-            isolated_app,
-        )
-    except ImportError:
-        return None
-    return isolated_app
+    return None
 
 
 @pytest.mark.anyio
 async def test_create_run_assigns_correlation_id(_harness):
     if _harness is None:
-        pytest.skip("runtime_lifecycle_harness unavailable")
+        pytest.skip(
+            "DEAD TEST: the harness import names a module that does not exist "
+            "and this file's `from tests.X` imports do not resolve — see the "
+            "_harness fixture docstring. Has never run."
+        )
     isolated_app = _harness
     from tests._agent_e2e_helpers import (
         FakeToolCallingModel,  # type: ignore[import-not-found]

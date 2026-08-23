@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 import time
 
 import pytest
@@ -215,7 +216,12 @@ class TestTwoPhaseCancellation:
     async def test_cancel_returns_immediately_then_kills(self):
         kernel = ExecutionKernel()
         req = ExecutionRequest(
-            argv=("python", "-c", "import time; time.sleep(30)"),
+            # sys.executable, not "python": Debian and Ubuntu ship no bare
+            # `python` unless python-is-python3 is installed, so this was the
+            # only spawn in the file that could not run on a stock host --
+            # every other one uses `sleep`. CI passed because setup-python
+            # provides the alias, which is exactly what kept it hidden.
+            argv=(sys.executable, "-c", "import time; time.sleep(30)"),
             execution_class=ExecutionClass.PYTHON,
             limits=ResourceLimits(timeout=60.0),
         )

@@ -1,7 +1,5 @@
 "use client";
 
-import { BrainIcon, ShieldCheckIcon, UsersIcon } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRuntimeConfig } from "@/core/api/runtime-config";

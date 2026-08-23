@@ -599,7 +599,12 @@ export function InputBox({
     isMock,
     status,
     threadId,
-    suggestionsConfig?.enabled,
+    // The whole object, not just `.enabled`: the effect also branches on
+    // `suggestionsConfig === undefined` (the still-loading case), which
+    // `?.enabled` cannot distinguish from `{enabled: false}`. Safe to depend on
+    // directly -- it comes from react-query, whose data reference is stable
+    // between refetches, so this does not re-run every render.
+    suggestionsConfig,
   ]);
 
   return (

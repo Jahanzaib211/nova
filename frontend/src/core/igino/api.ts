@@ -2,7 +2,6 @@ import { fetch } from "@/core/api/fetcher";
 
 import type {
   IGINOStatus,
-  IGINOToggleResponse,
   IGINOResearchResult,
   IGINOCacheStats,
 } from "./types";

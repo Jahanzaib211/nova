@@ -9,7 +9,7 @@
  * never exercises real navigation/data-fetching in a browser).
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { mockLangGraphAPI, mockWorkspaceAPI } from "./utils/mock-api";
 
@@ -19,7 +19,7 @@ test.describe("Workspace-aware panel tabs", () => {
     mockWorkspaceAPI(page);
   });
 
-  async function openPanel(page: import("@playwright/test").Page) {
+  async function openPanel(page: Page) {
     await page.goto("/workspace/chats/new");
     const trigger = page.getByRole("button", { name: /agent's computer/i });
     if ((await trigger.count()) === 0) {

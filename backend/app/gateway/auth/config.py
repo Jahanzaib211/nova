@@ -29,6 +29,9 @@ class AuthConfig(BaseModel):
     oauth_github_client_secret: str | None = Field(default=None)
 
 
+# RFC 7518 §3.2: an HMAC key for HS256 must be at least as long as the hash.
+_MIN_SECRET_BYTES = 32
+
 _auth_config: AuthConfig | None = None
 
 
@@ -66,6 +69,18 @@ def get_auth_config() -> AuthConfig:
 
         load_dotenv()
         jwt_secret = os.environ.get("AUTH_JWT_SECRET")
+        if jwt_secret and len(jwt_secret.encode()) < _MIN_SECRET_BYTES:
+            # An explicitly-set secret was never length-checked. PyJWT only
+            # warns (InsecureKeyLengthWarning), so a short secret produced
+            # weakly-signed sessions with nothing in the logs that an operator
+            # would notice. The auto-generated path already uses
+            # token_urlsafe(32); this holds a hand-set one to the same bar.
+            raise RuntimeError(
+                f"AUTH_JWT_SECRET is {len(jwt_secret.encode())} bytes; "
+                f"RFC 7518 §3.2 requires at least {_MIN_SECRET_BYTES} for "
+                'HS256. Generate one with: python -c "import secrets; '
+                'print(secrets.token_urlsafe(32))"'
+            )
         if not jwt_secret:
             jwt_secret = _load_or_create_secret()
             os.environ["AUTH_JWT_SECRET"] = jwt_secret
