@@ -116,7 +116,12 @@ export function getLocalSettings(): LocalSettings {
       const settings = JSON.parse(json) as Partial<LocalSettings>;
       return mergeLocalSettings(settings);
     }
-  } catch {}
+  } catch (err) {
+    // Falling back to defaults is right, but doing it silently means a user
+    // whose stored blob got corrupted watches every preference reset with no
+    // explanation and no way to know it happened.
+    console.warn("[nova] local settings were unreadable; using defaults", err);
+  }
   return DEFAULT_LOCAL_SETTINGS;
 }
 

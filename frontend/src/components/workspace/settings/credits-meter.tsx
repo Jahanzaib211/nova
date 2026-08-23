@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
@@ -71,12 +72,15 @@ export function CreditsMeter() {
         headers: { "Content-Type": "application/json", ...getCsrfHeaders() },
         body: JSON.stringify({ reason: reason.trim() || null }),
       });
-      if (res.ok) {
-        setStatus("pending");
-        setShowForm(false);
-        setReason("");
+      if (!res.ok) {
+        toast.error(t.settings.account.billingActionFailed);
+        return;
       }
+      setStatus("pending");
+      setShowForm(false);
+      setReason("");
     } catch {
+      toast.error(t.settings.account.billingActionFailed);
       // Request failed — user can retry
     } finally {
       setSending(false);

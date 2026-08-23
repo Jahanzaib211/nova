@@ -322,6 +322,9 @@ services:
       - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
       - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
       - DEER_FLOW_SANDBOX_HOST=host.docker.internal
+      # capabilities.py falls back to "dev" when this is unset, so the public
+      # deployment was reporting itself as a dev build in /api/runtime/capabilities.
+      - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-dev}
       # Publish sandbox ports on the Docker bridge, not on every interface.
       # _resolve_docker_bind_host falls through to 0.0.0.0 whenever
       # DEER_FLOW_SANDBOX_HOST is non-loopback, which made the sandbox the only
@@ -444,6 +447,11 @@ services:
     # Digest-pinned; see the crawl4ai service below for the reasoning.
     image: ghcr.io/browserless/chromium@sha256:c0886239e4eaa102e214acbbde5345f5b2a55a7ccbb52456048afd374defbabb
     container_name: deer-flow-browserless
+    # Every other service in this file sets this. Without it these two stay
+    # down after a host reboot or a dockerd restart while the rest come back,
+    # so web_fetch / web_fetch_many / web_crawl silently fall through to their
+    # DDG fallback and nothing looks broken.
+    restart: unless-stopped
     ports:
       - "127.0.0.1:3032:3000"
     environment:
@@ -485,6 +493,11 @@ services:
     # reproducibility hole Dockerfile.base closed for the sandbox.
     image: unclecode/crawl4ai@sha256:bd36741e7bdd35ddc1a05d9183e1d6d8cefb61dd640d944a25d026b76e917690
     container_name: deer-flow-crawl4ai
+    # Every other service in this file sets this. Without it these two stay
+    # down after a host reboot or a dockerd restart while the rest come back,
+    # so web_fetch / web_fetch_many / web_crawl silently fall through to their
+    # DDG fallback and nothing looks broken.
+    restart: unless-stopped
     ports:
       - "127.0.0.1:11235:11235"
     volumes:

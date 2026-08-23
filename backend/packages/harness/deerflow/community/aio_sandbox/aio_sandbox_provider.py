@@ -192,8 +192,16 @@ class AioSandboxProvider(SandboxProvider):
             self._register_signal_handlers()
             self._reconcile_orphans()
 
-        # Start idle checker if enabled
-        if self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0:
+        # The loop this starts enforces BOTH idle_timeout and max_lifetime --
+        # _enforce_max_lifetime() is only ever called from _idle_checker_loop.
+        # Gating solely on idle_timeout therefore meant that setting
+        # `idle_timeout: 0` (documented as "disable the idle check") also
+        # silently disabled the hard lifetime ceiling, with no warning, even
+        # though the two are documented as independent knobs.
+        if (
+            self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0
+            or self._config.get("max_lifetime") is not None
+        ):
             self._start_idle_checker()
 
     @property
@@ -423,7 +431,13 @@ class AioSandboxProvider(SandboxProvider):
         idle_timeout = self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT)
         while not self._idle_checker_stop.wait(timeout=IDLE_CHECK_INTERVAL):
             try:
-                self._cleanup_idle_sandboxes(idle_timeout)
+                # Only when idle eviction is actually configured. The loop may
+                # now be running purely to enforce max_lifetime, and
+                # _cleanup_idle_sandboxes tests `idle_duration > idle_timeout`
+                # -- so calling it with 0 would destroy every sandbox on the
+                # first tick, which is the opposite of "idle check disabled".
+                if idle_timeout > 0:
+                    self._cleanup_idle_sandboxes(idle_timeout)
                 self._enforce_max_lifetime()
             except Exception as e:
                 logger.error(f"Error in idle checker loop: {e}")

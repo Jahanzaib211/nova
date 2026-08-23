@@ -732,6 +732,7 @@ export const enUS: Translations = {
       billingCurrentPlan: "Current plan",
       billingUpgrade: "Upgrade to Nova Plus",
       billingManage: "Manage subscription",
+      billingActionFailed: "That didn't go through. Please try again.",
       changeEmailTitle: "Change Email",
       changeEmailDescription: "Update the email address on your account.",
       newEmail: "New email",

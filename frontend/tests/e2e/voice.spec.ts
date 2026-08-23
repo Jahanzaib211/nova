@@ -124,6 +124,14 @@ async function openChat(page: Page): Promise<boolean> {
 test.use({
   permissions: ["microphone"],
   launchOptions: {
+    // Preserve a locally-overridden browser. `test.use` REPLACES the project's
+    // launchOptions rather than merging, so without this every spec in this
+    // file ignores PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH and tries to launch the
+    // default headless shell -- which fails outright on any machine where
+    // `npx playwright install` cannot run (Ubuntu 26.04, for one).
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {}),
     args: [
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",

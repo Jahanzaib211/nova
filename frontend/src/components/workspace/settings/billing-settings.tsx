@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
@@ -41,12 +42,17 @@ export function BillingSettings() {
         headers: { "Content-Type": "application/json", ...getCsrfHeaders() },
         body: "{}",
       });
-      if (res.ok) {
-        const { url } = (await res.json()) as { url: string };
-        window.location.href = url;
+      if (!res.ok) {
+        // Previously this fell through silently: the button re-enabled and
+        // nothing else happened, which is indistinguishable from a no-op on
+        // the one screen where the user is trying to give you money.
+        toast.error(t.settings.account.billingActionFailed);
+        return;
       }
+      const { url } = (await res.json()) as { url: string };
+      window.location.href = url;
     } catch {
-      // Redirect failed — user can retry
+      toast.error(t.settings.account.billingActionFailed);
     } finally {
       setBusy(false);
     }

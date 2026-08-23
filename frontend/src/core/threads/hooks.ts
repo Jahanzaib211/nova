@@ -2093,6 +2093,14 @@ export function useThreadHistory(
           },
           credentials: "include",
         }).then((res) => {
+          // Without this an error body parses fine, `result.data.filter`
+          // throws into the console.error catch below, and -- because that
+          // happens BEFORE loadedRunIdsRef.add(run.run_id) -- hasUnloadedRuns
+          // stays true. "Load more" then stays clickable forever, doing
+          // nothing, with no feedback beyond a console line.
+          if (!res.ok) {
+            throw new Error(`Failed to load run messages: HTTP ${res.status}`);
+          }
           return res.json();
         });
         if (

@@ -617,6 +617,7 @@ export interface Translations {
       billingCurrentPlan: string;
       billingUpgrade: string;
       billingManage: string;
+      billingActionFailed: string;
       changeEmailTitle: string;
       changeEmailDescription: string;
       newEmail: string;

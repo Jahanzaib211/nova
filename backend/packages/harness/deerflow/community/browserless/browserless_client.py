@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any
 
 import httpx
@@ -11,7 +12,12 @@ class BrowserlessClient:
 
     def __init__(self, base_url: str, token: str = "", timeout_s: float = 30) -> None:
         self.base_url = base_url.rstrip("/")
-        self.token = token
+        # Fall back to the environment, as the crawl4ai client already does.
+        # The compose service takes TOKEN=${BROWSERLESS_TOKEN:-}, so setting
+        # that variable makes browserless start requiring auth while this
+        # client -- which only ever read config.yaml -- kept sending none, and
+        # every web_fetch would begin failing with no config change to point at.
+        self.token = token or os.environ.get("BROWSERLESS_TOKEN", "")
         self.timeout_s = timeout_s
 
     async def fetch_html(

@@ -928,7 +928,8 @@ sandbox:
   # without an explicit register_external_dev_server call. Off by default to
   # avoid surprising the user with a phantom preview when nothing was actually
   # launched.
-  auto_detect_external_dev_server: false
+  # auto_detect_external_dev_server: NOT IMPLEMENTED — no reader exists.
+  # auto_detect_external_dev_server: false
 
 # Option 2: Container-based AIO Sandbox
 # Executes commands in isolated containers (Docker or Apple Container)
@@ -1313,7 +1314,14 @@ skill_evolution:
 #
 # NOTE: When both `checkpointer` and `database` are configured,
 # `checkpointer` takes precedence for LangGraph state persistence.
-# If you use `database`, you can remove the `checkpointer` section.
+#
+# Do NOT remove the `checkpointer` section because you configured `database`.
+# They are not interchangeable: the LangGraph long-term Store reads
+# `checkpointer` and nothing else (runtime/store/async_provider.py). With it
+# absent the Store silently falls back to InMemoryStore -- one WARNING line,
+# then the thread list is lost on every restart, and `make config-upgrade`
+# cannot repair it because commented YAML is not merged. Earlier revisions of
+# this file advised removing it; that advice was wrong and cost exactly that.
 # database:
 #   backend: sqlite
 #   sqlite_dir: .deer-flow/data

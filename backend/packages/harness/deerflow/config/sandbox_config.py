@@ -183,13 +183,16 @@ class SandboxConfig(BaseModel):
     auto_detect_external_dev_server: bool = Field(
         default=False,
         description=(
-            "When True, the Agent's Computer Browser tab scans a small set of well-known "
-            "ports (3000, 5173, 8080, …) on each /dev-status poll and auto-registers any "
-            "server it finds, without requiring an explicit call to "
-            "``register_external_dev_server``. Useful when an agent starts a dev server "
-            "via a raw ``bash`` tool instead of ``start_dev_server``. Default False to "
-            "avoid surprising the user with a phantom preview when nothing was actually "
-            "launched."
+            "NOT IMPLEMENTED — setting this has no effect. Kept only so an "
+            "existing config.yaml that sets it still validates. The described "
+            "port scan does not exist: this field has no reader anywhere in the "
+            "codebase, while every other field here traces to "
+            "aio_sandbox_provider -> local_backend -> the docker run argv. "
+            "Intended behaviour was: on each /dev-status poll, scan well-known "
+            "ports (3000, 5173, 8080, …) and auto-register any dev server "
+            "found, so an agent that started one via raw ``bash`` rather than "
+            "``start_dev_server`` still gets a preview. Implement it or delete "
+            "the field; do not leave it looking like a working switch."
         ),
     )
 

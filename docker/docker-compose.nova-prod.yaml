@@ -220,6 +220,16 @@ services:
       # reported "gateway could not be resolved". Note these land at
       # /app/backend/..., matching the mounts above.
       - DEER_FLOW_CONFIG_PATH=/app/backend/config.yaml
+      # config.yaml references this as $DATABASE_URL. It was set nowhere in
+      # this file and is commented out in ../.env, so AppConfig raised
+      # "Environment variable DATABASE_URL not found" at import -- this stack
+      # could not start at all. Same value as the dev compose.
+      - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
+      # The sandbox needs these too; see docker-compose-dev.yaml for why each
+      # exists (LAN exposure, and the rate limiter's view past nginx).
+      - DEER_FLOW_SANDBOX_BIND_HOST=${DEER_FLOW_SANDBOX_BIND_HOST:-172.17.0.1}
+      - AUTH_TRUSTED_PROXIES=${AUTH_TRUSTED_PROXIES:-192.168.200.0/24}
+      - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-prod}
       - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
       - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}
       - DEER_FLOW_CHANNELS_GATEWAY_URL=${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}
@@ -279,6 +289,191 @@ services:
       - DOCKER_SOCK=/var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  # ── Services config.yaml requires ────────────────────────────────────────
+  # This stack previously defined only nginx/frontend/gateway/autoheal, while
+  # config.yaml points at postgres, searxng, browserless and crawl4ai. The
+  # database failure was loud (AppConfig raises at import when DATABASE_URL is
+  # unset) but the three web services failed silently: config.yaml documents
+  # the DDG fallback as silent, so `web_search` simply got quietly worse.
+  #
+  # Kept verbatim from docker-compose-dev.yaml, including the digest pins. This
+  # file is standalone by design (see the header), so the duplication is
+  # deliberate -- but the two copies must be changed together.
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: deer-flow-postgres
+    environment:
+      - POSTGRES_DB=${NOVA_PG_DB:-nova}
+      - POSTGRES_USER=${NOVA_PG_USER:-nova}
+      - POSTGRES_PASSWORD=${NOVA_PG_PASSWORD:?Set NOVA_PG_PASSWORD in .env}
+      # Nova stores UTF-8 conversation text; the image default is fine but
+      # pinning it stops a host-locale surprise on a rebuild.
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    ports:
+      # Loopback only. Nothing outside this machine has any business reaching
+      # it, and the gateway talks to it over the compose network.
+      - "127.0.0.1:${NOVA_PG_PORT:-5433}:5432"
+    volumes:
+      - nova-postgres-data:/var/lib/postgresql/data
+    networks:
+      deer-flow-dev:
+        # Pinned like the gateway (.3) and frontend (.4): Docker's embedded DNS
+        # has SERVFAILed on service names after a container recreation on this
+        # host (see the frontend's note), and a database the gateway cannot
+        # resolve is indistinguishable from a database that is down.
+        ipv4_address: 192.168.200.5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOVA_PG_USER:-nova} -d ${NOVA_PG_DB:-nova}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 2g
+    mem_reservation: 512m
+    security_opt:
+      - no-new-privileges:true
+
+  # Self-hosted headless Chrome for web_fetch. Nova's fetch path was Jina's
+  # hosted API, whose key expired -- and because the tool silently falls back to
+  # a plain HTTP GET, it kept returning plausible output while article
+  # extraction was off, for 118 logged 401s. Self-hosting removes the key, the
+  # quota and the silent-degradation mode in one move.
+  #
+  # Chosen over the firecrawl module already in the tree because that one
+  # constructs FirecrawlApp(api_key=...) with no base_url, so it can only talk
+  # to the cloud service; browserless takes a base_url and self-hosts as-is.
+  # It renders JS/SPAs, and the gateway extracts the article from the returned
+  # HTML with readabilipy -- so keep that path healthy (dev-entrypoint.sh
+  # repairs it at boot) or this returns whole pages instead of articles.
+
+  searxng:
+    # Digest-pinned; see the crawl4ai service above for the reasoning.
+    image: searxng/searxng@sha256:f4c8e59de166ed71f6380c0847c312ca51f0d41996e31d0559163b6b09ecde52
+    container_name: deer-flow-searxng
+    ports:
+      - "127.0.0.1:8088:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:?Set SEARXNG_SECRET_KEY in .env}
+      - SEARXNG_BASE_URL=http://searxng:8080
+    networks:
+      - deer-flow-dev
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 256m
+    mem_reservation: 128m
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  # TOR proxy removed: it crash-looped under the non-root hardening (setgid
+  # EPERM) and is not needed for the default stack. Re-add a hardened Tor
+  # service here if iGIN0 anonymized fetching is required.
+
+  # Autoheal: restarts any container marked `autoheal=true` (currently the
+  # gateway) when its Docker healthcheck reports unhealthy. This is the
+  # missing auto-recovery from the 2026-07-16 outage — a hung-but-Up gateway
+  # now self-heals within ~15s instead of taking the site down until a human
+  # notices. Watches the Docker socket read-only-ish (needs it to issue the
+  # restart); no ports, minimal footprint.
+
+  browserless:
+    # Digest-pinned; see the crawl4ai service below for the reasoning.
+    image: ghcr.io/browserless/chromium@sha256:c0886239e4eaa102e214acbbde5345f5b2a55a7ccbb52456048afd374defbabb
+    container_name: deer-flow-browserless
+    # Every other service in this file sets this. Without it these two stay
+    # down after a host reboot or a dockerd restart while the rest come back,
+    # so web_fetch / web_fetch_many / web_crawl silently fall through to their
+    # DDG fallback and nothing looks broken.
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3032:3000"
+    environment:
+      - CONCURRENT=2
+      - TIMEOUT=30000
+      - TOKEN=${BROWSERLESS_TOKEN:-}
+    networks:
+      # Pinned. This network hands out fixed addresses to nginx/gateway/
+      # frontend/postgres, and an unpinned service just takes the next free
+      # one -- which, while the gateway happened to be down, was the gateway's
+      # own 192.168.200.3. The gateway then could not restart at all:
+      # "failed to set up container networking: Address already in use".
+      deer-flow-dev:
+        ipv4_address: 192.168.200.7
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/pressure"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Chrome is memory-hungry and this box has an OOM history; two concurrent
+    # sessions inside 1.5g is enough for fetch-a-page work without competing
+    # with the gateway.
+    mem_limit: 1500m
+    mem_reservation: 512m
+    shm_size: 1gb
+    security_opt:
+      - "no-new-privileges:true"
+
+  # Self-hosted Crawl4AI. Distinct from browserless, which renders one URL the
+  # agent already names -- this follows links, so "read this docs site" is one
+  # tool call instead of the agent hand-rolling a crawl a fetch at a time.
+  #
+  # Runs as a service rather than a gateway dependency: the library ships its
+  # own Playwright browser download, which would put a second headless-Chrome
+  # stack inside the gateway image next to the one browserless already is.
+
+  crawl4ai:
+    # Pinned by digest, not :latest. A floating tag means two `up -d` runs
+    # a week apart can differ with no change in this repo — the same
+    # reproducibility hole Dockerfile.base closed for the sandbox.
+    image: unclecode/crawl4ai@sha256:bd36741e7bdd35ddc1a05d9183e1d6d8cefb61dd640d944a25d026b76e917690
+    container_name: deer-flow-crawl4ai
+    # Every other service in this file sets this. Without it these two stay
+    # down after a host reboot or a dockerd restart while the rest come back,
+    # so web_fetch / web_fetch_many / web_crawl silently fall through to their
+    # DDG fallback and nothing looks broken.
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11235:11235"
+    volumes:
+      # Upstream binds 127.0.0.1 inside the container, so the published port
+      # reaches nothing and the gateway cannot see it at all. This override
+      # only changes the bind address.
+      - ./crawl4ai/config.yml:/app/config.yml:ro
+    environment:
+      # Required for the non-loopback bind above; without it the server refuses
+      # to start on 0.0.0.0, which is the correct default for a crawler.
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:?Set CRAWL4AI_API_TOKEN in .env}
+    networks:
+      # Pinned like everything else here. An unpinned service takes the next
+      # free address, and when the gateway was briefly down that was the
+      # gateway's own .3 -- which then could not restart at all.
+      deer-flow-dev:
+        ipv4_address: 192.168.200.8
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Chrome again, and a crawler drives several tabs at once. Bounded for the
+    # same reason browserless is.
+    mem_limit: 2g
+    mem_reservation: 512m
+    shm_size: 1gb
+    security_opt:
+      - "no-new-privileges:true"
+
+volumes:
+  nova-postgres-data:
 
 networks:
   # Same name, subnet and addressing as the dev stack so the pinned

@@ -225,12 +225,16 @@ const WORKSPACE_EVENT_TYPES: WorkspaceEventType[] = [
  * workspace flag is off or the thread has no live connection yet — callers
  * degrade the same way the other workspace hooks do pre-flag.
  */
+/** Mirrors MAX_OPEN_FAILURES in core/sandbox/hooks.ts; same reasoning. */
+const MAX_WORKSPACE_OPEN_FAILURES = 3;
+
 export function useWorkspaceEvents(
   threadId: string | null,
   enabled = true,
 ): WorkspaceLiveEvent[] {
   const [events, setEvents] = useState<WorkspaceLiveEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
+  const failuresRef = useRef(0);
 
   useEffect(() => {
     setEvents([]);
@@ -260,15 +264,32 @@ export function useWorkspaceEvents(
         }
       };
 
+    failuresRef.current = 0;
+
     const listeners = WORKSPACE_EVENT_TYPES.map((type) => {
-      const handler = append(type);
-      es.addEventListener(type, handler);
-      return { type, handler };
+      const inner = append(type);
+      // Register the wrapper, and keep a reference to the SAME function so the
+      // cleanup below actually detaches it.
+      const handler = (event: MessageEvent) => {
+        // A delivered frame proves the stream is healthy, so earlier failures
+        // were transient and must not count toward the cap.
+        failuresRef.current = 0;
+        inner(event);
+      };
+      es.addEventListener(type, handler as EventListener);
+      return { type, handler: handler as EventListener };
     });
 
     es.onerror = () => {
-      // 403 (flag off) or transient network drop — EventSource retries on
-      // its own; a persistently-disabled workspace just never delivers.
+      // 403 when workspace.intelligence_enabled is off is permanent, not
+      // transient, and an EventSource left alone retries it every few seconds
+      // forever with a console error each time. Same cap as useSandboxLogs:
+      // give up once it has failed repeatedly without ever delivering a frame.
+      failuresRef.current += 1;
+      if (failuresRef.current >= MAX_WORKSPACE_OPEN_FAILURES) {
+        es.close();
+        esRef.current = null;
+      }
     };
 
     return () => {

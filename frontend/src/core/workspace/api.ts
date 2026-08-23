@@ -128,8 +128,14 @@ export async function fetchWorkspaceMetrics(
   });
   if (res.status === 403 || res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to fetch metrics: ${res.status}`);
-  const body = (await res.json()) as { metrics: WorkspaceMetrics };
-  return body.metrics ?? null;
+  const body = (await res.json()) as { metrics?: Partial<WorkspaceMetrics> };
+  // The backend returns `{"metrics": {}}` when the metrics object has no
+  // snapshot() (routers/workspace.py:260). `{}` is not nullish, so `?? null`
+  // let it through and privacy-tab then read .scan.count and .cache.hit_rate
+  // off it and took the tab down. Require the fields the consumer needs.
+  const metrics = body.metrics;
+  if (!metrics?.scan || !metrics.cache) return null;
+  return metrics as WorkspaceMetrics;
 }
 
 export interface WorkspaceImpact {

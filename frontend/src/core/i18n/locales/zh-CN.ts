@@ -704,6 +704,7 @@ export const zhCN: Translations = {
       billingCurrentPlan: "当前套餐",
       billingUpgrade: "升级到 Nova Plus",
       billingManage: "管理订阅",
+      billingActionFailed: "操作未成功，请重试。",
       changeEmailTitle: "修改邮箱",
       changeEmailDescription: "更新你账号的邮箱地址。",
       newEmail: "新邮箱",
