@@ -788,7 +788,9 @@ export const enUS: Translations = {
       browser: "Browser",
       activity: "Activity",
       review: "Review",
-      privacy: "Privacy",
+      // Matches the panel header ("Recon — private web access"); the button
+      // said "Privacy" and the panel said "Recon", which read as two features.
+      privacy: "Recon",
     },
     files: {
       empty: "Files the agent creates will appear here",
@@ -848,6 +850,9 @@ export const enUS: Translations = {
       noOutput: "No terminal output yet",
       noOutputHint: "Agent commands appear here — switch to",
       running: "running...",
+      reconnect: "Reconnect",
+      shellDisconnected:
+        "The interactive shell is not responding. The sandbox may have been recycled.",
     },
     editor: {
       startWriting: "Start writing a file to see code live",
@@ -932,6 +937,24 @@ export const enUS: Translations = {
       fetch: "Fetch · one page",
       fetchMany: "Fetch many · parallel",
       crawl: "Crawl · follows links",
+      /* Labels and hints keyed by the tool name the server reports, so the
+         panel renders whatever capabilities exist rather than a list baked
+         into the component. An unknown tool falls back to its own name. */
+      capabilityLabels: {
+        web_search: "Search · finds pages",
+        web_fetch: "Fetch · one page",
+        web_fetch_many: "Fetch many · parallel",
+        web_crawl: "Crawl · follows links",
+      } as Record<string, string>,
+      capabilityHints: {
+        web_search: "finds pages",
+        web_fetch: "reads one page",
+        web_fetch_many: "reads several pages you name, at once",
+        web_crawl: "starts at one page and follows its links",
+      } as Record<string, string>,
+      /* Shown where a counter has no value at all. Rendering 0 for "the
+         server sent nothing" is a lie the panel used to tell in six places. */
+      noData: "—",
       fetches: "Fetches",
       avgFetch: "Avg fetch",
       capabilities: "Capabilities",

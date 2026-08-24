@@ -12,6 +12,7 @@ import {
   useSandboxLogs,
   useSandboxTodo,
   type SandboxEvent,
+  type SandboxLogStatus,
 } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import type { Todo } from "@/core/todos";
@@ -35,6 +36,9 @@ export interface WorkspaceState {
   /** sandbox.log-backed history merged with in-flight running events. */
   mergedEvents: AgentActivityEvent[];
   todos: Todo[];
+  /** Connection state of the sandbox.log stream, so the Terminal can say
+      "reconnecting…" rather than sitting silently empty. */
+  logStatus: SandboxLogStatus;
   taskProgress: TaskProgress | null;
   verifyResult: VerifyResult | null;
   llmError: LlmError | null;
@@ -54,6 +58,56 @@ export function useWorkspaceState(): WorkspaceState {
   return state;
 }
 
+/**
+ * Merge the sandbox.log history with the in-flight LangGraph "running" events.
+ *
+ * Exported and pure so the two identity rules below can be tested without
+ * rendering React — both were silent, intermittent bugs that a render test
+ * would not have caught reliably.
+ */
+export function mergeWorkspaceEvents(
+  sseEvents: SandboxEvent[],
+  activityEvents: AgentActivityEvent[],
+): AgentActivityEvent[] {
+  const fromLog: AgentActivityEvent[] = sseEvents.map((e: SandboxEvent) => ({
+    // `uid` is assigned once, when the event is first ingested. The previous
+    // key was built from the array index, which shifts for every element the
+    // moment the MAX_EVENTS window rolls — remounting the entire list while
+    // the user is reading it.
+    id: e.uid ?? `${e.ts}-${e.type}-${e.summary}`,
+    ts: e.ts,
+    type: e.type,
+    path: e.path,
+    summary: e.summary,
+    output: e.output,
+    // A streamed command is still running until its closing frame arrives.
+    // Hardcoding "done" here is what made a live `npm install` look finished
+    // the instant its first line of output appeared.
+    status: e.state === "running" ? "running" : "done",
+  }));
+
+  // Suppress the in-flight spinner for work the log already shows. Counted,
+  // not set-membership: `ts` has one-second resolution ("%H:%M:%S"), so two
+  // identical commands in the same second share a key, and a plain Set let one
+  // log line mask both of them. N log entries now mask exactly N.
+  const seen = new Map<string, number>();
+  for (const e of sseEvents) {
+    const key = `${e.ts}|${e.type}|${e.summary}`;
+    seen.set(key, (seen.get(key) ?? 0) + 1);
+  }
+  const running = activityEvents.filter((e) => {
+    if (e.status !== "running") return false;
+    const key = `${e.ts}|${e.type}|${e.summary}`;
+    const remaining = seen.get(key) ?? 0;
+    if (remaining > 0) {
+      seen.set(key, remaining - 1);
+      return false;
+    }
+    return true;
+  });
+  return [...fromLog, ...running];
+}
+
 export function WorkspaceStateProvider({
   threadId,
   todos: streamTodos,
@@ -68,28 +122,11 @@ export function WorkspaceStateProvider({
 
   // sandbox.log SSE is the source of truth (real bash output, all tools).
   // Merge with in-flight "running" LangGraph events for the live spinner.
-  const sseEvents = useSandboxLogs(threadId);
-  const mergedEvents = useMemo<AgentActivityEvent[]>(() => {
-    const fromLog: AgentActivityEvent[] = sseEvents.map(
-      (e: SandboxEvent, i) => ({
-        id: `log-${i}-${e.ts}`,
-        ts: e.ts,
-        type: e.type,
-        path: e.path,
-        summary: e.summary,
-        output: e.output,
-        status: "done",
-      }),
-    );
-    const seen = new Set(
-      sseEvents.map((e) => `${e.ts}|${e.type}|${e.summary}`),
-    );
-    const running = activityEvents.filter(
-      (e) =>
-        e.status === "running" && !seen.has(`${e.ts}|${e.type}|${e.summary}`),
-    );
-    return [...fromLog, ...running];
-  }, [sseEvents, activityEvents]);
+  const { events: sseEvents, status: logStatus } = useSandboxLogs(threadId);
+  const mergedEvents = useMemo<AgentActivityEvent[]>(
+    () => mergeWorkspaceEvents(sseEvents, activityEvents),
+    [sseEvents, activityEvents],
+  );
 
   // Stream todos win; the checkpoint endpoint fills the gap after a
   // refresh/reconnect when thread.values has not hydrated yet.
@@ -108,6 +145,7 @@ export function WorkspaceStateProvider({
       activityEvents,
       mergedEvents,
       todos,
+      logStatus,
       taskProgress,
       verifyResult,
       llmError,
@@ -117,6 +155,7 @@ export function WorkspaceStateProvider({
       activityEvents,
       mergedEvents,
       todos,
+      logStatus,
       taskProgress,
       verifyResult,
       llmError,

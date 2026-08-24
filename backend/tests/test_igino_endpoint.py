@@ -86,7 +86,6 @@ class TestCapabilitiesIginoField(unittest.TestCase):
         igino = IGINOSummary(
             enabled=False,
             searxng_healthy=False,
-            circuit_states={},
             cache_stats={"size": 0, "max_size": 0, "hits": 0, "misses": 0, "hit_rate": 0.0, "ttl_s": 0},
             audit_stats={"total_records": 0, "errors": 0, "tor_usage": 0, "enabled": False, "redacted": False},
         )

@@ -86,7 +86,9 @@ describe("AgentComputerPanel smoke", () => {
       "Browser",
       "Activity",
       "Review",
-      "Privacy",
+      // The panel header has always said "Recon — private web access"; the tab
+      // button said "Privacy", so the same feature had two names.
+      "Recon",
     ]) {
       expect(html).toContain(tab);
     }

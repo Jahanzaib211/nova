@@ -725,6 +725,10 @@ export interface Translations {
       noOutput: string;
       noOutputHint: string;
       running: string;
+      /** Label for the control that re-fetches the ttyd URL after the
+          sandbox was recycled and the embedded shell went dead. */
+      reconnect: string;
+      shellDisconnected: string;
     };
     editor: {
       startWriting: string;
@@ -804,6 +808,13 @@ export interface Translations {
       fetch: string;
       fetchMany: string;
       crawl: string;
+      /** Per-tool display copy, keyed by the tool name `/api/igino/status`
+          reports. Data-driven so a new capability shows up without a frontend
+          change; an unknown key falls back to the raw tool name. */
+      capabilityLabels: Record<string, string>;
+      capabilityHints: Record<string, string>;
+      /** Placeholder for a counter the server did not send. */
+      noData: string;
       fetches: string;
       avgFetch: string;
       capabilities: string;

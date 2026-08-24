@@ -55,6 +55,29 @@ class ResearchRequest(BaseModel):
     timeout_s: float = 30.0
 
 
+def _provider_for(tool_name: str) -> str:
+    """The package behind a tool's configured ``use:`` string.
+
+    ``deerflow.community.searxng.tools:web_search_tool`` -> ``searxng``. The
+    last module segment is almost always ``tools``, so the provider is the
+    package containing it. Read from config rather than hardcoded: the provider
+    for these tools changed twice in one day, and a panel that names the wrong
+    one is worse than a panel that names none.
+    """
+    try:
+        entry = get_app_config().get_tool_config(tool_name)
+        if entry is None:
+            return "unconfigured"
+        module = str(getattr(entry, "use", "") or "").split(":")[0]
+        parts = [p for p in module.split(".") if p]
+        if not parts:
+            return "unknown"
+        return parts[-2] if len(parts) >= 2 and parts[-1] == "tools" else parts[-1]
+    except Exception as exc:  # noqa: BLE001 - the panel must render regardless
+        logger.debug("provider lookup for %s failed: %s", tool_name, exc)
+        return "unknown"
+
+
 async def _web_capability(tool_name: str, health_path: str) -> dict[str, Any]:
     """Health of one web capability, named by the job it does.
 
@@ -226,7 +249,20 @@ async def get_status() -> dict[str, Any]:
             "cache": cache.stats,
             "audit": audit.get_stats(),
             "fetch": await _fetch_status(),
+            # The pipeline, in the order a request actually flows through it.
+            # web_search is a member like any other: the frontend used to carry
+            # its own hardcoded four-step list and special-case search out of
+            # this array, so adding or renaming a capability meant editing the
+            # panel. The order here is the order rendered.
             "web": [
+                # Health comes from the same probe as `searxng_healthy` above,
+                # so the card and the pipeline row can never disagree.
+                {
+                    "tool": "web_search",
+                    "provider": _provider_for("web_search"),
+                    "healthy": searxng_healthy,
+                    "detail": "reachable" if searxng_healthy else "unreachable",
+                },
                 await _web_capability("web_fetch", "/pressure"),
                 await _web_capability("web_fetch_many", "/health"),
                 # web_crawl runs Nova's own BFS over the crawl4ai service, so

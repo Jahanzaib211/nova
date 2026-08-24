@@ -10,7 +10,10 @@ single authenticated call:
   - circuit-breaker snapshot (per-thread open/closed state)
   - browser subsystem health (status + last_check_at)
 
-The endpoint is **read-only**, **fast** (no I/O), and **additive**.
+The endpoint is **read-only** and **additive**. It is NOT I/O-free: it probes
+SearXNG over the network on every call (``probe_health()``, 3 s cap), and the UI
+polls it, so a hung instance costs one request per poll. The docstring used to
+claim "fast (no I/O)", which is worth correcting rather than trusting.
 Falls back to empty lists if any optional subsystem isn't loaded so the
 UI can always render something.
 
@@ -70,11 +73,16 @@ class CircuitEntry(BaseModel):
 class IGINOSummary(BaseModel):
     """Recon status for the runtime bar. No TOR fields: it was removed from the
     panel, the config and the capability list, and a payload that still carries
-    it invites the next reader to wire it back up."""
+    it invites the next reader to wire it back up.
+
+    No ``circuit_states`` either, for the same reason. It was declared here and
+    on the frontend's ``IGINOCapabilities``, populated by nothing, and read by
+    nobody -- a permanently empty dict that looked like a feature. The real
+    per-thread circuit snapshot lives on ``/api/browser/health``
+    (``browser_health.py``), which actually fills it."""
 
     enabled: bool = False
     searxng_healthy: bool = False
-    circuit_states: dict[str, str] = Field(default_factory=dict)
     cache_stats: dict[str, Any] = Field(default_factory=dict)
     audit_stats: dict[str, Any] = Field(default_factory=dict)
 
@@ -288,7 +296,6 @@ async def _safe_igino() -> IGINOSummary:
             # fall back to False; don't pretend it's healthy.
             searxng_healthy = False
 
-        circuit_states: dict[str, str] = {}
         try:
             from deerflow.community.searxng.search_cache import get_search_cache
 
@@ -306,7 +313,6 @@ async def _safe_igino() -> IGINOSummary:
         return IGINOSummary(
             enabled=enabled,
             searxng_healthy=searxng_healthy,
-            circuit_states=circuit_states,
             cache_stats=cache_stats,
             audit_stats=audit_stats,
         )

@@ -35,7 +35,6 @@ const STALE = {
   SANDBOX_URLS_MS: 60_000,
 } as const;
 
-
 // ── Event types ────────────────────────────────────────────
 
 export type SandboxEventType =
@@ -51,6 +50,21 @@ export type SandboxEvent = {
   path: string | null;
   summary: string;
   output: string;
+  /** Correlates the frames of one streamed command. Absent on the
+      single-line observations every non-streaming tool still writes. */
+  id?: string;
+  /** "running" while output is still arriving; "done" on the closing frame. */
+  state?: "running" | "done";
+  /** Text to append to `output`. Wire-only: folded away at ingest. */
+  delta?: string;
+  /** Replacement for the whole of `output`, for a redrawn screen
+      (a `\r` progress bar). Wire-only: folded away at ingest. */
+  replace?: string;
+  /** Stable client-side identity, assigned once when the event is first seen.
+      React keys must not be derived from the array index: the MAX_EVENTS
+      window shifts every element once it rolls, which remounts the whole list
+      mid-stream. Not part of the wire format. */
+  uid?: string;
 };
 
 export type SandboxFile = {
@@ -64,37 +78,127 @@ export type SandboxFile = {
 
 const MAX_EVENTS = 200;
 
+/** Monotonic source of `uid`. Module-scoped so ids stay unique across threads
+    and remounts within a session; the value itself is never meaningful. */
+let uidCounter = 0;
+
+/**
+ * Fold one incoming frame into the event list.
+ *
+ * Frames sharing an `id` are one Terminal entry, and they are merged **here**,
+ * at ingest, rather than pushed individually and reconciled at render. That
+ * ordering is the whole point: pushed as separate events, a chatty command
+ * (`npm install` emits hundreds of deltas) would walk its own opening frame out
+ * of the MAX_EVENTS window, so the command line itself — the `$ npm install`
+ * the user is reading — would vanish while its output was still arriving.
+ *
+ * `delta` appends, `replace` swaps the body, and the closing frame carries the
+ * complete output so a client that opened the panel mid-command still ends up
+ * with the whole thing rather than the tail it happened to catch.
+ */
+export function applySandboxFrame(
+  list: SandboxEvent[],
+  frame: SandboxEvent,
+): SandboxEvent[] {
+  // No id — the shape every other tool writes. Unchanged behaviour.
+  if (!frame.id) {
+    return list.concat({ ...frame, uid: `sbx-${uidCounter++}` });
+  }
+
+  const index = list.findIndex((e) => e.id === frame.id);
+  if (index === -1) {
+    return list.concat({
+      ...frame,
+      output: frame.replace ?? frame.delta ?? frame.output ?? "",
+      delta: undefined,
+      replace: undefined,
+      uid: `sbx-${uidCounter++}`,
+    });
+  }
+
+  const prev = list[index]!;
+  const output =
+    // `??` not `||`: an empty `replace` is a deliberate "clear the body".
+    frame.replace ??
+    (frame.delta !== undefined
+      ? prev.output + frame.delta
+      : // The closing frame carries the full output; an empty one (a kill,
+        // say) must not blank an entry that already has text.
+        frame.output || prev.output);
+
+  const next = list.slice();
+  next[index] = {
+    ...prev,
+    output,
+    state: frame.state ?? prev.state,
+    // Delta frames carry no summary; the opening frame's `$ command` stands.
+    summary: frame.summary || prev.summary,
+    path: frame.path ?? prev.path,
+  };
+  return next;
+}
+
 // ── useSandboxLogs ─────────────────────────────────────────
 // SSE stream; parses each line as a JSON SandboxEvent.
 
-// How many times to let the browser reconnect before we conclude the stream
-// is never going to open. `/api/sandbox/logs` 404s for any thread whose
-// directory does not exist yet, and an EventSource left to its own devices
-// retries that forever, logging a console error on every attempt. A thread
-// that starts producing output resets the counter, so a genuine mid-run drop
-// still reconnects indefinitely.
-const MAX_OPEN_FAILURES = 3;
+/**
+ * Reconnect backoff for the log stream.
+ *
+ * This replaces a hard stop after three failed opens. `/api/sandbox/logs` 404s
+ * for any thread whose directory does not exist yet, so a thread whose sandbox
+ * comes up late failed three times, closed the stream, and then showed an empty
+ * Terminal *forever* — nothing re-armed it except navigating to another thread
+ * and back. The reason for the cap was real, though: an EventSource left to its
+ * own devices retries a 404 on a tight loop and logs a console error each time.
+ *
+ * Backing off geometrically to a 30 s ceiling answers both: a late sandbox is
+ * picked up within half a minute, and a thread that never gets one costs two
+ * requests a minute instead of a flood.
+ */
+const RECONNECT = {
+  BASE_MS: 1_000,
+  MAX_MS: 30_000,
+} as const;
+
+/** Must match `_SSE_DELTA_EVENT` in `app/gateway/routers/sandbox.py`. */
+const SANDBOX_DELTA_EVENT = "sandbox_delta";
+
+export type SandboxLogStatus = "connecting" | "open" | "reconnecting";
+
+export type SandboxLogStream = {
+  events: SandboxEvent[];
+  /** Surfaced so the Terminal can say "reconnecting…" instead of looking idle. */
+  status: SandboxLogStatus;
+};
 
 export function useSandboxLogs(
   threadId: string | null,
   enabled = true,
-): SandboxEvent[] {
+): SandboxLogStream {
   const [events, setEvents] = useState<SandboxEvent[]>([]);
+  const [status, setStatus] = useState<SandboxLogStatus>("connecting");
   const esRef = useRef<EventSource | null>(null);
   const pendingRef = useRef<SandboxEvent[]>([]);
   const rafRef = useRef<number | null>(null);
-  const failuresRef = useRef(0);
-  const flush = () => {
+  const attemptRef = useRef(0);
+  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback(() => {
     if (pendingRef.current.length === 0) return;
     setEvents((prev) => {
-      const next = prev.concat(pendingRef.current);
+      // Fold first, window second. Reversing these is the bug this replaces:
+      // deltas would consume window slots and evict their own start event.
+      let next = prev;
+      for (const frame of pendingRef.current) {
+        next = applySandboxFrame(next, frame);
+      }
       pendingRef.current = [];
       return next.length > MAX_EVENTS
         ? next.slice(next.length - MAX_EVENTS)
         : next;
     });
     rafRef.current = null;
-  };
+  }, []);
 
   useEffect(() => {
     // Reset on thread change
@@ -109,41 +213,82 @@ export function useSandboxLogs(
   useEffect(() => {
     if (!threadId || !enabled || typeof EventSource === "undefined") return;
 
-    esRef.current?.close();
-    failuresRef.current = 0;
+    let cancelled = false;
 
-    const url = `${getBackendBaseURL()}/api/sandbox/logs?thread_id=${encodeURIComponent(threadId)}`;
-    const es = new EventSource(url, { withCredentials: true });
-    esRef.current = es;
-
-    es.onmessage = (event) => {
-      const raw = event.data as string;
-      if (!raw || raw === "[KEEPALIVE]") return;
-      // The stream is alive, so any earlier failures were transient.
-      failuresRef.current = 0;
-      try {
-        const parsed = JSON.parse(raw) as SandboxEvent;
-        if (parsed.type && parsed.ts !== undefined) {
-          pendingRef.current.push(parsed);
-          rafRef.current ??= requestAnimationFrame(flush);
-        }
-      } catch {
-        // Non-JSON line (old format or noise) — skip silently
+    const clearRetry = () => {
+      if (retryRef.current !== null) {
+        clearTimeout(retryRef.current);
+        retryRef.current = null;
       }
     };
 
-    es.onerror = () => {
-      // SSE reconnects on its own, but only up to a point: give up once the
-      // stream has failed to open repeatedly without ever delivering a line.
-      failuresRef.current += 1;
-      if (failuresRef.current >= MAX_OPEN_FAILURES) {
+    const connect = () => {
+      if (cancelled) return;
+      esRef.current?.close();
+
+      const url = `${getBackendBaseURL()}/api/sandbox/logs?thread_id=${encodeURIComponent(threadId)}`;
+      const es = new EventSource(url, { withCredentials: true });
+      esRef.current = es;
+
+      es.onopen = () => {
+        if (cancelled) return;
+        attemptRef.current = 0;
+        setStatus("open");
+      };
+
+      const ingest = (raw: string) => {
+        if (!raw || raw === "[KEEPALIVE]") return;
+        // A delivered line proves the stream is healthy, whatever onopen said.
+        attemptRef.current = 0;
+        setStatus("open");
+        try {
+          const parsed = JSON.parse(raw) as SandboxEvent;
+          if (parsed.type && parsed.ts !== undefined) {
+            pendingRef.current.push(parsed);
+            rafRef.current ??= requestAnimationFrame(flush);
+          }
+        } catch {
+          // Non-JSON line (old format or noise) — skip silently
+        }
+      };
+
+      es.onmessage = (event) => ingest(event.data as string);
+
+      // Incremental frames arrive under a NAMED event, which `onmessage` never
+      // receives. That is the point: a build of this app that predates
+      // streaming ignores them entirely and shows one row per command, instead
+      // of rendering each delta as a blank row — which is exactly what happened
+      // when they were sent as ordinary `message` events, because the backend
+      // hot-reloads while this bundle is prebuilt and shipped separately.
+      // `event` is already a MessageEvent here via EventSource's typing.
+      es.addEventListener(SANDBOX_DELTA_EVENT, (event) => ingest(event.data));
+
+      es.onerror = () => {
+        if (cancelled) return;
+        // Close before scheduling: the browser's own retry is what turns a 404
+        // into a console-error flood, and we want our backoff, not its loop.
         es.close();
         esRef.current = null;
-      }
+        setStatus("reconnecting");
+
+        const delay = Math.min(
+          RECONNECT.BASE_MS * 2 ** attemptRef.current,
+          RECONNECT.MAX_MS,
+        );
+        attemptRef.current += 1;
+        clearRetry();
+        retryRef.current = setTimeout(connect, delay);
+      };
     };
 
+    attemptRef.current = 0;
+    setStatus("connecting");
+    connect();
+
     return () => {
-      es.close();
+      cancelled = true;
+      clearRetry();
+      esRef.current?.close();
       esRef.current = null;
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
@@ -151,9 +296,9 @@ export function useSandboxLogs(
       }
       pendingRef.current = [];
     };
-  }, [threadId, enabled]);
+  }, [threadId, enabled, flush]);
 
-  return events;
+  return { events, status };
 }
 
 // ── useSandboxFiles ────────────────────────────────────────
@@ -263,11 +408,20 @@ export type SandboxTerminalUrls = {
 
 const EMPTY_TERMINAL_URLS: SandboxTerminalUrls = { terminal: null, vnc: null };
 
+export type SandboxTerminalUrlsResult = SandboxTerminalUrls & {
+  /** Re-ask the gateway for the URLs. A sandbox that was recycled hands out a
+      new published port, and the old iframe src points at a dead ttyd — with
+      `staleTime` holding the stale answer, the pane showed a dead terminal
+      indefinitely and offered no way to say "try again". */
+  refetch: () => void;
+  isFetching: boolean;
+};
+
 export function useSandboxTerminalUrl(
   threadId: string | null,
   enabled: boolean,
-): SandboxTerminalUrls {
-  const { data } = useQuery<SandboxTerminalUrls>({
+): SandboxTerminalUrlsResult {
+  const { data, refetch, isFetching } = useQuery<SandboxTerminalUrls>({
     queryKey: ["sandbox", "terminal-url", threadId],
     queryFn: async () => {
       const res = await fetch(
@@ -289,9 +443,16 @@ export function useSandboxTerminalUrl(
     },
     enabled: Boolean(threadId) && enabled,
     staleTime: STALE.SANDBOX_URLS_MS,
-    refetchOnWindowFocus: false,
+    // Re-validate when the user comes back to the tab. The URL is stable for
+    // the life of the sandbox, but not across a recycle — and returning to a
+    // dead pane is exactly when a stale answer is most expensive.
+    refetchOnWindowFocus: true,
   });
-  return data ?? EMPTY_TERMINAL_URLS;
+  return {
+    ...(data ?? EMPTY_TERMINAL_URLS),
+    refetch: () => void refetch(),
+    isFetching,
+  };
 }
 
 // ── useBrowserCheck ────────────────────────────────────────

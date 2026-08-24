@@ -1,7 +1,7 @@
 "use client";
 
 import { LoaderCircleIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import { useSandboxTerminalUrl } from "@/core/sandbox/hooks";
@@ -62,7 +62,28 @@ export function Terminal({
   // started until the user explicitly opens the shell, which is the gate that
   // matters. `active` is still accepted so the panel can pass it uniformly.
   const shellOpen = mode === "shell";
-  const { terminal: terminalUrl } = useSandboxTerminalUrl(threadId, shellOpen);
+  const {
+    terminal: terminalUrl,
+    refetch: refetchTerminalUrl,
+    isFetching: terminalUrlFetching,
+  } = useSandboxTerminalUrl(threadId, shellOpen);
+
+  // A ttyd that dies (sandbox recycled, container restarted) leaves the iframe
+  // showing a dead page with no error state and nothing to click -- the pane
+  // just sat there. `onError` covers a hard load failure; the explicit
+  // Reconnect button covers the rest, because an iframe pointed at a proxy that
+  // answers 502 fires `load`, not `error`, and cannot be inspected
+  // cross-document to tell the difference.
+  const [shellFailed, setShellFailed] = useState(false);
+  const reconnectShell = useCallback(() => {
+    setShellFailed(false);
+    refetchTerminalUrl();
+  }, [refetchTerminalUrl]);
+
+  // A new URL means a new session; clear any error from the previous one.
+  useEffect(() => {
+    setShellFailed(false);
+  }, [terminalUrl]);
 
   // Extracted so the dependency is a plain value the linter can check. Inline,
   // `terminalEvents.at(-1)?.output` is a complex expression that exhaustive-deps
@@ -106,6 +127,18 @@ export function Terminal({
           {t.agentComputer.terminal.shell}
         </button>
       </div>
+      {shellOpen && (
+        <button
+          type="button"
+          onClick={reconnectShell}
+          disabled={terminalUrlFetching}
+          className="border-border/40 text-muted-foreground/60 hover:text-muted-foreground ml-1 rounded border px-1.5 py-0.5 text-[10px] disabled:opacity-50"
+        >
+          {terminalUrlFetching
+            ? t.common.loading
+            : t.agentComputer.terminal.reconnect}
+        </button>
+      )}
     </div>
   );
 
@@ -114,12 +147,29 @@ export function Terminal({
       <div className="flex h-full flex-col">
         {ModeToggle}
         <div className="min-h-0 flex-1 bg-black">
-          {terminalUrl ? (
+          {shellFailed ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <p className="text-muted-foreground/60 text-xs">
+                {t.agentComputer.terminal.shellDisconnected}
+              </p>
+              <button
+                type="button"
+                onClick={reconnectShell}
+                disabled={terminalUrlFetching}
+                className="border-border/40 text-muted-foreground hover:bg-muted/20 rounded border px-2 py-1 text-[11px] disabled:opacity-50"
+              >
+                {terminalUrlFetching
+                  ? t.common.loading
+                  : t.agentComputer.terminal.reconnect}
+              </button>
+            </div>
+          ) : terminalUrl ? (
             <iframe
               key={terminalUrl}
               src={terminalUrl}
               title={t.agentComputer.terminal.interactiveTitle}
               className="h-full w-full border-0"
+              onError={() => setShellFailed(true)}
             />
           ) : (
             <div className="flex h-full items-center justify-center">

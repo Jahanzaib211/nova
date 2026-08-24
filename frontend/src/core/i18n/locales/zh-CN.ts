@@ -758,7 +758,7 @@ export const zhCN: Translations = {
       browser: "浏览器",
       activity: "活动",
       review: "审查",
-      privacy: "隐私",
+      privacy: "Recon",
     },
     files: {
       empty: "智能体创建的文件将显示在这里",
@@ -817,6 +817,8 @@ export const zhCN: Translations = {
       noOutput: "暂无终端输出",
       noOutputHint: "智能体命令将显示在这里 — 切换到",
       running: "运行中...",
+      reconnect: "重新连接",
+      shellDisconnected: "交互式 shell 无响应，沙箱可能已被回收。",
     },
     editor: {
       startWriting: "开始编写文件即可实时查看代码",
@@ -898,6 +900,19 @@ export const zhCN: Translations = {
       fetch: "抓取 · 单页",
       fetchMany: "批量抓取 · 并行",
       crawl: "爬取 · 跟随链接",
+      capabilityLabels: {
+        web_search: "搜索 · 查找页面",
+        web_fetch: "抓取 · 单个页面",
+        web_fetch_many: "批量抓取 · 并行",
+        web_crawl: "爬取 · 跟随链接",
+      } as Record<string, string>,
+      capabilityHints: {
+        web_search: "查找页面",
+        web_fetch: "读取一个页面",
+        web_fetch_many: "一次读取你指定的多个页面",
+        web_crawl: "从一个页面开始并跟随其链接",
+      } as Record<string, string>,
+      noData: "—",
       fetches: "抓取次数",
       avgFetch: "平均抓取",
       capabilities: "功能",

@@ -360,7 +360,12 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
                       : t.agentComputer.privacy.unhealthy
                   }`
                 : t.agentComputer.privacy.unhealthy,
-              `${status.cache.size}/${status.cache.max_size}`,
+              // `/api/igino/status` omits `cache` entirely on its error path
+              // (`{enabled: true, error: ...}`), where this read threw and took
+              // the whole runtime bar down with it.
+              status.cache
+                ? `${status.cache.size}/${status.cache.max_size}`
+                : t.agentComputer.privacy.noData,
             )}
           </p>
         </TooltipContent>
