@@ -491,14 +491,17 @@ async def _pump_output_aio(handle: DevServerHandle) -> None:
                 content = await asyncio.to_thread(sandbox.read_file, logpath)
             except Exception:
                 content = ""
-            # A closed/replaced sandbox client surfaces as an attribute error from
-            # the SDK ("'NoneType' object has no attribute 'file'"). The log tail
-            # can't recover — stop the LOOP so it doesn't spin forever and saturate
-            # the thread pool. But do NOT drop the handle or mark it stopped: the
+            # A released sandbox can never serve another read, so stop the LOOP
+            # rather than spin forever and saturate the thread pool. Asked
+            # directly via `sandbox.closed`; this used to string-match the SDK's
+            # AttributeError text ("has no attribute"), so rewording that
+            # exception would have silently resurrected the spin.
+            #
+            # Do NOT drop the handle or mark it stopped: the
             # dev server itself is almost certainly still listening on its port, and
             # liveness is judged by a real TCP check in /dev-status. Killing the
             # handle here is what caused "preview showed once then went blank".
-            if isinstance(content, str) and ("has no attribute" in content or "is closed" in content or "client has been closed" in content):
+            if sandbox.closed:
                 handle.log_buffer.append("[deerflow] preview log tail stopped (sandbox client reset); server still served by port check")
                 break
             # read_file returns "Error: ..." until the file exists; treat as empty.
@@ -667,18 +670,18 @@ async def _start_dev_server_aio(
     logpath = f"/mnt/user-data/workspace/.deerflow-dev-{container_port}.log"
     handle._logpath = logpath
 
-    # Ensure the log/pid files exist BEFORE the child runs so the SSE tail at
+    # The log/pid files must exist BEFORE the child runs so the SSE tail at
     # /api/sandbox/logs always has something to read — even when the child
-    # crashes immediately and never writes a single line. The wrapper's PID file
-    # is overwritten by the `echo $! > …` in the inner command; this touch just
-    # creates the inode so the file is present on the first poll.
-    try:
-        Path(logpath).touch(exist_ok=True)
-        Path(logpath + ".pid").touch(exist_ok=True)
-    except Exception:
-        # Touching must never block startup; the poller handles missing files.
-        logger.debug("failed to touch dev-server log files before launch", exc_info=True)
-
+    # crashes immediately and never writes a single line.
+    #
+    # This used to be `Path(logpath).touch()` right here, which never once
+    # worked under the AIO provider: `logpath` is a path *inside the sandbox
+    # container* (/mnt/user-data/workspace/...), while this code runs in the
+    # gateway, where /mnt is empty. Every call raised FileNotFoundError into the
+    # debug-level except below, so the window this guard exists to close stayed
+    # open for every dev server — and the resulting 404-per-poll was logged at
+    # ERROR by `read_file` about once a second. The touch is now part of the
+    # in-container command instead, where the path actually resolves.
     # Background the dev server inside the container, binding 0.0.0.0 so the
     # published port reaches it (HOSTNAME covers Next.js; the host flag covers
     # Vite). Launch under `setsid` so the server is its own process-group leader:
@@ -691,6 +694,7 @@ async def _start_dev_server_aio(
     # execs the dev command. This is robust even if the command retains a stray
     # leading assignment, avoiding `setsid: failed to execute PORT=…`.
     inner = (
+        f"touch {shlex.quote(logpath)} {shlex.quote(logpath + '.pid')}; "
         f"cd {shlex.quote(cwd)} && "
         f"setsid env PORT={container_port} HOST=0.0.0.0 HOSTNAME=0.0.0.0 BROWSER=none CI=1 "
         f"{bound_command} > {shlex.quote(logpath)} 2>&1 < /dev/null & "
