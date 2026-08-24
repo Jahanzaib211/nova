@@ -13,7 +13,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
+import json
 import logging
+import re
 import socket
 import zipfile
 from pathlib import Path
@@ -23,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSo
 from fastapi.responses import Response, StreamingResponse
 
 from app.gateway.deps import get_checkpointer
+from app.gateway.services import SSE_HEADERS
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id, reset_current_user, set_current_user
 from deerflow.sandbox.dev_server import (
@@ -39,8 +42,44 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sandbox", tags=["sandbox"])
 
+#: SSE event name for incremental terminal frames. Named rather than default so
+#: any client that does not subscribe ignores them (see ``_sse_frame_for``).
+_SSE_DELTA_EVENT = "sandbox_delta"
+
 _KEEPALIVE_INTERVAL = 15  # seconds between keepalive pings
 _POLL_INTERVAL = 0.5  # seconds between log-file tail polls
+
+
+def _classify_sse_frame(line: str) -> str:
+    """Wrap one sandbox.log line as an SSE frame.
+
+    Incremental frames go out under a **named** event. Per the SSE spec,
+    ``EventSource.onmessage`` receives only unnamed (``message``) events, so
+    a client that does not explicitly ``addEventListener`` for this name
+    never sees them -- which is the property that matters here.
+
+    The alternative, emitting them as ordinary ``message`` events with extra
+    fields, is what broke the live UI: the deployed frontend accepts any
+    frame with ``type`` and ``ts`` and renders it, so every ``delta`` became
+    a blank Terminal row whose real text sat in a field that build did not
+    read, and 54 such rows evicted real events from the 200-entry window.
+    Additive JSON fields are not backward compatible when the consumer
+    renders whatever it is handed; a named event is compatible *by
+    construction*, for this consumer and any future one.
+    """
+    # Cheap reject first: the vast majority of lines carry neither key, and
+    # this runs per line per poll for as long as a panel is open.
+    if '"delta"' in line or '"replace"' in line:
+        try:
+            record = json.loads(line)
+        except (ValueError, TypeError):
+            # Unparseable: fall through to the default event rather than
+            # hiding a line behind a name nobody is listening for.
+            return f"data: {line}\n\n"
+        if isinstance(record, dict) and ("delta" in record or "replace" in record):
+            return f"event: {_SSE_DELTA_EVENT}\ndata: {line}\n\n"
+    return f"data: {line}\n\n"
+
 
 # CSP for the sandbox's framed panes (ttyd/noVNC at /appview and agent-built dev
 # servers at /preview). They are iframed same-origin by the app shell, and must
@@ -123,6 +162,43 @@ async def stream_sandbox_logs(
     user_id = get_effective_user_id()
     log_path = _sandbox_log_path(thread_id, user_id=user_id)
 
+    def _read_from(offset: int) -> tuple[str, int]:
+        """Read from *offset*, returning only whole lines and the new offset.
+
+        Two bugs lived in the previous version of this, and both were silent.
+
+        **Torn lines.** It did ``chunk = fh.read()`` then advanced
+        ``seek_pos = fh.tell()`` unconditionally. The writer
+        (``sandbox/tools.py::_write_sandbox_observation``) appends from a
+        *different* process with no locking, so a read landing mid-append got
+        half a JSON line, emitted it, and moved the cursor past it. The frontend
+        then dropped it in a bare ``catch {}`` -- the event was gone with no
+        error anywhere. Now the trailing partial line is left unread: the offset
+        only ever advances to the last newline, so the remainder is picked up
+        whole on the next poll.
+
+        **Blocking IO on the event loop.** ``open()``/``read()`` are synchronous
+        and ran inside the async generator every 500 ms, per open panel, per
+        thread. The caller offloads this via ``asyncio.to_thread``; the repo has
+        a ``make test-blocking-io`` gate for precisely this class of bug.
+        """
+        # Binary mode on purpose. ``TextIOWrapper.tell()`` returns an *opaque
+        # cookie*, not a byte count, and ``seek()`` on a text file is only
+        # defined for values that came from ``tell()`` -- so mixing it with
+        # arithmetic offsets is undefined behaviour that happens to work. Reading
+        # bytes and decoding explicitly makes the cursor unambiguous, and lets us
+        # split on the last newline *before* decoding, so a multi-byte character
+        # straddling the read boundary can never be mangled.
+        with open(log_path, "rb") as fh:
+            fh.seek(offset)
+            raw = fh.read()
+        cut = raw.rfind(b"\n")
+        if cut == -1:
+            # Nothing complete yet -- do not advance, do not emit.
+            return "", offset
+        complete = raw[: cut + 1]
+        return complete.decode("utf-8", errors="replace"), offset + len(complete)
+
     async def event_generator():
         seek_pos = 0
         idle_ticks = 0
@@ -133,14 +209,11 @@ async def stream_sandbox_logs(
 
             if log_path.exists():
                 try:
-                    with open(log_path, encoding="utf-8", errors="replace") as fh:
-                        fh.seek(seek_pos)
-                        chunk = fh.read()
-                        seek_pos = fh.tell()
-                    if chunk:
-                        for line in chunk.splitlines():
+                    complete, seek_pos = await asyncio.to_thread(_read_from, seek_pos)
+                    if complete:
+                        for line in complete.splitlines():
                             if line:
-                                yield f"data: {line}\n\n"
+                                yield _classify_sse_frame(line)
                         idle_ticks = 0
                 except OSError:
                     pass
@@ -155,10 +228,7 @@ async def stream_sandbox_logs(
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers=SSE_HEADERS,
     )
 
 
@@ -184,36 +254,45 @@ async def get_sandbox_todo(
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
 
-    # Try to read from the sandbox todo.md file first (written by TodoMiddleware)
-    user_id = get_effective_user_id()
-    paths = get_paths()
-    todo_md_path = paths.sandbox_work_dir(thread_id, user_id=user_id) / "todo.md"
-
+    # The checkpoint is the ONE authority.
+    #
+    # This used to read ``todo.md`` first and fall back to the checkpoint only
+    # ``if not todos``, which made the panel non-deterministic: the list flipped
+    # between two sources depending on whether the file happened to parse to >=1
+    # item at that instant, and ``content`` could describe a different list than
+    # ``todos`` because only the fallback branch recomputed it.
+    #
+    # Worse, the "primary" source was dead on any container sandbox:
+    # ``_write_todo_md_file`` skipped every sandbox whose id did not start with
+    # ``local:``, so under AioSandboxProvider (hash ids) the file was never
+    # written at all. The file is now a convenience artifact for the agent and
+    # the Files tab; it is never the authority here.
     todos: list[dict] = []
-    content = ""
 
-    if todo_md_path.exists():
-        try:
-            content = todo_md_path.read_text(encoding="utf-8")
-            todos = _parse_todo_md(content)
-        except OSError:
-            pass
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        checkpoint_tuple = await checkpointer.aget_tuple(config)
+        if checkpoint_tuple is not None:
+            checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
+            channel_values = checkpoint.get("channel_values", {})
+            todos = _normalize_todos(channel_values.get("todos") or [])
+    except Exception:
+        logger.exception("Failed to read todos from checkpointer for thread %s", thread_id.replace("\n", "").replace("\r", ""))
 
-    # Fall back to LangGraph checkpoint state
+    # Only when the checkpoint has nothing to say (a thread whose first
+    # checkpoint has not landed yet) does the on-disk file get a voice.
     if not todos:
-        try:
-            config = {"configurable": {"thread_id": thread_id}}
-            checkpoint_tuple = await checkpointer.aget_tuple(config)
-            if checkpoint_tuple is not None:
-                checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-                channel_values = checkpoint.get("channel_values", {})
-                raw_todos = channel_values.get("todos") or []
-                todos = _normalize_todos(raw_todos)
-                content = _format_todo_md(todos)
-        except Exception:
-            logger.exception("Failed to read todos from checkpointer for thread %s", thread_id.replace("\n", "").replace("\r", ""))
+        user_id = get_effective_user_id()
+        todo_md_path = get_paths().sandbox_work_dir(thread_id, user_id=user_id) / "todo.md"
+        if todo_md_path.exists():
+            try:
+                todos = _parse_todo_md(todo_md_path.read_text(encoding="utf-8"))
+            except OSError:
+                pass
 
-    return {"content": content, "todos": todos}
+    # Derived once, from whatever list is actually being returned, so the two
+    # fields can never disagree.
+    return {"content": _format_todo_md(todos) if todos else "", "todos": todos}
 
 
 def _parse_todo_md(content: str) -> list[dict]:
@@ -263,7 +342,6 @@ def _format_todo_md(todos: list[dict]) -> str:
 # GET /api/sandbox/status
 # ──────────────────────────────────────────────────────────
 
-import json  # noqa: E402
 
 _TOOL_LABELS: dict[str, str] = {
     "bash": "is using Terminal",
@@ -948,6 +1026,14 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
             resp_headers.pop("Content-Length", None)
         except Exception:
             logger.warning("absproxy: HTML rewrite failed for thread %s port %d; serving upstream bytes", thread_id, port, exc_info=True)
+    elif "text/css" in (upstream.headers.get("content-type") or ""):
+        # See the CSS note in _proxy_dev_server: an unrewritten url(/…) 404s.
+        try:
+            content = _prefix_css_urls(content.decode("utf-8", errors="replace"), prefix).encode("utf-8")
+            resp_headers.pop("content-length", None)
+            resp_headers.pop("Content-Length", None)
+        except Exception:
+            logger.debug("absproxy: CSS rewrite failed; serving upstream bytes", exc_info=True)
 
     return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=upstream.headers.get("content-type") or None)
 
@@ -992,6 +1078,39 @@ window.WebSocket=W})();</script>"""
 # Null bytes are not valid in HTML, so this cannot collide with real content.
 _PREFIX_HIDDEN = "\x00prefix\x00"
 
+# The whole srcset attribute, captured so every comma-separated entry inside it
+# can be rewritten in one pass. Matching entry-by-entry does not work: after the
+# first substitution ``re.sub`` resumes *after* the match, so the second and
+# later URLs in the same attribute are never seen.
+_SRCSET_ATTR_RE = re.compile(r'((?:srcset|imagesrcset)=)(["\'])(.*?)\2', re.DOTALL)
+# A root-absolute URL at the start of a srcset entry (string start, or after a comma).
+_SRCSET_URL_RE = re.compile(r"(^|,)(\s*)/")
+# ``url(/…)`` in CSS, with optional quoting: url(/x), url("/x"), url('/x').
+_CSS_URL_RE = re.compile(r'(url\(\s*["\']?)/')
+
+
+def _prefix_srcset_attrs(html: str, prefix: str) -> str:
+    """Prefix every entry of every ``srcset`` / ``imagesrcset`` attribute.
+
+    These are comma-separated URL lists. Only the first entry sits behind the
+    opening quote; the rest follow ``, ``, so the plain attribute replacements
+    miss them entirely. A responsive image then 404s on exactly the descriptors
+    the browser picks for other device-pixel-ratios and viewports -- "fine on my
+    screen, broken on yours".
+
+    Rewriting entry-by-entry with one regex does not work either: ``re.sub``
+    resumes *after* each match, so a pattern anchored at the attribute name only
+    ever fires once per attribute. Hence the two-level pass -- outer match grabs
+    the whole attribute, inner sub rewrites each entry within it.
+    """
+
+    def _one_attr(match: re.Match[str]) -> str:
+        name, quote, value = match.group(1), match.group(2), match.group(3)
+        fixed = _SRCSET_URL_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{prefix}/", value)
+        return f"{name}{quote}{fixed}{quote}"
+
+    return _SRCSET_ATTR_RE.sub(_one_attr, html)
+
 
 def _prefix_html_urls(html: str, prefix: str) -> str:
     """Rewrite root-absolute URLs in HTML to stay under the proxy prefix.
@@ -1004,13 +1123,48 @@ def _prefix_html_urls(html: str, prefix: str) -> str:
     if not html or not prefix:
         return html
     hidden = html.replace(f"{prefix}/", _PREFIX_HIDDEN)
+
+    # srcset FIRST. Its first entry sits right behind the opening quote, so the
+    # generic `"/_next/` rule below would otherwise claim it and the entry would
+    # end up prefixed twice.
+    rewritten = _prefix_srcset_attrs(hidden, prefix)
+
     rewritten = (
-        hidden.replace('href="/', f'href="{prefix}/')
+        rewritten.replace('href="/', f'href="{prefix}/')
         .replace('src="/', f'src="{prefix}/')
         .replace('action="/', f'action="{prefix}/')
+        # Single-quoted attributes are just as valid as double-quoted ones, and
+        # hand-written pages and several templating engines emit them.
+        .replace("href='/", f"href='{prefix}/")
+        .replace("src='/", f"src='{prefix}/")
+        .replace("action='/", f"action='{prefix}/")
         # Next.js inlines its asset base (`"/_next/...`) without an attribute.
         .replace('"/_next/', f'"{prefix}/_next/')
+        .replace("'/_next/", f"'{prefix}/_next/")
     )
+    # Inline <style> blocks reference assets the same way a .css file does; the
+    # standalone-file case is handled by the content-type gate at the call sites.
+    rewritten = _CSS_URL_RE.sub(lambda m: f"{m.group(1)}{prefix}/", rewritten)
+    return rewritten.replace(_PREFIX_HIDDEN, f"{prefix}/")
+
+
+def _prefix_css_urls(css: str, prefix: str) -> str:
+    """Rewrite root-absolute ``url(/…)`` references inside a stylesheet.
+
+    The HTML rewrite was gated on ``text/html``, so a real ``.css`` response was
+    passed through untouched and every ``url(/_next/static/media/…)`` in it —
+    web fonts, background images — resolved against the *app* origin instead of
+    the proxy prefix, and 404'd. The page then renders with fallback fonts and
+    missing imagery: styled enough to look almost right, which is the hardest
+    kind of wrong to spot.
+
+    Shares ``_prefix_html_urls``' idempotence trick so a doubly-proxied
+    stylesheet is never double-prefixed.
+    """
+    if not css or not prefix:
+        return css
+    hidden = css.replace(f"{prefix}/", _PREFIX_HIDDEN)
+    rewritten = _CSS_URL_RE.sub(lambda m: f"{m.group(1)}{prefix}/", hidden)
     return rewritten.replace(_PREFIX_HIDDEN, f"{prefix}/")
 
 
@@ -1282,6 +1436,17 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
             content = html.encode("utf-8")
         except Exception:
             pass
+    elif "text/css" in content_type:
+        # Stylesheets were never rewritten: the gate above only matched HTML, so
+        # a `url(/_next/static/media/…)` — a web font, a background image —
+        # resolved against the app origin and 404'd, leaving the page styled just
+        # enough to look almost right.
+        try:
+            content = _prefix_css_urls(content.decode("utf-8", errors="replace"), prefix).encode("utf-8")
+            resp_headers.pop("content-length", None)
+            resp_headers.pop("Content-Length", None)
+        except Exception:
+            logger.debug("CSS rewrite failed; serving upstream bytes", exc_info=True)
 
     # Defense in depth: force opaque sandbox + strip cookies so untrusted preview
     # content cannot touch the parent app's session even on direct navigation.
@@ -1401,7 +1566,30 @@ async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:
                 except Exception:
                     return
 
-            await _asyncio.gather(client_to_upstream(), upstream_to_client())
+            # FIRST_COMPLETED, not gather().
+            #
+            # gather() waits for *both* pumps. When the browser closes the tab,
+            # `client_to_upstream` returns immediately but `upstream_to_client`
+            # stays parked in `async for msg in upstream` -- ttyd has nothing to
+            # say and never closes its side. The upstream socket and the PTY
+            # behind it then stay open until the sandbox container dies. Every
+            # open-and-close of the Terminal tab leaked one shell.
+            #
+            # Whichever direction ends first means the bridge is over; cancel the
+            # other and let the `async with` close the upstream connection.
+            done, pending = await _asyncio.wait(
+                {_asyncio.create_task(client_to_upstream()), _asyncio.create_task(upstream_to_client())},
+                return_when=_asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            if pending:
+                await _asyncio.wait(pending)
+            for task in done:
+                # Surface a genuine failure to the outer handler; a clean return
+                # is the normal path.
+                with contextlib.suppress(_asyncio.CancelledError, Exception):
+                    task.result()
     except Exception:
         pass
     finally:

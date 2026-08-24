@@ -237,3 +237,65 @@ class TestPrefixHtmlUrls:
     def test_empty_and_prefixless_input_are_noops(self) -> None:
         assert sandbox_router._prefix_html_urls("", "/p") == ""
         assert sandbox_router._prefix_html_urls("<html/>", "") == "<html/>"
+
+
+# ── The upstream-socket leak (ttyd PTY held after the browser closed) ─────────
+
+import asyncio as _aio  # noqa: E402
+import contextlib as _ctx  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
+
+
+class _SilentUpstream:
+    """An upstream that never sends and never closes -- exactly ttyd at idle.
+
+    Under the old ``asyncio.gather(...)`` this is what pinned the bridge open:
+    the client pump returned on disconnect, but this side stayed parked in
+    ``async for`` forever, holding the socket and its PTY until the container
+    died.
+    """
+
+    def __init__(self):
+        self.closed = False
+        self.send = AsyncMock()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        self.closed = True
+        return False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        await _aio.Event().wait()  # never resolves
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.asyncio
+async def test_client_disconnect_releases_the_upstream(monkeypatch):
+    """The bridge must finish promptly when the browser goes away."""
+    from app.gateway.routers import sandbox as mod
+
+    upstream = _SilentUpstream()
+    monkeypatch.setattr(mod, "_ws", MagicMock(connect=MagicMock(return_value=upstream)), raising=False)
+
+    ws = MagicMock()
+    ws.receive = AsyncMock(return_value={"type": "websocket.disconnect"})
+    ws.close = AsyncMock()
+
+    import sys
+    import types
+
+    fake = types.ModuleType("websockets")
+    fake.connect = MagicMock(return_value=upstream)
+    monkeypatch.setitem(sys.modules, "websockets", fake)
+
+    # Under gather() this never returns; the timeout is the assertion.
+    with _ctx.suppress(TimeoutError):
+        await _aio.wait_for(mod._bridge_ws(ws, "ws://sandbox:7681/ws"), timeout=5.0)
+
+    assert upstream.closed, "the upstream connection was never exited -- the PTY leaked"
+    ws.close.assert_awaited()
