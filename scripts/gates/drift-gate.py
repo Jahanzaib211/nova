@@ -154,6 +154,47 @@ def check_frontend_build_freshness() -> dict:
     if not src.is_dir():
         return check("frontend_build", YELLOW, "frontend/src not found")
 
+    # A dev server compiles from the bind mount on every request, so the image's
+    # baked copy is not what is being served and hashing it answers the wrong
+    # question. Without this the check reports RED forever the moment the stack
+    # runs `next dev` -- and a stale `.next/BUILD_ID` sits in the container to
+    # make the message look convincing. Per the note above: two false positives
+    # in a row is how a gate gets ignored.
+    #
+    # Dev mode is only trustworthy if the mount is actually there, so both are
+    # required before this short-circuits.
+    rc_c, cmd, _ = _run(
+        ["docker", "inspect", "deer-flow-frontend", "--format", "{{json .Config.Cmd}}"],
+        timeout=30,
+    )
+    is_dev_server = rc_c == 0 and ("next dev" in cmd or "run dev" in cmd)
+
+    rc_m, mounts, _ = _run(
+        [
+            "docker",
+            "inspect",
+            "deer-flow-frontend",
+            "--format",
+            "{{range .Mounts}}{{.Source}}=>{{.Destination}} {{end}}",
+        ],
+        timeout=30,
+    )
+    src_is_mounted = rc_m == 0 and f"{src}=>/app/frontend/src" in mounts
+
+    if is_dev_server:
+        if src_is_mounted:
+            return check(
+                "frontend_build",
+                GREEN,
+                "dev server compiling frontend/src live from the bind mount",
+            )
+        return check(
+            "frontend_build",
+            RED,
+            "running a dev server but frontend/src is NOT bind-mounted — it is "
+            "compiling the image's baked copy, so your edits are invisible",
+        )
+
     rc_h, host_hash, _ = _run(
         ["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120
     )
