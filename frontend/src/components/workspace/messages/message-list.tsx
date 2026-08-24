@@ -30,7 +30,10 @@ import {
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
-import { useUpdateSubtask } from "@/core/tasks/context";
+import {
+  useUpdateSubtask,
+  type SubtaskUpdateSource,
+} from "@/core/tasks/context";
 import {
   derivePendingSubtaskStatus,
   findSubtaskResultMessage,
@@ -235,6 +238,39 @@ export function MessageList({
   }, [groupedMessages, lastHumanGroupIndex]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
+
+  // Subtask state is *derived* from the message list, and that derivation
+  // happens while building the message JSX below. Calling `updateSubtask`
+  // straight from there writes to SubtasksProvider during MessageList's render,
+  // which React rejects:
+  //
+  //   Cannot update a component (`SubtasksProvider`) while rendering a
+  //   different component (`MessageList`)
+  //
+  // The derivation itself is fine where it is — it needs the same walk over
+  // messages the rendering does. Only the *write* has to wait, so updates are
+  // queued during render and flushed in the effect below. The queue is reset at
+  // the top of every render so a re-render cannot replay stale entries.
+  //
+  // Flushing on every render is safe because `updateSubtask` hands back the
+  // same state reference when nothing observable changed (see the identity note
+  // in `core/tasks/context.tsx`), so React bails out instead of looping.
+  const queuedSubtaskUpdates = useRef<
+    Array<[Partial<Subtask> & { id: string }, SubtaskUpdateSource]>
+  >([]);
+  queuedSubtaskUpdates.current = [];
+  const queueSubtaskUpdate = (
+    task: Partial<Subtask> & { id: string },
+    source: SubtaskUpdateSource,
+  ) => {
+    queuedSubtaskUpdates.current.push([task, source]);
+  };
+
+  useEffect(() => {
+    for (const [task, source] of queuedSubtaskUpdates.current) {
+      updateSubtask(task, source);
+    }
+  });
   // Server-truth liveness: a dropped stream must not paint still-running
   // subtasks as failed. Read-only consumer — `enabled: false` means this never
   // issues its own request, it only reads what useThreadStream's rejoin query
@@ -504,7 +540,7 @@ export function MessageList({
                             }
                           : {}),
                     };
-                    updateSubtask(task, parsed ? "result" : "derived");
+                    queueSubtaskUpdate(task, parsed ? "result" : "derived");
                     tasks.add(task);
                   }
                 }
@@ -515,7 +551,7 @@ export function MessageList({
                     extractTextFromMessage(message),
                     message.additional_kwargs,
                   );
-                  updateSubtask({ id: taskId, ...parsed }, "result");
+                  queueSubtaskUpdate({ id: taskId, ...parsed }, "result");
                 }
               }
             }
