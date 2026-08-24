@@ -91,8 +91,28 @@ def _classify_sse_frame(line: str) -> str:
 # boundary (script cannot reach the parent frame's DOM) while letting the framed
 # content carry the session cookie like any other same-origin page.
 _FRAMED_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-same-origin"
-# The generic absproxy is not framed by the app shell, so it keeps the stricter
-# opaque-origin CSP (defense in depth for arbitrary in-container ports).
+# The generic absproxy keeps the stricter opaque-origin CSP: it proxies
+# *arbitrary in-container ports*, so granting `allow-same-origin` would let any
+# service the agent happens to start act as the signed-in user against the
+# gateway — a materially wider blast radius than the preview proxy, which is
+# scoped to one registered dev-server port.
+#
+# KNOWN GAP (verified 2026-08-25, not yet resolved). This used to say "the
+# generic absproxy is not framed by the app shell". That premise is false:
+# `buildPreviewSrc` in `browser-tab.tsx` returns the absproxy URL as the iframe
+# `src` whenever the canonical preview proxy cannot reach the dev server — the
+# normal path when the agent started the server with raw `bash` rather than
+# `start_dev_server`. So a framed absproxy gets an opaque origin, and every
+# failure mode described above for _FRAMED_SANDBOX_CSP applies: sub-resources
+# arrive cookie-less and the auth middleware 401s them, and `localStorage` /
+# `document.cookie` throw during hydration. That is the likely cause of the
+# reported "renders in Chrome, wrong in Nova's Browser tab".
+#
+# Fixing it by simply adding `allow-same-origin` here would trade a rendering
+# bug for a privilege one. The shape that resolves both is to distinguish the
+# framed case (`Sec-Fetch-Dest: iframe`) from a direct hit and serve the framed
+# CSP only then — deliberately, rather than by accident in either direction.
+# Left open pending a reproduction of the render failure against a served build.
 _OPAQUE_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals"
 
 
