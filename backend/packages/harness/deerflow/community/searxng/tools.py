@@ -96,7 +96,10 @@ async def web_search_tool(query: str, tor: bool = False) -> str:
         )
     except Exception as exc:
         elapsed_ms = (time.monotonic() - start) * 1000
-        logger.warning("SearXNG search failed, attempting DDG fallback: %s", exc)
+        # Name the instance: the fallback keeps search *working*, so the only
+        # signal that the configured SearXNG is down is this line. Without the
+        # URL an operator cannot tell which one failed.
+        logger.warning("SearXNG search failed at %s, attempting DDG fallback: %s", base_url, exc)
         try:
             return await _ddg_fallback(query, max_results, start)
         except Exception as fallback_exc:

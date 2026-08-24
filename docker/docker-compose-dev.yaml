@@ -346,8 +346,8 @@ services:
       - AUTH_TRUSTED_PROXIES=${AUTH_TRUSTED_PROXIES:-192.168.200.0/24}
       # Proxy values (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY) are inherited from ../.env via env_file.
       # Only NO_PROXY is declared here so internal service hostnames are always exempt from the proxy.
-      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,host.docker.internal
-      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,host.docker.internal
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,searxng,crawl4ai,browserless,postgres,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,searxng,crawl4ai,browserless,postgres,host.docker.internal
     env_file:
       - ../.env
     extra_hosts:
@@ -546,6 +546,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      # SearXNG + uwsgi boot slower than 3x30s on a contended host, and without a
+      # grace period the container flaps to `unhealthy` before it is ever ready.
+      start_period: 30s
     mem_limit: 256m
     mem_reservation: 128m
     security_opt:

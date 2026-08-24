@@ -42,9 +42,15 @@
 #     one applies here, it is just no longer opt-in because this deployment has
 #     already made that choice.
 #
-# searxng and provisioner are absent by design: nothing in config.yaml
-# references SearXNG, and sandbox mode is aio (no provisioner_url). The dev
-# stack only ever ran them at `--scale 0` anyway.
+# provisioner is absent by design: sandbox mode is aio (no provisioner_url).
+#
+# searxng is NOT absent -- see "Services config.yaml requires" below. This
+# comment used to claim "nothing in config.yaml references SearXNG", which was
+# already false when written (`config.yaml:81-82` binds web_search to
+# http://searxng:8080) and contradicted the section that adds the service back.
+# The stale half of that contradiction is what kept searxng out of the launcher's
+# start list in scripts/docker.sh, so the container never came up and the
+# Privacy panel's SearXNG card was permanently red.
 
 services:
   # ── Reverse Proxy ──────────────────────────────────────────────────────────
@@ -244,8 +250,8 @@ services:
       - XDG_CACHE_HOME=/tmp/.cache
       - UV_CACHE_DIR=/tmp/.cache/uv
       - PYTHONDONTWRITEBYTECODE=1
-      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,host.docker.internal
-      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,host.docker.internal
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,searxng,crawl4ai,browserless,postgres,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,searxng,crawl4ai,browserless,postgres,host.docker.internal
     env_file:
       - ../.env
     extra_hosts:
@@ -367,6 +373,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      # SearXNG + uwsgi boot slower than 3x30s on a contended host, and without a
+      # grace period the container flaps to `unhealthy` before it is ever ready.
+      start_period: 30s
     mem_limit: 256m
     mem_reservation: 128m
     security_opt:
