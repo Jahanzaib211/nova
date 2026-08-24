@@ -136,8 +136,15 @@ does not re-investigate settled items.
   error as the first probe: auditing the container Nova spawns and attributing
   what it finds to the system that built it.
 
-### Not Nova's to fix
+### Was a credential problem, now resolved
 
-- **`MINIMAX_API_KEY` is rejected** (`error 2049: invalid api key`). The key is
-  forwarded correctly — `sandbox.environment` passes it through — but the
-  credential itself is invalid. No code change can fix that.
+- **Image generation.** The live run showed `MiniMax error 2049: invalid api key`
+  three times. The plumbing was never at fault: `sandbox.environment` forwards
+  `MINIMAX_API_KEY`, and the value inside the container is byte-identical to the
+  host's — same length, same SHA-256. Verified 2026-08-25 by hashing both rather
+  than printing either.
+
+  The key has since been replaced and image generation now works: a live
+  `POST /v1/image_generation` from inside the sandbox returns HTTP 200 with
+  `success_count: 1` and an image URL. Nothing in Nova needed changing; recorded
+  here so the 2049 in the old logs is not re-investigated.
