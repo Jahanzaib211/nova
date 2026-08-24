@@ -21,6 +21,8 @@ Probes:
       container actually uses via host.docker.internal)
   P10. nova-litellm proxy reachability (172.17.0.1:4000/v1/models — the
       unified gateway for Ollama cloud models)
+  P14. SearXNG reachability (127.0.0.1:8088/healthz; skipped when no tool
+       is bound to it) — the silent DDG fallback hides an outage otherwise
   P11. Dify stack health (127.0.0.1:8088/console/api/setup → step=finished;
       pm2 app nova-dify running the compose stack)
   P12. Cloudflare Tunnel — systemd unit active + public URL reachable.
@@ -342,6 +344,40 @@ async def probe_nginx(port: int = 2026) -> ProbeResult:
         f"http://localhost:{port}/health",
         body_validator=lambda d: d.get("status") == "healthy",
     )
+
+
+async def probe_searxng(port: int = 8088) -> ProbeResult:
+    """Is the search backend `web_search` is bound to actually up?
+
+    SearXNG was defined in compose, wired into `config.yaml` as `web_search`'s
+    backend, and never started by the launcher — for weeks. Nothing caught it,
+    because `web_search` falls back to DuckDuckGo silently: search kept working
+    while the Recon card stayed red, and a red card in one panel is easy to
+    scroll past. This is the check that would have said so out loud.
+
+    Skipped, not failed, when this deployment does not point a tool at SearXNG:
+    a probe that is permanently red on a deployment that never wanted the
+    service teaches people to ignore the whole daemon.
+    """
+    if not _searxng_is_configured():
+        return ProbeResult(
+            "P14_searxng", Status.GREEN, "skipped (no tool bound to searxng)", 0.0
+        )
+    return await _http_probe("P14_searxng", f"http://localhost:{port}/healthz")
+
+
+def _searxng_is_configured() -> bool:
+    """Does config.yaml bind any tool to a searxng base_url?
+
+    Deliberately a substring check rather than a YAML parse: this daemon starts
+    before the venv on some hosts, and adding a dependency to answer one boolean
+    is a worse trade than a slightly blunt read.
+    """
+    try:
+        config = Path(__file__).resolve().parent.parent / "config.yaml"
+        return "searxng" in config.read_text()
+    except OSError:
+        return False
 
 
 async def probe_gateway(port: int = 2026) -> ProbeResult:
@@ -1238,6 +1274,10 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
         ),
         ("P7_containers", probe_containers),
         ("P13_drift", probe_drift),
+        (
+            "P14_searxng",
+            lambda: probe_searxng(port=int(os.environ.get("SEARXNG_PORT", "8088"))),
+        ),
         ("P8_binary_attestation", probe_binary_attestation),
         (
             "P9_bridge",
