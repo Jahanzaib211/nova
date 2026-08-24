@@ -170,6 +170,31 @@ class SandboxConfig(BaseModel):
         ge=0,
         description="Maximum characters to keep from bash tool output. Output exceeding this limit is middle-truncated (head + tail), preserving the first and last half. Set to 0 to disable truncation.",
     )
+    stream_terminal_output: bool = Field(
+        default=False,
+        description=(
+            "Stream bash output into sandbox.log as it is produced, instead of "
+            "one line at completion. Emits extra `delta`/`replace` frames that "
+            "only a frontend built after this feature understands. Default OFF "
+            "because the backend hot-reloads while the frontend serves a "
+            "prebuilt bundle: turning it on before the matching frontend is "
+            "deployed makes every intermediate frame render as a blank row and "
+            "evict real events from the 200-entry display window. Turn on only "
+            "once the frontend serving this deployment understands the "
+            "`sandbox_delta` SSE event."
+        ),
+    )
+    observation_max_chars: int = Field(
+        default=20000,
+        ge=0,
+        description=(
+            "Maximum characters of tool output kept in one sandbox.log observation "
+            "line -- what the Agent's Computer Terminal renders. Was a hardcoded "
+            "2000 with no truncation marker, so the panel showed silently less "
+            "than the model received for the same command. Middle-truncated with "
+            "an explicit marker, like bash_output_max_chars. Set to 0 to disable."
+        ),
+    )
     read_file_output_max_chars: int = Field(
         default=50000,
         ge=0,

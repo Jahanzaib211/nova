@@ -3,12 +3,14 @@ import errno
 import logging
 import shlex
 import threading
+import time
 import uuid
 from collections.abc import Callable
 
 from agent_sandbox import Sandbox as AioSandboxClient
 
 from deerflow.config.paths import VIRTUAL_PATH_PREFIX
+from deerflow.sandbox.exceptions import SandboxError
 from deerflow.sandbox.sandbox import Sandbox
 from deerflow.sandbox.search import GrepMatch, path_matches, should_ignore_path, truncate_line
 
@@ -17,6 +19,35 @@ logger = logging.getLogger(__name__)
 _MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100 MB
 
 _ERROR_OBSERVATION_SIGNATURE = "'ErrorObservation' object has no attribute 'exit_code'"
+
+
+def _single_line(command: str) -> str:
+    """Collapse a multi-line command into one line the sandbox can parse.
+
+    The upstream sandbox server mis-handles a newline in ``exec_command`` and
+    answers with an ``ErrorObservation`` whose ``exit_code`` it then fails to
+    read, surfacing to the agent as::
+
+        Command failed: 'ErrorObservation' object has no attribute 'exit_code'
+
+    Measured against the live container: **10/10 multi-line commands failed,
+    0/10 single-line**. In one real run 13 of 25 multi-line commands were lost
+    this way -- the agent silently gave up half its shell scripts.
+
+    Base64 keeps the payload byte-exact, so heredocs, embedded quotes, tabs and
+    backslashes all survive. It also runs the script through a *non-interactive*
+    ``bash``, which disables history expansion -- the same run shows a bare
+    ``bash: !: event not found`` for a ``!`` inside double quotes.
+
+    Single-line commands are returned untouched: they already work, and 107 of
+    them ran clean in that same log. ``bash -s`` costs nothing here because the
+    default session persists neither cwd nor environment between calls (verified
+    directly: ``cd /tmp`` then ``pwd`` returns the home directory either way).
+    """
+    if "\n" not in command:
+        return command
+    encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
+    return f"echo {encoded} | base64 -d | bash -s"
 
 
 class AioSandbox(Sandbox):
@@ -60,6 +91,26 @@ class AioSandbox(Sandbox):
     @property
     def base_url(self) -> str:
         return self._base_url
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def _require_client(self):
+        """The SDK client, or a typed error explaining that it is gone.
+
+        :meth:`close` drops the reference so a later call fails loudly rather
+        than reusing a half-closed client. It did fail -- as
+        ``AttributeError: 'NoneType' object has no attribute 'file'``, which
+        says nothing about what happened. Downstream that forced
+        ``dev_server.py`` to recognise a released sandbox by **string-matching**
+        the words "has no attribute" in a returned error message; rewording the
+        exception would silently break the preview log tail.
+        """
+        client = self._client
+        if client is None:
+            raise SandboxError(f"sandbox {self.id} has been released; its client is closed")
+        return client
 
     def close(self) -> None:
         """Best-effort close of the host-side HTTP client owned by this sandbox.
@@ -116,7 +167,7 @@ class AioSandbox(Sandbox):
     def home_dir(self) -> str:
         """Get the home directory inside the sandbox."""
         if self._home_dir is None:
-            context = self._client.sandbox.get_context()
+            context = self._require_client().sandbox.get_context()
             self._home_dir = context.home_dir
         return self._home_dir
 
@@ -163,7 +214,8 @@ class AioSandbox(Sandbox):
     def _execute_command_locked(self, command: str) -> str:
         with self._lock:
             try:
-                result = self._client.shell.exec_command(command=command, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
+                wire = _single_line(command)
+                result = self._require_client().shell.exec_command(command=wire, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
                 output = result.data.output if result.data else ""
 
                 if output and _ERROR_OBSERVATION_SIGNATURE in output:
@@ -172,15 +224,15 @@ class AioSandbox(Sandbox):
                     # no id, so the recovery session must be created explicitly
                     # before we target it on retry.
                     fresh_id = str(uuid.uuid4())
-                    self._client.shell.create_session(id=fresh_id)
+                    self._require_client().shell.create_session(id=fresh_id)
                     try:
-                        result = self._client.shell.exec_command(command=command, id=fresh_id, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
+                        result = self._require_client().shell.exec_command(command=wire, id=fresh_id, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
                         output = result.data.output if result.data else ""
                     finally:
                         # Release the one-shot recovery session, best-effort, so
                         # repeated corruption can't accumulate sessions.
                         try:
-                            self._client.shell.cleanup_session(fresh_id)
+                            self._require_client().shell.cleanup_session(fresh_id)
                         except Exception as cleanup_error:
                             logger.warning(f"Failed to release recovery session {fresh_id}: {cleanup_error}")
 
@@ -188,6 +240,193 @@ class AioSandbox(Sandbox):
             except Exception as e:
                 logger.error(f"Failed to execute command in sandbox: {e}")
                 return f"Error: {e}"
+
+    # This backend can report output while a command is still running, so the
+    # Terminal fills line by line instead of showing one block at exit.
+    supports_streaming = True
+
+    #: How often to re-read the command's output file. 400 ms is below the
+    #: 500 ms at which the gateway tails sandbox.log, so the log is never the
+    #: slower half of the pipe.
+    _STREAM_POLL_INTERVAL = 0.4
+
+    #: Stop tailing once the output passes this size and just wait for the exit.
+    #: The file API returns whole files, so tailing a runaway log would re-read
+    #: it on every poll -- quadratic in bytes for output nobody can read anyway.
+    #: The full output is still returned; only the live narration stops.
+    _STREAM_MAX_TAIL_BYTES = 1_000_000
+
+    def execute_command_streaming(self, command: str, on_chunk: "Callable[[str, bool], None]") -> str:
+        """Run ``command``, reporting output as it appears rather than at exit.
+
+        ``on_chunk(text, replace)`` is called for each change in output:
+        ``replace=False`` appends ``text``, ``replace=True`` swaps the whole
+        body. Returns the complete output, exactly as :meth:`execute_command`.
+
+        **Why this redirects to a file rather than polling ``shell.view``.**
+        The obvious design -- ``exec_command(async_mode=True)`` then poll
+        ``view`` -- does not work against this sandbox server. ``exec_command``
+        does return immediately, but ``view`` reports ``output=''`` and an empty
+        ``console`` for the entire run and only produces the text at
+        ``status='completed'``. Measured against the live container on a command
+        printing one line a second for four seconds::
+
+            t+0.01s status='running'   output=''
+            t+2.11s status='running'   output=''
+            t+3.52s status='running'   output=''
+            t+4.22s status='completed' output='line 1\nline 2\nline 3\nline 4'
+
+        Driving the same command through an interactive PTY
+        (``write_to_process``) buffers identically, so the shell API simply does
+        not expose partial output.
+
+        The file API does. Redirecting to a file and polling ``file.read_file``
+        yields the output as it is written::
+
+            t+0.04s status='running'   file='line 1\n'
+            t+1.25s status='running'   file='line 1\nline 2\n'
+            t+2.46s status='running'   file='line 1\nline 2\nline 3\n'
+
+        It also avoids the shell entirely while the command runs, so the poll
+        cannot corrupt the session -- the failure mode that cost 13 of 25
+        multi-line commands before the base64 wrapper.
+        """
+        self._mark_busy(1)
+        try:
+            return self._execute_command_streaming_locked(command, on_chunk)
+        finally:
+            self._mark_busy(-1)
+
+    @staticmethod
+    def _stream_wire(command: str, log_path: str) -> str:
+        """The command, byte-exact, with all output redirected to ``log_path``.
+
+        Always base64 -- even for a single-line command that
+        :func:`_single_line` would pass through untouched. Appending
+        ``> file 2>&1`` to raw text binds the redirect to the *last* command
+        only, so ``echo a; echo b`` would stream half its output and return the
+        other half. Wrapping the whole script in one ``bash -s`` makes the
+        redirect unambiguous, and keeps the newline off the wire as a bonus.
+        """
+        encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
+        return f"echo {encoded} | base64 -d | bash -s > {shlex.quote(log_path)} 2>&1"
+
+    def _execute_command_streaming_locked(self, command: str, on_chunk: "Callable[[str, bool], None]") -> str:
+        with self._lock:
+            # A dedicated session per command: the default session is shared
+            # with `shell_session`, whose screen would mix another process's
+            # output into this command's stream.
+            session_id = f"nova-stream-{uuid.uuid4()}"
+            log_path = f"/tmp/nova-stream-{uuid.uuid4().hex}.log"
+
+            try:
+                self._require_client().shell.create_session(id=session_id)
+                self._require_client().shell.exec_command(
+                    command=self._stream_wire(command, log_path),
+                    id=session_id,
+                    async_mode=True,
+                    no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT,
+                )
+            except Exception as e:
+                logger.warning("streaming exec failed to start (%s); falling back to blocking exec", e)
+                self._cleanup_stream_session(session_id)
+                # Not an error to the agent: the blocking path still works, it
+                # just cannot report progress. Degrade quietly rather than fail
+                # a command because a nicety was unavailable.
+                return self._execute_command_locked(command)
+
+            seen = ""
+            tailing = True
+            try:
+                while True:
+                    grew = False
+                    if tailing:
+                        before = len(seen)
+                        seen = self._emit_new_output(log_path, seen, on_chunk)
+                        grew = len(seen) != before
+                        if len(seen) > self._STREAM_MAX_TAIL_BYTES:
+                            logger.debug("streaming output passed %d bytes; tailing off", self._STREAM_MAX_TAIL_BYTES)
+                            tailing = False
+                    # Output arriving is already proof the command is alive, so
+                    # only spend a `view` request when it goes quiet. Halves the
+                    # HTTP traffic during the noisy part of a build -- httpx logs
+                    # every one of these at INFO, and the poll loop was ~25% of
+                    # all gateway log lines.
+                    if not grew and self._stream_status(session_id) != "running":
+                        break
+                    time.sleep(self._STREAM_POLL_INTERVAL)
+
+                # One last read: the final write lands between the previous poll
+                # and the process exiting, so without this the last line of
+                # every command would be missing from the live view.
+                seen = self._emit_new_output(log_path, seen, on_chunk)
+            finally:
+                self._cleanup_stream_session(session_id, log_path)
+
+            # The corruption backstop still applies: if the wrapper somehow did
+            # not prevent it, re-run through the blocking path, which retries on
+            # a fresh session.
+            if seen and _ERROR_OBSERVATION_SIGNATURE in seen:
+                logger.warning("ErrorObservation in streamed output, retrying on the blocking path")
+                return self._execute_command_locked(command)
+
+            return seen if seen else "(no output)"
+
+    def _emit_new_output(self, log_path: str, seen: str, on_chunk: "Callable[[str, bool], None]") -> str:
+        """Report whatever the output file has gained since ``seen``."""
+        content = self._read_stream_log(log_path)
+        if content is None or content == seen:
+            return seen
+        if content.startswith(seen):
+            on_chunk(content[len(seen) :], False)
+        else:
+            # The file should only ever grow, but a truncating writer would
+            # otherwise have its output concatenated onto stale text.
+            on_chunk(content, True)
+        return content
+
+    def _read_stream_log(self, log_path: str) -> "str | None":
+        """Current contents of the output file, or None if it is not readable.
+
+        Not an error: the file does not exist until the redirect is set up, so
+        the first poll of every command lands before it.
+        """
+        try:
+            result = self._require_client().file.read_file(file=log_path)
+        except Exception as e:  # noqa: BLE001
+            logger.debug("stream log %s not readable yet: %s", log_path, e)
+            return None
+        return (result.data.content or "") if result.data else ""
+
+    def _stream_status(self, session_id: str) -> str:
+        """`running` while the command is live; any other value is terminal.
+
+        `no_change_timeout` and `hard_timeout` are terminal too -- the process
+        is gone and no more output will arrive, so polling on would spin until
+        the outer timeout.
+        """
+        try:
+            data = self._require_client().shell.view(id=session_id).data
+        except Exception as e:  # noqa: BLE001
+            logger.warning("streaming view failed for session %s: %s", session_id, e)
+            return "terminated"
+        return (getattr(data, "status", None) or "running") if data else "running"
+
+    def _cleanup_stream_session(self, session_id: str, log_path: "str | None" = None) -> None:
+        """Release the per-command session and its output file.
+
+        Best-effort: a leaked session or a stray file in the sandbox's /tmp
+        costs a little memory, and failing the command over it would be worse.
+        """
+        if log_path:
+            try:
+                self._require_client().shell.exec_command(command=f"rm -f {shlex.quote(log_path)}", id=session_id, no_change_timeout=10)
+            except Exception as e:  # noqa: BLE001
+                logger.debug("failed to remove stream log %s: %s", log_path, e)
+        try:
+            self._require_client().shell.cleanup_session(session_id)
+        except Exception as e:  # noqa: BLE001
+            logger.debug("failed to release streaming session %s: %s", session_id, e)
 
     def read_file(self, path: str) -> str:
         """Read the content of a file in the sandbox.
@@ -199,10 +438,19 @@ class AioSandbox(Sandbox):
             The content of the file.
         """
         try:
-            result = self._client.file.read_file(file=path)
+            result = self._require_client().file.read_file(file=path)
             return result.data.content if result.data else ""
         except Exception as e:
-            logger.error(f"Failed to read file in sandbox: {e}")
+            # A file that does not exist yet is an expected, handled outcome --
+            # the dev-server tail polls its log from before the server's first
+            # write, and `dev_server.py` treats "Error:" as empty. Logging that
+            # at ERROR wrote a multi-line entry with full HTTP headers roughly
+            # once a second and buried real failures.
+            detail = str(e)
+            if "does not exist" in detail or "status_code: 404" in detail:
+                logger.debug("File not present (yet) in sandbox: %s", path)
+            else:
+                logger.error(f"Failed to read file in sandbox: {e}")
             return f"Error: {e}"
 
     def download_file(self, path: str) -> bytes:
@@ -232,7 +480,7 @@ class AioSandbox(Sandbox):
             try:
                 chunks: list[bytes] = []
                 total = 0
-                for chunk in self._client.file.download_file(path=path):
+                for chunk in self._require_client().file.download_file(path=path):
                     total += len(chunk)
                     if total > _MAX_DOWNLOAD_SIZE:
                         raise OSError(
@@ -260,7 +508,7 @@ class AioSandbox(Sandbox):
         """
         with self._lock:
             try:
-                result = self._client.shell.exec_command(command=f"find {shlex.quote(path)} -maxdepth {max_depth} -type f -o -type d 2>/dev/null | head -500", no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
+                result = self._require_client().shell.exec_command(command=f"find {shlex.quote(path)} -maxdepth {max_depth} -type f -o -type d 2>/dev/null | head -500", no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
                 output = result.data.output if result.data else ""
                 if output:
                     return [line.strip() for line in output.strip().split("\n") if line.strip()]
@@ -283,20 +531,20 @@ class AioSandbox(Sandbox):
                     existing = self.read_file(path)
                     if not existing.startswith("Error:"):
                         content = existing + content
-                self._client.file.write_file(file=path, content=content)
+                self._require_client().file.write_file(file=path, content=content)
             except Exception as e:
                 logger.error(f"Failed to write file in sandbox: {e}")
                 raise
 
     def glob(self, path: str, pattern: str, *, include_dirs: bool = False, max_results: int = 200) -> tuple[list[str], bool]:
         if not include_dirs:
-            result = self._client.file.find_files(path=path, glob=pattern)
+            result = self._require_client().file.find_files(path=path, glob=pattern)
             files = result.data.files if result.data and result.data.files else []
             filtered = [file_path for file_path in files if not should_ignore_path(file_path)]
             truncated = len(filtered) > max_results
             return filtered[:max_results], truncated
 
-        result = self._client.file.list_path(path=path, recursive=True, show_hidden=False)
+        result = self._require_client().file.list_path(path=path, recursive=True, show_hidden=False)
         entries = result.data.files if result.data and result.data.files else []
         matches: list[str] = []
         root_path = path.rstrip("/") or "/"
@@ -333,10 +581,10 @@ class AioSandbox(Sandbox):
         regex = regex_source if case_sensitive else f"(?i){regex_source}"
 
         if glob is not None:
-            find_result = self._client.file.find_files(path=path, glob=glob)
+            find_result = self._require_client().file.find_files(path=path, glob=glob)
             candidate_paths = find_result.data.files if find_result.data and find_result.data.files else []
         else:
-            list_result = self._client.file.list_path(path=path, recursive=True, show_hidden=False)
+            list_result = self._require_client().file.list_path(path=path, recursive=True, show_hidden=False)
             entries = list_result.data.files if list_result.data and list_result.data.files else []
             candidate_paths = [entry.path for entry in entries if not entry.is_directory]
 
@@ -347,7 +595,7 @@ class AioSandbox(Sandbox):
             if should_ignore_path(file_path):
                 continue
 
-            search_result = self._client.file.search_in_file(file=file_path, regex=regex)
+            search_result = self._require_client().file.search_in_file(file=file_path, regex=regex)
             data = search_result.data
             if data is None:
                 continue
@@ -378,7 +626,7 @@ class AioSandbox(Sandbox):
         with self._lock:
             try:
                 base64_content = base64.b64encode(content).decode("utf-8")
-                self._client.file.write_file(file=path, content=base64_content, encoding="base64")
+                self._require_client().file.write_file(file=path, content=base64_content, encoding="base64")
             except Exception as e:
                 logger.error(f"Failed to update file in sandbox: {e}")
                 raise

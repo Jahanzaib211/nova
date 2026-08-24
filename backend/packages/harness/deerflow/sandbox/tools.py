@@ -6,6 +6,7 @@ import os
 import posixpath
 import re
 import shlex
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -141,12 +142,33 @@ def _thread_id_for_observation(sandbox_id: str) -> str | None:
     return None
 
 
+def _observation_max_chars() -> int:
+    """How much tool output one observation line may carry.
+
+    This was a bare ``output[:2000]`` with no marker, while the model got
+    ``sandbox.bash_output_max_chars`` (20 000) for the same command -- so the
+    Terminal showed a *silently* shorter answer than the agent acted on, and a
+    reader had no way to tell a 2 000-char command from a truncated one.
+    """
+    try:
+        cfg = get_app_config().sandbox
+        return cfg.observation_max_chars if cfg else 20000
+    except Exception as exc:  # noqa: BLE001 - observations must never raise
+        logger.debug("Failed to read observation_max_chars: %s", exc)
+        return 20000
+
+
 def _write_sandbox_observation(
     sandbox_id: str,
     tool: str,
     path: "str | None",
     summary: str,
     output: str = "",
+    *,
+    obs_id: "str | None" = None,
+    state: "str | None" = None,
+    delta: "str | None" = None,
+    replace: "str | None" = None,
 ) -> None:
     """Append a structured JSON-line event to the per-thread sandbox.log.
 
@@ -157,6 +179,22 @@ def _write_sandbox_observation(
 
         {"ts":"14:23:01","type":"bash","path":null,"summary":"$ echo hi","output":"hi"}
         {"ts":"14:23:05","type":"write_file","path":"/mnt/...","summary":"Wrote 3412 bytes","output":""}
+
+    Streaming (optional, additive)
+    ------------------------------
+    A command that produces output before it exits emits several lines sharing
+    one ``id``; the frontend folds them into a single Terminal entry:
+
+        {"ts":"…","type":"bash","id":"x1","summary":"$ npm install","state":"running"}
+        {"ts":"…","type":"bash","id":"x1","delta":"added 12 packages\n","state":"running"}
+        {"ts":"…","type":"bash","id":"x1","state":"done","output":"<full>"}
+
+    ``delta`` appends; ``replace`` swaps the whole body, which is what a ``\r``
+    progress bar needs (the AIO backend returns *rendered* terminal state, not
+    an append-only log, so a redrawn line must not be appended twice).
+
+    **Lines without ``id`` keep exactly today's meaning**, so every existing
+    tool, every already-written log, and any older frontend are unaffected.
 
     Works for per-thread local sandboxes (``local:{thread_id}``) and AIO/container
     sandboxes (hash ids, resolved to their thread via the provider). Silently
@@ -182,28 +220,104 @@ def _write_sandbox_observation(
         thread_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.datetime.now().strftime("%H:%M:%S")
-        entry = json.dumps(
-            {
-                "ts": ts,
-                "type": tool,
-                "path": path,
-                "summary": summary,
-                "output": output[:2000] if output else "",
-            }
-        )
+        max_chars = _observation_max_chars()
+        record: dict = {
+            "ts": ts,
+            "type": tool,
+            "path": path,
+            "summary": summary,
+            "output": _truncate_bash_output(output, max_chars) if output else "",
+        }
+        # Only the streaming shapes carry these, so a non-streaming caller
+        # writes a byte-identical line to the one it wrote before.
+        if obs_id is not None:
+            record["id"] = obs_id
+        if state is not None:
+            record["state"] = state
+        if delta is not None:
+            record["delta"] = _truncate_bash_output(delta, max_chars)
+        if replace is not None:
+            record["replace"] = _truncate_bash_output(replace, max_chars)
+        entry = json.dumps(record)
 
         log_path = thread_dir / "sandbox.log"
         with open(log_path, "a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
 
-        # sandbox_status.json — read by /api/sandbox/status
-        status_path = thread_dir / "sandbox_status.json"
-        status_path.write_text(
-            json.dumps({"tool": tool, "path": path, "ts": ts}),
-            encoding="utf-8",
-        )
+        # sandbox_status.json — read by /api/sandbox/status. Skipped for the
+        # intermediate frames of a streamed command: they are the same tool on
+        # the same path, so rewriting this file every 300 ms would be pure IO
+        # for an unchanged value.
+        if delta is None and replace is None:
+            status_path = thread_dir / "sandbox_status.json"
+            status_path.write_text(
+                json.dumps({"tool": tool, "path": path, "ts": ts}),
+                encoding="utf-8",
+            )
     except Exception as exc:
         logger.debug("_write_sandbox_observation failed: %s", exc)  # observation failures must never propagate
+
+
+def _terminal_streaming_enabled() -> bool:
+    """Whether to emit the incremental `delta`/`replace` frames.
+
+    Off unless the deployment's frontend understands them. The backend
+    hot-reloads and the frontend serves a prebuilt bundle, so the producer of
+    this format can go live while its consumer is still an older build -- and an
+    older build renders every intermediate frame as a blank Terminal row *and*
+    evicts real events from the 200-entry window. Measured on a live thread
+    before this gate existed: 54 blank rows out of 366 log lines, which broke
+    Terminal, Activity and Editor at once.
+    """
+    try:
+        cfg = get_app_config().sandbox
+        return bool(cfg and cfg.stream_terminal_output)
+    except Exception as exc:  # noqa: BLE001 - never break a command over a flag
+        logger.debug("Failed to read stream_terminal_output: %s", exc)
+        return False
+
+
+def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -> str:
+    """Run ``command`` on a streaming backend, narrating it into sandbox.log.
+
+    Emits one opening frame, a frame per output change, and one closing frame,
+    all sharing an ``id`` so the Terminal folds them into a single entry. The
+    alternative -- what this replaces -- was a single line written after the
+    command exited, which is why a five-minute ``npm install`` appeared in the
+    panel as one row at the very end.
+
+    Returns the full output, so the agent's view of the command is unchanged.
+    """
+    obs_id = uuid.uuid4().hex[:12]
+    summary = f"$ {command}"
+    _write_sandbox_observation(sandbox_id, "bash", None, summary, obs_id=obs_id, state="running")
+
+    def on_chunk(text: str, replace: bool) -> None:
+        if not text:
+            return
+        _write_sandbox_observation(
+            sandbox_id,
+            "bash",
+            None,
+            "",
+            obs_id=obs_id,
+            state="running",
+            **({"replace": text} if replace else {"delta": text}),
+        )
+
+    try:
+        output = sandbox.execute_command_streaming(command, on_chunk)
+    except Exception:
+        # A streaming backend that fails mid-run must not lose the command: fall
+        # back to the blocking path and close the entry with its result.
+        logger.warning("streaming execution failed; falling back to blocking exec", exc_info=True)
+        output = sandbox.execute_command(command)
+
+    # The closing frame carries the complete output, so a client that joined
+    # late (opened the panel mid-command) still ends up with the whole thing
+    # rather than the deltas it happened to catch.
+    _write_sandbox_observation(sandbox_id, "bash", None, summary, output, obs_id=obs_id, state="done")
+    return output
 
 
 def _get_skills_container_path() -> str:
@@ -1548,8 +1662,11 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
         except Exception as exc:
             logger.debug("Failed to read bash_output_max_chars: %s", exc)
             max_chars = 20000
-        raw_output = sandbox.execute_command(command)
-        _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
+        if _terminal_streaming_enabled() and getattr(sandbox, "supports_streaming", False):
+            raw_output = _stream_bash_observations(sandbox, sandbox_id, command)
+        else:
+            raw_output = sandbox.execute_command(command)
+            _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
         return _truncate_bash_output(raw_output, max_chars)
     except SandboxError as e:
         return f"Error: {e}"

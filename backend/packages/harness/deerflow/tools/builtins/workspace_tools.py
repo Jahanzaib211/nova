@@ -770,10 +770,27 @@ def shell_session_tool(
         except Exception:
             pass  # session may already exist
         resp = client.shell.exec_command(command=command, id=session_id, exec_dir=exec_dir, async_mode=True)
-        _write_sandbox_observation(_get_sandbox_id(runtime), "shell_session", exec_dir, f"[{session_id}] {command[:80]}", _data_str(resp)[:500])
+        # The opening frame of this session's Terminal entry. shell_view /
+        # shell_wait / shell_kill share the id, so a session renders as one
+        # growing entry rather than a scatter of unrelated lines.
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_session",
+            exec_dir,
+            f"[{session_id}] {command[:80]}",
+            _data_str(resp)[:500],
+            obs_id=f"shell:{session_id}",
+            state="running",
+        )
         return f"Started in session '{session_id}'. Use shell_view(session_id='{session_id}') to see output.\n{_data_str(resp)[:1500]}"
     except Exception as e:
         return f"Error: {e}"
+
+
+#: Last screen reported per (sandbox, session), so `shell_view` only writes an
+#: observation when the terminal actually changed. Bounded by the number of live
+#: shell sessions, and cleared for a session when it is killed.
+_LAST_SHELL_VIEW: dict[tuple[str, str], str] = {}
 
 
 @tool("shell_view", parse_docstring=True)
@@ -788,7 +805,29 @@ def shell_view_tool(runtime: Runtime, description: str, session_id: str = "main"
     if err:
         return err
     try:
-        return _data_str(client.shell.view(id=session_id))[:4000] or "(no output)"
+        out = _data_str(client.shell.view(id=session_id))[:4000] or "(no output)"
+        sandbox_id = _get_sandbox_id(runtime)
+        # Only record when the screen actually changed. An agent polling a
+        # session calls this in a loop, and writing a frame per poll put one
+        # Terminal row per poll into the log for output that had not moved --
+        # pure noise, and it burns entries in the panel's display window.
+        #
+        # `view` returns the session's *rendered* screen, so a change is a new
+        # rendering of the same body (a \r progress bar redrawing), never text
+        # to append -- hence `replace`, never `delta`.
+        key = (sandbox_id, session_id)
+        if _LAST_SHELL_VIEW.get(key) != out:
+            _LAST_SHELL_VIEW[key] = out
+            _write_sandbox_observation(
+                sandbox_id,
+                "shell_view",
+                None,
+                f"[{session_id}] view",
+                obs_id=f"shell:{session_id}",
+                state="running",
+                replace=out,
+            )
+        return out
     except Exception as e:
         return f"Error: {e}"
 
@@ -806,7 +845,17 @@ def shell_wait_tool(runtime: Runtime, description: str, session_id: str = "main"
     if err:
         return err
     try:
-        return _data_str(client.shell.wait_for_process(id=session_id, seconds=seconds))[:4000] or "(done)"
+        out = _data_str(client.shell.wait_for_process(id=session_id, seconds=seconds))[:4000] or "(done)"
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_wait",
+            None,
+            f"[{session_id}] waited up to {seconds}s",
+            obs_id=f"shell:{session_id}",
+            state="done",
+            replace=out,
+        )
+        return out
     except Exception as e:
         return f"Error: {e}"
 
@@ -826,6 +875,15 @@ def shell_write_tool(runtime: Runtime, description: str, input: str, session_id:
         return err
     try:
         client.shell.write_to_process(id=session_id, input=input, press_enter=press_enter)
+        # The keystrokes the agent sent are part of the transcript a human is
+        # reading in the Terminal; without them an interactive session shows
+        # answers to questions nobody appears to have answered.
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_write",
+            None,
+            f"[{session_id}] > {input[:80]}",
+        )
         return f"Sent to '{session_id}'. Use shell_view to see the result."
     except Exception as e:
         return f"Error: {e}"
@@ -844,6 +902,15 @@ def shell_kill_tool(runtime: Runtime, description: str, session_id: str = "main"
         return err
     try:
         client.shell.kill_process(id=session_id)
+        _LAST_SHELL_VIEW.pop((_get_sandbox_id(runtime), session_id), None)
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_kill",
+            None,
+            f"[{session_id}] killed",
+            obs_id=f"shell:{session_id}",
+            state="done",
+        )
         return f"Killed process in session '{session_id}'."
     except Exception as e:
         return f"Error: {e}"

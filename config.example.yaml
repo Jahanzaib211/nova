@@ -918,6 +918,12 @@ speech:
   #   tts: { use: deerflow.speech.engines.null:ToneTTS }
 
 sandbox:
+  # Stream bash output into the Agent's Computer Terminal as it is produced,
+  # instead of one entry when the command exits. Emits extra `delta`/`replace`
+  # frames on a NAMED SSE event (`sandbox_delta`), which any frontend that does
+  # not subscribe ignores by spec. Leave false unless the frontend serving this
+  # deployment is built from source that understands it.
+  stream_terminal_output: false
   use: deerflow.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is
   # not a secure isolation boundary for shell access. Enable only for fully
