@@ -198,10 +198,7 @@ class AioSandboxProvider(SandboxProvider):
         # `idle_timeout: 0` (documented as "disable the idle check") also
         # silently disabled the hard lifetime ceiling, with no warning, even
         # though the two are documented as independent knobs.
-        if (
-            self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0
-            or self._config.get("max_lifetime") is not None
-        ):
+        if self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0 or self._config.get("max_lifetime") is not None:
             self._start_idle_checker()
 
     @property
