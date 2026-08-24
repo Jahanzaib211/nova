@@ -109,6 +109,41 @@ The frontend is a stateful chat application. Users create **threads** (conversat
 - **LangGraph client** is a singleton obtained via `getAPIClient()` in `core/api/`
 - **Environment validation** uses `@t3-oss/env-nextjs` with Zod schemas (`src/env.js`). Skip with `SKIP_ENV_VALIDATION=1`
 
+### Agent's Computer invariants
+
+The panel is fed by `useSandboxLogs` (`core/sandbox/hooks.ts`) over
+`/api/sandbox/logs`. Four rules, each of which was learned by breaking it:
+
+- **Fold streamed frames at ingest, before the `MAX_EVENTS` window.** Frames
+  sharing an `id` are one Terminal entry, merged by `applySandboxFrame` as they
+  arrive. Pushed individually, a chatty command (`npm install` emits hundreds of
+  deltas) walks its own opening frame out of the 200-entry window — the
+  `$ npm install` line the user is reading disappears while its output is still
+  arriving.
+- **Never key React nodes on the array index.** Every event gets a `uid` at
+  ingest. The window shifts every element the moment it rolls, so index keys
+  remount the whole list mid-stream.
+- **`ts` has one-second resolution** (`"%H:%M:%S"`), so it cannot identify an
+  event. De-duplicating in-flight events against the log with a `Set` keyed on
+  `ts|type|summary` let one log line mask two identical commands run in the same
+  second; it counts occurrences instead.
+- **Incremental frames arrive on a named SSE event** (`sandbox_delta`), not the
+  default `message`. `EventSource.onmessage` receives only unnamed events, so a
+  build of this app that predates streaming ignores them entirely rather than
+  rendering each delta as a blank row. That is not hypothetical: this frontend
+  ships as a prebuilt bundle while the backend hot-reloads, so **assume the two
+  deploy independently** and make any new wire shape ignorable by construction.
+
+`WorkspaceStateProvider` mounts *above* the panel's own error boundary, so
+anything it throws escapes to the root boundary and takes the whole workspace
+with it — hence `normalizeTodoResult` and the defensive shapes around it. It
+also derives subtask state from the message list during render; the derivation
+stays in render, but the **writes are queued and flushed in an effect**, because
+calling `updateSubtask` from there is a setState-during-render violation
+(`Cannot update a component while rendering a different component`). A
+production build hides that warning — it only surfaced once the container ran
+`next dev`.
+
 ## Code Style
 
 - **Imports**: Enforced ordering (builtin → external → internal → parent → sibling), alphabetized, newlines between groups. Use inline type imports: `import { type Foo }`.

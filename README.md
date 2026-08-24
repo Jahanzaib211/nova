@@ -26,7 +26,7 @@ Nova is a full-stack refactor of DeerFlow 2.0 — **+35,738 lines across 338 fil
 - **Deterministic code review** — a no-LLM review engine producing a plain-English verdict for non-coders plus per-file stats and risk flags for developers.
 - **Self-correction middlewares** — runtime-enforced iteration budgets, dead-end loop detection, preflight quota checks, error-message decontamination, live task progress.
 - **32 agent tools** — shell sessions, browser navigate/click/input/eval, screenshot, scaffold, dev-server lifecycle, dev_verify, code_review, skill saving, and more.
-- **iGIN0 privacy research** — hardened SearXNG client with retry, circuit breaker, caching, optional TOR routing, and a privacy audit trail.
+- **iGIN0 privacy research** — hardened SearXNG client with retry, circuit breaker, caching, and a privacy audit trail. TOR routing is supported by the client but **no Tor proxy ships in the default stack** (it crash-looped under the non-root hardening); `tor_enabled: true` degrades to direct fetching until you add one back — see the note in `docker/docker-compose-dev.yaml`.
 - **Runtime model management** — add/switch models through the API and settings UI without touching config files.
 - **Ops layer** — 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery.
 - **Local + free models via LiteLLM** — an Ollama preset in settings and a PM2-managed LiteLLM proxy expose four free Ollama cloud models (MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B) alongside paid providers.
@@ -227,7 +227,13 @@ make docker-init    # Pull sandbox image (only once or when image updates)
 make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
 ```
 
-`make docker-start` starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
+`make docker-start` brings up `frontend`, `gateway`, `nginx`, `searxng`, `crawl4ai`, `browserless` and `autoheal`, plus `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
+
+Every service a tool is bound to is started explicitly rather than relying on
+`depends_on`: compose only auto-starts what that graph reaches, and nothing
+depends on the web-tool services. `searxng` was defined in compose and wired
+into `config.yaml` for weeks without ever being created — invisible because
+`web_search` falls back to DuckDuckGo silently.
 
 Docker builds use the upstream `uv` registry by default. If you need faster mirrors in restricted networks, export `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple` and `NPM_REGISTRY=https://registry.npmmirror.com` before running `make docker-init` or `make docker-start`.
 
