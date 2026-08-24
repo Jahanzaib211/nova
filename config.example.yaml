@@ -918,6 +918,15 @@ speech:
   #   tts: { use: deerflow.speech.engines.null:ToneTTS }
 
 sandbox:
+  # Environment injected into every sandbox container. Values starting with $
+  # are resolved from the host environment.
+  #
+  # TZ is set because the upstream base image displays CST while the host,
+  # gateway and sandbox clocks all agree in UTC. That cosmetic mismatch has
+  # been reported as an 8-hour clock skew; `date -u` inside the sandbox and on
+  # the host match to the second. Displaying UTC removes the illusion.
+  environment:
+    TZ: UTC
   # Stream bash output into the Agent's Computer Terminal as it is produced,
   # instead of one entry when the command exits. Emits extra `delta`/`replace`
   # frames on a NAMED SSE event (`sandbox_delta`), which any frontend that does

@@ -14,6 +14,27 @@ layers, so the intermediate tags cost essentially no extra disk — and
 | 3 | `nova-sandbox-dind` | A Docker daemon the agent can use (requires `sandbox.privileged`) |
 | 4 | `nova-sandbox-android` | OpenJDK 17, Android SDK, Gradle, Kotlin |
 
+## What is listening (and what only looks like it is)
+
+`cat /etc/nova-sandbox.json` answers "which image am I and what is in it",
+including a `services` block. Read that block before filing a bug about a port.
+
+The upstream base image exports two environment variables and starts neither
+daemon:
+
+| Env | Port | Reality |
+|---|---|---|
+| `TINYPROXY_PORT` | 8118 | No tinyproxy is started. Outbound traffic goes direct. |
+| `MCP_SERVER_PORT` | 8089 | No MCP server is started. |
+
+So `env` advertises two services that `ss -ltn` cannot find, and `curl
+localhost:8118` is refused. Both come from upstream and are inert by design, not
+by Nova breaking them — this has been reported as a Nova defect twice, which is
+why the manifest now says so explicitly.
+
+Nova starts nothing else in the sandbox by default; a dev server exists only
+once the agent starts one.
+
 ## Build
 
 ```bash
