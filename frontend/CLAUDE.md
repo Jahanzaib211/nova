@@ -134,7 +134,7 @@ The panel is fed by `useSandboxLogs` (`core/sandbox/hooks.ts`) over
   ships as a prebuilt bundle while the backend hot-reloads, so **assume the two
   deploy independently** and make any new wire shape ignorable by construction.
 
-`WorkspaceStateProvider` mounts *above* the panel's own error boundary, so
+`WorkspaceStateProvider` mounts _above_ the panel's own error boundary, so
 anything it throws escapes to the root boundary and takes the whole workspace
 with it — hence `normalizeTodoResult` and the defensive shapes around it. It
 also derives subtask state from the message list during render; the derivation

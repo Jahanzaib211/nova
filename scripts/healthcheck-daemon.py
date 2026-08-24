@@ -1243,11 +1243,14 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
                 )
 
 
-async def run_cycle(state: WatchdogState) -> CycleReport:
-    state.cycle_id += 1
-    t0 = time.perf_counter()
-    report = CycleReport(cycle_id=state.cycle_id, started_at=t0, duration_ms=0.0)
+def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResult]]]]:
+    """The probe registry, as (name, coroutine factory) pairs.
 
+    Module-level so the probe set can be inspected without running a cycle.
+    Tests previously asserted a hardcoded probe count, so adding one broke
+    three unrelated tests with `assert 14 == 13` -- an error naming neither
+    the probe nor the reason.
+    """
     # (name, coroutine factory) pairs. The coroutine is only created for probes
     # that are enabled, so a disabled probe costs nothing and never emits a
     # "coroutine was never awaited" warning. Naming the probe here also lets us
@@ -1301,6 +1304,15 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
         ),
         ("P12_tunnel", probe_tunnel),
     ]
+    return probe_factories
+
+
+async def run_cycle(state: WatchdogState) -> CycleReport:
+    state.cycle_id += 1
+    t0 = time.perf_counter()
+    report = CycleReport(cycle_id=state.cycle_id, started_at=t0, duration_ms=0.0)
+
+    probe_factories = build_probe_factories()
     skip = disabled_probes()
     probes: list[
         tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]
