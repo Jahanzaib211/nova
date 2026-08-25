@@ -141,3 +141,29 @@ class TestTodoBindingContract:
         ts = _read(TASK_EVENTS_TS)
         assert "todo_indexes" in ts, "frontend dropped the binding field"
         assert "todoIndexes" in ts, "frontend stopped storing the binding"
+
+
+class TestComputerWsChannelContract:
+    """Channels the frontend routes must exist verbatim on both sides."""
+
+    def test_terminal_stats_channel(self) -> None:
+        py = _read(
+            REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "tools.py"
+        )
+        ts = _read(TASK_EVENTS_TS)
+        assert 'emit_channel(\n                        "terminal_stats"' in py or \
+               '"terminal_stats"' in py
+        assert '"terminal-stats"' in ts or "TerminalStatsEvent" in ts
+
+    def test_todos_channel(self) -> None:
+        py = _read(TASK_TOOL_PY.parent.parent.parent / "agents" / "middlewares" / "todo_middleware.py")
+        ts = _read(TASK_EVENTS_TS)
+        assert 'emit_channel(\n                "todos"' in py or '"todos"' in py
+        assert '"todos"' in ts
+
+    def test_dev_server_channel(self) -> None:
+        dev = _read(REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "dev_server.py")
+        deps = _read(REPO_ROOT / "backend" / "app" / "gateway" / "deps.py")
+        assert '"channel": "browser"' in deps, "gateway must tag dev-server events channel:browser"
+        assert '"channel": "workspace"' in deps, "gateway must tag observation events channel:workspace"
+        assert "emit_dev_server_status" in dev, "dev_server must announce transitions"

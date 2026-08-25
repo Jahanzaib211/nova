@@ -226,7 +226,7 @@ def register_external_dev_server(
     )
     handle.status = "ready"
     _notify_dev_server_status(handle)
-    handle.log_buffer.append(f"[deerflow] registered external dev server at {host}:{port}")
+    handle.log_buffer.append(f"[nova] registered external dev server at {host}:{port}")
     _servers[_server_key(thread_id, label)] = handle
     return handle
 
@@ -259,7 +259,7 @@ def adopt_handle(
         status="ready",
         _order=_order_counter,
     )
-    handle.log_buffer.append(f"[deerflow] adopted live dev server on {host}:{host_port}")
+    handle.log_buffer.append(f"[nova] adopted live dev server on {host}:{host_port}")
     _servers[_server_key(thread_id, label)] = handle
     return handle
 
@@ -457,7 +457,7 @@ async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _REA
                     handle.status = _STATUS_CRASHED
                     _notify_dev_server_status(handle)
                     msg = f"dev server crashed: did not bind {handle.host}:{handle.port} within {timeout:g}s"
-                    handle.log_buffer.append(f"[deerflow] {msg}")
+                    handle.log_buffer.append(f"[nova] {msg}")
                     _append_devlog_to_sandbox_log(handle.thread_id, msg)
                     logger.warning(msg)
                 return
@@ -529,7 +529,7 @@ async def _pump_output_aio(handle: DevServerHandle) -> None:
             # liveness is judged by a real TCP check in /dev-status. Killing the
             # handle here is what caused "preview showed once then went blank".
             if sandbox.closed:
-                handle.log_buffer.append("[deerflow] preview log tail stopped (sandbox client reset); server still served by port check")
+                handle.log_buffer.append("[nova] preview log tail stopped (sandbox client reset); server still served by port check")
                 break
             # read_file returns "Error: ..." until the file exists; treat as empty.
             if not content or content.startswith("Error:"):
@@ -541,7 +541,7 @@ async def _pump_output_aio(handle: DevServerHandle) -> None:
                     if handle.status == "starting":
                         handle.status = "error"
                         _notify_dev_server_status(handle)
-                        handle.log_buffer.append("[deerflow] dev server produced no output; stopping log tail")
+                        handle.log_buffer.append("[nova] dev server produced no output; stopping log tail")
                     break
                 continue
             misses = 0
@@ -624,7 +624,7 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
     }
 
     handle.log_buffer.append(f"$ PORT={port} {command}")
-    handle.log_buffer.append(f"[deerflow] starting dev server on port {port} in {cwd}")
+    handle.log_buffer.append(f"[nova] starting dev server on port {port} in {cwd}")
 
     try:
         from deerflow.execution import ExecutionClass, ExecutionRequest, ResourceLimits
@@ -646,7 +646,7 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
     except Exception as e:
         handle.status = "error"
         _notify_dev_server_status(handle)
-        handle.log_buffer.append(f"[deerflow] failed to start: {e}")
+        handle.log_buffer.append(f"[nova] failed to start: {e}")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 
@@ -692,12 +692,12 @@ async def _start_dev_server_aio(
     if endpoint is None:
         handle.status = "error"
         _notify_dev_server_status(handle)
-        handle.log_buffer.append(f"[deerflow] no published preview port {container_port} for this thread's sandbox")
+        handle.log_buffer.append(f"[nova] no published preview port {container_port} for this thread's sandbox")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 
     handle.host, handle.port = endpoint
-    logpath = f"/mnt/user-data/workspace/.deerflow-dev-{container_port}.log"
+    logpath = f"/mnt/user-data/workspace/.nova-dev-{container_port}.log"
     handle._logpath = logpath
 
     # The log/pid files must exist BEFORE the child runs so the SSE tail at
@@ -728,18 +728,18 @@ async def _start_dev_server_aio(
         f"cd {shlex.quote(cwd)} && "
         f"setsid env PORT={container_port} HOST=0.0.0.0 HOSTNAME=0.0.0.0 BROWSER=none CI=1 "
         f"{bound_command} > {shlex.quote(logpath)} 2>&1 < /dev/null & "
-        f"echo $! > {shlex.quote(logpath + '.pid')}; echo deerflow-dev-started"
+        f"echo $! > {shlex.quote(logpath + '.pid')}; echo nova-dev-started"
     )
 
     handle.log_buffer.append(f"$ PORT={container_port} {command}")
-    handle.log_buffer.append(f"[deerflow] starting dev server in container at {cwd} (preview {handle.host}:{handle.port})")
+    handle.log_buffer.append(f"[nova] starting dev server in container at {cwd} (preview {handle.host}:{handle.port})")
 
     try:
         await asyncio.to_thread(sandbox.execute_command, inner)
     except Exception as e:
         handle.status = "error"
         _notify_dev_server_status(handle)
-        handle.log_buffer.append(f"[deerflow] failed to start in container: {e}")
+        handle.log_buffer.append(f"[nova] failed to start in container: {e}")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 

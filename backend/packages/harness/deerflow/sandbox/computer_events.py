@@ -77,3 +77,21 @@ def emit_observation(payload: dict[str, Any]) -> None:
             listener(payload)
         except Exception:  # noqa: BLE001 - observability must never break a run
             logger.warning("observation listener failed", exc_info=True)
+
+
+def emit_channel(channel: str, payload: dict[str, Any]) -> None:
+    """Announce a typed event on a named computer-ws channel. Never raises."""
+    try:
+        from deerflow.sandbox import computer_events as _self
+
+        # Route through the same listener registries so the gateway needs one
+        # wiring: observations ride the observation listeners with an explicit
+        # channel marker.
+        merged = {"channel": channel, **payload}
+        for listener in list(_self._observation_listeners):
+            try:
+                listener(merged)
+            except Exception:  # noqa: BLE001
+                logger.warning("%s channel listener failed", channel, exc_info=True)
+    except Exception:  # noqa: BLE001 - observability must never break a run
+        logger.warning("emit_channel(%s) failed", channel, exc_info=True)

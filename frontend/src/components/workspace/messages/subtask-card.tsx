@@ -172,11 +172,15 @@ export function SubtaskCard({
               <ChainOfThoughtStep
                 label={
                   task.result ? (
-                    <MarkdownContent
-                      content={task.result}
-                      isLoading={false}
-                      rehypePlugins={rehypePlugins}
-                    />
+                    // Clamp: one verbose subagent result used to stretch the
+                    // whole chat column until refresh. Scroll, don't spill.
+                    <div className="max-h-56 overflow-y-auto pr-1">
+                      <MarkdownContent
+                        content={task.result}
+                        isLoading={false}
+                        rehypePlugins={rehypePlugins}
+                      />
+                    </div>
                   ) : null
                 }
               ></ChainOfThoughtStep>

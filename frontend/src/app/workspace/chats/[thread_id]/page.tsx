@@ -45,7 +45,8 @@ import {
 import {
   useActiveRun,
   useThreadMetadata,
-  useThreadStream,
+  takeQueuedMessage,
+    useThreadStream,
   useThreadTokenUsage,
 } from "@/core/threads/hooks";
 import { recordComposer } from "@/core/threads/stream-trace";
@@ -138,6 +139,14 @@ export default function ChatPage() {
       setIsNewThread(false);
     },
     onFinish: (state) => {
+      // H2 steering flush: a message typed mid-run was parked on 409; send it
+      // now that the run ended. Slight delay lets run teardown settle first.
+      const queued = takeQueuedMessage(threadId);
+      if (queued) {
+        window.setTimeout(() => {
+          void sendMessage(threadId, { text: queued, files: [] });
+        }, 400);
+      }
       if (document.hidden || !document.hasFocus()) {
         let body = "Conversation finished";
         const lastMessage = state.messages.at(-1);

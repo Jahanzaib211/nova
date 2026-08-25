@@ -51,6 +51,9 @@ type UpdateSubtask = (
   source?: SubtaskUpdateSource,
 ) => void;
 
+export type TodoSnapshotEvent = { thread_id: string; todos: Array<Record<string, unknown>> };
+export type TerminalStatsEvent = { thread_id: string; total_commands: number };
+
 export type ComputerEventHandlers = {
   /** Subagent lifecycle; applied to the subtask store via applyTaskEvent. */
   updateSubtask: UpdateSubtask;
@@ -58,6 +61,10 @@ export type ComputerEventHandlers = {
   onDevServer?: (event: DevServerEvent) => void;
   /** Workspace observation - invalidate file/preview caches here. */
   onObservation?: (event: WorkspaceObservationEvent) => void;
+  /** Authoritative todo snapshot from the harness middleware. */
+  onTodos?: (event: TodoSnapshotEvent) => void;
+  /** Deterministic command total for the Terminal header. */
+  onTerminalStats?: (event: TerminalStatsEvent) => void;
 };
 
 /** Is this a subagent lifecycle event we can apply? */
@@ -192,6 +199,22 @@ export function useComputerEvents(
         (parsed as { channel?: string }).channel === "workspace"
       ) {
         handlers.onObservation?.(parsed as WorkspaceObservationEvent);
+        return;
+      }
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        (parsed as { channel?: string }).channel === "todos"
+      ) {
+        handlers.onTodos?.(parsed as TodoSnapshotEvent);
+        return;
+      }
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        (parsed as { type?: string }).type === "terminal_stats"
+      ) {
+        handlers.onTerminalStats?.(parsed as TerminalStatsEvent);
       }
     };
 

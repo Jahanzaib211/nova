@@ -6,6 +6,8 @@ import os
 import posixpath
 import re
 import shlex
+import threading
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -315,6 +317,24 @@ def _write_sandbox_observation(
         # intermediate frames of a streamed command: they are the same tool on
         # the same path, so rewriting this file every 300 ms would be pure IO
         # for an unchanged value.
+        # Deterministic command count (G2): every framed opening and every
+        # non-framed bash line is exactly one command, persisted so the count
+        # survives window rolls, reconnects AND container recycles.
+        is_command_line = (
+            obs_id is not None and state == "running"
+        ) or (tool == "bash" and delta is None and replace is None and obs_id is None)
+        stats_total: int | None = None
+        if is_command_line:
+            try:
+                stats_path = log_path.parent / "terminal_stats.json"
+                current = 0
+                if stats_path.exists():
+                    current = int(json.loads(stats_path.read_text() or "0"))
+                stats_total = current + 1
+                stats_path.write_text(str(stats_total), encoding="utf-8")
+            except Exception as exc:  # noqa: BLE001 - count is best-effort
+                logger.debug("terminal_stats update failed: %s", exc)
+
         if delta is None and replace is None:
             status_path = log_path.parent / "sandbox_status.json"
             status_path.write_text(
@@ -326,8 +346,20 @@ def _write_sandbox_observation(
             # poll. Non-fatal by contract; delta/replace frames are skipped —
             # one signal per command, not per chunk.
             try:
-                from deerflow.sandbox.computer_events import emit_observation
+                from deerflow.sandbox.computer_events import (
+                    emit_channel,
+                    emit_observation,
+                )
 
+                if stats_total is not None:
+                    # Dedicated frame: the Terminal's deterministic counter.
+                    emit_channel(
+                        "terminal_stats",
+                        {
+                            "thread_id": thread_id,
+                            "total_commands": stats_total,
+                        },
+                    )
                 emit_observation(
                     {
                         "thread_id": thread_id,
@@ -1825,6 +1857,20 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
                 sandbox = fresh
                 raw_output = sandbox.execute_command(command)
             _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
+
+        # A dev server started via raw bash is invisible to the panel (no
+        # handle, no preview URL) — capture it so Browser/preview light up.
+        # Fire-and-forget; failures here can never affect the tool result.
+        try:
+            _capture_external_dev_server(
+                sandbox,
+                sandbox_id,
+                _thread_id_for_observation(sandbox_id) or "",
+                command,
+                aio_mode=not is_local_sandbox(runtime),
+            )
+        except Exception as exc:  # noqa: BLE001 - observability seam
+            logger.debug("dev-server capture skipped: %s", exc)
         return _truncate_bash_output(raw_output, max_chars)
     except SandboxError as e:
         return f"Error: {e}"
@@ -1834,6 +1880,112 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
         return f"Error: Unexpected error executing command: {_sanitize_error(e, runtime)}"
 
 
+# Ports a raw-bash dev server most likely bound, by framework hint. Only used
+# when the command itself does not say (--port/-p/PORT=).
+_FRAMEWORK_DEFAULT_PORTS: list[tuple[str, int]] = [
+    ("vite", 5173),
+    ("next dev", 3000),
+    ("next start", 3000),
+    ("serve -s", 3000),
+    ("http.server", 8000),
+    ("uvicorn", 8000),
+    ("flask", 5000),
+    ("php artisan serve", 8000),
+]
+
+_PORT_FLAGS_RE = re.compile(r"(?:--port[= ]|-p\s+|PORT[ =])(\d{2,5})")
+
+
+def _extract_dev_server_port(command: str) -> int | None:
+    m = _PORT_FLAGS_RE.search(command)
+    if m:
+        return int(m.group(1))
+    low = command.lower()
+    for hint, port in _FRAMEWORK_DEFAULT_PORTS:
+        if hint in low:
+            return port
+    return None
+
+
+_capture_in_flight: set[tuple[str, int]] = set()
+_capture_guard_lock = threading.Lock()
+
+
+def _capture_external_dev_server(
+    sandbox: Sandbox,
+    sandbox_id: str,
+    thread_id: str,
+    command: str,
+    *,
+    aio_mode: bool,
+) -> None:
+    """Auto-register a dev server the agent started via raw bash.
+
+    The panel can only show what has a handle. ``start_dev_server`` creates
+    one; a bare ``npm run dev`` in bash does not — so the site worked while
+    the Browser tab showed nothing (live: PakWheel on :5180). This fires
+    after the bash tool succeeds, probes the sandbox for the listening port,
+    and registers an external handle — which also emits the dev-server event
+    onto the computer WebSocket.
+
+    Fire-and-forget daemon thread: verification polls up to ~12s and must
+    never block the tool result. Duplicate guards keep parallel commands
+    from racing duplicates.
+    """
+    if not thread_id or not _looks_like_dev_server(command):
+        return
+    port = _extract_dev_server_port(command)
+    if port is None:
+        return
+    label = f"ext-{port}"
+    guard_key = (thread_id, port)
+    with _capture_guard_lock:
+        if guard_key in _capture_in_flight:
+            return
+        _capture_in_flight.add(guard_key)
+    try:
+        existing = get_dev_server(thread_id, label)
+        if existing is not None and existing.status in ("starting", "ready"):
+            return
+    except Exception:  # noqa: BLE001
+        pass
+
+    host = "host.docker.internal" if aio_mode else "127.0.0.1"
+
+    def _worker() -> None:
+        probe = (
+            f"curl -fsS -o /dev/null -w '%{{http_code}}' "
+            f"http://127.0.0.1:{port}/ 2>/dev/null || true"
+        )
+        for _ in range(12):
+            try:
+                out = (sandbox.execute_command(probe) or "").strip()
+                if out[:1] in ("2", "3"):
+                    from deerflow.sandbox.dev_server import (
+                        register_external_dev_server,
+                    )
+
+                    handle = register_external_dev_server(
+                        thread_id, port, host=host, label=label
+                    )
+                    logger.info(
+                        "Captured external dev server %s on port %d (%s)",
+                        thread_id,
+                        port,
+                        handle.status,
+                    )
+                    return
+            except Exception as exc:  # noqa: BLE001 - best-effort capture
+                logger.debug("dev-server probe failed: %s", exc)
+            time.sleep(1)
+        with _capture_guard_lock:
+            _capture_in_flight.discard(guard_key)
+
+    threading.Thread(
+        target=_worker,
+        name=f"dev-capture-{thread_id[:8]}-{port}",
+        daemon=True,
+    ).start()
 _DEV_SERVER_RE = re.compile(
     r"\b(npm\s+(run\s+)?(dev|start)|yarn\s+(dev|start)|pnpm\s+(run\s+)?(dev|start)|"
     r"next\s+(dev|start)|npx\s+next\s+(dev|start)|vite|npx\s+vite|bun\s+(run\s+)?(dev|start)|"

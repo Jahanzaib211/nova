@@ -171,6 +171,37 @@ export function useCompletedTodoBindings(): Set<number> {
   return useMemo(() => completedTodoIndexes(tasks), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/**
+ * Settle every still-in_progress subtask as superseded.
+ *
+ * Called on the rising edge of a NEW run: subagents from the previous run can
+ * never complete now, and leaving them spinning produced ghost "running"
+ * boxes that stacked across retries. Result-sourced failed status settles
+ * them authoritatively.
+ */
+export function useSupersedeStaleSubtasks() {
+  const { setTasks } = useSubtaskContext();
+  return useCallback(() => {
+    setTasks((current) => {
+      let changed = false;
+      const next: Record<string, Subtask> = {};
+      for (const [id, task] of Object.entries(current)) {
+        if (task.status === "in_progress") {
+          changed = true;
+          next[id] = {
+            ...task,
+            status: "failed",
+            error: task.error ?? "superseded by a newer run",
+          };
+        } else {
+          next[id] = task;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [setTasks]);
+}
+
 export function useUpdateSubtask() {
   const { setTasks, sourcesRef } = useSubtaskContext();
 

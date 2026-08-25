@@ -17,7 +17,10 @@ import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/wo
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
-import { useUpdateSubtask } from "@/core/tasks/context";
+import {
+  useSupersedeStaleSubtasks,
+  useUpdateSubtask,
+} from "@/core/tasks/context";
 import {
   useComputerEvents,
 } from "@/core/threads/task-events-ws";
@@ -92,6 +95,16 @@ const ChatBox: React.FC<{
   // no-op, and this path survives run end / reconnects, which is what lets a
   // todo binding arrive even if the SSE window missed it.
   const updateSubtaskForWs = useUpdateSubtask();
+  const supersedeStaleSubtasks = useSupersedeStaleSubtasks();
+  const prevIsLoadingRef = useRef(false);
+  useEffect(() => {
+    // Rising edge of a NEW run: subagents from the previous run can never
+    // finish now. Settle them so retries don't stack ghost running cards.
+    if (thread.isLoading && !prevIsLoadingRef.current) {
+      supersedeStaleSubtasks();
+    }
+    prevIsLoadingRef.current = thread.isLoading;
+  }, [supersedeStaleSubtasks, thread.isLoading]);
   const queryClient = useQueryClient();
   useComputerEvents(threadId, {
     updateSubtask: updateSubtaskForWs,
@@ -123,6 +136,25 @@ const ChatBox: React.FC<{
           queryKey: ["sandbox", "file", threadId],
         });
       }
+      if (tool === "browser_check") {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "browser-check-last", threadId],
+        });
+      }
+      if (tool === "dev_verify" || tool === "present_files" || tool === "code_review") {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "review", threadId],
+        });
+      }
+    },
+    // Authoritative todo snapshot: the checklist stops depending on when the
+    // values stream happens to deliver state.
+    onTodos: (snap) => {
+      queryClient.setQueryData(["sandbox", "todo", threadId], snap.todos);
+    },
+    // Deterministic command counter for the Terminal header.
+    onTerminalStats: (stat) => {
+      queryClient.setQueryData(["terminal-stats", threadId], stat.total_commands);
     },
   });
 
