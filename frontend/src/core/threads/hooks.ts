@@ -92,6 +92,16 @@ export type LlmErrorEvent = {
   code: string | null;
 };
 
+// Queued steering messages per thread (H2). A message sent while a run is
+// active used to bounce off the 409 with a toast and was LOST. Now it parks
+// here and flushes automatically when that run finishes.
+const queuedSteerMessages = new Map<string, string>();
+export function takeQueuedMessage(threadId: string): string | undefined {
+  const text = queuedSteerMessages.get(threadId);
+  if (text !== undefined) queuedSteerMessages.delete(threadId);
+  return text;
+}
+
 export type AgentActivityEvent = {
   id: string;
   ts: string;
@@ -1111,6 +1121,8 @@ export function useThreadStream({
     },
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
+      // Queued steering flush happens in the page's own onFinish, where
+      // sendMessage is in scope.
       pendingUsageBaselineMessageIdsRef.current = new Set(
         messagesRef.current
           .map(messageIdentity)
@@ -1714,6 +1726,17 @@ export function useThreadStream({
         // not a failure to surface as a red error overlay. Show a calm hint and
         // swallow it — the optimistic message was already rolled back above.
         if (getHttpStatus(error) === 409) {
+          // Steering: park the message; it auto-sends when this run ends.
+          const tid = threadIdRef.current ?? "";
+          if (tid) {
+            const prev = queuedSteerMessages.get(tid);
+            queuedSteerMessages.set(
+              tid,
+              prev ? `${prev}\n\n${text}` : text,
+            );
+            toast.info(t.common.agentBusy);
+            return;
+          }
           toast.info(t.common.agentBusy);
           return;
         }

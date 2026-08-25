@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { LoaderCircleIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -49,6 +50,17 @@ export function Terminal({
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
   const terminalEvents = events.filter((e) => isTerminalTool(e.type));
+  // Deterministic total pushed by the gateway (survives the 200-event window
+  // rolling and SSE reconnects). Falls back to the local window while the
+  // socket is down - prefixed with ~ so it can never read as exact.
+  const queryClient = useQueryClient();
+  const serverTotal = queryClient.getQueryData<number>([
+    "terminal-stats",
+    threadId,
+  ]);
+  const runningCount = terminalEvents.filter(
+    (e) => e.status === "running",
+  ).length;
   // "shell" = the sandbox's real interactive ttyd terminal (type into it live);
   // "stream" = the agent's command output log.
   const [mode, setMode] = useState<"stream" | "shell">("stream");
@@ -107,10 +119,9 @@ export function Terminal({
           shows only the live number; here the operator gets both without
           counting prompt rows by eye. */}
       <span className="text-muted-foreground/40 font-mono text-[10px]">
-        {t.agentComputer.terminal.counts(
-          terminalEvents.length,
-          terminalEvents.filter((e) => e.status === "running").length,
-        )}
+        {serverTotal !== undefined
+          ? t.agentComputer.terminal.counts(serverTotal, runningCount)
+          : `~${terminalEvents.length}`}
       </span>
       <div className="border-border/40 flex items-center rounded border text-[10px]">
         <button

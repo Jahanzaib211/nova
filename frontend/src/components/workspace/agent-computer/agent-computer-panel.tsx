@@ -166,7 +166,19 @@ export function AgentComputerPanel({
     : (devServers[0]?.label ?? "app");
   const devServer = useDevServerStatus(threadId, activeLabel);
   const msgFilePath = getActiveFilePath(messages);
-  const derivedFilePath = activeWriteFilePath ?? msgFilePath;
+  // After a refresh the message stream hydrates late; fall back to the last
+  // write seen on the sandbox.log timeline so the Editor is never blank.
+  const lastWritePath = useMemo(() => {
+    for (let i = mergedEvents.length - 1; i >= 0; i--) {
+      const e = mergedEvents[i];
+      if (!e) continue;
+      if ((e.type === "write_file" || e.type === "str_replace") && e.path)
+        return e.path;
+    }
+    return null;
+  }, [mergedEvents]);
+  const derivedFilePath =
+    activeWriteFilePath ?? msgFilePath ?? lastWritePath;
   const activeEdit = useMemo(() => getActiveEdit(messages), [messages]);
 
   // Session-storage persisted preview path
