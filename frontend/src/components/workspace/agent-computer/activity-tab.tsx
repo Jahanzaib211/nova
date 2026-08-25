@@ -309,7 +309,7 @@ export function ActivityPanel({
               </span>
             </div>
           )}
-          {recentLiveEvents.map((event, i) => {
+          {recentLiveEvents.map((event) => {
             // Live frames are blind-cast from parsed SSE; a malformed body
             // must render as a skipped pill, not crash the tab.
             const data = (event.data ?? {}) as unknown as Record<
@@ -320,7 +320,7 @@ export function ActivityPanel({
               typeof data[k] === "number" ? data[k] : 0;
             return (
               <div
-                key={`${event.type}-${String(data.occurred_at)}-${i}`}
+                key={`${event.type}-${String(data.occurred_at)}-${num("symbol_count")}-${num("step_count")}`}
                 className="border-border/20 bg-muted/5 text-muted-foreground/60 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]"
               >
                 <DatabaseIcon className="h-3 w-3 shrink-0 text-sky-400" />

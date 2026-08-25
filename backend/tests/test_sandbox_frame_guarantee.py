@@ -50,7 +50,9 @@ class _FakeLog:
 @pytest.fixture
 def log(tmp_path, monkeypatch) -> _FakeLog:
     fake = _FakeLog(tmp_path / "sandbox.log")
-    monkeypatch.setattr(sandbox_tools, "_sandbox_log_file", lambda sid: fake.path)
+    # The writer resolves sandbox->thread first, then the log path; pin both.
+    monkeypatch.setattr(sandbox_tools, "_thread_id_for_observation", lambda sid: "t1")
+    monkeypatch.setattr(sandbox_tools, "_sandbox_log_file", lambda tid: fake.path)
     return fake
 
 

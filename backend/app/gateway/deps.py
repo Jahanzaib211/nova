@@ -257,6 +257,48 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.run_events_config = run_events_config
         app.state.run_event_store = make_run_event_store(run_events_config)
 
+        # ── Computer panel live feeds (WS-G) ──────────────────────────────
+        # One multiplexed socket (/computer-ws) carries subagent tasks,
+        # dev-server transitions, and workspace observations. The harness
+        # announces facts through plain callbacks; we marshal them onto this
+        # loop. Listeners are removed on lifespan exit so repeated app
+        # construction in tests never stacks duplicates.
+        import asyncio as _asyncio
+
+        from deerflow.sandbox.computer_events import (
+            add_dev_server_listener,
+            add_observation_listener,
+            remove_dev_server_listener,
+            remove_observation_listener,
+        )
+
+        _loop = _asyncio.get_running_loop()
+        app.state.task_event_hub.attach_loop(_loop)
+        computer_event_hub = TaskEventHub(buffer_size=32)
+        computer_event_hub.attach_loop(_loop)
+        app.state.computer_event_hub = computer_event_hub
+
+        def _on_dev_server(payload: dict) -> None:
+            thread_id = payload.get("thread_id")
+            if thread_id:
+                computer_event_hub.publish_threadsafe(
+                    str(thread_id),
+                    {"channel": "browser", "kind": "dev_server", **payload},
+                )
+
+        def _on_observation(payload: dict) -> None:
+            thread_id = payload.get("thread_id")
+            if thread_id:
+                computer_event_hub.publish_threadsafe(
+                    str(thread_id),
+                    {"channel": "workspace", "kind": "observation", **payload},
+                )
+
+        add_dev_server_listener(_on_dev_server)
+        add_observation_listener(_on_observation)
+        stack.callback(remove_dev_server_listener, _on_dev_server)
+        stack.callback(remove_observation_listener, _on_observation)
+
         # Cross-replica cancel signal — see cancel_signal.py. Reuses the same
         # stream_bridge.redis_url config key rather than introducing a
         # second one; there's exactly one Redis instance in this deployment.

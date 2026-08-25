@@ -11,7 +11,7 @@ import type { Subtask } from "@/core/tasks/types";
 /**
  * One shape for every subagent lifecycle event, whichever transport delivered
  * it: the LangGraph custom-event stream (SSE) or the thread-scoped
- * tasks WebSocket (/api/threads/{id}/tasks-ws).
+ * computer WebSocket (/api/threads/{id}/computer-ws).
  */
 export type TaskLifecycleEvent = {
   type: string;
@@ -22,10 +22,42 @@ export type TaskLifecycleEvent = {
   error?: string;
   /**
    * Which todo rows this delegation was bound to at dispatch (indexes into
-   * the thread's todo list). Absent on older backends — treat as "unknown",
+   * the thread's todo list). Absent on older backends - treat as "unknown",
    * never as an empty strike set.
    */
   todo_indexes?: number[];
+};
+
+/** Dev-server transition pushed by the gateway (channel:"browser"). */
+export type DevServerEvent = {
+  thread_id: string;
+  label?: string;
+  status: "starting" | "ready" | "error" | "stopped" | "crashed" | string;
+  port?: number;
+  container_port?: number;
+};
+
+/** Observation fact pushed by the gateway (channel:"workspace"). */
+export type WorkspaceObservationEvent = {
+  thread_id: string;
+  tool: string;
+  path?: string | null;
+  ts?: string;
+  state?: string | null;
+};
+
+type UpdateSubtask = (
+  patch: Partial<Subtask> & { id: string },
+  source?: SubtaskUpdateSource,
+) => void;
+
+export type ComputerEventHandlers = {
+  /** Subagent lifecycle; applied to the subtask store via applyTaskEvent. */
+  updateSubtask: UpdateSubtask;
+  /** Dev-server transition - invalidate dev-status/dev-servers caches here. */
+  onDevServer?: (event: DevServerEvent) => void;
+  /** Workspace observation - invalidate file/preview caches here. */
+  onObservation?: (event: WorkspaceObservationEvent) => void;
 };
 
 /** Is this a subagent lifecycle event we can apply? */
@@ -40,15 +72,10 @@ export function isTaskLifecycleEvent(event: unknown): event is TaskLifecycleEven
   );
 }
 
-type UpdateSubtask = (
-  patch: Partial<Subtask> & { id: string },
-  source?: SubtaskUpdateSource,
-) => void;
-
 /**
  * Apply one lifecycle event to the subtask store. The single writer used by
- * BOTH transports so their semantics cannot drift — the FSM in tasks/context
- * dedupes the double delivery by design ("if either arrives, the card settles").
+ * BOTH transports so their semantics cannot drift - the FSM in tasks/context
+ * dedupes double delivery by design ("if either arrives, the card settles").
  */
 export function applyTaskEvent(
   e: TaskLifecycleEvent,
@@ -92,8 +119,7 @@ export function applyTaskEvent(
         "result",
       );
       return;
-    // Cancelled and timed-out are failures as far as the card is concerned;
-    // the error string is what distinguishes them.
+    // Cancelled and timed-out are failures as far as the card is concerned.
     case "task_failed":
     case "task_cancelled":
     case "task_timed_out":
@@ -113,20 +139,21 @@ export function applyTaskEvent(
 }
 
 /**
- * Live subagent events over the thread-scoped tasks WebSocket.
+ * Live Agent's Computer feed over ONE thread-scoped WebSocket.
  *
- * Why WS when SSE already carries these: the custom stream dies with its RUN,
- * while todo bindings must survive reconnects and outlive it — the WS is
- * scoped to the thread and replays a bounded buffer on join. Delivery is
- * additive to the SSE path; the subtask FSM makes duplicate application a
- * no-op, so old frontends and new transports coexist.
+ * Channels multiplexed on /api/threads/{id}/computer-ws:
+ * - task_* lifecycle events -> updateSubtask (same FSM as the SSE path)
+ * - channel:"browser"       -> onDevServer (dev-server transitions, push)
+ * - channel:"workspace"     -> onObservation (tool facts that invalidate
+ *                              stale previews instantly)
  *
- * Reconnects with capped exponential backoff; the gateway may legitimately be
- * older than this build, and a failed upgrade must stay invisible.
+ * Reconnects with capped exponential backoff. A gateway older than this
+ * build has no such route - the failed upgrade stays invisible and the SSE
+ * fallbacks keep working.
  */
-export function useThreadTaskEvents(
+export function useComputerEvents(
   threadId: string | null | undefined,
-  updateSubtask: UpdateSubtask,
+  handlers: ComputerEventHandlers,
 ): void {
   useEffect(() => {
     if (!threadId) return;
@@ -136,13 +163,37 @@ export function useThreadTaskEvents(
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let attempts = 0;
 
-    // Same-origin deploys return an empty base — but the WebSocket
-    // constructor REQUIRES an absolute URL, so resolve against the page
-    // origin. Without this the socket never connects outside split-origin
-    // setups, silently (the retry loop just spins).
     const base = getBackendBaseURL() || getBaseOrigin();
     const wsBase = base.replace(/^http/, "ws");
-    const url = `${wsBase}/api/threads/${encodeURIComponent(threadId)}/tasks-ws`;
+    const url = `${wsBase}/api/threads/${encodeURIComponent(threadId)}/computer-ws`;
+
+    const handleFrame = (raw: string) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return; // heartbeat / non-JSON frame
+      }
+      if (isTaskLifecycleEvent(parsed)) {
+        applyTaskEvent(parsed, handlers.updateSubtask);
+        return;
+      }
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        (parsed as { channel?: string }).channel === "browser"
+      ) {
+        handlers.onDevServer?.(parsed as DevServerEvent);
+        return;
+      }
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        (parsed as { channel?: string }).channel === "workspace"
+      ) {
+        handlers.onObservation?.(parsed as WorkspaceObservationEvent);
+      }
+    };
 
     const connect = () => {
       if (closed) return;
@@ -153,27 +204,16 @@ export function useThreadTaskEvents(
         return;
       }
 
-      socket.onmessage = (message) => {
-        try {
-          const parsed: unknown = JSON.parse(String(message.data));
-          if (isTaskLifecycleEvent(parsed)) {
-            applyTaskEvent(parsed, updateSubtask);
-          }
-        } catch {
-          /* non-JSON frame (heartbeat etc.) — ignore */
-        }
-      };
-
+      socket.onmessage = (message) => handleFrame(String(message.data));
       socket.onopen = () => {
         attempts = 0;
       };
-
       socket.onclose = () => {
         socket = null;
         scheduleRetry();
       };
       socket.onerror = () => {
-        // onclose follows; nothing to do here beyond preventing unhandled noise.
+        /* onclose follows */
       };
     };
 
@@ -189,7 +229,6 @@ export function useThreadTaskEvents(
       closed = true;
       clearTimeout(retryTimer);
       if (socket) {
-        // Detach handlers before close so onclose does not schedule a retry.
         socket.onclose = null;
         socket.onerror = null;
         socket.onmessage = null;
@@ -197,8 +236,8 @@ export function useThreadTaskEvents(
         socket = null;
       }
     };
-    // updateSubtask comes from context with stable identity; threadId scopes
-    // the socket. Anything else changing should not rebuild the connection.
+    // Handlers come from the consumer; wrap them in a stable ref so a new
+    // closure per render does not rebuild the socket.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
 }

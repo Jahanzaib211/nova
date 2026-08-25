@@ -828,6 +828,8 @@ export const zhCN: Translations = {
       running: "运行中...",
       reconnect: "重新连接",
       shellDisconnected: "交互式 shell 无响应，沙箱可能已被回收。",
+      counts: (total: number, running: number) =>
+        `${total} 条命令${running ? ` · ${running} 运行中` : ""}`,
     },
     editor: {
       startWriting: "开始编写文件即可实时查看代码",

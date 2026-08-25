@@ -70,6 +70,27 @@ class DevServerHandle:
     _watchdog_task: asyncio.Task | None = None  # port-readiness watchdog (local + AIO)
 
 
+def _notify_dev_server_status(handle: "DevServerHandle") -> None:
+    """Announce a status transition to registered listeners (gateway WS).
+
+    Non-fatal by contract: listener failures are contained inside the emitter.
+    """
+    try:
+        from deerflow.sandbox.computer_events import emit_dev_server_status
+
+        emit_dev_server_status(
+            {
+                "thread_id": handle.thread_id,
+                "label": handle.label,
+                "status": handle.status,
+                "port": handle.port,
+                "container_port": handle.container_port,
+            }
+        )
+    except Exception:  # noqa: BLE001 - observability must never break a run
+        logger.debug("dev-server status notify failed", exc_info=True)
+
+
 _servers: dict[str, DevServerHandle] = {}
 _order_counter = 0
 
@@ -204,6 +225,7 @@ def register_external_dev_server(
         _order=_order_counter,
     )
     handle.status = "ready"
+    _notify_dev_server_status(handle)
     handle.log_buffer.append(f"[deerflow] registered external dev server at {host}:{port}")
     _servers[_server_key(thread_id, label)] = handle
     return handle
@@ -394,6 +416,7 @@ def _ingest_line(handle: DevServerHandle, text: str) -> None:
     low = text.lower()
     if handle.status == "starting" and any(m in low for m in _READY_MARKERS):
         handle.status = "ready"
+        _notify_dev_server_status(handle)
         logger.info("Dev server for thread %s (%s) is ready on %s:%s", handle.thread_id, handle.label, handle.host, handle.port)
     # Count recompiles so the frontend can auto-reload the preview iframe.
     if "compiled" in low or "hmr" in low or "hot updated" in low:
@@ -420,6 +443,7 @@ async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _REA
             if handle.host and handle.port and await port_alive(handle.host, handle.port):
                 if handle.status == "starting":
                     handle.status = "ready"
+                    _notify_dev_server_status(handle)
                     logger.info(
                         "Dev server for thread %s (%s) bound %s:%s within readiness window",
                         handle.thread_id,
@@ -431,6 +455,7 @@ async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _REA
             if loop.time() >= deadline:
                 if handle.status == "starting":
                     handle.status = _STATUS_CRASHED
+                    _notify_dev_server_status(handle)
                     msg = f"dev server crashed: did not bind {handle.host}:{handle.port} within {timeout:g}s"
                     handle.log_buffer.append(f"[deerflow] {msg}")
                     _append_devlog_to_sandbox_log(handle.thread_id, msg)
@@ -461,8 +486,10 @@ async def _pump_output(handle: DevServerHandle) -> None:
         # Process exited
         if handle.status not in ("stopped", "ready"):
             handle.status = "error"
+            _notify_dev_server_status(handle)
         elif handle.status == "ready" and proc.returncode is not None:
             handle.status = "stopped"
+            _notify_dev_server_status(handle)
 
 
 async def _pump_output_aio(handle: DevServerHandle) -> None:
@@ -513,6 +540,7 @@ async def _pump_output_aio(handle: DevServerHandle) -> None:
                 if misses >= _MAX_AIO_MISSES:
                     if handle.status == "starting":
                         handle.status = "error"
+                        _notify_dev_server_status(handle)
                         handle.log_buffer.append("[deerflow] dev server produced no output; stopping log tail")
                     break
                 continue
@@ -617,6 +645,7 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
         )
     except Exception as e:
         handle.status = "error"
+        _notify_dev_server_status(handle)
         handle.log_buffer.append(f"[deerflow] failed to start: {e}")
         _servers[_server_key(thread_id, label)] = handle
         return handle
@@ -662,6 +691,7 @@ async def _start_dev_server_aio(
 
     if endpoint is None:
         handle.status = "error"
+        _notify_dev_server_status(handle)
         handle.log_buffer.append(f"[deerflow] no published preview port {container_port} for this thread's sandbox")
         _servers[_server_key(thread_id, label)] = handle
         return handle
@@ -708,6 +738,7 @@ async def _start_dev_server_aio(
         await asyncio.to_thread(sandbox.execute_command, inner)
     except Exception as e:
         handle.status = "error"
+        _notify_dev_server_status(handle)
         handle.log_buffer.append(f"[deerflow] failed to start in container: {e}")
         _servers[_server_key(thread_id, label)] = handle
         return handle
@@ -723,6 +754,7 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
     if handle is None:
         return False
     handle.status = "stopped"
+    _notify_dev_server_status(handle)
 
     # Cancel the AIO log poller if any.
     poller = handle._poller_task

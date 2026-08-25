@@ -862,6 +862,8 @@ export const enUS: Translations = {
       reconnect: "Reconnect",
       shellDisconnected:
         "The interactive shell is not responding. The sandbox may have been recycled.",
+      counts: (total: number, running: number) =>
+        `${total} cmd${total === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`,
     },
     editor: {
       startWriting: "Start writing a file to see code live",

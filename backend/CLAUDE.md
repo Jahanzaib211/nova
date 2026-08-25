@@ -387,6 +387,32 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 
 Page selection goes through `_active_page(ctx)`, which probes `document.visibilityState` to find the genuinely visible tab rather than taking `ctx.pages[0]` (the *first* tab, which is only the active one by coincidence). It returns `(page, created)`; callers close the page only when they created it. `screenshot` previously called `ctx.new_page()` and so captured a blank `about:blank` rather than the page under test. Selector operations run through `_selector_action`, which retries in child frames when the main frame misses (iframe piercing) and raises a failure naming the selector, frame count, and the page's real URL/title. The page-op timeout is 30s, overridable via `DEERFLOW_BROWSER_OP_TIMEOUT_MS`.
 
+### Computer panel live socket (WS-G)
+
+One thread-scoped WebSocket per surface, replacing poll-driven liveness:
+
+- `/api/threads/{id}/tasks-ws` — subagent task events only (parity with the custom SSE stream)
+- `/api/threads/{id}/computer-ws` — multiplexed: `task_*` events + `channel:"browser"` dev-server transitions + `channel:"workspace"` observation facts
+
+Plumbing: `app/gateway/task_events.py` holds the thread-keyed hubs and a
+`MirroringStreamBridge` decorator that duplicates `task_*` custom events out
+of whatever StreamBridge is configured; harness seams
+(`deerflow/sandbox/computer_events.py`) announce dev-server status changes
+and sandbox observations as plain callbacks the gateway registers at
+lifespan (removed on exit — test-safe). Emitters are cross-thread;
+`publish_threadsafe` marshals onto the lifespan loop. Hubs replay a bounded
+buffer on join, drop-oldest for slow consumers, and send a JSON ping every
+30s so idle sockets survive NATs. **Single-replica by design** — multi-
+replica gateways must fan emitters through Redis pub/sub or sockets attached
+to other replicas see nothing.
+
+`task_tool` binds the currently-`in_progress` todo indexes at dispatch and
+carries `todo_indexes` on every terminal event; the frontend strikes exactly
+those rows (`useCompletedTodoBindings`) instead of the old positional
+first-N heuristic. Absent field = older backend → no strike, never a wrong
+strike. The observation-type ↔ frontend-classifier contract is pinned by
+pure-text assertions in `tests/test_frontend_contract.py`.
+
 ### Subagent System (`packages/harness/deerflow/subagents/`)
 
 **Built-in Agents**: `general-purpose` (all tools except `task`) and `bash` (command specialist)

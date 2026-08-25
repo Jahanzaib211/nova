@@ -158,15 +158,14 @@ def _observation_max_chars() -> int:
         return 20000
 
 
-def _sandbox_log_file(sandbox_id: str):
-    """Resolve the per-thread ``sandbox.log`` path for a sandbox id, or None.
+def _sandbox_log_file(thread_id: str):
+    """Resolve the per-thread ``sandbox.log`` path, or None.
 
     Shared by the observation writer and the stale-id finalizer so both always
     agree on where the log lives. All failures degrade to None (the writer's
     contract: observations must never break the agent loop).
     """
     try:
-        thread_id = _thread_id_for_observation(sandbox_id)
         if not thread_id:
             return None
 
@@ -183,7 +182,7 @@ def _sandbox_log_file(sandbox_id: str):
         thread_dir.mkdir(parents=True, exist_ok=True)
         return thread_dir / "sandbox.log"
     except Exception as exc:
-        logger.debug("Failed to resolve sandbox.log for %s: %s", sandbox_id, exc)
+        logger.debug("Failed to resolve sandbox.log for %s: %s", thread_id, exc)
         return None
 
 
@@ -197,7 +196,8 @@ def _finalize_stale_open_ids(sandbox_id: str) -> None:
     keeps the invariant *at most one open id*, no matter how the previous
     command died. Best-effort by the same contract as the writer itself.
     """
-    log_path = _sandbox_log_file(sandbox_id)
+    thread_id = _thread_id_for_observation(sandbox_id)
+    log_path = _sandbox_log_file(thread_id) if thread_id else None
     if log_path is None or not log_path.exists():
         return
     try:
@@ -282,7 +282,8 @@ def _write_sandbox_observation(
     failures never affect the agent loop.
     """
     try:
-        log_path = _sandbox_log_file(sandbox_id)
+        thread_id = _thread_id_for_observation(sandbox_id)
+        log_path = _sandbox_log_file(thread_id) if thread_id else None
         if log_path is None:
             return
 
@@ -320,6 +321,25 @@ def _write_sandbox_observation(
                 json.dumps({"tool": tool, "path": path, "ts": ts}),
                 encoding="utf-8",
             )
+            # Push the fact (not the payload) to the gateway's computer-ws so
+            # stale previews invalidate instantly instead of waiting for a
+            # poll. Non-fatal by contract; delta/replace frames are skipped —
+            # one signal per command, not per chunk.
+            try:
+                from deerflow.sandbox.computer_events import emit_observation
+
+                emit_observation(
+                    {
+                        "thread_id": thread_id,
+                        "tool": tool,
+                        "path": path,
+                        "ts": ts,
+                        "state": state,
+                        "id": obs_id,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("observation emit failed: %s", exc)
     except Exception as exc:
         logger.debug("_write_sandbox_observation failed: %s", exc)  # observation failures must never propagate
 

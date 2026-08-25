@@ -710,3 +710,42 @@ async def tasks_ws(websocket: "WebSocket", thread_id: str) -> None:
         await run_tasks_ws_stream(websocket, hub, thread_id)
     finally:
         reset_current_user(token)
+
+
+@router.websocket("/{thread_id}/computer-ws")
+async def computer_ws(websocket: "WebSocket", thread_id: str) -> None:
+    """Multiplexed Agent's Computer feed for one thread.
+
+    One socket carries every channel the panel needs live:
+    - ``task_*`` events (subagent lifecycle + todo bindings)
+    - ``channel:"browser"`` dev-server transitions (starting/ready/crashed…)
+    - ``channel:"workspace"`` observation facts (tool/path/ts) that
+      invalidate stale previews instantly
+
+    Replaces polling for these signals; the REST endpoints remain for
+    initial hydration. Admission mirrors tasks-ws exactly.
+    """
+    from app.gateway.task_events import run_computer_ws_stream
+    from app.gateway.ws_guards import caller_owns_thread, ws_user, ws_same_origin
+
+    from deerflow.runtime.user_context import reset_current_user, set_current_user
+
+    if not ws_same_origin(websocket):
+        await websocket.close(code=1008)
+        return
+    user = await ws_user(websocket)
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    token = set_current_user(user)
+    try:
+        if not caller_owns_thread(thread_id):
+            await websocket.close(code=1008)
+            return
+        task_hub: TaskEventHub = websocket.app.state.task_event_hub  # type: ignore[name-defined]
+        computer_hub: TaskEventHub = websocket.app.state.computer_event_hub  # type: ignore[name-defined]
+        await run_computer_ws_stream(
+            websocket, [task_hub, computer_hub], thread_id
+        )
+    finally:
+        reset_current_user(token)

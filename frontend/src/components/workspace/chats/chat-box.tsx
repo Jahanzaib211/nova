@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { FilesIcon, LaptopIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
@@ -18,7 +19,7 @@ import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilit
 import { useI18n } from "@/core/i18n/hooks";
 import { useUpdateSubtask } from "@/core/tasks/context";
 import {
-  useThreadTaskEvents,
+  useComputerEvents,
 } from "@/core/threads/task-events-ws";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -91,7 +92,39 @@ const ChatBox: React.FC<{
   // no-op, and this path survives run end / reconnects, which is what lets a
   // todo binding arrive even if the SSE window missed it.
   const updateSubtaskForWs = useUpdateSubtask();
-  useThreadTaskEvents(threadId, updateSubtaskForWs);
+  const queryClient = useQueryClient();
+  useComputerEvents(threadId, {
+    updateSubtask: updateSubtaskForWs,
+    // Dev-server transitions arrive as push: refresh the caches the panel's
+    // Browser tab reads instead of waiting for the next poll interval.
+    onDevServer: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["sandbox", "dev-status", threadId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["sandbox", "dev-servers", threadId],
+      });
+    },
+    // A workspace observation means files changed under the panel. Invalidate
+    // the file-content caches so the static preview refetches immediately —
+    // this is what killed the stale `file://`-era snapshot class: the panel
+    // kept showing an early render until its poll happened to catch up.
+    onObservation: (event) => {
+      const tool = event.tool;
+      if (
+        tool === "write_file" ||
+        tool === "str_replace" ||
+        tool === "bash"
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "live-file", threadId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "file", threadId],
+        });
+      }
+    },
+  });
 
   const {
     artifacts,

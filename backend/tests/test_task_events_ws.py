@@ -160,6 +160,64 @@ class TestRouteRegistration:
         paths = {getattr(r, "path", "") for r in threads_router.router.routes}
         assert "/api/threads/{thread_id}/tasks-ws" in paths
 
+    def test_computer_ws_route_exists(self) -> None:
+        from app.gateway.routers import threads as threads_router
+
+        paths = {getattr(r, "path", "") for r in threads_router.router.routes}
+        assert "/api/threads/{thread_id}/computer-ws" in paths
+
+
+class TestComputerWsMultiplex:
+    @pytest.mark.asyncio
+    async def test_single_socket_carries_both_channels(self) -> None:
+        from app.gateway.task_events import (
+            TaskEventHub,
+            run_computer_ws_stream,
+        )
+
+        tasks_hub = TaskEventHub()
+        computer_hub = TaskEventHub(buffer_size=8)
+        received: list[dict] = []
+
+        from starlette.websockets import WebSocketState as _WsState
+
+        class _FakeWs:
+            def __init__(self) -> None:
+                self.client_state = _WsState.CONNECTED
+
+            async def accept(self):
+                pass
+
+            async def send_text(self, raw: str) -> None:
+                payload = json.loads(raw)
+                if payload.get("kind") == "stop":
+                    self.client_state = _WsState.DISCONNECTED
+                    raise RuntimeError("client gone")
+                received.append(payload)
+
+            async def close(self, code: int = 1000) -> None:
+                self.client_state = _WsState.DISCONNECTED
+
+        ws = _FakeWs()
+
+        async def runner():
+            await run_computer_ws_stream(ws, [tasks_hub, computer_hub], "t9")
+
+        task = asyncio.ensure_future(runner())
+        await asyncio.sleep(0)
+        await tasks_hub.publish("t9", {"type": "task_completed", "task_id": "x"})
+        await computer_hub.publish(
+            "t9",
+            {"channel": "browser", "kind": "dev_server", "status": "ready"},
+        )
+        # Sentinel tells the fake socket to hang up, which ends the stream.
+        await computer_hub.publish("t9", {"channel": "workspace", "kind": "stop"})
+        await asyncio.wait_for(task, timeout=3)
+
+        kinds = {(p.get("type"), p.get("kind")) for p in received}
+        assert ("task_completed", None) in kinds
+        assert (None, "dev_server") in kinds
+
 
 # ── todo binding extraction ─────────────────────────────────────────────────
 

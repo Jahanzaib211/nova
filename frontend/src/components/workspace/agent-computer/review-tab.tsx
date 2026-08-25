@@ -185,7 +185,7 @@ export function ReviewPanel({
               <div className="flex flex-col gap-1">
                 {risks.map((r, i) => (
                   <div
-                    key={i}
+                    key={`${r.level}:${(r.message ?? r.evidence ?? "").slice(0, 48)}:${i}`}
                     className="border-border/20 bg-muted/10 rounded border px-2 py-1"
                   >
                     <span

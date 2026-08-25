@@ -103,6 +103,15 @@ export function Terminal({
       <span className="text-muted-foreground/50 mr-auto font-mono text-[10px]">
         {t.agentComputer.terminal.tab}
       </span>
+      {/* Command count: total captured + work in flight. The panel badge
+          shows only the live number; here the operator gets both without
+          counting prompt rows by eye. */}
+      <span className="text-muted-foreground/40 font-mono text-[10px]">
+        {t.agentComputer.terminal.counts(
+          terminalEvents.length,
+          terminalEvents.filter((e) => e.status === "running").length,
+        )}
+      </span>
       <div className="border-border/40 flex items-center rounded border text-[10px]">
         <button
           onClick={() => setMode("stream")}

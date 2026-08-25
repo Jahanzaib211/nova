@@ -738,6 +738,7 @@ export interface Translations {
           sandbox was recycled and the embedded shell went dead. */
       reconnect: string;
       shellDisconnected: string;
+      counts: (total: number, running: number) => string;
     };
     editor: {
       startWriting: string;
