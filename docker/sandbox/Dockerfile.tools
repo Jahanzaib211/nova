@@ -290,6 +290,98 @@ RUN set -eux; \
     python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 httpie; \
     ln -sf /opt/python3.12/bin/httpie /usr/local/bin/httpie
 
+# --- Security arsenal --------------------------------------------------------
+# Mapped 1:1 from the owner's Security-Toolkit knowledge base (mounted
+# read-only at /mnt/security-toolkit at runtime). Domain -> tools:
+#
+#   network    nmap masscan tshark(wireshark-cli)
+#   vulnscan   nuclei trivy nikto wapiti whatweb
+#   webapp     sqlmap gobuster ffuf dirb dalfox arjun
+#   secrets    gitleaks trufflehog semgrep detect-secrets
+#   osint      subfinder amass httpx sherlock theHarvester
+#   ad/creds   hydra john hashcat enum4linux smbclient impacket(secretsdump)
+#   forensics  sleuthkit binwalk foremost exiftool yara
+#   wireless   aircrack-ng bettercap wifite
+#   blueteam   suricata lynis chkrootkit
+#   reverse    checksec ropper (+ strings from binutils)
+#
+# Go/single-file tools are pinned release tarballs; bumping is a one-line ARG.
+RUN set -eux;     apt-get update;     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        nmap masscan nikto sqlmap dirb whatweb wapiti gobuster ffuf \
+        hydra john john-data hashcat hashid binwalk foremost \
+        libimage-exiftool-perl testssl.sh sslscan dnsrecon \
+        enum4linux smbclient ldap-utils aircrack-ng bettercap wifite \
+        suricata yara sleuthkit seclists wireshark-cli lynis chkrootkit libpcap-dev; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux;     python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
+        impacket semgrep sherlock theHarvester arjun detect-secrets ropper; \
+    for b in secretsdump.py GetUserSPNs.py wmiexec.py psexec.py semgrep \
+             sherlock theHarvester arjun detect-secrets ropper; do \
+        if [ -e "/opt/python3.12/bin/$b" ]; then \
+            ln -sf "/opt/python3.12/bin/$b" "/usr/local/bin/$b"; fi; \
+    done
+
+ARG NUCLEI_VERSION=3.3.9
+ARG HTTPX_VERSION=1.6.9
+ARG SUBFINDER_VERSION=2.6.7
+ARG AMASS_VERSION=4.2.0
+ARG GITLEAKS_VERSION=8.24.3
+ARG TRUFFLEHOG_VERSION=3.88.25
+ARG DALFOX_VERSION=2.10.0
+ARG TRIVY_VERSION=0.62.1
+RUN set -eux; \
+    fetch() { url="$1"; out="$2"; \
+        if [ -f "/vendor/$out" ]; then \
+            install -m 0755 "/vendor/$out" "/usr/local/bin/$out"; \
+        else \
+            curl -fsSL "$url" -o "/tmp/$out.dl"; \
+            case "$out.dl" in \
+                *.zip) python3 -c "import zipfile,sys;z=zipfile.ZipFile('/tmp/$out.dl');z.extract('$out','/usr/local/bin')" ;; \
+                *) mkdir -p /tmp/x && tar -xzf "/tmp/$out.dl" -C /tmp/x "$out" && install -m 0755 "/tmp/x/$out" "/usr/local/bin/$out" ;; \
+            esac; \
+        fi; \
+        chmod 0755 "/usr/local/bin/$out"; rm -f "/tmp/$out.dl"; rm -rf /tmp/x; }; \
+    fetch "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" nuclei; \
+    fetch "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_amd64.zip" httpx; \
+    fetch "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" subfinder; \
+    fetch "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks; \
+    fetch "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" trufflehog; \
+    fetch "https://github.com/hahwul/dalfox/releases/download/v${DALFOX_VERSION}/dalfox_${DALFOX_VERSION}_linux_amd64.zip" dalfox; \
+    fetch "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64Bit.tar.gz" trivy
+
+# amass ships a nested folder layout; handle it separately.
+ARG AMASS_VERSION=4.2.0
+RUN set -eux; \
+    curl -fsSL "https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_linux_amd64.zip" -o /tmp/amass.zip; \
+    python3 -c "import zipfile;z=zipfile.ZipFile('/tmp/amass.zip');[z.extract(n,'/tmp/amass') for n in z.namelist() if n.endswith('/amass')]"; \
+    install -m 0755 $(find /tmp/amass -name amass -type f | head -1) /usr/local/bin/amass; \
+    rm -rf /tmp/amass.zip /tmp/amass
+
+# --- Software-house completeness: per-language module gaps -------------------
+# The manifest already advertises go/rust/node/python/playwright. What a whole
+# software house reaches for that was MISSING entirely:
+#   vcs/ops    gh (GitHub CLI), ansible
+#   jvm        maven + gradle wrappers (JDK17 arrives on the android layer)
+#   data       sqlite3, mysql-client, redis-tools(psql/redis-cli already present)
+#   systems    strace, ltrace, zip, unzip, rsync, jq (vendored), net-tools
+#   web        php-cli + composer, ruby-full
+#   dotnet     .NET SDK pinned via dotnet-install (channel 8.0, LTS)
+#   quality    pre-commit framework (pip, 3.12 shim like httpie)
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        gh ansible sqlite3 mysql-client strace ltrace zip unzip rsync \
+        network-manager net-tools php-cli ruby-full maven gradle; \
+    rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer --quiet; \
+    curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && chmod +x /tmp/dotnet-install.sh && \
+        /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet && \
+        ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet && rm -f /tmp/dotnet-install.sh
+
+RUN python3.12 -m pip install --no-cache-dir pre-commit && \
+    ln -sf /opt/python3.12/bin/pre-commit /usr/local/bin/pre-commit
+
 # --- The build asserts its own claims ---------------------------------------
 # Everything above is an intention until something checks it. Two failures made
 # that concrete: the Playwright browsers were never installed because this file

@@ -369,6 +369,28 @@ class AioSandboxProvider(SandboxProvider):
             mounts.append(skills_mount)
             logger.info(f"Adding skills mount: {skills_mount}")
 
+        # Security-Toolkit knowledge base: the owner's curated methodology
+        # cheatsheets, read-only, so the agent reads HOW next to its new
+        # arsenal (mounted by the tools layer of the image). Opt-in via env;
+        # absent/missing path silently skips — a missing KB must never block
+        # sandbox creation.
+        import os
+        from pathlib import Path as _Path
+
+        # Resolution order: this process env, then the sandbox environment
+        # map (config.yaml sandbox.environment) — either may carry it.
+        env_map = self._config.get("environment") or {}
+        sec_kb = (
+            os.environ.get("DEER_FLOW_SECURITY_TOOLKIT")
+            or self._resolve_env_vars(
+                {k: v for k, v in env_map.items() if k == "DEER_FLOW_SECURITY_TOOLKIT"}
+            ).get("DEER_FLOW_SECURITY_TOOLKIT", "")
+        )
+        sec_kb = (sec_kb or "").strip()
+        if sec_kb and _Path(sec_kb).is_dir():
+            mounts.append((sec_kb, "/mnt/security-toolkit", True))
+            logger.info(f"Adding security-toolkit mount: {sec_kb}")
+
         return mounts
 
     @staticmethod
