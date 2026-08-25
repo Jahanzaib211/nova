@@ -65,16 +65,28 @@ export function useWorkspaceState(): WorkspaceState {
  * rendering React — both were silent, intermittent bugs that a render test
  * would not have caught reliably.
  */
+/** First occurrence passes through; later identical ids get `#2`, `#3`, … */
+function disambiguate(base: string, seen: Map<string, number>): string {
+  const count = (seen.get(base) ?? 0) + 1;
+  seen.set(base, count);
+  return count === 1 ? base : `${base}#${count}`;
+}
+
 export function mergeWorkspaceEvents(
   sseEvents: SandboxEvent[],
   activityEvents: AgentActivityEvent[],
 ): AgentActivityEvent[] {
+  const seenIds = new Map<string, number>();
   const fromLog: AgentActivityEvent[] = sseEvents.map((e: SandboxEvent) => ({
     // `uid` is assigned once, when the event is first ingested. The previous
     // key was built from the array index, which shifts for every element the
     // moment the MAX_EVENTS window rolls — remounting the entire list while
     // the user is reading it.
-    id: e.uid ?? `${e.ts}-${e.type}-${e.summary}`,
+    //
+    // The composite fallback collides when two identical commands land in the
+    // same second (same ts|type|summary) — duplicate React keys remount rows
+    // mid-stream. Disambiguate with an occurrence counter.
+    id: e.uid ?? disambiguate(`${e.ts}-${e.type}-${e.summary}`, seenIds),
     ts: e.ts,
     type: e.type,
     path: e.path,

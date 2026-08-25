@@ -89,10 +89,13 @@ export function Editor({
   // Depending on the object meant this effect refired continuously while the
   // agent wrote, so a user who clicked "File" to read the whole thing was
   // yanked back to "Diff" a fraction of a second later, every time — the toggle
-  // was effectively unusable during streaming. The path+kind key still resets
-  // the view when the agent moves to a genuinely different edit.
+  // was effectively unusable during streaming.
+  //
+  // The key includes the tool-call id: path+kind alone could NOT distinguish
+  // two consecutive str_replace calls on the same file, so edit #2 silently
+  // kept "File" view and its diff badge was never shown.
   const editKey = editForFile
-    ? `${editForFile.path}:${editForFile.kind}`
+    ? `${editForFile.callId}:${editForFile.path}:${editForFile.kind}`
     : null;
   const [mode, setMode] = useState<"diff" | "file">("diff");
   useEffect(() => {
