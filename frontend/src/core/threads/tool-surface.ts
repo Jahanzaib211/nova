@@ -1,24 +1,24 @@
 /**
- * Which Agent's Computer tab an agent activity event belongs to.
+ * Which Agent's Computer tab an agent activity event belongs to, what kind of
+ * work it represents, and which tab a running tool should focus.
  *
- * The Terminal and Activity tabs render a *partition* of the same event stream:
- * Terminal shows command-line work (a command and its output), Activity shows
- * everything else as high-signal cards. Every tool must land in exactly one.
+ * Three questions live here on purpose, because they were answered in five
+ * places before and every one of them rotted independently:
  *
- * This lived as a bare name list inside terminal-tab.tsx, and it drifted twice:
+ *   1. Surface  (`isTerminalTool`/`isActivityTool`) — Terminal and Activity
+ *      render a *partition* of the same event stream: Terminal shows
+ *      command-line work (a command and its output), Activity shows
+ *      everything else as high-signal cards. Every tool must land in exactly
+ *      one. The failure mode is silent by construction: a misclassified event
+ *      goes to the other tab rather than disappearing, so nothing errors.
  *
- *   2026-08-14  `write_file` / `str_replace` / `read_file` were missing, so a
- *               run that only edited files left the Terminal tab empty.
- *   2026-08-21  the entire `shell_*` family was missing. Those tools wrap the
- *               AIO SDK and are the modern execution path, so an agent doing
- *               its work through `shell_session` showed *nothing* in Terminal
- *               while the backend stream was perfectly healthy.
+ *   2. Focus    (`isEditorTool`) — which tab a *running* tool should bring to
+ *      the front. This is about user attention, not the partition: editor
+ *      tools are also Terminal-surface events (their output is logged like
+ *      shell work), but while one is streaming the user wants the Editor.
  *
- * A hand-maintained list of names rots every time a tool is added, and the
- * failure is silent — the event goes to the other tab rather than disappearing,
- * so nothing errors and nobody notices until a user says "the terminal is
- * broken". Hence the prefix rule: a new `shell_*` tool is classified correctly
- * the day it is added, without anyone remembering this file exists.
+ *   3. Kind     (`classifyToolWork`) — the semantic flavor used for status
+ *      labels, dots, icons and colors.
  */
 
 /** Tools whose output reads as a terminal session. */
@@ -26,6 +26,11 @@ const TERMINAL_TOOL_NAMES: ReadonlySet<string> = new Set([
   // Command execution
   "bash",
   "execute_command",
+  // Directory listing reads as a command transcript (`ls src/` → output).
+  "ls",
+  // Sandbox-native search tools; pattern hits read like a command transcript.
+  "glob",
+  "grep",
   // File operations the agent narrates like shell work
   "read_file",
   "write_file",
@@ -42,6 +47,57 @@ const TERMINAL_TOOL_NAMES: ReadonlySet<string> = new Set([
  * handled without a code change here.
  */
 const TERMINAL_TOOL_PREFIXES: readonly string[] = ["shell_"];
+
+/**
+ * Tools whose *streaming* should put the Editor tab in front. A superset of
+ * nothing: these are all Terminal-surface events too (see above) — this set
+ * only answers "which tab does the user want to watch right now".
+ */
+const EDITOR_FOCUS_TOOLS: ReadonlySet<string> = new Set([
+  "write_file",
+  "str_replace",
+  "scaffold_project",
+]);
+
+/** What a tool does, for labels, dots, icons and colors. */
+export type ToolWorkKind =
+  | "terminal" // command execution and directory listings
+  | "file-read"
+  | "file-write"
+  | "file-edit"
+  | "file-search" // filename-oriented search
+  | "content-search" // content-oriented search
+  | "browser"
+  | "devserver"
+  | "subagent"
+  | "scaffold"
+  | "other";
+
+const KIND_BY_NAME: ReadonlyMap<string, ToolWorkKind> = new Map([
+  ["bash", "terminal"],
+  ["execute_command", "terminal"],
+  ["ls", "terminal"],
+  ["free_port", "terminal"],
+  ["system_probe", "terminal"],
+  ["read_file", "file-read"],
+  ["write_file", "file-write"],
+  ["str_replace", "file-edit"],
+  ["search_files", "file-search"],
+  ["glob", "file-search"],
+  ["grep_files", "content-search"],
+  ["grep", "content-search"],
+  ["start_dev_server", "devserver"],
+  ["stop_dev_server", "devserver"],
+  ["deploy_expose", "devserver"],
+  ["task", "subagent"],
+  ["scaffold_project", "scaffold"],
+  ["screenshot", "browser"],
+  ["view_image", "browser"],
+  ["web_search", "browser"],
+  ["web_fetch", "browser"],
+  ["tavily_search", "browser"],
+  ["image_search", "browser"],
+]);
 
 /**
  * `name` is typed `string`, but this classifies events decoded from a live
@@ -69,6 +125,28 @@ export function isTerminalTool(name: string): boolean {
  */
 export function isActivityTool(name: string): boolean {
   return !isTerminalTool(name);
+}
+
+/** Which tab a running tool should focus, or null when no switch is due. */
+export function isEditorTool(name: string): boolean {
+  return typeof name === "string" && EDITOR_FOCUS_TOOLS.has(name);
+}
+
+/** Classify a tool's work for labels/dots/icons. Unknown names stay graceful. */
+export function classifyToolWork(name: string): ToolWorkKind {
+  if (typeof name !== "string") return "other";
+  const known = KIND_BY_NAME.get(name);
+  if (known) return known;
+  if (TERMINAL_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix)))
+    return "terminal";
+  if (
+    name.startsWith("browser_") ||
+    name.startsWith("web_") ||
+    name.startsWith("tavily_") ||
+    name.startsWith("image_")
+  )
+    return "browser";
+  return "other";
 }
 
 /** Exported for tests that assert the partition is total and disjoint. */

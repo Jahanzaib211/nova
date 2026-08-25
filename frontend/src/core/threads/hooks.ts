@@ -26,6 +26,7 @@ import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
 import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
+import { buildActivitySummary } from "./activity";
 import { fetchThreadTokenUsage } from "./api";
 import {
   classifyVerifyOutcome,
@@ -97,24 +98,11 @@ export type AgentActivityEvent = {
   status: "running" | "done" | "error";
 };
 
-function _buildActivitySummary(
-  name: string,
-  { path, cmd }: { path?: string | null; cmd?: string | null },
-): string {
-  const filename = path?.split("/").at(-1);
-  if (name === "write_file")
-    return filename ? `Writing ${filename}` : "Writing file";
-  if (name === "str_replace")
-    return filename ? `Editing ${filename}` : "Editing file";
-  if (name === "read_file")
-    return filename ? `Reading ${filename}` : "Reading file";
-  if (name === "bash" || name === "execute_command")
-    return cmd ? `$ ${cmd.slice(0, 60)}` : "Running command";
-  if (name === "search_files") return "Searching files";
-  if (name === "grep_files") return "Searching content";
-  if (name === "task") return "Delegating to subagent";
-  return name;
-}
+// One summary builder for both render paths — the live streaming callback and
+// the message-derived reconstruction must produce the same string for the same
+// event, or a card changes text mid-flight when the reconstruction replaces it.
+// This used to be a drifted private copy that lacked `scaffold_project`, so a
+// live card read "scaffold_project" and then flipped to "Scaffolding project".
 
 export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
@@ -777,7 +765,7 @@ export function useThreadStream({
           ts,
           type: event.name,
           path,
-          summary: _buildActivitySummary(event.name, { path, cmd }),
+          summary: buildActivitySummary(event.name, { path, cmd }),
           output: "",
           status: "running",
         });
