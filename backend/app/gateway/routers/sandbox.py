@@ -24,6 +24,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
 
+from app.gateway.csrf_middleware import get_configured_cors_origins
 from app.gateway.deps import get_checkpointer
 from app.gateway.services import SSE_HEADERS
 from deerflow.config.paths import get_paths
@@ -91,29 +92,61 @@ def _classify_sse_frame(line: str) -> str:
 # boundary (script cannot reach the parent frame's DOM) while letting the framed
 # content carry the session cookie like any other same-origin page.
 _FRAMED_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals allow-same-origin"
-# The generic absproxy keeps the stricter opaque-origin CSP: it proxies
-# *arbitrary in-container ports*, so granting `allow-same-origin` would let any
-# service the agent happens to start act as the signed-in user against the
-# gateway — a materially wider blast radius than the preview proxy, which is
-# scoped to one registered dev-server port.
-#
-# KNOWN GAP (verified 2026-08-25, not yet resolved). This used to say "the
-# generic absproxy is not framed by the app shell". That premise is false:
-# `buildPreviewSrc` in `browser-tab.tsx` returns the absproxy URL as the iframe
-# `src` whenever the canonical preview proxy cannot reach the dev server — the
-# normal path when the agent started the server with raw `bash` rather than
-# `start_dev_server`. So a framed absproxy gets an opaque origin, and every
-# failure mode described above for _FRAMED_SANDBOX_CSP applies: sub-resources
-# arrive cookie-less and the auth middleware 401s them, and `localStorage` /
-# `document.cookie` throw during hydration. That is the likely cause of the
-# reported "renders in Chrome, wrong in Nova's Browser tab".
-#
-# Fixing it by simply adding `allow-same-origin` here would trade a rendering
-# bug for a privilege one. The shape that resolves both is to distinguish the
-# framed case (`Sec-Fetch-Dest: iframe`) from a direct hit and serve the framed
-# CSP only then — deliberately, rather than by accident in either direction.
-# Left open pending a reproduction of the render failure against a served build.
+# Anything NOT framed by the app shell keeps an opaque origin. The generic
+# absproxy proxies *arbitrary in-container ports*, so handing every one of them
+# `allow-same-origin` unconditionally would let any service the agent happens to
+# start act as the signed-in user against the gateway — a much wider blast
+# radius than the preview proxy, which is scoped to one registered port.
 _OPAQUE_SANDBOX_CSP = "sandbox allow-scripts allow-forms allow-popups allow-modals"
+
+
+def _frame_ancestors() -> str:
+    """Who is allowed to frame sandbox content.
+
+    Nothing set `frame-ancestors` before, so *any* site could frame these proxy
+    URLs. That matters more than usual here: the framed CSP grants
+    `allow-same-origin`, so without this an attacker's page could embed sandbox
+    content running with the user's gateway session.
+
+    It is also what makes `Sec-Fetch-Dest` trustworthy in `_sandbox_csp` — once
+    only our own origins can frame these responses, "this was loaded as an
+    iframe" reliably means "our app shell framed it".
+
+    Reuses the CORS/CSRF allowlist rather than hardcoding `'self'`: the unified
+    nginx endpoint is same-origin, but a split-origin deployment
+    (`NEXT_PUBLIC_BACKEND_BASE_URL`) serves the shell from a different origin,
+    and `'self'` alone would blank every preview there.
+    """
+    origins = sorted(get_configured_cors_origins())
+    return " ".join(["'self'", *origins])
+
+
+def _sandbox_csp(*, framed: bool) -> str:
+    """The sandbox CSP for one response, plus the frame-ancestors restriction."""
+    base = _FRAMED_SANDBOX_CSP if framed else _OPAQUE_SANDBOX_CSP
+    return f"{base}; frame-ancestors {_frame_ancestors()}"
+
+
+def _is_framed_request(request: Request) -> bool:
+    """Is the browser loading this *as an iframe*?
+
+    `Sec-Fetch-Dest` is a forbidden header name: a page cannot set or forge it
+    from `fetch`/XHR, only the browser emits it. A non-browser client (curl, a
+    server-side fetch) omits it entirely and therefore gets the opaque CSP,
+    which is the safe default.
+
+    This exists because the absproxy IS framed, contrary to what the comment
+    here used to claim: `buildPreviewSrc` in `browser-tab.tsx` returns the
+    absproxy URL as the iframe `src` whenever the canonical preview proxy cannot
+    reach the dev server — the normal path when the agent started one with raw
+    `bash` rather than `start_dev_server`. A framed opaque origin hits every
+    failure `_FRAMED_SANDBOX_CSP` describes: sub-resources arrive cookie-less so
+    the auth middleware 401s them, and `localStorage` / `document.cookie` throw
+    during hydration. That is the mechanism behind "renders correctly in Chrome,
+    wrong in Nova's Browser tab" — the page server-renders and then fails to
+    hydrate.
+    """
+    return request.headers.get("sec-fetch-dest", "").lower() == "iframe"
 
 
 def _is_port_open(host: str, port: int, timeout: float = 0.4) -> bool:
@@ -1020,7 +1053,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     if location and location.startswith("/") and not location.startswith(prefix):
         resp_headers["location"] = f"{prefix}{location}"
     resp_headers.pop("set-cookie", None)
-    resp_headers["Content-Security-Policy"] = _OPAQUE_SANDBOX_CSP
+    resp_headers["Content-Security-Policy"] = _sandbox_csp(framed=_is_framed_request(request))
 
     content = upstream.content
     # Rewrite root-absolute asset URLs, exactly as _proxy_dev_server does.
@@ -1238,7 +1271,7 @@ async def _proxy_appview(thread_id: str, path: str, request: Request) -> Respons
         resp_headers.pop("Content-Length", None)
 
     resp_headers.pop("set-cookie", None)
-    resp_headers["Content-Security-Policy"] = _FRAMED_SANDBOX_CSP
+    resp_headers["Content-Security-Policy"] = _sandbox_csp(framed=True)
     return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=content_type or None)
 
 
@@ -1473,7 +1506,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
     # The preview is framed same-origin and must be able to authenticate, so it
     # gets the framed (non-opaque) sandbox CSP — see _FRAMED_SANDBOX_CSP.
     resp_headers.pop("set-cookie", None)
-    resp_headers["Content-Security-Policy"] = _FRAMED_SANDBOX_CSP
+    resp_headers["Content-Security-Policy"] = _sandbox_csp(framed=True)
     return Response(
         content=content,
         status_code=upstream.status_code,

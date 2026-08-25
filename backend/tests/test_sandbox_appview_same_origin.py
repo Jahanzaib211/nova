@@ -191,7 +191,13 @@ class TestFramedCsp:
             receive=receive,
         )
         resp = __import__("asyncio").run(sandbox_router._proxy_appview("thread-abc", "terminal", request))
-        assert resp.headers.get("content-security-policy") == sandbox_router._FRAMED_SANDBOX_CSP
+        csp = resp.headers.get("content-security-policy")
+        # The framed CSP, plus the frame-ancestors restriction added alongside
+        # `Sec-Fetch-Dest` selection — `allow-same-origin` is only safe while
+        # something limits who can frame the response in the first place.
+        assert csp.startswith(sandbox_router._FRAMED_SANDBOX_CSP)
+        assert "allow-same-origin" in csp
+        assert "frame-ancestors 'self'" in csp
 
 
 class _FakeAsyncClient:
