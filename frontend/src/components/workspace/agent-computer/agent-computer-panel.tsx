@@ -35,7 +35,10 @@ import {
   useStartPreview,
   type SandboxFile,
 } from "@/core/sandbox/hooks";
-import { isTerminalTool } from "@/core/threads/tool-surface";
+import {
+  isEditorTool,
+  isTerminalTool,
+} from "@/core/threads/tool-surface";
 import { cn } from "@/lib/utils";
 
 import { ActivityPanel, LlmErrorBadge, TaskChecklist } from "./activity-tab";
@@ -189,45 +192,72 @@ export function AgentComputerPanel({
   });
   const reviewQuery = useSandboxReview(threadId, activeTab === "review");
 
-  // Auto-switch tabs based on current tool
+  // ── User-intent tab lock ──
+  // Auto-switch exists so the panel follows the agent's work, but it must not
+  // fight the user: once they manually pick a tab during a run, programmatic
+  // switches stand down until the NEXT run starts. Without this, watching the
+  // Browser preview while the agent edits files means being dragged to Editor
+  // and back on every tool call.
+  const userPinnedTabRef = useRef(false);
+  const prevIsLoadingRef = useRef(false);
+  useEffect(() => {
+    if (isLoading && !prevIsLoadingRef.current) {
+      userPinnedTabRef.current = false;
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  /** Manual selection (tab bar, file/artifact clicks, header actions). */
+  const selectTabManually = useCallback((tab: PanelTab) => {
+    userPinnedTabRef.current = true;
+    setActiveTab(tab);
+  }, []);
+
+  /** Programmatic focus — suppressed while the user holds a tab. */
+  const autoSwitchTab = useCallback((tab: PanelTab) => {
+    setActiveTab((prev) => {
+      if (!userPinnedTabRef.current) return tab;
+      return prev;
+    });
+  }, []);
+
+  // Auto-switch tabs based on current tool. Derived from the shared
+  // classifier (core/threads/tool-surface.ts) rather than a local name list —
+  // the list form drifted twice (2026-08-14, 2026-08-21) because the failure
+  // is silent: an unlisted tool simply never focuses its tab. Order matters:
+  // dev-server first (it is neither editor nor terminal), then editor focus,
+  // then the whole Terminal surface — which since the `shell_` prefix rule
+  // includes read_file and the shell_* family, matching where their events
+  // actually land.
   useEffect(() => {
     if (!currentTool) return;
-    if (
-      currentTool === "write_file" ||
-      currentTool === "str_replace" ||
-      currentTool === "scaffold_project"
-    ) {
-      setActiveTab("editor");
-    } else if (
-      currentTool === "bash" ||
-      currentTool === "execute_command" ||
-      currentTool === "search_files" ||
-      currentTool === "grep_files"
-    ) {
-      setActiveTab("terminal");
-    } else if (currentTool === "start_dev_server") {
-      setActiveTab("browser");
+    if (currentTool === "start_dev_server") {
+      autoSwitchTab("browser");
+    } else if (isEditorTool(currentTool)) {
+      autoSwitchTab("editor");
+    } else if (isTerminalTool(currentTool)) {
+      autoSwitchTab("terminal");
     }
-  }, [currentTool]);
+  }, [autoSwitchTab, currentTool]);
 
   // Auto-switch to Browser when the dev server comes up
   const prevDevRunning = useRef(false);
   useEffect(() => {
     if (devServer.running && !prevDevRunning.current) {
-      setActiveTab("browser");
+      autoSwitchTab("browser");
     }
     prevDevRunning.current = devServer.running;
-  }, [devServer.running]);
+  }, [autoSwitchTab, devServer.running]);
 
   // Switch to browser after first write completes
   const firstWriteDone = mergedEvents.some((e) => e.type === "write_file");
   const prevFirstWriteDone = useRef(false);
   useEffect(() => {
     if (firstWriteDone && !prevFirstWriteDone.current) {
-      setActiveTab("browser");
+      autoSwitchTab("browser");
     }
     prevFirstWriteDone.current = firstWriteDone;
-  }, [firstWriteDone]);
+  }, [autoSwitchTab, firstWriteDone]);
 
   // Canonical preview for self-contained deliverables: when the agent ships an
   // HTML file via present_files (→ artifacts) and no live dev server is up, show
@@ -247,26 +277,26 @@ export function AgentComputerPanel({
       shownArtifactRef.current = latestHtmlArtifact;
       setBrowserFilePath(latestHtmlArtifact);
       sessionStorage.setItem(storageKey, latestHtmlArtifact);
-      setActiveTab("browser");
+      autoSwitchTab("browser");
     }
-  }, [latestHtmlArtifact, devServer.running, storageKey]);
+  }, [autoSwitchTab, devServer.running, latestHtmlArtifact, storageKey]);
 
   const handleSelectFile = useCallback(
     (file: SandboxFile) => {
+      selectTabManually("browser");
       setBrowserFilePath(file.virtual_path);
       sessionStorage.setItem(storageKey, file.virtual_path);
-      setActiveTab("browser");
     },
-    [storageKey],
+    [selectTabManually, storageKey],
   );
 
   const handleSelectArtifact = useCallback(
     (path: string) => {
+      selectTabManually("browser");
       setBrowserFilePath(path);
       sessionStorage.setItem(storageKey, path);
-      setActiveTab("browser");
     },
-    [storageKey],
+    [selectTabManually, storageKey],
   );
 
   // Live line count for status
@@ -298,7 +328,9 @@ export function AgentComputerPanel({
       a.href = url;
       a.download = filename;
       a.click();
-      URL.revokeObjectURL(url);
+      // Revoking synchronously after click() can cancel the in-flight
+      // download in Safari; the next task tick is enough.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch {
       toast.error(t.agentComputer.downloadFailed);
     }
@@ -329,11 +361,12 @@ export function AgentComputerPanel({
         `git -c http.extraHeader="Authorization: Bearer $GITHUB_TOKEN" push -u origin main. ` +
         `Report the GitHub URL when done. If GITHUB_TOKEN is not set, ask the user to set it in the sandbox environment.`,
     );
-    setActiveTab("terminal");
-  }, [onAgentMessage]);
-
-  const terminalCount = mergedEvents.filter((e) =>
-    isTerminalTool(e.type),
+    selectTabManually("terminal");
+  }, [onAgentMessage, selectTabManually]);
+  // Badge = work IN FLIGHT, not lifetime history. The old total climbed into
+  // the hundreds over a long run — a number nobody could act on.
+  const terminalCount = mergedEvents.filter(
+    (e) => e.status === "running" && isTerminalTool(e.type),
   ).length;
 
   return (
@@ -383,7 +416,7 @@ export function AgentComputerPanel({
             <SkillLauncher
               onRun={(text) => {
                 onAgentMessage(text);
-                setActiveTab("terminal");
+                selectTabManually("terminal");
               }}
             />
           )}
@@ -462,7 +495,7 @@ export function AgentComputerPanel({
       >
         <TabBtn
           active={activeTab === "files"}
-          onClick={() => setActiveTab("files")}
+          onClick={() => selectTabManually("files")}
         >
           <FolderIcon className="h-3 w-3" />
           {t.agentComputer.tabs.files}
@@ -474,7 +507,7 @@ export function AgentComputerPanel({
         </TabBtn>
         <TabBtn
           active={activeTab === "terminal"}
-          onClick={() => setActiveTab("terminal")}
+          onClick={() => selectTabManually("terminal")}
         >
           <SquareTerminalIcon className="h-3 w-3" />
           {t.agentComputer.tabs.terminal}
@@ -486,35 +519,35 @@ export function AgentComputerPanel({
         </TabBtn>
         <TabBtn
           active={activeTab === "editor"}
-          onClick={() => setActiveTab("editor")}
+          onClick={() => selectTabManually("editor")}
         >
           <PencilIcon className="h-3 w-3" />
           {t.agentComputer.tabs.editor}
         </TabBtn>
         <TabBtn
           active={activeTab === "browser"}
-          onClick={() => setActiveTab("browser")}
+          onClick={() => selectTabManually("browser")}
         >
           <GlobeIcon className="h-3 w-3" />
           {t.agentComputer.tabs.browser}
         </TabBtn>
         <TabBtn
           active={activeTab === "activity"}
-          onClick={() => setActiveTab("activity")}
+          onClick={() => selectTabManually("activity")}
         >
           <FileTextIcon className="h-3 w-3" />
           {t.agentComputer.tabs.activity}
         </TabBtn>
         <TabBtn
           active={activeTab === "review"}
-          onClick={() => setActiveTab("review")}
+          onClick={() => selectTabManually("review")}
         >
           <CheckCircle2Icon className="h-3 w-3" />
           {t.agentComputer.tabs.review}
         </TabBtn>
         <TabBtn
           active={activeTab === "privacy"}
-          onClick={() => setActiveTab("privacy")}
+          onClick={() => selectTabManually("privacy")}
         >
           <ShieldIcon className="h-3 w-3" />
           {t.agentComputer.tabs.privacy}
@@ -532,7 +565,7 @@ export function AgentComputerPanel({
           their own data (Editor, Browser, Activity, Privacy) already accept
           an active/enabled-style prop to gate their queries while hidden. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <AgentComputerErrorBoundary tabName="Files">
+        <AgentComputerErrorBoundary tabName="Files" resetKeys={[threadId]}>
           <ScrollArea
             data-tab="files"
             className={cn("h-full", activeTab !== "files" && "hidden")}
@@ -549,7 +582,7 @@ export function AgentComputerPanel({
           </ScrollArea>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Terminal">
+        <AgentComputerErrorBoundary tabName="Terminal" resetKeys={[threadId]}>
           <div
             data-tab="terminal"
             className={cn("h-full", activeTab !== "terminal" && "hidden")}
@@ -562,7 +595,7 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Editor">
+        <AgentComputerErrorBoundary tabName="Editor" resetKeys={[threadId]}>
           <div
             data-tab="editor"
             className={cn("h-full", activeTab !== "editor" && "hidden")}
@@ -579,7 +612,7 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Browser">
+        <AgentComputerErrorBoundary tabName="Browser" resetKeys={[threadId]}>
           <div
             data-tab="browser"
             className={cn("h-full", activeTab !== "browser" && "hidden")}
@@ -600,7 +633,7 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Review">
+        <AgentComputerErrorBoundary tabName="Review" resetKeys={[threadId]}>
           <div
             data-tab="review"
             className={cn("h-full", activeTab !== "review" && "hidden")}
@@ -609,13 +642,14 @@ export function AgentComputerPanel({
               threadId={threadId}
               review={reviewQuery.data ?? undefined}
               isFetching={reviewQuery.isFetching}
+              isError={Boolean(reviewQuery.isError)}
               onRegenerate={() => void reviewQuery.refetch()}
               active={activeTab === "review"}
             />
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Activity">
+        <AgentComputerErrorBoundary tabName="Activity" resetKeys={[threadId]}>
           <div
             data-tab="activity"
             className={cn("h-full", activeTab !== "activity" && "hidden")}
@@ -629,7 +663,7 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Privacy">
+        <AgentComputerErrorBoundary tabName="Privacy" resetKeys={[threadId]}>
           <div
             data-tab="privacy"
             className={cn("h-full", activeTab !== "privacy" && "hidden")}

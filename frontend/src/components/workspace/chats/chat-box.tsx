@@ -1,7 +1,6 @@
 "use client";
 
 import { FilesIcon, LaptopIcon, MessageSquareIcon, XIcon } from "lucide-react";
-import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
@@ -347,6 +346,10 @@ const ChatBox: React.FC<{
               {artifactsBody}
             </div>
           )}
+          {/* Stays mounted while the thread lives (only `hidden`) so the
+              computer's shell/tab state survives switching to chat and back;
+              it is torn down only when the panel is closed, same trade-off
+              as desktop but full-width surfaces make closed == gone. */}
           {agentComputerOpen && (
             <div
               className={cn(
@@ -401,28 +404,41 @@ const ChatBox: React.FC<{
         </ResizablePanelGroup>
       </div>
 
-      {/* ── Right: Agent's Computer panel (resizable IDE surface) ── */}
-      <AnimatePresence>
-        {agentComputerOpen && (
-          <div className="flex h-full shrink-0">
-            {/* Drag (or scroll-wheel) this handle to resize the panel. */}
-            <div
-              onMouseDown={startComputerResize}
-              onWheel={wheelComputerResize}
-              title={t.a11y.dragResize}
-              aria-label={t.a11y.dragResize}
-              role="separator"
-              className="bg-border/40 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-[--primary]/60"
-            />
-            <div
-              style={{ width: computerWidth }}
-              className="flex h-full shrink-0 flex-col overflow-hidden"
-            >
-              {computerBody}
-            </div>
-          </div>
+      {/* ── Right: Agent's Computer panel (resizable IDE surface) ──
+          Stays MOUNTED across open/close: closing collapses the column to
+          zero width (animated, so chat reflows continuously instead of
+          snapping when the exit animation finished), but the panel's state —
+          the interactive ttyd shell, browser nav history, scrollback, last
+          tab — survives the toggle. Full teardown happens on thread switch
+          via the panel's key. `invisible` keeps focus out of the collapsed
+          surface. */}
+      <div
+        aria-hidden={!agentComputerOpen}
+        className={cn(
+          "flex h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out",
+          !agentComputerOpen && "invisible",
         )}
-      </AnimatePresence>
+        style={{ width: agentComputerOpen ? computerWidth : 0 }}
+      >
+        {/* Drag (or scroll-wheel) this handle to resize the panel. */}
+        <div
+          onMouseDown={startComputerResize}
+          onWheel={wheelComputerResize}
+          title={t.a11y.dragResize}
+          aria-label={t.a11y.dragResize}
+          role="separator"
+          className={cn(
+            "bg-border/40 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-[--primary]/60",
+            !agentComputerOpen && "pointer-events-none",
+          )}
+        />
+        <div
+          style={{ width: computerWidth }}
+          className="flex h-full shrink-0 flex-col overflow-hidden"
+        >
+          {computerBody}
+        </div>
+      </div>
     </div>
   );
 };
