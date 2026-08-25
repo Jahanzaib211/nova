@@ -158,6 +158,86 @@ def _observation_max_chars() -> int:
         return 20000
 
 
+def _sandbox_log_file(sandbox_id: str):
+    """Resolve the per-thread ``sandbox.log`` path for a sandbox id, or None.
+
+    Shared by the observation writer and the stale-id finalizer so both always
+    agree on where the log lives. All failures degrade to None (the writer's
+    contract: observations must never break the agent loop).
+    """
+    try:
+        thread_id = _thread_id_for_observation(sandbox_id)
+        if not thread_id:
+            return None
+
+        from deerflow.config.paths import get_paths
+        from deerflow.runtime.user_context import get_effective_user_id
+
+        try:
+            user_id = get_effective_user_id()
+        except Exception as exc:
+            logger.debug("get_effective_user_id failed: %s", exc)
+            user_id = None
+
+        thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)
+        thread_dir.mkdir(parents=True, exist_ok=True)
+        return thread_dir / "sandbox.log"
+    except Exception as exc:
+        logger.debug("Failed to resolve sandbox.log for %s: %s", sandbox_id, exc)
+        return None
+
+
+def _finalize_stale_open_ids(sandbox_id: str) -> None:
+    """Close any streamed command still marked ``running`` in sandbox.log.
+
+    A crashed run (or a released warm-pool client racing a background task)
+    can leave an opening frame without its closing frame — the Terminal then
+    renders that command as perpetually running. Before opening a NEW stream,
+    finalize every dangling id with a synthetic ``done`` frame so the log
+    keeps the invariant *at most one open id*, no matter how the previous
+    command died. Best-effort by the same contract as the writer itself.
+    """
+    log_path = _sandbox_log_file(sandbox_id)
+    if log_path is None or not log_path.exists():
+        return
+    try:
+        open_ids: set[str] = set()
+        with open(log_path, encoding="utf-8") as fh:
+            # Tail only: the window a Terminal actually renders is bounded, and
+            # scanning a multi-MB log on every command would be pure waste.
+            lines = fh.readlines()[-512:]
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+            obs_id = entry.get("id")
+            if not obs_id:
+                continue
+            # Interactive shell sessions use long-lived ``shell:<session>`` ids
+            # that are running BY DESIGN while the process lives; they are
+            # closed by shell_wait/shell_kill, never by this sweep.
+            if obs_id.startswith("shell:"):
+                continue
+            if entry.get("state") == "done":
+                open_ids.discard(obs_id)
+            elif entry.get("state") == "running":
+                open_ids.add(obs_id)
+        for stale in sorted(open_ids):
+            _write_sandbox_observation(
+                sandbox_id,
+                "bash",
+                None,
+                "",
+                output="(interrupted)",
+                obs_id=stale,
+                state="done",
+            )
+            logger.info("Finalized stale open observation %s for sandbox %s", stale, sandbox_id)
+    except Exception as exc:  # noqa: BLE001 - observations must never raise
+        logger.debug("_finalize_stale_open_ids failed: %s", exc)
+
+
 def _write_sandbox_observation(
     sandbox_id: str,
     tool: str,
@@ -202,22 +282,9 @@ def _write_sandbox_observation(
     failures never affect the agent loop.
     """
     try:
-        thread_id = _thread_id_for_observation(sandbox_id)
-        if not thread_id:
+        log_path = _sandbox_log_file(sandbox_id)
+        if log_path is None:
             return
-
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
-
-        try:
-            user_id = get_effective_user_id()
-        except Exception as exc:
-            logger.debug("get_effective_user_id failed: %s", exc)
-            user_id = None
-
-        paths = get_paths()
-        thread_dir = paths.thread_dir(thread_id, user_id=user_id)
-        thread_dir.mkdir(parents=True, exist_ok=True)
 
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         max_chars = _observation_max_chars()
@@ -240,7 +307,6 @@ def _write_sandbox_observation(
             record["replace"] = _truncate_bash_output(replace, max_chars)
         entry = json.dumps(record)
 
-        log_path = thread_dir / "sandbox.log"
         with open(log_path, "a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
 
@@ -249,7 +315,7 @@ def _write_sandbox_observation(
         # the same path, so rewriting this file every 300 ms would be pure IO
         # for an unchanged value.
         if delta is None and replace is None:
-            status_path = thread_dir / "sandbox_status.json"
+            status_path = log_path.parent / "sandbox_status.json"
             status_path.write_text(
                 json.dumps({"tool": tool, "path": path, "ts": ts}),
                 encoding="utf-8",
@@ -277,6 +343,36 @@ def _terminal_streaming_enabled() -> bool:
         return False
 
 
+def _readopt_released(sandbox: Sandbox):
+    """Ask the provider for a live replacement of a released-but-pooled sandbox.
+
+    Warm-pool release closes the host-side HTTP client but leaves the container
+    running; a command that raced the release fails with
+    ``SandboxError("has been released…")`` even though one retry on a fresh
+    handle would succeed. Returns None for anything that is not exactly that
+    situation — destroyed containers must surface as errors, never resurrect.
+    """
+    try:
+        from deerflow.sandbox import get_sandbox_provider
+
+        readopt = getattr(get_sandbox_provider(), "readopt_released", None)
+        if readopt is None:
+            return None
+        return readopt(sandbox)
+    except Exception as exc:  # noqa: BLE001 - retry plumbing must never mask the real error
+        logger.debug("_readopt_released failed: %s", exc)
+        return None
+
+
+def _run_command_both_ways(sandbox: Sandbox, command: str, on_chunk) -> str:
+    """Streaming execution with the blocking path as fallback."""
+    try:
+        return sandbox.execute_command_streaming(command, on_chunk)
+    except Exception:
+        logger.warning("streaming execution failed; falling back to blocking exec", exc_info=True)
+        return sandbox.execute_command(command)
+
+
 def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -> str:
     """Run ``command`` on a streaming backend, narrating it into sandbox.log.
 
@@ -286,10 +382,17 @@ def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -
     command exited, which is why a five-minute ``npm install`` appeared in the
     panel as one row at the very end.
 
+    Failure contract: whatever happens, the frame is CLOSED before this
+    returns or raises. A released-client race gets exactly one provider-mediated
+    readopt and retry; anything after that propagates with the closing frame in
+    place, so the Terminal never shows a spinner that outlives the command.
+
     Returns the full output, so the agent's view of the command is unchanged.
     """
     obs_id = uuid.uuid4().hex[:12]
     summary = f"$ {command}"
+    # Close yesterday's dangling ids first — see _finalize_stale_open_ids.
+    _finalize_stale_open_ids(sandbox_id)
     _write_sandbox_observation(sandbox_id, "bash", None, summary, obs_id=obs_id, state="running")
 
     def on_chunk(text: str, replace: bool) -> None:
@@ -305,17 +408,43 @@ def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -
             **({"replace": text} if replace else {"delta": text}),
         )
 
-    try:
-        output = sandbox.execute_command_streaming(command, on_chunk)
-    except Exception:
-        # A streaming backend that fails mid-run must not lose the command: fall
-        # back to the blocking path and close the entry with its result.
-        logger.warning("streaming execution failed; falling back to blocking exec", exc_info=True)
-        output = sandbox.execute_command(command)
-
     # The closing frame carries the complete output, so a client that joined
     # late (opened the panel mid-command) still ends up with the whole thing
     # rather than the deltas it happened to catch.
+    try:
+        output = _run_command_both_ways(sandbox, command, on_chunk)
+    except Exception:
+        fresh = _readopt_released(sandbox)
+        if fresh is None:
+            _write_sandbox_observation(
+                sandbox_id,
+                "bash",
+                None,
+                summary,
+                "(failed: sandbox unavailable mid-command)",
+                obs_id=obs_id,
+                state="done",
+            )
+            raise
+        logger.info(
+            "sandbox %s was released mid-command; reclaimed from warm pool and retried once",
+            sandbox.id,
+        )
+        sandbox = fresh
+        try:
+            output = _run_command_both_ways(sandbox, command, on_chunk)
+        except Exception:
+            _write_sandbox_observation(
+                sandbox_id,
+                "bash",
+                None,
+                summary,
+                "(failed: sandbox unavailable mid-command)",
+                obs_id=obs_id,
+                state="done",
+            )
+            raise
+
     _write_sandbox_observation(sandbox_id, "bash", None, summary, output, obs_id=obs_id, state="done")
     return output
 
@@ -1665,7 +1794,16 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
         if _terminal_streaming_enabled() and getattr(sandbox, "supports_streaming", False):
             raw_output = _stream_bash_observations(sandbox, sandbox_id, command)
         else:
-            raw_output = sandbox.execute_command(command)
+            try:
+                raw_output = sandbox.execute_command(command)
+            except SandboxError:
+                # Same released-client race the streaming path handles; one
+                # provider-mediated readopt and retry before surfacing the error.
+                fresh = _readopt_released(sandbox)
+                if fresh is None:
+                    raise
+                sandbox = fresh
+                raw_output = sandbox.execute_command(command)
             _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
         return _truncate_bash_output(raw_output, max_chars)
     except SandboxError as e:

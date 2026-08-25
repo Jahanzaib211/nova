@@ -682,6 +682,42 @@ class AioSandboxProvider(SandboxProvider):
         """Re-check in-memory caches after acquiring the cross-process file lock."""
         return self._reuse_in_process_sandbox(thread_id, post_lock=True) or self._reclaim_warm_pool_sandbox(thread_id, sandbox_id, post_lock=True)
 
+    def readopt_released(self, sandbox):
+        """Return a live replacement for a released-but-still-pooled sandbox.
+
+        Warm-pool release closes the host-side HTTP client but leaves the
+        container running; a tool holding the old handle races the release and
+        fails with ``SandboxError("has been released…")``. This hands back the
+        reclaimed, freshly-registered handle so the caller can retry once —
+        going THROUGH this method (not around it) keeps the provider's
+        bookkeeping truthful: the sandbox moves out of ``_warm_pool`` back into
+        active tracking, so the idle reaper cannot destroy a container that is
+        mid-command.
+
+        Returns None unless the sandbox is (a) closed and (b) still sitting in
+        the warm pool — destroyed containers surface as errors, never resurrect.
+        """
+        try:
+            sid = getattr(sandbox, "id", None)
+            if not sid or not getattr(sandbox, "closed", False):
+                return None
+
+            with self._lock:
+                if sid not in self._warm_pool:
+                    return None
+                thread_id = next(
+                    (tid for tid, bound in self._thread_sandboxes.items() if bound == sid),
+                    f"readopt:{sid}",
+                )
+
+            if self._reclaim_warm_pool_sandbox(thread_id, sid) is None:
+                return None
+            with self._lock:
+                return self._sandboxes.get(sid)
+        except Exception as exc:  # noqa: BLE001 - retry plumbing must never mask the real error
+            logger.warning("readopt_released failed for %s: %s", getattr(sandbox, "id", "?"), exc)
+            return None
+
     def _register_discovered_sandbox(self, thread_id: str, info: SandboxInfo) -> str:
         """Track a sandbox discovered through the backend."""
         sandbox = AioSandbox(id=info.sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
