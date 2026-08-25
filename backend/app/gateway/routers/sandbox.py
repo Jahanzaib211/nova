@@ -1074,7 +1074,15 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
             html = content.decode("utf-8", errors="replace")
             if "<head>" in html and "<base " not in html:
                 html = html.replace("<head>", f'<head><base href="{prefix}/">', 1)
-            content = _prefix_html_urls(html, prefix).encode("utf-8")
+            html = _prefix_html_urls(html, prefix)
+            # Same HMR rationale as _proxy_dev_server: absproxy is the fallback
+            # surface for raw-bash dev servers, so its pages need the shim
+            # aimed at the absproxy-ws mount or their sockets reconnect-loop.
+            if "<head>" in html:
+                html = _inject_ws_shim(
+                    html, f"/api/sandbox/absproxy-ws/{thread_id}/{port}", prefix
+                )
+            content = html.encode("utf-8")
             resp_headers.pop("content-length", None)
             resp_headers.pop("Content-Length", None)
         except Exception:
@@ -1111,22 +1119,60 @@ async def _sandbox_base_url(thread_id: str) -> str:
     return str(base_url).rstrip("/")
 
 
-# Injected into appview HTML so the container UI's own WebSockets come back
-# through the gateway instead of straight at the app origin's root. ttyd and
-# noVNC both build their socket URL in JS from `window.location`, so a <base>
-# tag cannot reach them — only patching the constructor can. Cross-origin
-# sockets are left untouched.
+# Injected into proxied HTML so same-origin WebSockets come back through the
+# gateway instead of straight at the app origin's root. ttyd, noVNC, Next.js
+# HMR and Vite all build their socket URL in JS from `window.location`, so a
+# <base> tag cannot reach them — only patching the constructor can.
+# Cross-origin sockets are left untouched.
+#
+# Two prefixes are templated:
+#   P (ws_prefix)  — the ``-ws`` mount the rewritten socket must land on.
+#   B (base_prefix)— the surface's *plain* HTTP prefix. A socket URL resolved
+#                    against that <base> arrives with B already in its path;
+#                    it must be SWAPPED for P, not prepended (which would
+#                    produce P + "/api/sandbox/preview/…" garbage). Empty B
+#                    keeps the original prepend-only appview behavior.
 _APPVIEW_WS_SHIM = """<script>(function(){
-var P=%(ws_prefix)s;var Orig=window.WebSocket;
+var P=%(ws_prefix)s;var B=%(base_prefix)s;var Orig=window.WebSocket;
 function rw(u){try{var x=new URL(u,window.location.href);
 if(x.host!==window.location.host)return u;
 if(x.pathname.indexOf(P)===0)return x.href;
-x.pathname=P+x.pathname;
+if(B&&x.pathname.indexOf(B)===0){x.pathname=P+x.pathname.slice(B.length)}
+else{x.pathname=P+x.pathname}
 x.protocol=(window.location.protocol==='https:')?'wss:':'ws:';
 return x.href}catch(e){return u}}
 function W(u,p){return p===undefined?new Orig(rw(u)):new Orig(rw(u),p)}
 W.prototype=Orig.prototype;W.CONNECTING=0;W.OPEN=1;W.CLOSING=2;W.CLOSED=3;
 window.WebSocket=W})();</script>"""
+
+
+def _ws_shim(ws_prefix: str, base_prefix: str = "") -> str:
+    """Render the WebSocket-constructor shim for one proxied surface.
+
+    ``base_prefix=""`` reproduces the original appview semantics exactly
+    (prepend-only); passing the surface's HTTP prefix enables the swap branch
+    so HMR URLs resolved against the injected ``<base>`` re-point correctly.
+    """
+    return _APPVIEW_WS_SHIM % {
+        "ws_prefix": json.dumps(ws_prefix),
+        "base_prefix": json.dumps(base_prefix),
+    }
+
+
+def _inject_ws_shim(html: str, ws_prefix: str, base_prefix: str = "") -> str:
+    """Inject the shim once, right after ``<head>`` (with a <base> if absent).
+
+    Idempotent: a page proxied twice must not grow two shims, or every socket
+    URL would be rewritten twice (the second pass sees an already-prefixed
+    path and returns it unchanged today, but relying on that is fragile and
+    doubles the DOM noise).
+    """
+    if "<head>" not in html or "window.WebSocket=W" in html:
+        return html
+    shim = _ws_shim(ws_prefix, base_prefix)
+    needs_base = bool(base_prefix) and "<base " not in html
+    injected = f'<head><base href="{base_prefix}/">{shim}' if needs_base else f"<head>{shim}"
+    return html.replace("<head>", injected, 1)
 
 # Null bytes are not valid in HTML, so this cannot collide with real content.
 _PREFIX_HIDDEN = "\x00prefix\x00"
@@ -1255,7 +1301,10 @@ async def _proxy_appview(thread_id: str, path: str, request: Request) -> Respons
     if "text/html" in content_type:
         try:
             html = content.decode("utf-8", errors="replace")
-            shim = _APPVIEW_WS_SHIM % {"ws_prefix": json.dumps(f"/api/sandbox/appview-ws/{thread_id}")}
+            # appview semantics are frozen: B="" (prepend-only) — ttyd/noVNC
+            # socket URLs resolve correctly under it today, so the swap branch
+            # stays off here even though a <base> is injected.
+            shim = _ws_shim(f"/api/sandbox/appview-ws/{thread_id}")
             if "<head>" in html:
                 injected = f'<head><base href="{prefix}/">{shim}' if "<base " not in html else f"<head>{shim}"
                 html = html.replace("<head>", injected, 1)
@@ -1486,6 +1535,18 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
             if "<head>" in html and "<base " not in html:
                 html = html.replace("<head>", f'<head><base href="{prefix}/">', 1)
             html = _prefix_html_urls(html, prefix)
+            # Bridge HMR sockets: Next's webpack-hmr / Vite's @vite/client open
+            # a WebSocket that <base> cannot re-point (it is built in JS from
+            # window.location), so inject the constructor shim aimed at this
+            # surface's -ws mount. Without it the page loads but hot reload
+            # silently reconnect-loops forever.
+            if "<head>" in html:
+                ws_prefix = (
+                    f"/api/sandbox/lpreview-ws/{thread_id}/{label}"
+                    if label != DEFAULT_LABEL
+                    else f"/api/sandbox/preview-ws/{thread_id}"
+                )
+                html = _inject_ws_shim(html, ws_prefix, prefix)
             content = html.encode("utf-8")
         except Exception:
             pass
@@ -1566,6 +1627,46 @@ async def proxy_appview_ws(websocket: WebSocket, thread_id: str, path: str):
         parts = urlsplit(base_url)
         query = websocket.url.query
         upstream_url = f"ws://{parts.netloc}/{path}" + (f"?{query}" if query else "")
+        await websocket.accept()
+        await _bridge_ws(websocket, upstream_url)
+    finally:
+        reset_current_user(token)
+
+
+@router.websocket("/absproxy-ws/{thread_id}/{port}/{path:path}")
+async def proxy_absproxy_ws(websocket: WebSocket, thread_id: str, port: int, path: str):
+    """Bridge WebSockets for the absproxy fallback surface (raw-bash dev servers).
+
+    The shim injected into absproxy HTML re-points same-origin sockets at this
+    mount; the gateway relays them to the sandbox container's ``/absproxy``
+    relay — the exact upstream the HTTP surface uses, so reachability semantics
+    cannot drift between the two. If the in-container relay refuses an upgrade
+    for some port, the socket closes here and the page degrades to what it did
+    before this route existed (no hot reload), never to broken content."""
+    if not _ws_same_origin(websocket):
+        await websocket.close(code=1008)
+        return
+    from app.gateway.ws_guards import ws_user
+
+    user = await ws_user(websocket)
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    token = set_current_user(user)
+    try:
+        if not _caller_owns_thread(thread_id):
+            await websocket.close(code=1008)
+            return
+        _mark_sandbox_active(thread_id)
+        base_url = await _sandbox_base_url(thread_id)
+
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(base_url)
+        query = websocket.url.query
+        upstream_url = f"ws://{parts.netloc}/absproxy/{port}/{path}" + (
+            f"?{query}" if query else ""
+        )
         await websocket.accept()
         await _bridge_ws(websocket, upstream_url)
     finally:

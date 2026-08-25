@@ -115,7 +115,7 @@ class TestWebSocketShim:
     """
 
     def _shim(self, thread_id: str = "t1") -> str:
-        return sandbox_router._APPVIEW_WS_SHIM % {"ws_prefix": json.dumps(f"/api/sandbox/appview-ws/{thread_id}")}
+        return sandbox_router._ws_shim(f"/api/sandbox/appview-ws/{thread_id}")
 
     def test_shim_targets_the_ws_route(self) -> None:
         assert '"/api/sandbox/appview-ws/t1"' in self._shim()
