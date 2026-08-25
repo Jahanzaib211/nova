@@ -143,12 +143,20 @@ services:
       # and matches the value pinned in nginx.conf (Batch 2A). For
       # production deployments behind a real LB, override via .env.
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
-      # Heap ceiling *below* mem_limit (4 GiB). Without this Node grows until
-      # the kernel OOM-kills it — abrupt, nothing in the log, and an nginx 502
-      # for whoever is using the app. With it, V8 collects harder as it nears
-      # the limit and the process stays alive. 3 GiB leaves room for the
-      # non-heap side (Turbopack's native allocations, buffers, the runtime).
-      - NODE_OPTIONS=--max-old-space-size=3072
+      # Heap ceiling deliberately *below* mem_limit (8 GiB, below). Without one
+      # Node grows until the kernel OOM-kills it — abrupt, nothing in the log,
+      # and an nginx 502 for whoever is using the app. With it, V8 collects
+      # harder as it nears the ceiling and the process stays alive.
+      #
+      # 4 GiB heap against an 8 GiB limit leaves 4 GiB for the non-heap side
+      # (Turbopack's native allocations, buffers, the runtime) — the gap matters
+      # as much as the ceiling, because that side is not what V8 collects.
+      #
+      # Sizing note: under `prod-frontend` (the default stack) this process sits
+      # at ~120 MiB, so the ceiling is headroom for the dev target, where
+      # Turbopack will fill whatever it is given — it held ~2.9 GiB against the
+      # previous 3 GiB ceiling, which was the cap working, not a leak.
+      - NODE_OPTIONS=--max-old-space-size=4096
       # Match the gateway: dev mode skips the sign-in gate so the user
       # can interact with the app immediately. Production must set
       # DEER_FLOW_AUTH_DISABLED=0 (or DEER_FLOW_ENV=prod).
@@ -186,7 +194,7 @@ services:
     # after a long HMR session accumulated. 6g keeps the container healthy
     # through sustained edit cycles without giving it free rein to take the
     # host down.
-    mem_limit: 6g
+    mem_limit: 8g
 
   # Backend - Gateway API
   gateway:

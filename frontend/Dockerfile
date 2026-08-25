@@ -39,6 +39,14 @@ COPY frontend ./frontend
 # ── Dev: install only, CMD is overridden by docker-compose ───────────────────
 FROM base AS dev
 RUN cd /app/frontend && pnpm install --frozen-lockfile
+# Run as non-root, matching the prod stage. docker-compose-dev.yaml already
+# claims "the dev target runs as USER node already; no cap_add needed" — that
+# was untrue: this stage had no USER, so the dev image ran as root, and the
+# image in use only ran as `node` because it had been built from the prod stage
+# instead. The chown is required, not cosmetic: `pnpm install` runs as root, and
+# `next dev` has to write `.next/` into this tree.
+RUN chown -R node:node /app/frontend
+USER node
 EXPOSE 3000
 
 # ── Builder: install + compile Next.js ───────────────────────────────────────
