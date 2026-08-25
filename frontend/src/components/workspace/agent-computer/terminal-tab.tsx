@@ -1,6 +1,5 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { LoaderCircleIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -41,11 +40,18 @@ export function Terminal({
   events,
   threadId,
   active = true,
+  serverCommandCount,
 }: {
   events: AgentActivityEvent[];
   threadId: string;
   /** Accepted for uniformity with the other tabs; see the note on `shellOpen`. */
   active?: boolean;
+  /**
+   * Exact command total pushed over computer-ws. Undefined while the socket
+   * is down - the header then shows an approximate window count prefixed
+   * with ~ so it can never read as exact.
+   */
+  serverCommandCount?: number;
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -53,11 +59,7 @@ export function Terminal({
   // Deterministic total pushed by the gateway (survives the 200-event window
   // rolling and SSE reconnects). Falls back to the local window while the
   // socket is down - prefixed with ~ so it can never read as exact.
-  const queryClient = useQueryClient();
-  const serverTotal = queryClient.getQueryData<number>([
-    "terminal-stats",
-    threadId,
-  ]);
+  const serverTotal = serverCommandCount;
   const runningCount = terminalEvents.filter(
     (e) => e.status === "running",
   ).length;

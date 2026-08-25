@@ -181,25 +181,37 @@ export function useCompletedTodoBindings(): Set<number> {
  */
 export function useSupersedeStaleSubtasks() {
   const { setTasks } = useSubtaskContext();
-  return useCallback(() => {
-    setTasks((current) => {
-      let changed = false;
-      const next: Record<string, Subtask> = {};
-      for (const [id, task] of Object.entries(current)) {
-        if (task.status === "in_progress") {
-          changed = true;
-          next[id] = {
-            ...task,
-            status: "failed",
-            error: task.error ?? "superseded by a newer run",
-          };
-        } else {
-          next[id] = task;
+  /**
+   * Settle only subtasks that are NOT part of the CURRENT run.
+   *
+   * Membership is decided by the live tool_call ids in `messages` — the same
+   * stream that created them. A naive "rising isLoading edge" version killed
+   * genuinely-running subagents on page refresh (the run was still live, the
+   * edge just fired on hydration), which read as a wall of red failures.
+   */
+  return useCallback(
+    (currentToolCallIds: Set<string>) => {
+      setTasks((current) => {
+        let changed = false;
+        const next: Record<string, Subtask> = {};
+        for (const [id, task] of Object.entries(current)) {
+          const isLive = currentToolCallIds.has(id);
+          if (task.status === "in_progress" && !isLive) {
+            changed = true;
+            next[id] = {
+              ...task,
+              status: "failed",
+              error: task.error ?? "superseded by a newer run",
+            };
+          } else {
+            next[id] = task;
+          }
         }
-      }
-      return changed ? next : current;
-    });
-  }, [setTasks]);
+        return changed ? next : current;
+      });
+    },
+    [setTasks],
+  );
 }
 
 export function useUpdateSubtask() {

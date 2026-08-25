@@ -96,15 +96,21 @@ const ChatBox: React.FC<{
   // todo binding arrive even if the SSE window missed it.
   const updateSubtaskForWs = useUpdateSubtask();
   const supersedeStaleSubtasks = useSupersedeStaleSubtasks();
-  const prevIsLoadingRef = useRef(false);
-  useEffect(() => {
-    // Rising edge of a NEW run: subagents from the previous run can never
-    // finish now. Settle them so retries don't stack ghost running cards.
-    if (thread.isLoading && !prevIsLoadingRef.current) {
-      supersedeStaleSubtasks();
+  // Live tool_call ids of the CURRENT message stream — the membership test
+  // that makes supersede deterministic instead of timing-based.
+  const liveToolCallIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of thread.messages) {
+      for (const tc of (m as { tool_calls?: Array<{ id?: string }> }).tool_calls ??
+        []) {
+        if (tc.id) ids.add(tc.id);
+      }
     }
-    prevIsLoadingRef.current = thread.isLoading;
-  }, [supersedeStaleSubtasks, thread.isLoading]);
+    return ids;
+  }, [thread.messages]);
+  useEffect(() => {
+    supersedeStaleSubtasks(liveToolCallIds);
+  }, [liveToolCallIds, supersedeStaleSubtasks]);
   const queryClient = useQueryClient();
   useComputerEvents(threadId, {
     updateSubtask: updateSubtaskForWs,
@@ -152,9 +158,12 @@ const ChatBox: React.FC<{
     onTodos: (snap) => {
       queryClient.setQueryData(["sandbox", "todo", threadId], snap.todos);
     },
-    // Deterministic command counter for the Terminal header.
+    // Deterministic command counter for the Terminal header. State, not just
+    // query cache: getQueryData is not reactive, so the header never
+    // re-rendered on arrival.
     onTerminalStats: (stat) => {
       queryClient.setQueryData(["terminal-stats", threadId], stat.total_commands);
+      setTerminalCommandCount(stat.total_commands);
     },
   });
 
@@ -272,6 +281,12 @@ const ChatBox: React.FC<{
   const isMobile = useIsMobile();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("chat");
 
+  // Deterministic command total pushed over computer-ws (drilled into the
+  // Agent's Computer panel's Terminal header).
+  const [terminalCommandCount, setTerminalCommandCount] = useState<
+    number | undefined
+  >(undefined);
+
   // Opening either surface pulls it to the front, mirroring how they take over
   // screen space on desktop.
   useEffect(() => {
@@ -359,6 +374,7 @@ const ChatBox: React.FC<{
             isLoading={thread.isLoading}
             messages={thread.messages}
             activeWriteFilePath={activeWriteFilePath}
+            terminalCommandCount={terminalCommandCount}
             artifacts={thread.values.artifacts ?? []}
             onClose={() => setAgentComputerOpen(false)}
             onAgentMessage={onAgentMessage}

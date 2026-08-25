@@ -212,7 +212,8 @@ export function useComputerEvents(
       if (
         typeof parsed === "object" &&
         parsed !== null &&
-        (parsed as { type?: string }).type === "terminal_stats"
+        ((parsed as { type?: string }).type === "terminal_stats" ||
+          (parsed as { channel?: string }).channel === "terminal_stats")
       ) {
         handlers.onTerminalStats?.(parsed as TerminalStatsEvent);
       }

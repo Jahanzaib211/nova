@@ -120,6 +120,7 @@ export interface AgentComputerPanelProps {
   messages: Message[];
   activeWriteFilePath: string | null;
   artifacts?: string[];
+  terminalCommandCount?: number;
   onClose: () => void;
   onAgentMessage?: (text: string) => void;
 }
@@ -133,6 +134,8 @@ export function AgentComputerPanel({
   artifacts = [],
   onClose,
   onAgentMessage,
+  /** Deterministic command total from computer-ws; undefined = socket down. */
+  terminalCommandCount,
 }: AgentComputerPanelProps) {
   const { t } = useI18n();
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -602,6 +605,7 @@ export function AgentComputerPanel({
               events={mergedEvents}
               threadId={threadId}
               active={activeTab === "terminal"}
+              serverCommandCount={terminalCommandCount}
             />
           </div>
         </AgentComputerErrorBoundary>

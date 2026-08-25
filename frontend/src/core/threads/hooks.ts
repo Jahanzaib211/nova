@@ -1695,10 +1695,12 @@ export function useThreadStream({
               ...context,
               thinking_enabled: context.mode !== "flash",
               is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-              // Subagents available in pro + ultra (not just ultra) so delegation
-              // can fire from the get-go on substantial tasks.
-              subagent_enabled:
-                context.mode === "pro" || context.mode === "ultra",
+              // Subagents are ALWAYS bound. Coupling them to pro/ultra meant
+              // any lower-mode run had no `task` tool at all - the lead agent
+              // then did everything solo and ballooned its context (observed
+              // live: 341K input tokens, "Subagent tool isn't actually wired
+              // up"). Fan-out stays bounded by MAX_CONCURRENT + timeouts.
+              subagent_enabled: true,
               reasoning_effort:
                 context.reasoning_effort ??
                 (context.mode === "ultra"

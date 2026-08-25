@@ -114,7 +114,10 @@ export function SubtaskCard({
                   <div
                     className={cn(
                       "text-muted-foreground flex items-center gap-1 text-xs font-normal",
-                      task.status === "failed" ? "text-red-500 opacity-67" : "",
+                      task.status === "failed" &&
+                        task.error !== "superseded by a newer run"
+                        ? "text-red-500 opacity-67"
+                        : "",
                     )}
                   >
                     {icon}
@@ -188,8 +191,27 @@ export function SubtaskCard({
           )}
           {task.status === "failed" && (
             <ChainOfThoughtStep
-              label={<div className="text-red-500">{task.error}</div>}
-              icon={<XCircleIcon className="size-4 text-red-500" />}
+              label={
+                <div
+                  className={cn(
+                    task.error === "superseded by a newer run"
+                      ? "text-muted-foreground/60"
+                      : "text-red-500",
+                  )}
+                >
+                  {task.error}
+                </div>
+              }
+              icon={
+                <XCircleIcon
+                  className={cn(
+                    "size-4",
+                    task.error === "superseded by a newer run"
+                      ? "text-muted-foreground/40"
+                      : "text-red-500",
+                  )}
+                />
+              }
             ></ChainOfThoughtStep>
           )}
         </ChainOfThoughtContent>
