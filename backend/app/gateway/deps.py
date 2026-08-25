@@ -199,6 +199,31 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
 
         app.state.stream_bridge = await stack.enter_async_context(make_stream_bridge(config))
 
+        # Mirror subagent task_* custom events into the thread-scoped WS hub
+        # (app.gateway.task_events). The resolver is lazy: the RunManager does
+        # not exist yet at this line, and resolution only happens when a
+        # task_* event actually fires.
+        from app.gateway.task_events import MirroringStreamBridge, TaskEventHub
+
+        app.state.task_event_hub = TaskEventHub()
+        _inner_bridge = app.state.stream_bridge
+
+        async def _resolve_run_thread(run_id: str) -> str | None:
+            manager = getattr(app.state, "run_manager", None)
+            if manager is None:
+                return None
+            try:
+                record = await manager.get(run_id)
+            except Exception:
+                return None
+            return getattr(record, "thread_id", None)
+
+        app.state.stream_bridge = MirroringStreamBridge(
+            inner=_inner_bridge,
+            hub=app.state.task_event_hub,
+            resolve_run_thread=_resolve_run_thread,
+        )
+
         # Initialize persistence engine BEFORE checkpointer so that
         # auto-create-database logic runs first (postgres backend).
         await init_engine_from_config(config.database)

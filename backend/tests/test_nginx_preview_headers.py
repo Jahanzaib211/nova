@@ -143,6 +143,45 @@ class TestArtifactsLocation:
         assert text.index(ARTIFACTS_LOCATION) < text.index(general), f"{name}: artifacts location must precede the general /api/threads location or it never matches"
 
 
+TASKS_WS_LOCATION = "location ~ ^/api/threads/[^/]+/tasks-ws$"
+
+
+class TestTasksWsLocation:
+    """The thread-scoped task-event WebSocket (WS-G).
+
+    Without its own location the generic `/api/threads` block catches the
+    handshake and, setting no Upgrade header, nginx answers 400 — the panel
+    loses subagent/todo bindings on every deployment while `make dev`
+    (bypassing nginx) looks fine. The same asymmetry that hid the preview
+    framing bug.
+    """
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_location_exists(self, name: str) -> None:
+        assert TASKS_WS_LOCATION in _read(name), f"{name}: tasks-ws needs its own location"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_supports_websocket_upgrade(self, name: str) -> None:
+        body = _location_body(_read(name), TASKS_WS_LOCATION)
+        assert "Upgrade $http_upgrade" in body.replace("  ", " "), f"{name}: no Upgrade header on tasks-ws"
+        assert "Connection $connection_upgrade" in body.replace("  ", " "), f"{name}: no Connection upgrade on tasks-ws"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_ordered_before_the_general_threads_location(self, name: str) -> None:
+        text = _read(name)
+        general = "location ~ ^/api/threads {"
+        if general not in text:
+            pytest.skip(f"{name} has no general /api/threads regex location")
+        assert text.index(TASKS_WS_LOCATION) < text.index(general), f"{name}: tasks-ws location must precede the general /api/threads location or it never matches"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_long_read_timeout_for_idle_sockets(self, name: str) -> None:
+        body = _location_body(_read(name), TASKS_WS_LOCATION)
+        match = re.search(r"proxy_read_timeout\s+(\d+)s", body)
+        assert match is not None, f"{name}: tasks-ws has no read timeout override"
+        assert int(match.group(1)) >= 600, f"{name}: task sockets idle between subagents; a short timeout kills them"
+
+
 class TestGlobalPostureUnchanged:
     """The fix must not weaken the app shell's own headers."""
 

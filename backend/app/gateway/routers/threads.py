@@ -17,12 +17,14 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.websockets import WebSocket
 from langgraph.checkpoint.base import empty_checkpoint, uuid6
 from pydantic import BaseModel, Field, field_validator
 
 from app.gateway.authz import require_permission
 from app.gateway.deps import get_checkpointer
 from app.gateway.internal_auth import get_trusted_internal_owner_user_id
+from app.gateway.task_events import TaskEventHub
 from app.gateway.utils import sanitize_log_param
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime import serialize_channel_values_for_api
@@ -668,3 +670,43 @@ async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request
         raise HTTPException(status_code=500, detail="Failed to get thread history")
 
     return entries
+
+
+# ── Thread-scoped task-event WebSocket (WS-G) ───────────────────────────────
+
+
+@router.websocket("/{thread_id}/tasks-ws")
+async def tasks_ws(websocket: "WebSocket", thread_id: str) -> None:
+    """Stream subagent task events for one thread.
+
+    The harness emits ``task_*`` events as custom stream events on a per-run
+    bridge; the gateway mirrors them into a thread-scoped hub
+    (:mod:`app.gateway.task_events`) so the Agent's Computer can correlate
+    subagent completions with todo rows across reconnects — runs are
+    transient, the socket is not.
+
+    Admission mirrors the other WS surfaces: same-origin handshake, session
+    cookie auth (the auth middleware never runs for WebSocket scope), and
+    per-user thread ownership.
+    """
+    from app.gateway.task_events import run_tasks_ws_stream
+    from app.gateway.ws_guards import caller_owns_thread, ws_user, ws_same_origin
+
+    from deerflow.runtime.user_context import reset_current_user, set_current_user
+
+    if not ws_same_origin(websocket):
+        await websocket.close(code=1008)
+        return
+    user = await ws_user(websocket)
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    token = set_current_user(user)
+    try:
+        if not caller_owns_thread(thread_id):
+            await websocket.close(code=1008)
+            return
+        hub: TaskEventHub = websocket.app.state.task_event_hub  # type: ignore[name-defined]
+        await run_tasks_ws_stream(websocket, hub, thread_id)
+    finally:
+        reset_current_user(token)
