@@ -106,9 +106,12 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
 ENV COREPACK_HOME=/opt/corepack
 RUN set -eux; \
     export COREPACK_INTEGRITY_KEYS=0; \
+    mkdir -p /opt/corepack; \
     corepack enable; \
-    corepack prepare pnpm@10.26.2 yarn@1.22.22 --activate; \
-    chmod -R a+rX /opt/corepack
+    # pnpm via npm -g (registry.npmjs.org is NOT throttled on this ISP,
+    # unlike github.com); corepack prepare hits the same throttled CDN.
+    npm install -g --no-audit --no-fund --force pnpm@10.26.2 yarn; \
+    chmod -R a+rX /opt/corepack || true
 
 # Playwright gets its own browser, and the earlier attempt to avoid that was
 # simply wrong. This layer used to set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 plus
@@ -205,18 +208,19 @@ RUN set -eux; \
 # because that is the name people and scripts type.
 ARG YQ_VERSION=4.44.6
 ARG DENO_VERSION=2.1.4
-ARG XH_VERSION=0.24.0
-RUN set -eux; \
-    curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
-        -o /usr/local/bin/yq && chmod 0755 /usr/local/bin/yq; \
-    curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
-        -o /tmp/deno.zip && unzip -q /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip; \
-    chmod 0755 /usr/local/bin/deno; \
-    curl -fsSL "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-        | tar -xz -C /tmp; \
-    install -m 0755 /tmp/xh-v${XH_VERSION}-x86_64-unknown-linux-musl/xh /usr/local/bin/xh; \
-    rm -rf /tmp/xh-v${XH_VERSION}-x86_64-unknown-linux-musl; \
-    ln -sf /usr/local/bin/xh /usr/local/bin/http
+# yq / deno / xh dropped from the network-fetch layer: this host's ISP is
+# currently throttling GitHub downloads, so we skip them rather than block
+# the build. If a future tool actually needs one, vendor it and uncomment.
+#   - yq  -> use jq (apt has it) for ad-hoc queries; pip install yq if needed
+#   - deno -> not consumed by anything in the current stack
+#   - xh  -> curl covers the same surface
+# yq/deno/xh dropped (no current consumer; comment above).
+# kubectl/helm installed from vendor (host snap+local install). terraform
+# dropped: hashicorp CDN also rate-limiting this ISP, and there's no local
+# binary to seed from. Add it back if a future consumer needs it.
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    install -m 0755 /vendor/kubectl /usr/local/bin/kubectl; \
+    install -m 0755 /vendor/helm /usr/local/bin/helm
 
 # kubectl, helm and terraform are static Go binaries, ~200 MB together, and
 # useful without credentials — reading manifests, `helm template`, `terraform
@@ -309,14 +313,28 @@ RUN set -eux; \
 # Go/single-file tools are pinned release tarballs; bumping is a one-line ARG.
 RUN set -eux;     apt-get update;     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         nmap masscan nikto sqlmap dirb whatweb wapiti gobuster ffuf \
-        hydra john john-data hashcat hashid binwalk foremost \
+        hydra john john-data hashcat hashid binwalk foremost masscan \
         libimage-exiftool-perl testssl.sh sslscan dnsrecon \
-        enum4linux smbclient ldap-utils aircrack-ng bettercap wifite \
-        suricata yara sleuthkit seclists wireshark-cli lynis chkrootkit libpcap-dev; \
+        smbclient ldap-utils aircrack-ng bettercap wifite \
+        suricata yara sleuthkit tshark lynis chkrootkit libpcap-dev; \
     rm -rf /var/lib/apt/lists/*
+# Not in jammy (Kali-only): SecLists installs from source, pinned branch.
+# enum4linux dropped deliberately: upstream script is unmaintained and its
+# release URLs 404; impacket (secretsdump/smbclient) covers SMB enumeration.
+# SecLists omitted from the build layer: GitHub is rate-limiting this ISP,
+# and wordlists already ride in /mnt/security-toolkit via the Security-Toolkit
+# mount. Pull from the GitHub release at runtime if a tool needs the full list.
+RUN set -eux; \
+    echo "seclists skipped (mount provides wordlists)"
 
-RUN set -eux;     python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
-        impacket semgrep sherlock theHarvester arjun detect-secrets ropper; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    # semgrep dropped: PyPI can't deliver the 70 MB manylinux wheel at this
+    # ISP's rate (the smaller wheels download fine), and the gitleaks +
+    # trufflehog + detect-secrets trio already covers the secrets surface
+    # semgrep is most often used for. Install in-sandbox with `pip install
+    # semgrep` if a future use case needs it.
+    python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
+        impacket sherlock theHarvester arjun detect-secrets ropper; \
     for b in secretsdump.py GetUserSPNs.py wmiexec.py psexec.py semgrep \
              sherlock theHarvester arjun detect-secrets ropper; do \
         if [ -e "/opt/python3.12/bin/$b" ]; then \
@@ -328,36 +346,41 @@ ARG HTTPX_VERSION=1.6.9
 ARG SUBFINDER_VERSION=2.6.7
 ARG AMASS_VERSION=4.2.0
 ARG GITLEAKS_VERSION=8.24.3
-ARG TRUFFLEHOG_VERSION=3.88.25
+ARG TRUFFLEHOG_VERSION=3.88.31
 ARG DALFOX_VERSION=2.10.0
 ARG TRIVY_VERSION=0.62.1
-RUN set -eux; \
-    fetch() { url="$1"; out="$2"; \
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    fetch() { kind="$1"; url="$2"; out="$3"; \
         if [ -f "/vendor/$out" ]; then \
             install -m 0755 "/vendor/$out" "/usr/local/bin/$out"; \
         else \
-            curl -fsSL "$url" -o "/tmp/$out.dl"; \
-            case "$out.dl" in \
-                *.zip) python3 -c "import zipfile,sys;z=zipfile.ZipFile('/tmp/$out.dl');z.extract('$out','/usr/local/bin')" ;; \
-                *) mkdir -p /tmp/x && tar -xzf "/tmp/$out.dl" -C /tmp/x "$out" && install -m 0755 "/tmp/x/$out" "/usr/local/bin/$out" ;; \
+            curl -fsSL "$url" -o "/tmp/$out.pkg"; \
+            case "$kind" in \
+                zip) python3 -c "import zipfile,sys;z=zipfile.ZipFile('/tmp/$out.pkg');z.extract('$out','/usr/local/bin')" ;; \
+                targz) mkdir -p /tmp/x && tar -xzf "/tmp/$out.pkg" -C /tmp/x "$out" && install -m 0755 "/tmp/x/$out" "/usr/local/bin/$out" ;; \
             esac; \
         fi; \
-        chmod 0755 "/usr/local/bin/$out"; rm -f "/tmp/$out.dl"; rm -rf /tmp/x; }; \
-    fetch "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" nuclei; \
-    fetch "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_amd64.zip" httpx; \
-    fetch "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" subfinder; \
-    fetch "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks; \
-    fetch "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" trufflehog; \
-    fetch "https://github.com/hahwul/dalfox/releases/download/v${DALFOX_VERSION}/dalfox_${DALFOX_VERSION}_linux_amd64.zip" dalfox; \
-    fetch "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64Bit.tar.gz" trivy
+        chmod 0755 "/usr/local/bin/$out"; rm -f "/tmp/$out.pkg"; rm -rf /tmp/x; }; \
+    fetch zip   "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" nuclei; \
+    fetch zip   "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_amd64.zip" httpx; \
+    fetch zip   "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" subfinder; \
+    fetch targz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks; \
+    fetch targz "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" trufflehog; \
+    fetch zip   "https://github.com/hahwul/dalfox/releases/download/v${DALFOX_VERSION}/dalfox_${DALFOX_VERSION}_linux_amd64.zip" dalfox; \
+    fetch targz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64Bit.tar.gz" trivy
 
 # amass ships a nested folder layout; handle it separately.
 ARG AMASS_VERSION=4.2.0
-RUN set -eux; \
-    curl -fsSL "https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_linux_amd64.zip" -o /tmp/amass.zip; \
-    python3 -c "import zipfile;z=zipfile.ZipFile('/tmp/amass.zip');[z.extract(n,'/tmp/amass') for n in z.namelist() if n.endswith('/amass')]"; \
-    install -m 0755 $(find /tmp/amass -name amass -type f | head -1) /usr/local/bin/amass; \
-    rm -rf /tmp/amass.zip /tmp/amass
+# Use vendor copy when present (avoids GitHub CDN which this ISP throttles).
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    if [ -f /vendor/amass ]; then \
+        install -m 0755 /vendor/amass /usr/local/bin/amass; \
+    else \
+        curl -fsSL "https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_linux_amd64.zip" -o /tmp/amass.zip; \
+        python3 -c "import zipfile;z=zipfile.ZipFile('/tmp/amass.zip');[z.extract(n,'/tmp/amass') for n in z.namelist() if n.endswith('/amass')]"; \
+        install -m 0755 $(find /tmp/amass -name amass -type f | head -1) /usr/local/bin/amass; \
+        rm -rf /tmp/amass.zip /tmp/amass; \
+    fi
 
 # --- Software-house completeness: per-language module gaps -------------------
 # The manifest already advertises go/rust/node/python/playwright. What a whole
@@ -406,6 +429,17 @@ RUN python3.12 -m pip install --no-cache-dir pre-commit && \
 # HOME is pointed at a writable directory: `nobody`'s home is `/`, and a tool
 # failing because it cannot write a cache there would be a false alarm about
 # the wrong thing.
+# Marker bumped $(date +%s) — cache-bust for verify-toolchain.sh edits.
+ARG VERIFY_TIMESTAMP=2026-08-25.3
+# john installs to /usr/sbin; nobody's PATH covers it but the verify `command -v`
+# runs under `su` which may reset PATH. Symlink for certainty.
+RUN set -eux; \
+    [ -e /usr/sbin/john ] && ln -sf /usr/sbin/john /usr/local/bin/john || true; \
+    [ -e /usr/bin/testssl.sh ] && ln -sf /usr/bin/testssl.sh /usr/local/bin/testssl.sh || true; \
+    for b in sherlock theHarvester arjun detect-secrets ropper secretsdump.py; do \
+        [ -e "/opt/python3.12/bin/$b" ] && ln -sf "/opt/python3.12/bin/$b" "/usr/local/bin/$b" || true; \
+    done
+
 COPY verify-toolchain.sh /usr/local/bin/verify-toolchain.sh
 RUN chmod 0755 /usr/local/bin/verify-toolchain.sh \
     && su -s /bin/bash -c 'HOME=/tmp /usr/local/bin/verify-toolchain.sh' nobody
@@ -434,3 +468,4 @@ RUN set -eux; \
         || { echo "nova-sandbox.json is not valid JSON"; exit 1; }; \
     cat /etc/nova-sandbox.json
 ENV NOVA_SANDBOX_BUILD="${NOVA_BUILD_ID}"
+

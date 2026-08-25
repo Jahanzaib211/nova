@@ -435,7 +435,28 @@ class LocalContainerBackend(SandboxBackend):
                         continue
                 raise
         else:
-            raise RuntimeError("Could not start sandbox container: all candidate ports are already allocated by Docker")
+            # Concurrent recreates (gateway restart, recycle storm) can race
+            # outside Docker's atomic allocate: each create claims its own
+            # ports before the previous one's bind is visible. The single
+            # attempt above exhausted candidates; give Docker a brief moment
+            # to settle and try the whole sequence once more before failing.
+            import time as _t
+            for _retry in range(3):
+                _t.sleep(1.0 + _retry * 1.0)
+                try:
+                    container_id, preview_ports = self._start_container(container_name, port, extra_mounts)
+                    break
+                except RuntimeError as exc:
+                    err = str(exc)
+                    if "port is already allocated" not in err and "address already in use" not in err.lower():
+                        raise
+            else:
+                raise RuntimeError(
+                    "Could not start sandbox container: all candidate ports "
+                    "are still allocated by Docker after retrying (transient "
+                    "race during recycle storm). Close existing sandboxes or "
+                    "extend the published-port range."
+                )
 
         # When running inside Docker (DooD), sandbox containers are reachable via
         # host.docker.internal rather than localhost (they run on the host daemon).
