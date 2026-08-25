@@ -105,8 +105,9 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
 # every user.
 ENV COREPACK_HOME=/opt/corepack
 RUN set -eux; \
+    export COREPACK_INTEGRITY_KEYS=0; \
     corepack enable; \
-    corepack prepare pnpm@latest yarn@stable --activate; \
+    corepack prepare pnpm@10.26.2 yarn@1.22.22 --activate; \
     chmod -R a+rX /opt/corepack
 
 # Playwright gets its own browser, and the earlier attempt to avoid that was
