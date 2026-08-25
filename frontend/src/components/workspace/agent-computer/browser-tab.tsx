@@ -132,8 +132,15 @@ export function Browser({
   const route = navStack[navIdx] ?? "/";
   const [routeInput, setRouteInput] = useState(entryRoute);
   useEffect(() => setRouteInput(route), [route]);
+  // Reset history only when the SERVER (prefix) changes — a genuinely new
+  // context. A new HTML artifact mid-session used to land here too (entryRoute
+  // derives from the artifact list) and threw away the user's navigation
+  // history mid-run; now an entry change only seeds the stack while the user
+  // is still sitting on the untouched entry route.
+  const prevPrefixRef = useRef(prefix);
   useEffect(() => {
-    // New dev server / switched label / new deliverable → fresh history at entry route.
+    if (prevPrefixRef.current === prefix && prefix !== "") return;
+    prevPrefixRef.current = prefix;
     setNavStack([entryRoute]);
     setNavIdx(0);
   }, [prefix, entryRoute]);
@@ -141,6 +148,13 @@ export function Browser({
     (raw: string) => {
       let p = raw.trim();
       if (!p) p = "/";
+      // Tolerate a full URL pasted into the address bar: without stripping,
+      // "http://host/about" becomes "/http://host/about" and proxies to a
+      // guaranteed 404.
+      const SCHEME_RE = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\/[^/]+(\/.*)?$/;
+      const schemeMatch = SCHEME_RE.exec(p);
+      if (schemeMatch?.[1]) p = schemeMatch[1];
+      else if (/^[a-zA-Z][a-zA-Z\d+\-.]:\/\//.test(p)) p = "/";
       if (!p.startsWith("/")) p = "/" + p;
       setNavStack((s) => [...s.slice(0, navIdx + 1), p]);
       setNavIdx((i) => i + 1);
@@ -163,6 +177,37 @@ export function Browser({
     route,
     srcMode,
   );
+  // A proxy failure renders its error body as a document inside the iframe and
+  // fires `load` — DOM `error` essentially never fires for an HTTP error, so
+  // the preview→absproxy fallback keyed on onError was dead code for exactly
+  // its target failure mode (502 from a not-yet-listening dev server). On
+  // load, probe the same URL same-origin from the PARENT (the iframe itself is
+  // opaque-sandboxed, but this fetch runs outside it) and flip to absproxy on
+  // a non-OK answer.
+  const onPreviewLoad = useCallback(() => {
+    if (srcMode !== "preview") return;
+    if (!devServer.running || !devServer.url || !devServer.absproxyUrl) return;
+    const probeUrl = `${getBackendBaseURL()}${devServer.url.replace(/\/$/, "")}${route}`;
+    void fetch(probeUrl, {
+      method: "HEAD",
+      credentials: "include",
+      // Cache-bust so a cached 502 from the compile window cannot pin the
+      // fallback decision after the server is actually up.
+      cache: "no-store",
+    })
+      .then((res) => {
+        if (!res.ok && srcModeRef.current === "preview") setSrcMode("absproxy");
+      })
+      .catch(() => {
+        /* network hiccup — leave the preview as-is */
+      });
+  }, [devServer.absproxyUrl, devServer.running, devServer.url, route, srcMode]);
+  // The load handler closes over srcMode at render time, but the probe result
+  // lands asynchronously; read the latest value through a ref.
+  const srcModeRef = useRef(srcMode);
+  useEffect(() => {
+    srcModeRef.current = srcMode;
+  }, [srcMode]);
   const onPreviewError = useCallback(() => {
     if (srcMode === "preview" && devServer.absproxyUrl) setSrcMode("absproxy");
   }, [srcMode, devServer.absproxyUrl]);
@@ -173,7 +218,15 @@ export function Browser({
   // CSS), so once VNC was toggled on the noVNC iframe kept streaming video —
   // bandwidth and CPU — while the user sat on Files or Terminal.
   const vncVisible = Boolean(active) && showVnc;
-  const { vnc: vncUrl } = useSandboxTerminalUrl(threadId, vncVisible);
+  // The hook deliberately returns EMPTY_TERMINAL_URLS with a `reason` when the
+  // sandbox has no VNC / the URL fetch fails — render that instead of an
+  // infinite spinner, and expose its refetch for recycled sandboxes.
+  const {
+    vnc: vncUrl,
+    reason: vncReason,
+    refetch: refetchTerminalUrl,
+    isFetching: terminalUrlFetching,
+  } = useSandboxTerminalUrl(threadId, vncVisible);
 
   // Agent browser self-test (native sandbox Chromium): console errors + screenshot.
   const {
@@ -182,16 +235,19 @@ export function Browser({
     run: runSelfTest,
   } = useBrowserCheck(threadId);
   // The deterministic auto-check runs on every preview — poll it so results show
-  // without anyone clicking. Manual run (if any) takes precedence.
+  // without anyone clicking. Manual run (if any) takes precedence. Both payloads
+  // cross the network unchecked; a degraded body must not crash the tab.
   const autoTest = useLastBrowserCheck(threadId, active && devServer.running);
+  const autoRoutes = autoTest?.routes ?? [];
   const selfTest =
-    manualTest ?? (autoTest && autoTest.routes.length > 0 ? autoTest : null);
+    manualTest ?? (autoTest && autoRoutes.length > 0 ? autoTest : null);
+  const selfTestRoutes = selfTest?.routes ?? [];
   const [showSelfTest, setShowSelfTest] = useState(false);
   // Surface automatically when the self-test found issues.
   useEffect(() => {
-    if (selfTest && !selfTest.ok && selfTest.routes.length > 0)
+    if (selfTest && !selfTest.ok && selfTestRoutes.length > 0)
       setShowSelfTest(true);
-  }, [selfTest]);
+  }, [selfTest, selfTestRoutes.length]);
   const triggerSelfTest = useCallback(() => {
     setShowSelfTest(true);
     void runSelfTest(selectedLabel, route);
@@ -210,7 +266,9 @@ export function Browser({
   }, [content, isHtml]);
 
   // Download the HTML file (blob URL is same-origin; never window.open it).
-  const openInNewTab = useCallback(() => {
+  // Named `downloadHtml` honestly — it downloads; the i18n title used to say
+  // "open in new tab", which is not what happens.
+  const downloadHtml = useCallback(() => {
     if (!content || !filename) return;
     const blob = new Blob([content], { type: "text/html" });
     const url = URL.createObjectURL(blob);
@@ -218,7 +276,9 @@ export function Browser({
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    // Safari can cancel an in-flight download if the URL is revoked in the
+    // same tick as click(); defer by a task.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }, [content, filename]);
 
   // Open the LIVE dev server preview in a real tab (proxy sets CSP sandbox + strips cookies).
@@ -246,6 +306,11 @@ export function Browser({
   // already `true` from the first thread silently skips auto-start there.
   useEffect(() => {
     autoStartedRef.current = false;
+    // Same class of leak: UI toggles must not survive a thread switch. VNC
+    // dropped the user straight into the new thread's video stream; a failed
+    // self-test banner stayed open showing thread A's issues over thread B.
+    setShowVnc(false);
+    setShowSelfTest(false);
   }, [threadId]);
   useEffect(() => {
     if (
@@ -284,6 +349,23 @@ export function Browser({
               title={t.agentComputer.browser.watchAgentBrowser}
               className="h-full w-full border-0"
             />
+          ) : vncReason ? (
+            // The hook answers "why not" when VNC is unavailable (no sandbox
+            // UI, fetch failed, …). An eternal spinner here read as a hung
+            // pane; a reason plus retry reads as a state.
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <p className="text-muted-foreground/60 text-xs">{vncReason}</p>
+              <button
+                type="button"
+                onClick={() => void refetchTerminalUrl()}
+                disabled={terminalUrlFetching}
+                className="border-border/40 text-muted-foreground hover:bg-muted/20 rounded border px-2 py-1 text-[11px] disabled:opacity-50"
+              >
+                {terminalUrlFetching
+                  ? t.common.loading
+                  : t.agentComputer.terminal.reconnect}
+              </button>
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center">
               <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
@@ -333,17 +415,25 @@ export function Browser({
           >
             ⟳
           </button>
+          {/* Tri-state dot: a crashed/stopped server used to keep the pulsing
+              yellow "compiling" dot next to the error panel — two messages
+              disagreeing side by side. */}
           <span
             className={cn(
               "ml-0.5 h-2 w-2 shrink-0 rounded-full",
               devServer.status === "ready"
                 ? "bg-emerald-400"
-                : "animate-pulse bg-yellow-400",
+                : devServer.status === "error" ||
+                    devServer.status === "stopped"
+                  ? "bg-red-500/80"
+                  : "animate-pulse bg-yellow-400",
             )}
             title={
               devServer.status === "ready"
                 ? t.agentComputer.browser.live
-                : t.agentComputer.browser.compiling
+                : devServer.status === "error" || devServer.status === "stopped"
+                  ? t.agentComputer.browser.devServerError
+                  : t.agentComputer.browser.compiling
             }
           />
           <form
@@ -394,7 +484,7 @@ export function Browser({
                 "rounded p-1 transition-colors",
                 selfTesting
                   ? "text-primary"
-                  : selfTest && selfTest.routes.length > 0
+                  : selfTest && selfTestRoutes.length > 0
                     ? selfTest.ok
                       ? "text-emerald-400"
                       : "text-red-400"
@@ -476,7 +566,7 @@ export function Browser({
               {selfTest &&
                 !selfTest.ok &&
                 selfTest.reason &&
-                selfTest.routes.length === 0 && (
+                selfTestRoutes.length === 0 && (
                   <span className="text-muted-foreground/60">
                     {selfTest.reason}
                   </span>
@@ -488,8 +578,12 @@ export function Browser({
                 <XIcon className="h-3 w-3" />
               </button>
             </div>
-            {(selfTest?.routes ?? []).map((r, i) => (
-              <div key={i} className="mt-1 flex items-start gap-2">
+            {selfTestRoutes.map((r, i) => {
+              // Route rows come from a network payload; a missing array must
+              // degrade to "no errors shown", not crash the strip.
+              const consoleErrors = r.console_errors ?? [];
+              return (
+              <div key={`${r.route}:${r.status}:${i}`} className="mt-1 flex items-start gap-2">
                 {r.screenshot && (
                   <a
                     href={r.screenshot}
@@ -497,7 +591,6 @@ export function Browser({
                     rel="noreferrer"
                     className="shrink-0"
                   >
-                    {}
                     <img
                       src={r.screenshot}
                       alt={`screenshot ${r.route}`}
@@ -517,9 +610,9 @@ export function Browser({
                   <span className="text-muted-foreground/50 ml-1">
                     [{r.status}]
                   </span>
-                  {r.console_errors.slice(0, 3).map((ce, j) => (
+                  {consoleErrors.slice(0, 3).map((ce, j) => (
                     <div
-                      key={j}
+                      key={`${j}:${ce.slice(0, 24)}`}
                       className="truncate font-mono text-[10px] text-red-300/80"
                       title={ce}
                     >
@@ -528,7 +621,8 @@ export function Browser({
                   ))}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
         <div
@@ -546,6 +640,7 @@ export function Browser({
               // opaque-origin sandbox prevents the agent-built app from reaching the
               // parent app's cookies / localStorage / auth.
               sandbox="allow-scripts allow-forms allow-popups allow-modals"
+              onLoad={onPreviewLoad}
               onError={onPreviewError}
               className={cn(
                 "border-0 bg-white",
@@ -682,9 +777,9 @@ export function Browser({
             <span className="font-mono text-[10px]">📱</span>
           </button>
           <button
-            onClick={openInNewTab}
+            onClick={downloadHtml}
             className="text-muted-foreground/50 hover:text-muted-foreground rounded p-1 transition-colors"
-            title={t.agentComputer.browser.openNewTab}
+            title={t.agentComputer.browser.downloadHtml}
           >
             <DownloadIcon className="h-3 w-3" />
           </button>

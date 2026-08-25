@@ -8,6 +8,7 @@ import {
   FileTextIcon,
   FolderOpenIcon,
   AlertTriangleIcon,
+  GlobeIcon,
   LoaderCircleIcon,
   PencilIcon,
   SquareTerminalIcon,
@@ -27,7 +28,7 @@ import type {
 import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import { isActivityTool } from "@/core/threads/tool-surface";
+import { classifyToolWork, isActivityTool } from "@/core/threads/tool-surface";
 import type { Todo } from "@/core/todos";
 import {
   useWorkspaceEvents,
@@ -37,38 +38,47 @@ import { cn } from "@/lib/utils";
 
 // Tab 4: Activity — compact event cards + Files tree
 // ──────────────────────────────────────────────────────────
+// Icon/color per work kind, from the shared classifier. The previous private
+ // tool-name list drifted silently — unknown tools fell to the default icon,
+// which is invisible in the UI and was exactly the pre-2026-08-21 failure
+// shape (see core/threads/tool-surface.ts).
 function getToolMeta(type: string): { icon: React.ReactNode; color: string } {
-  switch (type) {
-    case "write_file":
+  switch (classifyToolWork(type)) {
+    case "file-write":
       return {
         icon: <PencilIcon className="h-3 w-3" />,
         color: "text-blue-400",
       };
-    case "str_replace":
+    case "file-edit":
       return {
         icon: <PencilIcon className="h-3 w-3" />,
         color: "text-purple-400",
       };
-    case "read_file":
+    case "file-read":
       return {
         icon: <FileTextIcon className="h-3 w-3" />,
         color: "text-sky-400",
       };
-    case "search_files":
-    case "grep_files":
+    case "file-search":
+    case "content-search":
       return {
         icon: <FileSearchIcon className="h-3 w-3" />,
         color: "text-orange-400",
       };
-    case "scaffold_project":
+    case "scaffold":
       return {
         icon: <FolderOpenIcon className="h-3 w-3" />,
         color: "text-indigo-400",
       };
-    case "task":
+    case "subagent":
       return {
         icon: <SquareTerminalIcon className="h-3 w-3" />,
         color: "text-indigo-400",
+      };
+    case "browser":
+      return {
+        icon: <GlobeIcon className="h-3 w-3" />,
+        color: "text-cyan-400",
       };
     default:
       return {
@@ -115,9 +125,13 @@ function ActivityEventCard({
             {filename}
           </span>
         )}
-        <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
-          {event.ts}
-        </span>
+        {/* Message-derived events carry no wall-clock ts; render nothing
+            rather than an empty right-aligned slot. */}
+        {event.ts && (
+          <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
+            {event.ts}
+          </span>
+        )}
         {isRunning && (
           <LoaderCircleIcon className="text-muted-foreground/40 h-2.5 w-2.5 animate-spin" />
         )}
@@ -139,7 +153,18 @@ function ActivityEventCard({
 // Compact pill that surfaces the most recent deterministic verify_result
 // at the top of the Activity tab. Sourced from the verify_result custom
 // event emitted by the backend's auto-verify-on-present_files gate.
+
+/** Known LLM-error reasons → localized cause text. */
+const LLM_ERROR_REASONS: Record<string, (t: ReturnType<typeof useI18n>["t"]) => string> = {
+  quota: (t) => t.agentComputer.llmError.quota,
+  auth: (t) => t.agentComputer.llmError.auth,
+  busy: (t) => t.agentComputer.llmError.busy,
+  transient: (t) => t.agentComputer.llmError.busy,
+  circuit_open: (t) => t.agentComputer.llmError.busy,
+} as const;
+
 export function LlmErrorBadge({ event }: { event: LlmError }) {
+  const { t } = useI18n();
   const reason = (event.reason || "unknown").toLowerCase();
   const tone =
     reason === "quota"
@@ -147,14 +172,13 @@ export function LlmErrorBadge({ event }: { event: LlmError }) {
       : reason === "auth"
         ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
         : "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
-  const label =
-    reason === "quota"
-      ? "Last turn failed: out of quota"
-      : reason === "auth"
-        ? "Last turn failed: auth error"
-        : reason === "busy" || reason === "transient"
-          ? "Last turn failed: provider busy"
-          : "Last turn failed";
+  // i18n: these were hardcoded English; the reasons map keeps known causes
+  // specific and everything else falls to a generic line.
+  const reasonFn = LLM_ERROR_REASONS[reason];
+  const reasonText = reasonFn
+    ? reasonFn(t)
+    : t.agentComputer.llmError.generic;
+  const label = `${t.agentComputer.llmError.prefix}: ${reasonText}`;
   return (
     <div
       role="status"
@@ -238,10 +262,18 @@ export function ActivityPanel({
   // `length` is pinned at the cap, and the effect never fired again — the feed
   // silently stopped scrolling partway through any long run. Keying on the
   // newest event as well keeps it firing once the cap is reached.
+  //
+  // Gated on `active` (terminal-tab.tsx:93 is the pattern): every tab stays
+  // mounted via CSS `hidden`, so an ungated scroll drags a hidden subtree on
+  // every event — and because `active` was absent from deps, returning to the
+  // tab after events piled up opened it mid-scroll instead of at the bottom.
   const newestEvent = timeline.at(-1);
+  const newestId = newestEvent?.id;
+  const newestStatus = newestEvent?.status;
   useEffect(() => {
+    if (!active) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [timeline.length, newestEvent?.id, newestEvent?.status]);
+  }, [active, timeline.length, newestId, newestStatus]);
 
   return (
     <div className="flex h-full flex-col">
@@ -274,29 +306,41 @@ export function ActivityPanel({
               </span>
             </div>
           )}
-          {recentLiveEvents.map((event, i) => (
-            <div
-              key={`${event.type}-${event.data.occurred_at}-${i}`}
-              className="border-border/20 bg-muted/5 text-muted-foreground/60 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]"
-            >
-              <DatabaseIcon className="h-3 w-3 shrink-0 text-sky-400" />
-              <span className="truncate">
-                {event.type === "WorkspaceScanned"
-                  ? t.agentComputer.workspace.liveScanned(
-                      event.data.symbol_count,
-                      event.data.scan_duration_ms,
-                    )
-                  : event.type === "PlanBuilt"
-                    ? t.agentComputer.workspace.livePlan(
-                        event.data.step_count,
-                        event.data.risk_level,
+          {recentLiveEvents.map((event, i) => {
+            // Live frames are blind-cast from parsed SSE; a malformed body
+            // must render as a skipped pill, not crash the tab.
+            const data = (event.data ?? {}) as unknown as Record<
+              string,
+              unknown
+            >;
+            const num = (k: string): number =>
+              typeof data[k] === "number" ? data[k] : 0;
+            return (
+              <div
+                key={`${event.type}-${String(data.occurred_at)}-${i}`}
+                className="border-border/20 bg-muted/5 text-muted-foreground/60 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]"
+              >
+                <DatabaseIcon className="h-3 w-3 shrink-0 text-sky-400" />
+                <span className="truncate">
+                  {event.type === "WorkspaceScanned"
+                    ? t.agentComputer.workspace.liveScanned(
+                        num("symbol_count"),
+                        num("scan_duration_ms"),
                       )
-                    : event.type === "CacheHit"
-                      ? t.agentComputer.workspace.liveCacheHit
-                      : t.agentComputer.workspace.liveCacheMiss}
-              </span>
-            </div>
-          ))}
+                    : event.type === "PlanBuilt"
+                      ? t.agentComputer.workspace.livePlan(
+                          num("step_count"),
+                          typeof data.risk_level === "string"
+                            ? data.risk_level
+                            : "?",
+                        )
+                      : event.type === "CacheHit"
+                        ? t.agentComputer.workspace.liveCacheHit
+                        : t.agentComputer.workspace.liveCacheMiss}
+                </span>
+              </div>
+            );
+          })}
           {timeline.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
               <FileTextIcon className="text-muted-foreground/30 h-5 w-5" />

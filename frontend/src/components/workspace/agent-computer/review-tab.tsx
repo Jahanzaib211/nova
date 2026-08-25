@@ -33,17 +33,29 @@ export function ReviewPanel({
   threadId,
   review,
   isFetching,
+  isError = false,
   onRegenerate,
   active = true,
 }: {
   threadId: string;
   review: SandboxReview | undefined;
   isFetching: boolean;
+  /** The fetch failed outright — distinct from "still generating". Without
+   * this the panel showed eternal "Generating…" on a 500, and regenerate
+   * silently repeated the same failure. */
+  isError?: boolean;
   onRegenerate: () => void;
   active?: boolean;
 }) {
   const { t } = useI18n();
+  // The review payload crosses the network as an unchecked cast; every field
+  // access below must survive a partial/missing body without taking this tab
+  // into its error boundary.
   const risks = review?.risks ?? [];
+  const changedFiles = review?.files ?? [];
+  const addedTotal = review?.added_total ?? 0;
+  const removedTotal = review?.removed_total ?? 0;
+  const checks = review?.checks ?? {};
   const high = risks.filter((r) => r.level === "high").length;
   const med = risks.filter((r) => r.level === "med").length;
   // Latest WIK plan-built verdict (bus -> SSE bridge); undefined pre-flag
@@ -64,13 +76,18 @@ export function ReviewPanel({
         ),
     [liveEvents],
   );
-  const verdict = !review
-    ? { text: t.agentComputer.review.generating, cls: "text-muted-foreground" }
-    : high > 0
-      ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
-      : med > 0
-        ? { text: t.agentComputer.review.mostlyFine, cls: "text-orange-400" }
-        : { text: t.agentComputer.review.looksClean, cls: "text-emerald-400" };
+  const verdict = isError
+    ? {
+        text: t.agentComputer.review.generationFailed,
+        cls: "text-red-400",
+      }
+    : !review
+      ? { text: t.agentComputer.review.generating, cls: "text-muted-foreground" }
+      : high > 0
+        ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
+        : med > 0
+          ? { text: t.agentComputer.review.mostlyFine, cls: "text-orange-400" }
+          : { text: t.agentComputer.review.looksClean, cls: "text-emerald-400" };
 
   return (
     <div className="flex h-full flex-col">
@@ -110,13 +127,22 @@ export function ReviewPanel({
             </div>
             {review && (
               <div className="text-muted-foreground/70 mt-1 text-[11px]">
-                {review.files.length} file{review.files.length === 1 ? "" : "s"}{" "}
+                {changedFiles.length} file{changedFiles.length === 1 ? "" : "s"}{" "}
                 changed ·{" "}
-                <span className="text-emerald-400">+{review.added_total}</span>{" "}
-                <span className="text-red-400">−{review.removed_total}</span>
+                <span className="text-emerald-400">+{addedTotal}</span>{" "}
+                <span className="text-red-400">−{removedTotal}</span>
                 {high + med === 0 &&
                   ` · ${t.agentComputer.review.noRiskyActions}`}
               </div>
+            )}
+            {isError && (
+              <button
+                type="button"
+                onClick={onRegenerate}
+                className="text-muted-foreground/60 hover:text-foreground mt-1 block text-[11px] underline underline-offset-2"
+              >
+                {t.agentComputer.review.regenerate}
+              </button>
             )}
           </div>
 
@@ -130,20 +156,20 @@ export function ReviewPanel({
                 <span
                   className={cn(
                     "font-mono text-[10px] uppercase",
-                    kernelRiskColor(latestPlan.data.risk_level),
+                    kernelRiskColor(latestPlan.data?.risk_level),
                   )}
                 >
-                  {latestPlan.data.risk_level}
+                  {latestPlan.data?.risk_level ?? "?"}
                 </span>
                 <span className="text-muted-foreground/90">
-                  {latestPlan.data.plan_valid
+                  {latestPlan.data?.plan_valid
                     ? t.agentComputer.review.kernelVerdictValid
                     : t.agentComputer.review.kernelVerdictInvalid}
                 </span>
                 <span className="text-muted-foreground/50">
                   ·{" "}
                   {t.agentComputer.review.kernelVerdictSteps(
-                    latestPlan.data.step_count,
+                    latestPlan.data?.step_count ?? 0,
                   )}
                 </span>
               </div>
@@ -185,13 +211,13 @@ export function ReviewPanel({
           )}
 
           {/* Changed files */}
-          {review && review.files.length > 0 && (
+          {review && changedFiles.length > 0 && (
             <div>
               <div className="text-muted-foreground/70 mb-1 font-medium">
                 {t.agentComputer.review.changedFiles}
               </div>
               <div className="flex flex-col gap-px font-mono text-[11px]">
-                {review.files.slice(0, 200).map((f, i) => (
+                {changedFiles.slice(0, 200).map((f, i) => (
                   <div
                     key={f.path || i}
                     className="hover:bg-muted/30 flex items-center gap-2 rounded px-1 py-0.5"
@@ -213,13 +239,13 @@ export function ReviewPanel({
           )}
 
           {/* Checks */}
-          {review && Object.keys(review.checks).length > 0 && (
+          {review && Object.keys(checks).length > 0 && (
             <div>
               <div className="text-muted-foreground/70 mb-1 font-medium">
                 {t.agentComputer.review.detectedChecks}
               </div>
               <div className="flex flex-wrap gap-1">
-                {Object.entries(review.checks).map(([name, state]) => (
+                {Object.entries(checks).map(([name, state]) => (
                   <span
                     key={name}
                     className="border-border/20 bg-muted/10 text-muted-foreground/70 rounded border px-1.5 py-0.5 text-[10px]"
@@ -232,7 +258,7 @@ export function ReviewPanel({
             </div>
           )}
 
-          {review?.files.length === 0 && (
+          {review && changedFiles.length === 0 && (
             <div className="text-muted-foreground/50">
               {t.agentComputer.review.noChanges}
             </div>

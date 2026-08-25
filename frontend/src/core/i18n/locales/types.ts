@@ -663,6 +663,13 @@ export interface Translations {
       failed: (count: number) => string;
       consoleErrors: (count: number) => string;
     };
+    llmError: {
+      prefix: string;
+      generic: string;
+      quota: string;
+      auth: string;
+      busy: string;
+    };
     tabs: {
       files: string;
       terminal: string;
@@ -676,6 +683,8 @@ export interface Translations {
       empty: string;
       repository: string;
       running: (count: number) => string;
+      uploadLimits: string;
+      commandsHeader: string;
       uploadLimitsHint: string;
     };
     workspace: {
@@ -732,6 +741,8 @@ export interface Translations {
     };
     editor: {
       startWriting: string;
+      fileNotWritten: string;
+      emptyFile: string;
       diff: string;
       file: string;
       lines: (count: number) => string;
@@ -750,6 +761,7 @@ export interface Translations {
       desktop: string;
       mobile: string;
       openNewTab: string;
+      downloadHtml: string;
       testingInBrowser: string;
       selfTestPassed: string;
       selfTestIssues: string;
@@ -782,6 +794,7 @@ export interface Translations {
     };
     review: {
       generating: string;
+      generationFailed: string;
       needsLook: string;
       mostlyFine: string;
       looksClean: string;

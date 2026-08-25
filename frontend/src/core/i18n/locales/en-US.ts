@@ -781,6 +781,13 @@ export const enUS: Translations = {
       consoleErrors: (count: number) =>
         `${count} console error${count === 1 ? "" : "s"}`,
     },
+    llmError: {
+      prefix: "Last turn failed",
+      generic: "provider error",
+      quota: "out of quota",
+      auth: "authentication error",
+      busy: "provider busy",
+    },
     tabs: {
       files: "Files",
       terminal: "Terminal",
@@ -795,6 +802,8 @@ export const enUS: Translations = {
     files: {
       empty: "Files the agent creates will appear here",
       uploadLimitsHint: "Server-configured upload limits for this thread.",
+      uploadLimits: "Upload limits",
+      commandsHeader: "Commands",
       repository: "Repository",
       running: (count: number) => `${count} running`,
     },
@@ -856,6 +865,8 @@ export const enUS: Translations = {
     },
     editor: {
       startWriting: "Start writing a file to see code live",
+      fileNotWritten: "This file doesn't exist (yet)",
+      emptyFile: "File is empty",
       diff: "Diff",
       file: "File",
       lines: (count: number) => `${count} lines`,
@@ -874,6 +885,7 @@ export const enUS: Translations = {
       desktop: "Desktop",
       mobile: "Mobile",
       openNewTab: "Open in new tab",
+      downloadHtml: "Download HTML file",
       testingInBrowser: "Testing in browser\u2026",
       selfTestPassed: "\u2713 Self-test passed",
       selfTestIssues: "\u2717 Self-test found issues",
@@ -910,6 +922,7 @@ export const enUS: Translations = {
     },
     review: {
       generating: "Generating\u2026",
+      generationFailed: "Review failed to load",
       needsLook: "Needs a look before shipping",
       mostlyFine: "Mostly fine \u2014 a couple of checks",
       looksClean: "Looks clean",

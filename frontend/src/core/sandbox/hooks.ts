@@ -432,7 +432,9 @@ export function useSandboxTerminalUrl(
       // undefined, abs() returns undefined, and the object is still truthy --
       // so `data ?? {terminal: null, vnc: null}` below never fires and the
       // terminal and VNC panes spin on a loader forever with no error shown.
-      if (!res.ok) return EMPTY_TERMINAL_URLS;
+      // A reason rides along so panes can show *why* instead of just failing.
+      if (!res.ok)
+        return { ...EMPTY_TERMINAL_URLS, reason: `HTTP ${res.status}` };
       const raw = (await res.json()) as SandboxTerminalUrls;
       // Prefix root-relative paths so split-origin deployments (where
       // NEXT_PUBLIC_BACKEND_BASE_URL is set) still reach the gateway.
@@ -710,8 +712,8 @@ export function useLiveFileContent(
   threadId: string | null,
   path: string | null,
   enabled: boolean,
-): { content: string; exists: boolean; lineCount: number } {
-  const { data } = useQuery<{ content: string; exists: boolean; size: number }>(
+): { content: string; exists: boolean; lineCount: number; isLoading: boolean } {
+  const { data, isPending } = useQuery<{ content: string; exists: boolean; size: number }>(
     {
       queryKey: ["sandbox", "live-file", threadId, path],
       queryFn: async () => {
@@ -749,6 +751,9 @@ export function useLiveFileContent(
     content,
     exists: data?.exists ?? false,
     lineCount: content.split("\n").length,
+    // Distinguishes "still fetching" from a definitive answer. Without it the
+    // Editor rendered an eternal spinner for missing AND empty files alike.
+    isLoading: isPending && enabled && Boolean(threadId) && Boolean(path),
   };
 }
 
@@ -802,10 +807,14 @@ export function useSandboxFile(
     enabled: Boolean(threadId) && Boolean(path) && enabled,
     refetchInterval: POLL.FAST_MS,
     refetchIntervalInBackground: false,
-    // Keep the previous file's data while a new path loads. Changing `path`
-    // changes the query key, so without this `data` is briefly undefined and
-    // the UI flashed "file is missing" for one round-trip on every click.
-    placeholderData: (prev) => prev,
+    // Keep the previous file's data while a NEW PATH in the SAME thread loads.
+    // Changing `path` changes the query key, so without this `data` is briefly
+    // undefined and the UI flashed "file is missing" for one round-trip on
+    // every click. But a THREAD switch must NOT carry data over: the previous
+    // thread's deliverable would render as this thread's preview until the
+    // fetch resolved.
+    placeholderData: (prev, prevQuery) =>
+      prev && prevQuery?.queryKey[2] === threadId ? prev : undefined,
   });
 
   return {

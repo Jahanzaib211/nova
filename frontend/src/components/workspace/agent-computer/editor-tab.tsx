@@ -62,7 +62,7 @@ export function Editor({
   activeEdit: ActiveEdit | null;
 }) {
   const { t } = useI18n();
-  const { content, exists, lineCount } = useLiveFileContent(
+  const { content, exists, lineCount, isLoading } = useLiveFileContent(
     threadId,
     filePath,
     activeTab && Boolean(filePath),
@@ -100,10 +100,13 @@ export function Editor({
   }, [editKey]);
   const showDiff = mode === "diff" && diff !== null;
 
-  // Auto-scroll while writing
+  // Auto-scroll while writing — gated on the tab being visible: every tab
+  // stays mounted via CSS `hidden`, and an ungated scrollIntoView drags a
+  // hidden subtree on every streamed chunk (the v9.6 Terminal bug class).
   useEffect(() => {
-    if (isWriting) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [content, isWriting, showDiff]);
+    if (isWriting && activeTab)
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeTab, content, isWriting, showDiff]);
 
   if (!filePath) {
     return (
@@ -170,27 +173,44 @@ export function Editor({
           )}
         </div>
       </div>
-      {/* Code content */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {showDiff && diff ? (
-          <DiffView lines={diff} />
-        ) : exists && content ? (
-          <pre
-            className={cn(
-              "p-3 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap",
-              codeColor,
-            )}
-          >
-            {content}
-            {isWriting && <span className="animate-pulse text-white">█</span>}
-          </pre>
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
+        {/* Code content */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {showDiff && diff ? (
+            <DiffView lines={diff} />
+          ) : exists && content ? (
+            <pre
+              className={cn(
+                "p-3 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap",
+                codeColor,
+              )}
+            >
+              {content}
+              {isWriting && <span className="animate-pulse text-white">█</span>}
+            </pre>
+          ) : isLoading ? (
+            // Genuinely still fetching — the only state a spinner means.
+            <div className="flex h-full items-center justify-center">
+              <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
+            </div>
+          ) : !exists ? (
+            <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+              <span className="text-muted-foreground/50 text-xs">
+                {t.agentComputer.editor.fileNotWritten}
+              </span>
+              <span className="text-muted-foreground/35 font-mono text-[10px] break-all">
+                {filePath}
+              </span>
+            </div>
+          ) : (
+            // exists === true with empty content: a real, empty file.
+            <div className="flex h-full items-center justify-center">
+              <span className="text-muted-foreground/40 text-xs">
+                {t.agentComputer.editor.emptyFile}
+              </span>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
     </div>
   );
 }

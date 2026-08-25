@@ -751,6 +751,13 @@ export const zhCN: Translations = {
         `自检发现问题${count ? ` · ${count} 条路由失败` : ""}`,
       consoleErrors: (count: number) => `${count} 个控制台错误`,
     },
+    llmError: {
+      prefix: "上一轮失败",
+      generic: "提供商错误",
+      quota: "配额已用尽",
+      auth: "认证错误",
+      busy: "提供商繁忙",
+    },
     tabs: {
       files: "文件",
       terminal: "终端",
@@ -765,6 +772,8 @@ export const zhCN: Translations = {
       repository: "代码仓库",
       running: (count: number) => `${count} 个运行中`,
       uploadLimitsHint: "此线程的服务器上传限制。",
+      uploadLimits: "上传限制",
+      commandsHeader: "命令",
     },
     workspace: {
       title: "工作区",
@@ -822,6 +831,8 @@ export const zhCN: Translations = {
     },
     editor: {
       startWriting: "开始编写文件即可实时查看代码",
+      fileNotWritten: "该文件尚不存在",
+      emptyFile: "文件为空",
       diff: "差异",
       file: "文件",
       lines: (count: number) => `${count} 行`,
@@ -840,6 +851,7 @@ export const zhCN: Translations = {
       desktop: "桌面",
       mobile: "移动端",
       openNewTab: "在新标签页打开",
+      downloadHtml: "下载 HTML 文件",
       testingInBrowser: "在浏览器中测试\u2026",
       selfTestPassed: "\u2713 自检通过",
       selfTestIssues: "\u2717 自检发现问题",
@@ -874,6 +886,7 @@ export const zhCN: Translations = {
     },
     review: {
       generating: "生成中\u2026",
+      generationFailed: "审查加载失败",
       needsLook: "发布前需要检查",
       mostlyFine: "基本正常 \u2014 有几项检查",
       looksClean: "看起来没问题",
