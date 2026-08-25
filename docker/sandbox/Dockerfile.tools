@@ -215,13 +215,6 @@ ARG DENO_VERSION=2.1.4
 #   - deno -> not consumed by anything in the current stack
 #   - xh  -> curl covers the same surface
 # yq/deno/xh dropped (no current consumer; comment above).
-# kubectl/helm installed from vendor (host snap+local install). terraform
-# dropped: hashicorp CDN also rate-limiting this ISP, and there's no local
-# binary to seed from. Add it back if a future consumer needs it.
-RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
-    install -m 0755 /vendor/kubectl /usr/local/bin/kubectl; \
-    install -m 0755 /vendor/helm /usr/local/bin/helm
-
 # kubectl, helm and terraform are static Go binaries, ~200 MB together, and
 # useful without credentials — reading manifests, `helm template`, `terraform
 # validate` and `fmt` all work offline. The credential-bound cloud CLIs (aws,
@@ -232,14 +225,20 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
 ARG KUBECTL_VERSION=1.31.4
 ARG HELM_VERSION=3.16.3
 ARG TERRAFORM_VERSION=1.10.3
-RUN set -eux; \
-    curl -fsSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
-        -o /usr/local/bin/kubectl && chmod 0755 /usr/local/bin/kubectl; \
-    curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
-        | tar -xz -C /tmp && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && rm -rf /tmp/linux-amd64; \
-    curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
-        -o /tmp/tf.zip && unzip -q /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip; \
-    chmod 0755 /usr/local/bin/terraform
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    fetch_bin() { local name="$1"; if [ -f "/vendor/$name" ]; then \
+        install -m 0755 "/vendor/$name" "/usr/local/bin/$name"; echo "$name: vendored"; \
+    else echo "$name: vendor missing — will download"; return 1; fi; }; \
+    fetch_bin kubectl || { \
+        curl -fsSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+            -o /usr/local/bin/kubectl && chmod 0755 /usr/local/bin/kubectl; }; \
+    fetch_bin helm || { \
+        curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /tmp && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && rm -rf /tmp/linux-amd64; }; \
+    fetch_bin terraform || { \
+        curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+            -o /tmp/tf.zip && unzip -q /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip; \
+        chmod 0755 /usr/local/bin/terraform; }
 
 
 ENV PATH="/usr/local/go/bin:/usr/local/rust/bin:${PATH}" \
