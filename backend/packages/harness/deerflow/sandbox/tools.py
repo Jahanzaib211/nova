@@ -353,10 +353,13 @@ def _write_sandbox_observation(
 
                 if stats_total is not None:
                     # Dedicated frame: the Terminal's deterministic counter.
+                    # `type` mirrors `channel` so thin clients can route on
+                    # either field without special-casing.
                     emit_channel(
                         "terminal_stats",
                         {
                             "thread_id": thread_id,
+                            "type": "terminal_stats",
                             "total_commands": stats_total,
                         },
                     )

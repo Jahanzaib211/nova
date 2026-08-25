@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import logging
 import threading
+
+from deerflow.sandbox.computer_events import emit_channel
 from collections.abc import Awaitable, Callable
 from typing import Any, override
 
@@ -335,6 +337,49 @@ class TodoMiddleware(TodoListMiddleware):
         ]
         return request.override(messages=new_messages)
 
+    def _seed_progress_row_if_bare(self, request: ModelRequest) -> None:
+        """Deterministic progress: a run with NO todos ever written still
+        fires the panel with one honest row ("Working on your request").
+
+        The old behavior depended on the model choosing write_todos — runs
+        that skipped it left the checklist dead and users read that as a
+        broken panel. The seed is replaced wholesale the first time the model
+        writes a real list, so there is no conflict, only a floor.
+        """
+        try:
+            messages = getattr(request.state, "messages", None) or []
+            if not _todos_in_messages(list(messages)):
+                user_turns = sum(
+                    1
+                    for m in messages
+                    if getattr(m, "type", "") == "human"
+                )
+                if user_turns >= 1:
+                    emit_channel(
+                        "todos",
+                        {
+                            "thread_id": str(
+                                (
+                                    (
+                                        getattr(runtime := getattr(request, "runtime", None), "config", None)
+                                        or {}
+                                    ).get("configurable")
+                                    or {}
+                                ).get("thread_id")
+                                or ""
+                            ),
+                            "todos": [
+                                {
+                                    "content": "Working on your request",
+                                    "status": "in_progress",
+                                }
+                            ],
+                            "seeded": True,
+                        },
+                    )
+        except Exception:  # noqa: BLE001 - observability must never break a run
+            logger.debug("todo seed emit failed", exc_info=True)
+
     @override
     def wrap_model_call(
         self,
@@ -342,6 +387,7 @@ class TodoMiddleware(TodoListMiddleware):
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelCallResult:
         self._emit_todo_snapshots(request)
+        self._seed_progress_row_if_bare(request)
         return handler(self._augment_request(request))
 
     @override
@@ -351,6 +397,7 @@ class TodoMiddleware(TodoListMiddleware):
         handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
     ) -> ModelCallResult:
         self._emit_todo_snapshots(request)
+        self._seed_progress_row_if_bare(request)
         return await handler(self._augment_request(request))
 
     def _emit_todo_snapshots(self, request: ModelRequest) -> None:
