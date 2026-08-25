@@ -9,4 +9,11 @@ export interface Subtask {
   prompt: string;
   result?: string;
   error?: string;
+  /**
+   * Todo rows this delegation was bound to at dispatch (indexes into the
+   * thread's todo list). Set by the backend on task_started and carried on
+   * every terminal event; absent means "unknown binding" — the checklist
+   * then leaves the row's own status untouched instead of guessing.
+   */
+  todoIndexes?: number[];
 }

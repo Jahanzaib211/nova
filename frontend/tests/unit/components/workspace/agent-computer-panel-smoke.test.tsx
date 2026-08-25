@@ -21,6 +21,7 @@ import {
 import type { ThreadContextType } from "@/components/workspace/messages/context";
 import { ThreadContext } from "@/components/workspace/messages/context";
 import { I18nProvider } from "@/core/i18n/context";
+import { SubtasksProvider } from "@/core/tasks/context";
 
 const THREAD_ID = "smoke-thread-1";
 
@@ -59,17 +60,21 @@ function renderPanel(
     <QueryClientProvider client={queryClient}>
       <I18nProvider initialLocale="en-US">
         <ThreadContext.Provider value={threadContext}>
-          <WorkspaceStateProvider threadId={THREAD_ID} todos={todos}>
-            <AgentComputerPanel
-              threadId={THREAD_ID}
-              currentTool={null}
-              isLoading={false}
-              messages={[]}
-              activeWriteFilePath={null}
-              artifacts={[]}
-              onClose={() => undefined}
-            />
-          </WorkspaceStateProvider>
+          {/* The real page mounts SubtasksProvider above the workspace; the
+              checklist reads task→todo bindings from it. */}
+          <SubtasksProvider>
+            <WorkspaceStateProvider threadId={THREAD_ID} todos={todos}>
+              <AgentComputerPanel
+                threadId={THREAD_ID}
+                currentTool={null}
+                isLoading={false}
+                messages={[]}
+                activeWriteFilePath={null}
+                artifacts={[]}
+                onClose={() => undefined}
+              />
+            </WorkspaceStateProvider>
+          </SubtasksProvider>
         </ThreadContext.Provider>
       </I18nProvider>
     </QueryClientProvider>,

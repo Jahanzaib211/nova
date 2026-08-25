@@ -5,6 +5,7 @@ import {
   type SetStateAction,
   useCallback,
   useContext,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -140,6 +141,34 @@ export function useSubtaskContext() {
 export function useSubtask(id: string) {
   const { tasks } = useSubtaskContext();
   return tasks[id];
+}
+
+/**
+ * Todo indexes that a COMPLETED subagent settled, unioned across all tasks.
+ *
+ * This replaces the old positional heuristic (first N rows struck by count of
+ * done tasks), which struck the wrong rows whenever subagents finished out of
+ * order. Indexes arrive from the backend's task events (todo_indexes); rows
+ * with no binding are left exactly as the agent's own todo status says.
+ */
+export function completedTodoIndexes(
+  tasks: Record<string, Subtask>,
+): Set<number> {
+  const bindings = new Set<number>();
+  for (const task of Object.values(tasks)) {
+    if (task.status !== "completed") continue;
+    for (const index of task.todoIndexes ?? []) bindings.add(index);
+  }
+  return bindings;
+}
+
+export function useCompletedTodoBindings(): Set<number> {
+  const { tasks } = useSubtaskContext();
+  const signature = Object.values(tasks)
+    .map((t) => `${t.id}:${t.status}:${(t.todoIndexes ?? []).join(",")}`)
+    .sort()
+    .join("|");
+  return useMemo(() => completedTodoIndexes(tasks), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 export function useUpdateSubtask() {

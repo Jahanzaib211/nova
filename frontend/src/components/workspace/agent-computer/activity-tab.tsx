@@ -22,13 +22,16 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
   LlmError,
-  TaskProgress,
   VerifyResult,
 } from "@/components/workspace/messages/context";
 import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
+import { useCompletedTodoBindings } from "@/core/tasks/context";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import { classifyToolWork, isActivityTool } from "@/core/threads/tool-surface";
+import {
+  classifyToolWork,
+  isActivityTool,
+} from "@/core/threads/tool-surface";
 import type { Todo } from "@/core/todos";
 import {
   useWorkspaceEvents,
@@ -365,29 +368,25 @@ export function ActivityPanel({
 // ──────────────────────────────────────────────────────────
 export function TaskChecklist({
   todos,
-  taskProgress,
-  activityEvents,
 }: {
   todos: Todo[];
-  taskProgress: TaskProgress | null;
-  activityEvents: AgentActivityEvent[];
 }) {
   const { t } = useI18n();
+  // Todo rows a COMPLETED subagent settled, bound by index from the backend's
+  // task events. The old enrichment struck the FIRST N rows by count of done
+  // tasks — correct only while subagents finished in list order.
+  const bindings = useCompletedTodoBindings();
   if (todos.length === 0) return null;
 
-  // Enrich todo status from activity events (subagent task completions)
-  const completedTaskCount = activityEvents.filter(
-    (e) => e.type === "task" && e.status === "done",
-  ).length;
   const enrichedTodos = todos.map((todo, i) =>
-    i < completedTaskCount ? { ...todo, status: "completed" as const } : todo,
+    todo.status === "completed" || bindings.has(i)
+      ? { ...todo, status: "completed" as const }
+      : todo,
   );
 
   const done = enrichedTodos.filter((t) => t.status === "completed").length;
   const total = enrichedTodos.length;
-  const step = taskProgress?.step ?? done;
-  const totalSteps = taskProgress?.total ?? total;
-  const pct = totalSteps > 0 ? (step / totalSteps) * 100 : 0;
+  const pct = total > 0 ? (done / total) * 100 : 0;
 
   return (
     <div className="flex flex-col gap-1 px-3 py-2">
@@ -396,7 +395,7 @@ export function TaskChecklist({
           {t.agentComputer.taskProgress}
         </span>
         <span className="text-muted-foreground/50 text-xs">
-          {step} / {totalSteps}
+          {done} / {total}
         </span>
       </div>
       <Progress value={pct} className="h-1" />

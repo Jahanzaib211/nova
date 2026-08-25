@@ -16,6 +16,10 @@ import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/wo
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
+import { useUpdateSubtask } from "@/core/tasks/context";
+import {
+  useThreadTaskEvents,
+} from "@/core/threads/task-events-ws";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -81,6 +85,13 @@ const ChatBox: React.FC<{
   } = useThread();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
+
+  // Subagent task events over the thread-scoped WebSocket (WS-G). Additive to
+  // the SSE custom stream: the subtask FSM treats duplicate application as a
+  // no-op, and this path survives run end / reconnects, which is what lets a
+  // todo binding arrive even if the SSE window missed it.
+  const updateSubtaskForWs = useUpdateSubtask();
+  useThreadTaskEvents(threadId, updateSubtaskForWs);
 
   const {
     artifacts,

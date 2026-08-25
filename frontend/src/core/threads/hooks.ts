@@ -1,4 +1,4 @@
-import type { AIMessage, Message, Run } from "@langchain/langgraph-sdk";
+import type { Message, Run } from "@langchain/langgraph-sdk";
 import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import {
@@ -43,6 +43,10 @@ import {
   recordStateMerge,
   shouldArmWatchdog,
 } from "./stream-trace";
+import {
+  applyTaskEvent,
+  type TaskLifecycleEvent,
+} from "./task-events-ws";
 import { threadTokenUsageQueryKey } from "./token-usage";
 import type {
   AgentThread,
@@ -916,66 +920,12 @@ export function useThreadStream({
         event.type.startsWith("task_") &&
         "task_id" in event
       ) {
-        const e = event as {
-          type: string;
-          task_id: string;
-          message?: AIMessage;
-          description?: string;
-          result?: string;
-          error?: string;
-        };
-        switch (e.type) {
-          case "task_started":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "in_progress",
-                ...(e.description !== undefined
-                  ? { description: e.description }
-                  : {}),
-              },
-              "result",
-            );
-            return;
-          case "task_running":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "in_progress",
-                ...(e.message !== undefined
-                  ? { latestMessage: e.message }
-                  : {}),
-              },
-              "result",
-            );
-            return;
-          case "task_completed":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "completed",
-                ...(e.result !== undefined ? { result: e.result } : {}),
-              },
-              "result",
-            );
-            return;
-          // Cancelled and timed-out are failures as far as the card is
-          // concerned; the error string is what distinguishes them.
-          case "task_failed":
-          case "task_cancelled":
-          case "task_timed_out":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "failed",
-                ...(e.error ? { error: e.error } : {}),
-              },
-              "result",
-            );
-            return;
-          default:
-            break;
-        }
+        // The per-event handling is shared verbatim with the tasks WebSocket
+        // (core/threads/task-events-ws.ts) - one writer for both transports,
+        // so their semantics cannot drift. The FSM's authority rules make the
+        // double delivery a no-op.
+        applyTaskEvent(event as TaskLifecycleEvent, updateSubtask);
+        return;
       }
 
       // A second, independent "this subagent finished" signal, emitted by

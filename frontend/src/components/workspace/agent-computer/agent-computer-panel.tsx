@@ -143,14 +143,13 @@ export function AgentComputerPanel({
     mq.addEventListener("change", listener);
     return () => mq.removeEventListener("change", listener);
   }, []);
-  // Workspace state (C10 Batch 0): activity events, todos, task progress,
-  // verification, and the merged sandbox.log timeline come from the
-  // WorkspaceStateProvider mounted in chat-box.tsx.
+  // Workspace state (C10 Batch 0): activity events, todos, verification, and
+  // the merged sandbox.log timeline come from the WorkspaceStateProvider
+  // mounted in chat-box.tsx. (taskProgress left the checklist: its positional
+  // accounting is replaced by per-task todo bindings.)
   const {
-    activityEvents,
     mergedEvents,
     todos,
-    taskProgress,
     verifyResult,
     llmError,
   } = useWorkspaceState();
@@ -679,11 +678,7 @@ export function AgentComputerPanel({
       {/* ── Task checklist ── */}
       {todos.length > 0 && (
         <div className="border-border/50 shrink-0 border-t">
-          <TaskChecklist
-            todos={todos}
-            taskProgress={taskProgress}
-            activityEvents={activityEvents}
-          />
+          <TaskChecklist todos={todos} />
         </div>
       )}
     </motion.div>
