@@ -165,5 +165,12 @@ class TestComputerWsChannelContract:
         dev = _read(REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "dev_server.py")
         deps = _read(REPO_ROOT / "backend" / "app" / "gateway" / "deps.py")
         assert '"channel": "browser"' in deps, "gateway must tag dev-server events channel:browser"
-        assert '"channel": "workspace"' in deps, "gateway must tag observation events channel:workspace"
+        # Observation events now pass through the caller's channel instead of being
+        # hard-coded to "workspace", so terminal_stats / todos / etc. ride their own
+        # channel. The gateway must still default to "workspace" when the payload
+        # omits the channel field.
+        assert 'payload.get("channel") or "workspace"' in deps, (
+            "observation events must preserve their caller-supplied channel and fall "
+            "back to 'workspace' when none is supplied"
+        )
         assert "emit_dev_server_status" in dev, "dev_server must announce transitions"

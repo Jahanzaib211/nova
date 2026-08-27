@@ -291,7 +291,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             if thread_id:
                 computer_event_hub.publish_threadsafe(
                     str(thread_id),
-                    {"channel": "workspace", "kind": "observation", **payload},
+                    {"channel": payload.get("channel") or "workspace", "kind": "observation", **payload},
                 )
 
         add_dev_server_listener(_on_dev_server)
@@ -436,7 +436,6 @@ get_workspace_service: Callable[[Request], WorkspaceService] = _require("workspa
 get_browser_service: Callable[[Request], BrowserService] = _require("browser_service", "Browser service")
 get_terminal_service: Callable[[Request], TerminalService] = _require("terminal_service", "Terminal service")
 get_artifact_service: Callable[[Request], ArtifactService] = _require("artifact_service", "Artifact service")
-get_health_service: Callable[[Request], HealthService] = _require("health_service", "Health service")
 get_recovery_service: Callable[[Request], RecoveryService] = _require("recovery_service", "Recovery service")
 get_execution_kernel: Callable[[Request], Any] = _require("execution_kernel", "Execution kernel")
 
