@@ -182,6 +182,48 @@ class TestTasksWsLocation:
         assert int(match.group(1)) >= 600, f"{name}: task sockets idle between subagents; a short timeout kills them"
 
 
+COMPUTER_WS_LOCATION = "location ~ ^/api/threads/[^/]+/computer-ws$"
+
+
+class TestComputerWsLocation:
+    """The multiplexed Agent's Computer feed (task_* + browser + workspace channels).
+
+    The frontend migrated from ``tasks-ws`` to ``computer-ws`` while the
+    nginx configs only carried a ``tasks-ws`` location. The generic
+    ``/api/threads`` catch-all sets no ``Upgrade`` header, so every browser
+    attempt to open ``/api/threads/{id}/computer-ws`` returns 400 (logged
+    as 404 on the gateway) — subagent cards never receive status updates,
+    the Browser tab stays blank, and the Activity timeline never gets
+    fresh events. ``make dev`` (no nginx) and the static-demo mode hide
+    this entirely. Same asymmetry that hid tasks-ws initially.
+    """
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_location_exists(self, name: str) -> None:
+        assert COMPUTER_WS_LOCATION in _read(name), f"{name}: computer-ws needs its own location — frontend WS-G returns 400 without it"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_supports_websocket_upgrade(self, name: str) -> None:
+        body = _location_body(_read(name), COMPUTER_WS_LOCATION)
+        assert "Upgrade $http_upgrade" in body.replace("  ", " "), f"{name}: no Upgrade header on computer-ws"
+        assert "Connection $connection_upgrade" in body.replace("  ", " "), f"{name}: no Connection upgrade on computer-ws"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_ordered_before_the_general_threads_location(self, name: str) -> None:
+        text = _read(name)
+        general = "location ~ ^/api/threads {"
+        if general not in text:
+            pytest.skip(f"{name} has no general /api/threads regex location")
+        assert text.index(COMPUTER_WS_LOCATION) < text.index(general), f"{name}: computer-ws location must precede the general /api/threads location or it never matches"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_long_read_timeout_for_idle_sockets(self, name: str) -> None:
+        body = _location_body(_read(name), COMPUTER_WS_LOCATION)
+        match = re.search(r"proxy_read_timeout\s+(\d+)s", body)
+        assert match is not None, f"{name}: computer-ws has no read timeout override"
+        assert int(match.group(1)) >= 600, f"{name}: computer sockets idle between events; a short timeout kills them"
+
+
 class TestGlobalPostureUnchanged:
     """The fix must not weaken the app shell's own headers."""
 
