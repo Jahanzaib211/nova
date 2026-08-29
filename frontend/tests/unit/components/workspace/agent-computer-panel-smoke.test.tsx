@@ -82,18 +82,19 @@ function renderPanel(
 }
 
 describe("AgentComputerPanel smoke", () => {
-  test("renders the panel chrome with all seven tabs", () => {
+  test("renders the panel chrome with all eight tabs", () => {
     const html = renderPanel(makeThreadContext());
     for (const tab of [
       "Files",
       "Terminal",
-      "Editor",
+      "Viewer",
       "Browser",
       "Activity",
       "Review",
       // The panel header has always said "Recon — private web access"; the tab
       // button said "Privacy", so the same feature had two names.
       "Recon",
+      "Audit",
     ]) {
       expect(html).toContain(tab);
     }

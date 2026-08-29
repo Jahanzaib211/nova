@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   classifyToolWork,
   isActivityTool,
-  isEditorTool,
   isTerminalTool,
+  isViewerTool,
 } from "@/core/threads/tool-surface";
 
 /**
@@ -124,27 +124,25 @@ describe("tool surface partition", () => {
   });
 });
 
-describe("editor focus", () => {
-  it("focuses the Editor for writes, edits and scaffolding", () => {
+describe("viewer focus", () => {
+  it("focuses the Viewer for writes, edits and scaffolding", () => {
     for (const name of ["write_file", "str_replace", "scaffold_project"]) {
-      expect(isEditorTool(name), `${name} should focus Editor`).toBe(true);
+      expect(isViewerTool(name), `${name} should focus Viewer`).toBe(true);
     }
   });
 
-  it("does not focus Editor for terminal-only or unknown tools", () => {
+  it("does not focus Viewer for terminal-only or unknown tools", () => {
     for (const name of ["bash", "read_file", "shell_session", "task", "ls"]) {
-      expect(isEditorTool(name), `${name} should not focus Editor`).toBe(false);
+      expect(isViewerTool(name), `${name} should not focus Viewer`).toBe(false);
     }
   });
 
-  it("never focuses Editor for a partial tool call", () => {
-    expect(
-      isEditorTool(undefined as unknown as string),
-    ).toBe(false);
+  it("never focuses Viewer for a partial tool call", () => {
+    expect(isViewerTool(undefined as unknown as string)).toBe(false);
   });
 
-  it("keeps editor tools on the Terminal surface", () => {
-    // Focus is orthogonal to the partition: an editor write's output still
+  it("keeps viewer tools on the Terminal surface", () => {
+    // Focus is orthogonal to the partition: a viewer write's output still
     // logs to Terminal once done.
     for (const name of ["write_file", "str_replace"]) {
       expect(isTerminalTool(name), `${name} stays Terminal-surface`).toBe(true);

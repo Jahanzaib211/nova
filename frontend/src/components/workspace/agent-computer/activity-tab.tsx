@@ -28,10 +28,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
 import { useCompletedTodoBindings } from "@/core/tasks/context";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import {
-  classifyToolWork,
-  isActivityTool,
-} from "@/core/threads/tool-surface";
+import { classifyToolWork, isActivityTool } from "@/core/threads/tool-surface";
 import type { Todo } from "@/core/todos";
 import {
   useWorkspaceEvents,
@@ -42,7 +39,7 @@ import { cn } from "@/lib/utils";
 // Tab 4: Activity — compact event cards + Files tree
 // ──────────────────────────────────────────────────────────
 // Icon/color per work kind, from the shared classifier. The previous private
- // tool-name list drifted silently — unknown tools fell to the default icon,
+// tool-name list drifted silently — unknown tools fell to the default icon,
 // which is invisible in the UI and was exactly the pre-2026-08-21 failure
 // shape (see core/threads/tool-surface.ts).
 function getToolMeta(type: string): { icon: React.ReactNode; color: string } {
@@ -158,7 +155,10 @@ function ActivityEventCard({
 // event emitted by the backend's auto-verify-on-present_files gate.
 
 /** Known LLM-error reasons → localized cause text. */
-const LLM_ERROR_REASONS: Record<string, (t: ReturnType<typeof useI18n>["t"]) => string> = {
+const LLM_ERROR_REASONS: Record<
+  string,
+  (t: ReturnType<typeof useI18n>["t"]) => string
+> = {
   quota: (t) => t.agentComputer.llmError.quota,
   auth: (t) => t.agentComputer.llmError.auth,
   busy: (t) => t.agentComputer.llmError.busy,
@@ -178,9 +178,7 @@ export function LlmErrorBadge({ event }: { event: LlmError }) {
   // i18n: these were hardcoded English; the reasons map keeps known causes
   // specific and everything else falls to a generic line.
   const reasonFn = LLM_ERROR_REASONS[reason];
-  const reasonText = reasonFn
-    ? reasonFn(t)
-    : t.agentComputer.llmError.generic;
+  const reasonText = reasonFn ? reasonFn(t) : t.agentComputer.llmError.generic;
   const label = `${t.agentComputer.llmError.prefix}: ${reasonText}`;
   return (
     <div
@@ -366,11 +364,7 @@ export function ActivityPanel({
 // ──────────────────────────────────────────────────────────
 // Task checklist
 // ──────────────────────────────────────────────────────────
-export function TaskChecklist({
-  todos,
-}: {
-  todos: Todo[];
-}) {
+export function TaskChecklist({ todos }: { todos: Todo[] }) {
   const { t } = useI18n();
   // Todo rows a COMPLETED subagent settled, bound by index from the backend's
   // task events. The old enrichment struck the FIRST N rows by count of done

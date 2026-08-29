@@ -1079,9 +1079,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
             # surface for raw-bash dev servers, so its pages need the shim
             # aimed at the absproxy-ws mount or their sockets reconnect-loop.
             if "<head>" in html:
-                html = _inject_ws_shim(
-                    html, f"/api/sandbox/absproxy-ws/{thread_id}/{port}", prefix
-                )
+                html = _inject_ws_shim(html, f"/api/sandbox/absproxy-ws/{thread_id}/{port}", prefix)
             content = html.encode("utf-8")
             resp_headers.pop("content-length", None)
             resp_headers.pop("Content-Length", None)
@@ -1173,6 +1171,7 @@ def _inject_ws_shim(html: str, ws_prefix: str, base_prefix: str = "") -> str:
     needs_base = bool(base_prefix) and "<base " not in html
     injected = f'<head><base href="{base_prefix}/">{shim}' if needs_base else f"<head>{shim}"
     return html.replace("<head>", injected, 1)
+
 
 # Null bytes are not valid in HTML, so this cannot collide with real content.
 _PREFIX_HIDDEN = "\x00prefix\x00"
@@ -1541,11 +1540,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
             # surface's -ws mount. Without it the page loads but hot reload
             # silently reconnect-loops forever.
             if "<head>" in html:
-                ws_prefix = (
-                    f"/api/sandbox/lpreview-ws/{thread_id}/{label}"
-                    if label != DEFAULT_LABEL
-                    else f"/api/sandbox/preview-ws/{thread_id}"
-                )
+                ws_prefix = f"/api/sandbox/lpreview-ws/{thread_id}/{label}" if label != DEFAULT_LABEL else f"/api/sandbox/preview-ws/{thread_id}"
                 html = _inject_ws_shim(html, ws_prefix, prefix)
             content = html.encode("utf-8")
         except Exception:
@@ -1601,22 +1596,22 @@ async def proxy_appview_ws(websocket: WebSocket, thread_id: str, path: str):
     opens a same-origin socket here and the gateway relays it into the container,
     so the live terminal and VNC panes work on deployments where the container's
     published port is not reachable from the browser at all."""
-    if not _ws_same_origin(websocket):
+    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
+
+    if not ws_same_origin(websocket):
         await websocket.close(code=1008)
         return
     # The auth middleware never runs for WebSocket scope (BaseHTTPMiddleware is
     # skipped), so authenticate from the session cookie and stamp the contextvar
     # before the ownership check — otherwise it resolves to DEFAULT_USER_ID and
     # every real user is rejected.
-    from app.gateway.ws_guards import ws_user
-
     user = await ws_user(websocket)
     if user is None:
         await websocket.close(code=1008)
         return
     token = set_current_user(user)
     try:
-        if not _caller_owns_thread(thread_id):
+        if not await ws_caller_owns_thread(websocket, thread_id):
             await websocket.close(code=1008)
             return
         _mark_sandbox_active(thread_id)
@@ -1643,18 +1638,18 @@ async def proxy_absproxy_ws(websocket: WebSocket, thread_id: str, port: int, pat
     cannot drift between the two. If the in-container relay refuses an upgrade
     for some port, the socket closes here and the page degrades to what it did
     before this route existed (no hot reload), never to broken content."""
-    if not _ws_same_origin(websocket):
+    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
+
+    if not ws_same_origin(websocket):
         await websocket.close(code=1008)
         return
-    from app.gateway.ws_guards import ws_user
-
     user = await ws_user(websocket)
     if user is None:
         await websocket.close(code=1008)
         return
     token = set_current_user(user)
     try:
-        if not _caller_owns_thread(thread_id):
+        if not await ws_caller_owns_thread(websocket, thread_id):
             await websocket.close(code=1008)
             return
         _mark_sandbox_active(thread_id)
@@ -1664,24 +1659,11 @@ async def proxy_absproxy_ws(websocket: WebSocket, thread_id: str, port: int, pat
 
         parts = urlsplit(base_url)
         query = websocket.url.query
-        upstream_url = f"ws://{parts.netloc}/absproxy/{port}/{path}" + (
-            f"?{query}" if query else ""
-        )
+        upstream_url = f"ws://{parts.netloc}/absproxy/{port}/{path}" + (f"?{query}" if query else "")
         await websocket.accept()
         await _bridge_ws(websocket, upstream_url)
     finally:
         reset_current_user(token)
-
-
-def _ws_same_origin(websocket: WebSocket) -> bool:
-    """Anti cross-site-WebSocket-hijacking: only accept same-origin handshakes.
-
-    Delegates to the shared implementation so this router and the voice router
-    cannot drift apart on an admission check.
-    """
-    from app.gateway.ws_guards import ws_same_origin
-
-    return ws_same_origin(websocket)
 
 
 async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:
@@ -1754,14 +1736,14 @@ async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:
 async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str, path: str):
     """Bridge the browser's HMR WebSocket to the dev server's WS so the live
     preview hot-reloads when the agent edits files."""
-    if not _ws_same_origin(websocket):
+    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
+
+    if not ws_same_origin(websocket):
         await websocket.close(code=1008)
         return
 
     # Authenticate (the auth middleware never runs for ws scope) and stamp the
     # contextvar so the ownership check below sees the real caller.
-    from app.gateway.ws_guards import ws_user
-
     user = await ws_user(websocket)
     if user is None:
         await websocket.close(code=1008)
@@ -1774,7 +1756,7 @@ async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str,
             return
 
         # Cross-tenant check — refuse if the caller doesn't own this thread.
-        if not _caller_owns_thread(thread_id):
+        if not await ws_caller_owns_thread(websocket, thread_id):
             await websocket.close(code=1008)
             return
         _mark_sandbox_active(thread_id)

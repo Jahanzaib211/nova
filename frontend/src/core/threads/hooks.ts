@@ -43,10 +43,7 @@ import {
   recordStateMerge,
   shouldArmWatchdog,
 } from "./stream-trace";
-import {
-  applyTaskEvent,
-  type TaskLifecycleEvent,
-} from "./task-events-ws";
+import { applyTaskEvent, type TaskLifecycleEvent } from "./task-events-ws";
 import { threadTokenUsageQueryKey } from "./token-usage";
 import type {
   AgentThread,
@@ -1732,10 +1729,7 @@ export function useThreadStream({
           const tid = threadIdRef.current ?? "";
           if (tid) {
             const prev = queuedSteerMessages.get(tid);
-            queuedSteerMessages.set(
-              tid,
-              prev ? `${prev}\n\n${text}` : text,
-            );
+            queuedSteerMessages.set(tid, prev ? `${prev}\n\n${text}` : text);
             toast.info(t.common.agentBusy);
             return;
           }

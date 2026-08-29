@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FilesIcon, LaptopIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
+import { toast } from "sonner";
 
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,7 @@ import {
   useSupersedeStaleSubtasks,
   useUpdateSubtask,
 } from "@/core/tasks/context";
-import {
-  useComputerEvents,
-} from "@/core/threads/task-events-ws";
+import { useComputerEvents } from "@/core/threads/task-events-ws";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -101,8 +100,8 @@ const ChatBox: React.FC<{
   const liveToolCallIds = useMemo(() => {
     const ids = new Set<string>();
     for (const m of thread.messages) {
-      for (const tc of (m as { tool_calls?: Array<{ id?: string }> }).tool_calls ??
-        []) {
+      for (const tc of (m as { tool_calls?: Array<{ id?: string }> })
+        .tool_calls ?? []) {
         if (tc.id) ids.add(tc.id);
       }
     }
@@ -114,6 +113,20 @@ const ChatBox: React.FC<{
   const queryClient = useQueryClient();
   useComputerEvents(threadId, {
     updateSubtask: updateSubtaskForWs,
+    // The panel's live socket carries subagent status, todo bindings, dev-server
+    // pushes and terminal counts. When the session dies it cannot reconnect, and
+    // the REST/SSE legs keep rendering just enough that the panel looks alive —
+    // so without this the whole live half goes missing with no signal at all.
+    onAuthExpired: () => {
+      toast.error(t.workspace.sessionExpiredTitle, {
+        description: t.workspace.sessionExpiredDescription,
+        duration: Infinity,
+        action: {
+          label: t.workspace.sessionExpiredAction,
+          onClick: () => window.location.reload(),
+        },
+      });
+    },
     // Dev-server transitions arrive as push: refresh the caches the panel's
     // Browser tab reads instead of waiting for the next poll interval.
     onDevServer: () => {
@@ -130,11 +143,7 @@ const ChatBox: React.FC<{
     // kept showing an early render until its poll happened to catch up.
     onObservation: (event) => {
       const tool = event.tool;
-      if (
-        tool === "write_file" ||
-        tool === "str_replace" ||
-        tool === "bash"
-      ) {
+      if (tool === "write_file" || tool === "str_replace" || tool === "bash") {
         void queryClient.invalidateQueries({
           queryKey: ["sandbox", "live-file", threadId],
         });
@@ -147,7 +156,11 @@ const ChatBox: React.FC<{
           queryKey: ["sandbox", "browser-check-last", threadId],
         });
       }
-      if (tool === "dev_verify" || tool === "present_files" || tool === "code_review") {
+      if (
+        tool === "dev_verify" ||
+        tool === "present_files" ||
+        tool === "code_review"
+      ) {
         void queryClient.invalidateQueries({
           queryKey: ["sandbox", "review", threadId],
         });
@@ -162,7 +175,10 @@ const ChatBox: React.FC<{
     // query cache: getQueryData is not reactive, so the header never
     // re-rendered on arrival.
     onTerminalStats: (stat) => {
-      queryClient.setQueryData(["terminal-stats", threadId], stat.total_commands);
+      queryClient.setQueryData(
+        ["terminal-stats", threadId],
+        stat.total_commands,
+      );
       setTerminalCommandCount(stat.total_commands);
     },
   });

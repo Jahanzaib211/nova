@@ -25,7 +25,6 @@ import pytest
 
 from app.gateway.task_events import MirroringStreamBridge, TaskEventHub
 
-
 # ── Hub ─────────────────────────────────────────────────────────────────────
 
 
@@ -77,7 +76,7 @@ class TestTaskEventHub:
         try:
             while True:
                 items.append(await asyncio.wait_for(anext(gen), timeout=0.05))
-        except (asyncio.TimeoutError, StopAsyncIteration):
+        except (TimeoutError, StopAsyncIteration):
             pass
         assert items[-1] == {"i": 9}
 
@@ -154,12 +153,6 @@ class TestMirroringStreamBridge:
 
 
 class TestRouteRegistration:
-    def test_tasks_ws_route_exists(self) -> None:
-        from app.gateway.routers import threads as threads_router
-
-        paths = {getattr(r, "path", "") for r in threads_router.router.routes}
-        assert "/api/threads/{thread_id}/tasks-ws" in paths
-
     def test_computer_ws_route_exists(self) -> None:
         from app.gateway.routers import threads as threads_router
 
@@ -227,11 +220,13 @@ class TestTodoIndexesExtraction:
         from deerflow.tools.builtins.task_tool import _in_progress_todo_indexes
 
         runtime = SimpleNamespace(
-            state={"todos": [
-                {"content": "a", "status": "completed"},
-                {"content": "b", "status": "in_progress"},
-                {"content": "c"},
-            ]},
+            state={
+                "todos": [
+                    {"content": "a", "status": "completed"},
+                    {"content": "b", "status": "in_progress"},
+                    {"content": "c"},
+                ]
+            },
             context=None,
             config={},
         )

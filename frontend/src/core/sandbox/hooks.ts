@@ -315,10 +315,6 @@ export type AuditEvent = {
   output?: string;
 };
 
-/**
- * Unwired: there is no Audit tab component. /api/sandbox/audit is live and
- * this polls it every 4s, but nothing renders the result.
- */
 export function useSandboxAudit(
   threadId: string | null,
   enabled = true,
@@ -713,38 +709,40 @@ export function useLiveFileContent(
   path: string | null,
   enabled: boolean,
 ): { content: string; exists: boolean; lineCount: number; isLoading: boolean } {
-  const { data, isPending } = useQuery<{ content: string; exists: boolean; size: number }>(
-    {
-      queryKey: ["sandbox", "live-file", threadId, path],
-      queryFn: async () => {
-        if (!threadId || !path) return { content: "", exists: false, size: 0 };
-        const res = await fetch(
-          `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
-          { method: "GET", headers: { "Content-Type": "application/json" } },
-        );
-        if (!res.ok) {
-          // Surface transport failures as "missing" instead of letting
-          // res.json() throw and leave the query stuck on stale data.
-          const warnKey = `${threadId}:${path}:${res.status}`;
-          if (!warnedFilePaths.has(warnKey)) {
-            warnedFilePaths.add(warnKey);
-            console.warn(
-              `[nova] sandbox file read failed (${res.status}) for ${path}`,
-            );
-          }
-          return { content: "", exists: false, size: 0 };
+  const { data, isPending } = useQuery<{
+    content: string;
+    exists: boolean;
+    size: number;
+  }>({
+    queryKey: ["sandbox", "live-file", threadId, path],
+    queryFn: async () => {
+      if (!threadId || !path) return { content: "", exists: false, size: 0 };
+      const res = await fetch(
+        `${getBackendBaseURL()}/api/sandbox/file?thread_id=${encodeURIComponent(threadId)}&path=${encodeURIComponent(path)}`,
+        { method: "GET", headers: { "Content-Type": "application/json" } },
+      );
+      if (!res.ok) {
+        // Surface transport failures as "missing" instead of letting
+        // res.json() throw and leave the query stuck on stale data.
+        const warnKey = `${threadId}:${path}:${res.status}`;
+        if (!warnedFilePaths.has(warnKey)) {
+          warnedFilePaths.add(warnKey);
+          console.warn(
+            `[nova] sandbox file read failed (${res.status}) for ${path}`,
+          );
         }
-        return res.json() as Promise<{
-          content: string;
-          exists: boolean;
-          size: number;
-        }>;
-      },
-      enabled: enabled && Boolean(threadId) && Boolean(path),
-      refetchInterval: enabled ? 1000 : false,
-      refetchIntervalInBackground: false,
+        return { content: "", exists: false, size: 0 };
+      }
+      return res.json() as Promise<{
+        content: string;
+        exists: boolean;
+        size: number;
+      }>;
     },
-  );
+    enabled: enabled && Boolean(threadId) && Boolean(path),
+    refetchInterval: enabled ? 1000 : false,
+    refetchIntervalInBackground: false,
+  });
 
   const content = data?.content ?? "";
   return {

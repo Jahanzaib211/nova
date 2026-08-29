@@ -797,7 +797,16 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
     public_url = os.environ.get("CLOUDFLARE_TUNNEL_URL", public_url).strip()
     t0 = time.perf_counter()
 
-    # Layer 1: systemd unit must be active.
+    # Layer 1: the local connector must be running — under systemd *or* PM2.
+    #
+    # This probe used to demand `cloudflared-nova.service`, but that unit was
+    # never installed on this host: the tunnel runs as the PM2 app `tunnel-nova`
+    # (see ecosystem.config.js). Layer 1 was therefore permanently red, so the
+    # whole probe got switched off — and with P1/P2/P3 all terminating at
+    # localhost:2026, nothing was left watching the public hostname at all. A
+    # check that only recognises one deployment shape gets disabled rather than
+    # fixed, and takes its layer-2 coverage down with it.
+    connector = ""
     try:
         proc = subprocess.run(
             ["systemctl", "is-active", "cloudflared-nova.service"],
@@ -805,17 +814,31 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
             text=True,
             timeout=5,
         )
-        systemd_state = proc.stdout.strip() if proc.returncode == 0 else "inactive"
-        systemd_green = proc.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        systemd_state = f"err:{type(e).__name__}"
-        systemd_green = False
+        if proc.returncode == 0:
+            connector = "systemd=active"
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
 
-    if not systemd_green:
+    if not connector:
+        try:
+            proc = subprocess.run(
+                ["pm2", "jlist"], capture_output=True, text=True, timeout=15
+            )
+            if proc.returncode == 0:
+                for app in json.loads(proc.stdout or "[]"):
+                    if app.get("name") == "tunnel-nova" and (
+                        app.get("pm2_env", {}).get("status") == "online"
+                    ):
+                        connector = "pm2=online"
+                        break
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            pass
+
+    if not connector:
         return ProbeResult(
             "P12_tunnel",
             Status.RED,
-            f"systemd={systemd_state}",
+            "no cloudflared connector (systemd inactive and tunnel-nova not online)",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -824,7 +847,7 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
         return ProbeResult(
             "P12_tunnel",
             Status.GREEN,
-            "systemd=active (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
+            f"{connector} (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -836,20 +859,20 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
             return ProbeResult(
                 "P12_tunnel",
                 Status.RED,
-                f"systemd=active edge={public_url} HTTP {res.status_code}",
+                f"{connector} edge={public_url} HTTP {res.status_code}",
                 latency,
             )
         return ProbeResult(
             "P12_tunnel",
             Status.GREEN,
-            f"systemd=active edge HTTP 200 {latency:.0f}ms",
+            f"{connector} edge HTTP 200 {latency:.0f}ms",
             latency,
         )
     except Exception as e:
         return ProbeResult(
             "P12_tunnel",
             Status.RED,
-            f"systemd=active edge={type(e).__name__}",
+            f"{connector} edge={type(e).__name__}",
             (time.perf_counter() - t0) * 1000,
         )
 

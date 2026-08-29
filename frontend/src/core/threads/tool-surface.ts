@@ -12,8 +12,8 @@
  *      one. The failure mode is silent by construction: a misclassified event
  *      goes to the other tab rather than disappearing, so nothing errors.
  *
- *   2. Focus    (`isEditorTool`) — which tab a *running* tool should bring to
- *      the front. This is about user attention, not the partition: editor
+ *   2. Focus    (`isViewerTool`) — which tab a *running* tool should bring to
+ *      the front. This is about user attention, not the partition: viewer
  *      tools are also Terminal-surface events (their output is logged like
  *      shell work), but while one is streaming the user wants the Editor.
  *
@@ -49,7 +49,7 @@ const TERMINAL_TOOL_NAMES: ReadonlySet<string> = new Set([
 const TERMINAL_TOOL_PREFIXES: readonly string[] = ["shell_"];
 
 /**
- * Tools whose *streaming* should put the Editor tab in front. A superset of
+ * Tools whose *streaming* should put the Viewer tab in front. A superset of
  * nothing: these are all Terminal-surface events too (see above) — this set
  * only answers "which tab does the user want to watch right now".
  */
@@ -128,7 +128,7 @@ export function isActivityTool(name: string): boolean {
 }
 
 /** Which tab a running tool should focus, or null when no switch is due. */
-export function isEditorTool(name: string): boolean {
+export function isViewerTool(name: string): boolean {
   return typeof name === "string" && EDITOR_FOCUS_TOOLS.has(name);
 }
 

@@ -148,13 +148,23 @@ function openStream(threadId: string | null): void {
     return;
   }
   if (perThread.size >= MAX_TRACKED_THREADS) {
-    // Evict an arbitrary idle entry (no active streams) to stay bounded.
+    // Evict the least-recently-used idle entry (no active streams) to stay
+    // bounded. Falls back to the oldest entry if every thread is active.
+    let lruKey: string | null = null;
+    let lruTime = Infinity;
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
     for (const [key, value] of perThread) {
-      if (value.activeStreams <= 0) {
-        perThread.delete(key);
-        break;
+      if (value.activeStreams <= 0 && value.lastByteAt < lruTime) {
+        lruTime = value.lastByteAt;
+        lruKey = key;
+      }
+      if (value.lastByteAt < oldestTime) {
+        oldestTime = value.lastByteAt;
+        oldestKey = key;
       }
     }
+    perThread.delete(lruKey ?? oldestKey!);
   }
   perThread.set(threadId, { activeStreams: 1, lastByteAt: now() });
 }

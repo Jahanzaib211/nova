@@ -10,6 +10,7 @@ import {
   GithubIcon,
   GlobeIcon,
   PencilIcon,
+  ScrollTextIcon,
   SquareTerminalIcon,
   ShieldIcon,
   XIcon,
@@ -35,13 +36,11 @@ import {
   useStartPreview,
   type SandboxFile,
 } from "@/core/sandbox/hooks";
-import {
-  isEditorTool,
-  isTerminalTool,
-} from "@/core/threads/tool-surface";
+import { isTerminalTool, isViewerTool } from "@/core/threads/tool-surface";
 import { cn } from "@/lib/utils";
 
 import { ActivityPanel, LlmErrorBadge, TaskChecklist } from "./activity-tab";
+import { AuditPanel } from "./audit-tab";
 import { Browser } from "./browser-tab";
 import { Editor } from "./editor-tab";
 import { FilesPanel } from "./files-tab";
@@ -56,11 +55,12 @@ import { useWorkspaceState } from "./workspace-state";
 type PanelTab =
   | "files"
   | "terminal"
-  | "editor"
+  | "viewer"
   | "browser"
   | "activity"
   | "review"
-  | "privacy";
+  | "privacy"
+  | "audit";
 
 function TabBtn({
   active,
@@ -150,12 +150,7 @@ export function AgentComputerPanel({
   // the merged sandbox.log timeline come from the WorkspaceStateProvider
   // mounted in chat-box.tsx. (taskProgress left the checklist: its positional
   // accounting is replaced by per-task todo bindings.)
-  const {
-    mergedEvents,
-    todos,
-    verifyResult,
-    llmError,
-  } = useWorkspaceState();
+  const { mergedEvents, todos, verifyResult, llmError } = useWorkspaceState();
   const effectiveVerifyResult = verifyResult;
   const effectiveLlmError = llmError;
   const files = useSandboxFiles(threadId);
@@ -180,8 +175,7 @@ export function AgentComputerPanel({
     }
     return null;
   }, [mergedEvents]);
-  const derivedFilePath =
-    activeWriteFilePath ?? msgFilePath ?? lastWritePath;
+  const derivedFilePath = activeWriteFilePath ?? msgFilePath ?? lastWritePath;
   const activeEdit = useMemo(() => getActiveEdit(messages), [messages]);
 
   // Session-storage persisted preview path
@@ -247,8 +241,8 @@ export function AgentComputerPanel({
     if (!currentTool) return;
     if (currentTool === "start_dev_server") {
       autoSwitchTab("browser");
-    } else if (isEditorTool(currentTool)) {
-      autoSwitchTab("editor");
+    } else if (isViewerTool(currentTool)) {
+      autoSwitchTab("viewer");
     } else if (isTerminalTool(currentTool)) {
       autoSwitchTab("terminal");
     }
@@ -532,11 +526,11 @@ export function AgentComputerPanel({
           )}
         </TabBtn>
         <TabBtn
-          active={activeTab === "editor"}
-          onClick={() => selectTabManually("editor")}
+          active={activeTab === "viewer"}
+          onClick={() => selectTabManually("viewer")}
         >
           <PencilIcon className="h-3 w-3" />
-          {t.agentComputer.tabs.editor}
+          {t.agentComputer.tabs.viewer}
         </TabBtn>
         <TabBtn
           active={activeTab === "browser"}
@@ -565,6 +559,13 @@ export function AgentComputerPanel({
         >
           <ShieldIcon className="h-3 w-3" />
           {t.agentComputer.tabs.privacy}
+        </TabBtn>
+        <TabBtn
+          active={activeTab === "audit"}
+          onClick={() => selectTabManually("audit")}
+        >
+          <ScrollTextIcon className="h-3 w-3" />
+          {t.agentComputer.tabs.audit}
         </TabBtn>
       </div>
 
@@ -610,10 +611,10 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Editor" resetKeys={[threadId]}>
+        <AgentComputerErrorBoundary tabName="Viewer" resetKeys={[threadId]}>
           <div
-            data-tab="editor"
-            className={cn("h-full", activeTab !== "editor" && "hidden")}
+            data-tab="viewer"
+            className={cn("h-full", activeTab !== "viewer" && "hidden")}
           >
             <Editor
               threadId={threadId}
@@ -621,7 +622,7 @@ export function AgentComputerPanel({
               isWriting={
                 currentTool === "write_file" || currentTool === "str_replace"
               }
-              activeTab={activeTab === "editor"}
+              activeTab={activeTab === "viewer"}
               activeEdit={activeEdit}
             />
           </div>
@@ -686,6 +687,18 @@ export function AgentComputerPanel({
             <PrivacyPanel
               threadId={threadId}
               active={activeTab === "privacy"}
+            />
+          </div>
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary tabName="Audit" resetKeys={[threadId]}>
+          <div
+            data-tab="audit"
+            className={cn("h-full", activeTab !== "audit" && "hidden")}
+          >
+            <AuditPanel
+              threadId={threadId}
+              active={activeTab === "audit"}
             />
           </div>
         </AgentComputerErrorBoundary>

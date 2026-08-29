@@ -82,12 +82,18 @@ export function ReviewPanel({
         cls: "text-red-400",
       }
     : !review
-      ? { text: t.agentComputer.review.generating, cls: "text-muted-foreground" }
+      ? {
+          text: t.agentComputer.review.generating,
+          cls: "text-muted-foreground",
+        }
       : high > 0
         ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
         : med > 0
           ? { text: t.agentComputer.review.mostlyFine, cls: "text-orange-400" }
-          : { text: t.agentComputer.review.looksClean, cls: "text-emerald-400" };
+          : {
+              text: t.agentComputer.review.looksClean,
+              cls: "text-emerald-400",
+            };
 
   return (
     <div className="flex h-full flex-col">

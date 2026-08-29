@@ -10,8 +10,6 @@ describe("subagent binding", () => {
   it("is unconditional, not mode-coupled", () => {
     const src = readFileSync("src/core/threads/hooks.ts", "utf-8");
     expect(src).toMatch(/subagent_enabled:\s*true,/);
-    expect(src).not.toMatch(
-      /subagent_enabled:\s*\n?\s*context\.mode\s*===/,
-    );
+    expect(src).not.toMatch(/subagent_enabled:\s*\n?\s*context\.mode\s*===/);
   });
 });

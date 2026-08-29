@@ -191,6 +191,9 @@ export interface Translations {
     logout: string;
     gatewayUnavailable: string;
     gatewayUnavailableRetrying: string;
+    sessionExpiredTitle: string;
+    sessionExpiredDescription: string;
+    sessionExpiredAction: string;
   };
 
   // Conversation
@@ -648,7 +651,7 @@ export interface Translations {
     thinking: string;
     usingTerminal: string;
     usingBrowser: string;
-    usingEditor: string;
+    usingViewer: string;
     taskProgress: string;
     noLogs: string;
     close: string;
@@ -673,11 +676,12 @@ export interface Translations {
     tabs: {
       files: string;
       terminal: string;
-      editor: string;
+      viewer: string;
       browser: string;
       activity: string;
       review: string;
       privacy: string;
+      audit: string;
     };
     files: {
       empty: string;
@@ -714,7 +718,7 @@ export interface Translations {
     };
     status: {
       writing: (filename: string, lines?: string) => string;
-      usingEditor: string;
+      usingViewer: string;
       editing: (filename: string) => string;
       reading: (filename: string) => string;
       usingTerminal: string;
@@ -740,7 +744,7 @@ export interface Translations {
       shellDisconnected: string;
       counts: (total: number, running: number) => string;
     };
-    editor: {
+    viewer: {
       startWriting: string;
       fileNotWritten: string;
       emptyFile: string;
@@ -781,9 +785,9 @@ export interface Translations {
         code: string;
       };
       projectLabel: (type: string) => string;
-      switchToEditor: string;
-      switchToEditorPrefix: string;
-      switchToEditorSuffix: string;
+      switchToViewer: string;
+      switchToViewerPrefix: string;
+      switchToViewerSuffix: string;
       startLivePreview: string;
       fileMissing: (name: string) => string;
       fileEmpty: (name: string) => string;

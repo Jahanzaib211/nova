@@ -70,7 +70,7 @@ class DevServerHandle:
     _watchdog_task: asyncio.Task | None = None  # port-readiness watchdog (local + AIO)
 
 
-def _notify_dev_server_status(handle: "DevServerHandle") -> None:
+def _notify_dev_server_status(handle: DevServerHandle) -> None:
     """Announce a status transition to registered listeners (gateway WS).
 
     Non-fatal by contract: listener failures are contained inside the emitter.

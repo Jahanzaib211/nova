@@ -142,14 +142,20 @@ class TestWsSameOriginGuard:
         return SimpleNamespace(headers=headers)
 
     def test_matching_origin_allowed(self) -> None:
-        assert sandbox_router._ws_same_origin(self._ws("https://nova.example", "nova.example")) is True
+        from app.gateway.ws_guards import ws_same_origin
+
+        assert ws_same_origin(self._ws("https://nova.example", "nova.example")) is True
 
     def test_foreign_origin_rejected(self) -> None:
-        assert sandbox_router._ws_same_origin(self._ws("https://evil.example", "nova.example")) is False
+        from app.gateway.ws_guards import ws_same_origin
+
+        assert ws_same_origin(self._ws("https://evil.example", "nova.example")) is False
 
     def test_absent_origin_allowed(self) -> None:
         """Non-browser clients omit Origin; the thread-ownership check still applies."""
-        assert sandbox_router._ws_same_origin(self._ws(None, "nova.example")) is True
+        from app.gateway.ws_guards import ws_same_origin
+
+        assert ws_same_origin(self._ws(None, "nova.example")) is True
 
 
 class TestFramedCsp:

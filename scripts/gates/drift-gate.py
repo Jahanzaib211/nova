@@ -195,6 +195,26 @@ def check_frontend_build_freshness() -> dict:
             "compiling the image's baked copy, so your edits are invisible",
         )
 
+    # `next start` reads .next/BUILD_ID once at boot and refuses to start
+    # without it ("Could not find a production build"). An interrupted build
+    # leaves the rest of .next rewritten but never writes that file, which is a
+    # uniquely nasty state: the already-running server keeps serving from memory
+    # while the *next* restart — or reboot — fails outright, and the lazily
+    # loaded route chunks it points at have already been deleted from disk, so
+    # the workspace dies with a ChunkLoadError while `/` still returns 200 and
+    # every HTTP probe stays green. That is not a heuristic; the file is either
+    # there or the container cannot come back. Checked before the image-hash
+    # comparison below because it holds regardless of how source is delivered.
+    build_id_path = REPO_ROOT / "frontend" / ".next" / "BUILD_ID"
+    if not build_id_path.is_file():
+        return check(
+            "frontend_build",
+            RED,
+            "frontend/.next/BUILD_ID is missing — the last `next build` did not "
+            "finish, so deer-flow-frontend cannot be restarted and lazily "
+            "loaded route chunks 500",
+        )
+
     rc_h, host_hash, _ = _run(
         ["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120
     )
@@ -217,10 +237,32 @@ def check_frontend_build_freshness() -> dict:
         timeout=180,
     )
     if rc_i != 0 or not image_hash:
+        # The prod-frontend overlay bind-mounts frontend/ and runs `next start`
+        # against a build made on the host, so the image bakes no /app/frontend/src
+        # to hash. Reporting only "could not hash" made this check fail *open* on
+        # exactly the deployment it exists to protect. Fall back to comparing the
+        # build against the source it was built from.
+        newest_src = 0.0
+        for f in src.rglob("*"):
+            if f.is_file():
+                try:
+                    newest_src = max(newest_src, f.stat().st_mtime)
+                except OSError:
+                    continue
+        built_at = build_id_path.stat().st_mtime
+        if newest_src > built_at:
+            drift_s = int(newest_src - built_at)
+            return check(
+                "frontend_build",
+                YELLOW,
+                f"frontend/src is {drift_s}s newer than build {build_id_path.read_text().strip()} "
+                f"— those edits are not being served; run `pnpm build`",
+            )
         return check(
             "frontend_build",
-            YELLOW,
-            f"could not hash the image's source: {err[:100] or 'unknown'}",
+            GREEN,
+            f"build {build_id_path.read_text().strip()} is newer than frontend/src "
+            f"(image bakes no source: {err[:60] or 'no /app/frontend/src'})",
         )
 
     rc_b, build_id, _ = _run(
@@ -420,10 +462,101 @@ def check_restart_storm() -> dict:
     )
 
 
+def check_gateway_freshness() -> dict:
+    """Is the gateway process actually running the backend source on disk?
+
+    The gateway bind-mounts backend/ and runs uvicorn with --reload, which makes
+    it feel like edits are always live — so nobody thinks to check. But the
+    reloader can wedge: dev-entrypoint.sh bounds graceful shutdown precisely
+    because a reload otherwise waits forever on long-lived SSE connections and
+    the old worker never exits. When that happens there is no error anywhere;
+    the process simply keeps serving code from whenever it last started.
+
+    Found in the wild at a 33-hour drift, while the frontend was independently
+    stale — between them the whole subagent panel was dark and every HTTP probe
+    was green. Compare the worker's start time against the newest backend source
+    file; mtime is the right instrument here because the question is literally
+    "did this process start before that edit".
+    """
+    rc, started_at, _ = _run(
+        ["docker", "inspect", "deer-flow-gateway", "--format", "{{.State.StartedAt}}"],
+        timeout=30,
+    )
+    if rc != 0 or not started_at.strip():
+        return check("gateway_freshness", YELLOW, "gateway container not running")
+
+    from datetime import datetime
+
+    raw = started_at.strip()
+    try:
+        # Docker emits more sub-second digits than fromisoformat accepts.
+        cleaned = re.sub(r"(\.\d{6})\d+", r"\1", raw.replace("Z", "+00:00"))
+        boot = datetime.fromisoformat(cleaned).timestamp()
+    except ValueError:
+        return check("gateway_freshness", YELLOW, f"unparsable start time: {raw[:40]}")
+
+    app_dir = REPO_ROOT / "backend" / "app"
+    if not app_dir.is_dir():
+        return check("gateway_freshness", YELLOW, "backend/app not found")
+
+    newest = 0.0
+    newest_file = ""
+    for f in app_dir.rglob("*.py"):
+        try:
+            m = f.stat().st_mtime
+        except OSError:
+            continue
+        if m > newest:
+            newest, newest_file = m, str(f.relative_to(REPO_ROOT))
+
+    # A reload leaves the container's StartedAt alone, so a container older than
+    # the edit is only suspicious, not proof. Confirm against the serving
+    # process — but note *which* process that is: uvicorn's --reload supervisor
+    # never restarts itself, it re-spawns the app as a multiprocessing child.
+    # Matching on "uvicorn app.gateway.app" therefore finds only the supervisor,
+    # which is as old as the container and would report a healthy reload as
+    # stale. The spawn child is the one whose age answers the question.
+    import time
+
+    now = time.time()
+    # `docker top` rejects a format without a pid column.
+    rc_p, top_out, _ = _run(
+        ["docker", "top", "deer-flow-gateway", "-eo", "pid,etimes,args"], timeout=30
+    )
+    worker_start = 0.0
+    if rc_p == 0:
+        for line in top_out.splitlines()[1:]:
+            parts = line.split(None, 2)
+            if len(parts) != 3 or not parts[1].isdigit():
+                continue
+            etimes, args = int(parts[1]), parts[2]
+            if "multiprocessing.spawn" in args or "uvicorn app.gateway.app" in args:
+                worker_start = max(worker_start, now - etimes)
+
+    effective = max(boot, worker_start)
+    if newest > effective:
+        drift_s = int(newest - effective)
+        return check(
+            "gateway_freshness",
+            RED,
+            f"{newest_file} is {drift_s}s newer than the running uvicorn worker "
+            f"— the --reload watcher did not pick it up (wedged reloader); "
+            f"restart deer-flow-gateway",
+            newest_file=newest_file,
+            drift_seconds=drift_s,
+        )
+    return check(
+        "gateway_freshness",
+        GREEN,
+        "uvicorn worker is newer than every file in backend/app",
+    )
+
+
 CHECKS = (
     check_git_clean,
     check_config_version,
     check_frontend_build_freshness,
+    check_gateway_freshness,
     check_compose_chain,
     check_pm2_apps,
     check_restart_storm,

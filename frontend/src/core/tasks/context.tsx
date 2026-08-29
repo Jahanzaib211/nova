@@ -179,6 +179,16 @@ export function useCompletedTodoBindings(): Set<number> {
  * boxes that stacked across retries. Result-sourced failed status settles
  * them authoritatively.
  */
+/**
+ * How long a subtask is protected from being superseded after first sight.
+ *
+ * Covers the gap between the socket delivering `task_started` and the message
+ * stream carrying the matching tool_call. Generous enough to absorb a slow
+ * hydration, short enough that a genuinely orphaned subtask still settles
+ * rather than spinning forever.
+ */
+export const SUPERSEDE_GRACE_MS = 10_000;
+
 export function useSupersedeStaleSubtasks() {
   const { setTasks } = useSubtaskContext();
   /**
@@ -194,9 +204,17 @@ export function useSupersedeStaleSubtasks() {
       setTasks((current) => {
         let changed = false;
         const next: Record<string, Subtask> = {};
+        const now = Date.now();
         for (const [id, task] of Object.entries(current)) {
           const isLive = currentToolCallIds.has(id);
-          if (task.status === "in_progress" && !isLive) {
+          // A subtask younger than the grace window has not had time to appear
+          // in `messages` yet — the socket delivers task_started ahead of the
+          // assistant message that carries its tool_call. Superseding it here
+          // would fail a subagent that had only just started.
+          const tooYoung =
+            task.firstSeenAt !== undefined &&
+            now - task.firstSeenAt < SUPERSEDE_GRACE_MS;
+          if (task.status === "in_progress" && !isLive && !tooYoung) {
             changed = true;
             next[id] = {
               ...task,
@@ -256,6 +274,9 @@ export function useUpdateSubtask() {
           ...previous,
           ...task,
           ...(storedStatus !== undefined ? { status: storedStatus } : {}),
+          // Stamped once, on first sight. Every writer funnels through here, so
+          // this is the only place that can know which write was the first.
+          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
         } as Subtask;
         // A rejected status update must not smuggle in its result/error either
         // (e.g. a derived "failed" placeholder error overwriting a real result).

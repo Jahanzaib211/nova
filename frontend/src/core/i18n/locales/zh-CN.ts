@@ -250,6 +250,10 @@ export const zhCN: Translations = {
     logout: "退出登录",
     gatewayUnavailable: "网关暂时不可用。",
     gatewayUnavailableRetrying: "正在后台重试…",
+    sessionExpiredTitle: "会话已过期",
+    sessionExpiredDescription:
+      "智能体电脑已停止接收实时更新。请重新加载页面以重新登录。",
+    sessionExpiredAction: "重新加载",
   },
 
   // Conversation
@@ -735,7 +739,7 @@ export const zhCN: Translations = {
     thinking: "正在思考",
     usingTerminal: "正在使用终端",
     usingBrowser: "正在使用浏览器",
-    usingEditor: "正在使用编辑器",
+    usingViewer: "正在使用查看器",
     taskProgress: "任务进度",
     noLogs: "暂无输出",
     close: "关闭",
@@ -761,11 +765,12 @@ export const zhCN: Translations = {
     tabs: {
       files: "文件",
       terminal: "终端",
-      editor: "编辑器",
+      viewer: "查看器",
       browser: "浏览器",
       activity: "活动",
       review: "审查",
       privacy: "Recon",
+      audit: "审计",
     },
     files: {
       empty: "智能体创建的文件将显示在这里",
@@ -806,7 +811,7 @@ export const zhCN: Translations = {
     status: {
       writing: (filename: string, lines?: string) =>
         `正在写入 ${filename}${lines ? ` (${lines})` : ""}`,
-      usingEditor: "正在使用编辑器",
+      usingViewer: "正在使用查看器",
       editing: (filename: string) => `正在编辑 ${filename}`,
       reading: (filename: string) => `正在读取 ${filename}`,
       usingTerminal: "正在使用终端",
@@ -831,7 +836,7 @@ export const zhCN: Translations = {
       counts: (total: number, running: number) =>
         `${total} 条命令${running ? ` · ${running} 运行中` : ""}`,
     },
-    editor: {
+    viewer: {
       startWriting: "开始编写文件即可实时查看代码",
       fileNotWritten: "该文件尚不存在",
       emptyFile: "文件为空",
@@ -876,10 +881,10 @@ export const zhCN: Translations = {
         code: "代码",
       },
       projectLabel: (type: string) => `${type} 项目`,
-      switchToEditor: "切换到编辑器查看实时代码。",
+      switchToViewer: "切换到查看器查看实时代码。",
       startLivePreview: "启动实时预览",
-      switchToEditorPrefix: "切换到",
-      switchToEditorSuffix: "查看实时代码。",
+      switchToViewerPrefix: "切换到",
+      switchToViewerSuffix: "查看实时代码。",
     },
     activity: {
       title: (count: number) => `活动 \u00b7 ${count} 个操作`,

@@ -404,7 +404,8 @@ export function FilesPanel({
         >
           {t.agentComputer.files.uploadLimits} · {limitsSummary}
         </p>
-      )}      {!hasSandboxContent && (
+      )}{" "}
+      {!hasSandboxContent && (
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
           <FolderIcon className="text-muted-foreground/30 h-6 w-6" />
           <span className="text-muted-foreground/50 text-xs">

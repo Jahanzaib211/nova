@@ -320,9 +320,7 @@ def _write_sandbox_observation(
         # Deterministic command count (G2): every framed opening and every
         # non-framed bash line is exactly one command, persisted so the count
         # survives window rolls, reconnects AND container recycles.
-        is_command_line = (
-            obs_id is not None and state == "running"
-        ) or (tool == "bash" and delta is None and replace is None and obs_id is None)
+        is_command_line = (obs_id is not None and state == "running") or (tool == "bash" and delta is None and replace is None and obs_id is None)
         stats_total: int | None = None
         if is_command_line:
             try:
@@ -1956,10 +1954,7 @@ def _capture_external_dev_server(
     host = "host.docker.internal" if aio_mode else "127.0.0.1"
 
     def _worker() -> None:
-        probe = (
-            f"curl -fsS -o /dev/null -w '%{{http_code}}' "
-            f"http://127.0.0.1:{port}/ 2>/dev/null || true"
-        )
+        probe = f"curl -fsS -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{port}/ 2>/dev/null || true"
         for _ in range(12):
             try:
                 out = (sandbox.execute_command(probe) or "").strip()
@@ -1968,9 +1963,7 @@ def _capture_external_dev_server(
                         register_external_dev_server,
                     )
 
-                    handle = register_external_dev_server(
-                        thread_id, port, host=host, label=label
-                    )
+                    handle = register_external_dev_server(thread_id, port, host=host, label=label)
                     logger.info(
                         "Captured external dev server %s on port %d (%s)",
                         thread_id,
@@ -1989,6 +1982,8 @@ def _capture_external_dev_server(
         name=f"dev-capture-{thread_id[:8]}-{port}",
         daemon=True,
     ).start()
+
+
 _DEV_SERVER_RE = re.compile(
     r"\b(npm\s+(run\s+)?(dev|start)|yarn\s+(dev|start)|pnpm\s+(run\s+)?(dev|start)|"
     r"next\s+(dev|start)|npx\s+next\s+(dev|start)|vite|npx\s+vite|bun\s+(run\s+)?(dev|start)|"

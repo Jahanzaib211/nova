@@ -65,6 +65,21 @@ services:
       - SETGID
       - DAC_OVERRIDE
     pids_limit: 256
+    # 2026-09 hardening parity: mem_limit + healthcheck + autoheal label.
+    # Without these nginx (the only public entrypoint) is one unbounded
+    # container or one EXIT-137 worker OOM away from taking the whole site
+    # down: it has no supervisor, no recovery. The dev stack already had
+    # the healthcheck but not the autoheal label; the prod stack already
+    # had both; this base file had neither.
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2026/api/v1/auth/setup-status || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - autoheal=true
 
   # ── Frontend: Next.js Production ───────────────────────────────────────────
   frontend:
@@ -95,6 +110,26 @@ services:
     tmpfs:
       - /tmp:size=64m
     pids_limit: 512
+    # 2026-09 hardening parity with docker-compose-dev.yaml's frontend:
+    # mem_limit, healthcheck, and autoheal label all added so this base
+    # compose file gets the same auto-recovery the dev and nova-prod stacks
+    # do. Without this, `make up` (which uses this file via deploy.sh) is
+    # one frontend crash away from the same 2026-08-28 41-minute outage
+    # the dev stack just recovered from.
+    mem_limit: 2g
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - --spider
+        - http://127.0.0.1:3000/
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    labels:
+      - autoheal=true
 
   # ── Gateway API ────────────────────────────────────────────────────────────
   gateway:
@@ -171,6 +206,22 @@ services:
     tmpfs:
       - /tmp:size=128m
     pids_limit: 512
+    # 2026-09 hardening parity with the dev/prod stacks: detect a hung
+    # gateway and let the autoheal sidecar restart it. Without the
+    # healthcheck+label pair, this base compose file (used by `make up`
+    # via deploy.sh) is one uvicorn deadlock away from a silent outage.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=4).status==200 else 1)"
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
+    labels:
+      - autoheal=true
 
   # ── Sandbox Provisioner (optional, Kubernetes mode) ────────────────────────
   provisioner:

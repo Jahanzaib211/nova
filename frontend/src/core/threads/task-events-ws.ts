@@ -3,7 +3,6 @@
 import type { AIMessage } from "@langchain/langgraph-sdk";
 import { useEffect } from "react";
 
-
 import { getBackendBaseURL, getBaseOrigin } from "@/core/config";
 import type { SubtaskUpdateSource } from "@/core/tasks/context";
 import type { Subtask } from "@/core/tasks/types";
@@ -51,7 +50,10 @@ type UpdateSubtask = (
   source?: SubtaskUpdateSource,
 ) => void;
 
-export type TodoSnapshotEvent = { thread_id: string; todos: Array<Record<string, unknown>> };
+export type TodoSnapshotEvent = {
+  thread_id: string;
+  todos: Array<Record<string, unknown>>;
+};
 export type TerminalStatsEvent = { thread_id: string; total_commands: number };
 
 export type ComputerEventHandlers = {
@@ -65,10 +67,18 @@ export type ComputerEventHandlers = {
   onTodos?: (event: TodoSnapshotEvent) => void;
   /** Deterministic command total for the Terminal header. */
   onTerminalStats?: (event: TerminalStatsEvent) => void;
+  /**
+   * The session is gone and reconnecting cannot fix it. Fired once, after
+   * retries have been abandoned, so the panel can tell the user to reload
+   * instead of silently showing a dead socket forever.
+   */
+  onAuthExpired?: () => void;
 };
 
 /** Is this a subagent lifecycle event we can apply? */
-export function isTaskLifecycleEvent(event: unknown): event is TaskLifecycleEvent {
+export function isTaskLifecycleEvent(
+  event: unknown,
+): event is TaskLifecycleEvent {
   return (
     typeof event === "object" &&
     event !== null &&
@@ -100,7 +110,9 @@ export function applyTaskEvent(
           id: e.task_id,
           status: "in_progress",
           ...(todoIndexes ? { todoIndexes } : {}),
-          ...(e.description !== undefined ? { description: e.description } : {}),
+          ...(e.description !== undefined
+            ? { description: e.description }
+            : {}),
         },
         "result",
       );
@@ -158,6 +170,37 @@ export function applyTaskEvent(
  * build has no such route - the failed upgrade stays invisible and the SSE
  * fallbacks keep working.
  */
+/**
+ * Consecutive failed connects before we spend a request asking whether the
+ * session is still valid. Three covers the ordinary first-mount race (the
+ * thread's metadata row lands a beat after the panel mounts) without letting a
+ * genuinely dead session retry unnoticed for long.
+ */
+export const AUTH_PROBE_AFTER_ATTEMPTS = 3;
+
+/** The socket URL for a thread. Exported so the shape stays pinned: nginx
+ *  matches `^/api/threads/[^/]+/computer-ws$` exactly, and an earlier probe
+ *  looked for a `/runs/{id}/` segment this path has never had. */
+export function computerWsUrl(threadId: string, baseOverride?: string): string {
+  const base = baseOverride ?? (getBackendBaseURL() || getBaseOrigin());
+  return `${base.replace(/^http/, "ws")}/api/threads/${encodeURIComponent(
+    threadId,
+  )}/computer-ws`;
+}
+
+/**
+ * What a failed handshake means, given what the REST probe said.
+ *
+ * A refused WebSocket handshake exposes no status to script, so a dead session
+ * and a flaky network are indistinguishable at the socket. The probe separates
+ * them, and this is the whole decision: 401 is terminal, everything else is
+ * worth another attempt. 403/404 in particular is the benign first-mount race —
+ * the panel connects before the thread's metadata row exists.
+ */
+export function authProbeVerdict(status: number): "expired" | "retry" {
+  return status === 401 ? "expired" : "retry";
+}
+
 export function useComputerEvents(
   threadId: string | null | undefined,
   handlers: ComputerEventHandlers,
@@ -171,8 +214,7 @@ export function useComputerEvents(
     let attempts = 0;
 
     const base = getBackendBaseURL() || getBaseOrigin();
-    const wsBase = base.replace(/^http/, "ws");
-    const url = `${wsBase}/api/threads/${encodeURIComponent(threadId)}/computer-ws`;
+    const url = computerWsUrl(threadId, base);
 
     const handleFrame = (raw: string) => {
       let parsed: unknown;
@@ -241,9 +283,39 @@ export function useComputerEvents(
       };
     };
 
+    // A failed WebSocket handshake exposes no status code to script, so a dead
+    // session and a flaky network look identical from here — which is how a
+    // stale tab ended up retrying a 403 every 18s for days with nothing shown
+    // to the user. This endpoint separates them: 401 means the session itself
+    // is gone, 403/404 means the thread is not owned *yet* (the panel mounts
+    // before the first run creates it, so this is the benign startup race),
+    // and anything else means the socket, not the credentials, is the problem.
+    const sessionIsDead = async (): Promise<boolean> => {
+      try {
+        const resp = await fetch(
+          `${base}/api/threads/${encodeURIComponent(threadId)}/runs`,
+          { credentials: "include" },
+        );
+        return authProbeVerdict(resp.status) === "expired";
+      } catch {
+        return false; // offline: keep retrying, the credentials are fine
+      }
+    };
+
     const scheduleRetry = () => {
       if (closed) return;
-      const delay = Math.min(15000, 1000 * 2 ** attempts++);
+      attempts += 1;
+      // Only pay for the probe once the failures look persistent rather than
+      // like the ordinary first-mount race.
+      if (attempts === AUTH_PROBE_AFTER_ATTEMPTS) {
+        void sessionIsDead().then((dead) => {
+          if (closed || !dead) return;
+          closed = true;
+          clearTimeout(retryTimer);
+          handlers.onAuthExpired?.();
+        });
+      }
+      const delay = Math.min(15000, 1000 * 2 ** (attempts - 1));
       retryTimer = setTimeout(connect, delay);
     };
 

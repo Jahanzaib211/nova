@@ -441,6 +441,7 @@ class LocalContainerBackend(SandboxBackend):
             # attempt above exhausted candidates; give Docker a brief moment
             # to settle and try the whole sequence once more before failing.
             import time as _t
+
             for _retry in range(3):
                 _t.sleep(1.0 + _retry * 1.0)
                 try:
@@ -451,12 +452,7 @@ class LocalContainerBackend(SandboxBackend):
                     if "port is already allocated" not in err and "address already in use" not in err.lower():
                         raise
             else:
-                raise RuntimeError(
-                    "Could not start sandbox container: all candidate ports "
-                    "are still allocated by Docker after retrying (transient "
-                    "race during recycle storm). Close existing sandboxes or "
-                    "extend the published-port range."
-                )
+                raise RuntimeError("Could not start sandbox container: all candidate ports are still allocated by Docker after retrying (transient race during recycle storm). Close existing sandboxes or extend the published-port range.")
 
         # When running inside Docker (DooD), sandbox containers are reachable via
         # host.docker.internal rather than localhost (they run on the host daemon).

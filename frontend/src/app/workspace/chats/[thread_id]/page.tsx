@@ -46,7 +46,7 @@ import {
   useActiveRun,
   useThreadMetadata,
   takeQueuedMessage,
-    useThreadStream,
+  useThreadStream,
   useThreadTokenUsage,
 } from "@/core/threads/hooks";
 import { recordComposer } from "@/core/threads/stream-trace";

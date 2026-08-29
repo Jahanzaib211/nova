@@ -423,8 +423,7 @@ export function Browser({
               "ml-0.5 h-2 w-2 shrink-0 rounded-full",
               devServer.status === "ready"
                 ? "bg-emerald-400"
-                : devServer.status === "error" ||
-                    devServer.status === "stopped"
+                : devServer.status === "error" || devServer.status === "stopped"
                   ? "bg-red-500/80"
                   : "animate-pulse bg-yellow-400",
             )}
@@ -583,44 +582,47 @@ export function Browser({
               // degrade to "no errors shown", not crash the strip.
               const consoleErrors = r.console_errors ?? [];
               return (
-              <div key={`${r.route}:${r.status}:${i}`} className="mt-1 flex items-start gap-2">
-                {r.screenshot && (
-                  <a
-                    href={r.screenshot}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0"
-                  >
-                    <img
-                      src={r.screenshot}
-                      alt={`screenshot ${r.route}`}
-                      className="border-border/40 h-14 w-24 rounded border object-cover object-top"
-                    />
-                  </a>
-                )}
-                <div className="min-w-0 flex-1">
-                  <span
-                    className={cn(
-                      "font-mono",
-                      r.ok ? "text-emerald-400" : "text-red-400",
-                    )}
-                  >
-                    {r.ok ? "✓" : "✗"} {r.route}
-                  </span>
-                  <span className="text-muted-foreground/50 ml-1">
-                    [{r.status}]
-                  </span>
-                  {consoleErrors.slice(0, 3).map((ce, j) => (
-                    <div
-                      key={`${j}:${ce.slice(0, 24)}`}
-                      className="truncate font-mono text-[10px] text-red-300/80"
-                      title={ce}
+                <div
+                  key={`${r.route}:${r.status}:${i}`}
+                  className="mt-1 flex items-start gap-2"
+                >
+                  {r.screenshot && (
+                    <a
+                      href={r.screenshot}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0"
                     >
-                      {ce}
-                    </div>
-                  ))}
+                      <img
+                        src={r.screenshot}
+                        alt={`screenshot ${r.route}`}
+                        className="border-border/40 h-14 w-24 rounded border object-cover object-top"
+                      />
+                    </a>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        "font-mono",
+                        r.ok ? "text-emerald-400" : "text-red-400",
+                      )}
+                    >
+                      {r.ok ? "✓" : "✗"} {r.route}
+                    </span>
+                    <span className="text-muted-foreground/50 ml-1">
+                      [{r.status}]
+                    </span>
+                    {consoleErrors.slice(0, 3).map((ce, j) => (
+                      <div
+                        key={`${j}:${ce.slice(0, 24)}`}
+                        className="truncate font-mono text-[10px] text-red-300/80"
+                        title={ce}
+                      >
+                        {ce}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
               );
             })}
           </div>
@@ -719,9 +721,9 @@ export function Browser({
             {filename}
           </p>
           <p className="text-muted-foreground/50 mt-2 text-[11px] leading-relaxed">
-            {t.agentComputer.browser.switchToEditorPrefix}{" "}
-            <span className="text-blue-400">{t.agentComputer.tabs.editor}</span>{" "}
-            {t.agentComputer.browser.switchToEditorSuffix}
+            {t.agentComputer.browser.switchToViewerPrefix}{" "}
+            <span className="text-blue-400">{t.agentComputer.tabs.viewer}</span>{" "}
+            {t.agentComputer.browser.switchToViewerSuffix}
           </p>
           {(onStartPreview ?? onAgentMessage) && (
             <button

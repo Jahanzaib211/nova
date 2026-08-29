@@ -88,6 +88,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # 2026-09 hardening: nginx gets the same autoheal label the dev stack
+    # gives the gateway, so a hung proxy gets the same restart treatment.
+    # Without it nginx is the only healthchecked service in this compose
+    # that the sidecar does NOT touch.
+    labels:
+      - autoheal=true
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
@@ -146,6 +152,29 @@ services:
     # resident and grows with every recompile. `next start` serves a fixed
     # prebuilt bundle and has no such growth.
     mem_limit: 2g
+    # Detect a hung-but-"Up" frontend so the autoheal sidecar can restart it.
+    # Same hardening the dev stack applied after the 2026-08-28 41-minute
+    # 502 outage: without a healthcheck, an exited container holds the
+    # service name and `docker compose up` recreates with "name already in
+    # use" forever while nginx SERVFAILs every non-/api request. wget is in
+    # the image (BusyBox); a 200 on / proves Next is actually serving, not
+    # just listening.
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - --spider
+        - http://127.0.0.1:3000/
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Prod `next start` cold-start is faster than the dev stack's `pnpm
+      # install` + Turbopack warm-up (60s vs 90s). Below the dev value, above
+      # the 30s probe interval × retries so a legit slow boot doesn't flap.
+      start_period: 60s
+    labels:
+      - autoheal=true
 
   # ── Gateway API + agent runtime ────────────────────────────────────────────
   gateway:
@@ -285,7 +314,7 @@ services:
   # Restarts any container labelled autoheal=true when Docker reports it
   # unhealthy — the auto-recovery missing during the 2026-07-16 outage.
   autoheal:
-    image: willfarrell/autoheal:latest
+    image: willfarrell/autoheal@sha256:2ae2ff2c4047be936db416005262978b0d20d98d8f8dbfd2bc8bb97bbfc1a7b5
     container_name: deer-flow-autoheal
     restart: unless-stopped
     environment:
@@ -295,6 +324,19 @@ services:
       - DOCKER_SOCK=/var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    # Sidecar liveness — mirrors docker-compose-dev.yaml's autoheal block.
+    # Without this, a stuck autoheal process leaves every ``autoheal=true``
+    # container silently unmonitored (no other supervisor). The curl ``/_ping``
+    # confirms the mounted Docker socket is reachable; the pgrep confirms
+    # the main autoheal script is still in its poll loop.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "curl -s --unix-socket /var/run/docker.sock -f http://localhost/_ping >/dev/null && pgrep -f docker-entrypoint >/dev/null || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 75s
 
   # ── Services config.yaml requires ────────────────────────────────────────
   # This stack previously defined only nginx/frontend/gateway/autoheal, while
@@ -339,6 +381,12 @@ services:
     restart: unless-stopped
     mem_limit: 2g
     mem_reservation: 512m
+    # 2026-09 hardening: every long-running service that already has a
+    # healthcheck gets the autoheal label so a stuck container (Postgres
+    # full disk, connection storm) gets restarted automatically. The
+    # gateway label was already present from the 2026-07-16 hardening.
+    labels:
+      - autoheal=true
     security_opt:
       - no-new-privileges:true
 
@@ -382,6 +430,9 @@ services:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
+    # 2026-09 hardening: autoheal label for the search service.
+    labels:
+      - autoheal=true
     restart: unless-stopped
 
   # TOR proxy removed: it crash-looped under the non-root hardening (setgid
@@ -423,6 +474,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    # 2026-09 hardening: autoheal label for the headless browser.
+    labels:
+      - autoheal=true
     # Chrome is memory-hungry and this box has an OOM history; two concurrent
     # sessions inside 1.5g is enough for fetch-a-page work without competing
     # with the gateway.
@@ -473,6 +527,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    # 2026-09 hardening: autoheal label for the link-following crawler.
+    labels:
+      - autoheal=true
     # Chrome again, and a crawler drives several tabs at once. Bounded for the
     # same reason browserless is.
     mem_limit: 2g

@@ -78,18 +78,14 @@ class TaskEventHub:
 
         def _on_loop() -> None:
             try:
-                asyncio.get_running_loop().create_task(
-                    self.publish(thread_id, payload)
-                )
+                asyncio.get_running_loop().create_task(self.publish(thread_id, payload))
             except RuntimeError:
                 pass
 
         loop.call_soon_threadsafe(_on_loop)
 
     async def publish(self, thread_id: str, payload: dict) -> None:
-        buffer = self._buffers.setdefault(
-            thread_id, deque(maxlen=self._buffer_size)
-        )
+        buffer = self._buffers.setdefault(thread_id, deque(maxlen=self._buffer_size))
         buffer.append(payload)
         subscribers = self._subscribers.get(thread_id)
         if not subscribers:
@@ -136,11 +132,7 @@ class TaskEventHub:
 
 
 def _is_task_custom_event(event: str, data: Any) -> bool:
-    return (
-        event == "custom"
-        and isinstance(data, dict)
-        and str(data.get("type", "")).startswith("task_")
-    )
+    return event == "custom" and isinstance(data, dict) and str(data.get("type", "")).startswith("task_")
 
 
 class MirroringStreamBridge(StreamBridge):
@@ -208,9 +200,7 @@ def encode_task_ws_message(payload: dict) -> str:
     return json.dumps(payload)
 
 
-async def merged_stream(
-    hub: "TaskEventHub", thread_id: str
-) -> AsyncIterator[dict]:
+async def merged_stream(hub: TaskEventHub, thread_id: str) -> AsyncIterator[dict]:
     """Replay-then-live stream for the multiplexed computer socket."""
     return hub.subscribe(thread_id)
 
@@ -230,10 +220,8 @@ async def run_tasks_ws_stream(websocket: Any, hub: TaskEventHub, thread_id: str)
             if websocket.client_state != WebSocketState.CONNECTED:
                 break
             try:
-                payload = await asyncio.wait_for(
-                    gen.__anext__(), timeout=HEARTBEAT_SECONDS
-                )
-            except asyncio.TimeoutError:
+                payload = await asyncio.wait_for(gen.__anext__(), timeout=HEARTBEAT_SECONDS)
+            except TimeoutError:
                 await websocket.send_text('{"type":"ping"}')
                 continue
             except StopAsyncIteration:
@@ -282,7 +270,7 @@ async def run_computer_ws_stream(
                 break
             try:
                 payload = await asyncio.wait_for(out.get(), timeout=HEARTBEAT_SECONDS)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await websocket.send_text('{"type":"ping"}')
                 continue
             if websocket.client_state != WebSocketState.CONNECTED:

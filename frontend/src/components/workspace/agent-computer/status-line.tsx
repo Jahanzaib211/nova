@@ -34,15 +34,15 @@ function getStatusLabel(
             filename,
             lineCount && lineCount > 1 ? `${lineCount} lines` : undefined,
           )
-        : t.agentComputer.status.usingEditor;
+        : t.agentComputer.status.usingViewer;
     case "file-edit":
       return filename
         ? t.agentComputer.status.editing(filename)
-        : t.agentComputer.status.usingEditor;
+        : t.agentComputer.status.usingViewer;
     case "file-read":
       return filename
         ? t.agentComputer.status.reading(filename)
-        : t.agentComputer.status.usingEditor;
+        : t.agentComputer.status.usingViewer;
     case "terminal":
       return t.agentComputer.status.usingTerminal;
     case "file-search":

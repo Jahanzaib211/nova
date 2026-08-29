@@ -264,6 +264,10 @@ export const enUS: Translations = {
     logout: "Log out",
     gatewayUnavailable: "Gateway is temporarily unavailable.",
     gatewayUnavailableRetrying: "Retrying in the background…",
+    sessionExpiredTitle: "Your session expired",
+    sessionExpiredDescription:
+      "The Agent's Computer stopped receiving live updates. Reload the page to sign back in.",
+    sessionExpiredAction: "Reload",
   },
 
   // Conversation
@@ -763,7 +767,7 @@ export const enUS: Translations = {
     thinking: "is thinking",
     usingTerminal: "is using Terminal",
     usingBrowser: "is using Browser",
-    usingEditor: "is using Editor",
+    usingViewer: "is using Viewer",
     taskProgress: "Task progress",
     noLogs: "No output yet",
     close: "Close",
@@ -791,13 +795,14 @@ export const enUS: Translations = {
     tabs: {
       files: "Files",
       terminal: "Terminal",
-      editor: "Editor",
+      viewer: "Viewer",
       browser: "Browser",
       activity: "Activity",
       review: "Review",
       // Matches the panel header ("Recon — private web access"); the button
       // said "Privacy" and the panel said "Recon", which read as two features.
       privacy: "Recon",
+      audit: "Audit",
     },
     files: {
       empty: "Files the agent creates will appear here",
@@ -839,7 +844,7 @@ export const enUS: Translations = {
     status: {
       writing: (filename: string, lines?: string) =>
         `is writing ${filename}${lines ? ` (${lines})` : ""}`,
-      usingEditor: "is using Editor",
+      usingViewer: "is using Viewer",
       editing: (filename: string) => `is editing ${filename}`,
       reading: (filename: string) => `is reading ${filename}`,
       usingTerminal: "is using Terminal",
@@ -865,7 +870,7 @@ export const enUS: Translations = {
       counts: (total: number, running: number) =>
         `${total} cmd${total === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`,
     },
-    editor: {
+    viewer: {
       startWriting: "Start writing a file to see code live",
       fileNotWritten: "This file doesn't exist (yet)",
       emptyFile: "File is empty",
@@ -911,10 +916,10 @@ export const enUS: Translations = {
         code: "Code",
       },
       projectLabel: (type: string) => `${type} project`,
-      switchToEditor: "Switch to Editor to see live code.",
+      switchToViewer: "Switch to Viewer to see live code.",
       startLivePreview: "Start Live Preview",
-      switchToEditorPrefix: "Switch to",
-      switchToEditorSuffix: "to see live code.",
+      switchToViewerPrefix: "Switch to",
+      switchToViewerSuffix: "to see live code.",
     },
     activity: {
       title: (count: number) =>

@@ -29,16 +29,13 @@ import pytest
 
 from app.gateway.routers import sandbox as sandbox_router
 
-
 # ── Route registration ──────────────────────────────────────────────────────
 
 
 class TestAbsproxyWsRoute:
     def test_route_is_registered(self) -> None:
         paths = {getattr(r, "path", "") for r in sandbox_router.router.routes}
-        assert (
-            "/api/sandbox/absproxy-ws/{thread_id}/{port}/{path:path}" in paths
-        ), "the absproxy fallback has no WebSocket bridge"
+        assert "/api/sandbox/absproxy-ws/{thread_id}/{port}/{path:path}" in paths, "the absproxy fallback has no WebSocket bridge"
 
 
 # ── Admission checks (mirrors appview-ws; drift here would be a security bug) ──
@@ -52,7 +49,10 @@ def _fake_ws(origin: str = "https://nova.example", host: str = "nova.example", q
 
 @pytest.fixture
 def owned_thread(monkeypatch):
-    monkeypatch.setattr(sandbox_router, "_caller_owns_thread", lambda thread_id: True)
+    async def _owning(ws, tid):
+        return True
+
+    monkeypatch.setattr("app.gateway.ws_guards.ws_caller_owns_thread", _owning)
 
 
 @pytest.fixture
@@ -85,7 +85,10 @@ def wired(monkeypatch):
 
     provider = _FakeProvider()
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
-    monkeypatch.setattr(sandbox_router, "_caller_owns_thread", lambda tid: True)
+    async def _owning(ws, tid):
+        return True
+
+    monkeypatch.setattr("app.gateway.ws_guards.ws_caller_owns_thread", _owning)
 
     bridged: dict[str, object] = {}
     accepted: list[bool] = []
@@ -118,9 +121,7 @@ def wired(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_absproxy_ws_bridges_to_the_container_relay(wired) -> None:
-    await sandbox_router.proxy_absproxy_ws(
-        wired.ws, "thread-abc", 4321, "_next/webpack-hmr"
-    )
+    await sandbox_router.proxy_absproxy_ws(wired.ws, "thread-abc", 4321, "_next/webpack-hmr")
     assert wired.bridged["url"] == "ws://localhost:39123/absproxy/4321/_next/webpack-hmr"
     assert wired.ws.accept_calls == [True]
 
@@ -167,7 +168,10 @@ async def test_absproxy_ws_rejects_unauthenticated(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_absproxy_ws_rejects_non_owner(monkeypatch) -> None:
-    monkeypatch.setattr(sandbox_router, "_caller_owns_thread", lambda tid: False)
+    async def _denying(ws, tid):
+        return False
+
+    monkeypatch.setattr("app.gateway.ws_guards.ws_caller_owns_thread", _denying)
 
     async def fake_user(ws):
         return SimpleNamespace(id="u1")
@@ -259,9 +263,7 @@ class TestProxyHtmlInjectsShim:
             )
 
         monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: _FakeAsyncClient(fake_fetch))
-        resp = asyncio.run(
-            sandbox_router._proxy_dev_server("t1", "app", "", _request())
-        )
+        resp = asyncio.run(sandbox_router._proxy_dev_server("t1", "app", "", _request()))
         return bytes(resp.body).decode()
 
     def test_preview_html_carries_preview_ws_prefix(self, preview_html) -> None:

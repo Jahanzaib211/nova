@@ -380,12 +380,7 @@ class AioSandboxProvider(SandboxProvider):
         # Resolution order: this process env, then the sandbox environment
         # map (config.yaml sandbox.environment) — either may carry it.
         env_map = self._config.get("environment") or {}
-        sec_kb = (
-            os.environ.get("DEER_FLOW_SECURITY_TOOLKIT")
-            or self._resolve_env_vars(
-                {k: v for k, v in env_map.items() if k == "DEER_FLOW_SECURITY_TOOLKIT"}
-            ).get("DEER_FLOW_SECURITY_TOOLKIT", "")
-        )
+        sec_kb = os.environ.get("DEER_FLOW_SECURITY_TOOLKIT") or self._resolve_env_vars({k: v for k, v in env_map.items() if k == "DEER_FLOW_SECURITY_TOOLKIT"}).get("DEER_FLOW_SECURITY_TOOLKIT", "")
         sec_kb = (sec_kb or "").strip()
         if sec_kb and _Path(sec_kb).is_dir():
             mounts.append((sec_kb, "/mnt/security-toolkit", True))

@@ -676,8 +676,15 @@ async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request
 
 
 @router.websocket("/{thread_id}/tasks-ws")
-async def tasks_ws(websocket: "WebSocket", thread_id: str) -> None:
+async def tasks_ws(websocket: WebSocket, thread_id: str) -> None:
     """Stream subagent task events for one thread.
+
+    NOTE: the web frontend no longer opens this socket. It moved to the
+    multiplexed ``computer-ws`` below, which carries these same ``task_*``
+    events alongside the browser/workspace/todo channels on one connection.
+    This route is kept for non-multiplexed consumers and for parity with the
+    SSE leg; it is not dead code, but a change here will not affect the panel.
+    All four nginx configs still carry a matching location.
 
     The harness emits ``task_*`` events as custom stream events on a per-run
     bridge; the gateway mirrors them into a thread-scoped hub
@@ -690,20 +697,35 @@ async def tasks_ws(websocket: "WebSocket", thread_id: str) -> None:
     per-user thread ownership.
     """
     from app.gateway.task_events import run_tasks_ws_stream
-    from app.gateway.ws_guards import caller_owns_thread, ws_user, ws_same_origin
-
+    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
     from deerflow.runtime.user_context import reset_current_user, set_current_user
 
     if not ws_same_origin(websocket):
+        logger.warning(
+            "tasks-ws rejected: origin mismatch (origin=%r host=%r thread=%s)",
+            websocket.headers.get("origin"),
+            websocket.headers.get("host"),
+            thread_id,
+        )
         await websocket.close(code=1008)
         return
     user = await ws_user(websocket)
     if user is None:
+        logger.warning(
+            "tasks-ws rejected: no authenticated user (thread=%s cookies=%s)",
+            thread_id,
+            sorted(websocket.cookies),
+        )
         await websocket.close(code=1008)
         return
     token = set_current_user(user)
     try:
-        if not caller_owns_thread(thread_id):
+        if not await ws_caller_owns_thread(websocket, thread_id):
+            logger.warning(
+                "tasks-ws rejected: caller does not own thread (thread=%s user=%s)",
+                thread_id,
+                getattr(user, "id", "?"),
+            )
             await websocket.close(code=1008)
             return
         hub: TaskEventHub = websocket.app.state.task_event_hub  # type: ignore[name-defined]
@@ -713,7 +735,7 @@ async def tasks_ws(websocket: "WebSocket", thread_id: str) -> None:
 
 
 @router.websocket("/{thread_id}/computer-ws")
-async def computer_ws(websocket: "WebSocket", thread_id: str) -> None:
+async def computer_ws(websocket: WebSocket, thread_id: str) -> None:
     """Multiplexed Agent's Computer feed for one thread.
 
     One socket carries every channel the panel needs live:
@@ -726,26 +748,39 @@ async def computer_ws(websocket: "WebSocket", thread_id: str) -> None:
     initial hydration. Admission mirrors tasks-ws exactly.
     """
     from app.gateway.task_events import run_computer_ws_stream
-    from app.gateway.ws_guards import caller_owns_thread, ws_user, ws_same_origin
-
+    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
     from deerflow.runtime.user_context import reset_current_user, set_current_user
 
     if not ws_same_origin(websocket):
+        logger.warning(
+            "computer-ws rejected: origin mismatch (origin=%r host=%r thread=%s)",
+            websocket.headers.get("origin"),
+            websocket.headers.get("host"),
+            thread_id,
+        )
         await websocket.close(code=1008)
         return
     user = await ws_user(websocket)
     if user is None:
+        logger.warning(
+            "computer-ws rejected: no authenticated user (thread=%s cookies=%s)",
+            thread_id,
+            sorted(websocket.cookies),
+        )
         await websocket.close(code=1008)
         return
     token = set_current_user(user)
     try:
-        if not caller_owns_thread(thread_id):
+        if not await ws_caller_owns_thread(websocket, thread_id):
+            logger.warning(
+                "computer-ws rejected: caller does not own thread (thread=%s user=%s)",
+                thread_id,
+                getattr(user, "id", "?"),
+            )
             await websocket.close(code=1008)
             return
         task_hub: TaskEventHub = websocket.app.state.task_event_hub  # type: ignore[name-defined]
         computer_hub: TaskEventHub = websocket.app.state.computer_event_hub  # type: ignore[name-defined]
-        await run_computer_ws_stream(
-            websocket, [task_hub, computer_hub], thread_id
-        )
+        await run_computer_ws_stream(websocket, [task_hub, computer_hub], thread_id)
     finally:
         reset_current_user(token)

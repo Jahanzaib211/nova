@@ -20,51 +20,11 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOLS_PY = (
-    REPO_ROOT
-    / "backend"
-    / "packages"
-    / "harness"
-    / "deerflow"
-    / "sandbox"
-    / "tools.py"
-)
-WORKSPACE_TOOLS_PY = (
-    REPO_ROOT
-    / "backend"
-    / "packages"
-    / "harness"
-    / "deerflow"
-    / "tools"
-    / "builtins"
-    / "workspace_tools.py"
-)
-TASK_TOOL_PY = (
-    REPO_ROOT
-    / "backend"
-    / "packages"
-    / "harness"
-    / "deerflow"
-    / "tools"
-    / "builtins"
-    / "task_tool.py"
-)
-TOOL_SURFACE_TS = (
-    REPO_ROOT
-    / "frontend"
-    / "src"
-    / "core"
-    / "threads"
-    / "tool-surface.ts"
-)
-TASK_EVENTS_TS = (
-    REPO_ROOT
-    / "frontend"
-    / "src"
-    / "core"
-    / "threads"
-    / "task-events-ws.ts"
-)
+TOOLS_PY = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "tools.py"
+WORKSPACE_TOOLS_PY = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "tools" / "builtins" / "workspace_tools.py"
+TASK_TOOL_PY = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "tools" / "builtins" / "task_tool.py"
+TOOL_SURFACE_TS = REPO_ROOT / "frontend" / "src" / "core" / "threads" / "tool-surface.ts"
+TASK_EVENTS_TS = REPO_ROOT / "frontend" / "src" / "core" / "threads" / "task-events-ws.ts"
 
 
 def _read(path: Path) -> str:
@@ -74,9 +34,7 @@ def _read(path: Path) -> str:
 def _terminal_observation_types() -> set[str]:
     """Literal types written via _write_sandbox_observation in tools.py."""
     text = _read(TOOLS_PY)
-    found = set(
-        re.findall(r'_write_sandbox_observation\([^,]+,\s*"([a-z_]+)"', text)
-    )
+    found = set(re.findall(r'_write_sandbox_observation\([^,]+,\s*"([a-z_]+)"', text))
     # shell_session/shell_view live in workspace_tools.py.
     found |= set(
         re.findall(
@@ -111,21 +69,10 @@ class TestTerminalTypeContract:
         found = _terminal_observation_types()
         shell_family = {n for n in found if n.startswith("shell_")}
         unknown = found - self.TERMINAL_EXPECTED - self.ACTIVITY_ALLOWED - shell_family
-        assert not unknown, (
-            f"new observation types written without a contract decision: "
-            f"{sorted(unknown)}. Add them to TERMINAL_EXPECTED (and to "
-            "TERMINAL_TOOL_NAMES) or ACTIVITY_ALLOWED in this test."
-        )
+        assert not unknown, f"new observation types written without a contract decision: {sorted(unknown)}. Add them to TERMINAL_EXPECTED (and to TERMINAL_TOOL_NAMES) or ACTIVITY_ALLOWED in this test."
         assert shell_family, "shell_* family vanished from the writers?"
-        missing = {
-            name
-            for name in self.TERMINAL_EXPECTED & found
-            if f'"{name}"' not in ts
-        }
-        assert not missing, (
-            "backend writes terminal observations for types the frontend "
-            f"does not classify: {missing}. Add them to TERMINAL_TOOL_NAMES."
-        )
+        missing = {name for name in self.TERMINAL_EXPECTED & found if f'"{name}"' not in ts}
+        assert not missing, f"backend writes terminal observations for types the frontend does not classify: {missing}. Add them to TERMINAL_TOOL_NAMES."
 
     def test_shell_prefix_rule_is_present(self) -> None:
         ts = _read(TOOL_SURFACE_TS)
@@ -147,12 +94,9 @@ class TestComputerWsChannelContract:
     """Channels the frontend routes must exist verbatim on both sides."""
 
     def test_terminal_stats_channel(self) -> None:
-        py = _read(
-            REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "tools.py"
-        )
+        py = _read(REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "tools.py")
         ts = _read(TASK_EVENTS_TS)
-        assert 'emit_channel(\n                        "terminal_stats"' in py or \
-               '"terminal_stats"' in py
+        assert 'emit_channel(\n                        "terminal_stats"' in py or '"terminal_stats"' in py
         assert '"terminal-stats"' in ts or "TerminalStatsEvent" in ts
 
     def test_todos_channel(self) -> None:
@@ -169,8 +113,5 @@ class TestComputerWsChannelContract:
         # hard-coded to "workspace", so terminal_stats / todos / etc. ride their own
         # channel. The gateway must still default to "workspace" when the payload
         # omits the channel field.
-        assert 'payload.get("channel") or "workspace"' in deps, (
-            "observation events must preserve their caller-supplied channel and fall "
-            "back to 'workspace' when none is supplied"
-        )
+        assert 'payload.get("channel") or "workspace"' in deps, "observation events must preserve their caller-supplied channel and fall back to 'workspace' when none is supplied"
         assert "emit_dev_server_status" in dev, "dev_server must announce transitions"

@@ -17,8 +17,6 @@ from __future__ import annotations
 
 import logging
 import threading
-
-from deerflow.sandbox.computer_events import emit_channel
 from collections.abc import Awaitable, Callable
 from typing import Any, override
 
@@ -29,6 +27,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.runtime import Runtime
 
 from deerflow.agents.thread_state import ThreadState
+from deerflow.sandbox.computer_events import emit_channel
 
 
 def _todos_in_messages(messages: list[Any]) -> bool:
@@ -349,25 +348,12 @@ class TodoMiddleware(TodoListMiddleware):
         try:
             messages = getattr(request.state, "messages", None) or []
             if not _todos_in_messages(list(messages)):
-                user_turns = sum(
-                    1
-                    for m in messages
-                    if getattr(m, "type", "") == "human"
-                )
+                user_turns = sum(1 for m in messages if getattr(m, "type", "") == "human")
                 if user_turns >= 1:
                     emit_channel(
                         "todos",
                         {
-                            "thread_id": str(
-                                (
-                                    (
-                                        getattr(runtime := getattr(request, "runtime", None), "config", None)
-                                        or {}
-                                    ).get("configurable")
-                                    or {}
-                                ).get("thread_id")
-                                or ""
-                            ),
+                            "thread_id": str(((getattr(runtime := getattr(request, "runtime", None), "config", None) or {}).get("configurable") or {}).get("thread_id") or ""),
                             "todos": [
                                 {
                                     "content": "Working on your request",
@@ -411,9 +397,7 @@ class TodoMiddleware(TodoListMiddleware):
         try:
             from deerflow.sandbox.computer_events import emit_channel
 
-            messages = getattr(request, "state", None) and getattr(
-                request.state, "messages", None
-            )
+            messages = getattr(request, "state", None) and getattr(request.state, "messages", None)
             if not messages:
                 return
             latest: list[dict] | None = None
@@ -431,10 +415,7 @@ class TodoMiddleware(TodoListMiddleware):
                 return
             runtime = getattr(request, "runtime", None)
             cfg = getattr(runtime, "config", None) or {}
-            thread_id = (
-                (cfg.get("configurable") or {}).get("thread_id")
-                or (getattr(runtime, "context", None) or {}).get("thread_id")
-            )
+            thread_id = (cfg.get("configurable") or {}).get("thread_id") or (getattr(runtime, "context", None) or {}).get("thread_id")
             if not thread_id:
                 return
             emit_channel(
