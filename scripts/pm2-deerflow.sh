@@ -71,7 +71,16 @@ case "$NOVA_STACK" in
     else
       echo "[pm2-deerflow] voice overlay skipped (speech disabled or weights missing in $_voice_dir)" >&2
     fi
-    SCALE_FLAGS=(--scale provisioner=0 --scale searxng=0)
+    # provisioner stays at 0: nothing in the dev flow provisions sandboxes over
+    # HTTP, and nginx already resolves its upstream at request time so the route
+    # simply 502s if anyone tries.
+    #
+    # searxng does NOT stay at 0. config.yaml binds web_search to
+    # http://searxng:8080, and that tool falls back to DuckDuckGo *silently* --
+    # so scaling it away meant every search quietly used the fallback while the
+    # P14 probe and the privacy panel's SearXNG card sat red. Either the service
+    # runs or the config should not point at it; it runs.
+    SCALE_FLAGS=(--scale provisioner=0)
     ;;
   *)
     echo "ERROR: NOVA_STACK='$NOVA_STACK' is not valid (expected 'dev' or 'prod')" >&2
