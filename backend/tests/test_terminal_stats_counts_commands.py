@@ -13,12 +13,29 @@ next real command pushed a frame.
 """
 
 
+import deerflow.tools.builtins.workspace_tools  # noqa: F401  isort:skip
+from deerflow.sandbox.tools import is_command_line  # noqa: E402  isort:skip
+
+
 def _count_calls(calls):
-    """Replay a frame sequence through the real predicate."""
+    """Replay a frame sequence through the shipped predicate.
+
+    This used to re-implement the predicate inline, so the test could pass
+    while the real one was wrong -- the same "tests a stub" trap that hid the
+    skill tool-policy bug. It now imports the single definition.
+    """
     total = 0
     for obs_id, state, delta, replace, tool in calls:
-        is_command_line = delta is None and replace is None and ((obs_id is not None and state == "running") or (tool == "bash" and obs_id is None))
-        total += 1 if is_command_line else 0
+        record = {"type": tool}
+        if obs_id is not None:
+            record["id"] = obs_id
+        if state is not None:
+            record["state"] = state
+        if delta is not None:
+            record["delta"] = delta
+        if replace is not None:
+            record["replace"] = replace
+        total += 1 if is_command_line(record) else 0
     return total
 
 
@@ -55,17 +72,25 @@ def test_non_bash_tools_do_not_count():
     assert _count_calls([(None, None, None, None, "read_file")]) == 0
 
 
-def test_predicate_matches_the_shipped_source():
-    """Guard the predicate duplicated above against drift in tools.py.
+def test_the_predicate_is_not_duplicated_anywhere():
+    """The definition of "a command" must exist exactly once.
 
-    Read as text rather than imported: deerflow.sandbox.tools participates in an
-    import cycle (workspace_tools imports back into it), so pulling it in from a
-    test can fail at collection depending on import order. The assertion is a
-    source-level contract, so text is the right granularity anyway.
+    This file used to re-implement the predicate and guard it against drift by
+    asserting the shipped source *as text*. That is a weaker contract than
+    simply importing it, which is what `_count_calls` now does -- so the drift
+    guard is replaced by the thing it was approximating: no second copy of the
+    expression may exist in the tree.
     """
+    import subprocess
     from pathlib import Path
 
-    src = Path(__file__).resolve().parent.parent / "packages/harness/deerflow/sandbox/tools.py"
-    text = src.read_text()
-    expected = 'is_command_line = delta is None and replace is None and ((obs_id is not None and state == "running") or (tool == "bash" and obs_id is None))'
-    assert expected in text, "is_command_line changed in tools.py -- update _count_calls in this test to match"
+    root = Path(__file__).resolve().parent.parent
+    # Assembled at runtime so this file does not contain the literal it greps
+    # for -- otherwise the test matches its own source and always fails.
+    needle = '(tool == "bash"' + " and obs_id is None)"
+    hits = subprocess.run(
+        ["grep", "-rn", needle, str(root / "packages"), str(root / "app"), str(root / "tests")],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert hits == "", f"the command predicate was re-implemented instead of imported:\n{hits}"

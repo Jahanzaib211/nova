@@ -698,30 +698,38 @@ def _mark_sandbox_active(thread_id: str) -> None:
 async def terminal_stats(thread_id: str, request: Request) -> dict:
     """The deterministic command total for a thread's Terminal header.
 
-    The count is pushed over computer-ws as a `terminal_stats` frame, and that
-    was its *only* source. The hub replays a bounded buffer on join
-    (`TaskEventHub(buffer_size=32)` in deps.py) shared across every channel --
-    browser transitions, workspace observations, todos and these stats -- so a
-    burst of commands rolls the last stats frame out of replay. A panel opened
-    afterwards then showed the approximate "~N" local-window count until the
-    next command happened to run, and a gateway restart dropped the buffer
-    entirely.
+    The count was once pushed over computer-ws as a `terminal_stats` frame and
+    nowhere else. The hub replays only a bounded buffer on join, so a burst of
+    commands rolled the last stats frame out of replay and a panel opened
+    afterwards fell back to the approximate "~N" window count; a gateway
+    restart dropped the buffer entirely. Hence this endpoint.
 
-    terminal_stats.json is already the durable source of truth (written beside
-    sandbox.log by `_write_sandbox_observation`), and unlike the buffer it
-    survives a restart. This just lets the panel read it on mount.
+    It no longer just *reads* a stored integer. `sandbox.log` is the ground
+    truth and the counter beside it is a cache, so this reconciles the two --
+    which matters because the integer was for a long time maintained by an
+    unlocked read-modify-write and silently lost increments under concurrent
+    commands (one real thread recorded 216 commands as 146). Reading through
+    the reconciler means such a thread repairs itself the first time the panel
+    asks, instead of carrying a low number for its whole life.
     """
     if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
-    stats_path = _sandbox_log_path(thread_id, user_id=user_id).parent / "terminal_stats.json"
-    try:
-        return {"total_commands": int(json.loads(stats_path.read_text() or "0"))}
-    except (OSError, ValueError, json.JSONDecodeError):
-        # No commands yet, or an unreadable counter. Absent is not zero: the
-        # client keeps its approximate window count rather than printing a
-        # confident "0 cmds".
-        return {"total_commands": None}
+    log_path = _sandbox_log_path(thread_id, user_id=user_id)
+
+    from deerflow.sandbox.tools import reconcile_terminal_stats
+
+    # Reconcile on read, so a thread whose counter was damaged by the old
+    # unlocked increment repairs itself the first time the panel asks -- rather
+    # than carrying a permanently low number for the life of the thread. The
+    # scan is incremental (byte offset), so this is a short read in steady
+    # state. Offloaded because it is blocking file IO on an async path and
+    # `make test-blocking-io` is a hard CI gate.
+    total = await asyncio.to_thread(reconcile_terminal_stats, log_path)
+
+    # Absent is not zero: the client keeps its approximate window count rather
+    # than printing a confident "0 cmds".
+    return {"total_commands": total}
 
 
 @router.get("/dev-status")

@@ -30,6 +30,7 @@ from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
 from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
 from deerflow.tools.types import Runtime
+from deerflow.utils.atomic_write import atomic_write_text
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
 # A ``{...}`` block holding a single identifier-like placeholder (e.g. ``{id}``
@@ -248,6 +249,118 @@ def _finalize_stale_open_ids(sandbox_id: str) -> None:
         logger.debug("_finalize_stale_open_ids failed: %s", exc)
 
 
+# Serialises every terminal_stats.json read-modify-write.
+#
+# Subagents share their parent thread's sandbox and run on a thread pool, so
+# several commands touch this counter at once -- the Agent's Computer header
+# routinely reads "4 running". A bare read-modify-write loses those updates:
+# with 200 threads issuing one command each the counter landed on **2**, and on
+# a real thread 216 commands were recorded as 146. The UI renders the value
+# without a "~" prefix, i.e. as exact, so the number simply did not hold. One
+# process owns this file (uvicorn runs a single worker), so a thread lock
+# suffices; the atomic write is what keeps concurrent *readers* honest.
+_terminal_stats_lock = threading.Lock()
+
+_TERMINAL_STATS_FILE = "terminal_stats.json"
+
+
+def is_command_line(record: dict) -> bool:
+    """True if one sandbox.log record represents exactly one *command*.
+
+    The single definition of "a command". It used to live inline in
+    ``_write_sandbox_observation`` and was re-implemented by its own test, so
+    the test could pass while the shipped predicate was wrong.
+
+    A *command*, not a frame: ``on_chunk`` writes every delta/replace frame with
+    the same ``id`` and ``state="running"``, so matching those too made one
+    streamed command emitting 50 chunks count as 51. Only the opening frame of
+    a streamed command counts, plus every non-framed bash line.
+    """
+    if record.get("delta") is not None or record.get("replace") is not None:
+        return False
+    obs_id = record.get("id")
+    if obs_id is not None:
+        return record.get("state") == "running"
+    return record.get("type") == "bash"
+
+
+def reconcile_terminal_stats(log_path: Path) -> int | None:
+    """Recompute the command total from sandbox.log, cheaply and idempotently.
+
+    The counter is a *cache*; ``sandbox.log`` is the durable ground truth. An
+    incrementally-maintained integer can only ever be as correct as every write
+    that ever touched it -- and the unlocked version that shipped before this
+    lost 32% of one thread's commands, which no amount of future locking
+    repairs. Deriving the total from the log instead makes it self-healing:
+    wrong values converge on the next call.
+
+    State is ``{"total": N, "log_offset": B}``. Only the bytes past
+    ``log_offset`` are parsed, so steady-state cost is one short read.
+
+    A legacy bare-int file is discarded rather than trusted -- it is exactly the
+    value that may have lost increments -- and the whole log is rescanned once,
+    which is what repairs already-damaged threads.
+
+    Returns the total, or ``None`` if there is no log to count.
+    """
+    if not log_path.exists():
+        return None
+    stats_path = log_path.parent / _TERMINAL_STATS_FILE
+
+    with _terminal_stats_lock:
+        total = 0
+        offset = 0
+        try:
+            raw = stats_path.read_text()
+            state = json.loads(raw) if raw.strip() else {}
+            if isinstance(state, dict):
+                total = int(state.get("total", 0))
+                offset = int(state.get("log_offset", 0))
+            # Anything else (a legacy bare int) leaves total/offset at 0, so the
+            # log is rescanned in full and the stale value is replaced.
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            total, offset = 0, 0
+
+        try:
+            size = log_path.stat().st_size
+        except OSError:
+            return None
+        # Truncated or rotated out from under us: the offset is meaningless, so
+        # recount rather than resuming past the end of a shorter file.
+        if size < offset:
+            total, offset = 0, 0
+        if size > offset:
+            try:
+                with open(log_path, "rb") as fh:
+                    fh.seek(offset)
+                    chunk = fh.read()
+            except OSError:
+                return total
+            # Whole lines only. The writer appends from other threads, so a read
+            # can land mid-append; advancing past a partial line would drop it
+            # silently. Same discipline as sandbox.py::_read_from.
+            cut = chunk.rfind(b"\n")
+            if cut != -1:
+                for line in chunk[: cut + 1].decode("utf-8", errors="replace").splitlines():
+                    if not line.strip():
+                        continue
+                    try:
+                        if is_command_line(json.loads(line)):
+                            total += 1
+                    except (ValueError, json.JSONDecodeError):
+                        continue
+                offset += cut + 1
+
+        try:
+            # mode=0o644 explicitly: atomic_write_text writes through
+            # NamedTemporaryFile, which creates at 0600. Without this the
+            # counter silently became unreadable to every non-root reader.
+            atomic_write_text(stats_path, json.dumps({"total": total, "log_offset": offset}), mode=0o644)
+        except Exception as exc:  # noqa: BLE001 - the count is best-effort
+            logger.debug("terminal_stats write failed: %s", exc)
+        return total
+
+
 def _write_sandbox_observation(
     sandbox_id: str,
     tool: str,
@@ -325,29 +438,13 @@ def _write_sandbox_observation(
         # intermediate frames of a streamed command: they are the same tool on
         # the same path, so rewriting this file every 300 ms would be pure IO
         # for an unchanged value.
-        # Deterministic command count (G2): every framed opening and every
-        # non-framed bash line is exactly one command, persisted so the count
-        # survives window rolls, reconnects AND container recycles.
-        # A *command*, not a frame. `on_chunk` writes every delta/replace frame
-        # with the same obs_id and state="running", so the first branch matched
-        # each one and the counter incremented per output chunk -- a single
-        # streamed command producing 50 chunks added 51 to a number the UI
-        # labels "N cmds". The emit below is nested under `delta is None and
-        # replace is None`, so those increments were also invisible until the
-        # next real command pushed a frame, at which point the count jumped.
-        # Only the opening frame of a streamed command counts.
-        is_command_line = delta is None and replace is None and ((obs_id is not None and state == "running") or (tool == "bash" and obs_id is None))
+        # Deterministic command count. Derived from the log we just appended
+        # to, not tracked as a running integer -- see reconcile_terminal_stats.
+        # Only recomputed on frames that can change the total, so the chatty
+        # delta/replace frames cost nothing.
         stats_total: int | None = None
-        if is_command_line:
-            try:
-                stats_path = log_path.parent / "terminal_stats.json"
-                current = 0
-                if stats_path.exists():
-                    current = int(json.loads(stats_path.read_text() or "0"))
-                stats_total = current + 1
-                stats_path.write_text(str(stats_total), encoding="utf-8")
-            except Exception as exc:  # noqa: BLE001 - count is best-effort
-                logger.debug("terminal_stats update failed: %s", exc)
+        if is_command_line(record):
+            stats_total = reconcile_terminal_stats(log_path)
 
         if delta is None and replace is None:
             status_path = log_path.parent / "sandbox_status.json"
