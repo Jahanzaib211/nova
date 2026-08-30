@@ -142,12 +142,27 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
     roughly a third — and the missing entries were the ones people most want to
     confirm (can it run a shell? can it read my files?).
 
-    ``subagent_enabled=True`` matches the gateway's own runs, where the ``task``
-    tool is bound. MCP tools are excluded: they are reported separately, and
-    resolving them here would make a UI poll wait on remote servers.
+    ``subagent_enabled=True`` matches the gateway's own runs. MCP tools are
+    excluded: they are reported separately, and resolving them here would make a
+    UI poll wait on remote servers.
+
+    **The skill tool-policy is applied here, through the same function the agent
+    uses.** It was not, and the omission was expensive. This docstring already
+    claimed the report "cannot drift from what the model is really given" — but
+    ``get_available_tools()`` returns the *registry*, and the lead agent then
+    filters it through ``filter_tools_by_skill_allowed_tools``. When one public
+    skill's ``allowed-tools`` collapsed the bound set from 42 tools to 6, this
+    panel kept reporting 42 for five days, so the one instrument an operator
+    checks to answer "can it still spawn subagents?" was actively confirming a
+    capability that no longer existed.
+
+    This reports the **default agent's** binding. A custom agent that names
+    ``skills:`` in its config may legitimately bind fewer.
     """
     try:
+        from deerflow.agents.lead_agent.agent import skills_for_tool_policy
         from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
+        from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
         from deerflow.tools.tools import get_available_tools
 
         tools = get_available_tools(
@@ -155,6 +170,11 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
             subagent_enabled=True,
             app_config=config,
         )
+        # ``None`` is the default agent's skill selection -- the same argument
+        # ``_make_lead_agent`` passes for a run with no agent_name. Going through
+        # the shared helper rather than reimplementing the rule is the point:
+        # the two cannot disagree again.
+        tools = filter_tools_by_skill_allowed_tools(tools, skills_for_tool_policy(None, app_config=config))
 
         out: list[ToolSummary] = []
         seen: set[str] = set()
