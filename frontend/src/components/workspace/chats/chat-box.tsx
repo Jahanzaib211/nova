@@ -18,6 +18,7 @@ import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/wo
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
+import { useSandboxTerminalStats } from "@/core/sandbox/hooks";
 import {
   useSupersedeStaleSubtasks,
   useUpdateSubtask,
@@ -312,6 +313,16 @@ const ChatBox: React.FC<{
   useEffect(() => {
     setTerminalCommandCount(undefined);
   }, [threadId]);
+
+  // Seed from the durable counter on disk. The socket stays authoritative for
+  // live updates -- this only fills the window where no `terminal_stats` frame
+  // has arrived yet, which is the common case after a reload or once a burst of
+  // commands has rolled the frame out of the hub's shared replay buffer.
+  const seededCommandCount = useSandboxTerminalStats(threadId);
+  useEffect(() => {
+    if (seededCommandCount === null) return;
+    setTerminalCommandCount((current) => current ?? seededCommandCount);
+  }, [seededCommandCount]);
 
   // Opening either surface pulls it to the front, mirroring how they take over
   // screen space on desktop.

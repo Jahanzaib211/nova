@@ -847,6 +847,50 @@ export function normalizeTodoResult(body: unknown): SandboxTodoResult {
   };
 }
 
+/**
+ * Seed value for the Terminal's deterministic command count.
+ *
+ * The count arrives as a `terminal_stats` frame over computer-ws, and that was
+ * its only source. The hub replays a bounded buffer on join, shared across every
+ * channel, so a burst of commands rolls the stats frame out of replay -- a panel
+ * opened afterwards showed the approximate "~N" window count until the next
+ * command ran, and a gateway restart dropped the buffer entirely.
+ *
+ * `terminal_stats.json` is the durable source and survives a restart. Fetched
+ * once on mount; the socket remains authoritative for live updates.
+ *
+ * `null` means "unknown", which is NOT zero -- the caller keeps its approximate
+ * count rather than printing a confident "0 cmds".
+ */
+export function useSandboxTerminalStats(
+  threadId: string | null,
+): number | null {
+  const { data } = useQuery<number | null>({
+    queryKey: ["sandbox", "terminal-stats", threadId],
+    queryFn: async () => {
+      if (!threadId) return null;
+      const res = await fetch(
+        `${getBackendBaseURL()}/api/sandbox/terminal-stats?thread_id=${encodeURIComponent(threadId)}`,
+        { method: "GET", headers: { "Content-Type": "application/json" } },
+      );
+      // 404 is routine for a brand-new thread whose directory does not exist
+      // yet -- the same ownership-guard case useSandboxTodo documents above.
+      if (!res.ok) return null;
+      const body = (await res.json()) as { total_commands?: number | null };
+      return typeof body.total_commands === "number"
+        ? body.total_commands
+        : null;
+    },
+    enabled: Boolean(threadId),
+    // Mount-time seed only. The socket carries live updates, so polling this
+    // would be redundant traffic on every thread.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+
+  return data ?? null;
+}
+
 export function useSandboxTodo(threadId: string | null): SandboxTodoResult {
   const { data } = useQuery<SandboxTodoResult>({
     queryKey: ["sandbox", "todo", threadId],

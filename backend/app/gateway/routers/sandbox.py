@@ -694,6 +694,36 @@ def _mark_sandbox_active(thread_id: str) -> None:
         pass
 
 
+@router.get("/terminal-stats")
+async def terminal_stats(thread_id: str, request: Request) -> dict:
+    """The deterministic command total for a thread's Terminal header.
+
+    The count is pushed over computer-ws as a `terminal_stats` frame, and that
+    was its *only* source. The hub replays a bounded buffer on join
+    (`TaskEventHub(buffer_size=32)` in deps.py) shared across every channel --
+    browser transitions, workspace observations, todos and these stats -- so a
+    burst of commands rolls the last stats frame out of replay. A panel opened
+    afterwards then showed the approximate "~N" local-window count until the
+    next command happened to run, and a gateway restart dropped the buffer
+    entirely.
+
+    terminal_stats.json is already the durable source of truth (written beside
+    sandbox.log by `_write_sandbox_observation`), and unlike the buffer it
+    survives a restart. This just lets the panel read it on mount.
+    """
+    if not await _owns_thread_or_fresh(thread_id, request):
+        raise HTTPException(status_code=404, detail="Not found")
+    user_id = get_effective_user_id()
+    stats_path = _sandbox_log_path(thread_id, user_id=user_id).parent / "terminal_stats.json"
+    try:
+        return {"total_commands": int(json.loads(stats_path.read_text() or "0"))}
+    except (OSError, ValueError, json.JSONDecodeError):
+        # No commands yet, or an unreadable counter. Absent is not zero: the
+        # client keeps its approximate window count rather than printing a
+        # confident "0 cmds".
+        return {"total_commands": None}
+
+
 @router.get("/dev-status")
 async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     """Return the live dev server status for a thread (optionally a labeled one)."""
