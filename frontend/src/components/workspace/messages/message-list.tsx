@@ -540,7 +540,23 @@ export function MessageList({
                             }
                           : {}),
                     };
-                    queueSubtaskUpdate(task, parsed ? "result" : "derived");
+                    // Authority follows the parsed *status*, not the mere
+                    // existence of a ToolMessage.
+                    //
+                    // `parseSubtaskResult` deliberately returns `in_progress`
+                    // for a ToolMessage whose shape it does not recognise, so
+                    // contract drift surfaces instead of being masked as a
+                    // failure. But stamping that with "result" authority made it
+                    // permanent: the FSM rejects every later derived correction,
+                    // and supersede cannot help while the tool_call id is still
+                    // live -- so the card spun forever with no path back.
+                    // A non-terminal status is never a final answer.
+                    const isTerminal =
+                      task.status === "completed" || task.status === "failed";
+                    queueSubtaskUpdate(
+                      task,
+                      parsed && isTerminal ? "result" : "derived",
+                    );
                     tasks.add(task);
                   }
                 }
@@ -551,7 +567,12 @@ export function MessageList({
                     extractTextFromMessage(message),
                     message.additional_kwargs,
                   );
-                  queueSubtaskUpdate({ id: taskId, ...parsed }, "result");
+                  // Same rule as above: only a terminal status may claim
+                  // "result" authority and lock the row.
+                  queueSubtaskUpdate(
+                    { id: taskId, ...parsed },
+                    parsed.status === "in_progress" ? "derived" : "result",
+                  );
                 }
               }
             }

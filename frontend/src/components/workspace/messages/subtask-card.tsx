@@ -23,6 +23,7 @@ import { hasToolCalls } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { streamdownPluginsWithWordAnimation } from "@/core/streamdown";
 import { useSubtask } from "@/core/tasks/context";
+import type { Subtask } from "@/core/tasks/types";
 import { explainLastToolCall } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,35 @@ import { CitationLink } from "../citations/citation-link";
 import { FlipDisplay } from "../flip-display";
 
 import { MarkdownContent } from "./markdown-content";
+
+/**
+ * What the collapsed row says.
+ *
+ * It used to render the bare status enum, so three very different outcomes were
+ * one identical red "Subtask failed": the subagent ran and failed, the run was
+ * cut off before it reported, and -- the one that cost days -- the `task` tool
+ * was never bound at all, so nothing ran. That last case arrives as
+ * "Error: task is not a valid tool, try one of [...]", which names the actual
+ * problem, and the row threw it away. `message-list.tsx` already computes the
+ * distinction and stores it on `task.error`; this just stops discarding it.
+ *
+ * Superseded rows keep their plain label -- they are not a failure and are
+ * deliberately styled neutral elsewhere in this file.
+ */
+function failureSummary(
+  task: Subtask,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const label = t.subtasks[task.status];
+  if (task.status !== "failed" || !task.error) return label;
+  if (task.error === "superseded by a newer run") return label;
+  // One line, no wrapper noise: the row is truncated at 420px and the full
+  // text is already in the expanded body.
+  const reason = (
+    task.error.replace(/^Error:\s*/i, "").split("\n")[0] ?? ""
+  ).trim();
+  return reason ? `${label} — ${reason}` : label;
+}
 
 export function SubtaskCard({
   className,
@@ -129,7 +159,7 @@ export function SubtaskCard({
                       task.latestMessage &&
                       hasToolCalls(task.latestMessage)
                         ? explainLastToolCall(task.latestMessage, t)
-                        : t.subtasks[task.status]}
+                        : failureSummary(task, t)}
                     </FlipDisplay>
                   </div>
                 )}

@@ -328,7 +328,15 @@ def _write_sandbox_observation(
         # Deterministic command count (G2): every framed opening and every
         # non-framed bash line is exactly one command, persisted so the count
         # survives window rolls, reconnects AND container recycles.
-        is_command_line = (obs_id is not None and state == "running") or (tool == "bash" and delta is None and replace is None and obs_id is None)
+        # A *command*, not a frame. `on_chunk` writes every delta/replace frame
+        # with the same obs_id and state="running", so the first branch matched
+        # each one and the counter incremented per output chunk -- a single
+        # streamed command producing 50 chunks added 51 to a number the UI
+        # labels "N cmds". The emit below is nested under `delta is None and
+        # replace is None`, so those increments were also invisible until the
+        # next real command pushed a frame, at which point the count jumped.
+        # Only the opening frame of a streamed command counts.
+        is_command_line = delta is None and replace is None and ((obs_id is not None and state == "running") or (tool == "bash" and obs_id is None))
         stats_total: int | None = None
         if is_command_line:
             try:

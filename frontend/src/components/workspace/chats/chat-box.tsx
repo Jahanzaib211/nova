@@ -303,6 +303,16 @@ const ChatBox: React.FC<{
     number | undefined
   >(undefined);
 
+  // Reset on thread change. This state lives in ChatBox, which is NOT remounted
+  // when the thread changes -- only AgentComputerPanel is (key={threadId}). So
+  // a fresh panel was handed the previous thread's total, and rendered it
+  // *without* the "~" prefix, i.e. as an exact count, until thread B happened to
+  // run its first command. `undefined` is the honest value: the Terminal header
+  // falls back to "~N" from its local window, which reads as approximate.
+  useEffect(() => {
+    setTerminalCommandCount(undefined);
+  }, [threadId]);
+
   // Opening either surface pulls it to the front, mirroring how they take over
   // screen space on desktop.
   useEffect(() => {
