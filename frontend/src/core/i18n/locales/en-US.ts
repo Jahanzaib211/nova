@@ -879,7 +879,7 @@ export const enUS: Translations = {
       emptyFile: "File is empty",
       diff: "Diff",
       file: "File",
-      lines: (count: number) => `${count} lines`,
+      lines: (count: number) => `${count} line${count === 1 ? "" : "s"}`,
       writing: "Writing",
     },
     browser: {
@@ -1025,7 +1025,7 @@ export const enUS: Translations = {
     metrics: {
       tools: "tools",
       toolsDetail: "Builtin tools available to the lead agent.",
-      subagents: "subagents",
+      subagents: "agent types",
       subagentsDetail:
         "Agent types the lead can delegate to — not a count of running tasks.",
       subagentsConcurrency: (n: number) =>

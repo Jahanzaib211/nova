@@ -32,7 +32,10 @@ function getStatusLabel(
       return filename
         ? t.agentComputer.status.writing(
             filename,
-            lineCount && lineCount > 1 ? `${lineCount} lines` : undefined,
+            // Was a hardcoded English string that also dropped the count
+            // entirely at 1 -- so a one-line write silently lost its detail
+            // and no locale but English ever saw it.
+            lineCount ? t.agentComputer.viewer.lines(lineCount) : undefined,
           )
         : t.agentComputer.status.usingViewer;
     case "file-edit":

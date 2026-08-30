@@ -188,7 +188,11 @@ function SkillPill({
           <Badge
             variant={skill.enabled ? "secondary" : "outline"}
             className={cn(
-              "h-6 cursor-default gap-1 rounded-md px-1.5 font-mono text-[11px] font-medium",
+              // max-w + truncate, not just the parent's overflow-hidden: the
+              // rail clips at the container edge, so a long name was hard-cut
+              // mid-word ("academic-paper-review" -> "academ") with no
+              // ellipsis to signal it. The full name stays in the tooltip.
+              "h-6 max-w-[14ch] cursor-default gap-1 rounded-md px-1.5 font-mono text-[11px] font-medium",
               skill.enabled
                 ? "bg-secondary/60 hover:bg-secondary/80"
                 : "opacity-60",
@@ -197,8 +201,8 @@ function SkillPill({
             data-enabled={skill.enabled}
             data-category={skill.category}
           >
-            <SparklesIcon className="size-2.5 opacity-70" aria-hidden />
-            {skill.name}
+            <SparklesIcon className="size-2.5 shrink-0 opacity-70" aria-hidden />
+            <span className="truncate">{skill.name}</span>
           </Badge>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
@@ -226,7 +230,11 @@ function SkillRail({
 }) {
   const enabled = skills.filter((s) => s.enabled);
   const total = skills.length;
-  const overflow = total - MAX_VISIBLE_SKILLS;
+  // Overflow counts what this rail actually hides, which is drawn from
+  // `enabled` -- not from `total`. Computing it from `total` claimed "+20 more"
+  // with 28 installed and 5 enabled, while rendering all 5 and hiding nothing.
+  // Invisible whenever every skill is enabled, which is the common case.
+  const overflow = enabled.length - MAX_VISIBLE_SKILLS;
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex min-w-0 items-center gap-1.5">

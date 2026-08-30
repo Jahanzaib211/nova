@@ -979,7 +979,7 @@ export const zhCN: Translations = {
     metrics: {
       tools: "工具",
       toolsDetail: "主导智能体可用的内置工具。",
-      subagents: "子智能体",
+      subagents: "智能体类型",
       subagentsDetail: "主导智能体可委托的智能体类型 — 并非正在运行的任务数。",
       subagentsConcurrency: (n: number) => `最多 ${n} 个委托任务可同时运行。`,
       hooks: "钩子",
