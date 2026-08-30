@@ -592,7 +592,15 @@ services:
       - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:?Set SEARXNG_SECRET_KEY in .env}
       - SEARXNG_BASE_URL=http://searxng:8080
     networks:
-      - deer-flow-dev
+      deer-flow-dev:
+        # Static, like every other service on this network. Without one, IPAM
+        # allocated the lowest free address -- which was .2, nginx's static
+        # address -- and nginx then died with "failed to set up container
+        # networking: Address already in use". It stayed latent only because
+        # searxng was scaled to 0, so nothing ever contended for .2.
+        # Allocated: .2 nginx, .3 gateway, .4 frontend, .5 postgres,
+        # .6 searxng, .7 browserless, .8 crawl4ai.
+        ipv4_address: 192.168.200.6
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
       interval: 30s
