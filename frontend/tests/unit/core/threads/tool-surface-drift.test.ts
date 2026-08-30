@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isActivityTool,
-  isTerminalTool,
-} from "@/core/threads/tool-surface";
+import { isActivityTool, isTerminalTool } from "@/core/threads/tool-surface";
 
 /**
  * Drift guard: if someone adds a new tool and forgets to update the
@@ -60,7 +57,9 @@ describe("tool surface drift guard", () => {
   it("all known terminal tools are classified as terminal", () => {
     for (const name of KNOWN_TERMINAL_TOOLS) {
       expect(isTerminalTool(name), `${name} should be terminal`).toBe(true);
-      expect(isActivityTool(name), `${name} should not be activity`).toBe(false);
+      expect(isActivityTool(name), `${name} should not be activity`).toBe(
+        false,
+      );
     }
   });
 

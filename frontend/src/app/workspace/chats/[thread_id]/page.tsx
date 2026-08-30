@@ -53,6 +53,7 @@ import { recordComposer } from "@/core/threads/stream-trace";
 import { composerShouldStream } from "@/core/threads/stream-trace";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
+import { useTodoCollapse } from "@/core/todos";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -271,6 +272,8 @@ export default function ChatPage() {
     ? localSettings.tokenUsage.inlineMode
     : "off";
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  const { collapsed: todosCollapsed, toggle: toggleTodos } =
+    useTodoCollapse(threadId);
 
   return (
     <ThreadContext.Provider
@@ -383,7 +386,8 @@ export default function ChatPage() {
                         <TodoList
                           className="bg-background/5"
                           todos={thread.values.todos ?? []}
-                          hidden={false}
+                          collapsed={todosCollapsed}
+                          onToggle={toggleTodos}
                         />
                       </div>
                     </div>

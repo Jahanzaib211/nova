@@ -830,6 +830,8 @@ export const zhCN: Translations = {
       interactiveTitle: "交互式终端",
       noOutput: "暂无终端输出",
       noOutputHint: "智能体命令将显示在这里 — 切换到",
+      streamDown: "正在重新连接命令流",
+      streamDownHint: "智能体可能仍在工作 — 只是此面板暂时无法接收。",
       running: "运行中...",
       reconnect: "重新连接",
       shellDisconnected: "交互式 shell 无响应，沙箱可能已被回收。",

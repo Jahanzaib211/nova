@@ -85,7 +85,6 @@ src/
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns composer busy-state wiring.
 - `src/core/threads/hooks.ts` owns pre-submit upload state and thread submission.
 
-
 ## Resources
 
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)

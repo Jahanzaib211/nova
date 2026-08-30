@@ -863,6 +863,9 @@ export const enUS: Translations = {
       interactiveTitle: "Interactive terminal",
       noOutput: "No terminal output yet",
       noOutputHint: "Agent commands appear here — switch to",
+      streamDown: "Reconnecting to the command stream",
+      streamDownHint:
+        "The agent may be working — this panel just cannot hear it right now.",
       running: "running...",
       reconnect: "Reconnect",
       shellDisconnected:

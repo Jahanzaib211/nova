@@ -1,7 +1,7 @@
 "use client";
 
 import type { AIMessage } from "@langchain/langgraph-sdk";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { getBackendBaseURL, getBaseOrigin } from "@/core/config";
 import type { SubtaskUpdateSource } from "@/core/tasks/context";
@@ -205,6 +205,17 @@ export function useComputerEvents(
   threadId: string | null | undefined,
   handlers: ComputerEventHandlers,
 ): void {
+  // The socket must not be rebuilt on every render, so the effect below keeps
+  // `[threadId]` deps -- but that means its closure captures whichever
+  // `handlers` object the first render passed, forever. Callers build that
+  // object inline, so every later render's callbacks were being dropped on the
+  // floor: todos, terminal counts and subagent updates all applied against
+  // stale state. Read through a ref that each render refreshes instead.
+  const handlersRef = useRef(handlers);
+  useEffect(() => {
+    handlersRef.current = handlers;
+  });
+
   useEffect(() => {
     if (!threadId) return;
 
@@ -224,7 +235,7 @@ export function useComputerEvents(
         return; // heartbeat / non-JSON frame
       }
       if (isTaskLifecycleEvent(parsed)) {
-        applyTaskEvent(parsed, handlers.updateSubtask);
+        applyTaskEvent(parsed, handlersRef.current.updateSubtask);
         return;
       }
       if (
@@ -232,7 +243,7 @@ export function useComputerEvents(
         parsed !== null &&
         (parsed as { channel?: string }).channel === "browser"
       ) {
-        handlers.onDevServer?.(parsed as DevServerEvent);
+        handlersRef.current.onDevServer?.(parsed as DevServerEvent);
         return;
       }
       if (
@@ -240,7 +251,9 @@ export function useComputerEvents(
         parsed !== null &&
         (parsed as { channel?: string }).channel === "workspace"
       ) {
-        handlers.onObservation?.(parsed as WorkspaceObservationEvent);
+        handlersRef.current.onObservation?.(
+          parsed as WorkspaceObservationEvent,
+        );
         return;
       }
       if (
@@ -248,7 +261,7 @@ export function useComputerEvents(
         parsed !== null &&
         (parsed as { channel?: string }).channel === "todos"
       ) {
-        handlers.onTodos?.(parsed as TodoSnapshotEvent);
+        handlersRef.current.onTodos?.(parsed as TodoSnapshotEvent);
         return;
       }
       if (
@@ -257,7 +270,7 @@ export function useComputerEvents(
         ((parsed as { type?: string }).type === "terminal_stats" ||
           (parsed as { channel?: string }).channel === "terminal_stats")
       ) {
-        handlers.onTerminalStats?.(parsed as TerminalStatsEvent);
+        handlersRef.current.onTerminalStats?.(parsed as TerminalStatsEvent);
       }
     };
 
@@ -312,7 +325,7 @@ export function useComputerEvents(
           if (closed || !dead) return;
           closed = true;
           clearTimeout(retryTimer);
-          handlers.onAuthExpired?.();
+          handlersRef.current.onAuthExpired?.();
         });
       }
       const delay = Math.min(15000, 1000 * 2 ** (attempts - 1));
@@ -332,8 +345,9 @@ export function useComputerEvents(
         socket = null;
       }
     };
-    // Handlers come from the consumer; wrap them in a stable ref so a new
-    // closure per render does not rebuild the socket.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Handlers are read through `handlersRef` (refreshed after every commit),
+    // so the effect genuinely depends on nothing but the thread -- one socket
+    // per thread, and no stale closure. The exhaustive-deps suppression this
+    // block used to carry is no longer needed.
   }, [threadId]);
 }

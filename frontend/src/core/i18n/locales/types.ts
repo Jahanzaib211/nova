@@ -737,6 +737,8 @@ export interface Translations {
       interactiveTitle: string;
       noOutput: string;
       noOutputHint: string;
+      streamDown: string;
+      streamDownHint: string;
       running: string;
       /** Label for the control that re-fetches the ttyd URL after the
           sandbox was recycled and the embedded shell went dead. */

@@ -85,6 +85,7 @@ def wired(monkeypatch):
 
     provider = _FakeProvider()
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
+
     async def _owning(ws, tid):
         return True
 

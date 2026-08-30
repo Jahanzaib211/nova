@@ -182,6 +182,30 @@ def _caller_owns_thread(thread_id: str) -> bool:
         return False
 
 
+async def _owns_thread_or_fresh(thread_id: str, request: Request) -> bool:
+    """Ownership for the log stream, without the fresh-thread race.
+
+    The directory check below is the fast path (no database round-trip, and it
+    covers untracked legacy threads), but the thread directory is only created
+    when the first *run* starts -- while the panel opens this stream the moment
+    the chat page mounts. ``ws_caller_owns_thread`` was given a metadata-row
+    fallback for exactly this and the SSE path never got it, so the Terminal
+    404'd for the thread's own owner and the client backed off to a 30s ceiling
+    on top. Same fallback, same rule.
+    """
+    if _caller_owns_thread(thread_id):
+        return True
+    from app.gateway.ws_guards import caller_owns_thread_via_store
+
+    # `request` is Optional in practice: the denial tests call this endpoint
+    # directly with request=None to assert the ownership check short-circuits
+    # before anything touches it. No request means no app state means no store
+    # to consult, which is a denial -- the same answer the fast path just gave.
+    app = getattr(request, "app", None)
+    store = getattr(getattr(app, "state", None), "thread_store", None)
+    return await caller_owns_thread_via_store(thread_id, store)
+
+
 def _sandbox_log_path(thread_id: str, user_id: str | None = None) -> Path:
     """Return the host-side path for the per-thread sandbox execution log."""
     paths = get_paths()
@@ -210,7 +234,7 @@ async def stream_sandbox_logs(
     disconnects).  A keepalive ``[KEEPALIVE]`` comment is emitted every 15 s
     so reverse-proxies don't close idle connections.
     """
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     log_path = _sandbox_log_path(thread_id, user_id=user_id)

@@ -4,6 +4,7 @@ import { LoaderCircleIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
+import type { SandboxLogStatus } from "@/core/sandbox/hooks";
 import { useSandboxTerminalUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import { isTerminalTool } from "@/core/threads/tool-surface";
@@ -41,6 +42,7 @@ export function Terminal({
   threadId,
   active = true,
   serverCommandCount,
+  logStatus,
 }: {
   events: AgentActivityEvent[];
   threadId: string;
@@ -52,6 +54,14 @@ export function Terminal({
    * with ~ so it can never read as exact.
    */
   serverCommandCount?: number;
+  /**
+   * Connection state of the sandbox.log SSE -- the *only* transport that
+   * carries command text (computer-ws carries counters and facts, never
+   * output). A dead stream and an idle agent used to render identically, so
+   * "the terminal never shows anything" was indistinguishable from "nothing
+   * ran". Distinguish them.
+   */
+  logStatus?: SandboxLogStatus;
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -211,17 +221,28 @@ export function Terminal({
           <div className="animate-pulse font-mono text-xl text-emerald-400/30">
             ▮
           </div>
-          <div>
-            <p className="text-muted-foreground/60 text-xs font-medium">
-              {t.agentComputer.terminal.noOutput}
-            </p>
-            <p className="text-muted-foreground/40 mt-1 text-[10px]">
-              {t.agentComputer.terminal.noOutputHint}{" "}
-              <span className="text-emerald-400/70">
-                {t.agentComputer.terminal.shell}
-              </span>
-            </p>
-          </div>
+          {logStatus === "reconnecting" ? (
+            <div>
+              <p className="text-xs font-medium text-amber-400/70">
+                {t.agentComputer.terminal.streamDown}
+              </p>
+              <p className="text-muted-foreground/40 mt-1 text-[10px]">
+                {t.agentComputer.terminal.streamDownHint}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-muted-foreground/60 text-xs font-medium">
+                {t.agentComputer.terminal.noOutput}
+              </p>
+              <p className="text-muted-foreground/40 mt-1 text-[10px]">
+                {t.agentComputer.terminal.noOutputHint}{" "}
+                <span className="text-emerald-400/70">
+                  {t.agentComputer.terminal.shell}
+                </span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );

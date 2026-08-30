@@ -2,6 +2,7 @@
 
 import {
   CheckCircle2Icon,
+  ChevronUpIcon,
   CircleIcon,
   DownloadIcon,
   FileSearchIcon,
@@ -364,7 +365,15 @@ export function ActivityPanel({
 // ──────────────────────────────────────────────────────────
 // Task checklist
 // ──────────────────────────────────────────────────────────
-export function TaskChecklist({ todos }: { todos: Todo[] }) {
+export function TaskChecklist({
+  todos,
+  collapsed = false,
+  onToggle,
+}: {
+  todos: Todo[];
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   const { t } = useI18n();
   // Todo rows a COMPLETED subagent settled, bound by index from the backend's
   // task events. The old enrichment struck the FIRST N rows by count of done
@@ -384,16 +393,37 @@ export function TaskChecklist({ todos }: { todos: Todo[] }) {
 
   return (
     <div className="flex flex-col gap-1 px-3 py-2">
-      <div className="flex items-center justify-between">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 text-left"
+      >
         <span className="text-muted-foreground/70 text-xs font-medium">
           {t.agentComputer.taskProgress}
         </span>
-        <span className="text-muted-foreground/50 text-xs">
-          {done} / {total}
+        <span className="flex items-center gap-1.5">
+          <span className="text-muted-foreground/50 text-xs">
+            {done} / {total}
+          </span>
+          <ChevronUpIcon
+            className={cn(
+              "text-muted-foreground/50 size-3.5 transition-transform duration-200 ease-out",
+              collapsed ? "" : "rotate-180",
+            )}
+          />
         </span>
-      </div>
+      </button>
       <Progress value={pct} className="h-1" />
-      <div className="mt-0.5 flex flex-col gap-0.5">
+      {/* The checklist is a `shrink-0` footer beside a `min-h-0 flex-1` tab
+          body, so an uncapped list squeezes the Terminal/Browser viewport
+          toward zero. Cap it, and let the user fold it away entirely. */}
+      <div
+        className={cn(
+          "flex flex-col gap-0.5",
+          collapsed ? "h-0 overflow-hidden" : "mt-0.5 max-h-40 overflow-y-auto",
+        )}
+      >
         {enrichedTodos.map((todo, i) => {
           const isCompleted = todo.status === "completed";
           const isInProgress = todo.status === "in_progress";
@@ -419,7 +449,7 @@ export function TaskChecklist({ todos }: { todos: Todo[] }) {
               )}
               <span
                 className={cn(
-                  "text-[11px] leading-snug",
+                  "line-clamp-2 min-w-0 text-[11px] leading-snug break-words",
                   isCompleted
                     ? "text-muted-foreground/40 line-through"
                     : isInProgress

@@ -44,6 +44,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GREEN, YELLOW, RED = "green", "yellow", "red"
 NOVA_SERVICES = ("deer-flow-gateway", "deer-flow-frontend", "deer-flow-nginx")
 
+# Restarts below this are noise regardless of rate -- a couple over an app's
+# lifetime says nothing.
+PM2_RESTART_MIN = 5
+
 
 def _status_path() -> Path:
     override = os.environ.get("NOVA_DRIFT_GATE_STATUS_PATH", "").strip()
@@ -347,6 +351,86 @@ def check_compose_chain() -> dict:
     )
 
 
+def _launcher_scaled_to_zero() -> set[str]:
+    """Services scripts/pm2-deerflow.sh intentionally starts with --scale N=0.
+
+    Parsed from the launcher instead of hardcoded: this set is the difference
+    between "a service is down" and "a service was never meant to be up", and a
+    copy here would silently rot the moment the launcher changed.
+    """
+    try:
+        text = (REPO_ROOT / "scripts" / "pm2-deerflow.sh").read_text()
+    except OSError:
+        return set()
+    return set(re.findall(r"--scale\s+([A-Za-z0-9_-]+)=0\b", text))
+
+
+def check_services_running() -> dict:
+    """Every service the compose chain declares, actually up?
+
+    ``check_compose_chain`` compares the *files* a container was built from, and
+    ``P7_containers`` counts the containers that exist. Neither notices a
+    service that is declared and was simply never started -- and that is a real
+    failure mode here, because bringing one service up by hand
+    (``docker compose up -d gateway``) starts exactly that service and silently
+    leaves the rest of the chain alone.
+
+    Services the launcher deliberately scales to zero are not failures. As of
+    2026-08-30 ``scripts/pm2-deerflow.sh`` runs with
+    ``--scale provisioner=0 --scale searxng=0``, so both are *expected* absent
+    and this check must not flag them -- a gate that is permanently red on an
+    intentional configuration is one people learn to ignore. The scale-0 set is
+    read from that script rather than duplicated here, so the two cannot drift
+    apart.
+    """
+    files = [
+        "docker/docker-compose-dev.yaml",
+        "docker/docker-compose.dood.yaml",
+        "docker/docker-compose.prod-frontend.yaml",
+    ]
+    args: list[str] = []
+    for f in files:
+        path = REPO_ROOT / f
+        if not path.exists():
+            return check("services_running", YELLOW, f"missing compose file {f}")
+        args += ["-f", str(path)]
+
+    rc, declared_out, err = _run(["docker", "compose", *args, "config", "--services"])
+    if rc != 0:
+        return check("services_running", YELLOW, f"cannot read chain: {err[:120]}")
+    declared = {line.strip() for line in declared_out.splitlines() if line.strip()}
+
+    rc, running_out, err = _run(
+        ["docker", "compose", "-p", "deer-flow-dev", "ps", "--services"]
+    )
+    if rc != 0:
+        return check("services_running", YELLOW, f"cannot list running: {err[:120]}")
+    running = {line.strip() for line in running_out.splitlines() if line.strip()}
+
+    expected_down = _launcher_scaled_to_zero()
+    missing = sorted(declared - running - expected_down)
+    if not missing:
+        note = f"all {len(declared - expected_down)} expected services are up"
+        if expected_down:
+            note += f" ({', '.join(sorted(expected_down))} scaled to 0 by the launcher)"
+        return check(
+            "services_running",
+            GREEN,
+            note,
+            declared=sorted(declared),
+            expected_down=sorted(expected_down),
+        )
+    return check(
+        "services_running",
+        RED,
+        f"declared but not running: {', '.join(missing)} "
+        f"({len(running)}/{len(declared)} up) -- bring the stack up with "
+        f"scripts/pm2-deerflow.sh (pm2 restart nova), not a per-service up",
+        missing=missing,
+        declared=sorted(declared),
+    )
+
+
 def check_pm2_apps() -> dict:
     """PM2's running set vs what ecosystem.config.js declares."""
     eco = REPO_ROOT / "ecosystem.config.js"
@@ -367,11 +451,34 @@ def check_pm2_apps() -> dict:
     except (json.JSONDecodeError, KeyError, TypeError):
         return check("pm2_apps", YELLOW, "could not parse pm2 output")
 
+    # Restart churn, which `check_restart_storm` structurally cannot see: that
+    # check reads Docker's RestartCount for the containers, so a PM2 app that
+    # is flapping is invisible to it. Read as a rate against uptime, for the
+    # same reason -- restart_time is cumulative for the life of the app, so an
+    # absolute count says nothing on its own.
+    churn = []
+    try:
+        now_ms = time.time() * 1000
+        for a in json.loads(out):
+            if a.get("name") not in declared:
+                continue
+            env = a.get("pm2_env") or {}
+            restarts = int(env.get("restart_time") or 0)
+            up_h = max((now_ms - float(env.get("pm_uptime") or now_ms)) / 3_600_000, 0.0)
+            # Flat threshold below an hour of uptime: a young app with several
+            # restarts already behind it is exactly the case worth flagging.
+            if restarts >= PM2_RESTART_MIN and (up_h < 1.0 or restarts / up_h >= 1.0):
+                churn.append(f"{a['name']}={restarts} restarts/{up_h:.1f}h")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        pass
+
     absent = sorted(declared - set(running))
     stopped = sorted(n for n, st in running.items() if st != "online")
-    if not absent and not stopped:
+    if not absent and not stopped and not churn:
         return check("pm2_apps", GREEN, f"all {len(declared)} declared apps online")
     bits = []
+    if churn:
+        bits.append(f"restart churn: {', '.join(churn)}")
     if absent:
         bits.append(f"not registered: {absent}")
     if stopped:
@@ -558,6 +665,7 @@ CHECKS = (
     check_frontend_build_freshness,
     check_gateway_freshness,
     check_compose_chain,
+    check_services_running,
     check_pm2_apps,
     check_restart_storm,
 )

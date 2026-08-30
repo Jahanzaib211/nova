@@ -120,19 +120,33 @@ async def ws_caller_owns_thread(websocket: WebSocket, thread_id: str) -> bool:
 
     if caller_owns_thread(thread_id):
         return True
+    store = getattr(websocket.app.state, "thread_store", None)
+    return await caller_owns_thread_via_store(thread_id, store)
 
+
+async def caller_owns_thread_via_store(thread_id: str, store) -> bool:
+    """The metadata-row half of the ownership answer, transport-agnostic.
+
+    Split out of :func:`ws_caller_owns_thread` so the SSE log stream can use the
+    identical fallback. That endpoint had the same fresh-thread race and only
+    the WebSocket side was ever fixed: ``/api/sandbox/logs`` still decided
+    ownership purely by directory existence, so the Terminal was 404'd for the
+    thread's own owner until the first run materialised the directory — and the
+    client's geometric backoff then kept the panel blank for another 30s.
+
+    ``require_existing=True`` matches the socket rule: a missing row is a
+    denial, because thread ids are guessable.
+    """
+    if not thread_id or store is None:
+        return False
     try:
         user_id = get_effective_user_id()
     except Exception:
         return False
-
-    store = getattr(websocket.app.state, "thread_store", None)
-    if store is None:
-        return False
     try:
         return await store.check_access(thread_id, str(user_id), require_existing=True)
     except Exception:
-        logger.warning("ws ownership fallback failed for thread=%s", thread_id, exc_info=True)
+        logger.warning("ownership fallback failed for thread=%s", thread_id, exc_info=True)
         return False
 
 

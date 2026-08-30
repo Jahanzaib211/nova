@@ -52,7 +52,11 @@ function formatTimestamp(ts?: string): string {
   if (!ts) return "";
   try {
     const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return d.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   } catch {
     return ts;
   }
@@ -60,7 +64,8 @@ function formatTimestamp(ts?: string): string {
 
 function AuditEventRow({ event }: { event: AuditEvent }) {
   const Icon = EVENT_TYPE_ICONS[event.type ?? ""] ?? ScrollTextIcon;
-  const colorClass = EVENT_TYPE_COLORS[event.type ?? ""] ?? "text-muted-foreground bg-muted/50";
+  const colorClass =
+    EVENT_TYPE_COLORS[event.type ?? ""] ?? "text-muted-foreground bg-muted/50";
 
   return (
     <div className="border-border/30 flex items-start gap-2 border-b px-3 py-2 last:border-b-0">

@@ -404,8 +404,14 @@ def _append_devlog_to_sandbox_log(thread_id: str, text: str) -> None:
         )
         with open(thread_dir / "sandbox.log", "a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
-    except Exception:
-        pass
+    except Exception as exc:
+        # Must not propagate -- this mirrors output for the UI and is called
+        # from the readiness watchdog and the output pumps, neither of which
+        # should die over a log write. A bare `pass` made a wrong user bucket
+        # (get_effective_user_id() has no contextvar here on a detached task,
+        # so the line lands in users/default/ where the reader never tails it)
+        # completely invisible.
+        logger.warning("dev-server log mirror failed for thread=%s: %s", thread_id, exc)
 
 
 def _ingest_line(handle: DevServerHandle, text: str) -> None:

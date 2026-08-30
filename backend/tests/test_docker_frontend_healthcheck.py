@@ -28,7 +28,6 @@ from pathlib import Path
 
 import yaml
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKER_DIR = REPO_ROOT / "docker"
 
@@ -106,24 +105,14 @@ def test_frontend_service_has_healthcheck() -> None:
             continue
         frontend = _service(path, "frontend")
         assert _has_healthcheck(frontend), (
-            f"{path.relative_to(REPO_ROOT)}: frontend service has no healthcheck "
-            f"— see 2026-08-28 nginx-502 incident (recreated dead container "
-            f"loop while nginx SERVFAIL'd every non-/api request to the "
-            f"public URL)"
+            f"{path.relative_to(REPO_ROOT)}: frontend service has no healthcheck — see 2026-08-28 nginx-502 incident (recreated dead container loop while nginx SERVFAIL'd every non-/api request to the public URL)"
         )
         # The test command must actually probe the serving port, not just
         # the binary's existence. wget / curl / python one-liner all OK;
         # the live config uses BusyBox ``wget --spider`` from node:22-alpine.
         test = frontend["healthcheck"].get("test")
-        assert isinstance(test, list) and len(test) >= 2, (
-            f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.test must "
-            f"be an argv list (got {test!r})"
-        )
-        assert test[0] == "CMD", (
-            f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.test[0] "
-            f"must be 'CMD' so Docker exec's the command inside the "
-            f"container (got {test[0]!r})"
-        )
+        assert isinstance(test, list) and len(test) >= 2, f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.test must be an argv list (got {test!r})"
+        assert test[0] == "CMD", f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.test[0] must be 'CMD' so Docker exec's the command inside the container (got {test[0]!r})"
 
 
 def test_frontend_service_has_autoheal_label() -> None:
@@ -138,10 +127,7 @@ def test_frontend_service_has_autoheal_label() -> None:
     for path in FRONTEND_FILES:
         if not _service(path, "frontend"):
             continue
-        assert _has_autoheal_label(_service(path, "frontend")), (
-            f"{path.relative_to(REPO_ROOT)}: frontend service is missing "
-            f"the 'autoheal=true' label — autoheal sidecar will not see it"
-        )
+        assert _has_autoheal_label(_service(path, "frontend")), f"{path.relative_to(REPO_ROOT)}: frontend service is missing the 'autoheal=true' label — autoheal sidecar will not see it"
 
 
 def test_frontend_healthcheck_interval_is_short_enough() -> None:
@@ -155,16 +141,9 @@ def test_frontend_healthcheck_interval_is_short_enough() -> None:
         if not _service(path, "frontend"):
             continue
         interval = _service(path, "frontend").get("healthcheck", {}).get("interval", "0s")
-        assert interval.endswith("s"), (
-            f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.interval "
-            f"has unexpected format {interval!r}"
-        )
+        assert interval.endswith("s"), f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.interval has unexpected format {interval!r}"
         seconds = int(interval[:-1])
-        assert 5 <= seconds <= 60, (
-            f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.interval="
-            f"{seconds}s is outside the 5s–60s band — too long delays "
-            f"recovery, too short thrashes"
-        )
+        assert 5 <= seconds <= 60, f"{path.relative_to(REPO_ROOT)}: frontend healthcheck.interval={seconds}s is outside the 5s–60s band — too long delays recovery, too short thrashes"
 
 
 # ── Gateway (base + dev; nova-prod already had healthcheck+label) ────────────
@@ -178,19 +157,11 @@ def test_gateway_service_has_healthcheck_and_label() -> None:
     the fix to the base and prod stacks; this test freezes that across
     every compose file in the tree.
     """
-    files_with_gateway = [
-        p for p in COMPOSE_FILES if "gateway" in _load_services(p)
-    ]
+    files_with_gateway = [p for p in COMPOSE_FILES if "gateway" in _load_services(p)]
     for path in files_with_gateway:
         gateway = _service(path, "gateway")
-        assert _has_healthcheck(gateway), (
-            f"{path.relative_to(REPO_ROOT)}: gateway has no healthcheck "
-            f"— see 2026-07-16 hung-uvicorn outage"
-        )
-        assert _has_autoheal_label(gateway), (
-            f"{path.relative_to(REPO_ROOT)}: gateway is missing the "
-            f"'autoheal=true' label — sidecar will not restart a hung one"
-        )
+        assert _has_healthcheck(gateway), f"{path.relative_to(REPO_ROOT)}: gateway has no healthcheck — see 2026-07-16 hung-uvicorn outage"
+        assert _has_autoheal_label(gateway), f"{path.relative_to(REPO_ROOT)}: gateway is missing the 'autoheal=true' label — sidecar will not restart a hung one"
 
 
 # ── nginx (all three; was missing the label in base and dev) ────────────────
@@ -206,19 +177,11 @@ def test_nginx_service_has_healthcheck_and_label() -> None:
     already had the label from the dev stack's audit, but the dev and
     base compose files did not.
     """
-    files_with_nginx = [
-        p for p in NGINX_FILES if "nginx" in _load_services(p)
-    ]
+    files_with_nginx = [p for p in NGINX_FILES if "nginx" in _load_services(p)]
     for path in files_with_nginx:
         nginx = _service(path, "nginx")
-        assert _has_healthcheck(nginx), (
-            f"{path.relative_to(REPO_ROOT)}: nginx has no healthcheck — "
-            f"autoheal will treat it as healthy-by-omission"
-        )
-        assert _has_autoheal_label(nginx), (
-            f"{path.relative_to(REPO_ROOT)}: nginx is missing the "
-            f"'autoheal=true' label — sidecar will not restart a hung proxy"
-        )
+        assert _has_healthcheck(nginx), f"{path.relative_to(REPO_ROOT)}: nginx has no healthcheck — autoheal will treat it as healthy-by-omission"
+        assert _has_autoheal_label(nginx), f"{path.relative_to(REPO_ROOT)}: nginx is missing the 'autoheal=true' label — sidecar will not restart a hung proxy"
 
 
 # ── Postgres (base + dev + prod) ─────────────────────────────────────────────
@@ -231,18 +194,11 @@ def test_postgres_service_has_healthcheck_and_label() -> None:
     back up; a sidecar-watched Postgres recovers in ~30s instead of
     dragging the gateway into deadlock-driven timeouts.
     """
-    files_with_postgres = [
-        p for p in COMPOSE_FILES if "postgres" in _load_services(p)
-    ]
+    files_with_postgres = [p for p in COMPOSE_FILES if "postgres" in _load_services(p)]
     for path in files_with_postgres:
         postgres = _service(path, "postgres")
-        assert _has_healthcheck(postgres), (
-            f"{path.relative_to(REPO_ROOT)}: postgres has no healthcheck"
-        )
-        assert _has_autoheal_label(postgres), (
-            f"{path.relative_to(REPO_ROOT)}: postgres is missing the "
-            f"'autoheal=true' label"
-        )
+        assert _has_healthcheck(postgres), f"{path.relative_to(REPO_ROOT)}: postgres has no healthcheck"
+        assert _has_autoheal_label(postgres), f"{path.relative_to(REPO_ROOT)}: postgres is missing the 'autoheal=true' label"
 
 
 # ── SearXNG / browserless / crawl4ai (the silent fall-back trio) ─────────────
@@ -263,13 +219,8 @@ def test_web_search_and_crawl_services_have_healthcheck_and_label() -> None:
             if name not in services:
                 continue
             svc = services[name]
-            assert _has_healthcheck(svc), (
-                f"{path.relative_to(REPO_ROOT)}: {name} has no healthcheck"
-            )
-            assert _has_autoheal_label(svc), (
-                f"{path.relative_to(REPO_ROOT)}: {name} is missing the "
-                f"'autoheal=true' label — silent fallback will hide the outage"
-            )
+            assert _has_healthcheck(svc), f"{path.relative_to(REPO_ROOT)}: {name} has no healthcheck"
+            assert _has_autoheal_label(svc), f"{path.relative_to(REPO_ROOT)}: {name} is missing the 'autoheal=true' label — silent fallback will hide the outage"
 
 
 # ── Autoheal sidecar (must have a self-healthcheck in both stacks) ───────────
@@ -284,25 +235,16 @@ def test_autoheal_sidecar_has_own_healthcheck() -> None:
     sidecar just stops doing its job" with nothing in ``docker ps``
     flagging it. Both the dev and prod stacks must declare this.
     """
-    files_with_autoheal = [
-        p for p in COMPOSE_FILES if "autoheal" in _load_services(p)
-    ]
+    files_with_autoheal = [p for p in COMPOSE_FILES if "autoheal" in _load_services(p)]
     for path in files_with_autoheal:
         autoheal = _service(path, "autoheal")
-        assert _has_healthcheck(autoheal), (
-            f"{path.relative_to(REPO_ROOT)}: autoheal sidecar has no "
-            f"healthcheck — a stuck sidecar takes the whole hardening "
-            f"down silently"
-        )
+        assert _has_healthcheck(autoheal), f"{path.relative_to(REPO_ROOT)}: autoheal sidecar has no healthcheck — a stuck sidecar takes the whole hardening down silently"
         # The self-test must actually probe the docker socket, not just
         # the binary's existence. The live config uses
         # ``curl --unix-socket /var/run/docker.sock`` + ``pgrep -f``.
         test = autoheal["healthcheck"].get("test")
         cmd = " ".join(test) if isinstance(test, list) else test
-        assert "unix-socket" in cmd or "docker.sock" in cmd, (
-            f"{path.relative_to(REPO_ROOT)}: autoheal healthcheck must "
-            f"actually probe the docker socket (got {cmd!r})"
-        )
+        assert "unix-socket" in cmd or "docker.sock" in cmd, f"{path.relative_to(REPO_ROOT)}: autoheal healthcheck must actually probe the docker socket (got {cmd!r})"
 
 
 # ── Nginx config-level hardening ──────────────────────────────────────────────
@@ -327,15 +269,8 @@ def test_nginx_configs_strip_server_tokens() -> None:
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
-        assert "server_tokens off" in text, (
-            f"{path.relative_to(REPO_ROOT)}: nginx config is missing "
-            f"'server_tokens off;' — leaking the nginx version in the "
-            f"Server response header"
-        )
+        assert "server_tokens off" in text, f"{path.relative_to(REPO_ROOT)}: nginx config is missing 'server_tokens off;' — leaking the nginx version in the Server response header"
         # Must be in a valid context (http or server). Anything else is
         # a syntax error per nginx directive reference. A bare match
         # without looking at position would catch the wrong placement.
-        assert "server_tokens off;" in text + " ", (
-            f"{path.relative_to(REPO_ROOT)}: 'server_tokens off;' is "
-            f"missing the trailing semicolon"
-        )
+        assert "server_tokens off;" in text + " ", f"{path.relative_to(REPO_ROOT)}: 'server_tokens off;' is missing the trailing semicolon"

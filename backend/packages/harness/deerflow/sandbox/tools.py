@@ -141,6 +141,14 @@ def _thread_id_for_observation(sandbox_id: str) -> str | None:
                 return thread_id
     except Exception as exc:
         logger.debug("_find_thread_id_for_sandbox failed: %s", exc)
+    # Every return path above that yields None silently drops the observation,
+    # and sandbox.log is the *only* transport carrying command text to the
+    # Terminal (computer-ws carries counters, never output). A drop here is
+    # indistinguishable in the UI from an idle agent, so say it out loud.
+    logger.warning(
+        "observation dropped: no thread for sandbox_id=%r (legacy global sandbox, or id absent from the provider map)",
+        sandbox_id,
+    )
     return None
 
 
@@ -372,9 +380,12 @@ def _write_sandbox_observation(
                     }
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.debug("observation emit failed: %s", exc)
+                logger.warning("observation emit failed for thread=%s: %s", thread_id, exc)
     except Exception as exc:
-        logger.debug("_write_sandbox_observation failed: %s", exc)  # observation failures must never propagate
+        # Never propagate -- a failed observation must not break the tool call.
+        # But warn: this is the sole path feeding the Terminal, and at debug
+        # level a persistent failure was invisible for days.
+        logger.warning("_write_sandbox_observation failed: %s", exc, exc_info=True)
 
 
 def _terminal_streaming_enabled() -> bool:

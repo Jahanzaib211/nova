@@ -150,7 +150,8 @@ export function AgentComputerPanel({
   // the merged sandbox.log timeline come from the WorkspaceStateProvider
   // mounted in chat-box.tsx. (taskProgress left the checklist: its positional
   // accounting is replaced by per-task todo bindings.)
-  const { mergedEvents, todos, verifyResult, llmError } = useWorkspaceState();
+  const { mergedEvents, todos, verifyResult, llmError, logStatus } =
+    useWorkspaceState();
   const effectiveVerifyResult = verifyResult;
   const effectiveLlmError = llmError;
   const files = useSandboxFiles(threadId);
@@ -192,6 +193,31 @@ export function AgentComputerPanel({
       sessionStorage.setItem(storageKey, derivedFilePath);
     }
   }, [derivedFilePath, storageKey]);
+
+  // ── Task-checklist fold ──
+  // The checklist renders as a `shrink-0` footer next to a `min-h-0 flex-1`
+  // tab body, so a long todo list can squeeze the Terminal/Browser viewport to
+  // nothing -- and it sits outside every tab wrapper, so it does that on all of
+  // them. Let the user fold it, and remember the choice per thread beside the
+  // preview path above. Default expanded: the checklist is the point.
+  const todosCollapsedKey = `agent-computer-todos:${threadId}`;
+  const [todosCollapsed, setTodosCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(todosCollapsedKey) === "1";
+  });
+  // The panel stays mounted across thread switches (it is deliberately kept
+  // alive so open/close does not remount it), so the lazy initializer above
+  // runs once and would strand the previous thread's fold state here.
+  useEffect(() => {
+    setTodosCollapsed(sessionStorage.getItem(todosCollapsedKey) === "1");
+  }, [todosCollapsedKey]);
+  const toggleTodos = useCallback(() => {
+    setTodosCollapsed((prev) => {
+      const next = !prev;
+      sessionStorage.setItem(todosCollapsedKey, next ? "1" : "0");
+      return next;
+    });
+  }, [todosCollapsedKey]);
 
   const [activeTab, setActiveTab] = useState<PanelTab>(() => {
     if (typeof window !== "undefined" && sessionStorage.getItem(storageKey))
@@ -607,6 +633,7 @@ export function AgentComputerPanel({
               threadId={threadId}
               active={activeTab === "terminal"}
               serverCommandCount={terminalCommandCount}
+              logStatus={logStatus}
             />
           </div>
         </AgentComputerErrorBoundary>
@@ -696,10 +723,7 @@ export function AgentComputerPanel({
             data-tab="audit"
             className={cn("h-full", activeTab !== "audit" && "hidden")}
           >
-            <AuditPanel
-              threadId={threadId}
-              active={activeTab === "audit"}
-            />
+            <AuditPanel threadId={threadId} active={activeTab === "audit"} />
           </div>
         </AgentComputerErrorBoundary>
       </div>
@@ -707,7 +731,11 @@ export function AgentComputerPanel({
       {/* ── Task checklist ── */}
       {todos.length > 0 && (
         <div className="border-border/50 shrink-0 border-t">
-          <TaskChecklist todos={todos} />
+          <TaskChecklist
+            todos={todos}
+            collapsed={todosCollapsed}
+            onToggle={toggleTodos}
+          />
         </div>
       )}
     </motion.div>
