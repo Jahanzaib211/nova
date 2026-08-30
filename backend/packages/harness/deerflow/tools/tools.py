@@ -19,6 +19,7 @@ from deerflow.tools.builtins.workspace_tools import (
     dev_verify_tool,
     free_port_tool,
     grep_files_tool,
+    register_external_dev_server_tool,
     save_skill_tool,
     scaffold_project_tool,
     screenshot_tool,
@@ -45,6 +46,11 @@ BUILTIN_TOOLS = [
     scaffold_project_tool,
     start_dev_server_tool,
     stop_dev_server_tool,
+    # The escape hatch for a server started outside the pipeline (raw bash,
+    # PM2, a manual `node`). Without it the only route to the Browser tab is
+    # discover_live_preview, which probes just _PREVIEW_CONTAINER_PORTS
+    # (4100-4102) -- so anything on another port was unpreviewable.
+    register_external_dev_server_tool,
     code_review_tool,
     browser_check_tool,
     save_skill_tool,

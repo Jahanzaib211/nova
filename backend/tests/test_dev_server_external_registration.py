@@ -146,3 +146,37 @@ def test_dev_external_endpoint_refuses_unreachable_port():
     finally:
         # Nothing to clean up — registration must have been refused.
         assert ds.get_dev_server("t-http-bad") is None
+
+
+class TestExternalRegistrationToolIsReachable:
+    """The escape hatch is only an escape hatch if the agent can call it.
+
+    `register_external_dev_server_tool` was fully implemented (port validation,
+    a liveness probe that refuses to advertise a phantom server) and documented
+    in backend/CLAUDE.md as "the agent-facing tool" -- but it was never imported
+    into `deerflow.tools.tools` and never added to `BUILTIN_TOOLS`, so it was
+    unreachable dead code.
+
+    The cost is not theoretical. A dev server started outside the pipeline (raw
+    bash, PM2, a manual `node`) can only reach the Browser tab two ways:
+    `discover_live_preview`, which probes only `_PREVIEW_CONTAINER_PORTS`
+    (4100-4102), or this tool. With the tool unbound, anything on another port
+    was unpreviewable and the panel sat on "Start Live Preview" forever, with
+    the agent left to conclude the tool "isn't in this thread's whitelist".
+    """
+
+    def test_tool_is_in_the_builtin_registry(self):
+        from deerflow.tools.tools import BUILTIN_TOOLS
+
+        names = {getattr(t, "name", None) for t in BUILTIN_TOOLS}
+        assert "register_external_dev_server" in names, (
+            "register_external_dev_server is implemented but not bound; "
+            f"BUILTIN_TOOLS exposes {sorted(n for n in names if n)}"
+        )
+
+    def test_the_port_discovery_gap_it_covers_is_real(self):
+        """Pin the reason the tool must exist: discovery is a 3-port probe."""
+        from deerflow.sandbox.dev_server import _PREVIEW_CONTAINER_PORTS
+
+        assert 8787 not in _PREVIEW_CONTAINER_PORTS
+        assert len(_PREVIEW_CONTAINER_PORTS) == 3
