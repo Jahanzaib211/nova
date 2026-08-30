@@ -18,6 +18,7 @@ import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/wo
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
+import { foldCommandCount } from "@/core/sandbox/command-count";
 import { useSandboxTerminalStats } from "@/core/sandbox/hooks";
 import {
   useSupersedeStaleSubtasks,
@@ -176,11 +177,19 @@ const ChatBox: React.FC<{
     // query cache: getQueryData is not reactive, so the header never
     // re-rendered on arrival.
     onTerminalStats: (stat) => {
+      // Key must match `useSandboxTerminalStats` exactly, or this writes to a
+      // cache entry nothing reads -- it was missing the "sandbox" segment, so
+      // the socket never actually refreshed the seed it was trying to update.
       queryClient.setQueryData(
-        ["terminal-stats", threadId],
+        ["sandbox", "terminal-stats", threadId],
         stat.total_commands,
       );
-      setTerminalCommandCount(stat.total_commands);
+      // The hub replays its buffer to every late joiner, so this fires with
+      // historical frames on each reconnect. Folding monotonically keeps a
+      // replayed 146 from rewinding a live 313 and flickering the header.
+      setTerminalCommandCount((current) =>
+        foldCommandCount(current, stat.total_commands),
+      );
     },
   });
 
@@ -320,8 +329,9 @@ const ChatBox: React.FC<{
   // commands has rolled the frame out of the hub's shared replay buffer.
   const seededCommandCount = useSandboxTerminalStats(threadId);
   useEffect(() => {
-    if (seededCommandCount === null) return;
-    setTerminalCommandCount((current) => current ?? seededCommandCount);
+    setTerminalCommandCount((current) =>
+      foldCommandCount(current, seededCommandCount),
+    );
   }, [seededCommandCount]);
 
   // Opening either surface pulls it to the front, mirroring how they take over
