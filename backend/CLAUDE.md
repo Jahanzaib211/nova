@@ -33,7 +33,7 @@ nova/
 │   │       └── deerflow/
 │   │           ├── agents/            # LangGraph agent system
 │   │           │   ├── lead_agent/    # Main agent (factory + system prompt)
-│   │           │   ├── middlewares/   # 19 middleware components
+│   │           │   ├── middlewares/   # 28 modules; 23 in the live chain
 │   │           │   ├── memory/        # Memory extraction, queue, prompts
 │   │           │   └── thread_state.py # ThreadState schema
 │   │           ├── sandbox/           # Sandbox execution system
