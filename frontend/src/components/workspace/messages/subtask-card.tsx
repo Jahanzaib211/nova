@@ -139,11 +139,18 @@ export function SubtaskCard({
                 }
                 icon={<ClipboardListIcon />}
               ></ChainOfThoughtStep>
-              <div className="flex items-center gap-1">
+              {/* min-w-0 is load-bearing. A flex item's automatic minimum size is
+                  its content, capped by max-width -- so `max-w-[420px]` on the
+                  status text acted as a *floor*, not a ceiling: it could not
+                  shrink below 420px, and in any narrower layout (the panel open,
+                  a small viewport) a long failure string pushed out of the row
+                  and over the chevron. `truncate` cannot help an item that is
+                  never asked to shrink. */}
+              <div className="flex min-w-0 items-center gap-1">
                 {collapsed && (
                   <div
                     className={cn(
-                      "text-muted-foreground flex items-center gap-1 text-xs font-normal",
+                      "text-muted-foreground flex min-w-0 items-center gap-1 text-xs font-normal",
                       task.status === "failed" &&
                         task.error !== "superseded by a newer run"
                         ? "text-red-500 opacity-67"

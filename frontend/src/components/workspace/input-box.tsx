@@ -710,7 +710,15 @@ export function InputBox({
         <PromptInputAttachments>
           {(attachment) => <PromptInputAttachment data={attachment} />}
         </PromptInputAttachments>
-        <PromptInputBody className="absolute top-0 right-0 left-0 z-3">
+        {/* No positioning here: PromptInputBody renders `display: contents`, which
+            suppresses its own box, so `absolute`/`top`/`z-*` on it were silently
+            ignored -- the textarea has always been in normal flow. The classes
+            were removed rather than made to work: newly applying absolute
+            positioning to the main composer would change a layout that has
+            shipped this way, and the layering it was reaching for (textarea at
+            z-3 under the z-10 <Welcome> overlay) needs a visual check first.
+            The Welcome banner is still an unreserved overlay above this. */}
+        <PromptInputBody>
           <PromptInputTextarea
             className={cn("size-full")}
             disabled={disabled}
