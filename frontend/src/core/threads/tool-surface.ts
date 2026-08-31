@@ -119,6 +119,33 @@ export function isTerminalTool(name: string): boolean {
 }
 
 /**
+ * Tools whose invocation is one executed *command*, for the Terminal header's
+ * "N cmds" figure.
+ *
+ * A strict **subset** of the terminal surface, not a replacement for it: the
+ * Terminal still renders file work, it just does not call it a command.
+ *
+ * This mirrors `COMMAND_TOOL_NAMES` / `is_command_line` in the backend
+ * (`deerflow/sandbox/tools.py`), and it has to. The header shows the gateway's
+ * deterministic total when the socket is up and falls back to counting local
+ * events when it is not — and those two branches used to count different
+ * populations, so one thread read "1 cmd" over the socket and "~3" without it,
+ * flipping on reconnect. `backend/tests/test_frontend_contract.py` fails if the
+ * two sets drift.
+ */
+const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "bash",
+  "execute_command",
+  "shell_session",
+  "shell_write",
+]);
+
+export function isCommandTool(name: string): boolean {
+  if (typeof name !== "string") return false;
+  return COMMAND_TOOL_NAMES.has(name);
+}
+
+/**
  * The complement. Written as its own function rather than `!isTerminalTool` at
  * each call site so the partition is stated once and cannot be inverted by
  * accident in one of the two tabs.

@@ -7,7 +7,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import type { SandboxLogStatus } from "@/core/sandbox/hooks";
 import { useSandboxTerminalUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
-import { isTerminalTool } from "@/core/threads/tool-surface";
+import { isCommandTool, isTerminalTool } from "@/core/threads/tool-surface";
 import { cn } from "@/lib/utils";
 
 // Tab 1: Terminal — bash/search/grep events, always expanded
@@ -133,7 +133,7 @@ export function Terminal({
       <span className="text-muted-foreground/40 font-mono text-[10px]">
         {serverTotal !== undefined
           ? t.agentComputer.terminal.counts(serverTotal, runningCount)
-          : `~${terminalEvents.length}`}
+          : `~${terminalEvents.filter((e) => isCommandTool(e.type)).length}`}
       </span>
       <div className="border-border/40 flex items-center rounded border text-[10px]">
         <button

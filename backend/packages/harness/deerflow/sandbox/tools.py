@@ -263,6 +263,11 @@ _terminal_stats_lock = threading.Lock()
 
 _TERMINAL_STATS_FILE = "terminal_stats.json"
 
+#: Tools whose invocation is one executed *command* for the Terminal header's
+#: count. Mirrored by ``isCommandTool`` in the frontend's tool-surface module;
+#: ``tests/test_frontend_contract.py`` fails if the two drift.
+COMMAND_TOOL_NAMES = frozenset({"bash", "shell_session", "shell_write"})
+
 
 def is_command_line(record: dict) -> bool:
     """True if one sandbox.log record represents exactly one *command*.
@@ -274,14 +279,35 @@ def is_command_line(record: dict) -> bool:
     A *command*, not a frame: ``on_chunk`` writes every delta/replace frame with
     the same ``id`` and ``state="running"``, so matching those too made one
     streamed command emitting 50 chunks count as 51. Only the opening frame of
-    a streamed command counts, plus every non-framed bash line.
+    a streamed command counts, plus every non-framed command line.
+
+    **The population, and it is the authority.** The Terminal header renders this
+    as "N cmds", so a *command* is work the sandbox executed:
+
+    * ``bash`` -- one-shot, and the opening frame of a streamed one;
+    * ``shell_session`` -- starting a command in a persistent PTY;
+    * ``shell_write`` -- input sent to a live session; the agent answering a
+      prompt or driving a REPL is executed work, and it is a row in the
+      Terminal transcript.
+
+    Everything else the Terminal *renders* -- ``read_file``, ``write_file``,
+    ``str_replace``, ``ls``, ``glob``, ``grep`` -- is file work, not a command,
+    and is excluded. ``shell_view`` / ``shell_wait`` / ``shell_kill`` are session
+    bookkeeping, not new commands.
+
+    The frontend mirrors exactly this set in ``isCommandTool``
+    (``core/threads/tool-surface.ts``); the two are pinned against each other by
+    ``tests/test_frontend_contract.py``. They used to disagree -- the header's
+    socket branch counted this set while its fallback branch counted every
+    terminal-surface event, so the same thread read "1 cmd" or "~3" depending on
+    whether the socket happened to be up.
     """
     if record.get("delta") is not None or record.get("replace") is not None:
         return False
     obs_id = record.get("id")
     if obs_id is not None:
-        return record.get("state") == "running"
-    return record.get("type") == "bash"
+        return record.get("state") == "running" and record.get("type") in COMMAND_TOOL_NAMES
+    return record.get("type") in COMMAND_TOOL_NAMES
 
 
 def reconcile_terminal_stats(log_path: Path) -> int | None:

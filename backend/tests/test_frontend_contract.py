@@ -115,3 +115,66 @@ class TestComputerWsChannelContract:
         # omits the channel field.
         assert 'payload.get("channel") or "workspace"' in deps, "observation events must preserve their caller-supplied channel and fall back to 'workspace' when none is supplied"
         assert "emit_dev_server_status" in dev, "dev_server must announce transitions"
+
+
+class TestCommandCountContract:
+    """The Terminal header must count the same thing on both of its branches.
+
+    It renders the gateway's deterministic total when the computer-ws socket is
+    up, and falls back to counting local events when it is not. Those two
+    branches counted different populations: the backend's ``is_command_line``
+    counted commands, while the fallback counted every *terminal-surface* event
+    (``read_file``, ``write_file``, ``str_replace``, ``ls``, ``glob``, ``grep``
+    included). Measured on a live thread that had run one command plus a read
+    and a write, the same header showed "1 cmd" with the socket connected and
+    "~3" without it — flipping on every reconnect.
+
+    Neither number was wrong for what it counted; they were answers to different
+    questions rendered in the same slot. So the population is pinned here, in
+    both languages, rather than trusted to stay in sync.
+    """
+
+    def _backend_names(self) -> set[str]:
+        text = _read(TOOLS_PY)
+        match = re.search(r"COMMAND_TOOL_NAMES = frozenset\(\{([^}]*)\}\)", text)
+        assert match, "backend no longer declares COMMAND_TOOL_NAMES"
+        return set(re.findall(r'"([a-z_]+)"', match.group(1)))
+
+    def _frontend_names(self) -> set[str]:
+        text = _read(TOOL_SURFACE_TS)
+        match = re.search(
+            r"const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set\(\[(.*?)\]\)",
+            text,
+            re.S,
+        )
+        assert match, "frontend no longer declares COMMAND_TOOL_NAMES"
+        return set(re.findall(r'"([a-z_]+)"', match.group(1)))
+
+    def test_backend_declares_the_command_population(self) -> None:
+        assert "bash" in self._backend_names()
+
+    def test_the_two_sides_agree(self) -> None:
+        backend = self._backend_names()
+        frontend = self._frontend_names()
+        # `execute_command` is a frontend-only alias for the same concept: no
+        # backend writer emits it, but older/AIO event streams carry it.
+        assert frontend - {"execute_command"} == backend, (
+            f"command population drifted — backend={sorted(backend)} frontend={sorted(frontend)}"
+        )
+
+    def test_file_work_is_not_a_command(self) -> None:
+        backend = self._backend_names()
+        for name in ("read_file", "write_file", "str_replace", "ls", "glob", "grep"):
+            assert name not in backend, f"{name} is file work, not a command"
+
+    def test_session_bookkeeping_is_not_a_command(self) -> None:
+        backend = self._backend_names()
+        for name in ("shell_view", "shell_wait", "shell_kill"):
+            assert name not in backend, f"{name} does not start new work"
+
+    def test_the_header_fallback_counts_commands_not_events(self) -> None:
+        """The regression itself: the fallback branch must filter."""
+        terminal_tab = REPO_ROOT / "frontend" / "src" / "components" / "workspace" / "agent-computer" / "terminal-tab.tsx"
+        text = _read(terminal_tab)
+        assert "isCommandTool" in text, "header fallback no longer filters to commands"
+        assert "`~${terminalEvents.length}`" not in text, "header fallback counts every terminal event again"
