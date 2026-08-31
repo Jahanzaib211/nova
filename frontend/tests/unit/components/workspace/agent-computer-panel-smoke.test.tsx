@@ -82,22 +82,40 @@ function renderPanel(
 }
 
 describe("AgentComputerPanel smoke", () => {
-  test("renders the panel chrome with all eight tabs", () => {
+  test("renders the panel chrome with all seven tabs", () => {
     const html = renderPanel(makeThreadContext());
     for (const tab of [
       "Files",
       "Terminal",
       "Viewer",
       "Browser",
-      "Activity",
+      // Activity and Audit merged into one Telemetry inspector: they drew on the
+      // same tool-call stream and answered adjacent questions, so they are now
+      // two segments of one tab rather than two tabs.
+      "Telemetry",
       "Review",
       // The panel header has always said "Recon — private web access"; the tab
       // button said "Privacy", so the same feature had two names.
       "Recon",
-      "Audit",
     ]) {
       expect(html).toContain(tab);
     }
+  });
+
+  test("the merged tab keeps both segments reachable", () => {
+    // Timeline and Ledger are the two halves that used to be separate tabs.
+    // Losing either in the merge would silently drop the only JSONL export in
+    // the product, or the only home for the workspace-intelligence pills.
+    const html = renderPanel(makeThreadContext());
+    expect(html).toContain("Timeline");
+    expect(html).toContain("Ledger");
+  });
+
+  test("no longer renders Activity or Audit as separate tabs", () => {
+    const html = renderPanel(makeThreadContext());
+    expect(html).not.toContain('data-tab="activity"');
+    expect(html).not.toContain('data-tab="audit"');
+    expect(html).toContain('data-tab="telemetry"');
   });
 
   test("renders the task checklist when todos exist", () => {

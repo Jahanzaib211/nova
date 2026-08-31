@@ -679,6 +679,7 @@ export interface Translations {
       viewer: string;
       browser: string;
       activity: string;
+      telemetry: string;
       review: string;
       privacy: string;
       audit: string;
@@ -729,6 +730,10 @@ export interface Translations {
       usingBrowser: string;
       isThinking: string;
       isIdle: string;
+    };
+    telemetry: {
+      timeline: string;
+      ledger: string;
     };
     terminal: {
       tab: string;

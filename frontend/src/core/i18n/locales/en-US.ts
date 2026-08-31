@@ -798,6 +798,7 @@ export const enUS: Translations = {
       viewer: "Viewer",
       browser: "Browser",
       activity: "Activity",
+      telemetry: "Telemetry",
       review: "Review",
       // Matches the panel header ("Recon — private web access"); the button
       // said "Privacy" and the panel said "Recon", which read as two features.
@@ -855,6 +856,10 @@ export const enUS: Translations = {
       usingBrowser: "is using Browser",
       isThinking: "is thinking",
       isIdle: "is idle",
+    },
+    telemetry: {
+      timeline: "Timeline",
+      ledger: "Ledger",
     },
     terminal: {
       tab: "Terminal",

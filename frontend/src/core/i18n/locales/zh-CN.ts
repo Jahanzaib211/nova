@@ -768,6 +768,7 @@ export const zhCN: Translations = {
       viewer: "查看器",
       browser: "浏览器",
       activity: "活动",
+      telemetry: "遥测",
       review: "审查",
       privacy: "Recon",
       audit: "审计",
@@ -822,6 +823,10 @@ export const zhCN: Translations = {
       usingBrowser: "正在使用浏览器",
       isThinking: "正在思考",
       isIdle: "空闲中",
+    },
+    telemetry: {
+      timeline: "时间线",
+      ledger: "记录",
     },
     terminal: {
       tab: "终端",

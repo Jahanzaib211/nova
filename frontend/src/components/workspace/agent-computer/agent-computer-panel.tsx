@@ -10,7 +10,6 @@ import {
   GithubIcon,
   GlobeIcon,
   PencilIcon,
-  ScrollTextIcon,
   SquareTerminalIcon,
   ShieldIcon,
   XIcon,
@@ -39,8 +38,7 @@ import {
 import { isTerminalTool, isViewerTool } from "@/core/threads/tool-surface";
 import { cn } from "@/lib/utils";
 
-import { ActivityPanel, LlmErrorBadge, TaskChecklist } from "./activity-tab";
-import { AuditPanel } from "./audit-tab";
+import { LlmErrorBadge, TaskChecklist } from "./activity-tab";
 import { Browser } from "./browser-tab";
 import { Editor } from "./editor-tab";
 import { FilesPanel } from "./files-tab";
@@ -49,6 +47,7 @@ import { PrivacyPanel } from "./privacy-tab";
 import { ReviewPanel } from "./review-tab";
 import { SkillLauncher } from "./skill-launcher";
 import { StatusLine } from "./status-line";
+import { TelemetryPanel } from "./telemetry-tab";
 import { Terminal } from "./terminal-tab";
 import { useWorkspaceState } from "./workspace-state";
 
@@ -57,10 +56,9 @@ type PanelTab =
   | "terminal"
   | "viewer"
   | "browser"
-  | "activity"
+  | "telemetry"
   | "review"
-  | "privacy"
-  | "audit";
+  | "privacy";
 
 function TabBtn({
   active,
@@ -222,7 +220,7 @@ export function AgentComputerPanel({
   const [activeTab, setActiveTab] = useState<PanelTab>(() => {
     if (typeof window !== "undefined" && sessionStorage.getItem(storageKey))
       return "browser";
-    return "activity";
+    return "telemetry";
   });
   const reviewQuery = useSandboxReview(threadId, activeTab === "review");
 
@@ -566,11 +564,11 @@ export function AgentComputerPanel({
           {t.agentComputer.tabs.browser}
         </TabBtn>
         <TabBtn
-          active={activeTab === "activity"}
-          onClick={() => selectTabManually("activity")}
+          active={activeTab === "telemetry"}
+          onClick={() => selectTabManually("telemetry")}
         >
           <FileTextIcon className="h-3 w-3" />
-          {t.agentComputer.tabs.activity}
+          {t.agentComputer.tabs.telemetry}
         </TabBtn>
         <TabBtn
           active={activeTab === "review"}
@@ -585,13 +583,6 @@ export function AgentComputerPanel({
         >
           <ShieldIcon className="h-3 w-3" />
           {t.agentComputer.tabs.privacy}
-        </TabBtn>
-        <TabBtn
-          active={activeTab === "audit"}
-          onClick={() => selectTabManually("audit")}
-        >
-          <ScrollTextIcon className="h-3 w-3" />
-          {t.agentComputer.tabs.audit}
         </TabBtn>
       </div>
 
@@ -692,16 +683,16 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Activity" resetKeys={[threadId]}>
+        <AgentComputerErrorBoundary tabName="Telemetry" resetKeys={[threadId]}>
           <div
-            data-tab="activity"
-            className={cn("h-full", activeTab !== "activity" && "hidden")}
+            data-tab="telemetry"
+            className={cn("h-full", activeTab !== "telemetry" && "hidden")}
           >
-            <ActivityPanel
+            <TelemetryPanel
               events={mergedEvents}
               threadId={threadId}
               verifyResult={effectiveVerifyResult}
-              active={activeTab === "activity"}
+              active={activeTab === "telemetry"}
             />
           </div>
         </AgentComputerErrorBoundary>
@@ -718,14 +709,6 @@ export function AgentComputerPanel({
           </div>
         </AgentComputerErrorBoundary>
 
-        <AgentComputerErrorBoundary tabName="Audit" resetKeys={[threadId]}>
-          <div
-            data-tab="audit"
-            className={cn("h-full", activeTab !== "audit" && "hidden")}
-          >
-            <AuditPanel threadId={threadId} active={activeTab === "audit"} />
-          </div>
-        </AgentComputerErrorBoundary>
       </div>
 
       {/* ── Task checklist ── */}
