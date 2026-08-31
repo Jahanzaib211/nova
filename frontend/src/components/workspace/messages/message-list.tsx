@@ -3,7 +3,7 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
 import { ChevronUpIcon, Loader2Icon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import {
   Conversation,
@@ -35,6 +35,8 @@ import {
   type SubtaskUpdateSource,
 } from "@/core/tasks/context";
 import {
+  DERIVED_FAILURE_SETTLE_MS,
+  derivedFailureHasSettled,
   derivePendingSubtaskStatus,
   findSubtaskResultMessage,
   parseSubtaskResult,
@@ -191,6 +193,35 @@ function LoadMoreHistoryIndicator({
   );
 }
 
+
+/**
+ * Decide whether a derived `failed` may paint yet.
+ *
+ * Returns `in_progress` while the failure is still inside its settle window,
+ * and schedules a re-render for when the window closes so the real answer is
+ * not stuck behind a render that never comes. A status that came from a parsed
+ * ToolMessage (`fromResult`) is evidence, not a guess, and passes straight
+ * through.
+ */
+function holdDerivedFailure(
+  status: Subtask["status"],
+  fromResult: boolean,
+  taskId: string,
+  since: Map<string, number>,
+  scheduleResettle: (delay: number) => void,
+): Subtask["status"] {
+  if (fromResult || status !== "failed") {
+    since.delete(taskId);
+    return status;
+  }
+  const now = Date.now();
+  const first = since.get(taskId) ?? now;
+  if (!since.has(taskId)) since.set(taskId, now);
+  if (derivedFailureHasSettled(first, now)) return "failed";
+  scheduleResettle(DERIVED_FAILURE_SETTLE_MS - (now - first) + 20);
+  return "in_progress";
+}
+
 export function MessageList({
   className,
   threadId,
@@ -255,6 +286,30 @@ export function MessageList({
   // Flushing on every render is safe because `updateSubtask` hands back the
   // same state reference when nothing observable changed (see the identity note
   // in `core/tasks/context.tsx`), so React bails out instead of looping.
+  // When a derived failure was first seen, per task. A derived `failed` is a
+  // conclusion drawn from absence -- no tool result, no active run -- and the
+  // two channels it reads are not synchronised, so it can be momentarily early.
+  // Holding it for DERIVED_FAILURE_SETTLE_MS removes the red-then-green flash
+  // without ever hiding a failure that is real: after the window it paints.
+  const derivedFailureSince = useRef<Map<string, number>>(new Map());
+  const [, forceResettle] = useReducer((n: number) => n + 1, 0);
+  const resettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // One timer for all held tasks: they share a window, so the earliest expiry
+  // is enough to re-render and let every settled one through.
+  const scheduleResettle = useCallback((delay: number) => {
+    if (resettleTimer.current !== null) return;
+    resettleTimer.current = setTimeout(() => {
+      resettleTimer.current = null;
+      forceResettle();
+    }, delay);
+  }, []);
+  useEffect(
+    () => () => {
+      if (resettleTimer.current !== null) clearTimeout(resettleTimer.current);
+    },
+    [],
+  );
+
   const queuedSubtaskUpdates = useRef<
     Array<[Partial<Subtask> & { id: string }, SubtaskUpdateSource]>
   >([]);
@@ -499,7 +554,7 @@ export function MessageList({
                           resultMessage.additional_kwargs,
                         )
                       : undefined;
-                    const status =
+                    const derived =
                       parsed?.status ??
                       derivePendingSubtaskStatus(
                         taskId,
@@ -508,6 +563,18 @@ export function MessageList({
                         hasActiveRun && groupIsCurrentTurn,
                         runStateKnown,
                       );
+                    // Hold a *derived* failure briefly before painting it. The
+                    // runs cache and the task-event socket are independent, so
+                    // the cache can say "no pending run" a beat before the
+                    // socket delivers task_completed -- and the badge flashed
+                    // red, then green. See DERIVED_FAILURE_SETTLE_MS.
+                    const status = holdDerivedFailure(
+                      derived,
+                      parsed?.status !== undefined,
+                      taskId,
+                      derivedFailureSince.current,
+                      scheduleResettle,
+                    );
                     const task: Subtask = {
                       id: taskId,
                       subagent_type: toolCall.args.subagent_type,

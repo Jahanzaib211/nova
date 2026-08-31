@@ -264,3 +264,34 @@ function readStructuredStatus(
   }
   return result;
 }
+
+/**
+ * How long a derived "failed" must persist before it is allowed to paint.
+ *
+ * The runs cache and the task-event socket are independent channels. The cache
+ * can report "no pending run" a beat before the socket delivers
+ * `task_completed`, and in that window `derivePendingSubtaskStatus` concludes
+ * `failed` from evidence that is merely *early* rather than wrong. The FSM then
+ * lets the real event correct it, so the badge goes red and then green -- both
+ * values individually correct, the transition pure noise.
+ *
+ * A short settle window costs nothing when the task really did fail (the badge
+ * is a quarter-second later) and removes the flicker entirely when it did not.
+ */
+export const DERIVED_FAILURE_SETTLE_MS = 400;
+
+/**
+ * Should a derived `failed` be shown yet?
+ *
+ * Pure so the timing rule is testable without a clock or a React tree.
+ * `since` is when this task's derived failure was *first* observed; a task that
+ * has been failing for longer than the window is reported honestly.
+ */
+export function derivedFailureHasSettled(
+  since: number | undefined,
+  now: number,
+  settleMs: number = DERIVED_FAILURE_SETTLE_MS,
+): boolean {
+  if (since === undefined) return false;
+  return now - since >= settleMs;
+}
