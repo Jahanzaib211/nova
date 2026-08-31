@@ -1193,9 +1193,27 @@ async def deploy_expose_tool(runtime: Runtime, description: str, port: int) -> s
     if err:
         return err
     try:
-        url = f"/api/sandbox/absproxy/{thread_id}/{int(port)}/"
-        _write_sandbox_observation(_get_sandbox_id(runtime), "deploy_expose", None, f"exposed port {port}")
-        return f"✓ Exposed port {port}. Shareable preview URL (open in the Browser tab or a new tab): {url}"
+        from deerflow.sandbox.dev_server import (
+            DEFAULT_LABEL,
+            probe_container_port,
+            register_external_dev_server,
+        )
+
+        port_i = int(port)
+        if not (1 <= port_i <= 65535):
+            return f"Error: port must be between 1 and 65535 (got {port_i})"
+
+        # Verify, then *register*. Returning a URL alone was a half pipeline: the
+        # agent reported success, the Browser tab kept showing "Start Live
+        # Preview" because nothing ever created a dev-server handle, and an
+        # unreachable port produced a link that 503'd.
+        if not await probe_container_port(thread_id, port_i):
+            return f"Error: nothing is listening on port {port_i} inside the sandbox. Start the server first, then expose it."
+
+        register_external_dev_server(thread_id, port_i, label=DEFAULT_LABEL, container_port=port_i)
+        url = f"/api/sandbox/absproxy/{thread_id}/{port_i}/"
+        _write_sandbox_observation(_get_sandbox_id(runtime), "deploy_expose", None, f"exposed port {port_i}")
+        return f"✓ Exposed port {port_i} and wired it to the Browser tab (it renders on the next poll). Shareable preview URL: {url}"
     except Exception as e:
         return f"Error: {e}"
 
@@ -1551,9 +1569,11 @@ async def register_external_dev_server_tool(
     Args:
         description: Explain why you are wiring up an external server. ALWAYS PROVIDE THIS FIRST.
         port: TCP port the server is listening on (e.g. 3000 for ``npm start``).
-        host: Hostname the gateway can reach (defaults to 127.0.0.1; use
-            ``host.docker.internal`` for AIO sandbox servers started on the
-            host).
+        host: Leave this alone for a server running **inside** the sandbox
+            (the normal case) -- the port is checked and served through the
+            sandbox's own gateway, and does not need to be published. Only set
+            it for a server running on the *host* machine, where the value is
+            ``host.docker.internal``.
         label: Optional label to register under (default "app").
     """
     try:
@@ -1561,6 +1581,7 @@ async def register_external_dev_server_tool(
 
         from deerflow.sandbox.dev_server import (
             DEFAULT_LABEL,
+            probe_container_port,
         )
         from deerflow.sandbox.dev_server import (
             register_external_dev_server as _register,
@@ -1573,26 +1594,50 @@ async def register_external_dev_server_tool(
         if not (1 <= port_i <= 65535):
             return f"Error: port must be between 1 and 65535 (got {port_i})"
 
-        # Refuse up-front if nothing is actually listening, so the panel never
-        # advertises a phantom server. Sync probe — fast (0.4 s timeout).
-        try:
-            with _socket.create_connection((host, port_i), timeout=0.4):
-                reachable = True
-        except Exception:
-            reachable = False
-        if not reachable:
-            return f"Error: port {host}:{port_i} is not reachable; nothing is listening there."
-
+        # Resolve the thread first: the liveness probe below needs it, because
+        # for a container sandbox the only way to see an unpublished port is
+        # through that thread's sandbox.
         sandbox_id = _get_sandbox_id(runtime)
-        if is_local_sandbox(runtime):
+        local = is_local_sandbox(runtime)
+        if local:
             thread_id = _thread_id_from_sandbox_id(sandbox_id)
         else:
             thread_id = _extract_thread_id_from_thread_data(get_thread_data(runtime))
         if not thread_id:
             return "Error: could not resolve thread id from runtime config"
 
+        # Refuse up-front if nothing is actually listening, so the panel never
+        # advertises a phantom server.
+        #
+        # The probe has to run *from the sandbox's point of view*. This tool
+        # executes in the gateway process, so `create_connection(("127.0.0.1",
+        # 8787))` tested the gateway's own loopback -- and since only 4100-4102
+        # are published, a server the agent had just started inside the sandbox
+        # was always reported "not reachable". That made this escape hatch
+        # unusable for the exact case it exists for, even after it was bound
+        # into BUILTIN_TOOLS.
+        if local or host not in ("127.0.0.1", "localhost", ""):
+            # Local mode, or an explicitly host-side server: a direct connect is
+            # the right test.
+            try:
+                with _socket.create_connection((host, port_i), timeout=0.4):
+                    reachable = True
+            except Exception:
+                reachable = False
+        else:
+            reachable = await probe_container_port(thread_id, port_i)
+        if not reachable:
+            return f"Error: port {host}:{port_i} is not reachable; nothing is listening there."
+
         effective_label = label or DEFAULT_LABEL
-        handle = _register(thread_id, port_i, host=host, label=effective_label)
+        # In container mode the port the agent gave us is the in-container port.
+        handle = _register(
+            thread_id,
+            port_i,
+            host=host,
+            label=effective_label,
+            container_port=None if local else port_i,
+        )
         _write_sandbox_observation(
             sandbox_id,
             "register_external_dev_server",

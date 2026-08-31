@@ -168,6 +168,124 @@ def allocate_container_port(thread_id: str, label: str = DEFAULT_LABEL) -> int:
     return _PREVIEW_CONTAINER_PORTS[-1]
 
 
+# Ports the sandbox container owns for its own services, never an app's preview.
+# 8080 is the AIO sandbox API itself (ttyd / noVNC / the /absproxy gateway).
+_SANDBOX_INFRA_PORTS = frozenset({8080})
+
+
+def _sandbox_for_thread(thread_id: str):
+    """The live sandbox object for a thread, or ``None``.
+
+    Deliberately does not *acquire* — these helpers are diagnostics, and
+    acquiring from a probe would create a container as a side effect of asking
+    whether one has a server running.
+    """
+    from deerflow.sandbox import get_sandbox_provider
+
+    try:
+        provider = get_sandbox_provider()
+        # Look the thread's existing sandbox up; never `acquire`. Acquiring here
+        # would *create* a container as a side effect of asking whether one has a
+        # server running -- which also made `discover_live_preview` adopt ports
+        # belonging to a sandbox it had just spun up itself.
+        mapping = getattr(provider, "_thread_sandboxes", None) or {}
+        sandbox_id = mapping.get(thread_id)
+        if not sandbox_id:
+            return None
+        return provider.get(sandbox_id)
+    except Exception:
+        logger.debug("no sandbox for thread %s", thread_id, exc_info=True)
+        return None
+
+
+async def probe_container_port(thread_id: str, port: int) -> bool:
+    """True if something is listening on ``port`` *inside* the sandbox.
+
+    This is the correct liveness test for an in-container port, and it is not
+    ``port_alive``. ``port_alive`` connects from the **gateway** process, so for
+    an AIO sandbox it tests the gateway's own loopback -- which is why
+    registering a server the agent started inside the sandbox on, say, 8787
+    always failed with "nothing is listening there". Only 4100-4102 and the
+    sandbox API port are published to the host; every other in-container port is
+    reachable solely through the sandbox's own ``/absproxy/{port}/`` gateway,
+    which is exactly what ``_absproxy_impl`` proxies to.
+
+    Measured against a live sandbox: a listening port answers (``308`` for a
+    dev server that redirects), an idle one comes back ``500``. So "the sandbox
+    gateway answered, and not with a 5xx" is the discriminator.
+
+    Falls back to ``port_alive`` for local (non-AIO) sandboxes, where the dev
+    server really does run on the gateway host.
+    """
+    # `provider.acquire()` does blocking Docker work, so it must not run on the
+    # event loop -- see the blocking-IO gate in backend/Makefile.
+    sandbox = await asyncio.to_thread(_sandbox_for_thread, thread_id)
+    base_url = getattr(sandbox, "base_url", None) if sandbox is not None else None
+    if not base_url:
+        # Local sandbox (or no sandbox): the server, if any, is on this host.
+        return await port_alive("127.0.0.1", port)
+
+    import httpx
+
+    url = f"{base_url.rstrip('/')}/absproxy/{int(port)}/"
+    try:
+        async with httpx.AsyncClient(timeout=2.0, follow_redirects=False) as client:
+            resp = await client.get(url)
+    except Exception:
+        return False
+    return resp.status_code < 500
+
+
+async def list_listening_ports(thread_id: str) -> list[int]:
+    """TCP ports listening inside the sandbox, lowest first.
+
+    This is the agent's (and the preview's) map of its own network. Parses the
+    same ``ss -ltnp`` output ``system_probe`` shows the agent, so the two can
+    never disagree about what is up.
+
+    Best-effort by contract: an empty list means "could not tell", never
+    "nothing is running", so no caller may treat it as proof of absence.
+    """
+    sandbox = await asyncio.to_thread(_sandbox_for_thread, thread_id)
+    if sandbox is None:
+        return []
+    cmd = "(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -i listen"
+    try:
+        out = await asyncio.to_thread(sandbox.execute_command, cmd)
+    except Exception:
+        logger.debug("listening-port probe failed for %s", thread_id, exc_info=True)
+        return []
+    return parse_listening_ports(out or "")
+
+
+def parse_listening_ports(text: str) -> list[int]:
+    """Extract listening TCP ports from ``ss``/``netstat`` output.
+
+    Pure and separately testable: the local-address column is the 4th field for
+    ``ss`` and the 4th for ``netstat -ltn`` too, but the address forms vary
+    (``0.0.0.0:4100``, ``[::]:4100``, ``*:4100``), so match on the trailing
+    ``:port`` rather than trusting the column split.
+    """
+    import re
+
+    ports: set[int] = set()
+    for line in text.splitlines():
+        # First field carrying a ``:port`` / ``.port`` suffix is the local
+        # address; break there so the peer column (``0.0.0.0:*``) is ignored.
+        for field_ in line.split():
+            m = re.fullmatch(r".*[:.]([0-9]{1,5})", field_)
+            if not m:
+                continue
+            try:
+                value = int(m.group(1))
+            except ValueError:
+                continue
+            if 1 <= value <= 65535:
+                ports.add(value)
+                break
+    return sorted(ports)
+
+
 async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
     """Find a live HTTP server among the thread's published preview ports.
 
@@ -193,6 +311,22 @@ async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
         host, host_port = endpoint
         if await port_alive(host, host_port):
             return (container_port, host, host_port)
+
+    # Nothing on the published ports. A server started outside the pipeline
+    # (raw bash, PM2, a manual `node`) binds whatever port it likes, and only
+    # 4100-4102 are published -- so the sweep above is structurally blind to it
+    # and the Browser tab sat on "Start Live Preview" forever. Ask the sandbox
+    # what is actually listening and adopt the first real candidate; it is
+    # reachable through the sandbox's own absproxy gateway even though no host
+    # port maps to it.
+    for candidate in await list_listening_ports(thread_id):
+        if candidate in _PREVIEW_CONTAINER_PORTS or candidate in _SANDBOX_INFRA_PORTS:
+            continue
+        if await probe_container_port(thread_id, candidate):
+            # host/host_port are the *published* pair, which does not exist for
+            # this port. The absproxy URL is keyed on the container port, so
+            # report that and let the caller route through absproxy.
+            return (candidate, "", 0)
     return None
 
 
@@ -202,6 +336,7 @@ def register_external_dev_server(
     *,
     host: str = "127.0.0.1",
     label: str = DEFAULT_LABEL,
+    container_port: int | None = None,
 ) -> DevServerHandle:
     """Register a dev server that is already listening on ``host:port``.
 
@@ -222,6 +357,11 @@ def register_external_dev_server(
         command="(external)",
         label=label,
         host=host,
+        # For a server inside the sandbox the registered port *is* the
+        # in-container port, and that is what the absproxy URL must be keyed on.
+        # Leaving this at the 4100 default pointed the Browser tab's fallback at
+        # a port the server was not on.
+        container_port=int(container_port) if container_port else port,
         _order=_order_counter,
     )
     handle.status = "ready"
