@@ -46,9 +46,11 @@ describe("parseAnsi", () => {
 
   it("drops non-SGR escapes rather than showing them", () => {
     // The exact shape found in the live logs.
-    expect(parseAnsi(`[dev] ${ESC}[?25h`).map((s) => s.text).join("")).toBe(
-      "[dev] ",
-    );
+    expect(
+      parseAnsi(`[dev] ${ESC}[?25h`)
+        .map((s) => s.text)
+        .join(""),
+    ).toBe("[dev] ");
   });
 
   it("consumes 256-colour parameters instead of reading them as styles", () => {

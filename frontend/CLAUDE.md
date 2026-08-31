@@ -160,7 +160,7 @@ concludes `failed` from absence (no tool result, no active run), reading the run
 cache — a different channel from the task-event socket. The cache can report "no
 pending run" a beat before the socket delivers `task_completed`, so the badge
 went red and then green, both values individually correct. `DERIVED_FAILURE_SETTLE_MS`
-delays only the *guess*; evidence from a parsed ToolMessage passes straight through,
+delays only the _guess_; evidence from a parsed ToolMessage passes straight through,
 and a genuine failure still paints once the window closes.
 
 ## Code Style

@@ -34,9 +34,8 @@ vi.mock("@/components/workspace/agent-computer/audit-tab", () => ({
   },
 }));
 
-const { TelemetryPanel } = await import(
-  "@/components/workspace/agent-computer/telemetry-tab"
-);
+const { TelemetryPanel } =
+  await import("@/components/workspace/agent-computer/telemetry-tab");
 const { I18nProvider } = await import("@/core/i18n/context");
 
 function render(active: boolean) {
@@ -74,7 +73,8 @@ describe("TelemetryPanel segment gating", () => {
     // Unmounting Ledger would drop the audit list and refetch on every switch.
     // Attribute order is React's to choose, so match the whole tag rather than
     // assuming `data-segment` precedes `class`.
-    const ledgerTag = /<div[^>]*data-segment="ledger"[^>]*>/.exec(html)?.[0] ?? "";
+    const ledgerTag =
+      /<div[^>]*data-segment="ledger"[^>]*>/.exec(html)?.[0] ?? "";
     expect(ledgerTag).not.toBe("");
     expect(ledgerTag).toContain("hidden");
   });

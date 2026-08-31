@@ -16,13 +16,25 @@ import { isCommandTool, isTerminalTool } from "@/core/threads/tool-surface";
  */
 describe("isCommandTool", () => {
   it("counts executed commands", () => {
-    for (const name of ["bash", "execute_command", "shell_session", "shell_write"]) {
+    for (const name of [
+      "bash",
+      "execute_command",
+      "shell_session",
+      "shell_write",
+    ]) {
       expect(isCommandTool(name)).toBe(true);
     }
   });
 
   it("does not count file work", () => {
-    for (const name of ["read_file", "write_file", "str_replace", "ls", "glob", "grep"]) {
+    for (const name of [
+      "read_file",
+      "write_file",
+      "str_replace",
+      "ls",
+      "glob",
+      "grep",
+    ]) {
       expect(isCommandTool(name)).toBe(false);
     }
   });
@@ -35,7 +47,12 @@ describe("isCommandTool", () => {
 
   it("is a strict subset of the terminal surface", () => {
     // Terminal still *renders* file work; it just doesn't call it a command.
-    for (const name of ["bash", "shell_session", "shell_write", "execute_command"]) {
+    for (const name of [
+      "bash",
+      "shell_session",
+      "shell_write",
+      "execute_command",
+    ]) {
       expect(isTerminalTool(name)).toBe(true);
     }
     expect(isTerminalTool("read_file")).toBe(true);
