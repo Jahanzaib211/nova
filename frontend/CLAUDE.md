@@ -136,13 +136,32 @@ The panel is fed by `useSandboxLogs` (`core/sandbox/hooks.ts`) over
 
 `WorkspaceStateProvider` mounts _above_ the panel's own error boundary, so
 anything it throws escapes to the root boundary and takes the whole workspace
-with it — hence `normalizeTodoResult` and the defensive shapes around it. It
-also derives subtask state from the message list during render; the derivation
-stays in render, but the **writes are queued and flushed in an effect**, because
-calling `updateSubtask` from there is a setState-during-render violation
-(`Cannot update a component while rendering a different component`). A
-production build hides that warning — it only surfaced once the container ran
-`next dev`.
+with it — hence `normalizeTodoResult` and the defensive shapes around it.
+
+**Subtask derivation lives in `MessageList`, not here.** This paragraph used to
+attribute it to `WorkspaceStateProvider`, which does not contain a single
+reference to `updateSubtask` or `useSubtask` — it owns `activityEvents`,
+`mergedEvents`, `todos`, `taskProgress`, `verifyResult` and `llmError` and
+nothing else. The real code is `components/workspace/messages/message-list.tsx`:
+it derives subtask state from the message list during render, and the
+**writes are queued and flushed in an effect**, because calling `updateSubtask`
+from render is a setState-during-render violation (`Cannot update a component
+while rendering a different component`). A production build hides that warning —
+it only surfaced once the container ran `next dev`.
+
+**Subtask keys are stable identities, not indexes.** `SubtaskCard` is keyed
+`task-group-${taskId}` (the tool call's own id) and its group wrapper
+`subtask-group-${group.id}` (the originating message id). The no-index-key rule
+above is written for the sandbox-log merge, but the subtask tree obeys it
+independently — worth knowing before "fixing" a re-render by changing a key.
+
+**A derived subtask failure is held before it paints.** `derivePendingSubtaskStatus`
+concludes `failed` from absence (no tool result, no active run), reading the runs
+cache — a different channel from the task-event socket. The cache can report "no
+pending run" a beat before the socket delivers `task_completed`, so the badge
+went red and then green, both values individually correct. `DERIVED_FAILURE_SETTLE_MS`
+delays only the *guess*; evidence from a parsed ToolMessage passes straight through,
+and a genuine failure still paints once the window closes.
 
 ## Code Style
 

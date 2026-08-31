@@ -18,9 +18,9 @@ Requires [nektos/act](https://github.com/nektos/act) installed. Configuration is
 
 | Workflow | Trigger | What it validates |
 |---|---|---|
-| `backend-unit-tests.yml` | push/PR to main | 6,917 backend unit tests (`make test`) |
+| `backend-unit-tests.yml` | push/PR to main | 6,928 backend unit tests (`make test`) |
 | `backend-blocking-io-tests.yml` | push/PR to main | Blockbuster runtime gate on async blocking IO |
-| `frontend-unit-tests.yml` | push/PR to main | 668 frontend unit tests (`pnpm test`) |
+| `frontend-unit-tests.yml` | push/PR to main | 675 frontend unit tests (`pnpm test`) |
 | `frontend-build.yml` | push/PR to main | Next.js production build (`pnpm build`) |
 | `e2e-tests.yml` | push/PR to main | Playwright E2E tests (Chromium, mocked backend) |
 | `replay-e2e.yml` | push/PR to main | Replay golden E2E tests (deterministic regression) |
@@ -71,8 +71,8 @@ The `.actrc` file configures act with appropriate defaults for Nova's Docker-bas
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 6,917 | `cd backend && make test` |
-| Frontend unit tests | 668 | `cd frontend && pnpm test` |
+| Backend unit tests | 6,928 | `cd backend && make test` |
+| Frontend unit tests | 675 | `cd frontend && pnpm test` |
 | Playwright E2E | 85 | `cd frontend && pnpm test:e2e` |
 | Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
 | Cross-ref check | 1 | `python3 backend/tests/test_no_cross_references.py` |
