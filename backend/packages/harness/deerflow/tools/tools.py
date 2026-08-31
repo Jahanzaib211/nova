@@ -7,6 +7,7 @@ from deerflow.config.app_config import AppConfig
 from deerflow.reflection import resolve_variable
 from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
+from deerflow.tools.builtins.igino_research_tool import igino_research_tool
 from deerflow.tools.builtins.workspace_tools import (
     agent_notify_tool,
     browser_check_tool,
@@ -54,6 +55,14 @@ BUILTIN_TOOLS = [
     code_review_tool,
     browser_check_tool,
     save_skill_tool,
+    # Advertised by name in the lead-agent prompt ("for privacy-sensitive
+    # research, use igino_research instead of web_search") and carried in the
+    # manifest, but never imported here -- so every agent that followed that
+    # instruction got `igino_research is not a valid tool`. Dead since
+    # 462bcf80 (2026-06-26). Same defect as register_external_dev_server.
+    # Bound unconditionally: it degrades to an error string when SearXNG/TOR is
+    # unavailable (never raises), so a flag would only re-create the gap.
+    igino_research_tool,
     # Enterprise nodes (wrap the native AIO SDK)
     shell_session_tool,
     shell_view_tool,
