@@ -25,13 +25,13 @@ Nova is a full-stack refactor of DeerFlow 2.0 — **+35,738 lines across 338 fil
 - **Verify loop** — the agent tests its own builds: headless-Chromium self-checks against the running dev server (console errors, blank-render detection, screenshots), auto-triggered on dev-server-ready and on shipped HTML, with a vision path so the model *sees* its build.
 - **Deterministic code review** — a no-LLM review engine producing a plain-English verdict for non-coders plus per-file stats and risk flags for developers.
 - **Self-correction middlewares** — runtime-enforced iteration budgets, dead-end loop detection, preflight quota checks, error-message decontamination, live task progress.
-- **32 agent tools** — shell sessions, browser navigate/click/input/eval, screenshot, scaffold, dev-server lifecycle, dev_verify, code_review, skill saving, and more.
+- **27 built-in agent tools** (43 bound at runtime with the sandbox, web and subagent tools) — shell sessions, browser navigate/click/input/eval, screenshot, scaffold, dev-server lifecycle, external-server registration, dev_verify, code_review, skill saving, and more.
 - **iGIN0 privacy research** — hardened SearXNG client with retry, circuit breaker, caching, and a privacy audit trail. TOR routing is supported by the client but **no Tor proxy ships in the default stack** (it crash-looped under the non-root hardening); `tor_enabled: true` degrades to direct fetching until you add one back — see the note in `docker/docker-compose-dev.yaml`.
 - **Runtime model management** — add/switch models through the API and settings UI without touching config files.
 - **Ops layer** — 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery.
 - **Local + free models via LiteLLM** — an Ollama preset in settings and a PM2-managed LiteLLM proxy expose four free Ollama cloud models (MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B) alongside paid providers.
 - **8,112 lines of new tests** across 37 new backend test files.
-  **All tests green**: 6,860 backend tests · 650 frontend tests · 48 WIK kernel tests · 5 security hardening tests · cross-ref check clean.
+  **All tests green**: 6,892 backend tests · 656 frontend tests · 48 WIK kernel tests · 5 security hardening tests · cross-ref check clean.
 
 Upstream DeerFlow provides the agent harness (sub-agents, memory, LangGraph runtime), the skills system, and per-thread Docker sandboxes — credit where due. The complete, reproducible attribution map is in **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)**.
 
@@ -770,8 +770,8 @@ All dict-returning methods are validated against Gateway Pydantic response model
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 6,860 | `cd backend && make test` |
-| Frontend unit tests | 650 | `cd frontend && pnpm test` |
+| Backend unit tests | 6,892 | `cd backend && make test` |
+| Frontend unit tests | 656 | `cd frontend && pnpm test` |
 | Playwright E2E | 85 | `cd frontend && pnpm test:e2e` |
 | Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
 
