@@ -75,10 +75,26 @@ def _decorated_tools() -> dict[str, str]:
 #: Tools the agent really has that are not declared with an ``@tool`` decorator
 #: in this package: sandbox tools and community tools come from ``config.yaml``.
 CONFIG_DECLARED_TOOLS = {
-    "bash", "ls", "read_file", "write_file", "str_replace", "glob", "grep",
-    "web_search", "web_fetch", "web_fetch_many", "web_crawl", "image_search",
-    "get_ohlcv", "compute_indicators", "backtest_signals",
-    "task", "task_status", "view_image", "invoke_acp_agent", "write_todos",
+    "bash",
+    "ls",
+    "read_file",
+    "write_file",
+    "str_replace",
+    "glob",
+    "grep",
+    "web_search",
+    "web_fetch",
+    "web_fetch_many",
+    "web_crawl",
+    "image_search",
+    "get_ohlcv",
+    "compute_indicators",
+    "backtest_signals",
+    "task",
+    "task_status",
+    "view_image",
+    "invoke_acp_agent",
+    "write_todos",
 }
 
 
@@ -117,16 +133,8 @@ class TestEveryToolIsReachable:
     def test_no_tool_is_accidentally_unbound(self) -> None:
         bound = set(_builtin_tool_symbols())
         defined = _decorated_tools()
-        orphans = {
-            name: where
-            for name, where in defined.items()
-            if name not in bound and name not in INTENTIONALLY_UNBOUND
-        }
-        assert not orphans, (
-            "tool(s) defined but never bound and not declared intentional — "
-            "this is the register_external_dev_server / igino_research defect:\n"
-            + "\n".join(f"  {n}  ({w})" for n, w in sorted(orphans.items()))
-        )
+        orphans = {name: where for name, where in defined.items() if name not in bound and name not in INTENTIONALLY_UNBOUND}
+        assert not orphans, "tool(s) defined but never bound and not declared intentional — this is the register_external_dev_server / igino_research defect:\n" + "\n".join(f"  {n}  ({w})" for n, w in sorted(orphans.items()))
 
     def test_the_intentional_list_has_no_stale_entries(self) -> None:
         """A name that got bound should be removed from the exemption list."""
@@ -168,10 +176,7 @@ class TestNothingAdvertisesAToolThatDoesNotExist:
     def test_prompt_only_names_reachable_tools(self) -> None:
         mentioned = self._mentions(PROMPT_PY.read_text(encoding="utf-8"))
         dead = sorted((mentioned & _defined_tool_names()) - _reachable_tool_names())
-        assert not dead, (
-            "the system prompt tells the agent to use tools it cannot call — this is "
-            f"exactly the igino_research defect: {dead}"
-        )
+        assert not dead, f"the system prompt tells the agent to use tools it cannot call — this is exactly the igino_research defect: {dead}"
 
     def test_manifest_only_describes_reachable_tools(self) -> None:
         text = MANIFEST_PY.read_text(encoding="utf-8")
@@ -179,6 +184,4 @@ class TestNothingAdvertisesAToolThatDoesNotExist:
         assert match, "manifest no longer declares _TOOL_PURPOSE_OVERRIDES"
         described = set(re.findall(r'"([a-z_0-9]+)":', match.group(1)))
         dead = sorted(described - _reachable_tool_names())
-        assert not dead, (
-            f"the spawn-time manifest describes tools the agent cannot call: {dead}"
-        )
+        assert not dead, f"the spawn-time manifest describes tools the agent cannot call: {dead}"

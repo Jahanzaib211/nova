@@ -201,7 +201,10 @@ function SkillPill({
             data-enabled={skill.enabled}
             data-category={skill.category}
           >
-            <SparklesIcon className="size-2.5 shrink-0 opacity-70" aria-hidden />
+            <SparklesIcon
+              className="size-2.5 shrink-0 opacity-70"
+              aria-hidden
+            />
             <span className="truncate">{skill.name}</span>
           </Badge>
         </TooltipTrigger>

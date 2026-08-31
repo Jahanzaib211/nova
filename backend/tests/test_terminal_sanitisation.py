@@ -88,7 +88,7 @@ class TestTheWriterSanitises:
 
     def test_delta_and_replace_are_cleaned(self, thread_log) -> None:
         sandbox_tools._write_sandbox_observation("local:t", "bash", None, "", obs_id="x", state="running", delta=f"a{ESC}[2Kb")
-        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "", obs_id="x", state="running", replace=f"c\x00d")
+        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "", obs_id="x", state="running", replace="c\x00d")
         recs = _records(thread_log)
         assert recs[0]["delta"] == "ab"
         assert recs[1]["replace"] == "cd"

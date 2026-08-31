@@ -32,18 +32,11 @@ class TestParseListeningPorts:
     """The port map is parsed from what ``system_probe`` already shows the agent."""
 
     def test_parses_ss_output(self) -> None:
-        out = (
-            "State  Recv-Q Send-Q Local Address:Port  Peer Address:Port\n"
-            "LISTEN 0      511          0.0.0.0:4100       0.0.0.0:*\n"
-            "LISTEN 0      511             [::]:8787          [::]:*\n"
-        )
+        out = "State  Recv-Q Send-Q Local Address:Port  Peer Address:Port\nLISTEN 0      511          0.0.0.0:4100       0.0.0.0:*\nLISTEN 0      511             [::]:8787          [::]:*\n"
         assert dev_server.parse_listening_ports(out) == [4100, 8787]
 
     def test_parses_netstat_output(self) -> None:
-        out = (
-            "tcp        0      0 0.0.0.0:3000            0.0.0.0:*               LISTEN\n"
-            "tcp6       0      0 :::5173                 :::*                    LISTEN\n"
-        )
+        out = "tcp        0      0 0.0.0.0:3000            0.0.0.0:*               LISTEN\ntcp6       0      0 :::5173                 :::*                    LISTEN\n"
         assert dev_server.parse_listening_ports(out) == [3000, 5173]
 
     def test_ignores_the_peer_column(self) -> None:
@@ -188,10 +181,7 @@ class TestDiscoveryReachesBeyondThePublishedPorts:
 class TestRegistrationRecordsTheContainerPort:
     def test_container_port_defaults_to_the_registered_port(self) -> None:
         handle = dev_server.register_external_dev_server("t-cp", 8787, container_port=8787)
-        assert handle.container_port == 8787, (
-            "absproxy URLs are keyed on the container port; leaving this at the 4100 "
-            "default pointed the Browser tab at a port the server was not on"
-        )
+        assert handle.container_port == 8787, "absproxy URLs are keyed on the container port; leaving this at the 4100 default pointed the Browser tab at a port the server was not on"
 
     def test_an_explicit_container_port_wins(self) -> None:
         handle = dev_server.register_external_dev_server("t-cp2", 40001, container_port=3000)
@@ -227,10 +217,7 @@ class TestTheGatewayUsesThePathStrippingProxy:
 
         router = Path(__file__).resolve().parents[1] / "app" / "gateway" / "routers" / "sandbox.py"
         text = router.read_text(encoding="utf-8")
-        assert '''target = f"{base_url.rstrip('/')}/proxy/{port}/{path}"''' in text, (
-            "the gateway is targeting the sandbox's path-preserving proxy again; "
-            "a plain app served through the Browser tab fallback will 404"
-        )
+        assert '''target = f"{base_url.rstrip('/')}/proxy/{port}/{path}"''' in text, "the gateway is targeting the sandbox's path-preserving proxy again; a plain app served through the Browser tab fallback will 404"
 
     def test_the_public_route_name_is_unchanged(self) -> None:
         """Only the upstream hop moved — the frontend builds this URL."""

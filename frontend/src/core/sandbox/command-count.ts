@@ -25,7 +25,8 @@ export function foldCommandCount(
 ): number | undefined {
   // `null`/`undefined` mean "unknown", never zero — keep what we have rather
   // than dropping the header back to its approximate "~N" window count.
-  if (typeof incoming !== "number" || !Number.isFinite(incoming)) return current;
+  if (typeof incoming !== "number" || !Number.isFinite(incoming))
+    return current;
   if (current === undefined) return incoming;
   return Math.max(current, incoming);
 }

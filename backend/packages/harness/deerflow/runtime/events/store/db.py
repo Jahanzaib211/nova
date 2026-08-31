@@ -312,11 +312,7 @@ class DbRunEventStore(RunEventStore):
         deleted = 0
         while True:
             async with self._sf() as session:
-                ids = (
-                    await session.scalars(
-                        select(RunEventRow.id).where(RunEventRow.created_at < cutoff).limit(_PRUNE_BATCH)
-                    )
-                ).all()
+                ids = (await session.scalars(select(RunEventRow.id).where(RunEventRow.created_at < cutoff).limit(_PRUNE_BATCH))).all()
                 if not ids:
                     return deleted
                 await session.execute(delete(RunEventRow).where(RunEventRow.id.in_(list(ids))))

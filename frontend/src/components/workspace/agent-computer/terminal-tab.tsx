@@ -38,13 +38,22 @@ export { isTerminalTool } from "@/core/threads/tool-surface";
  * at the 20,000-character observation cap, mostly `curl` dumping raw HTML, and
  * one of those owns the whole viewport and buries the commands around it.
  */
-function TerminalOutput({ output, status }: { output: string; status: string }) {
+function TerminalOutput({
+  output,
+  status,
+}: {
+  output: string;
+  status: string;
+}) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useI18n();
 
   const lines = output.split("\n");
   const isLong = lines.length > OUTPUT_CLAMP_LINES;
-  const shown = expanded || !isLong ? output : lines.slice(0, OUTPUT_CLAMP_LINES).join("\n");
+  const shown =
+    expanded || !isLong
+      ? output
+      : lines.slice(0, OUTPUT_CLAMP_LINES).join("\n");
   const segments = parseAnsi(shown);
 
   return (
@@ -61,7 +70,7 @@ function TerminalOutput({ output, status }: { output: string; status: string }) 
       {isLong && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="text-muted-foreground/50 hover:text-muted-foreground ml-4 mt-1 text-[10px] underline underline-offset-2"
+          className="text-muted-foreground/50 hover:text-muted-foreground mt-1 ml-4 text-[10px] underline underline-offset-2"
         >
           {expanded
             ? t.agentComputer.terminal.showLess
@@ -118,7 +127,9 @@ export function Terminal({
   // a command either way.
   const [showDevLogs, setShowDevLogs] = useState(true);
   const allTerminalEvents = events.filter((e) => isTerminalTool(e.type));
-  const devLogCount = allTerminalEvents.filter((e) => e.type === "dev_server").length;
+  const devLogCount = allTerminalEvents.filter(
+    (e) => e.type === "dev_server",
+  ).length;
   const terminalEvents = showDevLogs
     ? allTerminalEvents
     : allTerminalEvents.filter((e) => e.type !== "dev_server");
@@ -195,7 +206,11 @@ export function Terminal({
         <button
           onClick={() => setShowDevLogs((v) => !v)}
           className="text-muted-foreground/50 hover:text-muted-foreground border-border/40 rounded border px-1.5 py-0.5 text-[10px]"
-          title={showDevLogs ? t.agentComputer.terminal.hideDevLogs : t.agentComputer.terminal.showDevLogs}
+          title={
+            showDevLogs
+              ? t.agentComputer.terminal.hideDevLogs
+              : t.agentComputer.terminal.showDevLogs
+          }
         >
           {showDevLogs
             ? t.agentComputer.terminal.hideDevLogs

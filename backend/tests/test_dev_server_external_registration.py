@@ -172,10 +172,7 @@ class TestExternalRegistrationToolIsReachable:
         from deerflow.tools.tools import BUILTIN_TOOLS
 
         names = {getattr(t, "name", None) for t in BUILTIN_TOOLS}
-        assert "register_external_dev_server" in names, (
-            "register_external_dev_server is implemented but not bound; "
-            f"BUILTIN_TOOLS exposes {sorted(n for n in names if n)}"
-        )
+        assert "register_external_dev_server" in names, f"register_external_dev_server is implemented but not bound; BUILTIN_TOOLS exposes {sorted(n for n in names if n)}"
 
     def test_the_port_discovery_gap_it_covers_is_real(self):
         """Pin the reason the tool must exist: discovery is a 3-port probe."""

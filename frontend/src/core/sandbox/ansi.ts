@@ -84,7 +84,8 @@ function classNameFor(style: Style): string {
 /** Apply one SGR parameter run to the running style. */
 function applyParams(style: Style, params: string): Style {
   // A bare `ESC[m` is a reset, same as `ESC[0m`.
-  const codes = params === "" ? [0] : params.split(";").map((n) => Number(n) || 0);
+  const codes =
+    params === "" ? [0] : params.split(";").map((n) => Number(n) || 0);
   let next: Style = { ...style };
   for (let i = 0; i < codes.length; i++) {
     const code = codes[i]!;

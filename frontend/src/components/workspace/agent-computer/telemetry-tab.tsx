@@ -77,7 +77,10 @@ export function TelemetryPanel({
         className={cn("min-h-0 flex-1", segment !== "ledger" && "hidden")}
         data-segment="ledger"
       >
-        <AuditPanel threadId={threadId} active={active && segment === "ledger"} />
+        <AuditPanel
+          threadId={threadId}
+          active={active && segment === "ledger"}
+        />
       </div>
     </div>
   );

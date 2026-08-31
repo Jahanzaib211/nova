@@ -69,7 +69,9 @@ export function summarizeUploadLimits(
   if (!limits) return "";
   const parts: string[] = [];
   if (limits.max_files > 0)
-    parts.push(`${limits.max_files} file${limits.max_files === 1 ? "" : "s"} max`);
+    parts.push(
+      `${limits.max_files} file${limits.max_files === 1 ? "" : "s"} max`,
+    );
   if (limits.max_file_size > 0)
     parts.push(`${formatBytes(limits.max_file_size)} per file`);
   if (limits.max_total_size > 0)

@@ -158,9 +158,7 @@ class TestCommandCountContract:
         frontend = self._frontend_names()
         # `execute_command` is a frontend-only alias for the same concept: no
         # backend writer emits it, but older/AIO event streams carry it.
-        assert frontend - {"execute_command"} == backend, (
-            f"command population drifted — backend={sorted(backend)} frontend={sorted(frontend)}"
-        )
+        assert frontend - {"execute_command"} == backend, f"command population drifted — backend={sorted(backend)} frontend={sorted(frontend)}"
 
     def test_file_work_is_not_a_command(self) -> None:
         backend = self._backend_names()

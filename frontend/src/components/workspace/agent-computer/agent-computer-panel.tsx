@@ -708,7 +708,6 @@ export function AgentComputerPanel({
             />
           </div>
         </AgentComputerErrorBoundary>
-
       </div>
 
       {/* ── Task checklist ── */}
