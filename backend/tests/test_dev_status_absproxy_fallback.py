@@ -35,7 +35,7 @@ def _temp_listener(host: str = "127.0.0.1"):
         listener.close()
 
 
-def _make_client():
+def _make_client(monkeypatch):
     from fastapi import FastAPI
 
     from app.gateway.routers.sandbox import router as sandbox_router
@@ -48,17 +48,20 @@ def _make_client():
     def _always_owned(thread_id: str) -> bool:
         return thread_id == "t-status"
 
-    sandbox_module._caller_owns_thread = _always_owned
+    # monkeypatch, not a raw assignment: a bare rebind here never unwinds, and
+    # because this stub is *narrowing* (False for every other thread id) it made
+    # unrelated ownership checks fail for the rest of the session.
+    monkeypatch.setattr(sandbox_module, "_caller_owns_thread", _always_owned)
 
     from fastapi.testclient import TestClient
 
     return TestClient(app)
 
 
-def test_dev_status_includes_host_and_absproxy_when_running():
+def test_dev_status_includes_host_and_absproxy_when_running(monkeypatch):
     import deerflow.sandbox.dev_server as ds
 
-    client = _make_client()
+    client = _make_client(monkeypatch)
     with _temp_listener() as (host, port):
         # Register the listener as a "ready" dev server.
         ds.register_external_dev_server("t-status", port, host=host)
@@ -77,10 +80,10 @@ def test_dev_status_includes_host_and_absproxy_when_running():
             ds._servers.pop(ds._server_key("t-status", ds.DEFAULT_LABEL), None)
 
 
-def test_dev_status_returns_nulls_when_no_server_running():
+def test_dev_status_returns_nulls_when_no_server_running(monkeypatch):
     import deerflow.sandbox.dev_server as ds
 
-    client = _make_client()
+    client = _make_client(monkeypatch)
     resp = client.get("/api/sandbox/dev-status", params={"thread_id": "t-status"})
     assert resp.status_code == 200
     body = resp.json()

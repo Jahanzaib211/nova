@@ -77,7 +77,7 @@ def test_register_external_dev_server_is_idempotent():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _make_client():
+def _make_client(monkeypatch):
     """Build a starlette TestClient that doesn't require a running DB.
 
     The router's other endpoints (logs, todo, status) reach the gateway's
@@ -100,17 +100,20 @@ def _make_client():
     def _always_owned(thread_id: str) -> bool:
         return thread_id in {"t-http-ok", "t-http-bad"}
 
-    sandbox_module._caller_owns_thread = _always_owned
+    # monkeypatch, not a raw assignment: see the note in
+    # test_dev_status_absproxy_fallback.py -- a bare rebind leaks a narrowing
+    # ownership stub into every test that runs after this file.
+    monkeypatch.setattr(sandbox_module, "_caller_owns_thread", _always_owned)
 
     from fastapi.testclient import TestClient
 
     return TestClient(app)
 
 
-def test_dev_external_endpoint_registers_and_returns_handles():
+def test_dev_external_endpoint_registers_and_returns_handles(monkeypatch):
     import deerflow.sandbox.dev_server as ds
 
-    client = _make_client()
+    client = _make_client(monkeypatch)
     with _temp_listener() as (host, port):
         resp = client.post(
             "/api/sandbox/dev-external",
@@ -127,11 +130,11 @@ def test_dev_external_endpoint_registers_and_returns_handles():
         ds._servers.pop(ds._server_key("t-http-ok", ds.DEFAULT_LABEL), None)
 
 
-def test_dev_external_endpoint_refuses_unreachable_port():
+def test_dev_external_endpoint_refuses_unreachable_port(monkeypatch):
     import deerflow.sandbox.dev_server as ds
     from app.gateway.routers import sandbox as sandbox_module
 
-    client = _make_client()
+    client = _make_client(monkeypatch)
     # Find a port nothing is bound to right now.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
