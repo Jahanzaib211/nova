@@ -36,6 +36,7 @@ from deerflow.sandbox.dev_server import (
     get_dev_server,
     list_dev_servers,
     port_alive,
+    probe_container_port,
     register_external_dev_server,
 )
 
@@ -732,6 +733,27 @@ async def terminal_stats(thread_id: str, request: Request) -> dict:
     return {"total_commands": total}
 
 
+def _absproxy_port(handle) -> int:
+    """In-container port for the absproxy fallback URL."""
+    return int(getattr(handle, "container_port", 0) or handle.port or 0)
+
+
+async def _handle_is_live(thread_id: str, handle) -> bool:
+    """Is this dev server actually up?
+
+    A handle adopted on an *unpublished* container port has no host:port pair to
+    connect to (only 4100-4102 are published), so ``port_alive`` would answer
+    False for a server that is running perfectly well. Fall through to the
+    in-sandbox probe in that case.
+    """
+    if handle.host and handle.port and await port_alive(handle.host, handle.port):
+        return True
+    port = _absproxy_port(handle)
+    if not port:
+        return False
+    return await probe_container_port(thread_id, port)
+
+
 @router.get("/dev-status")
 async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     """Return the live dev server status for a thread (optionally a labeled one)."""
@@ -757,7 +779,7 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     # Liveness is the port, not the poller: a reachable port means the preview
     # works even if the log tail died. While still "starting", trust the status
     # so the UI shows "compiling…" before the port is up.
-    alive = await port_alive(handle.host, handle.port)
+    alive = await _handle_is_live(thread_id, handle)
     running = alive or handle.status == "starting"
     status = handle.status
     if alive and status not in ("ready", "starting"):
@@ -774,7 +796,12 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
         # to when the canonical preview proxy fails (e.g. a dev server started
         # outside ``start_dev_server`` whose host:port the gateway cannot
         # reach via the in-container preview port).
-        "absproxy_url": (f"/api/sandbox/absproxy/{thread_id}/{handle.port}/" if running and handle.port else None),
+        # Keyed on the **container** port. This route proxies through the
+        # sandbox's own gateway, which resolves ports inside the container --
+        # handing it the published *host* port only worked because this host maps
+        # 4100-4102 identically, and broke silently wherever the backend picked a
+        # free host port instead.
+        "absproxy_url": (f"/api/sandbox/absproxy/{thread_id}/{_absproxy_port(handle)}/" if running and _absproxy_port(handle) else None),
     }
 
 
@@ -1094,7 +1121,25 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
         logger.warning("absproxy setup failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
         return Response(content="absproxy error", status_code=502)
 
-    target = f"{base_url.rstrip('/')}/absproxy/{port}/{path}"
+    # ``/proxy/{port}/`` (strips the prefix), NOT ``/absproxy/{port}/``.
+    #
+    # The sandbox offers both. ``absproxy`` passes the *absolute* path through
+    # verbatim, so an app reached that way receives ``GET /absproxy/8787/`` and
+    # only works if it was configured with a matching basePath. That is never
+    # true of the servers this fallback exists for -- a raw ``bash`` launch, PM2,
+    # a manual ``node``, ``python -m http.server`` -- so the Browser tab's safety
+    # net rendered a 404 from the app itself. Measured against a live sandbox: a
+    # ``python -m http.server`` on an unpublished 8787 answered ``/proxy/8787/``
+    # with 200 and the real page, and ``/absproxy/8787/`` with 404, its access
+    # log showing it had been asked for ``/absproxy/8787/``.
+    #
+    # Stripping upstream is also what composes with our own rewriting: we serve
+    # the app under ``/api/sandbox/absproxy/{tid}/{port}/`` and rewrite its URLs
+    # to match, so the browser asks us for ``.../{port}/assets/x.js``, we hand
+    # the sandbox ``assets/x.js``, and the app sees ``/assets/x.js`` -- which is
+    # where it actually keeps them. The route name stays ``absproxy`` because it
+    # is a public URL the frontend builds; only the upstream hop changes.
+    target = f"{base_url.rstrip('/')}/proxy/{port}/{path}"
     if request.url.query:
         target = f"{target}?{request.url.query}"
     prefix = f"/api/sandbox/absproxy/{thread_id}/{port}"
@@ -1721,7 +1766,15 @@ async def proxy_absproxy_ws(websocket: WebSocket, thread_id: str, port: int, pat
 
         parts = urlsplit(base_url)
         query = websocket.url.query
-        upstream_url = f"ws://{parts.netloc}/absproxy/{port}/{path}" + (f"?{query}" if query else "")
+        # ``/proxy/`` for the same reason the HTTP hop uses it: it strips the
+        # prefix, ``/absproxy/`` does not. Verified against a live sandbox with a
+        # server logging its upgrade paths --
+        #   /proxy/8788/_next/webpack-hmr     -> server saw /_next/webpack-hmr
+        #   /absproxy/8788/_next/webpack-hmr  -> server saw /absproxy/8788/...
+        # so HMR through the Browser tab's fallback was upgrading against a path
+        # no dev server serves, and silently never reconnected. ``/proxy/`` does
+        # forward the upgrade, so the two hops now agree.
+        upstream_url = f"ws://{parts.netloc}/proxy/{port}/{path}" + (f"?{query}" if query else "")
         await websocket.accept()
         await _bridge_ws(websocket, upstream_url)
     finally:

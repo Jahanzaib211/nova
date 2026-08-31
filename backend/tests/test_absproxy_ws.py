@@ -122,8 +122,26 @@ def wired(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_absproxy_ws_bridges_to_the_container_relay(wired) -> None:
+    """The upstream hop must be ``/proxy/`` — the one that strips the prefix.
+
+    This asserted ``/absproxy/4321/...`` until 2026-08-31. The sandbox exposes two
+    relays and only one is right for a dev server not configured with a matching
+    basePath. Measured on a live sandbox image, with a server logging the paths it
+    was actually asked for::
+
+        /proxy/8788/_next/webpack-hmr     -> server saw /_next/webpack-hmr
+        /absproxy/8788/_next/webpack-hmr  -> server saw /absproxy/8788/_next/...
+
+    ``/proxy/`` does forward the upgrade, so the old hop was not "the WebSocket
+    route" — it was a route that upgraded against a path no dev server serves.
+    That is why HMR through the Browser tab's fallback never reconnected and the
+    preview silently went stale until a manual reload.
+
+    The public route name stays ``absproxy-ws``; only the upstream hop moved, so
+    it now matches the HTTP side (``_absproxy_impl``).
+    """
     await sandbox_router.proxy_absproxy_ws(wired.ws, "thread-abc", 4321, "_next/webpack-hmr")
-    assert wired.bridged["url"] == "ws://localhost:39123/absproxy/4321/_next/webpack-hmr"
+    assert wired.bridged["url"] == "ws://localhost:39123/proxy/4321/_next/webpack-hmr"
     assert wired.ws.accept_calls == [True]
 
 
@@ -132,7 +150,22 @@ async def test_absproxy_ws_forwards_query_string(wired) -> None:
     ws = wired.ws
     ws.url = SimpleNamespace(query="token=x")
     await sandbox_router.proxy_absproxy_ws(ws, "thread-abc", 4321, "hmr")
-    assert wired.bridged["url"] == "ws://localhost:39123/absproxy/4321/hmr?token=x"
+    assert wired.bridged["url"] == "ws://localhost:39123/proxy/4321/hmr?token=x"
+
+
+def test_both_hops_use_the_same_relay() -> None:
+    """HTTP and WebSocket must not disagree about which relay strips the prefix.
+
+    They did disagree, briefly, mid-fix: the HTTP hop was switched to ``/proxy/``
+    while the socket still used ``/absproxy/``, so a page rendered correctly and
+    then could not hot-reload. Cheap to assert, and the failure it prevents is
+    invisible in the UI.
+    """
+    from pathlib import Path
+
+    src = Path(sandbox_router.__file__).read_text(encoding="utf-8")
+    assert "/proxy/{port}/{path}" in src
+    assert "/absproxy/{port}/{path}" not in src, "one of the two hops is still on the path-preserving relay"
 
 
 @pytest.mark.asyncio
