@@ -192,6 +192,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
     from deerflow.persistence.engine import close_engine, get_session_factory, init_engine_from_config
     from deerflow.runtime import make_store, make_stream_bridge
     from deerflow.runtime.checkpointer.async_provider import make_checkpointer
+    from deerflow.runtime.events.retention import start_run_event_pruner, stop_run_event_pruner
     from deerflow.runtime.events.store import make_run_event_store
 
     async with AsyncExitStack() as stack:
@@ -257,6 +258,15 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.run_events_config = run_events_config
         app.state.run_event_store = make_run_event_store(run_events_config)
 
+        # Retention. run_events is the only unbounded table left after the
+        # checkpoint tables were vacuumed -- 366 MB here, of which 335 MB is
+        # genuine content rather than bloat, so no amount of VACUUM bounds it.
+        # Off unless the operator sets run_events.retention_days.
+        app.state.run_events_pruner = start_run_event_pruner(
+            store=app.state.run_event_store,
+            retention_days=getattr(run_events_config, "retention_days", 0) or 0,
+        )
+
         # ── Computer panel live feeds (WS-G) ──────────────────────────────
         # One multiplexed socket (/computer-ws) carries subagent tasks,
         # dev-server transitions, and workspace observations. The harness
@@ -298,6 +308,10 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         add_observation_listener(_on_observation)
         stack.callback(remove_dev_server_listener, _on_dev_server)
         stack.callback(remove_observation_listener, _on_observation)
+        # Same reason the listeners are unregistered: repeated app construction
+        # in tests would otherwise leave a sweep task per app, all sharing a
+        # loop that is about to close.
+        stack.push_async_callback(stop_run_event_pruner, app.state.run_events_pruner)
 
         # Cross-replica cancel signal — see cancel_signal.py. Reuses the same
         # stream_bridge.redis_url config key rather than introducing a

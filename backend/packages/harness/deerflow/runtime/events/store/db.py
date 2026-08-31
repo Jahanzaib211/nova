@@ -22,6 +22,10 @@ from deerflow.utils.time import coerce_iso
 logger = logging.getLogger(__name__)
 
 
+#: Rows deleted per committed transaction. Bounds WAL growth on a large prune.
+_PRUNE_BATCH = 2000
+
+
 class DbRunEventStore(RunEventStore):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], *, max_trace_content: int = 10240):
         self._sf = session_factory
@@ -294,6 +298,32 @@ class DbRunEventStore(RunEventStore):
                 await session.execute(delete(RunEventRow).where(*count_conditions))
                 await session.commit()
             return count
+
+    async def delete_older_than(self, cutoff) -> int:
+        """Delete events older than ``cutoff``, oldest first, in bounded batches.
+
+        Batched because a single unbounded DELETE over a table this size holds
+        one long transaction and bloats WAL -- the same reason
+        `prune-checkpoints.py` commits in batches. Not user-scoped: retention is
+        an operator policy over the whole table, and a cutoff that applied per
+        user would leave the table unbounded in aggregate, which is the thing
+        being fixed.
+        """
+        deleted = 0
+        while True:
+            async with self._sf() as session:
+                ids = (
+                    await session.scalars(
+                        select(RunEventRow.id).where(RunEventRow.created_at < cutoff).limit(_PRUNE_BATCH)
+                    )
+                ).all()
+                if not ids:
+                    return deleted
+                await session.execute(delete(RunEventRow).where(RunEventRow.id.in_(list(ids))))
+                await session.commit()
+                deleted += len(ids)
+            if len(ids) < _PRUNE_BATCH:
+                return deleted
 
     async def delete_by_run(
         self,
