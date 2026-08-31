@@ -784,7 +784,7 @@ Steps 1-7 verified working. Steps 8-9 are the gaps this sprint addresses.
 | Frontend files | 372 (src) |
 | Frontend LOC | ~57k (src, excl. node_modules) |
 | Backend unit tests | 6,928 |
-| Frontend unit tests | 681 |
+| Frontend unit tests | 689 |
 | Tags on origin | 14 v7 + fork-v7 |
 | Live services | 8 containers (gateway, frontend, nginx, postgres, searxng, crawl4ai, browserless, autoheal) |
 | Browser tool actions | 5 (navigate, click, input, eval, screenshot) |
