@@ -4,6 +4,7 @@ import { LoaderCircleIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
+import { parseAnsi } from "@/core/sandbox/ansi";
 import type { SandboxLogStatus } from "@/core/sandbox/hooks";
 import { useSandboxTerminalUrl } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
@@ -28,6 +29,53 @@ export { isTerminalTool } from "@/core/threads/tool-surface";
  * tool that returned ``"Error: …"`` on a success path, but the styling here
  * stays defensive in case any future tool emits the literal error state.
  */
+/**
+ * One command's output.
+ *
+ * Two jobs beyond printing text. It renders SGR colour as spans -- the backend
+ * keeps colour and strips everything else, so a dev server's red error line
+ * reads as one -- and it clamps very long blocks. 56 rows in the live logs sit
+ * at the 20,000-character observation cap, mostly `curl` dumping raw HTML, and
+ * one of those owns the whole viewport and buries the commands around it.
+ */
+function TerminalOutput({ output, status }: { output: string; status: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const { t } = useI18n();
+
+  const lines = output.split("\n");
+  const isLong = lines.length > OUTPUT_CLAMP_LINES;
+  const shown = expanded || !isLong ? output : lines.slice(0, OUTPUT_CLAMP_LINES).join("\n");
+  const segments = parseAnsi(shown);
+
+  return (
+    <div>
+      <pre className={terminalOutputClass(status)}>
+        {segments.map((seg, i) => (
+          // Index keys are safe here and only here: segments are derived from
+          // one immutable string, so the list cannot reorder or shift.
+          <span key={i} className={seg.className || undefined}>
+            {seg.text}
+          </span>
+        ))}
+      </pre>
+      {isLong && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-muted-foreground/50 hover:text-muted-foreground ml-4 mt-1 text-[10px] underline underline-offset-2"
+        >
+          {expanded
+            ? t.agentComputer.terminal.showLess
+            : t.agentComputer.terminal.showAll(lines.length)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+//: Lines shown before a block is clamped. Generous enough for a real command's
+//: output, small enough that a 20k-char HTML dump cannot own the viewport.
+const OUTPUT_CLAMP_LINES = 40;
+
 export function terminalOutputClass(status: string): string {
   return cn(
     "border-l pl-4 leading-relaxed break-all whitespace-pre-wrap",
@@ -65,7 +113,15 @@ export function Terminal({
 }) {
   const { t } = useI18n();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const terminalEvents = events.filter((e) => isTerminalTool(e.type));
+  // Dev-server output is Terminal-surface but can dominate the transcript: a
+  // running `next dev` emits a line per request. Hideable, and never counted as
+  // a command either way.
+  const [showDevLogs, setShowDevLogs] = useState(true);
+  const allTerminalEvents = events.filter((e) => isTerminalTool(e.type));
+  const devLogCount = allTerminalEvents.filter((e) => e.type === "dev_server").length;
+  const terminalEvents = showDevLogs
+    ? allTerminalEvents
+    : allTerminalEvents.filter((e) => e.type !== "dev_server");
   // Deterministic total pushed by the gateway (survives the 200-event window
   // rolling and SSE reconnects). Falls back to the local window while the
   // socket is down - prefixed with ~ so it can never read as exact.
@@ -135,6 +191,17 @@ export function Terminal({
           ? t.agentComputer.terminal.counts(serverTotal, runningCount)
           : `~${terminalEvents.filter((e) => isCommandTool(e.type)).length}`}
       </span>
+      {devLogCount > 0 && (
+        <button
+          onClick={() => setShowDevLogs((v) => !v)}
+          className="text-muted-foreground/50 hover:text-muted-foreground border-border/40 rounded border px-1.5 py-0.5 text-[10px]"
+          title={showDevLogs ? t.agentComputer.terminal.hideDevLogs : t.agentComputer.terminal.showDevLogs}
+        >
+          {showDevLogs
+            ? t.agentComputer.terminal.hideDevLogs
+            : `${t.agentComputer.terminal.showDevLogs} (${devLogCount})`}
+        </button>
+      )}
       <div className="border-border/40 flex items-center rounded border text-[10px]">
         <button
           onClick={() => setMode("stream")}
@@ -276,9 +343,7 @@ export function Terminal({
             </div>
             {/* Output — always shown, no click needed */}
             {event.output ? (
-              <pre className={terminalOutputClass(event.status)}>
-                {event.output}
-              </pre>
+              <TerminalOutput output={event.output} status={event.status} />
             ) : event.status === "running" ? (
               <div className="pl-4 text-emerald-400/40">
                 <span className="animate-pulse">

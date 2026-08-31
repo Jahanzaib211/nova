@@ -178,3 +178,42 @@ class TestCommandCountContract:
         text = _read(terminal_tab)
         assert "isCommandTool" in text, "header fallback no longer filters to commands"
         assert "`~${terminalEvents.length}`" not in text, "header fallback counts every terminal event again"
+
+
+class TestDevServerSurfaceContract:
+    """`dev_server` must be Terminal-visible but never counted as a command.
+
+    It is the one type that deliberately sits in one set and not the other, so a
+    careless edit that adds it to both (or drops it from both) is exactly the
+    regression this pins. It arrived tagged `bash`, which put it in both, and 44%
+    of the header's command total was dev-server chatter as a result.
+    """
+
+    def test_frontend_renders_it_in_the_terminal(self) -> None:
+        ts = _read(TOOL_SURFACE_TS)
+        match = re.search(r"const TERMINAL_TOOL_NAMES: ReadonlySet<string> = new Set\(\[(.*?)\]\)", ts, re.S)
+        assert match, "TERMINAL_TOOL_NAMES is gone"
+        assert '"dev_server"' in match.group(1), "dev-server output would vanish from the Terminal"
+
+    def test_frontend_does_not_count_it(self) -> None:
+        ts = _read(TOOL_SURFACE_TS)
+        match = re.search(r"const COMMAND_TOOL_NAMES: ReadonlySet<string> = new Set\(\[(.*?)\]\)", ts, re.S)
+        assert match, "COMMAND_TOOL_NAMES is gone"
+        assert '"dev_server"' not in match.group(1), "dev-server output counted as a command again"
+
+    def test_backend_does_not_count_it(self) -> None:
+        py = _read(TOOLS_PY)
+        match = re.search(r"COMMAND_TOOL_NAMES = frozenset\(\{([^}]*)\}\)", py)
+        assert match, "COMMAND_TOOL_NAMES is gone"
+        assert "dev_server" not in match.group(1)
+
+    def test_the_mirror_emits_that_type(self) -> None:
+        dev_server_py = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "dev_server.py"
+        text = _read(dev_server_py)
+        assert '"dev_server"' in text, "the dev-log mirror no longer tags its lines"
+        assert '"type": "bash"' not in text, "the mirror is hand-rolling a bash-tagged line again"
+
+    def test_the_legacy_prefix_rule_survives(self) -> None:
+        """Existing threads carry thousands of `[dev] ` lines tagged `bash`."""
+        py = _read(TOOLS_PY)
+        assert "_DEVLOG_SUMMARY_PREFIX" in py, "legacy dev lines would start counting again"

@@ -31,6 +31,7 @@ from deerflow.sandbox.search import GrepMatch
 from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
 from deerflow.tools.types import Runtime
 from deerflow.utils.atomic_write import atomic_write_text
+from deerflow.utils.sanitize import sanitize_terminal_text
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
 # A ``{...}`` block holding a single identifier-like placeholder (e.g. ``{id}``
@@ -261,12 +262,20 @@ def _finalize_stale_open_ids(sandbox_id: str) -> None:
 # suffices; the atomic write is what keeps concurrent *readers* honest.
 _terminal_stats_lock = threading.Lock()
 
+#: A summary is a one-line header for a Terminal row, not a payload. Bounded
+#: separately from `output` so a runaway summary cannot dominate the panel.
+_SUMMARY_MAX_CHARS = 2000
+
 _TERMINAL_STATS_FILE = "terminal_stats.json"
 
 #: Tools whose invocation is one executed *command* for the Terminal header's
 #: count. Mirrored by ``isCommandTool`` in the frontend's tool-surface module;
 #: ``tests/test_frontend_contract.py`` fails if the two drift.
 COMMAND_TOOL_NAMES = frozenset({"bash", "shell_session", "shell_write"})
+
+#: Prefix the dev-server mirror stamps on its summaries. Load-bearing for the
+#: legacy exclusion in ``is_command_line`` -- see the note there.
+_DEVLOG_SUMMARY_PREFIX = "[dev] "
 
 
 def is_command_line(record: dict) -> bool:
@@ -303,6 +312,14 @@ def is_command_line(record: dict) -> bool:
     whether the socket happened to be up.
     """
     if record.get("delta") is not None or record.get("replace") is not None:
+        return False
+    # Legacy dev-server lines. Before the mirror was retagged `dev_server`, it
+    # wrote `type: "bash"`, so every line of dev-server chatter counted as a
+    # command -- 44% of the total across the live logs, 7.9x on the worst thread.
+    # Those lines are already on disk and reconcile_terminal_stats replays the log
+    # on read, so excluding them by their `[dev] ` prefix is what heals existing
+    # threads. New lines are excluded by type and never reach this check.
+    if str(record.get("summary") or "").startswith(_DEVLOG_SUMMARY_PREFIX):
         return False
     obs_id = record.get("id")
     if obs_id is not None:
@@ -438,12 +455,17 @@ def _write_sandbox_observation(
 
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         max_chars = _observation_max_chars()
+        # Sanitise every text field, summary included. summary was the one field
+        # that got neither truncation nor sanitisation, which is how raw ANSI and
+        # runs of NUL bytes from the dev-server mirror reached the Terminal and
+        # rendered as garbage. SGR colour survives; cursor/erase codes and control
+        # bytes do not. See deerflow.utils.sanitize.
         record: dict = {
             "ts": ts,
             "type": tool,
             "path": path,
-            "summary": summary,
-            "output": _truncate_bash_output(output, max_chars) if output else "",
+            "summary": _truncate_bash_output(sanitize_terminal_text(summary), _SUMMARY_MAX_CHARS) if summary else "",
+            "output": _truncate_bash_output(sanitize_terminal_text(output), max_chars) if output else "",
         }
         # Only the streaming shapes carry these, so a non-streaming caller
         # writes a byte-identical line to the one it wrote before.
@@ -452,9 +474,9 @@ def _write_sandbox_observation(
         if state is not None:
             record["state"] = state
         if delta is not None:
-            record["delta"] = _truncate_bash_output(delta, max_chars)
+            record["delta"] = _truncate_bash_output(sanitize_terminal_text(delta), max_chars)
         if replace is not None:
-            record["replace"] = _truncate_bash_output(replace, max_chars)
+            record["replace"] = _truncate_bash_output(sanitize_terminal_text(replace), max_chars)
         entry = json.dumps(record)
 
         with open(log_path, "a", encoding="utf-8") as fh:

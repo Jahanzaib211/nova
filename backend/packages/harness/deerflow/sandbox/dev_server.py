@@ -46,6 +46,8 @@ _AIO_POLL_INTERVAL = 1.5
 _MAX_AIO_MISSES = 60
 # Read short, well-known constant names for the new "crashed" terminal state.
 _STATUS_CRASHED = "crashed"
+#: Dev-server lines are a live tail, not a payload -- one line, bounded.
+_DEVLOG_SUMMARY_MAX = 200
 _READINESS_TIMEOUT_S = 12.0  # panel flips starting → ready/crashed inside this window
 
 
@@ -518,40 +520,56 @@ def _allocate_port() -> int:
 
 
 def _append_devlog_to_sandbox_log(thread_id: str, text: str) -> None:
-    """Mirror a dev-server output line into the per-thread sandbox.log so the
-    frontend Terminal (which tails sandbox.log via SSE) shows live dev output."""
+    """Mirror a dev-server output line into the thread's sandbox.log.
+
+    Routed through ``_write_sandbox_observation`` rather than hand-rolling the
+    JSON, which is what this used to do. That duplicate writer caused two bugs:
+
+    * it tagged every line ``type: "bash"``, so dev-server chatter counted as
+      executed commands. Measured across 89 live logs, **44% of the Terminal's
+      command total was this noise** -- one thread was inflated 7.9x.
+    * it wrote ``summary`` raw, so ANSI cursor codes and runs of NUL bytes from
+      the dev server's own terminal output reached the panel and rendered as
+      garbage.
+
+    ``dev_server`` is a Terminal-surface type but deliberately not a *command*
+    type, so this output stays visible where it is useful without being counted.
+    """
     try:
-        import datetime as _dt
-        import json as _json
+        from deerflow.sandbox.tools import _write_sandbox_observation
 
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
-
-        try:
-            user_id = get_effective_user_id()
-        except Exception:
-            user_id = None
-        thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)
-        thread_dir.mkdir(parents=True, exist_ok=True)
-        entry = _json.dumps(
-            {
-                "ts": _dt.datetime.now().strftime("%H:%M:%S"),
-                "type": "bash",
-                "path": None,
-                "summary": "[dev] " + text[:200],
-                "output": "",
-            }
+        _write_sandbox_observation(
+            _sandbox_id_for_thread(thread_id),
+            "dev_server",
+            None,
+            "[dev] " + text[:_DEVLOG_SUMMARY_MAX],
         )
-        with open(thread_dir / "sandbox.log", "a", encoding="utf-8") as fh:
-            fh.write(entry + "\n")
     except Exception as exc:
-        # Must not propagate -- this mirrors output for the UI and is called
-        # from the readiness watchdog and the output pumps, neither of which
-        # should die over a log write. A bare `pass` made a wrong user bucket
-        # (get_effective_user_id() has no contextvar here on a detached task,
-        # so the line lands in users/default/ where the reader never tails it)
-        # completely invisible.
+        # Must not propagate -- this mirrors output for the UI and is called from
+        # the readiness watchdog and the output pumps, neither of which should die
+        # over a log write. A bare `pass` made a wrong user bucket completely
+        # invisible, so it warns.
         logger.warning("dev-server log mirror failed for thread=%s: %s", thread_id, exc)
+
+
+def _sandbox_id_for_thread(thread_id: str) -> str:
+    """A sandbox id the observation writer can resolve back to ``thread_id``.
+
+    The writer resolves AIO ids through the provider's reverse map and treats a
+    ``local:`` prefix as carrying the thread directly. Prefer the real id when the
+    provider knows one, so an AIO thread is resolved the same way every other tool
+    is; fall back to the local form, which the writer can always resolve.
+    """
+    try:
+        from deerflow.sandbox import get_sandbox_provider
+
+        mapping = getattr(get_sandbox_provider(), "_thread_sandboxes", None) or {}
+        sandbox_id = mapping.get(thread_id)
+        if sandbox_id:
+            return str(sandbox_id)
+    except Exception:
+        logger.debug("could not resolve sandbox id for %s", thread_id, exc_info=True)
+    return f"local:{thread_id}"
 
 
 def _ingest_line(handle: DevServerHandle, text: str) -> None:

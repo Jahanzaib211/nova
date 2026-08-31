@@ -870,6 +870,10 @@ export const enUS: Translations = {
       reconnect: "Reconnect",
       shellDisconnected:
         "The interactive shell is not responding. The sandbox may have been recycled.",
+      showAll: (lines: number) => `Show all ${lines} lines`,
+      showLess: "Show less",
+      hideDevLogs: "Hide dev server",
+      showDevLogs: "Show dev server",
       counts: (total: number, running: number) =>
         `${total} cmd${total === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`,
     },

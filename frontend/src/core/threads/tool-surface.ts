@@ -37,6 +37,11 @@ const TERMINAL_TOOL_NAMES: ReadonlySet<string> = new Set([
   "str_replace",
   "search_files",
   "grep_files",
+  // Dev-server output mirrored into sandbox.log. It belongs in the Terminal --
+  // that is the whole point of the mirror -- but it is NOT a command, so it is
+  // deliberately absent from COMMAND_TOOL_NAMES below. It used to arrive tagged
+  // `bash`, which made it both, and 44% of the header's count was this chatter.
+  "dev_server",
 ]);
 
 /**

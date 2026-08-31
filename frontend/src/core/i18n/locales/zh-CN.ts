@@ -835,6 +835,10 @@ export const zhCN: Translations = {
       running: "运行中...",
       reconnect: "重新连接",
       shellDisconnected: "交互式 shell 无响应，沙箱可能已被回收。",
+      showAll: (lines: number) => `显示全部 ${lines} 行`,
+      showLess: "收起",
+      hideDevLogs: "隐藏开发服务器",
+      showDevLogs: "显示开发服务器",
       counts: (total: number, running: number) =>
         `${total} 条命令${running ? ` · ${running} 运行中` : ""}`,
     },

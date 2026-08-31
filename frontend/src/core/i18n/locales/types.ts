@@ -744,6 +744,10 @@ export interface Translations {
           sandbox was recycled and the embedded shell went dead. */
       reconnect: string;
       shellDisconnected: string;
+      showAll: (lines: number) => string;
+      showLess: string;
+      hideDevLogs: string;
+      showDevLogs: string;
       counts: (total: number, running: number) => string;
     };
     viewer: {
