@@ -48,6 +48,11 @@ NOVA_SERVICES = ("deer-flow-gateway", "deer-flow-frontend", "deer-flow-nginx")
 # lifetime says nothing.
 PM2_RESTART_MIN = 5
 
+# How long an app must have been up before its cumulative restart count stops
+# counting as churn. See check_pm2_apps for why this is a plain uptime floor
+# and not a rate.
+PM2_STABLE_HOURS = 6.0
+
 
 def _status_path() -> Path:
     override = os.environ.get("NOVA_DRIFT_GATE_STATUS_PATH", "").strip()
@@ -453,9 +458,20 @@ def check_pm2_apps() -> dict:
 
     # Restart churn, which `check_restart_storm` structurally cannot see: that
     # check reads Docker's RestartCount for the containers, so a PM2 app that
-    # is flapping is invisible to it. Read as a rate against uptime, for the
-    # same reason -- restart_time is cumulative for the life of the app, so an
-    # absolute count says nothing on its own.
+    # is flapping is invisible to it.
+    #
+    # This deliberately does NOT compute a rate. The obvious form --
+    # `restart_time / hours_of_uptime` -- divides two numbers with different
+    # epochs: `restart_time` is cumulative and SURVIVES `pm2 resurrect`, while
+    # `pm_uptime` (and `created_at`, which resurrect also rewrites) is reset by
+    # it. On 2026-09-01 `nova` read 51 restarts against 20.5h of unbroken
+    # uptime, giving a fictitious 2.5/h and a standing yellow for a process
+    # that had not restarted once in most of a day. There is no epoch on the
+    # PM2 side to make that division honest.
+    #
+    # An app that is flapping has, by definition, restarted RECENTLY -- so ask
+    # that directly. Short uptime with restarts behind it is the real signal;
+    # a long-stable app is not churning no matter how eventful its history.
     churn = []
     try:
         now_ms = time.time() * 1000
@@ -464,11 +480,11 @@ def check_pm2_apps() -> dict:
                 continue
             env = a.get("pm2_env") or {}
             restarts = int(env.get("restart_time") or 0)
-            up_h = max((now_ms - float(env.get("pm_uptime") or now_ms)) / 3_600_000, 0.0)
-            # Flat threshold below an hour of uptime: a young app with several
-            # restarts already behind it is exactly the case worth flagging.
-            if restarts >= PM2_RESTART_MIN and (up_h < 1.0 or restarts / up_h >= 1.0):
-                churn.append(f"{a['name']}={restarts} restarts/{up_h:.1f}h")
+            up_h = max(
+                (now_ms - float(env.get("pm_uptime") or now_ms)) / 3_600_000, 0.0
+            )
+            if restarts >= PM2_RESTART_MIN and up_h < PM2_STABLE_HOURS:
+                churn.append(f"{a['name']}={restarts} restarts, last {up_h:.1f}h ago")
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         pass
 

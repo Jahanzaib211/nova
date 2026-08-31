@@ -2,8 +2,12 @@
 --
 -- Apply after creating or restoring the Postgres database:
 --
---     docker exec -i deer-flow-postgres psql -U postgres -d postgres \
+--     docker exec -i deer-flow-postgres psql -U nova -d nova \
 --       < scripts/pg-autovacuum-tuning.sql
+--
+-- The role and database are both `nova` (POSTGRES_USER / POSTGRES_DB on the
+-- container). `-U postgres -d postgres` -- what this header said until
+-- 2026-09-01 -- fails with `role "postgres" does not exist`.
 --
 -- WHY THIS EXISTS
 -- ---------------
@@ -72,3 +76,31 @@ ALTER TABLE run_events SET (
     toast.autovacuum_vacuum_scale_factor = 0.0,
     toast.autovacuum_vacuum_threshold = 50
 );
+
+-- admin_audit: DELIBERATELY NOT TUNED HERE.
+-- --------------------------------------------------------------------------
+-- It looks like the next checkpoint_blobs and is not. Measured 2026-09-01:
+--
+--     total 42 MB | heap 26 MB | indexes 16 MB | TOAST 8192 bytes
+--     151,387 rows holding 24 MB live
+--
+-- 24 MB live in a 26 MB heap is a healthy table, and the TOAST that dominated
+-- the checkpoint tables is 8 kB here. Applying the settings above would be
+-- cargo-culting a remedy for bloat this table does not have.
+--
+-- What DID mislead: `pg_stat_user_tables.n_live_tup` read 3,097 -- a 49x
+-- undercount -- with `last_autovacuum` and `last_analyze` both NULL. That is a
+-- stats-collector reset (PG16 keeps cumulative stats in shared memory and
+-- discards them on an unclean shutdown), not a vacuum problem: `pg_class.
+-- reltuples` had survived at 135,578, within ~10% of the truth, so the *planner*
+-- was never badly misled. Only autovacuum's own thresholds, which read
+-- n_live_tup, were computed against the wrong number.
+--
+-- A plain `ANALYZE admin_audit;` restored it (n_live_tup 3,097 -> 151,414). If
+-- you find NULL autovacuum timestamps on a table here, check `stats_reset` in
+-- pg_stat_database and compare `reltuples` before concluding anything is wrong.
+--
+-- The real open question for this table is growth, not bloat: it is an
+-- append-only audit log with no retention policy, the same shape of risk that
+-- `run_events.retention_days` exists to bound. Left as a decision rather than
+-- silently deleting a user's audit history.
