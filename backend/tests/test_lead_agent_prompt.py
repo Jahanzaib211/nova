@@ -427,7 +427,13 @@ def test_prompt_carries_tool_discipline_block():
     text = apply_prompt_template()
     for needle in (
         "<tool_discipline>",
-        "Dev servers ONLY via `start_dev_server`",
+        # Was "Dev servers ONLY via `start_dev_server`". Softened deliberately:
+        # the rule used to end "stop it (fuser -k <port>/tcp) and re-start via
+        # the tool", which told the agent to kill a working server rather than
+        # register it — and register_external_dev_server was unreachable anyway,
+        # so there was no alternative to offer. Now there is.
+        "Prefer `start_dev_server` for dev servers",
+        "register_external_dev_server(port=<port>)",
         "Never navigate the browser to `file://`",
         "Multi-step work starts with `write_todos`",
     ):
