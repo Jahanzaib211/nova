@@ -1409,10 +1409,18 @@ stream_bridge:
 #   backend: memory
 #   max_trace_content: 10240    # Truncation threshold for trace content (db backend, bytes)
 #   track_token_usage: true     # Accumulate token counts to RunRow
+#   retention_days: 0           # Delete events older than N days. 0 = keep everything.
+#
+# retention_days is 0 by default because silently deleting a user's conversation
+# history on upgrade would be worse than the growth -- but the table IS unbounded
+# and nothing else trims it. On the reference deployment it reached 366 MB (335 MB
+# of genuine content, so vacuuming does not help) and was the largest object in the
+# database once the checkpoint tables were vacuumed. Set it deliberately.
 run_events:
   backend: memory
   max_trace_content: 10240
   track_token_usage: true
+  retention_days: 0
 
 # ============================================================================
 # User-Owned IM Channel Connections
