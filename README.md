@@ -8,91 +8,19 @@ English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](.
 [![CI](https://github.com/Jahanzaib211/nova/actions/workflows/backend-unit-tests.yml/badge.svg)](https://github.com/Jahanzaib211/nova/actions)
 [![CodeQL](https://github.com/Jahanzaib211/nova/actions/workflows/codeql.yml/badge.svg)](https://github.com/Jahanzaib211/nova/actions/workflows/codeql.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-blue?logo=dependabot)](https://github.com/dependabot)
+[![Security](https://img.shields.io/badge/Security-60%2B%20tools-blueviolet?logo=shield)](#security-arsenal)
 
-**Nova** is a full-stack **computer agent** that researches, codes, creates, and defends. It orchestrates **sub-agents**, **memory**, and **per-thread sandboxes** to do almost anything — powered by **extensible skills**, a live streaming view of the agent's own computer, and a built-in **security arsenal** (blue team + red team).
+**Nova** is a full-stack **computer agent** that researches, codes, creates, and defends. It orchestrates **sub-agents**, **memory**, and **per-thread sandboxes** — powered by **extensible skills**, a live streaming view of the agent's own computer, and a built-in **60+ tool security arsenal** (blue team + red team).
 
 Built by **[Ali Technologies](https://www.alilabsx.com)** on top of [DeerFlow](https://github.com/bytedance/deer-flow) (MIT). Upstream license and all copyright notices preserved — see [License](#license) and [NOTICE.md](./NOTICE.md).
 
 ![Nova workspace — the agent builds a tip calculator and previews it live in the Agent's Computer Browser tab](./docs/images/nova-workspace.png)
 
-## What Nova adds on top of DeerFlow
-
-120,533 lines of new code across 698 new files. Total delta: **+145,947 / −11,844 across 1,148 files**. Audited 2026-09-08; every number reproducible — see [NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md).
-
-- **Agent's Computer** — 7-tab live panel: Files, Terminal, Editor (red/green diff), Browser preview, Telemetry, Review, Privacy. Real-time streaming.
-- **Verify loop** — headless-Chromium self-checks against the running dev server. Console errors, blank-render detection, screenshots. Vision path so the model *sees* its build.
-- **Deterministic code review** — no-LLM review engine. Plain-English verdict for non-coders, per-file stats and risk flags for devs.
-- **Self-correction middlewares** — iteration budgets, dead-end loop detection, preflight quota checks, error decontamination, live task progress.
-- **27 built-in agent tools** (up from 2 at fork point, upstream still ships 3) — shell sessions, browser control, scaffold, dev-server lifecycle, code review, skill saving, and more.
-- **Runtime model management** — add/switch models via API and settings UI.
-- **4-layer sandbox image** — base → tools → dind → android (10.2 GB → 20.4 GB). Go, Rust, Playwright, pandoc, tesseract, nested Docker daemon, full Android SDK. Pinned by digest.
-- **Global skill promotion** — agent-authored skills security-scanned and promoted to global registry.
-- **Ops layer** — 14-probe self-healing watchdog, PM2 lifecycle, reboot persistence, tunnel auto-recovery.
-- **Free models via LiteLLM** — MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B via Ollama.
-- **38,782 lines of new tests** — 152 backend test files + 53 frontend test files.
-
-## Security Arsenal
-
-Nova ships with a full-stack security capability — application-level defenses (blue team), offensive toolkit (red team), and automated scanning infrastructure.
-
-### Blue Team (Defensive)
-
-| Layer | What it does |
-|---|---|
-| **AuthMiddleware** | Fail-closed JWT auth gate on every request. Session versioning (revoke-all via token bump). |
-| **CSRFMiddleware** | Double-submit cookie, timing-safe comparison, origin validation. |
-| **AuthRateLimitMiddleware** | Sliding-window brute-force protection (10 attempts/60s auth, 60/60s cost). CIDR trust chain. |
-| **GuardrailMiddleware** | Pre-tool-call authorization. Pluggable providers: AllowlistProvider, OAP policy, custom. Fail-closed default. |
-| **SandboxAuditMiddleware** | Command classifier: **block** (`rm -rf /`, fork bombs, reverse shells, LD_PRELOAD), **warn** (chmod 777, sudo, pip install), **pass**. 100% high-risk recall, 0% false positive rate. |
-| **Path traversal protection** | Multi-layer: `../`, backslash, bare root, `cd /`, env var escapes, `file://` URLs, brace expansion. |
-| **CSP headers** | `default-src 'self'`, `sandbox allow-scripts allow-same-origin`, `X-Frame-Options: DENY`. Active content forced as download. |
-| **Audit trail** | Append-only `admin_audit` table. Auth events, sandbox operations, admin actions logged. |
-| **Secrets management** | `secrets-doctor.sh`, `secrets-export.sh` (encrypted backup), K8s bootstrap. Env var resolution, Fernet-encrypted BYOK. |
-| **Dependency security** | pip-audit, npm audit, Trivy container scanning, CodeQL SAST (Python + JS/TS), Dependabot. |
-| **Visitor security** | Scanner/exploit probe detection, brute-force monitoring, high-4xx IP tracking. Grafana alerting. |
-| **Platform guardrails** | CI enforcement: middleware sprawl detection, duplicate recovery, cross-reference isolation, blocking IO gate. |
-| **IDS/IPS** | Suricata, Snort, Wazuh/OSSEC (host-based), Falco (runtime container security). |
-| **Hardening** | Lynis (system audit), chkrootkit (rootkit detection), OpenVAS (vulnerability scanning). |
-
-### Red Team (Offensive)
-
-All tools are sandboxed. Mount at `/mnt/security-toolkit`. Metasploit is **not** installed in the sandbox (deliberate).
-
-| Category | Tools |
-|---|---|
-| **Recon** | nmap (7.98), masscan, httpx, subfinder, amass, katana, naabu, gau, waybackurls |
-| **Web App** | nikto, sqlmap, dalfox (XSS), ffuf, gobuster, wafw00f, whatweb, OWASP ZAP |
-| **Secrets** | gitleaks, trufflehog, semgrep, detect-secrets |
-| **Exploitation** | nuclei (template-based), Metasploit (host-only), Empire + Starkiller, Sliver (C2) |
-| **Creds/AD** | hydra, hashcat, john, bloodhound-python, NetExec (nxc), responder, Mimikatz |
-| **Wireless** | aircrack-ng, wifite, bettercap, Wireshark |
-| **Forensics/RE** | Ghidra, Cutter, radare2, Volatility3, Autopsy, Velociraptor, binwalk, foremost, exiftool, yara |
-| **K8s Security** | peirates, kube-hunter |
-| **OSINT** | sherlock, theHarvester, recon-ng, SpiderFoot |
-
-### Security Scanning
-
-| Tool | Type |
-|---|---|
-| **CodeQL** | Semantic SAST (Python + JS/TS), weekly + every PR |
-| **Trivy** | Container/IaC vulnerability scanning |
-| **Semgrep** | Pattern-based SAST |
-| **Gitleaks** | Git secret detection |
-| **TruffleHog** | Filesystem + git secret scanning |
-| **Grype** | Container image vulnerability scanning |
-| **pip-audit / npm audit** | Dependency vulnerability scanning |
-
-## Runs on AMD Compute
-
-Nova serves inference on **AMD Instinct** GPUs — built for the **AMD Developer Hackathon (Act II)**.
-
-- **Fireworks AI** (managed, AMD Instinct MI300X) and **AMD Developer Cloud** (vLLM on ROCm) as one-click presets.
-- `GET /api/models/amd-usage` returns machine-readable AMD-usage summary.
-- Full setup: [docs/AMD_INTEGRATION.md](./docs/AMD_INTEGRATION.md).
-
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [What Nova adds on DeerFlow](#what-nova-adds-on-deerflow)
+- [Security Arsenal](#security-arsenal) -- blue team, red team, scanning
 - [Core Features](#core-features)
 - [Sandbox](#sandbox)
 - [IM Channels](#im-channels)
@@ -100,7 +28,6 @@ Nova serves inference on **AMD Instinct** GPUs — built for the **AMD Developer
 - [Recommended Models](#recommended-models)
 - [Embedded Python Client](#embedded-python-client)
 - [CI/CD & Testing](#cicd--testing)
-- [Security](#security-1)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -160,12 +87,81 @@ make up             # production
 make down           # stop
 ```
 
-### Startup Modes
+## What Nova adds on DeerFlow
 
-| | Foreground | Daemon | Docker Dev | Docker Prod |
-|---|---|---|---|---|
-| **Start** | `make dev` | `make dev-daemon` | `make docker-start` | `make up` |
-| **Stop** | `make stop` | `make stop` | `make docker-stop` | `make down` |
+120,533 lines of new code across 698 new files. Total delta: **+145,947 / −11,844 across 1,148 files**. Audited 2026-09-08; every number reproducible — see [NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md).
+
+- **Agent's Computer** — 7-tab live panel: Files, Terminal, Editor (red/green diff), Browser preview, Telemetry, Review, Privacy. Real-time streaming.
+- **Verify loop** — headless-Chromium self-checks against the running dev server. Console errors, blank-render detection, screenshots. Vision path so the model *sees* its build.
+- **Deterministic code review** — no-LLM review engine. Plain-English verdict for non-coders, per-file stats and risk flags for devs.
+- **Self-correction middlewares** — iteration budgets, dead-end loop detection, preflight quota checks, error decontamination, live task progress.
+- **27 built-in agent tools** (up from 2 at fork point, upstream still ships 3) — shell sessions, browser control, scaffold, dev-server lifecycle, code review, skill saving, and more.
+- **Runtime model management** — add/switch models via API and settings UI.
+- **4-layer sandbox image** — base → tools → dind → android (10.2 GB → 20.4 GB). Go, Rust, Playwright, pandoc, tesseract, nested Docker daemon, full Android SDK. Pinned by digest.
+- **Global skill promotion** — agent-authored skills security-scanned and promoted to global registry.
+- **Ops layer** — 14-probe self-healing watchdog, PM2 lifecycle, reboot persistence, tunnel auto-recovery.
+- **Free models via LiteLLM** — MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B via Ollama.
+- **38,782 lines of new tests** — 152 backend test files + 53 frontend test files.
+
+## Security Arsenal
+
+Nova ships a full-stack security capability. **80+ tools and defenses** across application-level blue team, offensive red team, and automated scanning.
+
+### Blue Team (Defensive)
+
+| Layer | What it does |
+|---|---|
+| **AuthMiddleware** | Fail-closed JWT auth gate on every request. Session versioning (revoke-all via token bump). |
+| **CSRFMiddleware** | Double-submit cookie, timing-safe comparison, origin validation. |
+| **AuthRateLimitMiddleware** | Sliding-window brute-force protection (10 attempts/60s auth, 60/60s cost). CIDR trust chain. |
+| **GuardrailMiddleware** | Pre-tool-call authorization. Pluggable providers: AllowlistProvider, OAP policy, custom. Fail-closed default. |
+| **SandboxAuditMiddleware** | Command classifier: **block** (`rm -rf /`, fork bombs, reverse shells, LD_PRELOAD), **warn** (chmod 777, sudo, pip install), **pass**. 100% high-risk recall, 0% false positive rate. |
+| **Path traversal protection** | Multi-layer: `../`, backslash, bare root, `cd /`, env var escapes, `file://` URLs, brace expansion. |
+| **CSP headers** | `default-src 'self'`, `sandbox allow-scripts allow-same-origin`, `X-Frame-Options: DENY`. Active content forced as download. |
+| **Audit trail** | Append-only `admin_audit` table. Auth events, sandbox operations, admin actions logged. |
+| **Secrets management** | `secrets-doctor.sh`, `secrets-export.sh` (encrypted backup), K8s bootstrap. Env var resolution, Fernet-encrypted BYOK. |
+| **Dependency security** | pip-audit, npm audit, Trivy container scanning, CodeQL SAST (Python + JS/TS), Dependabot. |
+| **Visitor security** | Scanner/exploit probe detection, brute-force monitoring, high-4xx IP tracking. Grafana alerting. |
+| **Platform guardrails** | CI enforcement: middleware sprawl detection, duplicate recovery, cross-reference isolation, blocking IO gate. |
+| **IDS/IPS** | Suricata, Snort, Wazuh/OSSEC (host-based), Falco (runtime container security). |
+| **Hardening** | Lynis (system audit), chkrootkit (rootkit detection), OpenVAS (vulnerability scanning). |
+
+### Red Team (Offensive)
+
+All tools are sandboxed at `/mnt/security-toolkit`. The **security skill** (`skills/public/security/SKILL.md`) maps every tool by domain with dependency-ordered attack chains: recon → network map → web app → secrets → exploit → creds → forensics → blue team hardening.
+
+| Category | Tools |
+|---|---|
+| **Recon** | nmap (7.98), masscan, httpx, subfinder, amass, katana, naabu, gau, waybackurls |
+| **Web App** | nikto, sqlmap, dalfox (XSS), ffuf, gobuster, wafw00f, whatweb, OWASP ZAP |
+| **Secrets** | gitleaks, trufflehog, semgrep, detect-secrets |
+| **Exploitation** | nuclei (template-based), Metasploit (host-only), Empire + Starkiller, Sliver (C2) |
+| **Creds/AD** | hydra, hashcat, john, bloodhound-python, NetExec (nxc), responder, Mimikatz |
+| **Wireless** | aircrack-ng, wifite, bettercap, Wireshark |
+| **Forensics/RE** | Ghidra, Cutter, radare2, Volatility3, Autopsy, Velociraptor, binwalk, foremost, exiftool, yara |
+| **K8s Security** | peirates, kube-hunter |
+| **OSINT** | sherlock, theHarvester, recon-ng, SpiderFoot |
+
+### Security Scanning
+
+| Tool | Type |
+|---|---|
+| **CodeQL** | Semantic SAST (Python + JS/TS), weekly + every PR |
+| **Trivy** | Container/IaC vulnerability scanning |
+| **Semgrep** | Pattern-based SAST |
+| **Gitleaks** | Git secret detection |
+| **TruffleHog** | Filesystem + git secret scanning |
+| **Grype** | Container image vulnerability scanning |
+| **pip-audit / npm audit** | Dependency vulnerability scanning |
+
+### Running Security Tests
+
+```bash
+cd backend && PYTHONPATH=. uv run pytest tests/test_sandbox_tools_security.py -v
+cd backend && PYTHONPATH=. uv run pytest tests/test_guardrail*.py -v
+cd backend && PYTHONPATH=. uv run pytest tests/test_sandbox_audit_middleware.py -v
+python3 backend/tests/test_no_cross_references.py
+```
 
 ## Core Features
 
@@ -176,7 +172,7 @@ make down           # stop
 | Category | Skills |
 |---|---|
 | Research | deep-research, academic-paper-review, github-deep-research, systematic-literature-review |
-| Code | code-reviewer, code-documentation, qa-tester, security |
+| Code | code-reviewer, code-documentation, qa-tester, **security** |
 | Data | data-analysis, chart-visualization |
 | Content | newsletter-generation, ppt-generation, podcast-generation |
 | Media | image-generation, video-generation, music-generation |
@@ -213,6 +209,14 @@ Lead agent spawns sub-agents on the fly — scoped context, tools, termination c
 ### Long-Term Memory
 
 Persistent memory across sessions. Profile, preferences, writing style, technical stack. Stored locally, under your control.
+
+### Runs on AMD Compute
+
+Nova serves inference on **AMD Instinct** GPUs — built for the **AMD Developer Hackathon (Act II)**.
+
+- **Fireworks AI** (managed, AMD Instinct MI300X) and **AMD Developer Cloud** (vLLM on ROCm) as one-click presets.
+- `GET /api/models/amd-usage` returns machine-readable AMD-usage summary.
+- Full setup: [docs/AMD_INTEGRATION.md](./docs/AMD_INTEGRATION.md).
 
 ## Sandbox
 
@@ -312,26 +316,13 @@ make self-audit  # full self-probe
 
 14 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
 
-## Security
+## Contributing
 
-See [docs/SECURITY.md](docs/SECURITY.md) for the full architecture.
-
-**Application layer**: JWT auth, CSRF, brute-force protection, guardrails, sandbox audit, path traversal defense, CSP, audit trail, secrets management, BYOK encryption.
-
-**Scanning**: CodeQL (SAST), Trivy (containers), Semgrep (patterns), Gitleaks + TruffleHog (secrets), pip-audit + npm audit (deps).
-
-**Sandboxed offensive toolkit**: 60+ tools across recon, web app, exploitation, creds, forensics, wireless, OSINT. See [Security Arsenal](#security-arsenal) above.
-
-**Infrastructure**: Suricata/Snort (IDS/IPS), Wazuh (host IDS), Falco (runtime), OpenVAS (vuln scanning), Lynis (hardening), chkrootkit (rootkit detection).
-
-### Running Security Tests
-
-```bash
-cd backend && PYTHONPATH=. uv run pytest tests/test_sandbox_tools_security.py -v
-cd backend && PYTHONPATH=. uv run pytest tests/test_guardrail*.py -v
-cd backend && PYTHONPATH=. uv run pytest tests/test_sandbox_audit_middleware.py -v
-python3 backend/tests/test_no_cross_references.py
-```
+1. Fork → feature branch
+2. `make setup` (Docker) or `make install` (local)
+3. Changes with hot-reload
+4. `cd backend && uv run pytest` && `cd frontend && pnpm test`
+5. PR — CI runs format, lint, typecheck, tests
 
 ## Documentation
 
@@ -342,21 +333,13 @@ python3 backend/tests/test_no_cross_references.py
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Local Models](docs/LOCAL_MODELS.md)
 - [Voice System](docs/VOICE.md)
-- [Security](docs/SECURITY.md)
-
-## Contributing
-
-1. Fork → feature branch
-2. `make setup` (Docker) or `make install` (local)
-3. Changes with hot-reload
-4. `cd backend && uv run pytest` && `cd frontend && pnpm test`
-5. PR — CI runs format, lint, typecheck, tests
+- [Security Architecture](docs/SECURITY.md)
 
 ## License
 
 DeerFlow foundation: [MIT License](./LICENSE). All upstream copyright notices preserved.
 
-Nova-specific additions (Agent's Computer UI, sandbox image, watchdogs, security arsenal, branding): **proprietary** — see [NOTICE.md](./NOTICE.md). Commercial license terms: `alilabsx@gmail.com`.
+Nova-specific additions (Agent's Computer UI, sandbox image, watchdogs, **security arsenal**, branding): **proprietary** — see [NOTICE.md](./NOTICE.md). Commercial license terms: `alilabsx@gmail.com`.
 
 ## Acknowledgments
 
