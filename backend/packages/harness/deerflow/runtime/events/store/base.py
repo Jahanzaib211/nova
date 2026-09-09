@@ -107,3 +107,14 @@ class RunEventStore(abc.ABC):
     @abc.abstractmethod
     async def delete_by_run(self, thread_id: str, run_id: str) -> int:
         """Delete all events for a specific run. Return the number of deleted events."""
+
+    async def delete_older_than(self, cutoff) -> int:
+        """Delete events created before ``cutoff``; return how many went.
+
+        Deliberately **not** abstract. Adding an abstract method to a published
+        interface breaks every implementation that has not been updated yet,
+        including any outside this repo, and a store that cannot prune is not
+        broken -- it just keeps everything, which is exactly what it did before.
+        Overriding this is opt-in; the default is honest about doing nothing.
+        """
+        return 0

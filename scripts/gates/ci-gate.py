@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -196,6 +197,17 @@ def _ruff_check(rc, out, err):
     except json.JSONDecodeError:
         return None
     if not items:
+        # rc matters here. `uvx ruff@...` can fail for reasons that have nothing
+        # to do with the code -- a cold resolve racing another uvx, a network
+        # blip -- and it exits non-zero with an empty result. Reporting that as
+        # "no violations" produced the genuinely baffling line
+        #
+        #     [FAIL] backend:ruff-check   46.3s  no violations
+        #
+        # which sends the reader looking for a lint error that does not exist.
+        if rc != 0:
+            reason = (err or out or "").strip().splitlines()
+            return f"ruff itself failed (exit {rc}): {reason[-1][:120] if reason else 'no output'}"
         return "no violations"
     codes: dict[str, int] = {}
     for i in items:
@@ -207,10 +219,30 @@ def _ruff_check(rc, out, err):
 
 
 def _ruff_format(rc, out, err):
+    """How many files `ruff format --check` would rewrite.
+
+    Counting non-blank stdout lines is what this did, and ruff does not print
+    one line per file: depending on version and settings it prints a diff
+    (`unformatted: ...`, `--> path:line:col`, then the hunk) or a
+    `Would reformat: <path>` line, and always a summary. The line count
+    reported **99 files** for a run whose own summary said `9 files would be
+    reformatted, 921 files already formatted` -- a tenfold overstatement on the
+    one number an operator reads to decide how bad it is.
+
+    Prefer ruff's own summary; fall back to counting per-file markers.
+    """
     if rc == 0:
         return "all files formatted"
-    n = len([l for l in out.splitlines() if l.strip()])
-    return f"{n} file(s) would be reformatted"
+    text = f"{out}\n{err}"
+    summary = re.search(r"(\d+)\s+files?\s+would\s+be\s+reformatted", text)
+    if summary:
+        return f"{summary.group(1)} file(s) would be reformatted"
+    markers = len(re.findall(r"^Would reformat:", text, re.MULTILINE)) or len(
+        re.findall(r"^unformatted:", text, re.MULTILINE)
+    )
+    if markers:
+        return f"{markers} file(s) would be reformatted"
+    return "files would be reformatted"
 
 
 def _eslint(rc, out, err):

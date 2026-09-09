@@ -7,7 +7,6 @@ export type {
   IGINOResearchItem,
   IGINOResearchMetadata,
   IGINOAuditRecord,
-  IGINOCapabilities,
 } from "./types";
 
 export {

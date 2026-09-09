@@ -21,6 +21,7 @@ import {
 import type { ThreadContextType } from "@/components/workspace/messages/context";
 import { ThreadContext } from "@/components/workspace/messages/context";
 import { I18nProvider } from "@/core/i18n/context";
+import { SubtasksProvider } from "@/core/tasks/context";
 
 const THREAD_ID = "smoke-thread-1";
 
@@ -59,17 +60,21 @@ function renderPanel(
     <QueryClientProvider client={queryClient}>
       <I18nProvider initialLocale="en-US">
         <ThreadContext.Provider value={threadContext}>
-          <WorkspaceStateProvider threadId={THREAD_ID} todos={todos}>
-            <AgentComputerPanel
-              threadId={THREAD_ID}
-              currentTool={null}
-              isLoading={false}
-              messages={[]}
-              activeWriteFilePath={null}
-              artifacts={[]}
-              onClose={() => undefined}
-            />
-          </WorkspaceStateProvider>
+          {/* The real page mounts SubtasksProvider above the workspace; the
+              checklist reads task→todo bindings from it. */}
+          <SubtasksProvider>
+            <WorkspaceStateProvider threadId={THREAD_ID} todos={todos}>
+              <AgentComputerPanel
+                threadId={THREAD_ID}
+                currentTool={null}
+                isLoading={false}
+                messages={[]}
+                activeWriteFilePath={null}
+                artifacts={[]}
+                onClose={() => undefined}
+              />
+            </WorkspaceStateProvider>
+          </SubtasksProvider>
         </ThreadContext.Provider>
       </I18nProvider>
     </QueryClientProvider>,
@@ -82,14 +87,35 @@ describe("AgentComputerPanel smoke", () => {
     for (const tab of [
       "Files",
       "Terminal",
-      "Editor",
+      "Viewer",
       "Browser",
-      "Activity",
+      // Activity and Audit merged into one Telemetry inspector: they drew on the
+      // same tool-call stream and answered adjacent questions, so they are now
+      // two segments of one tab rather than two tabs.
+      "Telemetry",
       "Review",
-      "Privacy",
+      // The panel header has always said "Recon — private web access"; the tab
+      // button said "Privacy", so the same feature had two names.
+      "Recon",
     ]) {
       expect(html).toContain(tab);
     }
+  });
+
+  test("the merged tab keeps both segments reachable", () => {
+    // Timeline and Ledger are the two halves that used to be separate tabs.
+    // Losing either in the merge would silently drop the only JSONL export in
+    // the product, or the only home for the workspace-intelligence pills.
+    const html = renderPanel(makeThreadContext());
+    expect(html).toContain("Timeline");
+    expect(html).toContain("Ledger");
+  });
+
+  test("no longer renders Activity or Audit as separate tabs", () => {
+    const html = renderPanel(makeThreadContext());
+    expect(html).not.toContain('data-tab="activity"');
+    expect(html).not.toContain('data-tab="audit"');
+    expect(html).toContain('data-tab="telemetry"');
   });
 
   test("renders the task checklist when todos exist", () => {

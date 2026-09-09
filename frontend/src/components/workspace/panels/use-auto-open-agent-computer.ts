@@ -12,27 +12,34 @@ import { usePanels } from "./context";
  * feed `syncRunState(thread.isLoading)` from an effect. The panel opens the
  * first time the agent actually uses its computer in a run; see
  * AgentComputerAutoOpenPolicy for the exact rules.
+ *
+ * The policy lives at MODULE scope, not per-mount: previously a ref died with
+ * the component, so "close the panel mid-run" was forgotten by simply
+ * navigating away and back during the same run — the next tool event then
+ * re-opened the panel against an explicit user decision. A module singleton
+ * survives route changes; it resets on the run boundary (`onRunStateChange`),
+ * which is the only reset that should exist.
  */
+const sharedPolicy = new AgentComputerAutoOpenPolicy();
+
 export function useAutoOpenAgentComputer() {
   const { agentComputerOpen, setAgentComputerOpen } = usePanels();
-  const policyRef = useRef<AgentComputerAutoOpenPolicy | null>(null);
-  policyRef.current ??= new AgentComputerAutoOpenPolicy();
+  // Per-mount "previous" is enough to report transitions: on a fresh mount it
+  // equals the current state, so no phantom transition is reported, while the
+  // accumulated userClosed/autoOpened state itself lives in sharedPolicy.
   const prevOpenRef = useRef(agentComputerOpen);
 
   useEffect(() => {
-    policyRef.current?.onPanelOpenChange(
-      agentComputerOpen,
-      prevOpenRef.current,
-    );
+    sharedPolicy.onPanelOpenChange(agentComputerOpen, prevOpenRef.current);
     prevOpenRef.current = agentComputerOpen;
   }, [agentComputerOpen]);
 
   const syncRunState = useCallback((isLoading: boolean) => {
-    policyRef.current?.onRunStateChange(isLoading);
+    sharedPolicy.onRunStateChange(isLoading);
   }, []);
 
   const notifyComputerActivity = useCallback(() => {
-    if (policyRef.current?.shouldAutoOpen()) {
+    if (sharedPolicy.shouldAutoOpen()) {
       setAgentComputerOpen(true);
     }
   }, [setAgentComputerOpen]);

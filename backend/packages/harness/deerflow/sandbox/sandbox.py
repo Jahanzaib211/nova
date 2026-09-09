@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 from deerflow.sandbox.search import GrepMatch
 
@@ -26,6 +27,40 @@ class Sandbox(ABC):
             The standard or error output of the command.
         """
         pass
+
+    @property
+    def closed(self) -> bool:
+        """Whether this sandbox has been released and can no longer be used.
+
+        Exists so callers can ask directly instead of inferring it from an error
+        message. ``dev_server``'s log tail used to detect a released sandbox by
+        searching a returned string for the words "has no attribute" -- coupling
+        a control-flow decision to the wording of an exception, which any
+        rewording would silently break.
+        """
+        return False
+
+    #: Whether this backend can report command output before the command exits.
+    #: Deliberately opt-in and *not* abstract: a backend that cannot stream is
+    #: not broken, and forcing every implementation (including test doubles) to
+    #: grow a method to stay instantiable would be a tax on the common case.
+    supports_streaming: bool = False
+
+    def execute_command_streaming(self, command: str, on_chunk: "Callable[[str, bool], None]") -> str:
+        """Execute a command, reporting output as it is produced.
+
+        ``on_chunk(text, replace)`` is called for each change in output:
+        ``replace=False`` appends ``text``; ``replace=True`` says the previous
+        body is void and ``text`` is the whole of the new one. Appending is the
+        normal case; ``replace`` exists so a backend whose output can be
+        rewritten rather than extended -- a truncated buffer, a redrawn screen
+        -- cannot have stale text concatenated onto fresh. Returns the complete
+        output, exactly as :meth:`execute_command` would.
+
+        Only meaningful when :attr:`supports_streaming` is True. Callers must
+        check that flag rather than catching this error.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not support streaming execution")
 
     @abstractmethod
     def read_file(self, path: str) -> str:

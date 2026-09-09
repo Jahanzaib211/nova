@@ -31,3 +31,15 @@ class RunEventsConfig(BaseModel):
         default=True,
         description="Whether RunJournal should accumulate token counts to RunRow.",
     )
+    retention_days: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Delete run events older than this many days. 0 disables pruning and keeps "
+            "everything, which is the historical behaviour and stays the default -- "
+            "silently deleting a user's conversation history on upgrade would be worse "
+            "than the growth. Set it explicitly: the table is otherwise unbounded, and on "
+            "this deployment it reached 366 MB (335 MB of genuine content) with no bound "
+            "at all, second only to the checkpoint tables."
+        ),
+    )

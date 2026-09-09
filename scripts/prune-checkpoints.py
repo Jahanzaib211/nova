@@ -123,6 +123,59 @@ doomed AS (
 """
 
 
+# Blobs still reachable from a surviving checkpoint, and the delete that spares
+# them. `#>> '{}'` unwraps the jsonb string to text so it compares against
+# checkpoint_blobs.version, which is plain text.
+_PG_BLOB_GC = (
+    _PG_DELETE
+    + """
+, survivor_versions AS (
+    SELECT c.thread_id, c.checkpoint_ns, kv.key AS channel, kv.value #>> '{}' AS version
+    FROM checkpoints c
+    LEFT JOIN doomed d
+      ON  d.thread_id     = c.thread_id
+      AND d.checkpoint_ns = c.checkpoint_ns
+      AND d.checkpoint_id = c.checkpoint_id
+    CROSS JOIN LATERAL jsonb_each(c.checkpoint->'channel_versions') AS kv
+    WHERE d.checkpoint_id IS NULL
+)
+DELETE FROM checkpoint_blobs b
+WHERE EXISTS (
+        SELECT 1 FROM doomed d
+        WHERE d.thread_id = b.thread_id AND d.checkpoint_ns = b.checkpoint_ns
+      )
+  AND NOT EXISTS (
+        SELECT 1 FROM survivor_versions sv
+        WHERE sv.thread_id     = b.thread_id
+          AND sv.checkpoint_ns = b.checkpoint_ns
+          AND sv.channel       = b.channel
+          AND sv.version       = b.version
+      )
+"""
+)
+
+
+_PG_DELETE_WRITES = (
+    _PG_DELETE
+    + """
+DELETE FROM checkpoint_writes c USING doomed d
+WHERE c.thread_id     = d.thread_id
+  AND c.checkpoint_ns = d.checkpoint_ns
+  AND c.checkpoint_id = d.checkpoint_id
+"""
+)
+
+_PG_DELETE_CHECKPOINTS = (
+    _PG_DELETE
+    + """
+DELETE FROM checkpoints c USING doomed d
+WHERE c.thread_id     = d.thread_id
+  AND c.checkpoint_ns = d.checkpoint_ns
+  AND c.checkpoint_id = d.checkpoint_id
+"""
+)
+
+
 def uuid6_for_epoch(epoch: float) -> str:
     """Smallest UUIDv6 at a given time, for comparing against checkpoint_id.
 
@@ -170,25 +223,36 @@ def prune_postgres(
             summary["ok"] = True
             return summary
 
-        # Children first: checkpoint_writes and checkpoint_blobs reference a
-        # checkpoint, and deleting the parent first would orphan them.
-        for child in ("checkpoint_writes", "checkpoint_blobs"):
-            cur.execute(
-                _PG_DELETE + f"DELETE FROM {child} c USING doomed d "
-                "WHERE c.thread_id = d.thread_id "
-                "AND c.checkpoint_ns = d.checkpoint_ns "
-                "AND c.checkpoint_id = d.checkpoint_id",
-                params,
-            )
-            summary[f"deleted_{child}"] = cur.rowcount
+        # Children first: both tables reference a checkpoint, and deleting the
+        # parent first would orphan them. They are keyed differently, though,
+        # and treating them as interchangeable is what broke this job.
+        #
+        # checkpoint_writes IS keyed by checkpoint_id, so the three-column join
+        # is exact.
+        cur.execute(_PG_DELETE_WRITES, params)
+        summary["deleted_checkpoint_writes"] = cur.rowcount
 
-        cur.execute(
-            _PG_DELETE + "DELETE FROM checkpoints c USING doomed d "
-            "WHERE c.thread_id = d.thread_id "
-            "AND c.checkpoint_ns = d.checkpoint_ns "
-            "AND c.checkpoint_id = d.checkpoint_id",
-            params,
-        )
+        # checkpoint_blobs is NOT. LangGraph keys it
+        # (thread_id, checkpoint_ns, channel, version) -- there is no
+        # checkpoint_id column at all, so the same join raised
+        #
+        #     UndefinedColumn: column c.checkpoint_id does not exist
+        #
+        # on every run since the Postgres migration. Because that aborted the
+        # transaction before the commit below, *nothing* was ever pruned: the
+        # job reported a bare "Traceback (most recent call last):" daily while
+        # the table grew unchecked -- the exact regrowth this script exists to
+        # prevent, and the shape of the 59 GB outage.
+        #
+        # A blob is reachable if any *surviving* checkpoint names its
+        # (channel, version) in `channel_versions`, so this is a reference GC,
+        # not a delete-by-parent. Scoped to threads we actually pruned, which
+        # keeps an actively-running thread's in-flight blobs out of range even
+        # if a write lands between the doomed set and this statement.
+        cur.execute(_PG_BLOB_GC, params)
+        summary["deleted_checkpoint_blobs"] = cur.rowcount
+
+        cur.execute(_PG_DELETE_CHECKPOINTS, params)
         summary["deleted_checkpoints"] = cur.rowcount
         conn.commit()
 

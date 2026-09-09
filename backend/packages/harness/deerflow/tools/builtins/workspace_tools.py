@@ -770,10 +770,27 @@ def shell_session_tool(
         except Exception:
             pass  # session may already exist
         resp = client.shell.exec_command(command=command, id=session_id, exec_dir=exec_dir, async_mode=True)
-        _write_sandbox_observation(_get_sandbox_id(runtime), "shell_session", exec_dir, f"[{session_id}] {command[:80]}", _data_str(resp)[:500])
+        # The opening frame of this session's Terminal entry. shell_view /
+        # shell_wait / shell_kill share the id, so a session renders as one
+        # growing entry rather than a scatter of unrelated lines.
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_session",
+            exec_dir,
+            f"[{session_id}] {command[:80]}",
+            _data_str(resp)[:500],
+            obs_id=f"shell:{session_id}",
+            state="running",
+        )
         return f"Started in session '{session_id}'. Use shell_view(session_id='{session_id}') to see output.\n{_data_str(resp)[:1500]}"
     except Exception as e:
         return f"Error: {e}"
+
+
+#: Last screen reported per (sandbox, session), so `shell_view` only writes an
+#: observation when the terminal actually changed. Bounded by the number of live
+#: shell sessions, and cleared for a session when it is killed.
+_LAST_SHELL_VIEW: dict[tuple[str, str], str] = {}
 
 
 @tool("shell_view", parse_docstring=True)
@@ -788,7 +805,29 @@ def shell_view_tool(runtime: Runtime, description: str, session_id: str = "main"
     if err:
         return err
     try:
-        return _data_str(client.shell.view(id=session_id))[:4000] or "(no output)"
+        out = _data_str(client.shell.view(id=session_id))[:4000] or "(no output)"
+        sandbox_id = _get_sandbox_id(runtime)
+        # Only record when the screen actually changed. An agent polling a
+        # session calls this in a loop, and writing a frame per poll put one
+        # Terminal row per poll into the log for output that had not moved --
+        # pure noise, and it burns entries in the panel's display window.
+        #
+        # `view` returns the session's *rendered* screen, so a change is a new
+        # rendering of the same body (a \r progress bar redrawing), never text
+        # to append -- hence `replace`, never `delta`.
+        key = (sandbox_id, session_id)
+        if _LAST_SHELL_VIEW.get(key) != out:
+            _LAST_SHELL_VIEW[key] = out
+            _write_sandbox_observation(
+                sandbox_id,
+                "shell_view",
+                None,
+                f"[{session_id}] view",
+                obs_id=f"shell:{session_id}",
+                state="running",
+                replace=out,
+            )
+        return out
     except Exception as e:
         return f"Error: {e}"
 
@@ -806,7 +845,17 @@ def shell_wait_tool(runtime: Runtime, description: str, session_id: str = "main"
     if err:
         return err
     try:
-        return _data_str(client.shell.wait_for_process(id=session_id, seconds=seconds))[:4000] or "(done)"
+        out = _data_str(client.shell.wait_for_process(id=session_id, seconds=seconds))[:4000] or "(done)"
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_wait",
+            None,
+            f"[{session_id}] waited up to {seconds}s",
+            obs_id=f"shell:{session_id}",
+            state="done",
+            replace=out,
+        )
+        return out
     except Exception as e:
         return f"Error: {e}"
 
@@ -826,6 +875,15 @@ def shell_write_tool(runtime: Runtime, description: str, input: str, session_id:
         return err
     try:
         client.shell.write_to_process(id=session_id, input=input, press_enter=press_enter)
+        # The keystrokes the agent sent are part of the transcript a human is
+        # reading in the Terminal; without them an interactive session shows
+        # answers to questions nobody appears to have answered.
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_write",
+            None,
+            f"[{session_id}] > {input[:80]}",
+        )
         return f"Sent to '{session_id}'. Use shell_view to see the result."
     except Exception as e:
         return f"Error: {e}"
@@ -844,6 +902,15 @@ def shell_kill_tool(runtime: Runtime, description: str, session_id: str = "main"
         return err
     try:
         client.shell.kill_process(id=session_id)
+        _LAST_SHELL_VIEW.pop((_get_sandbox_id(runtime), session_id), None)
+        _write_sandbox_observation(
+            _get_sandbox_id(runtime),
+            "shell_kill",
+            None,
+            f"[{session_id}] killed",
+            obs_id=f"shell:{session_id}",
+            state="done",
+        )
         return f"Killed process in session '{session_id}'."
     except Exception as e:
         return f"Error: {e}"
@@ -1126,9 +1193,27 @@ async def deploy_expose_tool(runtime: Runtime, description: str, port: int) -> s
     if err:
         return err
     try:
-        url = f"/api/sandbox/absproxy/{thread_id}/{int(port)}/"
-        _write_sandbox_observation(_get_sandbox_id(runtime), "deploy_expose", None, f"exposed port {port}")
-        return f"✓ Exposed port {port}. Shareable preview URL (open in the Browser tab or a new tab): {url}"
+        from deerflow.sandbox.dev_server import (
+            DEFAULT_LABEL,
+            probe_container_port,
+            register_external_dev_server,
+        )
+
+        port_i = int(port)
+        if not (1 <= port_i <= 65535):
+            return f"Error: port must be between 1 and 65535 (got {port_i})"
+
+        # Verify, then *register*. Returning a URL alone was a half pipeline: the
+        # agent reported success, the Browser tab kept showing "Start Live
+        # Preview" because nothing ever created a dev-server handle, and an
+        # unreachable port produced a link that 503'd.
+        if not await probe_container_port(thread_id, port_i):
+            return f"Error: nothing is listening on port {port_i} inside the sandbox. Start the server first, then expose it."
+
+        register_external_dev_server(thread_id, port_i, label=DEFAULT_LABEL, container_port=port_i)
+        url = f"/api/sandbox/absproxy/{thread_id}/{port_i}/"
+        _write_sandbox_observation(_get_sandbox_id(runtime), "deploy_expose", None, f"exposed port {port_i}")
+        return f"✓ Exposed port {port_i} and wired it to the Browser tab (it renders on the next poll). Shareable preview URL: {url}"
     except Exception as e:
         return f"Error: {e}"
 
@@ -1484,9 +1569,11 @@ async def register_external_dev_server_tool(
     Args:
         description: Explain why you are wiring up an external server. ALWAYS PROVIDE THIS FIRST.
         port: TCP port the server is listening on (e.g. 3000 for ``npm start``).
-        host: Hostname the gateway can reach (defaults to 127.0.0.1; use
-            ``host.docker.internal`` for AIO sandbox servers started on the
-            host).
+        host: Leave this alone for a server running **inside** the sandbox
+            (the normal case) -- the port is checked and served through the
+            sandbox's own gateway, and does not need to be published. Only set
+            it for a server running on the *host* machine, where the value is
+            ``host.docker.internal``.
         label: Optional label to register under (default "app").
     """
     try:
@@ -1494,6 +1581,7 @@ async def register_external_dev_server_tool(
 
         from deerflow.sandbox.dev_server import (
             DEFAULT_LABEL,
+            probe_container_port,
         )
         from deerflow.sandbox.dev_server import (
             register_external_dev_server as _register,
@@ -1506,26 +1594,50 @@ async def register_external_dev_server_tool(
         if not (1 <= port_i <= 65535):
             return f"Error: port must be between 1 and 65535 (got {port_i})"
 
-        # Refuse up-front if nothing is actually listening, so the panel never
-        # advertises a phantom server. Sync probe — fast (0.4 s timeout).
-        try:
-            with _socket.create_connection((host, port_i), timeout=0.4):
-                reachable = True
-        except Exception:
-            reachable = False
-        if not reachable:
-            return f"Error: port {host}:{port_i} is not reachable; nothing is listening there."
-
+        # Resolve the thread first: the liveness probe below needs it, because
+        # for a container sandbox the only way to see an unpublished port is
+        # through that thread's sandbox.
         sandbox_id = _get_sandbox_id(runtime)
-        if is_local_sandbox(runtime):
+        local = is_local_sandbox(runtime)
+        if local:
             thread_id = _thread_id_from_sandbox_id(sandbox_id)
         else:
             thread_id = _extract_thread_id_from_thread_data(get_thread_data(runtime))
         if not thread_id:
             return "Error: could not resolve thread id from runtime config"
 
+        # Refuse up-front if nothing is actually listening, so the panel never
+        # advertises a phantom server.
+        #
+        # The probe has to run *from the sandbox's point of view*. This tool
+        # executes in the gateway process, so `create_connection(("127.0.0.1",
+        # 8787))` tested the gateway's own loopback -- and since only 4100-4102
+        # are published, a server the agent had just started inside the sandbox
+        # was always reported "not reachable". That made this escape hatch
+        # unusable for the exact case it exists for, even after it was bound
+        # into BUILTIN_TOOLS.
+        if local or host not in ("127.0.0.1", "localhost", ""):
+            # Local mode, or an explicitly host-side server: a direct connect is
+            # the right test.
+            try:
+                with _socket.create_connection((host, port_i), timeout=0.4):
+                    reachable = True
+            except Exception:
+                reachable = False
+        else:
+            reachable = await probe_container_port(thread_id, port_i)
+        if not reachable:
+            return f"Error: port {host}:{port_i} is not reachable; nothing is listening there."
+
         effective_label = label or DEFAULT_LABEL
-        handle = _register(thread_id, port_i, host=host, label=effective_label)
+        # In container mode the port the agent gave us is the in-container port.
+        handle = _register(
+            thread_id,
+            port_i,
+            host=host,
+            label=effective_label,
+            container_port=None if local else port_i,
+        )
         _write_sandbox_observation(
             sandbox_id,
             "register_external_dev_server",

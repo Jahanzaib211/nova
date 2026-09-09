@@ -47,7 +47,13 @@ module.exports = {
       max_restarts: 10,
       restart_delay: 5000,
       exp_backoff_restart_delay: 60,
-      kill_timeout: 10000,
+      // 2026-09 hardening: bump kill timeout from 10s → 30s. The compose
+      // stack takes ~90s to cold-boot (uv sync + frontend `pnpm install`
+      // in dev), and the old 10s window meant a rolling restart could
+      // force-kill the old stack before the new one bound its ports,
+      // surfacing as a brief nginx 502. 30s gives clean SIGTERM → cascade
+      // → exit without forcing the issue mid-boot.
+      kill_timeout: 30000,
     },
     {
       // LiteLLM proxy — Nova's unified OpenAI-compatible model gateway.
@@ -150,13 +156,15 @@ module.exports = {
         //   P9_bridge            — llama-bridge; ~/Desktop/llama-bridge
         //                          does not exist
         //   P11_dify             — nova-dify; ~/Desktop/dify does not exist
-        //   P12_tunnel           — cloudflared-nova.service is not
-        //                          installed; the public hostname is served
-        //                          by the `tunnel-nova` pm2 app via
-        //                          ~/.cloudflared/nova-config.yml instead
+        // P12_tunnel is ENABLED again: it demanded cloudflared-nova.service,
+        // which was never installed here, so it sat permanently red and got
+        // switched off — leaving P1/P2/P3 all terminating at localhost:2026 and
+        // nothing at all watching the public hostname. The probe now accepts
+        // the `tunnel-nova` pm2 app as the connector, which is how this host
+        // actually runs it, and its layer-2 check reaches the Cloudflare edge.
         // Re-enable by removing a name here once the service is back.
         HEALTHCHECK_DISABLED_PROBES:
-          "P4_local_llm_gateway,P5_llama_loopback,P6_llama_vram,P9_bridge,P11_dify,P12_tunnel",
+          "P4_local_llm_gateway,P5_llama_loopback,P6_llama_vram,P9_bridge,P11_dify",
         // Binary-attestation probe — left unset by default. To enable:
         //   WATCHDOG_ATTESTATION_BINARY_PATH=/path/to/binary
         //   WATCHDOG_ATTESTATION_CONSTITUTION_PATH=/path/to/constitution

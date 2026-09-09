@@ -208,7 +208,7 @@ class _FakeSandbox:
 
     def execute_command(self, command: str) -> str:
         self.commands.append(command)
-        return "deerflow-dev-started"
+        return "nova-dev-started"
 
     def read_file(self, path: str) -> str:
         return "Error: not found"

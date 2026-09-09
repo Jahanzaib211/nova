@@ -918,6 +918,21 @@ speech:
   #   tts: { use: deerflow.speech.engines.null:ToneTTS }
 
 sandbox:
+  # Environment injected into every sandbox container. Values starting with $
+  # are resolved from the host environment.
+  #
+  # TZ is set because the upstream base image displays CST while the host,
+  # gateway and sandbox clocks all agree in UTC. That cosmetic mismatch has
+  # been reported as an 8-hour clock skew; `date -u` inside the sandbox and on
+  # the host match to the second. Displaying UTC removes the illusion.
+  environment:
+    TZ: UTC
+  # Stream bash output into the Agent's Computer Terminal as it is produced,
+  # instead of one entry when the command exits. Emits extra `delta`/`replace`
+  # frames on a NAMED SSE event (`sandbox_delta`), which any frontend that does
+  # not subscribe ignores by spec. Leave false unless the frontend serving this
+  # deployment is built from source that understands it.
+  stream_terminal_output: false
   use: deerflow.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is
   # not a secure isolation boundary for shell access. Enable only for fully
@@ -1394,10 +1409,18 @@ stream_bridge:
 #   backend: memory
 #   max_trace_content: 10240    # Truncation threshold for trace content (db backend, bytes)
 #   track_token_usage: true     # Accumulate token counts to RunRow
+#   retention_days: 0           # Delete events older than N days. 0 = keep everything.
+#
+# retention_days is 0 by default because silently deleting a user's conversation
+# history on upgrade would be worse than the growth -- but the table IS unbounded
+# and nothing else trims it. On the reference deployment it reached 366 MB (335 MB
+# of genuine content, so vacuuming does not help) and was the largest object in the
+# database once the checkpoint tables were vacuumed. Set it deliberately.
 run_events:
   backend: memory
   max_trace_content: 10240
   track_token_usage: true
+  retention_days: 0
 
 # ============================================================================
 # User-Owned IM Channel Connections

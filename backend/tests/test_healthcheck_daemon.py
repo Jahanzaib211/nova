@@ -284,7 +284,7 @@ class TestDisabledProbes:
         report = await healthcheck.run_cycle(healthcheck.WatchdogState())
 
         assert ran == []
-        assert len(report.probes) == 10
+        assert len(report.probes) == len(healthcheck.build_probe_factories()) - len(healthcheck.disabled_probes())
         assert {p.name for p in report.probes}.isdisjoint({"P9_bridge", "P11_dify", "P12_tunnel"})
 
 
@@ -341,13 +341,17 @@ class TestRunCycleSmoke:
             "probe_dify",
             "probe_tunnel",
             "probe_drift",
+            "probe_searxng",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
         state = healthcheck.WatchdogState()
         report = await healthcheck.run_cycle(state)
         assert report.overall == healthcheck.Status.GREEN
-        assert len(report.probes) == 13
+        # Derived, not hardcoded: a literal here makes every added probe fail
+        # three tests with `assert 14 == 13`, which names neither the probe
+        # nor the reason.
+        assert len(report.probes) == len(healthcheck.build_probe_factories())
         assert all(p.status == healthcheck.Status.GREEN for p in report.probes)
 
     @pytest.mark.asyncio
@@ -375,6 +379,7 @@ class TestRunCycleSmoke:
             "probe_dify",
             "probe_tunnel",
             "probe_drift",
+            "probe_searxng",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
         monkeypatch.setattr(healthcheck, "probe_binary_attestation", fake_boom)
@@ -393,7 +398,8 @@ class TestRunCycleSmoke:
         assert report.overall == healthcheck.Status.RED
         assert report.exit_code == 1
         green_count = sum(1 for p in report.probes if p.status == healthcheck.Status.GREEN)
-        assert green_count == 12
+        # every probe but the one made to raise
+        assert green_count == len(healthcheck.build_probe_factories()) - 1
 
 
 class TestLogRouting:

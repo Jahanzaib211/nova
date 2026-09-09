@@ -1,0 +1,546 @@
+[ws open] wss://nova.alilabsx.com/api/threads/6534b851-b255-4bc4-95ad-33f07889cbb2/computer-ws
+[gate] visible=true
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/workspace/6534b851-b255-4bc4-95ad-33f07889cbb2/events
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[ws ERROR] wss://nova.alilabsx.com/api/threads/6534b851-b255-4bc4-95ad-33f07889cbb2/computer-ws -- Error during WebSocket handshake: Unexpected response code: 403
+[console.error] WebSocket connection to 'wss://nova.alilabsx.com/api/threads/6534b851-b255-4bc4-95ad-33f07889cbb2/computer-ws' failed: Error during WebSocket handshake: Unexpected response code: 403
+[ws close] wss://nova.alilabsx.com/api/threads/6534b851-b255-4bc4-95ad-33f07889cbb2/computer-ws in=0 out=0 error=Error during WebSocket handshake: Unexpected response code: 403
+[prompt submitted]
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[ws open] wss://nova.alilabsx.com/api/threads/6534b851-b255-4bc4-95ad-33f07889cbb2/computer-ws
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[console.error] Failed to load resource: the server responded with a status of 402 ()
+[console.error] e: HTTP 402: {"detail":{"code":"daily_limit_reached","message":"You've reached today's usage limit (250,000 tokens). It resets at midnight UTC. Need more today? Contact alilabsx@gmail.com or reply here to request an increase — we can raise your limit right away.","plan":"free","daily_limit":250000,"used":250362,"contact":"alilabsx@gmail.com","resets":"daily_utc_midnight","can_request_increase":true}}
+    at e.fromResponse (https://nova.alilabsx.com/_next/static/chunks/41yhe6_fnr8nf.js:1:14299)
+    at async https://nova.alilabsx.com/_next/static/chunks/41yhe6_fnr8nf.js:1:15007
+    at async u (https://nova.alilabsx.com/_next/static/chunks/41yhe6_fnr8nf.js:1:6268)
+    at async https://nova.alilabsx.com/_next/static/chunks/41yhe6_fnr8nf.js:1:12197
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[verify] no assistant reply containing 'hello' within 180s
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/logs?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/files?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/todo?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-servers?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[watched 404 <-- ERROR] GET https://nova.alilabsx.com/api/sandbox/dev-status?thread_id=6534b851-b255-4bc4-95ad-33f07889cbb2&label=app
+[console.error] Failed to load resource: the server responded with a status of 404 ()
+[verify] no subtask card appeared within 60s

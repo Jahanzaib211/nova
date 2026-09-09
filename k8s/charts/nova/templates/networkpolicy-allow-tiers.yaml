@@ -138,3 +138,30 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "nova.selectorLabels" (dict "component" "provisioner") | nindent 14 }}
+---
+# Without this, searxng is covered by default-deny-ingress (podSelector: {})
+# and the gateway cannot reach it — while the pod stays Ready, because kubelet's
+# probes are host-originated and unaffected by policy. That is the exact trap
+# documented in networkpolicy-default-deny.yaml's correction note, which cost a
+# debugging cycle on the sandbox pods: healthy, Ready, and unreachable.
+#
+# Failing this way is especially quiet here: web_search falls back to
+# DuckDuckGo, so a blocked SearXNG looks like working search.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-searxng-from-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "searxng") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "nova.selectorLabels" (dict "component" "gateway") | nindent 14 }}

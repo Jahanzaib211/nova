@@ -62,7 +62,7 @@ export function Editor({
   activeEdit: ActiveEdit | null;
 }) {
   const { t } = useI18n();
-  const { content, exists, lineCount } = useLiveFileContent(
+  const { content, exists, lineCount, isLoading } = useLiveFileContent(
     threadId,
     filePath,
     activeTab && Boolean(filePath),
@@ -89,10 +89,13 @@ export function Editor({
   // Depending on the object meant this effect refired continuously while the
   // agent wrote, so a user who clicked "File" to read the whole thing was
   // yanked back to "Diff" a fraction of a second later, every time — the toggle
-  // was effectively unusable during streaming. The path+kind key still resets
-  // the view when the agent moves to a genuinely different edit.
+  // was effectively unusable during streaming.
+  //
+  // The key includes the tool-call id: path+kind alone could NOT distinguish
+  // two consecutive str_replace calls on the same file, so edit #2 silently
+  // kept "File" view and its diff badge was never shown.
   const editKey = editForFile
-    ? `${editForFile.path}:${editForFile.kind}`
+    ? `${editForFile.callId}:${editForFile.path}:${editForFile.kind}`
     : null;
   const [mode, setMode] = useState<"diff" | "file">("diff");
   useEffect(() => {
@@ -100,17 +103,20 @@ export function Editor({
   }, [editKey]);
   const showDiff = mode === "diff" && diff !== null;
 
-  // Auto-scroll while writing
+  // Auto-scroll while writing — gated on the tab being visible: every tab
+  // stays mounted via CSS `hidden`, and an ungated scrollIntoView drags a
+  // hidden subtree on every streamed chunk (the v9.6 Terminal bug class).
   useEffect(() => {
-    if (isWriting) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [content, isWriting, showDiff]);
+    if (isWriting && activeTab)
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeTab, content, isWriting, showDiff]);
 
   if (!filePath) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
         <PencilIcon className="text-muted-foreground/30 h-6 w-6" />
         <span className="text-muted-foreground/50 text-xs">
-          {t.agentComputer.editor.startWriting}
+          {t.agentComputer.viewer.startWriting}
         </span>
       </div>
     );
@@ -142,7 +148,7 @@ export function Editor({
                     : "text-muted-foreground/60 hover:text-muted-foreground",
                 )}
               >
-                {t.agentComputer.editor.diff}
+                {t.agentComputer.viewer.diff}
               </button>
               <button
                 onClick={() => setMode("file")}
@@ -153,19 +159,19 @@ export function Editor({
                     : "text-muted-foreground/60 hover:text-muted-foreground",
                 )}
               >
-                {t.agentComputer.editor.file}
+                {t.agentComputer.viewer.file}
               </button>
             </div>
           )}
           {!showDiff && lineCount > 1 && (
             <span className="text-muted-foreground/50 text-[10px]">
-              {t.agentComputer.editor.lines(lineCount)}
+              {t.agentComputer.viewer.lines(lineCount)}
             </span>
           )}
           {isWriting && (
             <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-              {t.agentComputer.editor.writing}
+              {t.agentComputer.viewer.writing}
             </span>
           )}
         </div>
@@ -184,9 +190,26 @@ export function Editor({
             {content}
             {isWriting && <span className="animate-pulse text-white">█</span>}
           </pre>
-        ) : (
+        ) : isLoading ? (
+          // Genuinely still fetching — the only state a spinner means.
           <div className="flex h-full items-center justify-center">
             <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
+          </div>
+        ) : !exists ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+            <span className="text-muted-foreground/50 text-xs">
+              {t.agentComputer.viewer.fileNotWritten}
+            </span>
+            <span className="text-muted-foreground/35 font-mono text-[10px] break-all">
+              {filePath}
+            </span>
+          </div>
+        ) : (
+          // exists === true with empty content: a real, empty file.
+          <div className="flex h-full items-center justify-center">
+            <span className="text-muted-foreground/40 text-xs">
+              {t.agentComputer.viewer.emptyFile}
+            </span>
           </div>
         )}
         <div ref={bottomRef} />

@@ -206,9 +206,26 @@ start() {
 
     sandbox_mode="$(detect_sandbox_mode)"
 
-    services="frontend gateway nginx"
+    # Every service config.yaml binds a tool to must be started explicitly.
+    #
+    # Compose only auto-starts what `depends_on` reaches, and the graph here is
+    # just nginx -> {frontend, gateway} -> postgres. searxng, crawl4ai and
+    # browserless hang off nothing, so naming only "frontend gateway nginx" left
+    # them down while `config.yaml` pointed live tools at them:
+    #   searxng:8080     <- web_search      (config.yaml:81-82)
+    #   browserless:3000 <- web_fetch       (config.yaml:92-93)
+    #   crawl4ai:11235   <- web_fetch_many, web_crawl (config.yaml:104,118)
+    #
+    # searxng never came up at all, so `getent hosts searxng` NXDOMAIN'd inside
+    # the gateway and the Privacy panel's SearXNG card was permanently red. It
+    # went unnoticed for weeks because web_search falls back to DuckDuckGo
+    # silently, so search kept working while the badge stayed broken.
+    #
+    # autoheal restarts the gateway when its healthcheck fails -- the auto-recovery
+    # added after the 2026-07-16 outage, and worthless if it is not running.
+    services="frontend gateway nginx searxng crawl4ai browserless autoheal"
     if [ "$sandbox_mode" = "provisioner" ]; then
-        services="frontend gateway provisioner nginx"
+        services="$services provisioner"
     fi
 
     # Only aio mode (AioSandboxProvider without provisioner_url) needs the host

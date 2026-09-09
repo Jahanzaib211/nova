@@ -11,6 +11,9 @@ images:
   provisioner: nova-provisioner:staging      # the provisioner service's own image (docker/provisioner/Dockerfile)
   sandbox: nova-sandbox-android:latest       # SANDBOX_IMAGE — the image used for the sandbox PODS the provisioner creates
   redis: redis:7-alpine                      # public image, pulled directly — no local build/import step needed
+  # Digest-pinned, matching docker-compose-dev.yaml — an unpinned search
+  # backend is a supply-chain surface that reads every page the agent fetches.
+  searxng: searxng/searxng@sha256:f4c8e59de166ed71f6380c0847c312ca51f0d41996e31d0559163b6b09ecde52
 
 imagePullPolicy: IfNotPresent
 
