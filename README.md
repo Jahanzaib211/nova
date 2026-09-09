@@ -107,6 +107,31 @@ make down           # stop
 
 Nova ships a full-stack security capability. **80+ tools and defenses** across application-level blue team, offensive red team, and automated scanning.
 
+### Probe Vibe-Coded Apps
+
+Nova can **build an app and then attack it** — the full build-then-break loop in one agent:
+
+1. **Build** — scaffold a web app (Next.js, Flask, FastAPI, whatever) in the sandbox
+2. **Self-audit** — the verify loop catches console errors, blank renders, broken layouts
+3. **Red team** — the security skill spins up nuclei, nikto, sqlmap, dalfox, ffuf against the running dev server
+4. **Report** — deterministic code review + vulnerability scan output in one place
+5. **Fix** — agent patches the issues and re-verifies
+
+This works on Nova's own builds **or any app you point it at**. Paste a URL or drop a repo into the sandbox and say "audit this" — the security skill handles the rest. Dependency-ordered attack chains: recon → web app scan → secret detection → exploitation attempts → forensics → hardening recommendations.
+
+```
+# Example: Nova builds a tip calculator, then probes it
+> build a tip calculator with auth and a database
+
+# Nova's agent does the build, then:
+# - runs nuclei against localhost:3000
+# - checks for SQL injection with sqlmap
+# - fuzzes endpoints with ffuf
+# - scans for XSS with dalfox
+# - audits dependencies with trivy
+# - outputs a security report
+```
+
 ### Blue Team (Defensive)
 
 | Layer | What it does |
