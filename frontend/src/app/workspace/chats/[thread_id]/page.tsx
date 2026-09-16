@@ -45,6 +45,7 @@ import {
 import {
   useActiveRun,
   useThreadMetadata,
+  takeQueuedMessage,
   useThreadStream,
   useThreadTokenUsage,
 } from "@/core/threads/hooks";
@@ -52,6 +53,7 @@ import { recordComposer } from "@/core/threads/stream-trace";
 import { composerShouldStream } from "@/core/threads/stream-trace";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
+import { useTodoCollapse } from "@/core/todos";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -138,6 +140,14 @@ export default function ChatPage() {
       setIsNewThread(false);
     },
     onFinish: (state) => {
+      // H2 steering flush: a message typed mid-run was parked on 409; send it
+      // now that the run ended. Slight delay lets run teardown settle first.
+      const queued = takeQueuedMessage(threadId);
+      if (queued) {
+        window.setTimeout(() => {
+          void sendMessage(threadId, { text: queued, files: [] });
+        }, 400);
+      }
       if (document.hidden || !document.hasFocus()) {
         let body = "Conversation finished";
         const lastMessage = state.messages.at(-1);
@@ -262,6 +272,8 @@ export default function ChatPage() {
     ? localSettings.tokenUsage.inlineMode
     : "off";
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  const { collapsed: todosCollapsed, toggle: toggleTodos } =
+    useTodoCollapse(threadId);
 
   return (
     <ThreadContext.Provider
@@ -374,7 +386,8 @@ export default function ChatPage() {
                         <TodoList
                           className="bg-background/5"
                           todos={thread.values.todos ?? []}
-                          hidden={false}
+                          collapsed={todosCollapsed}
+                          onToggle={toggleTodos}
                         />
                       </div>
                     </div>

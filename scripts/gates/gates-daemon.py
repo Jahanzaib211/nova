@@ -224,6 +224,20 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_CI_INTERVAL", 21_600),
             timeout_sec=1800,
         ),
+        # Lighthouse. Publishes the LAST run's scores -- it does not run
+        # Lighthouse itself, which needs a production build and a real Chrome
+        # and has no business inside a polling daemon (see that script's
+        # docstring). Registering it anyway is the point: without a producer
+        # nothing ever refreshed lighthouse.json, so the console showed four
+        # green budgets measured 9 days earlier against a build that no longer
+        # existed. The gate is now age-aware, so this republish is what makes it
+        # say so. Cheap -- it reads a JSON directory.
+        Producer(
+            "lighthouse",
+            ["scripts/gates/lighthouse-gate.py"],
+            env_float("NOVA_GATE_LIGHTHOUSE_INTERVAL", 21_600),
+            timeout_sec=300,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took

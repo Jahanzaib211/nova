@@ -71,13 +71,54 @@ case "$NOVA_STACK" in
     else
       echo "[pm2-deerflow] voice overlay skipped (speech disabled or weights missing in $_voice_dir)" >&2
     fi
-    SCALE_FLAGS=(--scale provisioner=0 --scale searxng=0)
+    # provisioner stays at 0: nothing in the dev flow provisions sandboxes over
+    # HTTP, and nginx already resolves its upstream at request time so the route
+    # simply 502s if anyone tries.
+    #
+    # searxng does NOT stay at 0. config.yaml binds web_search to
+    # http://searxng:8080, and that tool falls back to DuckDuckGo *silently* --
+    # so scaling it away meant every search quietly used the fallback while the
+    # P14 probe and the privacy panel's SearXNG card sat red. Either the service
+    # runs or the config should not point at it; it runs.
+    SCALE_FLAGS=(--scale provisioner=0)
     ;;
   *)
     echo "ERROR: NOVA_STACK='$NOVA_STACK' is not valid (expected 'dev' or 'prod')" >&2
     exit 2
     ;;
 esac
+
+# ── Stale-frontend warning ────────────────────────────────────────────────
+# `up --no-build` can start, restart and recreate the frontend container, but
+# it can never rebuild the image -- and the frontend is prod-baked (`next start`
+# serves the image's .next) while frontend/src is still bind-mounted over it, so
+# a stale build looks live. That combination hid a four-day-old bundle behind a
+# current-looking container through every `pm2 restart nova`, while the drift
+# gate sat red and unread the whole time.
+#
+# Warn only, never block: refusing to start the stack over a stale frontend
+# would turn a cosmetic drift into an outage. The point is that the operator
+# cannot miss it.
+_drift="${NOVA_GATE_DRIFT_PATH:-$HOME/.nova/gates/drift.json}"
+if [ -r "$_drift" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"frontend_build"' "$_drift" \
+   && python3 -c "
+import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any(c.get('name')=='frontend_build' and c.get('status')=='red'
+                  for c in d.get('checks',[])) else 1)
+" "$_drift" 2>/dev/null; then
+  echo "[pm2-deerflow] WARNING: the drift gate reports frontend_build RED -- the served" >&2
+  echo "[pm2-deerflow]          bundle does not match frontend/src. 'up --no-build' CANNOT" >&2
+  echo "[pm2-deerflow]          fix this. Rebuild the image:" >&2
+  echo "[pm2-deerflow]            docker compose -p deer-flow-dev \\" >&2
+  echo "[pm2-deerflow]              -f docker/docker-compose-dev.yaml \\" >&2
+  echo "[pm2-deerflow]              -f docker/docker-compose.dood.yaml \\" >&2
+  echo "[pm2-deerflow]              -f docker/docker-compose.prod-frontend.yaml \\" >&2
+  echo "[pm2-deerflow]              build frontend" >&2
+fi
 
 exec /usr/bin/docker compose \
   "${COMPOSE_FILES[@]}" \

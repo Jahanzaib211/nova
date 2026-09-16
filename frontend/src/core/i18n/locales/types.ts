@@ -191,6 +191,9 @@ export interface Translations {
     logout: string;
     gatewayUnavailable: string;
     gatewayUnavailableRetrying: string;
+    sessionExpiredTitle: string;
+    sessionExpiredDescription: string;
+    sessionExpiredAction: string;
   };
 
   // Conversation
@@ -648,7 +651,7 @@ export interface Translations {
     thinking: string;
     usingTerminal: string;
     usingBrowser: string;
-    usingEditor: string;
+    usingViewer: string;
     taskProgress: string;
     noLogs: string;
     close: string;
@@ -663,19 +666,30 @@ export interface Translations {
       failed: (count: number) => string;
       consoleErrors: (count: number) => string;
     };
+    llmError: {
+      prefix: string;
+      generic: string;
+      quota: string;
+      auth: string;
+      busy: string;
+    };
     tabs: {
       files: string;
       terminal: string;
-      editor: string;
+      viewer: string;
       browser: string;
       activity: string;
+      telemetry: string;
       review: string;
       privacy: string;
+      audit: string;
     };
     files: {
       empty: string;
       repository: string;
       running: (count: number) => string;
+      uploadLimits: string;
+      commandsHeader: string;
       uploadLimitsHint: string;
     };
     workspace: {
@@ -705,7 +719,7 @@ export interface Translations {
     };
     status: {
       writing: (filename: string, lines?: string) => string;
-      usingEditor: string;
+      usingViewer: string;
       editing: (filename: string) => string;
       reading: (filename: string) => string;
       usingTerminal: string;
@@ -717,6 +731,10 @@ export interface Translations {
       isThinking: string;
       isIdle: string;
     };
+    telemetry: {
+      timeline: string;
+      ledger: string;
+    };
     terminal: {
       tab: string;
       stream: string;
@@ -724,10 +742,23 @@ export interface Translations {
       interactiveTitle: string;
       noOutput: string;
       noOutputHint: string;
+      streamDown: string;
+      streamDownHint: string;
       running: string;
+      /** Label for the control that re-fetches the ttyd URL after the
+          sandbox was recycled and the embedded shell went dead. */
+      reconnect: string;
+      shellDisconnected: string;
+      showAll: (lines: number) => string;
+      showLess: string;
+      hideDevLogs: string;
+      showDevLogs: string;
+      counts: (total: number, running: number) => string;
     };
-    editor: {
+    viewer: {
       startWriting: string;
+      fileNotWritten: string;
+      emptyFile: string;
       diff: string;
       file: string;
       lines: (count: number) => string;
@@ -746,6 +777,7 @@ export interface Translations {
       desktop: string;
       mobile: string;
       openNewTab: string;
+      downloadHtml: string;
       testingInBrowser: string;
       selfTestPassed: string;
       selfTestIssues: string;
@@ -764,9 +796,9 @@ export interface Translations {
         code: string;
       };
       projectLabel: (type: string) => string;
-      switchToEditor: string;
-      switchToEditorPrefix: string;
-      switchToEditorSuffix: string;
+      switchToViewer: string;
+      switchToViewerPrefix: string;
+      switchToViewerSuffix: string;
       startLivePreview: string;
       fileMissing: (name: string) => string;
       fileEmpty: (name: string) => string;
@@ -778,6 +810,7 @@ export interface Translations {
     };
     review: {
       generating: string;
+      generationFailed: string;
       needsLook: string;
       mostlyFine: string;
       looksClean: string;
@@ -804,6 +837,13 @@ export interface Translations {
       fetch: string;
       fetchMany: string;
       crawl: string;
+      /** Per-tool display copy, keyed by the tool name `/api/igino/status`
+          reports. Data-driven so a new capability shows up without a frontend
+          change; an unknown key falls back to the raw tool name. */
+      capabilityLabels: Record<string, string>;
+      capabilityHints: Record<string, string>;
+      /** Placeholder for a counter the server did not send. */
+      noData: string;
       fetches: string;
       avgFetch: string;
       capabilities: string;

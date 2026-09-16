@@ -98,3 +98,53 @@ The three `apex-seo-platform` SKILL.md items above (`33,665`, `API Routes (18)`,
 `/mnt/user-data/workspace`) are **recorded here but left in place**. They are documented so the
 next reader knows the numbers are stale by 1.02% and the ritual path is not portable — not so
 that anyone edits the file. The file is root-owned and stays as authored.
+
+---
+
+## Second self-probe (2026-08-25) — what was confirmed, fixed, and disproved
+
+A later in-sandbox probe raised a fresh list. Recorded here so the next reader
+does not re-investigate settled items.
+
+### Confirmed, and fixed
+
+- **`TINYPROXY_PORT=8118` and `MCP_SERVER_PORT=8089` advertise nothing.** Both
+  are exported by the upstream base image, which starts neither daemon. `env`
+  shows two services `ss -ltn` cannot find. Real, but not a Nova defect — and
+  now stated outright in `/etc/nova-sandbox.json`'s `services` block and in
+  `docker/sandbox/README.md`, because this had been filed as a Nova bug twice.
+- **Multi-line `bash` failed about half the time.** Not on the probe's list, and
+  the worst defect present: 10/10 multi-line commands failed against the live
+  container versus 0/10 single-line, and one real run lost 13 of 25. Fixed by
+  base64-wrapping the script so no newline reaches the upstream server.
+- **Disk was 85% full.** Real. Still is; `docker builder prune` recovers ~45 GB
+  and needs an explicit go-ahead on this box.
+
+### Disproved
+
+- **The "8-hour clock skew" is a display artifact.** Sandbox, gateway and host
+  all agree in UTC to the second; the probe's own log records `date -u` →
+  `Sun Aug 23 07:37:19 PM UTC 2026` beside a `CST` local rendering. The base
+  image simply displays CST. `TZ: UTC` is now set in `sandbox.environment` so
+  the illusion stops, but there was never a skew to correct.
+- **`/app` "missing"** — the probe's own log settles it: `ls: cannot access
+  '/app'`, while the sandbox's `python-server` package lives at
+  `/opt/python3.12/.../site-packages/app/`. That is an upstream package named
+  `app`, not a Nova path.
+- **`PROMPT_COMMAND`, the bash tool's preview short-circuit, and the browser UA**
+  belong to the harness running *inside* the sandbox, not to Nova. Same category
+  error as the first probe: auditing the container Nova spawns and attributing
+  what it finds to the system that built it.
+
+### Was a credential problem, now resolved
+
+- **Image generation.** The live run showed `MiniMax error 2049: invalid api key`
+  three times. The plumbing was never at fault: `sandbox.environment` forwards
+  `MINIMAX_API_KEY`, and the value inside the container is byte-identical to the
+  host's — same length, same SHA-256. Verified 2026-08-25 by hashing both rather
+  than printing either.
+
+  The key has since been replaced and image generation now works: a live
+  `POST /v1/image_generation` from inside the sandbox returns HTTP 200 with
+  `success_count: 1` and an image URL. Nothing in Nova needed changing; recorded
+  here so the 2049 in the old logs is not re-investigated.

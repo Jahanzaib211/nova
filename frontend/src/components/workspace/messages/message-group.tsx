@@ -19,7 +19,14 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ChainOfThought,
@@ -29,6 +36,7 @@ import {
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
 import { Button } from "@/components/ui/button";
+import { applyScrollAnchor } from "@/core/dom/scroll-anchor";
 import { useI18n } from "@/core/i18n/hooks";
 import { formatTokenCount } from "@/core/messages/usage";
 import type { TokenDebugStep } from "@/core/messages/usage-model";
@@ -68,6 +76,34 @@ export function MessageGroup({
   const [showLastThinking, setShowLastThinking] = useState(
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
   );
+  // Expanding the reasoning drawer inserts content into the middle of a
+  // transcript that `use-stick-to-bottom` is holding pinned to its bottom
+  // edge, which slides the lines above the trigger out of view. Measure the
+  // trigger before the toggle and put it back afterwards -- see
+  // core/dom/scroll-anchor.
+  const thinkingTriggerRef = useRef<HTMLButtonElement>(null);
+  const thinkingAnchorRef = useRef<number | null>(null);
+
+  const toggleLastThinking = useCallback(() => {
+    thinkingAnchorRef.current =
+      thinkingTriggerRef.current?.getBoundingClientRect().top ?? null;
+    setShowLastThinking((shown) => !shown);
+  }, []);
+
+  // Layout effect, not effect: this has to run in the same frame the drawer
+  // resizes in, or the jump is painted before it is corrected.
+  useLayoutEffect(() => {
+    const previousTop = thinkingAnchorRef.current;
+    thinkingAnchorRef.current = null;
+    const trigger = thinkingTriggerRef.current;
+    if (previousTop === null || !trigger) return;
+    applyScrollAnchor(
+      trigger,
+      previousTop,
+      trigger.getBoundingClientRect().top,
+      (node) => window.getComputedStyle(node as unknown as Element).overflowY,
+    );
+  }, [showLastThinking]);
   const steps = useMemo(() => convertToSteps(messages), [messages]);
   const debugStepByMessageId = useMemo(
     () =>
@@ -307,9 +343,10 @@ export function MessageGroup({
           )}
           <Button
             key={lastReasoningStep.id}
+            ref={thinkingTriggerRef}
             className="w-full items-start justify-start text-left"
             variant="ghost"
-            onClick={() => setShowLastThinking(!showLastThinking)}
+            onClick={toggleLastThinking}
           >
             <div className="flex w-full items-center justify-between">
               <ChainOfThoughtStep

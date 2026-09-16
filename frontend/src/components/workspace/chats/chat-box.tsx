@@ -1,9 +1,10 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { FilesIcon, LaptopIcon, MessageSquareIcon, XIcon } from "lucide-react";
-import { AnimatePresence } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
+import { toast } from "sonner";
 
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,13 @@ import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/wo
 import { usePanels } from "@/components/workspace/panels/context";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
+import { foldCommandCount } from "@/core/sandbox/command-count";
+import { useSandboxTerminalStats } from "@/core/sandbox/hooks";
+import {
+  useSupersedeStaleSubtasks,
+  useUpdateSubtask,
+} from "@/core/tasks/context";
+import { useComputerEvents } from "@/core/threads/task-events-ws";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
@@ -82,6 +90,108 @@ const ChatBox: React.FC<{
   } = useThread();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
+
+  // Subagent task events over the thread-scoped WebSocket (WS-G). Additive to
+  // the SSE custom stream: the subtask FSM treats duplicate application as a
+  // no-op, and this path survives run end / reconnects, which is what lets a
+  // todo binding arrive even if the SSE window missed it.
+  const updateSubtaskForWs = useUpdateSubtask();
+  const supersedeStaleSubtasks = useSupersedeStaleSubtasks();
+  // Live tool_call ids of the CURRENT message stream — the membership test
+  // that makes supersede deterministic instead of timing-based.
+  const liveToolCallIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of thread.messages) {
+      for (const tc of (m as { tool_calls?: Array<{ id?: string }> })
+        .tool_calls ?? []) {
+        if (tc.id) ids.add(tc.id);
+      }
+    }
+    return ids;
+  }, [thread.messages]);
+  useEffect(() => {
+    supersedeStaleSubtasks(liveToolCallIds);
+  }, [liveToolCallIds, supersedeStaleSubtasks]);
+  const queryClient = useQueryClient();
+  useComputerEvents(threadId, {
+    updateSubtask: updateSubtaskForWs,
+    // The panel's live socket carries subagent status, todo bindings, dev-server
+    // pushes and terminal counts. When the session dies it cannot reconnect, and
+    // the REST/SSE legs keep rendering just enough that the panel looks alive —
+    // so without this the whole live half goes missing with no signal at all.
+    onAuthExpired: () => {
+      toast.error(t.workspace.sessionExpiredTitle, {
+        description: t.workspace.sessionExpiredDescription,
+        duration: Infinity,
+        action: {
+          label: t.workspace.sessionExpiredAction,
+          onClick: () => window.location.reload(),
+        },
+      });
+    },
+    // Dev-server transitions arrive as push: refresh the caches the panel's
+    // Browser tab reads instead of waiting for the next poll interval.
+    onDevServer: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["sandbox", "dev-status", threadId],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["sandbox", "dev-servers", threadId],
+      });
+    },
+    // A workspace observation means files changed under the panel. Invalidate
+    // the file-content caches so the static preview refetches immediately —
+    // this is what killed the stale `file://`-era snapshot class: the panel
+    // kept showing an early render until its poll happened to catch up.
+    onObservation: (event) => {
+      const tool = event.tool;
+      if (tool === "write_file" || tool === "str_replace" || tool === "bash") {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "live-file", threadId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "file", threadId],
+        });
+      }
+      if (tool === "browser_check") {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "browser-check-last", threadId],
+        });
+      }
+      if (
+        tool === "dev_verify" ||
+        tool === "present_files" ||
+        tool === "code_review"
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "review", threadId],
+        });
+      }
+    },
+    // Authoritative todo snapshot: the checklist stops depending on when the
+    // values stream happens to deliver state.
+    onTodos: (snap) => {
+      queryClient.setQueryData(["sandbox", "todo", threadId], snap.todos);
+    },
+    // Deterministic command counter for the Terminal header. State, not just
+    // query cache: getQueryData is not reactive, so the header never
+    // re-rendered on arrival.
+    onTerminalStats: (stat) => {
+      // Key must match `useSandboxTerminalStats` exactly, or this writes to a
+      // cache entry nothing reads -- it was missing the "sandbox" segment, so
+      // the socket never actually refreshed the seed it was trying to update.
+      queryClient.setQueryData(
+        ["sandbox", "terminal-stats", threadId],
+        stat.total_commands,
+      );
+      // The hub replays its buffer to every late joiner, so this fires with
+      // historical frames on each reconnect. Folding monotonically keeps a
+      // replayed 146 from rewinding a live 313 and flickering the header.
+      setTerminalCommandCount((current) =>
+        foldCommandCount(current, stat.total_commands),
+      );
+    },
+  });
 
   const {
     artifacts,
@@ -197,6 +307,33 @@ const ChatBox: React.FC<{
   const isMobile = useIsMobile();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>("chat");
 
+  // Deterministic command total pushed over computer-ws (drilled into the
+  // Agent's Computer panel's Terminal header).
+  const [terminalCommandCount, setTerminalCommandCount] = useState<
+    number | undefined
+  >(undefined);
+
+  // Reset on thread change. This state lives in ChatBox, which is NOT remounted
+  // when the thread changes -- only AgentComputerPanel is (key={threadId}). So
+  // a fresh panel was handed the previous thread's total, and rendered it
+  // *without* the "~" prefix, i.e. as an exact count, until thread B happened to
+  // run its first command. `undefined` is the honest value: the Terminal header
+  // falls back to "~N" from its local window, which reads as approximate.
+  useEffect(() => {
+    setTerminalCommandCount(undefined);
+  }, [threadId]);
+
+  // Seed from the durable counter on disk. The socket stays authoritative for
+  // live updates -- this only fills the window where no `terminal_stats` frame
+  // has arrived yet, which is the common case after a reload or once a burst of
+  // commands has rolled the frame out of the hub's shared replay buffer.
+  const seededCommandCount = useSandboxTerminalStats(threadId);
+  useEffect(() => {
+    setTerminalCommandCount((current) =>
+      foldCommandCount(current, seededCommandCount),
+    );
+  }, [seededCommandCount]);
+
   // Opening either surface pulls it to the front, mirroring how they take over
   // screen space on desktop.
   useEffect(() => {
@@ -284,6 +421,7 @@ const ChatBox: React.FC<{
             isLoading={thread.isLoading}
             messages={thread.messages}
             activeWriteFilePath={activeWriteFilePath}
+            terminalCommandCount={terminalCommandCount}
             artifacts={thread.values.artifacts ?? []}
             onClose={() => setAgentComputerOpen(false)}
             onAgentMessage={onAgentMessage}
@@ -347,6 +485,10 @@ const ChatBox: React.FC<{
               {artifactsBody}
             </div>
           )}
+          {/* Stays mounted while the thread lives (only `hidden`) so the
+              computer's shell/tab state survives switching to chat and back;
+              it is torn down only when the panel is closed, same trade-off
+              as desktop but full-width surfaces make closed == gone. */}
           {agentComputerOpen && (
             <div
               className={cn(
@@ -401,28 +543,41 @@ const ChatBox: React.FC<{
         </ResizablePanelGroup>
       </div>
 
-      {/* ── Right: Agent's Computer panel (resizable IDE surface) ── */}
-      <AnimatePresence>
-        {agentComputerOpen && (
-          <div className="flex h-full shrink-0">
-            {/* Drag (or scroll-wheel) this handle to resize the panel. */}
-            <div
-              onMouseDown={startComputerResize}
-              onWheel={wheelComputerResize}
-              title={t.a11y.dragResize}
-              aria-label={t.a11y.dragResize}
-              role="separator"
-              className="bg-border/40 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-[--primary]/60"
-            />
-            <div
-              style={{ width: computerWidth }}
-              className="flex h-full shrink-0 flex-col overflow-hidden"
-            >
-              {computerBody}
-            </div>
-          </div>
+      {/* ── Right: Agent's Computer panel (resizable IDE surface) ──
+          Stays MOUNTED across open/close: closing collapses the column to
+          zero width (animated, so chat reflows continuously instead of
+          snapping when the exit animation finished), but the panel's state —
+          the interactive ttyd shell, browser nav history, scrollback, last
+          tab — survives the toggle. Full teardown happens on thread switch
+          via the panel's key. `invisible` keeps focus out of the collapsed
+          surface. */}
+      <div
+        aria-hidden={!agentComputerOpen}
+        className={cn(
+          "flex h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out",
+          !agentComputerOpen && "invisible",
         )}
-      </AnimatePresence>
+        style={{ width: agentComputerOpen ? computerWidth : 0 }}
+      >
+        {/* Drag (or scroll-wheel) this handle to resize the panel. */}
+        <div
+          onMouseDown={startComputerResize}
+          onWheel={wheelComputerResize}
+          title={t.a11y.dragResize}
+          aria-label={t.a11y.dragResize}
+          role="separator"
+          className={cn(
+            "bg-border/40 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-[--primary]/60",
+            !agentComputerOpen && "pointer-events-none",
+          )}
+        />
+        <div
+          style={{ width: computerWidth }}
+          className="flex h-full shrink-0 flex-col overflow-hidden"
+        >
+          {computerBody}
+        </div>
+      </div>
     </div>
   );
 };

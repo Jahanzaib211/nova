@@ -184,6 +184,30 @@ def _merge_skill_allowlists(parent: list[str] | None, child: list[str] | None) -
     return [skill for skill in child if skill in parent_set]
 
 
+def _in_progress_todo_indexes(runtime: Any) -> list[int]:
+    """Indexes of the todos currently marked in_progress.
+
+    The todo workflow's contract is one task in flight at a time, so these
+    are the rows this delegation is working on. Binding them to the
+    tool_call_id lets the frontend strike exactly the right checklist rows
+    when the subagent settles — the old positional heuristic struck the
+    first N rows and got out-of-order completions wrong. Best-effort: any
+    malformed state yields an empty binding, never an error.
+    """
+    try:
+        todos = (runtime.state or {}).get("todos") or []
+        indexes: list[int] = []
+        for index, todo in enumerate(todos):
+            try:
+                if isinstance(todo, dict) and todo.get("status") == "in_progress":
+                    indexes.append(index)
+            except Exception:  # noqa: BLE001 - one bad row must not sink the rest
+                continue
+        return indexes
+    except Exception:  # noqa: BLE001 - binding is a nicety, never load-bearing
+        return []
+
+
 @tool("task", parse_docstring=True)
 async def task_tool(
     runtime: Runtime,
@@ -331,8 +355,12 @@ async def task_tool(
     logger.info(f"[trace={trace_id}] Started background task {task_id} (subagent={subagent_type}, timeout={config.timeout_seconds}s, polling_limit={max_poll_count} polls)")
 
     writer = get_stream_writer()
+    # Which todo rows this delegation is working on (WS-G correlation). Bound
+    # at dispatch from the in_progress rows; carried on every lifecycle event
+    # so a client joining mid-run still learns the binding.
+    todo_indexes = _in_progress_todo_indexes(runtime)
     # Send Task Started message'
-    writer({"type": "task_started", "task_id": task_id, "description": description})
+    writer({"type": "task_started", "task_id": task_id, "description": description, "todo_indexes": todo_indexes})
 
     try:
         while True:
@@ -373,28 +401,28 @@ async def task_tool(
             if result.status == SubagentStatus.COMPLETED:
                 _cache_subagent_usage(tool_call_id, usage, enabled=cache_token_usage)
                 _report_subagent_usage(runtime, result)
-                writer({"type": "task_completed", "task_id": task_id, "result": result.result, "usage": usage})
+                writer({"type": "task_completed", "task_id": task_id, "result": result.result, "usage": usage, "todo_indexes": todo_indexes})
                 logger.info(f"[trace={trace_id}] Task {task_id} completed after {poll_count} polls")
                 cleanup_background_task(task_id)
                 return f"Task Succeeded. Result: {result.result}"
             elif result.status == SubagentStatus.FAILED:
                 _cache_subagent_usage(tool_call_id, usage, enabled=cache_token_usage)
                 _report_subagent_usage(runtime, result)
-                writer({"type": "task_failed", "task_id": task_id, "error": result.error, "usage": usage})
+                writer({"type": "task_failed", "task_id": task_id, "error": result.error, "usage": usage, "todo_indexes": todo_indexes})
                 logger.error(f"[trace={trace_id}] Task {task_id} failed: {result.error}")
                 cleanup_background_task(task_id)
                 return f"Task failed. Error: {result.error}"
             elif result.status == SubagentStatus.CANCELLED:
                 _cache_subagent_usage(tool_call_id, usage, enabled=cache_token_usage)
                 _report_subagent_usage(runtime, result)
-                writer({"type": "task_cancelled", "task_id": task_id, "error": result.error, "usage": usage})
+                writer({"type": "task_cancelled", "task_id": task_id, "error": result.error, "usage": usage, "todo_indexes": todo_indexes})
                 logger.info(f"[trace={trace_id}] Task {task_id} cancelled: {result.error}")
                 cleanup_background_task(task_id)
                 return "Task cancelled by user."
             elif result.status == SubagentStatus.TIMED_OUT:
                 _cache_subagent_usage(tool_call_id, usage, enabled=cache_token_usage)
                 _report_subagent_usage(runtime, result)
-                writer({"type": "task_timed_out", "task_id": task_id, "error": result.error, "usage": usage})
+                writer({"type": "task_timed_out", "task_id": task_id, "error": result.error, "usage": usage, "todo_indexes": todo_indexes})
                 logger.warning(f"[trace={trace_id}] Task {task_id} timed out: {result.error}")
                 cleanup_background_task(task_id)
                 return f"Task timed out. Error: {result.error}"

@@ -26,10 +26,7 @@ ALIASED = [
 def test_alias_resolves_to_the_same_module(suffix: str) -> None:
     via_nova = importlib.import_module(f"nova.{suffix}")
     via_deerflow = importlib.import_module(f"deerflow.{suffix}")
-    assert via_nova is via_deerflow, (
-        f"nova.{suffix} and deerflow.{suffix} are different module objects; "
-        "module-level singletons would be duplicated"
-    )
+    assert via_nova is via_deerflow, f"nova.{suffix} and deerflow.{suffix} are different module objects; module-level singletons would be duplicated"
 
 
 def test_alias_does_not_shadow_a_missing_module() -> None:

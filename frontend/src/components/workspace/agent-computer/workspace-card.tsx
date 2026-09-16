@@ -92,19 +92,21 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
       <div className="text-muted-foreground/70 mt-1.5 flex items-center gap-3 text-[10px]">
         <span className="flex items-center gap-1">
           <BoxIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.project_count} {t.agentComputer.workspace.projects}
+          {snapshot.project_count ?? 0} {t.agentComputer.workspace.projects}
         </span>
         <span className="flex items-center gap-1">
           <BracesIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.symbol_count.toLocaleString()}{" "}
+          {/* The payload crosses the network as an unchecked cast; a partial
+              body must degrade to 0, not crash the whole Files tab. */}
+          {(snapshot.symbol_count ?? 0).toLocaleString()}{" "}
           {t.agentComputer.workspace.symbols}
         </span>
         <span className="flex items-center gap-1">
           <SquareTerminalIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.command_count} {t.agentComputer.workspace.commands}
+          {snapshot.command_count ?? 0} {t.agentComputer.workspace.commands}
         </span>
       </div>
-      {snapshot.projects.length > 1 ? (
+      {(snapshot.projects?.length ?? 0) > 1 ? (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {snapshot.projects.slice(0, 6).map((project) => (
             <span
@@ -115,7 +117,7 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
               {project.name}
             </span>
           ))}
-          {snapshot.projects.length > 6 ? (
+          {(snapshot.projects?.length ?? 0) > 6 ? (
             <span className="text-muted-foreground/50 text-[10px]">
               +{snapshot.projects.length - 6}
             </span>

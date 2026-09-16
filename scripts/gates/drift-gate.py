@@ -44,6 +44,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GREEN, YELLOW, RED = "green", "yellow", "red"
 NOVA_SERVICES = ("deer-flow-gateway", "deer-flow-frontend", "deer-flow-nginx")
 
+# Restarts below this are noise regardless of rate -- a couple over an app's
+# lifetime says nothing.
+PM2_RESTART_MIN = 5
+
+# How long an app must have been up before its cumulative restart count stops
+# counting as churn. See check_pm2_apps for why this is a plain uptime floor
+# and not a rate.
+PM2_STABLE_HOURS = 6.0
+
 
 def _status_path() -> Path:
     override = os.environ.get("NOVA_DRIFT_GATE_STATUS_PATH", "").strip()
@@ -154,6 +163,67 @@ def check_frontend_build_freshness() -> dict:
     if not src.is_dir():
         return check("frontend_build", YELLOW, "frontend/src not found")
 
+    # A dev server compiles from the bind mount on every request, so the image's
+    # baked copy is not what is being served and hashing it answers the wrong
+    # question. Without this the check reports RED forever the moment the stack
+    # runs `next dev` -- and a stale `.next/BUILD_ID` sits in the container to
+    # make the message look convincing. Per the note above: two false positives
+    # in a row is how a gate gets ignored.
+    #
+    # Dev mode is only trustworthy if the mount is actually there, so both are
+    # required before this short-circuits.
+    rc_c, cmd, _ = _run(
+        ["docker", "inspect", "deer-flow-frontend", "--format", "{{json .Config.Cmd}}"],
+        timeout=30,
+    )
+    is_dev_server = rc_c == 0 and ("next dev" in cmd or "run dev" in cmd)
+
+    rc_m, mounts, _ = _run(
+        [
+            "docker",
+            "inspect",
+            "deer-flow-frontend",
+            "--format",
+            "{{range .Mounts}}{{.Source}}=>{{.Destination}} {{end}}",
+        ],
+        timeout=30,
+    )
+    src_is_mounted = rc_m == 0 and f"{src}=>/app/frontend/src" in mounts
+
+    if is_dev_server:
+        if src_is_mounted:
+            return check(
+                "frontend_build",
+                GREEN,
+                "dev server compiling frontend/src live from the bind mount",
+            )
+        return check(
+            "frontend_build",
+            RED,
+            "running a dev server but frontend/src is NOT bind-mounted — it is "
+            "compiling the image's baked copy, so your edits are invisible",
+        )
+
+    # `next start` reads .next/BUILD_ID once at boot and refuses to start
+    # without it ("Could not find a production build"). An interrupted build
+    # leaves the rest of .next rewritten but never writes that file, which is a
+    # uniquely nasty state: the already-running server keeps serving from memory
+    # while the *next* restart — or reboot — fails outright, and the lazily
+    # loaded route chunks it points at have already been deleted from disk, so
+    # the workspace dies with a ChunkLoadError while `/` still returns 200 and
+    # every HTTP probe stays green. That is not a heuristic; the file is either
+    # there or the container cannot come back. Checked before the image-hash
+    # comparison below because it holds regardless of how source is delivered.
+    build_id_path = REPO_ROOT / "frontend" / ".next" / "BUILD_ID"
+    if not build_id_path.is_file():
+        return check(
+            "frontend_build",
+            RED,
+            "frontend/.next/BUILD_ID is missing — the last `next build` did not "
+            "finish, so deer-flow-frontend cannot be restarted and lazily "
+            "loaded route chunks 500",
+        )
+
     rc_h, host_hash, _ = _run(
         ["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120
     )
@@ -176,10 +246,32 @@ def check_frontend_build_freshness() -> dict:
         timeout=180,
     )
     if rc_i != 0 or not image_hash:
+        # The prod-frontend overlay bind-mounts frontend/ and runs `next start`
+        # against a build made on the host, so the image bakes no /app/frontend/src
+        # to hash. Reporting only "could not hash" made this check fail *open* on
+        # exactly the deployment it exists to protect. Fall back to comparing the
+        # build against the source it was built from.
+        newest_src = 0.0
+        for f in src.rglob("*"):
+            if f.is_file():
+                try:
+                    newest_src = max(newest_src, f.stat().st_mtime)
+                except OSError:
+                    continue
+        built_at = build_id_path.stat().st_mtime
+        if newest_src > built_at:
+            drift_s = int(newest_src - built_at)
+            return check(
+                "frontend_build",
+                YELLOW,
+                f"frontend/src is {drift_s}s newer than build {build_id_path.read_text().strip()} "
+                f"— those edits are not being served; run `pnpm build`",
+            )
         return check(
             "frontend_build",
-            YELLOW,
-            f"could not hash the image's source: {err[:100] or 'unknown'}",
+            GREEN,
+            f"build {build_id_path.read_text().strip()} is newer than frontend/src "
+            f"(image bakes no source: {err[:60] or 'no /app/frontend/src'})",
         )
 
     rc_b, build_id, _ = _run(
@@ -264,6 +356,86 @@ def check_compose_chain() -> dict:
     )
 
 
+def _launcher_scaled_to_zero() -> set[str]:
+    """Services scripts/pm2-deerflow.sh intentionally starts with --scale N=0.
+
+    Parsed from the launcher instead of hardcoded: this set is the difference
+    between "a service is down" and "a service was never meant to be up", and a
+    copy here would silently rot the moment the launcher changed.
+    """
+    try:
+        text = (REPO_ROOT / "scripts" / "pm2-deerflow.sh").read_text()
+    except OSError:
+        return set()
+    return set(re.findall(r"--scale\s+([A-Za-z0-9_-]+)=0\b", text))
+
+
+def check_services_running() -> dict:
+    """Every service the compose chain declares, actually up?
+
+    ``check_compose_chain`` compares the *files* a container was built from, and
+    ``P7_containers`` counts the containers that exist. Neither notices a
+    service that is declared and was simply never started -- and that is a real
+    failure mode here, because bringing one service up by hand
+    (``docker compose up -d gateway``) starts exactly that service and silently
+    leaves the rest of the chain alone.
+
+    Services the launcher deliberately scales to zero are not failures. As of
+    2026-08-30 ``scripts/pm2-deerflow.sh`` runs with
+    ``--scale provisioner=0 --scale searxng=0``, so both are *expected* absent
+    and this check must not flag them -- a gate that is permanently red on an
+    intentional configuration is one people learn to ignore. The scale-0 set is
+    read from that script rather than duplicated here, so the two cannot drift
+    apart.
+    """
+    files = [
+        "docker/docker-compose-dev.yaml",
+        "docker/docker-compose.dood.yaml",
+        "docker/docker-compose.prod-frontend.yaml",
+    ]
+    args: list[str] = []
+    for f in files:
+        path = REPO_ROOT / f
+        if not path.exists():
+            return check("services_running", YELLOW, f"missing compose file {f}")
+        args += ["-f", str(path)]
+
+    rc, declared_out, err = _run(["docker", "compose", *args, "config", "--services"])
+    if rc != 0:
+        return check("services_running", YELLOW, f"cannot read chain: {err[:120]}")
+    declared = {line.strip() for line in declared_out.splitlines() if line.strip()}
+
+    rc, running_out, err = _run(
+        ["docker", "compose", "-p", "deer-flow-dev", "ps", "--services"]
+    )
+    if rc != 0:
+        return check("services_running", YELLOW, f"cannot list running: {err[:120]}")
+    running = {line.strip() for line in running_out.splitlines() if line.strip()}
+
+    expected_down = _launcher_scaled_to_zero()
+    missing = sorted(declared - running - expected_down)
+    if not missing:
+        note = f"all {len(declared - expected_down)} expected services are up"
+        if expected_down:
+            note += f" ({', '.join(sorted(expected_down))} scaled to 0 by the launcher)"
+        return check(
+            "services_running",
+            GREEN,
+            note,
+            declared=sorted(declared),
+            expected_down=sorted(expected_down),
+        )
+    return check(
+        "services_running",
+        RED,
+        f"declared but not running: {', '.join(missing)} "
+        f"({len(running)}/{len(declared)} up) -- bring the stack up with "
+        f"scripts/pm2-deerflow.sh (pm2 restart nova), not a per-service up",
+        missing=missing,
+        declared=sorted(declared),
+    )
+
+
 def check_pm2_apps() -> dict:
     """PM2's running set vs what ecosystem.config.js declares."""
     eco = REPO_ROOT / "ecosystem.config.js"
@@ -284,11 +456,45 @@ def check_pm2_apps() -> dict:
     except (json.JSONDecodeError, KeyError, TypeError):
         return check("pm2_apps", YELLOW, "could not parse pm2 output")
 
+    # Restart churn, which `check_restart_storm` structurally cannot see: that
+    # check reads Docker's RestartCount for the containers, so a PM2 app that
+    # is flapping is invisible to it.
+    #
+    # This deliberately does NOT compute a rate. The obvious form --
+    # `restart_time / hours_of_uptime` -- divides two numbers with different
+    # epochs: `restart_time` is cumulative and SURVIVES `pm2 resurrect`, while
+    # `pm_uptime` (and `created_at`, which resurrect also rewrites) is reset by
+    # it. On 2026-09-01 `nova` read 51 restarts against 20.5h of unbroken
+    # uptime, giving a fictitious 2.5/h and a standing yellow for a process
+    # that had not restarted once in most of a day. There is no epoch on the
+    # PM2 side to make that division honest.
+    #
+    # An app that is flapping has, by definition, restarted RECENTLY -- so ask
+    # that directly. Short uptime with restarts behind it is the real signal;
+    # a long-stable app is not churning no matter how eventful its history.
+    churn = []
+    try:
+        now_ms = time.time() * 1000
+        for a in json.loads(out):
+            if a.get("name") not in declared:
+                continue
+            env = a.get("pm2_env") or {}
+            restarts = int(env.get("restart_time") or 0)
+            up_h = max(
+                (now_ms - float(env.get("pm_uptime") or now_ms)) / 3_600_000, 0.0
+            )
+            if restarts >= PM2_RESTART_MIN and up_h < PM2_STABLE_HOURS:
+                churn.append(f"{a['name']}={restarts} restarts, last {up_h:.1f}h ago")
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        pass
+
     absent = sorted(declared - set(running))
     stopped = sorted(n for n, st in running.items() if st != "online")
-    if not absent and not stopped:
+    if not absent and not stopped and not churn:
         return check("pm2_apps", GREEN, f"all {len(declared)} declared apps online")
     bits = []
+    if churn:
+        bits.append(f"restart churn: {', '.join(churn)}")
     if absent:
         bits.append(f"not registered: {absent}")
     if stopped:
@@ -379,11 +585,103 @@ def check_restart_storm() -> dict:
     )
 
 
+def check_gateway_freshness() -> dict:
+    """Is the gateway process actually running the backend source on disk?
+
+    The gateway bind-mounts backend/ and runs uvicorn with --reload, which makes
+    it feel like edits are always live — so nobody thinks to check. But the
+    reloader can wedge: dev-entrypoint.sh bounds graceful shutdown precisely
+    because a reload otherwise waits forever on long-lived SSE connections and
+    the old worker never exits. When that happens there is no error anywhere;
+    the process simply keeps serving code from whenever it last started.
+
+    Found in the wild at a 33-hour drift, while the frontend was independently
+    stale — between them the whole subagent panel was dark and every HTTP probe
+    was green. Compare the worker's start time against the newest backend source
+    file; mtime is the right instrument here because the question is literally
+    "did this process start before that edit".
+    """
+    rc, started_at, _ = _run(
+        ["docker", "inspect", "deer-flow-gateway", "--format", "{{.State.StartedAt}}"],
+        timeout=30,
+    )
+    if rc != 0 or not started_at.strip():
+        return check("gateway_freshness", YELLOW, "gateway container not running")
+
+    from datetime import datetime
+
+    raw = started_at.strip()
+    try:
+        # Docker emits more sub-second digits than fromisoformat accepts.
+        cleaned = re.sub(r"(\.\d{6})\d+", r"\1", raw.replace("Z", "+00:00"))
+        boot = datetime.fromisoformat(cleaned).timestamp()
+    except ValueError:
+        return check("gateway_freshness", YELLOW, f"unparsable start time: {raw[:40]}")
+
+    app_dir = REPO_ROOT / "backend" / "app"
+    if not app_dir.is_dir():
+        return check("gateway_freshness", YELLOW, "backend/app not found")
+
+    newest = 0.0
+    newest_file = ""
+    for f in app_dir.rglob("*.py"):
+        try:
+            m = f.stat().st_mtime
+        except OSError:
+            continue
+        if m > newest:
+            newest, newest_file = m, str(f.relative_to(REPO_ROOT))
+
+    # A reload leaves the container's StartedAt alone, so a container older than
+    # the edit is only suspicious, not proof. Confirm against the serving
+    # process — but note *which* process that is: uvicorn's --reload supervisor
+    # never restarts itself, it re-spawns the app as a multiprocessing child.
+    # Matching on "uvicorn app.gateway.app" therefore finds only the supervisor,
+    # which is as old as the container and would report a healthy reload as
+    # stale. The spawn child is the one whose age answers the question.
+    import time
+
+    now = time.time()
+    # `docker top` rejects a format without a pid column.
+    rc_p, top_out, _ = _run(
+        ["docker", "top", "deer-flow-gateway", "-eo", "pid,etimes,args"], timeout=30
+    )
+    worker_start = 0.0
+    if rc_p == 0:
+        for line in top_out.splitlines()[1:]:
+            parts = line.split(None, 2)
+            if len(parts) != 3 or not parts[1].isdigit():
+                continue
+            etimes, args = int(parts[1]), parts[2]
+            if "multiprocessing.spawn" in args or "uvicorn app.gateway.app" in args:
+                worker_start = max(worker_start, now - etimes)
+
+    effective = max(boot, worker_start)
+    if newest > effective:
+        drift_s = int(newest - effective)
+        return check(
+            "gateway_freshness",
+            RED,
+            f"{newest_file} is {drift_s}s newer than the running uvicorn worker "
+            f"— the --reload watcher did not pick it up (wedged reloader); "
+            f"restart deer-flow-gateway",
+            newest_file=newest_file,
+            drift_seconds=drift_s,
+        )
+    return check(
+        "gateway_freshness",
+        GREEN,
+        "uvicorn worker is newer than every file in backend/app",
+    )
+
+
 CHECKS = (
     check_git_clean,
     check_config_version,
     check_frontend_build_freshness,
+    check_gateway_freshness,
     check_compose_chain,
+    check_services_running,
     check_pm2_apps,
     check_restart_storm,
 )

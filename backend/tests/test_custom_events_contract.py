@@ -1,7 +1,7 @@
-"""Wire-contract test for the four SSE ``custom`` event payloads.
+"""Wire-contract test for the SSE ``custom`` event payloads.
 
 Pinned by the 2026-08-14 audit: the subagent_status family already has its own
-contract fixture; the other three custom events did not. This test loads
+contract fixture; the other custom events did not. This test loads
 ``contracts/custom_events_contract.json`` and asserts the canonical
 sample payloads (the ones each producer in the codebase is expected to emit)
 conform. If a future refactor drops a field or changes a type, this test
@@ -59,6 +59,11 @@ def _check(contract: dict, event_name: str, payload: dict) -> list[str]:
     return errors
 
 
+# ---------------------------------------------------------------------------
+# Existing events
+# ---------------------------------------------------------------------------
+
+
 def test_task_progress_payload_conforms(contract):
     payload = {
         "type": "task_progress",
@@ -103,6 +108,187 @@ def test_task_running_payload_conforms(contract):
     assert _check(contract, "task_running", payload) == []
 
 
+# ---------------------------------------------------------------------------
+# safety_termination — emitted by safety_finish_reason_middleware.py
+# ---------------------------------------------------------------------------
+
+
+def test_safety_termination_payload_conforms(contract):
+    payload = {
+        "type": "safety_termination",
+        "detector": "OpenAICompatibleContentFilterDetector",
+        "reason_field": "finish_reason",
+        "reason_value": "content_filter",
+        "suppressed_tool_call_count": 2,
+        "suppressed_tool_call_names": ["bash", "write_file"],
+        "thread_id": "thread-1",
+    }
+    assert _check(contract, "safety_termination", payload) == []
+
+
+def test_safety_termination_without_optional_thread_id(contract):
+    payload = {
+        "type": "safety_termination",
+        "detector": "OpenAICompatibleContentFilterDetector",
+        "reason_field": "finish_reason",
+        "reason_value": "content_filter",
+        "suppressed_tool_call_count": 0,
+        "suppressed_tool_call_names": [],
+    }
+    assert _check(contract, "safety_termination", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# llm_retry — emitted by llm_error_handling_middleware.py
+# ---------------------------------------------------------------------------
+
+
+def test_llm_retry_payload_conforms(contract):
+    payload = {
+        "type": "llm_retry",
+        "attempt": 1,
+        "max_attempts": 3,
+        "wait_ms": 1000,
+        "reason": "rate_limit",
+        "message": "Rate limited, retrying in 1s (attempt 1/3)",
+    }
+    assert _check(contract, "llm_retry", payload) == []
+
+
+def test_llm_retry_final_attempt(contract):
+    payload = {
+        "type": "llm_retry",
+        "attempt": 3,
+        "max_attempts": 3,
+        "wait_ms": 0,
+        "reason": "server_error",
+        "message": "Server error, retrying (attempt 3/3)",
+    }
+    assert _check(contract, "llm_retry", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# task_started — emitted by tools/builtins/task_tool.py
+# ---------------------------------------------------------------------------
+
+
+def test_task_started_payload_conforms(contract):
+    payload = {
+        "type": "task_started",
+        "task_id": "task-abc",
+        "description": "Build a hello world app",
+        "todo_indexes": [0],
+    }
+    assert _check(contract, "task_started", payload) == []
+
+
+def test_task_started_empty_todo_indexes(contract):
+    payload = {
+        "type": "task_started",
+        "task_id": "task-xyz",
+        "description": "Run tests",
+        "todo_indexes": [],
+    }
+    assert _check(contract, "task_started", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# task_completed — emitted by tools/builtins/task_tool.py
+# ---------------------------------------------------------------------------
+
+
+def test_task_completed_payload_conforms(contract):
+    payload = {
+        "type": "task_completed",
+        "task_id": "task-abc",
+        "result": "Build succeeded",
+        "usage": {"input_tokens": 500, "output_tokens": 200},
+        "todo_indexes": [0],
+    }
+    assert _check(contract, "task_completed", payload) == []
+
+
+def test_task_completed_empty_usage(contract):
+    payload = {
+        "type": "task_completed",
+        "task_id": "task-abc",
+        "result": "Done",
+        "usage": {},
+        "todo_indexes": [],
+    }
+    assert _check(contract, "task_completed", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# task_failed — emitted by tools/builtins/task_tool.py
+# ---------------------------------------------------------------------------
+
+
+def test_task_failed_payload_conforms(contract):
+    payload = {
+        "type": "task_failed",
+        "task_id": "task-abc",
+        "error": "Task disappeared from background tasks",
+        "usage": {"input_tokens": 100, "output_tokens": 50},
+        "todo_indexes": [1],
+    }
+    assert _check(contract, "task_failed", payload) == []
+
+
+def test_task_failed_without_optional_fields(contract):
+    payload = {
+        "type": "task_failed",
+        "task_id": "task-abc",
+        "error": "Task disappeared from background tasks",
+    }
+    assert _check(contract, "task_failed", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# task_timed_out — emitted by tools/builtins/task_tool.py
+# ---------------------------------------------------------------------------
+
+
+def test_task_timed_out_payload_conforms(contract):
+    payload = {
+        "type": "task_timed_out",
+        "task_id": "task-abc",
+        "usage": {"input_tokens": 300, "output_tokens": 100},
+        "todo_indexes": [0],
+    }
+    assert _check(contract, "task_timed_out", payload) == []
+
+
+def test_task_timed_out_with_error(contract):
+    payload = {
+        "type": "task_timed_out",
+        "task_id": "task-abc",
+        "error": "Execution timed out after 1800s",
+        "usage": {},
+        "todo_indexes": [],
+    }
+    assert _check(contract, "task_timed_out", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# task_activity — emitted by observe_adjust_middleware.py
+# ---------------------------------------------------------------------------
+
+
+def test_task_activity_payload_conforms(contract):
+    payload = {
+        "type": "task_activity",
+        "tool_call_id": "call-123",
+        "status": "done",
+    }
+    assert _check(contract, "task_activity", payload) == []
+
+
+# ---------------------------------------------------------------------------
+# Generic contract rejection tests
+# ---------------------------------------------------------------------------
+
+
 def test_contract_rejects_wrong_type(contract):
     payload = {"type": "not_task_progress", "step": 1, "total": 2, "status": "in_progress"}
     errors = _check(contract, "task_progress", payload)
@@ -113,3 +299,36 @@ def test_contract_rejects_missing_required(contract):
     payload = {"type": "task_progress", "step": 1, "total": 2}
     errors = _check(contract, "task_progress", payload)
     assert any("status" in e for e in errors)
+
+
+def test_contract_rejects_extra_field(contract):
+    payload = {
+        "type": "safety_termination",
+        "detector": "test",
+        "reason_field": "test",
+        "reason_value": "test",
+        "suppressed_tool_call_count": 0,
+        "suppressed_tool_call_names": [],
+        "bogus_field": "should fail",
+    }
+    errors = _check(contract, "safety_termination", payload)
+    assert any("bogus_field" in e for e in errors)
+
+
+def test_contract_rejects_wrong_type_on_llm_retry(contract):
+    payload = {
+        "type": "not_llm_retry",
+        "attempt": 1,
+        "max_attempts": 3,
+        "wait_ms": 0,
+        "reason": "x",
+        "message": "x",
+    }
+    errors = _check(contract, "llm_retry", payload)
+    assert any("const" in e for e in errors)
+
+
+def test_contract_rejects_missing_required_on_task_started(contract):
+    payload = {"type": "task_started", "task_id": "x"}
+    errors = _check(contract, "task_started", payload)
+    assert any("description" in e for e in errors)

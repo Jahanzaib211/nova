@@ -17,6 +17,7 @@
 import type { AIMessage, Message, ToolMessage } from "@langchain/langgraph-sdk";
 
 import type { AgentActivityEvent } from "./hooks";
+import { isTerminalTool } from "./tool-surface";
 
 export type { AgentActivityEvent };
 
@@ -34,8 +35,15 @@ export function buildActivitySummary(
     return filename ? `Reading ${filename}` : "Reading file";
   if (name === "bash" || name === "execute_command")
     return cmd ? `$ ${cmd.slice(0, 60)}` : "Running command";
+  // The shell_* family is the modern execution path; its args carry the
+  // command under the same `command`/`cmd` keys as bash. Classify — don't
+  // enumerate: the next family member summarizes itself.
+  if (isTerminalTool(name) && name.startsWith("shell_"))
+    return cmd ? `$ ${cmd.slice(0, 60)}` : "Shell session";
+  if (name === "ls") return "Listing directory";
   if (name === "search_files") return "Searching files";
-  if (name === "grep_files") return "Searching content";
+  if (name === "grep" || name === "grep_files") return "Searching content";
+  if (name === "glob") return "Finding files by pattern";
   if (name === "scaffold_project") return "Scaffolding project";
   if (name === "task") return "Delegating to subagent";
   return name;

@@ -688,3 +688,45 @@ def test_remove_stale_container_refuses_to_touch_a_running_one(monkeypatch):
 
     assert backend._remove_stale_container("sandbox-live") is False
     assert not any(c[:2] == ["rm", "-f"] for c in calls), "a running container must never be removed"
+
+
+# ── Sandbox isolation hardening (SEC-011) ──────────────────────────────────
+
+
+def test_non_privileged_sandbox_drops_caps_and_forbids_privilege_escalation(monkeypatch):
+    """Default (non-privileged) sandboxes must run hardened: default seccomp,
+    cap-drop ALL + minimal cap-add, and no-new-privileges — never the blanket
+    seccomp=unconfined that used to apply to every container."""
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        privileged=False,
+    )
+    cmd = _capture_start_container_command(monkeypatch, backend)
+    joined = " ".join(cmd)
+    assert "--privileged" not in cmd
+    assert "seccomp=unconfined" not in joined
+    assert "no-new-privileges" in joined
+    assert "--cap-drop" in cmd and cmd[cmd.index("--cap-drop") + 1] == "ALL"
+    assert "SETUID" in cmd  # a minimal cap is re-added
+
+
+def test_privileged_sandbox_path_is_behaviour_preserving(monkeypatch):
+    """The opt-in privileged (dind) path keeps --privileged + seccomp=unconfined,
+    which the nested Docker daemon requires — no regression for that path."""
+    backend = LocalContainerBackend(
+        image="sandbox:latest",
+        base_port=8080,
+        container_prefix="sandbox",
+        config_mounts=[],
+        environment={},
+        privileged=True,
+    )
+    cmd = _capture_start_container_command(monkeypatch, backend)
+    joined = " ".join(cmd)
+    assert "--privileged" in cmd
+    assert "seccomp=unconfined" in joined
+    assert "no-new-privileges" not in joined  # meaningless under privileged

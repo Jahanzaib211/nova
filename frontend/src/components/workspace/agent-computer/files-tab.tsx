@@ -368,8 +368,12 @@ export function FilesPanel({
     [files, uniqueArtifacts],
   );
   const tree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
-  const runningCount = runningEvents.filter((e) =>
-    isTerminalTool(e.type),
+  // Only *in-flight* work counts as running. `mergedEvents` is the full
+  // sandbox.log history plus live spinners; filtering by name alone counted
+  // every completed command forever, so the header spun and read "N running"
+  // on an idle thread.
+  const runningCount = runningEvents.filter(
+    (e) => e.status === "running" && isTerminalTool(e.type),
   ).length;
   // Workspace intelligence: renders nothing while the backend flag is off.
   // `active` gates the query the same way every other tab does (see
@@ -398,9 +402,9 @@ export function FilesPanel({
           className="text-muted-foreground/60 px-1 text-[10px]"
           title={t.agentComputer.files.uploadLimitsHint}
         >
-          Upload limits · {limitsSummary}
+          {t.agentComputer.files.uploadLimits} · {limitsSummary}
         </p>
-      )}
+      )}{" "}
       {!hasSandboxContent && (
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
           <FolderIcon className="text-muted-foreground/30 h-6 w-6" />
@@ -414,7 +418,7 @@ export function FilesPanel({
         <div>
           <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
             <PlayIcon className="h-3 w-3 text-sky-400" />
-            Commands
+            {t.agentComputer.files.commandsHeader}
             <span className="bg-muted rounded px-1 text-[10px]">
               {commands.length}
             </span>

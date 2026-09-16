@@ -264,6 +264,10 @@ export const enUS: Translations = {
     logout: "Log out",
     gatewayUnavailable: "Gateway is temporarily unavailable.",
     gatewayUnavailableRetrying: "Retrying in the background…",
+    sessionExpiredTitle: "Your session expired",
+    sessionExpiredDescription:
+      "The Agent's Computer stopped receiving live updates. Reload the page to sign back in.",
+    sessionExpiredAction: "Reload",
   },
 
   // Conversation
@@ -763,7 +767,7 @@ export const enUS: Translations = {
     thinking: "is thinking",
     usingTerminal: "is using Terminal",
     usingBrowser: "is using Browser",
-    usingEditor: "is using Editor",
+    usingViewer: "is using Viewer",
     taskProgress: "Task progress",
     noLogs: "No output yet",
     close: "Close",
@@ -781,18 +785,31 @@ export const enUS: Translations = {
       consoleErrors: (count: number) =>
         `${count} console error${count === 1 ? "" : "s"}`,
     },
+    llmError: {
+      prefix: "Last turn failed",
+      generic: "provider error",
+      quota: "out of quota",
+      auth: "authentication error",
+      busy: "provider busy",
+    },
     tabs: {
       files: "Files",
       terminal: "Terminal",
-      editor: "Editor",
+      viewer: "Viewer",
       browser: "Browser",
       activity: "Activity",
+      telemetry: "Telemetry",
       review: "Review",
-      privacy: "Privacy",
+      // Matches the panel header ("Recon — private web access"); the button
+      // said "Privacy" and the panel said "Recon", which read as two features.
+      privacy: "Recon",
+      audit: "Audit",
     },
     files: {
       empty: "Files the agent creates will appear here",
       uploadLimitsHint: "Server-configured upload limits for this thread.",
+      uploadLimits: "Upload limits",
+      commandsHeader: "Commands",
       repository: "Repository",
       running: (count: number) => `${count} running`,
     },
@@ -828,7 +845,7 @@ export const enUS: Translations = {
     status: {
       writing: (filename: string, lines?: string) =>
         `is writing ${filename}${lines ? ` (${lines})` : ""}`,
-      usingEditor: "is using Editor",
+      usingViewer: "is using Viewer",
       editing: (filename: string) => `is editing ${filename}`,
       reading: (filename: string) => `is reading ${filename}`,
       usingTerminal: "is using Terminal",
@@ -840,6 +857,10 @@ export const enUS: Translations = {
       isThinking: "is thinking",
       isIdle: "is idle",
     },
+    telemetry: {
+      timeline: "Timeline",
+      ledger: "Ledger",
+    },
     terminal: {
       tab: "Terminal",
       stream: "Stream",
@@ -847,13 +868,27 @@ export const enUS: Translations = {
       interactiveTitle: "Interactive terminal",
       noOutput: "No terminal output yet",
       noOutputHint: "Agent commands appear here — switch to",
+      streamDown: "Reconnecting to the command stream",
+      streamDownHint:
+        "The agent may be working — this panel just cannot hear it right now.",
       running: "running...",
+      reconnect: "Reconnect",
+      shellDisconnected:
+        "The interactive shell is not responding. The sandbox may have been recycled.",
+      showAll: (lines: number) => `Show all ${lines} lines`,
+      showLess: "Show less",
+      hideDevLogs: "Hide dev server",
+      showDevLogs: "Show dev server",
+      counts: (total: number, running: number) =>
+        `${total} cmd${total === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`,
     },
-    editor: {
+    viewer: {
       startWriting: "Start writing a file to see code live",
+      fileNotWritten: "This file doesn't exist (yet)",
+      emptyFile: "File is empty",
       diff: "Diff",
       file: "File",
-      lines: (count: number) => `${count} lines`,
+      lines: (count: number) => `${count} line${count === 1 ? "" : "s"}`,
       writing: "Writing",
     },
     browser: {
@@ -869,6 +904,7 @@ export const enUS: Translations = {
       desktop: "Desktop",
       mobile: "Mobile",
       openNewTab: "Open in new tab",
+      downloadHtml: "Download HTML file",
       testingInBrowser: "Testing in browser\u2026",
       selfTestPassed: "\u2713 Self-test passed",
       selfTestIssues: "\u2717 Self-test found issues",
@@ -892,10 +928,10 @@ export const enUS: Translations = {
         code: "Code",
       },
       projectLabel: (type: string) => `${type} project`,
-      switchToEditor: "Switch to Editor to see live code.",
+      switchToViewer: "Switch to Viewer to see live code.",
       startLivePreview: "Start Live Preview",
-      switchToEditorPrefix: "Switch to",
-      switchToEditorSuffix: "to see live code.",
+      switchToViewerPrefix: "Switch to",
+      switchToViewerSuffix: "to see live code.",
     },
     activity: {
       title: (count: number) =>
@@ -905,6 +941,7 @@ export const enUS: Translations = {
     },
     review: {
       generating: "Generating\u2026",
+      generationFailed: "Review failed to load",
       needsLook: "Needs a look before shipping",
       mostlyFine: "Mostly fine \u2014 a couple of checks",
       looksClean: "Looks clean",
@@ -932,6 +969,24 @@ export const enUS: Translations = {
       fetch: "Fetch · one page",
       fetchMany: "Fetch many · parallel",
       crawl: "Crawl · follows links",
+      /* Labels and hints keyed by the tool name the server reports, so the
+         panel renders whatever capabilities exist rather than a list baked
+         into the component. An unknown tool falls back to its own name. */
+      capabilityLabels: {
+        web_search: "Search · finds pages",
+        web_fetch: "Fetch · one page",
+        web_fetch_many: "Fetch many · parallel",
+        web_crawl: "Crawl · follows links",
+      } as Record<string, string>,
+      capabilityHints: {
+        web_search: "finds pages",
+        web_fetch: "reads one page",
+        web_fetch_many: "reads several pages you name, at once",
+        web_crawl: "starts at one page and follows its links",
+      } as Record<string, string>,
+      /* Shown where a counter has no value at all. Rendering 0 for "the
+         server sent nothing" is a lie the panel used to tell in six places. */
+      noData: "—",
       fetches: "Fetches",
       avgFetch: "Avg fetch",
       capabilities: "Capabilities",
@@ -979,7 +1034,7 @@ export const enUS: Translations = {
     metrics: {
       tools: "tools",
       toolsDetail: "Builtin tools available to the lead agent.",
-      subagents: "subagents",
+      subagents: "agent types",
       subagentsDetail:
         "Agent types the lead can delegate to — not a count of running tasks.",
       subagentsConcurrency: (n: number) =>

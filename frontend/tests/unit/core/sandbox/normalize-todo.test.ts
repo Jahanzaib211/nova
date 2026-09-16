@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  EMPTY_TODO_RESULT,
-  normalizeTodoResult,
-} from "@/core/sandbox/hooks";
+import { EMPTY_TODO_RESULT, normalizeTodoResult } from "@/core/sandbox/hooks";
 
 /**
  * The exact shape that blanked the workspace.
@@ -22,7 +19,9 @@ describe("normalizeTodoResult", () => {
   it("rejects FastAPI's error body instead of passing it through", () => {
     // The actual 404 payload. It is an object, so it is truthy — which is why
     // every `?? []` fallback downstream failed to fire.
-    expect(normalizeTodoResult({ detail: "Not found" })).toBe(EMPTY_TODO_RESULT);
+    expect(normalizeTodoResult({ detail: "Not found" })).toBe(
+      EMPTY_TODO_RESULT,
+    );
   });
 
   it("rejects a body whose todos is not an array", () => {

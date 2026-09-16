@@ -77,7 +77,7 @@ def test_register_external_dev_server_is_idempotent():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _make_client():
+def _make_client(monkeypatch):
     """Build a starlette TestClient that doesn't require a running DB.
 
     The router's other endpoints (logs, todo, status) reach the gateway's
@@ -100,17 +100,20 @@ def _make_client():
     def _always_owned(thread_id: str) -> bool:
         return thread_id in {"t-http-ok", "t-http-bad"}
 
-    sandbox_module._caller_owns_thread = _always_owned
+    # monkeypatch, not a raw assignment: see the note in
+    # test_dev_status_absproxy_fallback.py -- a bare rebind leaks a narrowing
+    # ownership stub into every test that runs after this file.
+    monkeypatch.setattr(sandbox_module, "_caller_owns_thread", _always_owned)
 
     from fastapi.testclient import TestClient
 
     return TestClient(app)
 
 
-def test_dev_external_endpoint_registers_and_returns_handles():
+def test_dev_external_endpoint_registers_and_returns_handles(monkeypatch):
     import deerflow.sandbox.dev_server as ds
 
-    client = _make_client()
+    client = _make_client(monkeypatch)
     with _temp_listener() as (host, port):
         resp = client.post(
             "/api/sandbox/dev-external",
@@ -127,11 +130,11 @@ def test_dev_external_endpoint_registers_and_returns_handles():
         ds._servers.pop(ds._server_key("t-http-ok", ds.DEFAULT_LABEL), None)
 
 
-def test_dev_external_endpoint_refuses_unreachable_port():
+def test_dev_external_endpoint_refuses_unreachable_port(monkeypatch):
     import deerflow.sandbox.dev_server as ds
     from app.gateway.routers import sandbox as sandbox_module
 
-    client = _make_client()
+    client = _make_client(monkeypatch)
     # Find a port nothing is bound to right now.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
@@ -146,3 +149,34 @@ def test_dev_external_endpoint_refuses_unreachable_port():
     finally:
         # Nothing to clean up — registration must have been refused.
         assert ds.get_dev_server("t-http-bad") is None
+
+
+class TestExternalRegistrationToolIsReachable:
+    """The escape hatch is only an escape hatch if the agent can call it.
+
+    `register_external_dev_server_tool` was fully implemented (port validation,
+    a liveness probe that refuses to advertise a phantom server) and documented
+    in backend/CLAUDE.md as "the agent-facing tool" -- but it was never imported
+    into `deerflow.tools.tools` and never added to `BUILTIN_TOOLS`, so it was
+    unreachable dead code.
+
+    The cost is not theoretical. A dev server started outside the pipeline (raw
+    bash, PM2, a manual `node`) can only reach the Browser tab two ways:
+    `discover_live_preview`, which probes only `_PREVIEW_CONTAINER_PORTS`
+    (4100-4102), or this tool. With the tool unbound, anything on another port
+    was unpreviewable and the panel sat on "Start Live Preview" forever, with
+    the agent left to conclude the tool "isn't in this thread's whitelist".
+    """
+
+    def test_tool_is_in_the_builtin_registry(self):
+        from deerflow.tools.tools import BUILTIN_TOOLS
+
+        names = {getattr(t, "name", None) for t in BUILTIN_TOOLS}
+        assert "register_external_dev_server" in names, f"register_external_dev_server is implemented but not bound; BUILTIN_TOOLS exposes {sorted(n for n in names if n)}"
+
+    def test_the_port_discovery_gap_it_covers_is_real(self):
+        """Pin the reason the tool must exist: discovery is a 3-port probe."""
+        from deerflow.sandbox.dev_server import _PREVIEW_CONTAINER_PORTS
+
+        assert 8787 not in _PREVIEW_CONTAINER_PORTS
+        assert len(_PREVIEW_CONTAINER_PORTS) == 3

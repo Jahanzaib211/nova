@@ -5,6 +5,7 @@ import {
   type SetStateAction,
   useCallback,
   useContext,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -142,6 +143,95 @@ export function useSubtask(id: string) {
   return tasks[id];
 }
 
+/**
+ * Todo indexes that a COMPLETED subagent settled, unioned across all tasks.
+ *
+ * This replaces the old positional heuristic (first N rows struck by count of
+ * done tasks), which struck the wrong rows whenever subagents finished out of
+ * order. Indexes arrive from the backend's task events (todo_indexes); rows
+ * with no binding are left exactly as the agent's own todo status says.
+ */
+export function completedTodoIndexes(
+  tasks: Record<string, Subtask>,
+): Set<number> {
+  const bindings = new Set<number>();
+  for (const task of Object.values(tasks)) {
+    if (task.status !== "completed") continue;
+    for (const index of task.todoIndexes ?? []) bindings.add(index);
+  }
+  return bindings;
+}
+
+export function useCompletedTodoBindings(): Set<number> {
+  const { tasks } = useSubtaskContext();
+  const signature = Object.values(tasks)
+    .map((t) => `${t.id}:${t.status}:${(t.todoIndexes ?? []).join(",")}`)
+    .sort()
+    .join("|");
+  return useMemo(() => completedTodoIndexes(tasks), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/**
+ * Settle every still-in_progress subtask as superseded.
+ *
+ * Called on the rising edge of a NEW run: subagents from the previous run can
+ * never complete now, and leaving them spinning produced ghost "running"
+ * boxes that stacked across retries. Result-sourced failed status settles
+ * them authoritatively.
+ */
+/**
+ * How long a subtask is protected from being superseded after first sight.
+ *
+ * Covers the gap between the socket delivering `task_started` and the message
+ * stream carrying the matching tool_call. Generous enough to absorb a slow
+ * hydration, short enough that a genuinely orphaned subtask still settles
+ * rather than spinning forever.
+ */
+export const SUPERSEDE_GRACE_MS = 10_000;
+
+export function useSupersedeStaleSubtasks() {
+  const { setTasks } = useSubtaskContext();
+  /**
+   * Settle only subtasks that are NOT part of the CURRENT run.
+   *
+   * Membership is decided by the live tool_call ids in `messages` — the same
+   * stream that created them. A naive "rising isLoading edge" version killed
+   * genuinely-running subagents on page refresh (the run was still live, the
+   * edge just fired on hydration), which read as a wall of red failures.
+   */
+  return useCallback(
+    (currentToolCallIds: Set<string>) => {
+      setTasks((current) => {
+        let changed = false;
+        const next: Record<string, Subtask> = {};
+        const now = Date.now();
+        for (const [id, task] of Object.entries(current)) {
+          const isLive = currentToolCallIds.has(id);
+          // A subtask younger than the grace window has not had time to appear
+          // in `messages` yet — the socket delivers task_started ahead of the
+          // assistant message that carries its tool_call. Superseding it here
+          // would fail a subagent that had only just started.
+          const tooYoung =
+            task.firstSeenAt !== undefined &&
+            now - task.firstSeenAt < SUPERSEDE_GRACE_MS;
+          if (task.status === "in_progress" && !isLive && !tooYoung) {
+            changed = true;
+            next[id] = {
+              ...task,
+              status: "failed",
+              error: task.error ?? "superseded by a newer run",
+            };
+          } else {
+            next[id] = task;
+          }
+        }
+        return changed ? next : current;
+      });
+    },
+    [setTasks],
+  );
+}
+
 export function useUpdateSubtask() {
   const { setTasks, sourcesRef } = useSubtaskContext();
 
@@ -184,6 +274,9 @@ export function useUpdateSubtask() {
           ...previous,
           ...task,
           ...(storedStatus !== undefined ? { status: storedStatus } : {}),
+          // Stamped once, on first sight. Every writer funnels through here, so
+          // this is the only place that can know which write was the first.
+          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
         } as Subtask;
         // A rejected status update must not smuggle in its result/error either
         // (e.g. a derived "failed" placeholder error overwriting a real result).

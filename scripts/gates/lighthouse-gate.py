@@ -39,6 +39,12 @@ FRONTEND = REPO_ROOT / "frontend"
 LHCI_DIR = FRONTEND / ".lighthouseci"
 GREEN, YELLOW, RED = "green", "yellow", "red"
 
+# How old the newest Lighthouse report may be before the gate stops calling
+# itself green. Runs are CI- or operator-triggered, so a couple of days is
+# normal; a week means nothing is measuring this any more.
+STALE_YELLOW_DAYS = float(os.environ.get("NOVA_LIGHTHOUSE_STALE_YELLOW_DAYS", "3"))
+STALE_RED_DAYS = float(os.environ.get("NOVA_LIGHTHOUSE_STALE_RED_DAYS", "7"))
+
 # Mirrors the assertions in frontend/lighthouserc.cjs. Accessibility is the one
 # hard requirement there, so it is the one that can go red here; the rest warn,
 # to be ratcheted up as the numbers improve rather than being red on day one.
@@ -166,14 +172,38 @@ def build_report() -> dict:
             )
 
     newest = reports[0]
+    # Age is part of the verdict, not decoration.
+    #
+    # This gate republishes whatever the last lhci run produced; it deliberately
+    # does not run Lighthouse itself (see the module docstring). That is the
+    # right call, but it means the scores above are only as true as the run that
+    # produced them -- and with nothing scheduling runs, this gate sat showing
+    # four green budgets from a 9-day-old measurement of a build that no longer
+    # existed. A gate that reports green while measuring nothing is worse than
+    # one that reports red, because it is trusted.
+    age_days = _report_age_days(newest)
+    if age_days is None:
+        status, age_note = YELLOW, "age unknown"
+    elif age_days >= STALE_RED_DAYS:
+        status, age_note = RED, f"{age_days:.1f}d old"
+    elif age_days >= STALE_YELLOW_DAYS:
+        status, age_note = YELLOW, f"{age_days:.1f}d old"
+    else:
+        status, age_note = GREEN, f"{age_days:.1f}d old"
     checks.append(
         check(
             "last_run",
-            GREEN,
+            status,
             f"{len(reports)} report(s), newest {newest['url']} "
-            f"at {newest['fetched_at'] or 'unknown time'}",
+            f"at {newest['fetched_at'] or 'unknown time'} ({age_note})",
         )
     )
+    if status != GREEN:
+        # The budget checks above are measurements of a build this old, so do
+        # not let them read as current.
+        for c in checks:
+            if c["name"] != "last_run" and c["status"] == GREEN:
+                c["detail"] += f" — from a report {age_note}"
 
     overall = (
         RED
@@ -187,6 +217,23 @@ def build_report() -> dict:
         "ok": overall != RED,
         "checks": checks,
     }
+
+
+
+def _report_age_days(report: dict) -> float | None:
+    """Age of a report in days, or None if it carries no usable timestamp."""
+    raw = report.get("fetched_at")
+    if not raw:
+        return None
+    try:
+        import datetime as _dt
+
+        ts = _dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=_dt.timezone.utc)
+        return (_dt.datetime.now(_dt.timezone.utc) - ts).total_seconds() / 86_400
+    except Exception:
+        return None
 
 
 def write_atomic(path: Path, payload: dict) -> None:

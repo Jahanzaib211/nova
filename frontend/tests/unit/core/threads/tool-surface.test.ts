@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { isActivityTool, isTerminalTool } from "@/core/threads/tool-surface";
+import {
+  classifyToolWork,
+  isActivityTool,
+  isTerminalTool,
+  isViewerTool,
+} from "@/core/threads/tool-surface";
 
 /**
  * The Terminal and Activity tabs render a partition of one event stream, and
@@ -84,11 +89,14 @@ describe("tool surface partition", () => {
     for (const name of [
       "bash",
       "execute_command",
+      "ls",
       "read_file",
       "write_file",
       "str_replace",
       "search_files",
       "grep_files",
+      "glob",
+      "grep",
     ]) {
       expect(isTerminalTool(name), `${name} belongs in Terminal`).toBe(true);
     }
@@ -113,6 +121,70 @@ describe("tool surface partition", () => {
   it("does not match a prefix appearing mid-name", () => {
     // Guards against a lazy `includes` rewrite of the prefix rule.
     expect(isTerminalTool("my_shell_helper")).toBe(false);
+  });
+});
+
+describe("viewer focus", () => {
+  it("focuses the Viewer for writes, edits and scaffolding", () => {
+    for (const name of ["write_file", "str_replace", "scaffold_project"]) {
+      expect(isViewerTool(name), `${name} should focus Viewer`).toBe(true);
+    }
+  });
+
+  it("does not focus Viewer for terminal-only or unknown tools", () => {
+    for (const name of ["bash", "read_file", "shell_session", "task", "ls"]) {
+      expect(isViewerTool(name), `${name} should not focus Viewer`).toBe(false);
+    }
+  });
+
+  it("never focuses Viewer for a partial tool call", () => {
+    expect(isViewerTool(undefined as unknown as string)).toBe(false);
+  });
+
+  it("keeps viewer tools on the Terminal surface", () => {
+    // Focus is orthogonal to the partition: a viewer write's output still
+    // logs to Terminal once done.
+    for (const name of ["write_file", "str_replace"]) {
+      expect(isTerminalTool(name), `${name} stays Terminal-surface`).toBe(true);
+    }
+  });
+});
+
+describe("work kinds", () => {
+  it("classifies known tools by their work", () => {
+    expect(classifyToolWork("bash")).toBe("terminal");
+    expect(classifyToolWork("shell_session")).toBe("terminal");
+    expect(classifyToolWork("ls")).toBe("terminal");
+    expect(classifyToolWork("read_file")).toBe("file-read");
+    expect(classifyToolWork("write_file")).toBe("file-write");
+    expect(classifyToolWork("str_replace")).toBe("file-edit");
+    expect(classifyToolWork("search_files")).toBe("file-search");
+    expect(classifyToolWork("glob")).toBe("file-search");
+    expect(classifyToolWork("grep_files")).toBe("content-search");
+    expect(classifyToolWork("grep")).toBe("content-search");
+    expect(classifyToolWork("start_dev_server")).toBe("devserver");
+    expect(classifyToolWork("task")).toBe("subagent");
+    expect(classifyToolWork("scaffold_project")).toBe("scaffold");
+    expect(classifyToolWork("browser_navigate")).toBe("browser");
+    expect(classifyToolWork("web_search")).toBe("browser");
+    expect(classifyToolWork("screenshot")).toBe("browser");
+  });
+
+  it("classifies future family members without code changes here", () => {
+    expect(classifyToolWork("shell_repl_new")).toBe("terminal");
+    expect(classifyToolWork("browser_something_new")).toBe("browser");
+  });
+
+  it("stays graceful on non-string names", () => {
+    expect(classifyToolWork(undefined as unknown as string)).toBe("other");
+    expect(classifyToolWork(null as unknown as string)).toBe("other");
+    expect(classifyToolWork("")).toBe("other");
+  });
+
+  it("does not label every *search* word as browser work", () => {
+    // A loose `includes("search")` heuristic would misroute hypothetical
+    // tools like "research_topic" into the browser bucket.
+    expect(classifyToolWork("search_workspace")).not.toBe("browser");
   });
 });
 

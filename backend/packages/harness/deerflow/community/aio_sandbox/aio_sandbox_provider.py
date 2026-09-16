@@ -198,10 +198,7 @@ class AioSandboxProvider(SandboxProvider):
         # `idle_timeout: 0` (documented as "disable the idle check") also
         # silently disabled the hard lifetime ceiling, with no warning, even
         # though the two are documented as independent knobs.
-        if (
-            self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0
-            or self._config.get("max_lifetime") is not None
-        ):
+        if self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT) > 0 or self._config.get("max_lifetime") is not None:
             self._start_idle_checker()
 
     @property
@@ -371,6 +368,23 @@ class AioSandboxProvider(SandboxProvider):
         if skills_mount:
             mounts.append(skills_mount)
             logger.info(f"Adding skills mount: {skills_mount}")
+
+        # Security-Toolkit knowledge base: the owner's curated methodology
+        # cheatsheets, read-only, so the agent reads HOW next to its new
+        # arsenal (mounted by the tools layer of the image). Opt-in via env;
+        # absent/missing path silently skips — a missing KB must never block
+        # sandbox creation.
+        import os
+        from pathlib import Path as _Path
+
+        # Resolution order: this process env, then the sandbox environment
+        # map (config.yaml sandbox.environment) — either may carry it.
+        env_map = self._config.get("environment") or {}
+        sec_kb = os.environ.get("DEER_FLOW_SECURITY_TOOLKIT") or self._resolve_env_vars({k: v for k, v in env_map.items() if k == "DEER_FLOW_SECURITY_TOOLKIT"}).get("DEER_FLOW_SECURITY_TOOLKIT", "")
+        sec_kb = (sec_kb or "").strip()
+        if sec_kb and _Path(sec_kb).is_dir():
+            mounts.append((sec_kb, "/mnt/security-toolkit", True))
+            logger.info(f"Adding security-toolkit mount: {sec_kb}")
 
         return mounts
 
@@ -684,6 +698,42 @@ class AioSandboxProvider(SandboxProvider):
     def _recheck_cached_sandbox(self, thread_id: str, sandbox_id: str) -> str | None:
         """Re-check in-memory caches after acquiring the cross-process file lock."""
         return self._reuse_in_process_sandbox(thread_id, post_lock=True) or self._reclaim_warm_pool_sandbox(thread_id, sandbox_id, post_lock=True)
+
+    def readopt_released(self, sandbox):
+        """Return a live replacement for a released-but-still-pooled sandbox.
+
+        Warm-pool release closes the host-side HTTP client but leaves the
+        container running; a tool holding the old handle races the release and
+        fails with ``SandboxError("has been released…")``. This hands back the
+        reclaimed, freshly-registered handle so the caller can retry once —
+        going THROUGH this method (not around it) keeps the provider's
+        bookkeeping truthful: the sandbox moves out of ``_warm_pool`` back into
+        active tracking, so the idle reaper cannot destroy a container that is
+        mid-command.
+
+        Returns None unless the sandbox is (a) closed and (b) still sitting in
+        the warm pool — destroyed containers surface as errors, never resurrect.
+        """
+        try:
+            sid = getattr(sandbox, "id", None)
+            if not sid or not getattr(sandbox, "closed", False):
+                return None
+
+            with self._lock:
+                if sid not in self._warm_pool:
+                    return None
+                thread_id = next(
+                    (tid for tid, bound in self._thread_sandboxes.items() if bound == sid),
+                    f"readopt:{sid}",
+                )
+
+            if self._reclaim_warm_pool_sandbox(thread_id, sid) is None:
+                return None
+            with self._lock:
+                return self._sandboxes.get(sid)
+        except Exception as exc:  # noqa: BLE001 - retry plumbing must never mask the real error
+            logger.warning("readopt_released failed for %s: %s", getattr(sandbox, "id", "?"), exc)
+            return None
 
     def _register_discovered_sandbox(self, thread_id: str, info: SandboxInfo) -> str:
         """Track a sandbox discovered through the backend."""

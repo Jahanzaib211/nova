@@ -286,13 +286,20 @@ class SearxngClient:
             proxy_url = self._tor.http_proxy()
             if proxy_url:
                 client_kwargs["proxy"] = proxy_url
-        try:
-            async with httpx.AsyncClient(**client_kwargs) as client:
-                resp = await client.get(f"{self._base_url}/healthz")
-            return 200 <= resp.status_code < 300
-        except Exception as exc:  # noqa: BLE001 - health probe: report unhealthy
-            logger.debug("SearXNG health probe failed: %s", exc)
-            return False
+        # Same two paths as health(), in the same order. This used to try
+        # /healthz only, so the capabilities bar and the Privacy panel could
+        # disagree about the very same instance: a SearXNG behind a proxy that
+        # forwards /search but not /healthz read healthy in one and unhealthy in
+        # the other.
+        for path in ("/healthz", "/"):
+            try:
+                async with httpx.AsyncClient(**client_kwargs) as client:
+                    resp = await client.get(f"{self._base_url}{path}")
+                if 200 <= resp.status_code < 400:
+                    return True
+            except Exception as exc:  # noqa: BLE001 - health probe: report unhealthy
+                logger.debug("SearXNG health probe failed for %s%s: %s", self._base_url, path, exc)
+        return False
 
     def health_check(self) -> dict[str, Any]:
         return {
