@@ -314,7 +314,15 @@ class TestTaskEventsCarryBinding:
                 "thread_data": None,
             },
             context={"thread_id": "t-9"},
-            config={"configurable": {"thread_id": "t-9"}, "metadata": {}},
+            # Carry a parent model_name the way a real runtime always does, so
+            # the subagent inherits it instead of falling through to
+            # get_app_config() — which has no models under the CI
+            # config.example.yaml and would raise (this test mocks the actual
+            # subagent execution, so the model is never invoked).
+            config={
+                "configurable": {"thread_id": "t-9"},
+                "metadata": {"model_name": "test-model"},
+            },
         )
         return tt, runtime, captured
 
