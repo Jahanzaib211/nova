@@ -53,6 +53,15 @@ def owned_thread(monkeypatch):
         return True
 
     monkeypatch.setattr("app.gateway.ws_guards.ws_caller_owns_thread", _owning)
+    # The HTTP proxy path (_proxy_dev_server / _absproxy_impl) guards on the
+    # separate synchronous _caller_owns_thread, which resolves ownership by
+    # checking whether the thread's dir exists on disk. That makes these
+    # shim-injection tests pass only where such a dir happens to exist (a dev
+    # box with real .deer-flow data) and 404 on a clean checkout (CI). These
+    # tests are about HTML shim injection, not ownership — pin it True so they
+    # are deterministic across environments. Ownership itself is covered by the
+    # dedicated admission tests above.
+    monkeypatch.setattr(sandbox_router, "_caller_owns_thread", lambda tid: True)
 
 
 @pytest.fixture
