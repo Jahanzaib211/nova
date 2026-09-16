@@ -11,7 +11,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from contextvars import Context, copy_context
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -130,7 +130,7 @@ class SubagentResult:
                 self.ai_messages = ai_messages
             if token_usage_records is not None:
                 self.token_usage_records = token_usage_records
-            self.completed_at = completed_at or datetime.now()
+            self.completed_at = completed_at or datetime.now(UTC)
             self.status = status
             return True
 
@@ -506,7 +506,7 @@ class SubagentExecutor:
                 task_id=task_id,
                 trace_id=self.trace_id,
                 status=SubagentStatus.RUNNING,
-                started_at=datetime.now(),
+                started_at=datetime.now(UTC),
             )
         ai_messages = result.ai_messages
         if ai_messages is None:
@@ -823,7 +823,7 @@ class SubagentExecutor:
         def run_task():
             with _background_tasks_lock:
                 _background_tasks[task_id].status = SubagentStatus.RUNNING
-                _background_tasks[task_id].started_at = datetime.now()
+                _background_tasks[task_id].started_at = datetime.now(UTC)
                 result_holder = _background_tasks[task_id]
 
             try:
