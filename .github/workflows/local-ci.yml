@@ -67,6 +67,7 @@ jobs:
           python-version: ${{ env.PYTHON }}
       - uses: astral-sh/setup-uv@v7
       - run: cd backend && uv sync --group dev --extra postgres
+      - run: cp config.example.yaml config.yaml
       - run: cd backend && make test-blocking-io
 
   backend-coverage:
