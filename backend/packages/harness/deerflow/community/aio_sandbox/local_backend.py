@@ -764,12 +764,24 @@ class LocalContainerBackend(SandboxBackend):
 
         # Docker-specific security options
         if self._runtime == "docker":
-            cmd.extend(["--security-opt", "seccomp=unconfined"])
             # --privileged is what makes the dind layer's nested daemon work.
             # It is effectively host root, so it stays behind an explicit
             # config flag that defaults to off rather than following the image.
             if self._privileged:
+                # The nested Docker daemon needs unconfined seccomp; a privileged
+                # container already has full capabilities, so no-new-privileges
+                # would be a no-op here. Behaviour unchanged for this path.
+                cmd.extend(["--security-opt", "seccomp=unconfined"])
                 cmd.append("--privileged")
+            else:
+                # Non-privileged path: harden it rather than blanket-disabling
+                # seccomp for every sandbox. Default seccomp profile, drop all
+                # Linux capabilities and re-add only the minimal set the sandbox
+                # tooling needs, and forbid privilege escalation via setuid.
+                cmd.extend(["--security-opt", "no-new-privileges"])
+                cmd.extend(["--cap-drop", "ALL"])
+                for _cap in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "FSETID", "SETGID", "SETUID", "KILL"):
+                    cmd.extend(["--cap-add", _cap])
             # Make host services reachable from inside the sandbox at
             # host.docker.internal (Linux needs the explicit host-gateway
             # mapping; Docker Desktop provides it natively). Without this,
