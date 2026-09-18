@@ -46,7 +46,7 @@ export function TelemetryPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-border/40 flex shrink-0 items-center gap-1 border-b px-2 py-1">
+      <div className="border-panel-border flex shrink-0 items-center gap-1 border-b px-2 py-1">
         <SegmentBtn
           active={segment === "timeline"}
           onClick={() => setSegment("timeline")}

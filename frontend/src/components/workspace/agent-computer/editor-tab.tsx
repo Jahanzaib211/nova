@@ -14,14 +14,14 @@ import type { ActiveEdit } from "./message-helpers";
 // ──────────────────────────────────────────────────────────
 function getCodeColor(filename: string): string {
   const ext = filename.split(".").at(-1)?.toLowerCase() ?? "";
-  if (ext === "html" || ext === "htm") return "text-orange-300";
-  if (ext === "css" || ext === "scss") return "text-pink-300";
-  if (ext === "js" || ext === "jsx" || ext === "mjs") return "text-yellow-300";
-  if (ext === "ts" || ext === "tsx") return "text-blue-300";
-  if (ext === "json") return "text-green-300";
-  if (ext === "md") return "text-sky-300";
-  if (ext === "py") return "text-emerald-300";
-  return "text-slate-300";
+  if (ext === "html" || ext === "htm") return "text-warning";
+  if (ext === "css" || ext === "scss") return "text-info";
+  if (ext === "js" || ext === "jsx" || ext === "mjs") return "text-warning";
+  if (ext === "ts" || ext === "tsx") return "text-info";
+  if (ext === "json") return "text-success";
+  if (ext === "md") return "text-info";
+  if (ext === "py") return "text-success";
+  return "text-muted-foreground";
 }
 
 // Renders an interleaved red/green line diff (zai/cursor style).
@@ -33,8 +33,8 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
           key={i}
           className={cn(
             "flex px-2 break-all whitespace-pre-wrap",
-            l.type === "add" && "bg-emerald-500/10 text-emerald-300",
-            l.type === "del" && "bg-red-500/10 text-red-300/90",
+            l.type === "add" && "bg-success/10 text-success",
+            l.type === "del" && "bg-destructive/10 text-destructive/90",
             l.type === "ctx" && "text-muted-foreground/70",
           )}
         >
@@ -125,20 +125,20 @@ export function Editor({
   return (
     <div className="flex h-full flex-col bg-black/50">
       {/* File header */}
-      <div className="border-border/30 flex shrink-0 items-center gap-2 border-b bg-black/40 px-3 py-1.5">
+      <div className="border-panel-border flex shrink-0 items-center gap-2 border-b bg-black/40 px-3 py-1.5">
         <CodeIcon className="text-muted-foreground/60 h-3 w-3" />
         <span className="text-muted-foreground/80 truncate font-mono text-xs">
           {filename}
         </span>
         {showDiff && stats && (stats.added > 0 || stats.removed > 0) && (
           <span className="ml-1 shrink-0 font-mono text-[10px]">
-            <span className="text-emerald-400">+{stats.added}</span>{" "}
-            <span className="text-red-400">−{stats.removed}</span>
+            <span className="text-success">+{stats.added}</span>{" "}
+            <span className="text-destructive">−{stats.removed}</span>
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {diff !== null && (
-            <div className="border-border/40 flex items-center rounded border text-[10px]">
+            <div className="border-panel-border flex items-center rounded border text-[10px]">
               <button
                 onClick={() => setMode("diff")}
                 className={cn(
@@ -169,8 +169,8 @@ export function Editor({
             </span>
           )}
           {isWriting && (
-            <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+            <span className="bg-info/20 text-info inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]">
+              <span className="bg-info h-1.5 w-1.5 animate-pulse rounded-full" />
               {t.agentComputer.viewer.writing}
             </span>
           )}

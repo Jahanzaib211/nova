@@ -20,18 +20,18 @@ describe("isTerminalTool", () => {
 });
 
 describe("terminalOutputClass", () => {
-  test("a 'done' tool whose output starts with 'Error:' still renders emerald", () => {
+  test("a 'done' tool whose output starts with 'Error:' still renders as success", () => {
     // Regression for the 2026-08-14 false-positive bug: 40+ tools legitimately
     // return ``f"Error: …"`` on success paths. The Terminal-tab output block
     // must not color that red just because the text starts with "Error:".
     const cls = terminalOutputClass("done");
-    expect(cls).toContain("border-emerald-900/30");
-    expect(cls).not.toContain("border-red-900/50");
+    expect(cls).toContain("border-success/30");
+    expect(cls).not.toContain("border-destructive/50");
   });
 
-  test("an actual error tool still renders red", () => {
+  test("an actual error tool still renders as destructive", () => {
     const cls = terminalOutputClass("error");
-    expect(cls).toContain("border-red-900/50");
-    expect(cls).not.toContain("border-emerald-900/30");
+    expect(cls).toContain("border-destructive/50");
+    expect(cls).not.toContain("border-success/30");
   });
 });

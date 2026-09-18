@@ -1047,7 +1047,7 @@ export function InputBox({
                   {selectedModel?.amd_compute ? (
                     <Badge
                       variant="outline"
-                      className="ml-1 hidden shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 sm:inline-flex dark:text-red-400"
+                      className="border-destructive/30 bg-destructive/10 text-destructive dark:text-destructive ml-1 hidden shrink-0 text-[9px] font-medium sm:inline-flex"
                     >
                       AMD
                     </Badge>
@@ -1076,7 +1076,7 @@ export function InputBox({
                         {m.amd_compute ? (
                           <Badge
                             variant="outline"
-                            className="ml-2 shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 dark:text-red-400"
+                            className="border-destructive/30 bg-destructive/10 text-destructive dark:text-destructive ml-2 shrink-0 text-[9px] font-medium"
                           >
                             {m.amd_compute}
                           </Badge>

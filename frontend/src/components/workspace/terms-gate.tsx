@@ -71,7 +71,7 @@ export function TermsGate() {
               href="/terms"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
+              className="text-info hover:underline"
             >
               Terms of Service
             </a>{" "}
@@ -80,7 +80,7 @@ export function TermsGate() {
               href="/privacy"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-500 hover:underline"
+              className="text-info hover:underline"
             >
               Privacy Policy
             </a>
@@ -89,7 +89,7 @@ export function TermsGate() {
         </div>
 
         {error && (
-          <p className="text-sm text-red-500">
+          <p className="text-destructive text-sm">
             Something went wrong. Please try again.
           </p>
         )}

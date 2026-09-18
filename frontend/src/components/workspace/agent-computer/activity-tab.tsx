@@ -48,43 +48,43 @@ function getToolMeta(type: string): { icon: React.ReactNode; color: string } {
     case "file-write":
       return {
         icon: <PencilIcon className="h-3 w-3" />,
-        color: "text-blue-400",
+        color: "text-info",
       };
     case "file-edit":
       return {
         icon: <PencilIcon className="h-3 w-3" />,
-        color: "text-purple-400",
+        color: "text-info",
       };
     case "file-read":
       return {
         icon: <FileTextIcon className="h-3 w-3" />,
-        color: "text-sky-400",
+        color: "text-info",
       };
     case "file-search":
     case "content-search":
       return {
         icon: <FileSearchIcon className="h-3 w-3" />,
-        color: "text-orange-400",
+        color: "text-warning",
       };
     case "scaffold":
       return {
         icon: <FolderOpenIcon className="h-3 w-3" />,
-        color: "text-indigo-400",
+        color: "text-info",
       };
     case "subagent":
       return {
         icon: <SquareTerminalIcon className="h-3 w-3" />,
-        color: "text-indigo-400",
+        color: "text-info",
       };
     case "browser":
       return {
         icon: <GlobeIcon className="h-3 w-3" />,
-        color: "text-cyan-400",
+        color: "text-info",
       };
     default:
       return {
         icon: <TerminalIcon className="h-3 w-3" />,
-        color: "text-emerald-400",
+        color: "text-success",
       };
   }
 }
@@ -112,8 +112,8 @@ function ActivityEventCard({
       className={cn(
         "rounded border px-2 py-1.5 text-xs",
         isError
-          ? "border-red-500/20 bg-red-500/5"
-          : "border-border/20 bg-muted/10",
+          ? "border-destructive/20 bg-destructive/5"
+          : "border-panel-border bg-muted/10",
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -172,10 +172,10 @@ export function LlmErrorBadge({ event }: { event: LlmError }) {
   const reason = (event.reason || "unknown").toLowerCase();
   const tone =
     reason === "quota"
-      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+      ? "border-warning/40 bg-warning/10 text-warning dark:text-warning"
       : reason === "auth"
-        ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-        : "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+        ? "border-destructive/40 bg-destructive/10 text-destructive dark:text-destructive"
+        : "border-warning/40 bg-warning/10 text-warning dark:text-warning";
   // i18n: these were hardcoded English; the reasons map keeps known causes
   // specific and everything else falls to a generic line.
   const reasonFn = LLM_ERROR_REASONS[reason];
@@ -186,7 +186,7 @@ export function LlmErrorBadge({ event }: { event: LlmError }) {
       role="status"
       aria-live="polite"
       className={cn(
-        "border-border/30 flex shrink-0 items-center gap-2 border-b px-3 py-2 font-mono text-xs",
+        "border-panel-border flex shrink-0 items-center gap-2 border-b px-3 py-2 font-mono text-xs",
         tone,
       )}
       data-testid="llm-error-badge"
@@ -209,12 +209,12 @@ function VerifyResultPill({ event }: { event: VerifyResult }) {
     ? t.agentComputer.verifyResult.passed(event.routes?.length ?? 0)
     : t.agentComputer.verifyResult.failed(failedRoutes.length);
   const tone = ok
-    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-    : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    ? "border-success/40 bg-success/10 text-success dark:text-success"
+    : "border-warning/40 bg-warning/10 text-warning dark:text-warning";
   return (
     <div
       className={cn(
-        "border-border/30 flex shrink-0 items-center gap-2 border-b px-3 py-2 font-mono text-xs",
+        "border-panel-border flex shrink-0 items-center gap-2 border-b px-3 py-2 font-mono text-xs",
         tone,
       )}
       data-testid="verify-result-pill"
@@ -280,7 +280,7 @@ export function ActivityPanel({
   return (
     <div className="flex h-full flex-col">
       {verifyResult ? <VerifyResultPill event={verifyResult} /> : null}
-      <div className="border-border/30 bg-muted/20 flex shrink-0 items-center justify-between border-b px-2 py-1">
+      <div className="border-panel-border bg-muted/20 flex shrink-0 items-center justify-between border-b px-2 py-1">
         <span className="text-muted-foreground/70 font-mono text-xs">
           {t.agentComputer.activity.title(timeline.length)}
         </span>
@@ -296,8 +296,8 @@ export function ActivityPanel({
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-1 p-2">
           {snapshot && (
-            <div className="border-border/30 bg-muted/10 text-muted-foreground/70 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]">
-              <DatabaseIcon className="h-3 w-3 shrink-0 text-emerald-400" />
+            <div className="border-panel-border bg-muted/10 text-muted-foreground/70 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]">
+              <DatabaseIcon className="text-success h-3 w-3 shrink-0" />
               <span className="truncate">
                 {t.agentComputer.workspace.indexedBanner(
                   snapshot.symbol_count,
@@ -320,9 +320,9 @@ export function ActivityPanel({
             return (
               <div
                 key={`${event.type}-${String(data.occurred_at)}-${num("symbol_count")}-${num("step_count")}`}
-                className="border-border/20 bg-muted/5 text-muted-foreground/60 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]"
+                className="border-panel-border bg-muted/5 text-muted-foreground/60 flex items-center gap-1.5 rounded border px-2 py-1 text-[10px]"
               >
-                <DatabaseIcon className="h-3 w-3 shrink-0 text-sky-400" />
+                <DatabaseIcon className="text-info h-3 w-3 shrink-0" />
                 <span className="truncate">
                   {event.type === "WorkspaceScanned"
                     ? t.agentComputer.workspace.liveScanned(
@@ -441,7 +441,7 @@ export function TaskChecklist({
               )}
             >
               {isCompleted ? (
-                <CheckCircle2Icon className="mt-px h-3 w-3 shrink-0 text-emerald-500" />
+                <CheckCircle2Icon className="text-success mt-px h-3 w-3 shrink-0" />
               ) : isInProgress ? (
                 <LoaderCircleIcon className="text-primary/70 mt-px h-3 w-3 shrink-0 animate-spin" />
               ) : (

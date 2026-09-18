@@ -29,13 +29,13 @@ const EVENT_TYPE_ICONS: Record<string, typeof TerminalIcon> = {
 };
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
-  bash: "text-emerald-400 bg-emerald-500/10",
-  execute_command: "text-emerald-400 bg-emerald-500/10",
-  write_file: "text-blue-400 bg-blue-500/10",
-  read_file: "text-sky-400 bg-sky-500/10",
-  str_replace: "text-amber-400 bg-amber-500/10",
-  glob: "text-purple-400 bg-purple-500/10",
-  grep: "text-purple-400 bg-purple-500/10",
+  bash: "text-success bg-success/10",
+  execute_command: "text-success bg-success/10",
+  write_file: "text-info bg-info/10",
+  read_file: "text-info bg-info/10",
+  str_replace: "text-warning bg-warning/10",
+  glob: "text-info bg-info/10",
+  grep: "text-info bg-info/10",
 };
 
 const FILTER_TYPES = [
@@ -68,7 +68,7 @@ function AuditEventRow({ event }: { event: AuditEvent }) {
     EVENT_TYPE_COLORS[event.type ?? ""] ?? "text-muted-foreground bg-muted/50";
 
   return (
-    <div className="border-border/30 flex items-start gap-2 border-b px-3 py-2 last:border-b-0">
+    <div className="border-panel-border flex items-start gap-2 border-b px-3 py-2 last:border-b-0">
       <span
         className={cn(
           "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded",
@@ -129,7 +129,7 @@ export function AuditPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="border-border/50 flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
+      <div className="border-panel-border flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
         <ScrollTextIcon className="text-muted-foreground h-3 w-3" />
         <span className="text-muted-foreground text-[11px] font-medium">
           {t.agentComputer.tabs.audit}

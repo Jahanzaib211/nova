@@ -466,7 +466,7 @@ function ModelItem({
           {testModel.isPending ? (
             <LoaderCircleIcon className="size-4 animate-spin" />
           ) : testModel.data?.ok === true ? (
-            <CircleCheckIcon className="size-4 text-green-600" />
+            <CircleCheckIcon className="text-success size-4" />
           ) : testModel.data?.ok === false ? (
             <CircleXIcon className="text-destructive size-4" />
           ) : null}

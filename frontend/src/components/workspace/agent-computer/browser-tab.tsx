@@ -329,7 +329,7 @@ export function Browser({
   if (showVnc) {
     return (
       <div className="flex h-full flex-col">
-        <div className="border-border/30 bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
+        <div className="border-panel-border bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
           <button
             onClick={() => setShowVnc(false)}
             className="text-muted-foreground hover:text-foreground rounded px-1 text-sm"
@@ -359,7 +359,7 @@ export function Browser({
                 type="button"
                 onClick={() => void refetchTerminalUrl()}
                 disabled={terminalUrlFetching}
-                className="border-border/40 text-muted-foreground hover:bg-muted/20 rounded border px-2 py-1 text-[11px] disabled:opacity-50"
+                className="border-panel-border text-muted-foreground hover:bg-muted/20 rounded border px-2 py-1 text-[11px] disabled:opacity-50"
               >
                 {terminalUrlFetching
                   ? t.common.loading
@@ -381,7 +381,7 @@ export function Browser({
     return (
       <div className="flex h-full flex-col">
         {/* Browser chrome: nav + address bar */}
-        <div className="border-border/30 bg-muted/20 flex shrink-0 items-center gap-1 border-b px-1.5 py-1">
+        <div className="border-panel-border bg-muted/20 flex shrink-0 items-center gap-1 border-b px-1.5 py-1">
           <button
             onClick={() => canBack && setNavIdx((i) => i - 1)}
             disabled={!canBack}
@@ -422,10 +422,10 @@ export function Browser({
             className={cn(
               "ml-0.5 h-2 w-2 shrink-0 rounded-full",
               devServer.status === "ready"
-                ? "bg-emerald-400"
+                ? "bg-success"
                 : devServer.status === "error" || devServer.status === "stopped"
-                  ? "bg-red-500/80"
-                  : "animate-pulse bg-yellow-400",
+                  ? "bg-destructive/80"
+                  : "bg-warning animate-pulse",
             )}
             title={
               devServer.status === "ready"
@@ -440,7 +440,7 @@ export function Browser({
               e.preventDefault();
               goRoute(routeInput);
             }}
-            className="border-border/40 bg-background/40 flex min-w-0 flex-1 items-center rounded-md border px-2"
+            className="border-panel-border bg-background/40 flex min-w-0 flex-1 items-center rounded-md border px-2"
           >
             <span className="text-muted-foreground/40 shrink-0 font-mono text-[10px] select-none">
               :{devServer.port}
@@ -457,7 +457,7 @@ export function Browser({
             <select
               value={selectedLabel}
               onChange={(e) => onSelectLabel?.(e.target.value)}
-              className="border-border/40 bg-muted/30 text-muted-foreground shrink-0 rounded border px-1 py-0.5 font-mono text-[10px] focus:outline-none"
+              className="border-panel-border bg-muted/30 text-muted-foreground shrink-0 rounded border px-1 py-0.5 font-mono text-[10px] focus:outline-none"
               title={t.agentComputer.browser.switchPreview}
             >
               {devServers.map((s) => (
@@ -469,7 +469,7 @@ export function Browser({
           )}
           {srcMode === "absproxy" && devServer.absproxyUrl ? (
             <span
-              className="shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
+              className="border-warning/40 bg-warning/10 text-warning shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10px]"
               title="Preview proxy was unreachable; rendering via the generic absproxy instead."
             >
               Showing via absproxy
@@ -485,8 +485,8 @@ export function Browser({
                   ? "text-primary"
                   : selfTest && selfTestRoutes.length > 0
                     ? selfTest.ok
-                      ? "text-emerald-400"
-                      : "text-red-400"
+                      ? "text-success"
+                      : "text-destructive"
                     : "text-muted-foreground/50 hover:text-muted-foreground",
               )}
               title={t.agentComputer.browser.selfTest}
@@ -539,7 +539,7 @@ export function Browser({
         </div>
         {/* Self-test results strip */}
         {showSelfTest && (
-          <div className="border-border/30 bg-muted/10 shrink-0 border-b px-2 py-1.5 text-[11px]">
+          <div className="border-panel-border bg-muted/10 shrink-0 border-b px-2 py-1.5 text-[11px]">
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -547,8 +547,8 @@ export function Browser({
                   selfTesting
                     ? "text-primary"
                     : selfTest?.ok
-                      ? "text-emerald-400"
-                      : "text-red-400",
+                      ? "text-success"
+                      : "text-destructive",
                 )}
               >
                 {selfTesting
@@ -596,7 +596,7 @@ export function Browser({
                       <img
                         src={r.screenshot}
                         alt={`screenshot ${r.route}`}
-                        className="border-border/40 h-14 w-24 rounded border object-cover object-top"
+                        className="border-panel-border h-14 w-24 rounded border object-cover object-top"
                       />
                     </a>
                   )}
@@ -604,7 +604,7 @@ export function Browser({
                     <span
                       className={cn(
                         "font-mono",
-                        r.ok ? "text-emerald-400" : "text-red-400",
+                        r.ok ? "text-success" : "text-destructive",
                       )}
                     >
                       {r.ok ? "✓" : "✗"} {r.route}
@@ -615,7 +615,7 @@ export function Browser({
                     {consoleErrors.slice(0, 3).map((ce, j) => (
                       <div
                         key={`${j}:${ce.slice(0, 24)}`}
-                        className="truncate font-mono text-[10px] text-red-300/80"
+                        className="text-destructive/80 truncate font-mono text-[10px]"
                         title={ce}
                       >
                         {ce}
@@ -660,7 +660,7 @@ export function Browser({
               {onStartPreview && (
                 <button
                   onClick={() => void onStartPreview(selectedLabel)}
-                  className="border-border/40 text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
+                  className="border-panel-border text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
                 >
                   <RefreshCwIcon className="h-3 w-3" />
                   {t.agentComputer.browser.retryPreview}
@@ -691,7 +691,7 @@ export function Browser({
         </p>
         <button
           onClick={() => setShowVnc(true)}
-          className="border-border/40 text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
+          className="border-panel-border text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
         >
           <EyeIcon className="h-3 w-3" />{" "}
           {t.agentComputer.browser.watchLiveBrowser}
@@ -712,7 +712,7 @@ export function Browser({
           : t.agentComputer.browser.projectType.code;
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
-        <CodeIcon className="h-8 w-8 text-blue-400/30" />
+        <CodeIcon className="text-info/30 h-8 w-8" />
         <div>
           <p className="text-muted-foreground text-xs font-medium">
             {t.agentComputer.browser.projectLabel(projectType)}
@@ -722,7 +722,7 @@ export function Browser({
           </p>
           <p className="text-muted-foreground/50 mt-2 text-[11px] leading-relaxed">
             {t.agentComputer.browser.switchToViewerPrefix}{" "}
-            <span className="text-blue-400">{t.agentComputer.tabs.viewer}</span>{" "}
+            <span className="text-info">{t.agentComputer.tabs.viewer}</span>{" "}
             {t.agentComputer.browser.switchToViewerSuffix}
           </p>
           {(onStartPreview ?? onAgentMessage) && (
@@ -750,8 +750,8 @@ export function Browser({
   return (
     <div className="flex h-full flex-col">
       {/* Browser toolbar */}
-      <div className="border-border/30 bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
-        <GlobeIcon className="h-3 w-3 shrink-0 text-orange-400" />
+      <div className="border-panel-border bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
+        <GlobeIcon className="text-warning h-3 w-3 shrink-0" />
         <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-xs">
           {filename}
         </span>
@@ -826,7 +826,7 @@ export function Browser({
                 {onStartPreview && (
                   <button
                     onClick={() => void onStartPreview(selectedLabel)}
-                    className="border-border/40 text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors"
+                    className="border-panel-border text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors"
                   >
                     <GlobeIcon className="h-3 w-3" />
                     {t.agentComputer.browser.startLivePreview}

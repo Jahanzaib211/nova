@@ -152,7 +152,7 @@ export function VoiceLab({
   const busy = speaking || benching || recording;
 
   return (
-    <div className="border-border/50 rounded-lg border p-4">
+    <div className="border-panel-border rounded-lg border p-4">
       <div className="mb-1 flex items-center gap-2">
         <GaugeIcon className="size-4 text-sky-400" />
         <h3 className="text-sm font-semibold">Voice lab</h3>

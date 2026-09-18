@@ -160,11 +160,11 @@ function ThemePreviewCard({
             : "border-slate-200 bg-white text-slate-900",
         )}
       >
-        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
+        <div className="border-panel-border flex items-center gap-2 border-b px-3 py-2">
           <div
             className={cn(
               "h-2 w-2 rounded-full",
-              previewMode === "dark" ? "bg-emerald-400" : "bg-emerald-500",
+              previewMode === "dark" ? "bg-success" : "bg-success",
             )}
           />
           <div className="h-2 w-10 rounded-full bg-current/20" />

@@ -99,12 +99,12 @@ export class AgentComputerErrorBoundary extends Component<
           aria-live="polite"
           className={cn(
             "flex h-full flex-col items-center justify-center gap-3 px-6 py-8 text-center",
-            "border border-amber-500/30 bg-amber-500/5",
+            "border-warning/30 bg-warning/5 border",
           )}
         >
-          <AlertTriangleIcon className="h-6 w-6 text-amber-400" aria-hidden />
+          <AlertTriangleIcon className="text-warning h-6 w-6" aria-hidden />
           <div className="space-y-1">
-            <div className="font-mono text-sm font-medium text-amber-300">
+            <div className="text-warning font-mono text-sm font-medium">
               {tabName} tab crashed
             </div>
             <div className="text-muted-foreground/70 text-xs">
@@ -113,7 +113,7 @@ export class AgentComputerErrorBoundary extends Component<
             </div>
           </div>
           {error?.message ? (
-            <pre className="border-border/30 bg-muted/30 text-muted-foreground/80 max-w-full overflow-x-auto rounded border px-3 py-2 text-left font-mono text-[11px]">
+            <pre className="border-panel-border bg-muted/30 text-muted-foreground/80 max-w-full overflow-x-auto rounded border px-3 py-2 text-left font-mono text-[11px]">
               {error.message}
             </pre>
           ) : null}
@@ -121,9 +121,9 @@ export class AgentComputerErrorBoundary extends Component<
             type="button"
             onClick={this.handleReset}
             className={cn(
-              "border-border/40 bg-background/60 inline-flex items-center gap-1.5 rounded border px-3 py-1.5",
+              "border-panel-border bg-background/60 inline-flex items-center gap-1.5 rounded border px-3 py-1.5",
               "text-foreground/90 hover:bg-muted/40 text-xs font-medium transition-colors",
-              "focus:ring-2 focus:ring-amber-500/40 focus:outline-none",
+              "focus:ring-warning/40 focus:ring-2 focus:outline-none",
             )}
           >
             <RotateCcwIcon className="h-3 w-3" aria-hidden />

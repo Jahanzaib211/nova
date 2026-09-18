@@ -16,7 +16,7 @@ import {
 import { AgentComputerPanel } from "@/components/workspace/agent-computer/agent-computer-panel";
 import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/workspace-state";
 import { usePanels } from "@/components/workspace/panels/context";
-import { fitPanelWidth } from "@/components/workspace/panels/fit-panel-width";
+import { SidePanel } from "@/components/workspace/panels/side-panel";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
 import { foldCommandCount } from "@/core/sandbox/command-count";
@@ -206,57 +206,9 @@ const ChatBox: React.FC<{
 
   const { agentComputerOpen, setAgentComputerOpen } = usePanels();
 
-  // Resizable Agent's Computer width (drag the handle, or scroll-wheel over it).
-  const [computerWidth, setComputerWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 640;
-    const saved = Number(localStorage.getItem("agent-computer-width"));
-    return saved >= 380 && saved <= 1100 ? saved : 640;
-  });
-  const computerWidthRef = useRef(computerWidth);
-  computerWidthRef.current = computerWidth;
-  const clampWidth = (w: number) => Math.min(1100, Math.max(380, w));
-  const startComputerResize = (e: React.MouseEvent) => {
-    e.preventDefault();
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "col-resize";
-    const onMove = (ev: MouseEvent) =>
-      setComputerWidth(clampWidth(window.innerWidth - ev.clientX));
-    const onUp = () => {
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-      localStorage.setItem(
-        "agent-computer-width",
-        String(Math.round(computerWidthRef.current)),
-      );
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-  const wheelComputerResize = (e: React.WheelEvent) => {
-    setComputerWidth((w) => {
-      const next = clampWidth(w - e.deltaY);
-      localStorage.setItem("agent-computer-width", String(Math.round(next)));
-      return next;
-    });
-  };
-
-  // The column the chat and the panel share; the applied panel width yields
-  // to the chat's minimum inside it (see fitPanelWidth).
+  // The column the chat and the Agent's Computer share; <SidePanel> fits its
+  // width inside it (see fitPanelWidth).
   const layoutRootRef = useRef<HTMLDivElement | null>(null);
-  const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
-  useEffect(() => {
-    const el = layoutRootRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => {
-      const next = Math.round(entry?.contentRect.width ?? 0);
-      setLayoutWidth((prev) => (prev === next ? prev : next));
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  const appliedComputerWidth = fitPanelWidth(computerWidth, layoutWidth);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
@@ -454,7 +406,7 @@ const ChatBox: React.FC<{
         {showMobileTabs && (
           <nav
             aria-label={t.a11y.panels}
-            className="border-border/60 flex shrink-0 border-b"
+            className="border-panel-border flex shrink-0 border-b"
           >
             <MobileTabBtn
               active={activeMobilePanel === "chat"}
@@ -560,41 +512,19 @@ const ChatBox: React.FC<{
         </ResizablePanelGroup>
       </div>
 
-      {/* ── Right: Agent's Computer panel (resizable IDE surface) ──
-          Stays MOUNTED across open/close: closing collapses the column to
-          zero width (animated, so chat reflows continuously instead of
-          snapping when the exit animation finished), but the panel's state —
-          the interactive ttyd shell, browser nav history, scrollback, last
-          tab — survives the toggle. Full teardown happens on thread switch
-          via the panel's key. `invisible` keeps focus out of the collapsed
-          surface. */}
-      <div
-        aria-hidden={!agentComputerOpen}
-        className={cn(
-          "flex h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out",
-          !agentComputerOpen && "invisible",
-        )}
-        style={{ width: agentComputerOpen ? appliedComputerWidth : 0 }}
+      {/* ── Right: Agent's Computer (resizable IDE surface). SidePanel keeps it
+          mounted across open/close so the ttyd shell, browser history and
+          last tab survive the toggle; full teardown happens on thread switch
+          via the panel's key. */}
+      <SidePanel
+        open={agentComputerOpen}
+        side="right"
+        storageKey="agent-computer-width"
+        containerRef={layoutRootRef}
+        resizeLabel={t.a11y.dragResize}
       >
-        {/* Drag (or scroll-wheel) this handle to resize the panel. */}
-        <div
-          onMouseDown={startComputerResize}
-          onWheel={wheelComputerResize}
-          title={t.a11y.dragResize}
-          aria-label={t.a11y.dragResize}
-          role="separator"
-          className={cn(
-            "bg-border/40 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-[--primary]/60",
-            !agentComputerOpen && "pointer-events-none",
-          )}
-        />
-        <div
-          style={{ width: appliedComputerWidth }}
-          className="flex h-full shrink-0 flex-col overflow-hidden"
-        >
-          {computerBody}
-        </div>
-      </div>
+        {computerBody}
+      </SidePanel>
     </div>
   );
 };

@@ -67,22 +67,22 @@ function getStatusLabel(
 }
 
 const DOT_CLASS_BY_KIND: Partial<Record<ToolWorkKind, string>> = {
-  terminal: "bg-emerald-400",
-  "file-write": "bg-blue-400",
-  "file-edit": "bg-purple-400",
-  "file-read": "bg-sky-400",
-  "file-search": "bg-orange-400",
-  "content-search": "bg-orange-400",
-  subagent: "bg-indigo-400",
-  scaffold: "bg-indigo-400",
-  browser: "bg-cyan-400",
-  devserver: "bg-violet-400",
+  terminal: "bg-success",
+  "file-write": "bg-info",
+  "file-edit": "bg-info",
+  "file-read": "bg-info",
+  "file-search": "bg-warning",
+  "content-search": "bg-warning",
+  subagent: "bg-info",
+  scaffold: "bg-info",
+  browser: "bg-info",
+  devserver: "bg-info",
 };
 
 function getDotClass(kind: ToolWorkKind, isLoading: boolean): string {
   return (
     DOT_CLASS_BY_KIND[kind] ??
-    (isLoading ? "bg-yellow-400" : "bg-muted-foreground/40")
+    (isLoading ? "bg-warning" : "bg-muted-foreground/40")
   );
 }
 
@@ -169,7 +169,7 @@ export function StatusLine({
   }, [pulse, displayedLabel]);
 
   return (
-    <div className="border-border/50 flex items-center gap-2 border-b px-3 py-1.5">
+    <div className="border-panel-border flex items-center gap-2 border-b px-3 py-1.5">
       <span className="relative inline-flex h-2 w-2 shrink-0">
         {pulse && (
           <span

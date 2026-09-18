@@ -82,7 +82,7 @@ export function SubtaskCard({
     if (task?.status === "completed") {
       return <CheckCircleIcon className="size-3" />;
     } else if (task?.status === "failed") {
-      return <XCircleIcon className="size-3 text-red-500" />;
+      return <XCircleIcon className="text-destructive size-3" />;
     } else if (task?.status === "in_progress") {
       return <Loader2Icon className="size-3 animate-spin" />;
     }
@@ -159,7 +159,7 @@ export function SubtaskCard({
                       "text-muted-foreground flex min-w-0 items-center gap-1 text-xs font-normal",
                       task.status === "failed" &&
                         task.error !== "superseded by a newer run"
-                        ? "text-red-500 opacity-67"
+                        ? "text-destructive opacity-67"
                         : "",
                     )}
                   >
@@ -239,7 +239,7 @@ export function SubtaskCard({
                   className={cn(
                     task.error === "superseded by a newer run"
                       ? "text-muted-foreground/60"
-                      : "text-red-500",
+                      : "text-destructive",
                   )}
                 >
                   {task.error}
@@ -251,7 +251,7 @@ export function SubtaskCard({
                     "size-4",
                     task.error === "superseded by a newer run"
                       ? "text-muted-foreground/40"
-                      : "text-red-500",
+                      : "text-destructive",
                   )}
                 />
               }

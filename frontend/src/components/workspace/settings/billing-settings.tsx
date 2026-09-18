@@ -90,7 +90,7 @@ export function BillingSettings() {
             size="sm"
             disabled={busy}
             onClick={() => go("checkout")}
-            className="bg-gradient-to-r from-violet-600 to-cyan-600 text-white hover:opacity-90"
+            className="bg-brand-gradient text-white hover:opacity-90"
           >
             {t.settings.account.billingUpgrade}
           </Button>

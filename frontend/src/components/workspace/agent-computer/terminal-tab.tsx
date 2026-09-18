@@ -89,8 +89,8 @@ export function terminalOutputClass(status: string): string {
   return cn(
     "border-l pl-4 leading-relaxed break-all whitespace-pre-wrap",
     status === "error"
-      ? "border-red-900/50 text-red-400"
-      : "border-emerald-900/30 text-emerald-300/80",
+      ? "border-destructive/50 text-destructive"
+      : "border-success/30 text-success/80",
   );
 }
 
@@ -190,7 +190,7 @@ export function Terminal({
   }, [active, terminalEvents.length, lastTerminalOutput]);
 
   const ModeToggle = (
-    <div className="border-border/30 flex shrink-0 items-center gap-1 border-b bg-black/40 px-2 py-1">
+    <div className="border-panel-border flex shrink-0 items-center gap-1 border-b bg-black/40 px-2 py-1">
       <span className="text-muted-foreground/50 mr-auto min-w-0 truncate font-mono text-[10px]">
         {t.agentComputer.terminal.tab}
       </span>
@@ -205,7 +205,7 @@ export function Terminal({
       {devLogCount > 0 && (
         <button
           onClick={() => setShowDevLogs((v) => !v)}
-          className="text-muted-foreground/50 hover:text-muted-foreground border-border/40 rounded border px-1.5 py-0.5 text-[10px]"
+          className="text-muted-foreground/50 hover:text-muted-foreground border-panel-border rounded border px-1.5 py-0.5 text-[10px]"
           title={
             showDevLogs
               ? t.agentComputer.terminal.hideDevLogs
@@ -219,7 +219,7 @@ export function Terminal({
       )}
       {/* shrink-0: the leading label yields (truncate) so this toggle never
           gets pushed past the panel edge, where "Shell" was cut off. */}
-      <div className="border-border/40 flex shrink-0 items-center rounded border text-[10px]">
+      <div className="border-panel-border flex shrink-0 items-center rounded border text-[10px]">
         <button
           onClick={() => setMode("stream")}
           className={cn(
@@ -248,7 +248,7 @@ export function Terminal({
           type="button"
           onClick={reconnectShell}
           disabled={terminalUrlFetching}
-          className="border-border/40 text-muted-foreground/60 hover:text-muted-foreground ml-1 rounded border px-1.5 py-0.5 text-[10px] disabled:opacity-50"
+          className="border-panel-border text-muted-foreground/60 hover:text-muted-foreground ml-1 rounded border px-1.5 py-0.5 text-[10px] disabled:opacity-50"
         >
           {terminalUrlFetching
             ? t.common.loading
@@ -272,7 +272,7 @@ export function Terminal({
                 type="button"
                 onClick={reconnectShell}
                 disabled={terminalUrlFetching}
-                className="border-border/40 text-muted-foreground hover:bg-muted/20 rounded border px-2 py-1 text-[11px] disabled:opacity-50"
+                className="border-panel-border text-muted-foreground hover:bg-muted/20 rounded border px-2 py-1 text-[11px] disabled:opacity-50"
               >
                 {terminalUrlFetching
                   ? t.common.loading
@@ -302,12 +302,12 @@ export function Terminal({
       <div className="flex h-full flex-col">
         {ModeToggle}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-black/50 text-center">
-          <div className="animate-pulse font-mono text-xl text-emerald-400/30">
+          <div className="text-success/30 animate-pulse font-mono text-xl">
             ▮
           </div>
           {logStatus === "reconnecting" ? (
             <div>
-              <p className="text-xs font-medium text-amber-400/70">
+              <p className="text-warning/70 text-xs font-medium">
                 {t.agentComputer.terminal.streamDown}
               </p>
               <p className="text-muted-foreground/40 mt-1 text-[10px]">
@@ -321,7 +321,7 @@ export function Terminal({
               </p>
               <p className="text-muted-foreground/40 mt-1 text-[10px]">
                 {t.agentComputer.terminal.noOutputHint}{" "}
-                <span className="text-emerald-400/70">
+                <span className="text-success/70">
                   {t.agentComputer.terminal.shell}
                 </span>
               </p>
@@ -340,19 +340,19 @@ export function Terminal({
           <div key={event.id || `${event.type}-${i}`} className="mb-4">
             {/* Command prompt line */}
             <div className="mb-1.5 flex items-center gap-1.5">
-              <span className="text-emerald-500/70 select-none">❯</span>
+              <span className="text-success/70 select-none">❯</span>
               <span
                 className={cn(
                   "flex-1 font-medium",
                   event.type === "search_files" || event.type === "grep_files"
-                    ? "text-orange-400"
-                    : "text-emerald-400",
+                    ? "text-warning"
+                    : "text-success",
                 )}
               >
                 {event.summary}
               </span>
               {event.status === "running" && (
-                <LoaderCircleIcon className="h-3 w-3 shrink-0 animate-spin text-emerald-400/50" />
+                <LoaderCircleIcon className="text-success/50 h-3 w-3 shrink-0 animate-spin" />
               )}
               <span className="text-muted-foreground/30 shrink-0 text-[10px]">
                 {event.ts}
@@ -362,7 +362,7 @@ export function Terminal({
             {event.output ? (
               <TerminalOutput output={event.output} status={event.status} />
             ) : event.status === "running" ? (
-              <div className="pl-4 text-emerald-400/40">
+              <div className="text-success/40 pl-4">
                 <span className="animate-pulse">
                   {t.agentComputer.terminal.running}
                 </span>
@@ -371,7 +371,7 @@ export function Terminal({
           </div>
         ))}
         <div ref={bottomRef} />
-        <span className="animate-pulse text-emerald-400/60">▮</span>
+        <span className="text-success/60 animate-pulse">▮</span>
       </div>
     </div>
   );

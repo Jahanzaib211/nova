@@ -115,8 +115,8 @@ export function CreditsMeter() {
             <div
               className={
                 low
-                  ? "h-full rounded-full bg-red-500 transition-all"
-                  : "h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 transition-all"
+                  ? "bg-destructive h-full rounded-full transition-all"
+                  : "bg-brand-gradient h-full rounded-full transition-all"
               }
               style={{ width: `${usedPct}%` }}
             />
@@ -128,7 +128,7 @@ export function CreditsMeter() {
 
           {/* Self-service request path (hybrid wall). */}
           {status === "pending" ? (
-            <p className="text-xs text-amber-600 dark:text-amber-500">
+            <p className="text-warning dark:text-warning text-xs">
               {t.settings.account.creditsRequestPending}
             </p>
           ) : showForm ? (

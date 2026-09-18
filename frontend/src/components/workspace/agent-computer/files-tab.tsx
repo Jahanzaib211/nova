@@ -52,14 +52,14 @@ function fileExtension(name: string): string {
 function getFileIcon(name: string): React.ReactNode {
   const ext = name.split(".").at(-1)?.toLowerCase() ?? "";
   if (ext === "html" || ext === "htm")
-    return <GlobeIcon className="h-3 w-3 text-orange-400" />;
+    return <GlobeIcon className="text-warning h-3 w-3" />;
   if (ext === "css" || ext === "scss")
-    return <PaletteIcon className="h-3 w-3 text-pink-400" />;
+    return <PaletteIcon className="text-info h-3 w-3" />;
   if (ext === "js" || ext === "ts" || ext === "jsx" || ext === "tsx")
-    return <CodeIcon className="h-3 w-3 text-yellow-400" />;
-  if (ext === "json") return <BracesIcon className="h-3 w-3 text-green-400" />;
+    return <CodeIcon className="text-warning h-3 w-3" />;
+  if (ext === "json") return <BracesIcon className="text-success h-3 w-3" />;
   if (ext === "md" || ext === "txt")
-    return <FileTextIcon className="h-3 w-3 text-sky-400" />;
+    return <FileTextIcon className="text-info h-3 w-3" />;
   return <FileIcon className="text-muted-foreground/60 h-3 w-3" />;
 }
 
@@ -163,8 +163,8 @@ function sortTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
 
 function symbolKindIcon(kind: string): React.ReactNode {
   if (kind === "class" || kind === "struct" || kind === "interface")
-    return <BracesIcon className="h-2.5 w-2.5 text-purple-400" />;
-  return <CodeIcon className="h-2.5 w-2.5 text-sky-400" />;
+    return <BracesIcon className="text-info h-2.5 w-2.5" />;
+  return <CodeIcon className="text-info h-2.5 w-2.5" />;
 }
 
 /** Mounted only while a file row is expanded — one fetch per (thread, file). */
@@ -311,9 +311,9 @@ function FileTreeNode({
             style={{ paddingLeft: `${depth * 10 + 4}px` }}
           >
             {open ? (
-              <FolderOpenIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
+              <FolderOpenIcon className="text-warning h-2.5 w-2.5 shrink-0" />
             ) : (
-              <FolderIcon className="h-2.5 w-2.5 shrink-0 text-yellow-400" />
+              <FolderIcon className="text-warning h-2.5 w-2.5 shrink-0" />
             )}
             <span className="font-medium">{node.name}/</span>
             <span className="text-muted-foreground/40 ml-auto shrink-0 text-[10px]">
@@ -417,7 +417,7 @@ export function FilesPanel({
       {commands.length > 0 && (
         <div>
           <div className="text-muted-foreground/70 flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
-            <PlayIcon className="h-3 w-3 text-sky-400" />
+            <PlayIcon className="text-info h-3 w-3" />
             {t.agentComputer.files.commandsHeader}
             <span className="bg-muted rounded px-1 text-[10px]">
               {commands.length}
@@ -428,7 +428,7 @@ export function FilesPanel({
               <span
                 key={`${c.project_id}:${c.name}`}
                 title={c.argv.join(" ")}
-                className="border-border/30 bg-muted/20 text-muted-foreground rounded border px-1.5 py-0.5 font-mono text-[10px]"
+                className="border-panel-border bg-muted/20 text-muted-foreground rounded border px-1.5 py-0.5 font-mono text-[10px]"
               >
                 {c.name}
               </span>
@@ -441,14 +441,14 @@ export function FilesPanel({
         <div>
           <div className="flex items-center justify-between px-1 pb-1">
             <div className="text-muted-foreground/70 flex items-center gap-1.5 text-[11px] font-medium">
-              <FileTextIcon className="h-3 w-3 text-emerald-400" />
+              <FileTextIcon className="text-success h-3 w-3" />
               Outputs
               <span className="bg-muted rounded px-1 text-[10px]">
                 {uniqueArtifacts.length}
               </span>
             </div>
           </div>
-          <div className="border-border/20 bg-muted/10 rounded border p-1">
+          <div className="border-panel-border bg-muted/10 rounded border p-1">
             {uniqueArtifacts.map((path) => (
               <div
                 key={path}
@@ -485,7 +485,7 @@ export function FilesPanel({
       {(treeFiles.length > 0 || runningCount > 0) && (
         <div>
           <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium">
-            <FolderIcon className="h-3 w-3 text-yellow-400" />
+            <FolderIcon className="text-warning h-3 w-3" />
             <span className="text-muted-foreground/70">
               {t.agentComputer.files.repository}
             </span>
@@ -511,7 +511,7 @@ export function FilesPanel({
               aria-label="Agent is working"
             />
           )}
-          <div className="border-border/20 bg-muted/10 rounded border p-1">
+          <div className="border-panel-border bg-muted/10 rounded border p-1">
             {sortTreeNodes(Object.values(tree.children)).map((child) => (
               <FileTreeNode
                 key={child.name}

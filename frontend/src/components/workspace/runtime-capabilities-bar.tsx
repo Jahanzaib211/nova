@@ -127,9 +127,9 @@ function deriveStatusVisuals(
   if (openCircuits === 0) {
     return {
       tone: {
-        bg: "bg-emerald-500/10",
-        dot: "bg-emerald-500",
-        icon: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-success/10",
+        dot: "bg-success",
+        icon: "text-success dark:text-success",
       },
       label: {
         text: t.runtimeBar.status.healthy,
@@ -143,9 +143,9 @@ function deriveStatusVisuals(
   if (openCircuits <= 2) {
     return {
       tone: {
-        bg: "bg-amber-500/10",
-        dot: "bg-amber-500",
-        icon: "text-amber-600 dark:text-amber-400",
+        bg: "bg-warning/10",
+        dot: "bg-warning",
+        icon: "text-warning dark:text-warning",
       },
       label: {
         text: t.runtimeBar.status.degraded(openCircuits),
@@ -158,9 +158,9 @@ function deriveStatusVisuals(
   }
   return {
     tone: {
-      bg: "bg-red-500/10",
-      dot: "bg-red-500",
-      icon: "text-red-600 dark:text-red-400",
+      bg: "bg-destructive/10",
+      dot: "bg-destructive",
+      icon: "text-destructive dark:text-destructive",
     },
     label: {
       text: t.runtimeBar.status.critical(openCircuits),
@@ -312,9 +312,9 @@ function MetricCounter({
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
+              "border-panel-border bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
               disabled && !warn && "opacity-50",
-              warn && "border-amber-500/60 bg-amber-500/10 text-amber-500",
+              warn && "border-warning/60 bg-warning/10 text-warning",
             )}
             data-testid={testId}
             data-state={warn ? "empty" : undefined}
@@ -352,7 +352,7 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
+              "border-panel-border bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
             )}
             data-testid="runtime-igino-pill"
           >
@@ -366,7 +366,7 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
                 not "Pipeline": the badge names the broken step, and the whole
                 pipeline is not down when one step is. */}
             {status.fetch && !status.fetch.healthy && (
-              <span className="rounded bg-amber-500/20 px-1 text-[9px] text-amber-400">
+              <span className="bg-warning/20 text-warning rounded px-1 text-[9px]">
                 {t.agentComputer.privacy.fetchHealth}
               </span>
             )}
@@ -451,7 +451,7 @@ export function RuntimeCapabilitiesBar({
     return (
       <div
         className={cn(
-          "bg-muted/30 text-muted-foreground border-border/40 flex items-center gap-2 border-b px-3 py-1.5 text-xs",
+          "bg-muted/30 text-muted-foreground border-panel-border flex items-center gap-2 border-b px-3 py-1.5 text-xs",
           className,
         )}
         data-testid="runtime-bar-offline"
@@ -474,7 +474,7 @@ export function RuntimeCapabilitiesBar({
     return (
       <div
         className={cn(
-          "bg-muted/10 border-border/40 flex items-center gap-2 border-b px-3 py-1.5 text-xs",
+          "bg-muted/10 border-panel-border flex items-center gap-2 border-b px-3 py-1.5 text-xs",
           className,
         )}
         aria-hidden
@@ -494,7 +494,7 @@ export function RuntimeCapabilitiesBar({
     <TooltipProvider delayDuration={150}>
       <div
         className={cn(
-          "border-border/40 bg-background/80 supports-[backdrop-filter]:bg-background/60 flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 text-xs backdrop-blur-sm",
+          "border-panel-border bg-background/80 supports-[backdrop-filter]:bg-background/60 flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 text-xs backdrop-blur-sm",
           ROW_HEIGHT,
           className,
         )}
@@ -579,7 +579,7 @@ export function RuntimeCapabilitiesBar({
 
         {installState && (
           <span
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 font-mono text-[11px] font-medium text-amber-600 dark:text-amber-400"
+            className="border-warning/30 bg-warning/10 text-warning dark:text-warning inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] font-medium"
             data-testid="runtime-installing-pill"
           >
             <Loader2Icon className="size-3 animate-spin" aria-hidden />
@@ -604,7 +604,7 @@ export function RuntimeCapabilitiesBar({
             />
           ) : (
             <span
-              className="inline-flex size-1.5 shrink-0 rounded-full bg-emerald-500/60"
+              className="bg-success/60 inline-flex size-1.5 shrink-0 rounded-full"
               aria-label="ready"
               data-testid="runtime-bar-ready-dot"
             />

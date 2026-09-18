@@ -306,7 +306,7 @@ export function PrivacyPanel({
                   <span
                     className={cn(
                       "shrink-0 text-[10px]",
-                      cap.healthy ? "text-emerald-400" : "text-amber-400",
+                      cap.healthy ? "text-success" : "text-warning",
                     )}
                   >
                     ●
@@ -355,7 +355,7 @@ export function PrivacyPanel({
                   <span
                     className={cn(
                       "shrink-0 text-[10px] font-medium tracking-wide uppercase",
-                      f.enabled ? "text-emerald-400" : "text-muted-foreground",
+                      f.enabled ? "text-success" : "text-muted-foreground",
                     )}
                   >
                     {f.enabled
@@ -412,12 +412,12 @@ function StatusCard({
   healthy: boolean;
 }) {
   return (
-    <div className="border-border/50 rounded-md border p-2">
+    <div className="border-panel-border rounded-md border p-2">
       <div className="text-muted-foreground text-xs">{label}</div>
       <div
         className={cn(
           "mt-1 text-sm font-medium",
-          healthy ? "text-emerald-400" : "text-amber-400",
+          healthy ? "text-success" : "text-warning",
         )}
       >
         {status}
@@ -434,7 +434,7 @@ function MetricCard({
   value: string | number;
 }) {
   return (
-    <div className="border-border/50 rounded-md border p-2">
+    <div className="border-panel-border rounded-md border p-2">
       <div className="text-muted-foreground text-xs">{label}</div>
       <div className="mt-1 text-sm font-medium">{value}</div>
     </div>

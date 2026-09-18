@@ -758,7 +758,7 @@ function ToolCall({
           <img
             src={src}
             alt="agent screenshot"
-            className="border-border/40 mt-2 max-w-full rounded-md border"
+            className="border-panel-border mt-2 max-w-full rounded-md border"
             data-testid="screenshot-output"
           />
         ) : (
@@ -822,7 +822,7 @@ function ToolCall({
                 <span
                   className={cn(
                     "font-mono tabular-nums",
-                    stat.tone === "positive" && "text-emerald-600",
+                    stat.tone === "positive" && "text-success",
                     stat.tone === "negative" && "text-destructive",
                   )}
                 >

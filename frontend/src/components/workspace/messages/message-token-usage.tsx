@@ -25,7 +25,7 @@ function TokenUsageSummary({
   return (
     <div
       className={cn(
-        "text-muted-foreground border-border/60 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-[11px]",
+        "text-muted-foreground border-panel-border mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-[11px]",
         className,
       )}
     >
@@ -105,12 +105,12 @@ export function MessageTokenUsageDebugList({
   }
 
   return (
-    <div className={cn("border-border/60 mt-1 border-t pt-2", className)}>
+    <div className={cn("border-panel-border mt-1 border-t pt-2", className)}>
       <div className="space-y-2">
         {steps.map((step) => (
           <div
             key={step.id}
-            className="bg-muted/30 border-border/50 flex items-start justify-between gap-3 rounded-md border px-3 py-2"
+            className="bg-muted/30 border-panel-border flex items-start justify-between gap-3 rounded-md border px-3 py-2"
           >
             <div className="min-w-0 flex-1 space-y-1">
               <div className="text-foreground flex items-center gap-2 text-xs font-medium">

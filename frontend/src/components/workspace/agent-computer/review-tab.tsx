@@ -15,18 +15,18 @@ import { cn } from "@/lib/utils";
 // Tab: Review — deterministic dual-audience code review (non-coder + developer)
 // ──────────────────────────────────────────────────────────
 function riskColor(level: string): string {
-  if (level === "high") return "text-red-400";
-  if (level === "med") return "text-orange-400";
-  return "text-yellow-400";
+  if (level === "high") return "text-destructive";
+  if (level === "med") return "text-warning";
+  return "text-warning";
 }
 
 // WIK risk levels (deerflow.workspace.models.execution_plan.RiskLevel) use a
 // different vocabulary than the sandbox-review risks above.
 function kernelRiskColor(level: string): string {
-  if (level === "critical") return "text-red-400";
-  if (level === "high") return "text-orange-400";
-  if (level === "medium") return "text-yellow-400";
-  return "text-emerald-400";
+  if (level === "critical") return "text-destructive";
+  if (level === "high") return "text-warning";
+  if (level === "medium") return "text-warning";
+  return "text-success";
 }
 
 export function ReviewPanel({
@@ -79,7 +79,7 @@ export function ReviewPanel({
   const verdict = isError
     ? {
         text: t.agentComputer.review.generationFailed,
-        cls: "text-red-400",
+        cls: "text-destructive",
       }
     : !review
       ? {
@@ -95,20 +95,20 @@ export function ReviewPanel({
             cls: "text-muted-foreground",
           }
         : high > 0
-          ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
+          ? { text: t.agentComputer.review.needsLook, cls: "text-destructive" }
           : med > 0
             ? {
                 text: t.agentComputer.review.mostlyFine,
-                cls: "text-orange-400",
+                cls: "text-warning",
               }
             : {
                 text: t.agentComputer.review.looksClean,
-                cls: "text-emerald-400",
+                cls: "text-success",
               };
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-border/30 bg-muted/20 flex shrink-0 items-center justify-between border-b px-2 py-1">
+      <div className="border-panel-border bg-muted/20 flex shrink-0 items-center justify-between border-b px-2 py-1">
         <span className="text-muted-foreground/70 font-mono text-xs">
           {t.agentComputer.review.codeReview}
         </span>
@@ -138,16 +138,15 @@ export function ReviewPanel({
       <ScrollArea className="h-full">
         <div className="flex flex-col gap-3 p-3 text-xs">
           {/* Plain-English verdict */}
-          <div className="border-border/30 bg-muted/10 rounded-lg border p-3">
+          <div className="border-panel-border bg-muted/10 rounded-lg border p-3">
             <div className={cn("text-sm font-medium", verdict.cls)}>
               {verdict.text}
             </div>
             {review && changedFiles.length > 0 && (
               <div className="text-muted-foreground/70 mt-1 text-[11px]">
                 {changedFiles.length} file{changedFiles.length === 1 ? "" : "s"}{" "}
-                changed ·{" "}
-                <span className="text-emerald-400">+{addedTotal}</span>{" "}
-                <span className="text-red-400">−{removedTotal}</span>
+                changed · <span className="text-success">+{addedTotal}</span>{" "}
+                <span className="text-destructive">−{removedTotal}</span>
                 {high + med === 0 &&
                   ` · ${t.agentComputer.review.noRiskyActions}`}
               </div>
@@ -165,7 +164,7 @@ export function ReviewPanel({
 
           {/* WIK plan verdict (live, bus -> SSE) */}
           {latestPlan && (
-            <div className="border-border/30 bg-muted/10 rounded-lg border p-3">
+            <div className="border-panel-border bg-muted/10 rounded-lg border p-3">
               <div className="text-muted-foreground/70 mb-1 font-medium">
                 {t.agentComputer.review.kernelVerdictTitle}
               </div>
@@ -203,7 +202,7 @@ export function ReviewPanel({
                 {risks.map((r, i) => (
                   <div
                     key={`${r.level}:${(r.message ?? r.evidence ?? "").slice(0, 48)}:${i}`}
-                    className="border-border/20 bg-muted/10 rounded border px-2 py-1"
+                    className="border-panel-border bg-muted/10 rounded border px-2 py-1"
                   >
                     <span
                       className={cn(
@@ -245,10 +244,10 @@ export function ReviewPanel({
                     <span className="text-muted-foreground/40 shrink-0 text-[9px]">
                       {f.status}
                     </span>
-                    <span className="shrink-0 text-emerald-400">
-                      +{f.added}
+                    <span className="text-success shrink-0">+{f.added}</span>
+                    <span className="text-destructive shrink-0">
+                      −{f.removed}
                     </span>
-                    <span className="shrink-0 text-red-400">−{f.removed}</span>
                   </div>
                 ))}
               </div>
@@ -265,7 +264,7 @@ export function ReviewPanel({
                 {Object.entries(checks).map(([name, state]) => (
                   <span
                     key={name}
-                    className="border-border/20 bg-muted/10 text-muted-foreground/70 rounded border px-1.5 py-0.5 text-[10px]"
+                    className="border-panel-border bg-muted/10 text-muted-foreground/70 rounded border px-1.5 py-0.5 text-[10px]"
                   >
                     {state === "ok" ? "✅" : state === "warn" ? "⚠️" : "•"}{" "}
                     {name.replace(/_/g, " ")}

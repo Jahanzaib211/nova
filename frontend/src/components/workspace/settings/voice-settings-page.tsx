@@ -545,7 +545,7 @@ export function VoiceSettingsPage() {
         </div>
 
         {config.has_overrides && (
-          <div className="border-border/50 flex items-center justify-between gap-4 border-t pt-4">
+          <div className="border-panel-border flex items-center justify-between gap-4 border-t pt-4">
             <p className="text-muted-foreground text-xs">
               These settings are saved separately from{" "}
               <code className="font-mono">config.yaml</code>, which is never

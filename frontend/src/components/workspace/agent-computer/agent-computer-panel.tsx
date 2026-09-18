@@ -98,7 +98,7 @@ function TabBtn({
       {active && (
         <motion.div
           layoutId="agent-computer-tab-underline"
-          className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-violet-500 to-cyan-400"
+          className="bg-brand-gradient absolute inset-x-1 -bottom-px h-0.5 rounded-full"
           transition={{ type: "spring", stiffness: 400, damping: 32 }}
         />
       )}
@@ -407,10 +407,10 @@ export function AgentComputerPanel({
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: 320, opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
-      className="border-border/50 bg-card/50 flex h-full w-full flex-col overflow-hidden border-l backdrop-blur-sm"
+      className="border-panel-border bg-card/50 flex h-full w-full flex-col overflow-hidden border-l backdrop-blur-sm"
     >
       {/* ── Header ── */}
-      <div className="border-border/50 bg-card/50 relative flex h-10 shrink-0 items-center justify-between overflow-hidden border-b px-3 backdrop-blur-sm">
+      <div className="border-panel-border bg-card/50 relative flex h-10 shrink-0 items-center justify-between overflow-hidden border-b px-3 backdrop-blur-sm">
         {!reducedMotion && (isLoading || currentTool) && (
           <ShineBorder
             borderWidth={1}
@@ -526,7 +526,7 @@ export function AgentComputerPanel({
         // Wrap rather than scroll: with the scrollbar hidden, Review and Recon
         // simply did not exist below ~620px of panel width (no affordance at
         // all). A second row is honest; an invisible tab is not.
-        className="border-border/50 flex shrink-0 flex-wrap border-b"
+        className="border-panel-border flex shrink-0 flex-wrap border-b"
       >
         <TabBtn
           active={activeTab === "files"}
@@ -547,7 +547,7 @@ export function AgentComputerPanel({
           <SquareTerminalIcon className="h-3 w-3" />
           {t.agentComputer.tabs.terminal}
           {terminalCount > 0 && (
-            <span className="rounded-full bg-emerald-500/20 px-1 text-[9px] text-emerald-400">
+            <span className="bg-success/20 text-success rounded-full px-1 text-[9px]">
               {terminalCount}
             </span>
           )}
@@ -715,7 +715,7 @@ export function AgentComputerPanel({
 
       {/* ── Task checklist ── */}
       {todos.length > 0 && (
-        <div className="border-border/50 shrink-0 border-t">
+        <div className="border-panel-border shrink-0 border-t">
           <TaskChecklist
             todos={todos}
             collapsed={todosCollapsed}
