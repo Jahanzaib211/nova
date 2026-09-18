@@ -282,6 +282,9 @@ services:
       # Mount the dev entrypoint as a read-only file so edits to the script
       # take effect on `make docker-restart` without requiring an image rebuild.
       - ./dev-entrypoint.sh:/usr/local/bin/dev-entrypoint.sh:ro
+      # Boot-time schema step (create_all, then alembic upgrade head); mounted
+      # like the entrypoint so it needs no image rebuild.
+      - ../scripts/db-migrate.sh:/usr/local/bin/db-migrate.sh:ro
       - ../backend/:/app/backend/
       # Preserve the .venv built during Docker image build — mounting the full backend/
       # directory above would otherwise shadow it with the (empty) host directory.

@@ -1,0 +1,1289 @@
+{
+  "tables": {
+    "admin_audit": {
+      "columns": {
+        "action": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(48)"
+        },
+        "actor": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "actor_ip": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "actor_user_agent": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(512)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "payload_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "target_user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_admin_audit_created_at",
+          [
+            "created_at"
+          ]
+        ],
+        [
+          "ix_admin_audit_target",
+          [
+            "target_user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "agent_configs": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "is_shared": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "is_system": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      },
+      "indexes": [
+        [
+          "ix_agent_configs_owner_id",
+          [
+            "owner_id"
+          ]
+        ],
+        [
+          "uq_agent_config_owner_name",
+          [
+            "name",
+            "owner_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "channel_connections": {
+      "columns": {
+        "bot_user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "capabilities_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "external_account_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "external_account_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "last_error_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "last_seen_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "metadata_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "provider": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "scopes_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "workspace_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "workspace_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        }
+      },
+      "indexes": [
+        [
+          "idx_channel_connections_event_lookup",
+          [
+            "bot_user_id",
+            "provider",
+            "workspace_id"
+          ]
+        ],
+        [
+          "ix_channel_connections_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_channel_connections_provider",
+          [
+            "provider"
+          ]
+        ],
+        [
+          "uq_channel_connection_active_identity",
+          [
+            "external_account_id",
+            "provider",
+            "workspace_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "external_account_id",
+          "owner_user_id",
+          "provider",
+          "workspace_id"
+        ]
+      ]
+    },
+    "channel_conversations": {
+      "columns": {
+        "connection_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "external_conversation_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "external_topic_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "provider": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "thread_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      },
+      "indexes": [
+        [
+          "ix_channel_conversations_connection_id",
+          [
+            "connection_id"
+          ]
+        ],
+        [
+          "ix_channel_conversations_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_channel_conversations_provider",
+          [
+            "provider"
+          ]
+        ],
+        [
+          "ix_channel_conversations_thread_id",
+          [
+            "thread_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "connection_id",
+          "external_conversation_id",
+          "external_topic_id"
+        ]
+      ]
+    },
+    "channel_credentials": {
+      "columns": {
+        "connection_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "encrypted_access_token": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "encrypted_extra_json": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "encrypted_refresh_token": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "expires_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "refresh_expires_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "token_type": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "version": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        }
+      },
+      "indexes": [],
+      "unique": []
+    },
+    "channel_oauth_states": {
+      "columns": {
+        "code_verifier_encrypted": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "consumed_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "expires_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "metadata_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "nonce_hash": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "provider": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "redirect_after": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "requested_scopes_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "state_hash": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(128)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_channel_oauth_states_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_channel_oauth_states_provider",
+          [
+            "provider"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "credit_grants": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "daily_bonus_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "expires_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "reason": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [
+        [
+          "idx_credit_grants_user_expiry",
+          [
+            "expires_at",
+            "user_id"
+          ]
+        ],
+        [
+          "ix_credit_grants_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "credit_requests": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "email": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "reason": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "requested_tokens": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "resolved_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "resolved_by": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_credit_requests_status_created",
+          [
+            "created_at",
+            "status"
+          ]
+        ],
+        [
+          "ix_credit_requests_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "feedback": {
+      "columns": {
+        "comment": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "feedback_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "message_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "rating": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "run_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "thread_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_feedback_run_id",
+          [
+            "run_id"
+          ]
+        ],
+        [
+          "ix_feedback_thread_id",
+          [
+            "thread_id"
+          ]
+        ],
+        [
+          "ix_feedback_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "run_id",
+          "thread_id",
+          "user_id"
+        ]
+      ]
+    },
+    "model_configs": {
+      "columns": {
+        "amd_compute": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        },
+        "base_url": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(512)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "description": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(1024)"
+        },
+        "display_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        },
+        "has_api_key": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "is_shared": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "is_system": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "model": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        },
+        "model_use": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "supports_reasoning_effort": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "supports_thinking": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "supports_vision": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      },
+      "indexes": [
+        [
+          "ix_model_configs_owner_id",
+          [
+            "owner_id"
+          ]
+        ],
+        [
+          "uq_model_config_owner_name",
+          [
+            "name",
+            "owner_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "password_reset_tokens": {
+      "columns": {
+        "consumed": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "consumed_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "expires_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "token_hash": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_password_reset_tokens_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "run_events": {
+      "columns": {
+        "category": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "content": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "event_metadata": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "event_type": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "run_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "seq": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "thread_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_events_run",
+          [
+            "run_id",
+            "seq",
+            "thread_id"
+          ]
+        ],
+        [
+          "ix_events_thread_cat_seq",
+          [
+            "category",
+            "seq",
+            "thread_id"
+          ]
+        ],
+        [
+          "ix_run_events_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "seq",
+          "thread_id"
+        ]
+      ]
+    },
+    "runs": {
+      "columns": {
+        "assistant_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "correlation_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "error": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "first_human_message": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "follow_up_to_run_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "kwargs_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "last_ai_message": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "lead_agent_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "llm_call_count": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "message_count": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "metadata_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "middleware_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "model_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "multitask_strategy": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        "run_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        "subagent_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "thread_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "token_usage_by_model": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "total_input_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "total_output_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "total_tokens": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_runs_created_at",
+          [
+            "created_at"
+          ]
+        ],
+        [
+          "ix_runs_thread_id",
+          [
+            "thread_id"
+          ]
+        ],
+        [
+          "ix_runs_thread_status",
+          [
+            "status",
+            "thread_id"
+          ]
+        ],
+        [
+          "ix_runs_user_created",
+          [
+            "created_at",
+            "user_id"
+          ]
+        ],
+        [
+          "ix_runs_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "shared_threads": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "thread_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "token": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_shared_threads_thread_id",
+          [
+            "thread_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "threads_meta": {
+      "columns": {
+        "assistant_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "display_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(256)"
+        },
+        "metadata_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(20)"
+        },
+        "thread_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_threads_meta_assistant_id",
+          [
+            "assistant_id"
+          ]
+        ],
+        [
+          "ix_threads_meta_user_id",
+          [
+            "user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "user_api_keys": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "encrypted_key": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "provider": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "user_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [],
+      "unique": []
+    },
+    "users": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "credit_usage_reset_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "daily_limit_override": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "email": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "is_forbidden": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "last_sign_in_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "needs_setup": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "oauth_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "oauth_provider": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "password_hash": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "plan": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "plan_renews_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "plan_status": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "referral_code": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "referred_by": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "stripe_customer_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "stripe_subscription_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "system_role": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "token_version": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "tos_accepted_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "tos_accepted_version": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        }
+      },
+      "indexes": [
+        [
+          "idx_users_oauth_identity",
+          [
+            "oauth_id",
+            "oauth_provider"
+          ]
+        ],
+        [
+          "ix_users_email",
+          [
+            "email"
+          ]
+        ],
+        [
+          "ix_users_referral_code",
+          [
+            "referral_code"
+          ]
+        ],
+        [
+          "ix_users_stripe_customer_id",
+          [
+            "stripe_customer_id"
+          ]
+        ]
+      ],
+      "unique": []
+    }
+  }
+}

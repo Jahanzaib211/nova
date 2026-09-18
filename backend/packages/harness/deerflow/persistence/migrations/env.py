@@ -45,7 +45,32 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+VERSION_TABLE = "alembic_version"
+VERSION_NUM_WIDTH = 128
+
+
+def _ensure_wide_version_table(connection) -> None:
+    """Own ``alembic_version`` so revision ids longer than 32 chars fit.
+
+    Alembic creates the table with ``version_num VARCHAR(32)``. Several
+    revision ids in this repo are 33–34 characters; SQLite ignores the
+    length, Postgres enforces it, and the very first ``upgrade head`` on the
+    live database died on the stamp (2026-09-19). Creating the table
+    ourselves (and widening it if an older one exists) runs before Alembic
+    looks for it, so it reuses ours.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(connection)
+    if not inspector.has_table(VERSION_TABLE):
+        connection.execute(text(f"CREATE TABLE {VERSION_TABLE} (version_num VARCHAR({VERSION_NUM_WIDTH}) NOT NULL, CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"))
+        return
+    if connection.dialect.name == "postgresql":
+        connection.execute(text(f"ALTER TABLE {VERSION_TABLE} ALTER COLUMN version_num TYPE VARCHAR({VERSION_NUM_WIDTH})"))
+
+
 def do_run_migrations(connection):
+    _ensure_wide_version_table(connection)
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -65,7 +90,7 @@ def _resolve_database_url() -> str:
 
 async def run_migrations_online() -> None:
     connectable = create_async_engine(_resolve_database_url())
-    async with connectable.connect() as connection:
+    async with connectable.begin() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
 

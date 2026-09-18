@@ -157,6 +157,15 @@ case "${UV_EXTRAS:-}" in
         ;;
 esac
 
+# ── Schema: create new tables, then apply Alembic head ──────────────────────
+# Until 2026-09 nothing ran the migrations on deploy, so a column added to an
+# existing table never reached a live database (audit PROD-001). Opt out with
+# NOVA_DB_MIGRATE=0. A failure here is fatal on purpose: booting a gateway
+# against a schema it does not expect is worse than not booting.
+if [ "${NOVA_DB_MIGRATE:-1}" = "1" ]; then
+    NOVA_BACKEND_DIR=/app/backend /usr/local/bin/db-migrate.sh
+fi
+
 # ── Hand off to uvicorn ─────────────────────────────────────────────────────
 
 PYTHONPATH=. exec uv run uvicorn app.gateway.app:app \

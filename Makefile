@@ -11,7 +11,7 @@
 #
 # DO NOT commit monitoring.env to git.
 
-.PHONY: help setup doctor config config-upgrade check install setup-sandbox sandbox-image \
+.PHONY: help setup doctor db-migrate config config-upgrade check install setup-sandbox sandbox-image \
 	dev dev-daemon start start-daemon stop \
 	docker-init docker-start docker-stop docker-logs up down \
 	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate \
@@ -89,6 +89,9 @@ config:
 
 config-upgrade:
 	@bash scripts/config-upgrade.sh
+
+db-migrate: ## Create missing tables and apply Alembic head to the app database (host, :5433)
+	@DATABASE_URL="$${DATABASE_URL:-postgresql://$${NOVA_PG_USER:-nova}:$${NOVA_PG_PASSWORD}@127.0.0.1:$${NOVA_PG_PORT:-5433}/$${NOVA_PG_DB:-nova}}" scripts/db-migrate.sh
 
 doctor:
 	@python3 scripts/doctor.py
