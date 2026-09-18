@@ -46,6 +46,39 @@ The Agent's Computer panel polls several `/api/sandbox/*` endpoints; without
 isn't running under `pnpm start`, the tabs render empty, and assertions pass
 vacuously.
 
+**Never let an e2e build reach the live gateway.** `next.config.js` bakes its
+`/api/*` rewrites to `DEER_FLOW_INTERNAL_GATEWAY_BASE_URL` at _build_ time
+(default `127.0.0.1:8001`). On this box that gateway is up, so an unmocked
+call returned 401 and the fetcher redirected the page to `/login` — tests
+that pass in CI (no gateway, 404) failed here, and test traffic hit
+production. `playwright.config.ts` sets the variable to a closed port for its
+own `webServer`; when you build by hand for a manual `pnpm start`, pass
+`DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://127.0.0.1:9` to `pnpm build`.
+
+**Visual regression** (`tests/e2e/visual/`): 25 screens × {chromium,
+mobile-chrome} pinned with `toHaveScreenshot` at 0.1 % tolerance (1 % let a
+whole line of text change pass). Opt-in with `NOVA_VISUAL=1`; it runs full
+Chromium with software GL because the landing's WebGL starfield wedges the
+headless shell for the _next_ page. Update snapshots only in a commit titled
+`vr: update snapshots (<reason>)`:
+
+```bash
+NOVA_VISUAL=1 E2E_PORT=3111 pnpm exec playwright test tests/e2e/visual \
+  --project=chromium --project=mobile-chrome --update-snapshots=all
+```
+
+**Minified production stacks**: `NOVA_SOURCEMAPS=1 pnpm build` emits browser
+source maps so a React `#185`-style error can be mapped back to a file.
+
+**The subtask registry is an external store** (`core/tasks/context.tsx`,
+`SubtaskStore` + `useSubtasks()`), not `useState`. Writers call
+`store.update(updater)` against the _live_ state; the previous `useState`
+version re-applied a queued functional update against a stale base while
+renders restarted under load, and the same transition was "accepted" every
+render until React #185 replaced the workspace. `MessageList` also skips
+derived writes the store already reflects (`subtaskWriteIsNoop`). Do not move
+it back to component state.
+
 ## Architecture
 
 ```
