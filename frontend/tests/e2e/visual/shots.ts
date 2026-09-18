@@ -120,7 +120,9 @@ const MASK_SELECTORS = [
   "time",
   "[data-vr-mask]",
   "[data-testid='token-usage']",
-  ".overflow-hidden.py-2 > h1",
+  // The whole hero headline: the rotating word changes width, which reflows
+  // the "with Nova" beside it, so masking the word alone was not enough.
+  "h1:has(> .overflow-hidden.py-2)",
 ];
 
 async function snap(page: Page, name: string) {
@@ -130,7 +132,10 @@ async function snap(page: Page, name: string) {
   await expect(page).toHaveScreenshot(`${name}.png`, {
     animations: "disabled",
     caret: "hide",
-    maxDiffPixelRatio: 0.01,
+    // 0.1 % of a 1280x720 frame is ~900 px: enough to absorb antialiasing,
+    // small enough that a changed line of text fails. 1 % let a whole verdict
+    // line change pass unnoticed.
+    maxDiffPixelRatio: 0.001,
     timeout: 15_000,
     mask: MASK_SELECTORS.map((s) => page.locator(s)),
   });
@@ -141,7 +146,9 @@ export function defineVisualTests() {
     !process.env.NOVA_VISUAL,
     "set NOVA_VISUAL=1 to run the visual-regression gate",
   );
-  test.describe.configure({ mode: "serial" });
+  // Independent screens: a single capture hiccup must not skip the rest, and
+  // one retry absorbs the occasional "Unable to capture screenshot".
+  test.describe.configure({ retries: 1 });
   // Full Chromium (new headless) instead of the headless shell, with software
   // GL: pixel-deterministic across machines, and the landing's WebGL starfield
   // otherwise wedges the shell's compositor so the *next* page's
@@ -209,24 +216,47 @@ export function defineVisualTests() {
     }
   });
 
-  test("agent's computer files and terminal", async ({ page }) => {
+  const COMPUTER_TABS = [
+    "files",
+    "terminal",
+    "viewer",
+    "browser",
+    "review",
+    "telemetry",
+    "privacy",
+  ] as const;
+
+  test("agent's computer, every tab", async ({ page }) => {
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
     await page.waitForLoadState("networkidle");
     const trigger = page
       .getByRole("button", { name: /agent's computer/i })
       .first();
     await trigger.click();
-    await page.getByRole("tab", { name: /^files/i }).click();
-    await page.locator('[data-tab="files"]').waitFor({ state: "visible" });
-    await snap(page, "computer-files");
-    await page.getByRole("tab", { name: /^terminal/i }).click();
-    await snap(page, "computer-terminal");
+    await expect(page.getByRole("tab").first()).toBeVisible();
+    for (const tab of COMPUTER_TABS) {
+      const panel = page.locator(`[data-tab="${tab}"]`);
+      // Tab labels follow t.agentComputer.tabs; "privacy" is labelled Recon.
+      const label = tab === "privacy" ? "recon" : tab;
+      await page
+        .getByRole("tab", { name: new RegExp(`^${label}`, "i") })
+        .first()
+        .click();
+      await expect(panel).toBeVisible();
+      await snap(page, `computer-${tab}`);
+    }
   });
 
   test("agents gallery", async ({ page }) => {
     await page.goto("/workspace/agents");
     await page.waitForLoadState("networkidle");
     await snap(page, "agents");
+  });
+
+  test("create agent", async ({ page }) => {
+    await page.goto("/workspace/agents/new");
+    await page.waitForLoadState("networkidle");
+    await snap(page, "agents-new");
   });
 
   for (const section of SETTINGS_SECTIONS) {

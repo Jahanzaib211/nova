@@ -76,7 +76,33 @@ def save_runtime_model_dicts(entries: list[dict[str, Any]], path: Path | str | N
         except OSError:
             pass
         raise
+    _hand_to_directory_owner(resolved)
     return resolved
+
+
+def _hand_to_directory_owner(path: Path) -> None:
+    """Give a file written as root to the owner of its (bind-mounted) directory.
+
+    The gateway's dev image runs as root and ``$DEER_FLOW_HOME`` is a bind
+    mount, so without this every save left a ``root:root 0600`` file the host
+    user could not read (host-side tests and ``make doctor`` then logged a
+    PermissionError and ignored the runtime models). Mode stays 0600 — the
+    file can hold API keys. Best effort: a failed chown must not lose the write.
+    """
+    geteuid = getattr(os, "geteuid", None)
+    if geteuid is None or geteuid() != 0:
+        return
+    try:
+        owner = os.stat(path.parent)
+    except OSError as exc:
+        logger.warning("Could not stat %s: %s", path.parent, exc)
+        return
+    if owner.st_uid == 0:
+        return
+    try:
+        os.chown(path, owner.st_uid, owner.st_gid)
+    except OSError as exc:
+        logger.warning("Could not hand %s to uid %s: %s", path, owner.st_uid, exc)
 
 
 def runtime_model_names(path: Path | str | None = None) -> set[str]:

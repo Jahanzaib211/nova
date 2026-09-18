@@ -86,14 +86,25 @@ export function ReviewPanel({
           text: t.agentComputer.review.generating,
           cls: "text-muted-foreground",
         }
-      : high > 0
-        ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
-        : med > 0
-          ? { text: t.agentComputer.review.mostlyFine, cls: "text-orange-400" }
-          : {
-              text: t.agentComputer.review.looksClean,
-              cls: "text-emerald-400",
-            };
+      : changedFiles.length === 0 && high + med === 0
+        ? // A review of nothing is not a clean bill of health; "Looks clean"
+          // in green over "0 files changed" claimed a verdict that was never
+          // reached.
+          {
+            text: t.agentComputer.review.noChanges,
+            cls: "text-muted-foreground",
+          }
+        : high > 0
+          ? { text: t.agentComputer.review.needsLook, cls: "text-red-400" }
+          : med > 0
+            ? {
+                text: t.agentComputer.review.mostlyFine,
+                cls: "text-orange-400",
+              }
+            : {
+                text: t.agentComputer.review.looksClean,
+                cls: "text-emerald-400",
+              };
 
   return (
     <div className="flex h-full flex-col">
@@ -131,7 +142,7 @@ export function ReviewPanel({
             <div className={cn("text-sm font-medium", verdict.cls)}>
               {verdict.text}
             </div>
-            {review && (
+            {review && changedFiles.length > 0 && (
               <div className="text-muted-foreground/70 mt-1 text-[11px]">
                 {changedFiles.length} file{changedFiles.length === 1 ? "" : "s"}{" "}
                 changed ·{" "}
@@ -261,12 +272,6 @@ export function ReviewPanel({
                   </span>
                 ))}
               </div>
-            </div>
-          )}
-
-          {review && changedFiles.length === 0 && (
-            <div className="text-muted-foreground/50">
-              {t.agentComputer.review.noChanges}
             </div>
           )}
         </div>

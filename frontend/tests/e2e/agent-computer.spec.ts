@@ -84,10 +84,11 @@ test.describe("Agent Computer panel", () => {
     await trigger.first().click();
     await expect(page.getByRole("tab").first()).toBeVisible({ timeout: 5_000 });
 
-    const activityPanel = page.locator('[data-tab="activity"]');
+    // Activity and Audit were merged into one Telemetry tab (3e89e33e).
+    const activityPanel = page.locator('[data-tab="telemetry"]');
     const terminalPanel = page.locator('[data-tab="terminal"]');
 
-    // Activity is the default tab (no sessionStorage-remembered "browser"
+    // Telemetry is the default tab (no sessionStorage-remembered "browser"
     // preference in a fresh test). Terminal is inactive but must still be
     // attached to the DOM (not unmounted) and hidden via CSS.
     await expect(activityPanel).toBeVisible();
@@ -99,9 +100,9 @@ test.describe("Agent Computer panel", () => {
     await expect(activityPanel).toBeAttached();
     await expect(activityPanel).toBeHidden();
 
-    // Switch back — Activity should still be the same attached node, not a
+    // Switch back — Telemetry should still be the same attached node, not a
     // freshly remounted one, and Terminal (now inactive) stays attached too.
-    await page.getByRole("tab", { name: /activity/i }).click();
+    await page.getByRole("tab", { name: /telemetry/i }).click();
     await expect(activityPanel).toBeVisible();
     await expect(terminalPanel).toBeAttached();
     await expect(terminalPanel).toBeHidden();

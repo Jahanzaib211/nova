@@ -828,6 +828,8 @@ export interface Translations {
       kernelVerdictSteps: (count: number) => string;
     };
     privacy: {
+      unavailable: string;
+      retry: string;
       title: string;
       sourceHealth: string;
       searxng: string;
@@ -887,6 +889,7 @@ export interface Translations {
     metrics: {
       tools: string;
       toolsDetail: string;
+      toolsEmpty: string;
       subagents: string;
       subagentsDetail: string;
       subagentsConcurrency: (n: number) => string;

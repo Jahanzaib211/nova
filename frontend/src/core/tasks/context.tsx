@@ -1,13 +1,11 @@
 import {
   createContext,
-  type Dispatch,
   type MutableRefObject,
-  type SetStateAction,
   useCallback,
   useContext,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
 } from "react";
 
 import type { Subtask } from "./types";
@@ -90,8 +88,46 @@ function logSubtaskTransition(entry: {
   });
 }
 
+type SubtaskUpdater = (
+  current: Record<string, Subtask>,
+) => Record<string, Subtask>;
+
+/**
+ * The subtask registry as an external store.
+ *
+ * It used to be `useState` inside the provider, with writers using the
+ * functional form. Under load (2026-09-18, a thread with an orphaned `task`
+ * call) React kept re-applying the queued updater against a stale base while
+ * the surrounding render was restarted, so the same transition was "accepted"
+ * on every render and never converged — React #185, and the route boundary
+ * replaced the whole workspace. A store applies each write synchronously to
+ * the *actual* current state, notifies only when the reference changed, and
+ * hands React a cached snapshot, so there is no update queue to replay.
+ */
+export class SubtaskStore {
+  private tasks: Record<string, Subtask> = {};
+  private readonly listeners = new Set<() => void>();
+
+  getSnapshot = (): Record<string, Subtask> => this.tasks;
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  /** Apply `updater` to the live state; notify only if the reference changed. */
+  update(updater: SubtaskUpdater): void {
+    const next = updater(this.tasks);
+    if (next === this.tasks) return;
+    this.tasks = next;
+    for (const listener of this.listeners) listener();
+  }
+}
+
 export interface SubtaskContextValue {
-  tasks: Record<string, Subtask>;
+  store: SubtaskStore;
   /**
    * Per-task authority of the stored status, shared by every writer.
    *
@@ -103,10 +139,6 @@ export interface SubtaskContextValue {
    * FSM's authority rule was silently only half in force.
    */
   sourcesRef: MutableRefObject<Record<string, SubtaskUpdateSource>>;
-  // A full Dispatch, not a value-only setter: writers must be able to use the
-  // functional form so an update always applies to current state rather than
-  // to whatever `tasks` their render captured.
-  setTasks: Dispatch<SetStateAction<Record<string, Subtask>>>;
 }
 
 // Deliberately no default value. A concrete default made the `undefined` check
@@ -118,13 +150,15 @@ export const SubtaskContext = createContext<SubtaskContextValue | undefined>(
   undefined,
 );
 
+const EMPTY_TASKS: Record<string, Subtask> = {};
+
 export function SubtasksProvider({ children }: { children: React.ReactNode }) {
-  const [tasks, setTasks] = useState<Record<string, Subtask>>({});
+  const storeRef = useRef<SubtaskStore | null>(null);
+  storeRef.current ??= new SubtaskStore();
   const sourcesRef = useRef<Record<string, SubtaskUpdateSource>>({});
+  const value = useMemo(() => ({ store: storeRef.current!, sourcesRef }), []);
   return (
-    <SubtaskContext.Provider value={{ tasks, setTasks, sourcesRef }}>
-      {children}
-    </SubtaskContext.Provider>
+    <SubtaskContext.Provider value={value}>{children}</SubtaskContext.Provider>
   );
 }
 
@@ -138,9 +172,18 @@ export function useSubtaskContext() {
   return context;
 }
 
+/** The live registry, subscribed through useSyncExternalStore. */
+export function useSubtasks(): Record<string, Subtask> {
+  const { store } = useSubtaskContext();
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    () => EMPTY_TASKS,
+  );
+}
+
 export function useSubtask(id: string) {
-  const { tasks } = useSubtaskContext();
-  return tasks[id];
+  return useSubtasks()[id];
 }
 
 /**
@@ -163,7 +206,7 @@ export function completedTodoIndexes(
 }
 
 export function useCompletedTodoBindings(): Set<number> {
-  const { tasks } = useSubtaskContext();
+  const tasks = useSubtasks();
   const signature = Object.values(tasks)
     .map((t) => `${t.id}:${t.status}:${(t.todoIndexes ?? []).join(",")}`)
     .sort()
@@ -190,7 +233,7 @@ export function useCompletedTodoBindings(): Set<number> {
 export const SUPERSEDE_GRACE_MS = 10_000;
 
 export function useSupersedeStaleSubtasks() {
-  const { setTasks } = useSubtaskContext();
+  const { store } = useSubtaskContext();
   /**
    * Settle only subtasks that are NOT part of the CURRENT run.
    *
@@ -201,7 +244,7 @@ export function useSupersedeStaleSubtasks() {
    */
   return useCallback(
     (currentToolCallIds: Set<string>) => {
-      setTasks((current) => {
+      store.update((current) => {
         let changed = false;
         const next: Record<string, Subtask> = {};
         const now = Date.now();
@@ -228,28 +271,51 @@ export function useSupersedeStaleSubtasks() {
         return changed ? next : current;
       });
     },
-    [setTasks],
+    [store],
   );
 }
 
+/** The fields `updateSubtask` treats as observable when deciding identity. */
+const OBSERVABLE_SUBTASK_FIELDS = [
+  "status",
+  "result",
+  "error",
+  "latestMessage",
+  "description",
+  "subagent_type",
+  "prompt",
+] as const;
+
+/**
+ * True when a write carries nothing the rendered task does not already show.
+ * MessageList's derived pass queues a write per task on every render; skipping
+ * the ones the store already reflects keeps the flush from ever re-issuing a
+ * transition it has already made.
+ */
+export function subtaskWriteIsNoop(
+  existing: Subtask | undefined,
+  write: Partial<Subtask> & { id: string },
+): boolean {
+  if (existing === undefined) return false;
+  for (const field of OBSERVABLE_SUBTASK_FIELDS) {
+    if (field in write && write[field] !== existing[field]) return false;
+  }
+  return true;
+}
+
 export function useUpdateSubtask() {
-  const { setTasks, sourcesRef } = useSubtaskContext();
+  const { store, sourcesRef } = useSubtaskContext();
 
   const updateSubtask = useCallback(
     (
       task: Partial<Subtask> & { id: string },
       source: SubtaskUpdateSource = "derived",
     ) => {
-      // Functional update, not a mutation of a captured `tasks` object.
-      //
-      // The previous version read and wrote `tasks` from the enclosing render
-      // and memoised on `[tasks, setTasks]`, so any listener still holding an
-      // earlier callback mutated an object React had already replaced -- the
-      // write was accepted by the FSM and then silently lost. That is exactly
-      // how a streamed `task_completed` landed and vanished before the next
-      // event, leaving the card on its stale status. The updater form always
-      // receives current state, so no writer can be stale.
-      setTasks((current) => {
+      // Applied to the store's live state, never to a `tasks` object captured
+      // by some render: a listener holding an earlier callback used to mutate
+      // an object React had already replaced, so a streamed `task_completed`
+      // was accepted by the FSM and then silently lost.
+      store.update((current) => {
         const previous = current[task.id];
         const previousStatus = previous?.status;
         const previousSource = sourcesRef.current[task.id];
@@ -313,7 +379,7 @@ export function useUpdateSubtask() {
         return unchanged ? current : { ...current, [task.id]: next };
       });
     },
-    [setTasks, sourcesRef],
+    [store, sourcesRef],
   );
 
   return updateSubtask;

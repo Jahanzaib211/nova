@@ -33,7 +33,7 @@ export function PrivacyPanel({
   active?: boolean;
 }) {
   const { t } = useI18n();
-  const { data: status, isLoading } = useIGINOStatus(active);
+  const { data: status, isLoading, isError, refetch } = useIGINOStatus(active);
   const testMutation = useTestIGINOCapability();
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
@@ -74,9 +74,23 @@ export function PrivacyPanel({
   }
 
   if (!status) {
+    // A failed status query used to fall through to "Loading..." forever,
+    // which reads as "still working" when the truth is "the gateway did not
+    // answer". Say so, and offer the retry.
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
-        {t.common.loading}
+      <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-4 text-sm">
+        <span>
+          {isError ? t.agentComputer.privacy.unavailable : t.common.loading}
+        </span>
+        {isError && (
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="hover:text-foreground text-xs underline underline-offset-2"
+          >
+            {t.agentComputer.privacy.retry}
+          </button>
+        )}
       </div>
     );
   }

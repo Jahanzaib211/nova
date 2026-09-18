@@ -5,18 +5,10 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
+import { type Credits, isCredits } from "@/core/credits";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsSection } from "./settings-section";
-
-interface Credits {
-  plan: string;
-  daily_limit: number;
-  used: number;
-  remaining: number;
-  unlimited: boolean;
-  request_status: string | null;
-}
 
 export function CreditsMeter() {
   const { t } = useI18n();
@@ -32,7 +24,10 @@ export function CreditsMeter() {
       .then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
       )
-      .then((data: Credits) => {
+      .then((data: unknown) => {
+        if (!isCredits(data)) {
+          throw new Error("malformed credits payload");
+        }
         setCredits(data);
         setStatus(data.request_status);
       })

@@ -523,7 +523,10 @@ export function AgentComputerPanel({
       <div
         role="tablist"
         aria-label={t.agentComputer.header}
-        className="border-border/50 scrollbar-none flex shrink-0 overflow-x-auto border-b"
+        // Wrap rather than scroll: with the scrollbar hidden, Review and Recon
+        // simply did not exist below ~620px of panel width (no affordance at
+        // all). A second row is honest; an invisible tab is not.
+        className="border-border/50 flex shrink-0 flex-wrap border-b"
       >
         <TabBtn
           active={activeTab === "files"}

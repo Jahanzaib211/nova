@@ -524,7 +524,7 @@ export function ModelsSettingsPage() {
           {models.map((model) => (
             <ModelItem key={model.name} model={model} onEdit={openEdit} />
           ))}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => openAdd()}>
               <PlusIcon className="size-4" />
               {strings.addButton}

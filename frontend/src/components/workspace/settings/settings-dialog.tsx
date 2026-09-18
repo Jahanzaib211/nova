@@ -111,7 +111,7 @@ export function SettingsSectionsShell({
   const { sections } = useSettingsSections();
 
   return (
-    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-1">
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-1">
       <nav className="bg-sidebar min-h-0 overflow-x-auto rounded-lg border p-2 md:overflow-x-visible md:overflow-y-auto">
         <ul className="flex gap-1 md:block md:space-y-1 md:pr-1">
           {sections.map(({ id, label, icon: Icon }) => {

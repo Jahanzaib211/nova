@@ -16,6 +16,7 @@ import {
 import { AgentComputerPanel } from "@/components/workspace/agent-computer/agent-computer-panel";
 import { WorkspaceStateProvider } from "@/components/workspace/agent-computer/workspace-state";
 import { usePanels } from "@/components/workspace/panels/context";
+import { fitPanelWidth } from "@/components/workspace/panels/fit-panel-width";
 import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilities-bar";
 import { useI18n } from "@/core/i18n/hooks";
 import { foldCommandCount } from "@/core/sandbox/command-count";
@@ -240,6 +241,22 @@ const ChatBox: React.FC<{
       return next;
     });
   };
+
+  // The column the chat and the panel share; the applied panel width yields
+  // to the chat's minimum inside it (see fitPanelWidth).
+  const layoutRootRef = useRef<HTMLDivElement | null>(null);
+  const [layoutWidth, setLayoutWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = layoutRootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const next = Math.round(entry?.contentRect.width ?? 0);
+      setLayoutWidth((prev) => (prev === next ? prev : next));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const appliedComputerWidth = fitPanelWidth(computerWidth, layoutWidth);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
@@ -505,7 +522,7 @@ const ChatBox: React.FC<{
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div ref={layoutRootRef} className="flex h-full w-full overflow-hidden">
       {/* ── Centre: existing chat + artifacts split (unchanged) ── */}
       <div className="min-w-0 flex-1">
         <ResizablePanelGroup
@@ -557,7 +574,7 @@ const ChatBox: React.FC<{
           "flex h-full shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out",
           !agentComputerOpen && "invisible",
         )}
-        style={{ width: agentComputerOpen ? computerWidth : 0 }}
+        style={{ width: agentComputerOpen ? appliedComputerWidth : 0 }}
       >
         {/* Drag (or scroll-wheel) this handle to resize the panel. */}
         <div
@@ -572,7 +589,7 @@ const ChatBox: React.FC<{
           )}
         />
         <div
-          style={{ width: computerWidth }}
+          style={{ width: appliedComputerWidth }}
           className="flex h-full shrink-0 flex-col overflow-hidden"
         >
           {computerBody}

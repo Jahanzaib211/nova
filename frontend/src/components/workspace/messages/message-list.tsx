@@ -38,6 +38,8 @@ import {
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
 import {
+  subtaskWriteIsNoop,
+  useSubtasks,
   useUpdateSubtask,
   type SubtaskUpdateSource,
 } from "@/core/tasks/context";
@@ -327,8 +329,15 @@ export function MessageList({
     queuedSubtaskUpdates.current.push([task, source]);
   };
 
+  // Skip writes the provider already renders. The identity bail-out inside
+  // `updateSubtask` is not sufficient by itself: under load the functional
+  // updater can run against a base older than the last commit, so the same
+  // accepted transition was re-issued every render until React #185 took the
+  // whole route down (2026-09-18, thread with an orphaned `task` call).
+  const renderedTasks = useSubtasks();
   useEffect(() => {
     for (const [task, source] of queuedSubtaskUpdates.current) {
+      if (subtaskWriteIsNoop(renderedTasks[task.id], task)) continue;
       updateSubtask(task, source);
     }
   });

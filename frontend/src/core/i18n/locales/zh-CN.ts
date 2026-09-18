@@ -922,6 +922,9 @@ export const zhCN: Translations = {
       kernelVerdictSteps: (count: number) => `${count} 个步骤`,
     },
     privacy: {
+      unavailable:
+        "\u65e0\u6cd5\u83b7\u53d6 Recon \u72b6\u6001\uff0c\u7f51\u5173\u672a\u54cd\u5e94\u3002",
+      retry: "\u91cd\u8bd5",
       title: "Recon — 私有网络访问",
       sourceHealth: "来源健康状态",
       searxng: "SearXNG",
@@ -988,6 +991,8 @@ export const zhCN: Translations = {
     metrics: {
       tools: "工具",
       toolsDetail: "主导智能体可用的内置工具。",
+      toolsEmpty:
+        "\u672a\u7ed1\u5b9a\u4efb\u4f55\u5de5\u5177\uff0c\u667a\u80fd\u4f53\u65e0\u6cd5\u6267\u884c\u64cd\u4f5c\u3002\u8bf7\u68c0\u67e5\u7f51\u5173\u65e5\u5fd7\u4e2d\u7684\u5de5\u5177\u52a0\u8f7d\u9519\u8bef\u3002",
       subagents: "智能体类型",
       subagentsDetail: "主导智能体可委托的智能体类型 — 并非正在运行的任务数。",
       subagentsConcurrency: (n: number) => `最多 ${n} 个委托任务可同时运行。`,

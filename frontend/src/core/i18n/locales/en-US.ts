@@ -960,6 +960,9 @@ export const enUS: Translations = {
         `${count} ${count === 1 ? "step" : "steps"}`,
     },
     privacy: {
+      unavailable:
+        "Recon status is unavailable \u2014 the gateway did not answer.",
+      retry: "Try again",
       title: "Recon — private web access",
       sourceHealth: "Source Health",
       searxng: "SearXNG",
@@ -1034,6 +1037,8 @@ export const enUS: Translations = {
     metrics: {
       tools: "tools",
       toolsDetail: "Builtin tools available to the lead agent.",
+      toolsEmpty:
+        "No tools are bound \u2014 the agent cannot act. Check the gateway log for tool-loading errors.",
       subagents: "agent types",
       subagentsDetail:
         "Agent types the lead can delegate to — not a count of running tasks.",

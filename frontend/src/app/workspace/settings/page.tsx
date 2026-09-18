@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
   SettingsSectionsShell,
   type SettingsSection,
@@ -32,15 +33,20 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b px-6 py-4">
-        <h1 className="text-lg font-semibold tracking-tight">
-          {t.settings.title}
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          {t.settings.description}
-        </p>
+      <header className="flex items-start gap-2 border-b px-4 py-4 sm:px-6">
+        {/* The sidebar collapses into a sheet below md; without a trigger this
+            route was a dead end on phones (no way back to the chat list). */}
+        <SidebarTrigger className="mt-0.5 md:hidden" />
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight">
+            {t.settings.title}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {t.settings.description}
+          </p>
+        </div>
       </header>
-      <div className="flex min-h-0 flex-1 p-6">
+      <div className="flex min-h-0 flex-1 p-4 sm:p-6">
         <SettingsSectionsShell
           activeSection={activeSection}
           onNavigate={setActiveSection}

@@ -125,20 +125,26 @@ export function SubtaskCard({
             variant="ghost"
             onClick={() => setCollapsed(!collapsed)}
           >
-            <div className="flex w-full items-center justify-between">
-              <ChainOfThoughtStep
-                className="font-normal"
-                label={
-                  task.status === "in_progress" ? (
-                    <Shimmer duration={3} spread={3}>
-                      {task.description}
-                    </Shimmer>
-                  ) : (
-                    task.description
-                  )
-                }
-                icon={<ClipboardListIcon />}
-              ></ChainOfThoughtStep>
+            <div className="flex w-full min-w-0 items-center justify-between gap-2">
+              {/* min-w-0 + flex-1 so the description yields width: it used
+                  to keep its content width and squeeze the status text on the
+                  right to zero, so a collapsed failed card showed nothing but
+                  an icon (2026-09-18, caught by subtask-card.spec). */}
+              <div className="min-w-0 flex-1">
+                <ChainOfThoughtStep
+                  className="font-normal"
+                  label={
+                    task.status === "in_progress" ? (
+                      <Shimmer duration={3} spread={3}>
+                        {task.description}
+                      </Shimmer>
+                    ) : (
+                      task.description
+                    )
+                  }
+                  icon={<ClipboardListIcon />}
+                ></ChainOfThoughtStep>
+              </div>
               {/* min-w-0 is load-bearing. A flex item's automatic minimum size is
                   its content, capped by max-width -- so `max-w-[420px]` on the
                   status text acted as a *floor*, not a ceiling: it could not
@@ -146,7 +152,7 @@ export function SubtaskCard({
                   a small viewport) a long failure string pushed out of the row
                   and over the chevron. `truncate` cannot help an item that is
                   never asked to shrink. */}
-              <div className="flex min-w-0 items-center gap-1">
+              <div className="flex max-w-[60%] min-w-0 shrink-0 items-center gap-1">
                 {collapsed && (
                   <div
                     className={cn(

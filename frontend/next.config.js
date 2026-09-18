@@ -32,6 +32,9 @@ const config = {
     defaultLocale: "en",
   },
   devIndicators: false,
+  // Opt-in for diagnosing minified production stacks (React #185 etc.):
+  //   NOVA_SOURCEMAPS=1 pnpm build
+  productionBrowserSourceMaps: process.env.NOVA_SOURCEMAPS === "1",
   async rewrites() {
     const rewrites = [];
     const gatewayURL = getInternalServiceURL(

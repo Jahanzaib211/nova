@@ -191,7 +191,7 @@ export function Terminal({
 
   const ModeToggle = (
     <div className="border-border/30 flex shrink-0 items-center gap-1 border-b bg-black/40 px-2 py-1">
-      <span className="text-muted-foreground/50 mr-auto font-mono text-[10px]">
+      <span className="text-muted-foreground/50 mr-auto min-w-0 truncate font-mono text-[10px]">
         {t.agentComputer.terminal.tab}
       </span>
       {/* Command count: total captured + work in flight. The panel badge
@@ -217,7 +217,9 @@ export function Terminal({
             : `${t.agentComputer.terminal.showDevLogs} (${devLogCount})`}
         </button>
       )}
-      <div className="border-border/40 flex items-center rounded border text-[10px]">
+      {/* shrink-0: the leading label yields (truncate) so this toggle never
+          gets pushed past the panel edge, where "Shell" was cut off. */}
+      <div className="border-border/40 flex shrink-0 items-center rounded border text-[10px]">
         <button
           onClick={() => setMode("stream")}
           className={cn(

@@ -240,7 +240,10 @@ function SkillRail({
   const overflow = enabled.length - MAX_VISIBLE_SKILLS;
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="flex min-w-0 items-center gap-1.5">
+      {/* shrink-0: the bar scrolls horizontally on purpose. Letting this rail
+          shrink instead crushed "no skills loaded" to zero width on phones and
+          ran the tools counter into the skills count. */}
+      <div className="flex shrink-0 items-center gap-1.5">
         <LayersIcon
           className="text-muted-foreground/70 size-3.5 shrink-0"
           aria-hidden
@@ -249,7 +252,7 @@ function SkillRail({
           {enabled.length}
           <span className="text-muted-foreground/50">/{total}</span>
         </span>
-        <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+        <div className="flex items-center gap-1">
           {enabled.length === 0 ? (
             <span className="text-muted-foreground/70 text-[11px]">
               {t.runtimeBar.skills.none}
@@ -287,14 +290,22 @@ function MetricCounter({
   count,
   testId,
   detail,
+  emptyWarning,
 }: {
   icon: typeof BoxesIcon;
   label: string;
   count: number;
   testId: string;
   detail?: string;
+  /**
+   * When set, a count of zero is a problem, not an idle state: the pill turns
+   * amber and this text replaces `detail`. Used for tools — a "Healthy" pill
+   * next to a dimmed "0 tools" read as fine when the agent could not act.
+   */
+  emptyWarning?: string;
 }) {
   const disabled = count === 0;
+  const warn = disabled && emptyWarning !== undefined;
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
@@ -302,9 +313,11 @@ function MetricCounter({
           <span
             className={cn(
               "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
-              disabled && "opacity-50",
+              disabled && !warn && "opacity-50",
+              warn && "border-amber-500/60 bg-amber-500/10 text-amber-500",
             )}
             data-testid={testId}
+            data-state={warn ? "empty" : undefined}
             aria-label={`${label}: ${count}`}
           >
             <Icon className="text-muted-foreground/80 size-3" aria-hidden />
@@ -318,8 +331,10 @@ function MetricCounter({
           <p className="font-medium">
             {count} {label.toLowerCase()}
           </p>
-          {detail && (
-            <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
+          {(warn ? emptyWarning : detail) && (
+            <p className="text-muted-foreground mt-1 text-xs">
+              {warn ? emptyWarning : detail}
+            </p>
           )}
         </TooltipContent>
       </Tooltip>
@@ -501,6 +516,7 @@ export function RuntimeCapabilitiesBar({
           count={tools.length}
           testId="runtime-tools-pill"
           detail={t.runtimeBar.metrics.toolsDetail}
+          emptyWarning={t.runtimeBar.metrics.toolsEmpty}
         />
         <MetricCounter
           icon={CpuIcon}
