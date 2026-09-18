@@ -629,6 +629,380 @@
         ]
       ]
     },
+    "job_events": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "job_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "payload_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "seq": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "type": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_job_events_job_id",
+          [
+            "job_id"
+          ]
+        ],
+        [
+          "ix_job_events_job_seq",
+          [
+            "job_id",
+            "seq"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "job_schedules": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "cron": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "enabled": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "last_enqueued_for": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "next_run_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "owner_user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "payload_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "queue": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "timezone": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "type": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_job_schedules_next_run_at",
+          [
+            "next_run_at"
+          ]
+        ],
+        [
+          "ix_job_schedules_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "name"
+        ]
+      ]
+    },
+    "job_workers": {
+      "columns": {
+        "current_job_ids_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "hostname": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "last_seen_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "pid": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "queues_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "started_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "version": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "worker_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [],
+      "unique": []
+    },
+    "jobs": {
+      "columns": {
+        "attempts": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "backoff_seconds": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "cancel_requested": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "dedupe_key": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "error": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "finished_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "heartbeat_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "lease_expires_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "lease_owner": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "max_attempts": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "owner_user_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "payload_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "priority": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "progress_message": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "progress_pct": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "queue": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(32)"
+        },
+        "result_json": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "run_after": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "schedule_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "started_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "thread_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "type": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_jobs_claim",
+          [
+            "priority",
+            "queue",
+            "run_after",
+            "status"
+          ]
+        ],
+        [
+          "ix_jobs_dedupe_key",
+          [
+            "dedupe_key"
+          ]
+        ],
+        [
+          "ix_jobs_lease_expires_at",
+          [
+            "lease_expires_at"
+          ]
+        ],
+        [
+          "ix_jobs_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_jobs_queue",
+          [
+            "queue"
+          ]
+        ],
+        [
+          "ix_jobs_run_after",
+          [
+            "run_after"
+          ]
+        ],
+        [
+          "ix_jobs_schedule_id",
+          [
+            "schedule_id"
+          ]
+        ],
+        [
+          "ix_jobs_status",
+          [
+            "status"
+          ]
+        ],
+        [
+          "ix_jobs_thread_id",
+          [
+            "thread_id"
+          ]
+        ],
+        [
+          "ix_jobs_type",
+          [
+            "type"
+          ]
+        ]
+      ],
+      "unique": []
+    },
     "model_configs": {
       "columns": {
         "amd_compute": {

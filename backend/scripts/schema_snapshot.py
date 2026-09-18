@@ -21,6 +21,10 @@ def build_schema_document() -> dict:
 
     tables = {}
     for name, table in sorted(Base.metadata.tables.items()):
+        # Test suites declare throwaway models on the same Base (they start
+        # with an underscore); they are not part of the product schema.
+        if name.startswith("_"):
+            continue
         tables[name] = {
             "columns": {
                 col.name: {

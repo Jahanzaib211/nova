@@ -81,6 +81,12 @@ case "$NOVA_STACK" in
     # P14 probe and the privacy panel's SearXNG card sat red. Either the service
     # runs or the config should not point at it; it runs.
     SCALE_FLAGS=(--scale provisioner=0)
+    # The job runner is part of the chain; NOVA_JOBS_SCALE=0 keeps it off on a
+    # host that does not want background work (it still needs jobs.enabled in
+    # config.yaml to actually start).
+    if [ "${NOVA_JOBS_SCALE:-1}" = "0" ]; then
+      SCALE_FLAGS+=(--scale jobs=0)
+    fi
     ;;
   *)
     echo "ERROR: NOVA_STACK='$NOVA_STACK' is not valid (expected 'dev' or 'prod')" >&2

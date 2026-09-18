@@ -641,6 +641,56 @@ services:
   # down by ID (no name collision) and lets `docker compose up` recreate it
   # cleanly. Watches the Docker socket read-only-ish (needs it to issue the
   # restart); no ports, minimal footprint.
+  # Job runner — the worker process behind /api/jobs (campaign sends, imports,
+  # long agent tasks). Same image and bind mounts as the gateway, no ports, no
+  # Docker socket (the dood overlay touches only `gateway`), so a gateway
+  # --reload or restart cannot kill an in-flight job. It reuses the gateway's
+  # built image and .venv volume, so it never needs its own build; it waits
+  # for a *healthy* gateway because that is what runs the schema step.
+  # Scale to zero with NOVA_JOBS_SCALE=0 (scripts/pm2-deerflow.sh).
+  jobs:
+    image: deer-flow-dev-gateway:latest
+    container_name: deer-flow-jobs
+    command: ["sh", "-c", "cd /app/backend && PYTHONPATH=. exec uv run --no-sync python -m app.jobs.worker"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - deer-flow-dev
+    env_file:
+      - ../.env
+    environment:
+      - DEER_FLOW_PROJECT_ROOT=/app
+      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - DEER_FLOW_CONFIG_PATH=/app/config.yaml
+      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
+      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}
+      - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-dev}
+      - NOVA_VERSION=${DEERFLOW_VERSION:-nova-dev}
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../backend/:/app/backend/
+      - gateway-venv:/app/backend/.venv
+      - ../config.yaml:/app/config.yaml:ro
+      - ../extensions_config.json:/app/extensions_config.json:ro
+      - ../skills:/app/skills
+      - ../logs:/app/logs
+    healthcheck:
+      test: ["CMD", "sh", "-c", "cd /app/backend && PYTHONPATH=. uv run --no-sync python -m app.jobs.healthcheck --max-age 90"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    labels:
+      - autoheal=true
+    mem_limit: 3g
+    pids_limit: 256
+    restart: unless-stopped
+
   autoheal:
     # Digest-pinned; see the crawl4ai service above for the reasoning.
     image: willfarrell/autoheal@sha256:2ae2ff2c4047be936db416005262978b0d20d98d8f8dbfd2bc8bb97bbfc1a7b5

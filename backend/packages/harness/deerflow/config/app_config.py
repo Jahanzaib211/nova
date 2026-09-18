@@ -18,6 +18,7 @@ from deerflow.config.database_config import DatabaseConfig
 from deerflow.config.email_config import EmailConfig
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
+from deerflow.config.jobs_config import JobsConfig
 from deerflow.config.loop_detection_config import LoopDetectionConfig
 from deerflow.config.memory_config import MemoryConfig, load_memory_config_from_dict
 from deerflow.config.model_config import ModelConfig
@@ -146,6 +147,13 @@ class AppConfig(BaseModel):
         description=format_field_description(
             "database",
             field_doc="Unified database backend for run/feedback metadata (memory, sqlite, or postgres).",
+        ),
+    )
+    jobs: JobsConfig = Field(
+        default_factory=JobsConfig,
+        description=format_field_description(
+            "jobs",
+            field_doc="Job runner (separate worker process): queues, concurrency, lease/reaper/scheduler cadence.",
         ),
     )
     run_events: RunEventsConfig = Field(

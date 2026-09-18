@@ -24,6 +24,7 @@ from deerflow.persistence.channel_connections.model import (
 from deerflow.persistence.credit_grant.model import CreditGrantRow
 from deerflow.persistence.credit_request.model import CreditRequestRow
 from deerflow.persistence.feedback.model import FeedbackRow
+from deerflow.persistence.job.model import JobEventRow, JobRow, JobScheduleRow, JobWorkerRow
 from deerflow.persistence.models.agent_config_row import AgentConfigRow
 from deerflow.persistence.models.model_config_row import ModelConfigRow
 from deerflow.persistence.models.run_event import RunEventRow
@@ -35,6 +36,10 @@ from deerflow.persistence.user.model import UserRow
 from deerflow.persistence.user_api_key.model import UserApiKeyRow
 
 __all__ = [
+    "JobEventRow",
+    "JobRow",
+    "JobScheduleRow",
+    "JobWorkerRow",
     "AdminAuditRow",
     "AgentConfigRow",
     "ChannelConnectionRow",

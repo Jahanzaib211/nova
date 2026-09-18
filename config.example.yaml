@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 20
+config_version: 21
 
 # ============================================================================
 # Logging
@@ -1633,6 +1633,25 @@ run_events:
 
 # ============================================================
 # Email (self-service password reset)
+# ============================================================================
+# Job runner (background work: campaign sends, imports, long agent tasks)
+# ============================================================================
+# A separate worker process (`docker compose … up jobs`, `python -m app.jobs.worker`)
+# claims jobs from the `jobs` table with leases and heartbeats; the reaper
+# retries leases nobody renews and dead-letters after max_attempts; cron rows
+# in `job_schedules` enqueue on their cadence. The gateway only enqueues and
+# exposes /api/jobs. startup-only: the worker reads this block once.
+# jobs:
+#   enabled: true
+#   queues: [default, email, agents]
+#   concurrency: 4
+#   lease_ttl_seconds: 60
+#   poll_interval_seconds: 1.0
+#   reaper_interval_seconds: 15
+#   scheduler_interval_seconds: 30
+#   shutdown_grace_seconds: 30
+#   events_retention_days: 14
+
 # ============================================================
 # Outbound SMTP for the forgot-password flow. When enabled, POST
 # /api/v1/auth/forgot-password emails a one-time reset link

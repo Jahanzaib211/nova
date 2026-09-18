@@ -28,7 +28,11 @@ except ImportError:
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: the default silently disables every
+    # logger created before this point. Harmless for the CLI, but when the
+    # migrations run in-process (boot, tests) it muted the application's
+    # loggers — caplog-based tests after the migration test all went dark.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
