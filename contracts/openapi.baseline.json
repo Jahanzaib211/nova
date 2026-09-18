@@ -2944,18 +2944,6 @@
             "title": "Hidden",
             "type": "boolean"
           },
-          "max_input_tokens": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Context window wired onto the chat model's LangChain profile; drives fraction-based summarization triggers",
-            "title": "Max Input Tokens"
-          },
           "model": {
             "description": "Actual provider model identifier",
             "title": "Model",
@@ -3089,25 +3077,6 @@
               }
             ],
             "title": "Display Name"
-          },
-          "hidden": {
-            "default": false,
-            "description": "Hide from the chat model picker. False (the default) surfaces the model in chat.",
-            "title": "Hidden",
-            "type": "boolean"
-          },
-          "max_input_tokens": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Context window in tokens. For a local model this is the value the serving runtime was actually launched with (llama.cpp -c, Ollama num_ctx, vLLM --max-model-len) \u2014 setting it higher here does not enlarge the real window, it only misinforms summarization.",
-            "title": "Max Input Tokens"
           },
           "model": {
             "description": "Provider model identifier",
