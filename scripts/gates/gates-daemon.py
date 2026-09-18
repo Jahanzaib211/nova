@@ -238,6 +238,18 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_LIGHTHOUSE_INTERVAL", 21_600),
             timeout_sec=300,
         ),
+        # Machine inventory: what Nova can reach on this box (LLM gateways,
+        # Mailcow, Chatwoot, Twenty, OpenClaw, MCP servers, skills, ACP agents,
+        # CLIs, resources). Read-only TCP/HTTP probes with 3 s timeouts; the
+        # only slow parts are `pm2 jlist` and `openclaw --version`, hence the
+        # generous timeout. Ten minutes is plenty -- this is an inventory, not
+        # a watchdog (healthcheck-daemon owns "is Nova up").
+        Producer(
+            "inventory",
+            ["scripts/inventory.py"],
+            env_float("NOVA_GATE_INVENTORY_INTERVAL", 600),
+            timeout_sec=120,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took

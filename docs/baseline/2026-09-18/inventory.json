@@ -1,0 +1,210 @@
+{
+  "gate": "inventory",
+  "overall": "yellow",
+  "ok": true,
+  "checks": [
+    {
+      "id": "nova_nginx",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "HTTP 200",
+      "endpoint": "http://127.0.0.1:2026/health"
+    },
+    {
+      "id": "nova_gateway",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "HTTP 200",
+      "endpoint": "http://127.0.0.1:8001/health"
+    },
+    {
+      "id": "nova_postgres",
+      "kind": "database",
+      "health": "healthy",
+      "detail": "tcp ok",
+      "endpoint": "127.0.0.1:5433"
+    },
+    {
+      "id": "ollama",
+      "kind": "llm_gateway",
+      "health": "healthy",
+      "detail": "4 models: hymt7b:latest, qwen2.5vl:7b, qwen2.5:7b-instruct, nomic-embed-text:latest",
+      "endpoint": "http://host.docker.internal:11434"
+    },
+    {
+      "id": "litellm",
+      "kind": "llm_gateway",
+      "health": "healthy",
+      "detail": "HTTP 200",
+      "endpoint": "http://172.17.0.1:4000/health/liveliness"
+    },
+    {
+      "id": "mailcow_smtp",
+      "kind": "mail",
+      "health": "healthy",
+      "detail": "220 cloud.apexgroupcompanies.com ESMTP Postcow",
+      "endpoint": "host.docker.internal:25"
+    },
+    {
+      "id": "mailcow_imap",
+      "kind": "mail",
+      "health": "healthy",
+      "detail": "* OK [CAPABILITY IMAP4rev1 SASL-IR LOGIN-REFERRALS ID ENABLE IDLE LITERAL+ AUTH=PLAIN AUTH=LOGIN] Dovecot ready.",
+      "endpoint": "host.docker.internal:993"
+    },
+    {
+      "id": "mailcow_api",
+      "kind": "mail",
+      "health": "healthy",
+      "detail": "HTTP 200 (MAILCOW_API_KEY not set; needs host bridge from containers)",
+      "endpoint": "http://127.0.0.1:8080/api/v1/get/status/version"
+    },
+    {
+      "id": "chatwoot",
+      "kind": "helpdesk",
+      "health": "healthy",
+      "detail": "HTTP 200",
+      "endpoint": "http://127.0.0.1:4800/api"
+    },
+    {
+      "id": "twenty",
+      "kind": "crm",
+      "health": "healthy",
+      "detail": "HTTP 200",
+      "endpoint": "http://127.0.0.1:3008/healthz"
+    },
+    {
+      "id": "openclaw",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "HTTP 200",
+      "endpoint": "http://127.0.0.1:18789/"
+    },
+    {
+      "id": "nova_searxng",
+      "kind": "search",
+      "health": "healthy",
+      "detail": "Up 39 hours (healthy)",
+      "endpoint": "deer-flow-searxng"
+    },
+    {
+      "id": "nova_crawl4ai",
+      "kind": "crawler",
+      "health": "healthy",
+      "detail": "Up 39 hours (healthy)",
+      "endpoint": "deer-flow-crawl4ai"
+    },
+    {
+      "id": "nova_browserless",
+      "kind": "browser",
+      "health": "healthy",
+      "detail": "Up 39 hours (healthy)",
+      "endpoint": "deer-flow-browserless"
+    },
+    {
+      "id": "mcp_github",
+      "kind": "mcp_server",
+      "health": "disabled",
+      "detail": "stdio \u00b7 disabled (not probed on host)",
+      "endpoint": "npx"
+    },
+    {
+      "id": "mcp_postgres",
+      "kind": "mcp_server",
+      "health": "disabled",
+      "detail": "stdio \u00b7 disabled (not probed on host)",
+      "endpoint": "npx"
+    },
+    {
+      "id": "skills",
+      "kind": "skill",
+      "health": "healthy",
+      "detail": "27 public + 1 custom, 28 enabled",
+      "endpoint": "/home/jahanzaib/Desktop/nova/skills"
+    },
+    {
+      "id": "acp_agents",
+      "kind": "acp_agent",
+      "health": "disabled",
+      "detail": "no acp_agents in config.yaml",
+      "endpoint": null
+    },
+    {
+      "id": "claude_cli",
+      "kind": "acp_agent",
+      "health": "healthy",
+      "detail": "2.1.271 (Claude Code)",
+      "endpoint": "/home/jahanzaib/.local/bin/claude"
+    },
+    {
+      "id": "openclaw_cli",
+      "kind": "acp_agent",
+      "health": "healthy",
+      "detail": "OpenClaw 2026.9.2 (3928bad)",
+      "endpoint": "/home/jahanzaib/.npm-global/bin/openclaw"
+    },
+    {
+      "id": "pm2_nova",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "online \u00b7 3 restarts",
+      "endpoint": null
+    },
+    {
+      "id": "pm2_nova-litellm",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "online \u00b7 1 restarts",
+      "endpoint": null
+    },
+    {
+      "id": "pm2_nova-healthcheck",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "online \u00b7 1 restarts",
+      "endpoint": null
+    },
+    {
+      "id": "pm2_nova-gates",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "online \u00b7 0 restarts",
+      "endpoint": null
+    },
+    {
+      "id": "pm2_nova-ops",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "online \u00b7 0 restarts",
+      "endpoint": null
+    },
+    {
+      "id": "pm2_tunnel-nova",
+      "kind": "agent_gateway",
+      "health": "healthy",
+      "detail": "online \u00b7 0 restarts",
+      "endpoint": null
+    },
+    {
+      "id": "disk_root",
+      "kind": "database",
+      "health": "degraded",
+      "detail": "88% used, 33 GB free",
+      "endpoint": null
+    },
+    {
+      "id": "memory",
+      "kind": "database",
+      "health": "healthy",
+      "detail": "37% available, swap used 9.4 GB",
+      "endpoint": null
+    },
+    {
+      "id": "gpu",
+      "kind": "llm_gateway",
+      "health": "healthy",
+      "detail": "NVIDIA GeForce RTX 3060, 404 MiB, 12288 MiB",
+      "endpoint": null
+    }
+  ]
+}
