@@ -29,10 +29,10 @@ export function WorkspaceHeader({ className }: { className?: string }) {
       >
         {state === "collapsed" ? (
           <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full cursor-pointer items-center justify-center">
-            <div className="text-brand-gradient block pt-1 font-serif font-semibold group-hover/workspace-header:hidden">
+            <div className="text-brand-gradient block pt-1 font-serif font-semibold group-hover/workspace-header:hidden [@media(hover:none)]:hidden">
               N
             </div>
-            <SidebarTrigger className="hidden pl-2 group-hover/workspace-header:block" />
+            <SidebarTrigger className="hidden pl-2 group-hover/workspace-header:block [@media(hover:none)]:block" />
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2">

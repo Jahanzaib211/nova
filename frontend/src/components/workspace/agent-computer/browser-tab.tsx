@@ -647,7 +647,7 @@ export function Browser({
               className={cn(
                 "border-0 bg-white",
                 viewMode === "mobile"
-                  ? "h-full w-[375px] rounded-lg shadow-lg"
+                  ? "h-full w-full max-w-[375px] rounded-lg shadow-lg"
                   : "h-full w-full",
               )}
             />
@@ -803,7 +803,7 @@ export function Browser({
             className={cn(
               "border-0 bg-white",
               viewMode === "mobile"
-                ? "h-full w-[375px] rounded-lg shadow-lg"
+                ? "h-full w-full max-w-[375px] rounded-lg shadow-lg"
                 : "h-full w-full",
             )}
           />

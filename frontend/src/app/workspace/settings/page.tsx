@@ -8,6 +8,7 @@ import {
   type SettingsSection,
 } from "@/components/workspace/settings/settings-dialog";
 import { useI18n } from "@/core/i18n/hooks";
+import { isSettingsPageId } from "@/features/registry";
 
 /**
  * Standalone settings page. The same section rail + content used by the
@@ -23,8 +24,10 @@ export default function SettingsPage() {
   // Anchor support: /settings#memory opens the memory section directly.
   useEffect(() => {
     const onHash = () => {
-      const hash = window.location.hash.replace("#", "") as SettingsSection;
-      if (hash) setActiveSection(hash);
+      const hash = window.location.hash.replace("#", "");
+      // An unknown hash used to select a section that does not exist and
+      // render an empty body; ignore it and keep the current section.
+      if (isSettingsPageId(hash)) setActiveSection(hash);
     };
     onHash();
     window.addEventListener("hashchange", onHash);

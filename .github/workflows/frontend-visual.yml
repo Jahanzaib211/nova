@@ -1,0 +1,62 @@
+name: Frontend Visual Snapshots
+
+# Renders the visual-regression screens (frontend/tests/e2e/visual) inside
+# the Playwright container so fonts and GL are deterministic, and uploads the
+# result as an artifact.
+#
+# Non-blocking for now: the committed snapshots were rendered on the
+# developer box (Ubuntu 26.04 fonts), so an in-container compare would be red
+# on day one. Flip `--update-snapshots=all` to a plain compare (and drop
+# `continue-on-error`) once a container-rendered set has been committed with
+# `vr: update snapshots (container baseline)`.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-visual.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-visual-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  visual:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-jammy
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Enable Corepack
+        run: corepack enable && corepack prepare pnpm@10.26.2 --activate
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Render visual snapshots
+        working-directory: frontend
+        run: pnpm exec playwright test tests/e2e/visual --project=chromium --project=mobile-chrome --update-snapshots=all --workers=1
+        env:
+          SKIP_ENV_VALIDATION: '1'
+          NOVA_VISUAL: '1'
+          HOME: /root
+
+      - name: Upload rendered snapshots
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: visual-snapshots
+          path: frontend/tests/e2e/visual/__snapshots__/
+          retention-days: 14

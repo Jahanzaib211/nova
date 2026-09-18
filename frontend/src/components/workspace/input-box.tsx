@@ -611,7 +611,7 @@ export function InputBox({
     <div
       ref={promptRootRef}
       className={cn(
-        "relative flex min-w-0 flex-col",
+        "relative flex min-w-0 flex-col pb-[env(safe-area-inset-bottom)]",
         isWelcomeMode ? "gap-4" : "gap-2",
       )}
     >

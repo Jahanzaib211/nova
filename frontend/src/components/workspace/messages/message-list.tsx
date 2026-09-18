@@ -384,7 +384,7 @@ export function MessageList({
       }
 
       return (
-        <div className="mt-2 flex justify-start opacity-0 transition-opacity delay-200 duration-300 group-hover/assistant-turn:opacity-100">
+        <div className="mt-2 flex justify-start opacity-0 transition-opacity delay-200 duration-300 group-hover/assistant-turn:opacity-100 max-md:opacity-100">
           <CopyButton clipboardData={clipboardData} />
         </div>
       );
