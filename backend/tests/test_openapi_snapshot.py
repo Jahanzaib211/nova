@@ -67,6 +67,27 @@ def test_no_operation_removed(live_document, baseline_document):
     assert not missing, "operations present in the snapshot but gone from the gateway: " + ", ".join(f"{m} {p}" for m, p in missing)
 
 
+def _compatible(baseline: object, live: object) -> bool:
+    """True when ``live`` keeps everything ``baseline`` promised.
+
+    Additive changes pass: a new property on a response model, a new
+    response code, a field that became required. Removing or retyping
+    anything the snapshot pinned fails. Lists other than ``required`` (enum
+    values, ``anyOf`` branches, ...) must match exactly.
+    """
+    if isinstance(baseline, dict):
+        if not isinstance(live, dict):
+            return False
+        return all(key in live and _compatible(value, live[key]) for key, value in baseline.items())
+    if isinstance(baseline, list):
+        if not isinstance(live, list):
+            return False
+        if all(isinstance(item, str) for item in baseline) and all(isinstance(item, str) for item in live):
+            return set(baseline) <= set(live)
+        return baseline == live
+    return baseline == live
+
+
 def test_response_schemas_unchanged(live_document, baseline_document):
     live_ops = _operations(live_document)
     changed = []
@@ -74,9 +95,9 @@ def test_response_schemas_unchanged(live_document, baseline_document):
         live_op = live_ops.get(key)
         if live_op is None:
             continue  # reported by test_no_operation_removed
-        if baseline_op.get("responses") != live_op.get("responses"):
+        if not _compatible(baseline_op.get("responses"), live_op.get("responses")):
             changed.append(f"{key[0]} {key[1]}")
-    assert not changed, "response schemas changed for: " + ", ".join(changed)
+    assert not changed, "response schemas lost or retyped fields for: " + ", ".join(changed)
 
 
 def test_referenced_component_schemas_unchanged(live_document, baseline_document):
@@ -94,8 +115,8 @@ def test_referenced_component_schemas_unchanged(live_document, baseline_document
             if nested not in referenced:
                 referenced.add(nested)
                 frontier.add(nested)
-    changed = sorted(name for name in referenced if baseline_components.get(name) != live_components.get(name))
-    assert not changed, "response model schemas changed: " + ", ".join(changed)
+    changed = sorted(name for name in referenced if not _compatible(baseline_components.get(name), live_components.get(name)))
+    assert not changed, "response model schemas lost or retyped fields: " + ", ".join(changed)
 
 
 def test_additions_remind_to_refresh(live_document, baseline_document):
@@ -105,3 +126,20 @@ def test_additions_remind_to_refresh(live_document, baseline_document):
             "new gateway operations not in contracts/openapi.baseline.json (refresh the snapshot): " + ", ".join(f"{m} {p}" for m, p in added),
             stacklevel=1,
         )
+
+
+@pytest.mark.parametrize(
+    ("baseline", "live", "ok"),
+    [
+        ({"a": 1}, {"a": 1, "b": 2}, True),
+        ({"a": 1}, {"a": 2}, False),
+        ({"a": 1}, {}, False),
+        ({"required": ["a"]}, {"required": ["a", "b"]}, True),
+        ({"required": ["a", "b"]}, {"required": ["a"]}, False),
+        ({"enum": ["x"]}, {"enum": ["x", "y"]}, True),
+        ({"anyOf": [{"type": "string"}]}, {"anyOf": [{"type": "string"}, {"type": "null"}]}, False),
+        ({"properties": {"a": {"type": "string"}}}, {"properties": {"a": {"type": "integer"}}}, False),
+    ],
+)
+def test_compatible_accepts_additions_and_rejects_removals(baseline, live, ok):
+    assert _compatible(baseline, live) is ok
