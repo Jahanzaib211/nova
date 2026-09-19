@@ -1,7 +1,9 @@
+import { jobsManifest } from "./jobs/manifest";
 import { settingsCoreManifest } from "./settings-core/manifest";
 import {
   SETTINGS_PAGE_IDS,
   type FeatureManifest,
+  type NavSpec,
   type SettingsPageId,
   type SettingsPageSpec,
 } from "./types";
@@ -13,7 +15,15 @@ import {
  */
 export const FEATURE_MANIFESTS: readonly FeatureManifest[] = [
   settingsCoreManifest,
+  jobsManifest,
 ];
+
+/** All registered sidebar entries, in order. */
+export function navItems(): NavSpec[] {
+  return FEATURE_MANIFESTS.flatMap((m) => m.nav ?? []).sort(
+    (a, b) => a.order - b.order,
+  );
+}
 
 /** All registered settings pages, in rail order. */
 export function settingsPages(): SettingsPageSpec[] {

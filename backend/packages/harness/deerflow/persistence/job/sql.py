@@ -288,6 +288,32 @@ class JobRepository:
                 await self._append_event(session, job_id, JobEventType.RELEASED, {"worker_id": worker_id})
             await session.commit()
 
+    async def requeue(self, job_id: str) -> bool:
+        """Put a failed or dead-lettered job back on the queue with a fresh attempt budget."""
+        async with self._sf() as session:
+            res = await session.execute(
+                update(JobRow)
+                .where(JobRow.id == job_id, JobRow.status.in_((JobStatus.FAILED.value, JobStatus.DEAD_LETTER.value)))
+                .values(
+                    status=JobStatus.QUEUED.value,
+                    attempts=0,
+                    error=None,
+                    cancel_requested=False,
+                    result_json=None,
+                    progress_pct=0,
+                    progress_message=None,
+                    run_after=datetime.now(UTC),
+                    started_at=None,
+                    finished_at=None,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                )
+            )
+            if res.rowcount == 1:
+                await self._append_event(session, job_id, JobEventType.ENQUEUED, {"requeued": True})
+            await session.commit()
+            return res.rowcount == 1
+
     async def expired_leases(self, *, now: datetime | None = None) -> list[str]:
         now = now or datetime.now(UTC)
         async with self._sf() as session:

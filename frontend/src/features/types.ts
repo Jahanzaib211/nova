@@ -16,6 +16,7 @@ export const SETTINGS_PAGE_IDS = [
   "skills",
   "notification",
   "voice",
+  "jobs",
   "channels",
   "models",
   "about",
@@ -40,7 +41,19 @@ export interface SettingsPageSpec {
   flag?: FeatureFlagKey;
 }
 
+export interface NavSpec {
+  id: string;
+  /** Ascending; rendered after the built-in Chats / Agents entries. */
+  order: number;
+  icon: LucideIcon;
+  label: (t: Translations) => string;
+  href: string;
+  flag?: FeatureFlagKey;
+}
+
 export interface FeatureManifest {
   id: string;
   settings?: SettingsPageSpec[];
+  /** Sidebar entries this feature contributes. */
+  nav?: NavSpec[];
 }

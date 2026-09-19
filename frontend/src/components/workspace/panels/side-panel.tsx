@@ -8,7 +8,7 @@ import {
   COMPUTER_PANEL_MAX_WIDTH,
   COMPUTER_PANEL_MIN_WIDTH,
 } from "./fit-panel-width";
-import { ResizeHandle } from "./resize-handle";
+import { RESIZE_HANDLE_WIDTH, ResizeHandle } from "./resize-handle";
 import { type PanelSide, usePanelWidth } from "./use-panel-width";
 
 /**
@@ -79,8 +79,11 @@ export function SidePanel({
       style={{ width: open ? width : 0 }}
     >
       {side === "right" && handle}
+      {/* The column's width covers seam + content: the content div is fixed
+          (not flex-1) so text does not reflow during the width transition,
+          and it must subtract the seam or its last 8px are clipped. */}
       <div
-        style={{ width }}
+        style={{ width: width - RESIZE_HANDLE_WIDTH }}
         className="bg-panel flex h-full shrink-0 flex-col overflow-hidden"
       >
         {children}

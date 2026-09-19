@@ -18,6 +18,7 @@ from app.gateway.rate_limiter import InMemoryRateLimiter, RateLimiter, RedisRate
 from app.gateway.routers import (
     admin,
     admin_infra,
+    admin_jobs,
     agents,
     artifacts,
     assistants_compat,
@@ -31,6 +32,7 @@ from app.gateway.routers import (
     credits,
     feedback,
     igino,
+    jobs,
     legal,
     mcp,
     memory,
@@ -526,6 +528,12 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # Voice: full-duplex speech session + capability probe. Self-hosted engines,
     # opt-in via config.yaml `speech.enabled`; the WS refuses cleanly when off.
     app.include_router(voice_router.router)
+
+    # Job runner: user-facing /api/jobs and the operator /api/v1/admin/jobs.
+    # The worker is a separate process (app.jobs.worker); these only read,
+    # enqueue and steer. 503 when no SQL backend (jobs_repo unset).
+    app.include_router(jobs.router)
+    app.include_router(admin_jobs.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:

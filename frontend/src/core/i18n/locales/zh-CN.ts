@@ -12,6 +12,59 @@
 import type { Translations } from "./types";
 
 export const zhCN: Translations = {
+  features: {
+    jobs: {
+      title: "任务",
+      description:
+        "由后台工作进程为你执行的工作——长任务、定时发送、导入——带有实时进度、重试与取消。",
+      empty: "还没有任务。你安排或委派的工作会显示在这里。",
+      filterAll: "全部状态",
+      columns: {
+        type: "任务",
+        status: "状态",
+        progress: "进度",
+        attempts: "尝试",
+        created: "创建时间",
+        actions: "操作",
+      },
+      actions: {
+        cancel: "取消",
+        retry: "重试",
+        refresh: "刷新",
+        showEvents: "显示事件",
+        hideEvents: "隐藏事件",
+      },
+      events: { title: "事件", empty: "暂无事件记录。", live: "实时" },
+      schedules: {
+        title: "定时计划",
+        description: "Cron 计划按其节奏入队任务。时间按计划的时区解释。",
+        empty: "还没有定时计划。",
+        name: "名称",
+        type: "任务类型",
+        cron: "Cron 表达式",
+        timezone: "时区",
+        payload: "载荷（JSON）",
+        enabled: "已启用",
+        nextRun: "下次运行",
+        create: "添加计划",
+        delete: "删除",
+        invalidPayload: "载荷必须是 JSON 对象。",
+        created: "计划已创建",
+        deleted: "计划已删除",
+        updated: "计划已更新",
+      },
+      settings: {
+        title: "任务",
+        description: "后台工作与定时计划。",
+        openPage: "打开任务页面",
+      },
+      toasts: {
+        cancelled: "已请求取消",
+        retried: "任务已重新入队",
+        failed: "请求失败",
+      },
+    },
+  },
   // Locale meta
   locale: {
     localName: "中文",
@@ -178,6 +231,7 @@ export const zhCN: Translations = {
     recentChats: "最近的对话",
     demoChats: "演示对话",
     agents: "智能体",
+    jobs: "任务",
   },
 
   // Agents
@@ -402,6 +456,7 @@ export const zhCN: Translations = {
     title: "设置",
     description: "根据你的偏好调整 Nova 的界面和行为。",
     sections: {
+      jobs: "任务",
       account: "账号",
       appearance: "外观",
       channels: "渠道",

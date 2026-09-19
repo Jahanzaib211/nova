@@ -5,6 +5,9 @@ import { useMemo } from "react";
 import { env } from "@/env";
 import type { FeatureFlagKey } from "@/features/types";
 
+import { useCapabilities } from "./hooks";
+import type { ServerFeatureFlags } from "./types";
+
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
 
 const ALL_OFF: FeatureFlags = {
@@ -34,6 +37,27 @@ export function parseFeatureFlags(raw: string | undefined): FeatureFlags {
   return flags;
 }
 
+/** Server flags win when present; the env override can only add. */
+export function mergeFeatureFlags(
+  env_: FeatureFlags,
+  server: ServerFeatureFlags | undefined,
+): FeatureFlags {
+  const merged = { ...env_ };
+  for (const key of Object.keys(merged) as FeatureFlagKey[]) {
+    if (server?.[key]) merged[key] = true;
+  }
+  return merged;
+}
+
 export function useFeatureFlags(): FeatureFlags {
-  return useMemo(() => parseFeatureFlags(env.NEXT_PUBLIC_NOVA_FEATURES), []);
+  const { capabilities } = useCapabilities();
+  const server = capabilities?.features;
+  return useMemo(
+    () =>
+      mergeFeatureFlags(
+        parseFeatureFlags(env.NEXT_PUBLIC_NOVA_FEATURES),
+        server,
+      ),
+    [server],
+  );
 }

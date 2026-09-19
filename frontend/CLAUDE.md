@@ -55,12 +55,15 @@ production. `playwright.config.ts` sets the variable to a closed port for its
 own `webServer`; when you build by hand for a manual `pnpm start`, pass
 `DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://127.0.0.1:9` to `pnpm build`.
 
-**Visual regression** (`tests/e2e/visual/`): 25 screens × {chromium,
+**Visual regression** (`tests/e2e/visual/`): 26 screens × {chromium,
 mobile-chrome} pinned with `toHaveScreenshot` at 0.1 % tolerance (1 % let a
 whole line of text change pass). Opt-in with `NOVA_VISUAL=1`; it runs full
 Chromium with software GL because the landing's WebGL starfield wedges the
-headless shell for the _next_ page. Update snapshots only in a commit titled
-`vr: update snapshots (<reason>)`:
+headless shell for the _next_ page. There is deliberately no `/login` screen:
+the e2e server runs with auth disabled, so the `(auth)` layout redirects
+`/login` to `/workspace` on the server, and the "login" snapshot was a picture
+of the workspace that flaked on the follow-on client redirect. Update
+snapshots only in a commit titled `vr: update snapshots (<reason>)`:
 
 ```bash
 NOVA_VISUAL=1 E2E_PORT=3111 pnpm exec playwright test tests/e2e/visual \

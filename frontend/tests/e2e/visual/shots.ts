@@ -30,6 +30,7 @@ const SETTINGS_SECTIONS = [
   "skills",
   "notification",
   "voice",
+  "jobs",
   "channels",
   "models",
   "about",
@@ -82,9 +83,16 @@ async function mockEverything(page: Page) {
       }),
     ),
   );
+  await page.route("**/api/jobs?**", (r) =>
+    r.fulfill(json({ jobs: [], limit: 100, offset: 0 })),
+  );
+  await page.route("**/api/jobs/schedules", (r) =>
+    r.fulfill(json({ schedules: [] })),
+  );
   await page.route("**/api/runtime/capabilities", (r) =>
     r.fulfill(
       json({
+        features: { jobs: true },
         skills: [],
         tools: [],
         hooks: [],
@@ -113,7 +121,30 @@ async function mockEverything(page: Page) {
 // frame from random seeds, so they can never match a snapshot; hide them.
 // A frozen clock is not an option: toHaveScreenshot itself needs the page's
 // requestAnimationFrame and deadlocks under page.clock.pauseAt().
-const FREEZE_CSS = "canvas { display: none !important; }";
+// The hero headline is masked, but its box width follows the rotating word;
+// pin it to the full row so the mask edges never move.
+const FREEZE_CSS =
+  "canvas { display: none !important; } h1:has(> .overflow-hidden.py-2) { width: 100% !important; }" +
+  // Side panels animate their width; a frame caught mid-transition shifts
+  // the whole Agent's Computer column by a few pixels (flaked once in 40).
+  " [data-side-panel], [data-side-panel] > div { transition: none !important; }";
+
+/** Wait until every side panel has held the same width for two samples. */
+async function settlePanels(page: Page) {
+  await page.waitForFunction(
+    () =>
+      new Promise<boolean>((resolve) => {
+        const measure = () =>
+          Array.from(document.querySelectorAll("[data-side-panel]"))
+            .map((el) => Math.round(el.getBoundingClientRect().width))
+            .join(",");
+        const before = measure();
+        setTimeout(() => resolve(measure() === before), 200);
+      }),
+    undefined,
+    { timeout: 5_000 },
+  );
+}
 
 // Rotating hero word (WordRotate) and anything time-based.
 const MASK_SELECTORS = [
@@ -129,6 +160,7 @@ async function snap(page: Page, name: string) {
   await page.addStyleTag({ content: FREEZE_CSS });
   // Let entrance transitions (motion/react) settle.
   await page.waitForTimeout(1_500);
+  await settlePanels(page);
   await expect(page).toHaveScreenshot(`${name}.png`, {
     animations: "disabled",
     caret: "hide",
@@ -193,11 +225,11 @@ export function defineVisualTests() {
     await snap(page, "landing");
   });
 
-  test("login", async ({ page }) => {
-    await page.goto("/login");
-    await page.waitForLoadState("networkidle");
-    await snap(page, "login");
-  });
+  // No "login" screen: the e2e server runs with auth disabled, so the (auth)
+  // layout redirects /login to /workspace on the server. The snapshot that
+  // used to live here was a picture of the workspace, and it flaked whenever
+  // the follow-on client redirect (/workspace -> /workspace/chats/new) landed
+  // mid-capture. The form has no e2e coverage yet: it needs a signed-out server.
 
   test("workspace empty chat", async ({ page }) => {
     await page.goto("/workspace/chats/new");
@@ -227,13 +259,22 @@ export function defineVisualTests() {
   ] as const;
 
   test("agent's computer, every tab", async ({ page }) => {
+    // Seven captures in one test (1.5 s settle each plus the compare); the
+    // default 30 s budget was hit on a loaded box and reported as a flake.
+    test.setTimeout(120_000);
     await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
     await page.waitForLoadState("networkidle");
     const trigger = page
       .getByRole("button", { name: /agent's computer/i })
       .first();
-    await trigger.click();
-    await expect(page.getByRole("tab").first()).toBeVisible();
+    // A click that lands before hydration attaches the handler does nothing
+    // (seen on mobile-chrome under load); re-click until the tabs appear.
+    await expect(async () => {
+      await trigger.click();
+      await expect(page.getByRole("tab").first()).toBeVisible({
+        timeout: 2_000,
+      });
+    }).toPass({ timeout: 20_000 });
     for (const tab of COMPUTER_TABS) {
       const panel = page.locator(`[data-tab="${tab}"]`);
       // Tab labels follow t.agentComputer.tabs; "privacy" is labelled Recon.
@@ -251,6 +292,12 @@ export function defineVisualTests() {
     await page.goto("/workspace/agents");
     await page.waitForLoadState("networkidle");
     await snap(page, "agents");
+  });
+
+  test("jobs page", async ({ page }) => {
+    await page.goto("/workspace/jobs");
+    await page.waitForLoadState("networkidle");
+    await snap(page, "jobs");
   });
 
   test("create agent", async ({ page }) => {

@@ -328,9 +328,9 @@ for event in client.stream("hello"):
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 6,928 | `cd backend && make test` |
-| Frontend unit tests | 689 | `cd frontend && pnpm test` |
-| Playwright E2E | 85 | `cd frontend && pnpm test:e2e` |
+| Backend unit tests | 7,040 | `cd backend && make test` |
+| Frontend unit tests | 751 | `cd frontend && pnpm test` |
+| Playwright E2E | 132 | `cd frontend && pnpm test:e2e` |
 | Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
 
 ```bash
@@ -339,7 +339,7 @@ make ci-fast     # lint + tests only
 make self-audit  # full self-probe
 ```
 
-14 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
+18 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
 
 ## Contributing
 

@@ -12,6 +12,61 @@ import {
 import type { Translations } from "./types";
 
 export const enUS: Translations = {
+  features: {
+    jobs: {
+      title: "Jobs",
+      description:
+        "Background work the worker runs for you — long tasks, scheduled sends, imports — with live progress, retries and cancellation.",
+      empty:
+        "No jobs yet. Anything you schedule or delegate will show up here.",
+      filterAll: "All statuses",
+      columns: {
+        type: "Job",
+        status: "Status",
+        progress: "Progress",
+        attempts: "Attempts",
+        created: "Created",
+        actions: "Actions",
+      },
+      actions: {
+        cancel: "Cancel",
+        retry: "Retry",
+        refresh: "Refresh",
+        showEvents: "Show events",
+        hideEvents: "Hide events",
+      },
+      events: { title: "Events", empty: "No events recorded.", live: "live" },
+      schedules: {
+        title: "Schedules",
+        description:
+          "Cron schedules enqueue a job on their cadence. Times are interpreted in the schedule's timezone.",
+        empty: "No schedules yet.",
+        name: "Name",
+        type: "Job type",
+        cron: "Cron",
+        timezone: "Timezone",
+        payload: "Payload (JSON)",
+        enabled: "Enabled",
+        nextRun: "Next run",
+        create: "Add schedule",
+        delete: "Delete",
+        invalidPayload: "Payload must be a JSON object.",
+        created: "Schedule created",
+        deleted: "Schedule deleted",
+        updated: "Schedule updated",
+      },
+      settings: {
+        title: "Jobs",
+        description: "Background work and cron schedules.",
+        openPage: "Open the jobs page",
+      },
+      toasts: {
+        cancelled: "Cancellation requested",
+        retried: "Job re-queued",
+        failed: "Request failed",
+      },
+    },
+  },
   // Locale meta
   locale: {
     localName: "English",
@@ -185,6 +240,7 @@ export const enUS: Translations = {
     recentChats: "Recent chats",
     demoChats: "Demo chats",
     agents: "Agents",
+    jobs: "Jobs",
   },
 
   // Agents
@@ -421,6 +477,7 @@ export const enUS: Translations = {
     title: "Settings",
     description: "Adjust how Nova looks and behaves for you.",
     sections: {
+      jobs: "Jobs",
       account: "Account",
       appearance: "Appearance",
       channels: "Channels",

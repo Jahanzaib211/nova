@@ -13,20 +13,32 @@ import { mockLangGraphAPI } from "./utils/mock-api";
  *
  * Polled, not sampled: a section still streaming in its content can be wider
  * for a frame or two, and under parallel workers a single sample landed in
- * that window. The steady state is what must fit.
+ * that window. The steady state is what must fit. On failure the message
+ * names the offending elements, so a flake is diagnosable from the report.
  */
 async function expectNoHorizontalOverflow(page: Page) {
+  const measure = () =>
+    page.evaluate(() => {
+      const doc = document.documentElement;
+      const vw = doc.clientWidth;
+      const offenders = Array.from(document.querySelectorAll("body *"))
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 40 && r.right > vw + 1 && !el.closest("nav");
+        })
+        .slice(0, 5)
+        .map(
+          (el) =>
+            `${el.tagName.toLowerCase()} right=${Math.round(el.getBoundingClientRect().right)} .${(el.getAttribute("class") ?? "").slice(0, 80)}`,
+        );
+      return { overflow: doc.scrollWidth - doc.clientWidth, offenders };
+    });
   await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const doc = document.documentElement;
-          return doc.scrollWidth - doc.clientWidth;
-        }),
-      { timeout: 5_000 },
-    )
+    .poll(async () => (await measure()).overflow, { timeout: 15_000 })
     // Sub-pixel rounding shows up as a 1px diff on some builds.
     .toBeLessThanOrEqual(1);
+  const final = await measure();
+  expect(final.offenders, "elements past the viewport edge").toEqual([]);
 }
 
 test.describe("landing page on mobile", () => {
@@ -183,6 +195,11 @@ test.describe("settings route on mobile", () => {
   for (const section of SECTIONS) {
     test(`#${section} does not overflow the viewport`, async ({ page }) => {
       mockLangGraphAPI(page);
+      // The memory section proxies through Next's own /api/memory handler;
+      // answer it here so the section reaches its settled state.
+      await page.route("**/api/memory**", (r) =>
+        r.fulfill({ status: 404, contentType: "application/json", body: "{}" }),
+      );
       await page.goto(`/workspace/settings#${section}`);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
         timeout: 15_000,

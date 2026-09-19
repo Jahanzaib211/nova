@@ -48,6 +48,18 @@
 
 ---
 
+## v9.8 — Upgrade program: baseline, tokens, migrations, a job runner (2026-09-18/19)
+
+Phases P0–P3 of the upgrade program (`~/.claude/plans/ui-upgrades-from-side-cozy-melody.md`).
+
+- **Baseline & contracts (P0).** `contracts/{job_status,email_marketing_events,integrations_health}_contract.json` pinned by tests on both sides; `contracts/openapi.baseline.json` gate (removed/retyped fields fail, additions pass); `scripts/inventory.py` machine-inventory gate; 25-screen visual-regression baseline (`frontend/tests/e2e/visual`). Fixed what it exposed: Settings › Account/Memory crashes on partial payloads, the create-agent SSR crash, a React #185 loop in the subtask registry (now an external store), mobile overflow, "Looks clean"/"Loading…"/"Healthy" UI lies, e2e builds reaching the live gateway.
+- **Frontend foundation (P1).** Semantic tokens (`success/warning/info`, `panel-*`), visible focus rings, no dark `font-weight:300`, one brand gradient; ~200 raw palette classes converted with a ratchet test; `<SidePanel>` with pointer/touch/keyboard resize; feature-module registry (`src/features`) so settings pages and sidebar entries are declared once; server feature flags via `GET /api/runtime/capabilities` → `features`.
+- **Migrations at boot (P2a).** `scripts/db-migrate.sh` (create_all → `alembic upgrade head`) in the gateway entrypoint and `make db-migrate`; schema snapshot test; fixed Alembic's 32-char `alembic_version.version_num` that rejected this repo's revision ids on Postgres.
+- **Job runner (P2/P3).** `deerflow.jobs` + `deer-flow-jobs` worker container: leases, heartbeats, cooperative cancel, retry/backoff/dead-letter, reaper, cron schedules, graceful shutdown; `/api/jobs` and `/api/v1/admin/jobs`; watchdog probe `P15_jobs_worker` + `jobrunner` gate; Jobs page + settings section + sidebar entry in the UI. See `backend/docs/JOBS.md`.
+- **Fixes found on the way.** `<SidePanel>` clipped the last 8 px of every open panel (content was sized to the column, the seam took 8 px of it); the `/api/memory` route handlers proxied to the live gateway instead of `DEER_FLOW_INTERNAL_GATEWAY_BASE_URL`; the visual gate's "login" screen was a picture of the workspace (auth-disabled servers redirect `/login`) and is gone; the watchdog now honours a probe's `fixable` flag and a repair grace window so a busy docker daemon no longer triggers stack restarts.
+
+---
+
 ## v9.7 — Room to work, and a sandbox that stops moving
 
 Two problems that turned out to be the same problem: nothing bounded what Nova

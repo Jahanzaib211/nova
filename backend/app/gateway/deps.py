@@ -97,6 +97,7 @@ async def _drain_inflight_runs(run_manager: RunManager) -> None:
 if TYPE_CHECKING:
     from app.gateway.auth.local_provider import LocalAuthProvider
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+    from deerflow.persistence.job.sql import JobRepository
     from deerflow.persistence.thread_meta.base import ThreadMetaStore
     from deerflow.runtime import RunRecord
 
@@ -236,10 +237,13 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         sf = get_session_factory()
         if sf is not None:
             from deerflow.persistence.feedback import FeedbackRepository
+            from deerflow.persistence.job.sql import JobRepository
             from deerflow.persistence.run import RunRepository
 
             app.state.run_store = RunRepository(sf)
             app.state.feedback_repo = FeedbackRepository(sf)
+            # Job runner read/enqueue side; the worker process runs the jobs.
+            app.state.jobs_repo = JobRepository(sf)
         else:
             from deerflow.runtime.runs.store.memory import MemoryRunStore
 
@@ -441,6 +445,7 @@ get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
+get_jobs_repo: Callable[[Request], JobRepository] = _require("jobs_repo", "Job runner")
 
 # Typed service getters — gateway routers should use these instead of
 # importing from deerflow.* directly (Phase C6 platform decoupling).

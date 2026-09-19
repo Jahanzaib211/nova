@@ -250,6 +250,15 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_INVENTORY_INTERVAL", 600),
             timeout_sec=120,
         ),
+        # Application job runner (deer-flow-jobs): worker liveness, backlog,
+        # dead-letter, via the gateway's admin summary. Two minutes: a dead
+        # worker should show within one reaper interval of the next cycle.
+        Producer(
+            "jobrunner",
+            ["scripts/gates/jobs-gate.py"],
+            env_float("NOVA_GATE_JOBRUNNER_INTERVAL", 120),
+            timeout_sec=30,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took

@@ -18,3 +18,15 @@ describe("parseFeatureFlags", () => {
     expect(Object.values(parseFeatureFlags("all")).every(Boolean)).toBe(true);
   });
 });
+
+describe("mergeFeatureFlags", () => {
+  it("server flags turn features on; env can add but never remove", async () => {
+    const { mergeFeatureFlags } = await import("@/core/runtime/feature-flags");
+    const envFlags = parseFeatureFlags("integrations");
+    const merged = mergeFeatureFlags(envFlags, { jobs: true });
+    expect(merged.jobs).toBe(true);
+    expect(merged.integrations).toBe(true);
+    expect(merged.email_marketing).toBe(false);
+    expect(mergeFeatureFlags(envFlags, undefined)).toEqual(envFlags);
+  });
+});

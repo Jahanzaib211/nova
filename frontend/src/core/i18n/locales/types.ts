@@ -1,6 +1,52 @@
 import type { LucideIcon } from "lucide-react";
 
+export interface JobsFeatureTranslations {
+  title: string;
+  description: string;
+  empty: string;
+  filterAll: string;
+  columns: {
+    type: string;
+    status: string;
+    progress: string;
+    attempts: string;
+    created: string;
+    actions: string;
+  };
+  actions: {
+    cancel: string;
+    retry: string;
+    refresh: string;
+    showEvents: string;
+    hideEvents: string;
+  };
+  events: { title: string; empty: string; live: string };
+  schedules: {
+    title: string;
+    description: string;
+    empty: string;
+    name: string;
+    type: string;
+    cron: string;
+    timezone: string;
+    payload: string;
+    enabled: string;
+    nextRun: string;
+    create: string;
+    delete: string;
+    invalidPayload: string;
+    created: string;
+    deleted: string;
+    updated: string;
+  };
+  settings: { title: string; description: string; openPage: string };
+  toasts: { cancelled: string; retried: string; failed: string };
+}
+
 export interface Translations {
+  features: {
+    jobs: JobsFeatureTranslations;
+  };
   // Locale meta
   locale: {
     localName: string;
@@ -127,6 +173,7 @@ export interface Translations {
     chats: string;
     demoChats: string;
     agents: string;
+    jobs: string;
     channels: string;
   };
 
@@ -334,6 +381,7 @@ export interface Translations {
     title: string;
     description: string;
     sections: {
+      jobs: string;
       account: string;
       appearance: string;
       channels: string;

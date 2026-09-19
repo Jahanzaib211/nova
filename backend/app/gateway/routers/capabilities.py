@@ -87,7 +87,23 @@ class IGINOSummary(BaseModel):
     audit_stats: dict[str, Any] = Field(default_factory=dict)
 
 
+class FeatureFlags(BaseModel):
+    """Server-declared feature switches the UI gates navigation on.
+
+    Each maps to a config section's ``enabled`` (or, for ACP, to whether any
+    agent is configured). New features add a field here and in
+    ``frontend/src/features/types.ts``; a flag the frontend does not know is
+    simply ignored.
+    """
+
+    jobs: bool = False
+    integrations: bool = False
+    email_marketing: bool = False
+    acp_agents: bool = False
+
+
 class CapabilitiesResponse(BaseModel):
+    features: FeatureFlags = Field(default_factory=FeatureFlags)
     skills: list[SkillSummary] = Field(default_factory=list)
     tools: list[ToolSummary] = Field(default_factory=list)
     hooks: list[HookSummary] = Field(default_factory=list)
@@ -341,6 +357,22 @@ async def _safe_igino() -> IGINOSummary:
         return IGINOSummary()
 
 
+def _safe_features(config: AppConfig) -> FeatureFlags:
+    """Flags derived from config; a missing section reads as off."""
+
+    def enabled(section: str) -> bool:
+        block = getattr(config, section, None)
+        return bool(getattr(block, "enabled", False)) if block is not None else False
+
+    acp = getattr(config, "acp_agents", None)
+    return FeatureFlags(
+        jobs=enabled("jobs"),
+        integrations=enabled("integrations"),
+        email_marketing=enabled("email_marketing"),
+        acp_agents=bool(acp),
+    )
+
+
 # ---------- endpoint ----------
 
 
@@ -356,6 +388,7 @@ async def get_runtime_capabilities(
     plus a per-thread circuit-breaker snapshot. Read-only, fast (no I/O).
     """
     return CapabilitiesResponse(
+        features=_safe_features(config),
         skills=_safe_skills(config),
         tools=_safe_tools(config),
         hooks=_safe_hooks(config),

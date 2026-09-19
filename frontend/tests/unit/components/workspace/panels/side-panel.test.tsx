@@ -42,4 +42,13 @@ describe("SidePanel", () => {
     expect(html).toContain('aria-label="Resize panel"');
     expect(html).toContain("touch-none");
   });
+
+  it("gives the content the column width minus the seam", () => {
+    // Outer column 640 = 8px handle + 632px content. With the content at the
+    // full 640 the last 8px were clipped by overflow-hidden on every open
+    // panel, and the clipped edge moved a few px between runs (visual flake).
+    const html = render(true);
+    expect(html).toMatch(/style="width:640(px)?"/);
+    expect(html).toMatch(/style="width:632(px)?"/);
+  });
 });

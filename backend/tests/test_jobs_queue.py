@@ -154,3 +154,18 @@ async def test_list_for_owner_and_counts(tmp_path):
     assert [j["type"] for j in mine] == ["a"]
     summary = await repo.summary()
     assert summary["queued"] == 2 and summary["running"] == 0
+
+
+@pytest.mark.anyio
+async def test_requeue_only_from_failed_or_dead_letter(tmp_path):
+    repo = await _repo(tmp_path)
+    queue = JobQueue(repo)
+    job_id = await queue.enqueue("a", {}, max_attempts=1)
+    await repo.claim(queues=["default"], worker_id="w1", lease_ttl=timedelta(seconds=30))
+    await repo.mark_failed(job_id, error="boom")
+    assert await repo.requeue(job_id) is True
+    job = await repo.get(job_id)
+    assert job["status"] == JobStatus.QUEUED.value
+    assert job["attempts"] == 0 and job["error"] is None and job["cancel_requested"] is False
+    assert (await repo.list_events(job_id))[-1]["type"] == JobEventType.ENQUEUED.value
+    assert await repo.requeue(job_id) is False, "a queued job is not requeued again"

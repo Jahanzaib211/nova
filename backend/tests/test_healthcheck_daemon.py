@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
@@ -620,3 +621,231 @@ class TestDifyProbeAndFix:
 
         assert fixed == ["dify"]
         assert report.probes[0].fixed is True
+
+
+# ---------------------------------------------------------------------------
+# Post-repair grace + "docker ps timeout" is not a restart trigger
+#
+# Regression cover for 2026-09-13: host rebooted, docker was slow, P7 went RED
+# on "docker ps timeout" twice, and the daemon issued `pm2 restart nova` at
+# 08:29:15 and again at 08:29:40. The second restart interrupted the first
+# compose-up mid-flight and stranded deer-flow-gateway (stopped, never
+# restarted) for four hours.
+# ---------------------------------------------------------------------------
+
+
+class TestRepairGrace:
+    def _red_cycle(self, state, probe="P7_containers", detail="only 1 containers", **kw):
+        state.cycle_id += 1
+        report = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
+        report.add(healthcheck.ProbeResult(probe, healthcheck.Status.RED, detail, 1.0, **kw))
+        healthcheck.dispatch_fixes(report, state)
+        return report
+
+    def test_successful_repair_is_not_repeated_within_grace(self, monkeypatch):
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_deerflow_containers", lambda: attempts.append(1) or True)
+        state = healthcheck.WatchdogState()
+        # Stack stays RED for the whole grace window while it boots.
+        for _ in range(2 + healthcheck.FIX_GRACE_CYCLES - 1):
+            self._red_cycle(state)
+        assert attempts == [1], f"repair re-issued during grace: {len(attempts)}"
+        # Once the grace window has elapsed and it is *still* RED, repair again.
+        self._red_cycle(state)
+        assert attempts == [1, 1]
+
+    def test_docker_ps_timeout_never_restarts_the_stack(self, monkeypatch):
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_deerflow_containers", lambda: attempts.append(1) or True)
+        state = healthcheck.WatchdogState()
+        for _ in range(10):
+            self._red_cycle(state, detail="docker ps timeout", fixable=False)
+        assert attempts == []
+        # It still counts as RED for the dashboard.
+        assert state.consecutive_red["P7_containers"] == 10
+
+    @pytest.mark.asyncio
+    async def test_probe_containers_marks_timeout_unfixable(self, monkeypatch):
+        class _Hung:
+            async def communicate(self):
+                await asyncio.sleep(60)
+
+        async def _spawn(*a, **k):
+            return _Hung()
+
+        monkeypatch.setattr(healthcheck.asyncio, "create_subprocess_exec", _spawn)
+
+        async def _wait_for(coro, timeout):
+            coro.close()
+            raise TimeoutError
+
+        monkeypatch.setattr(healthcheck.asyncio, "wait_for", _wait_for)
+        res = await healthcheck.probe_containers()
+        assert res.status == healthcheck.Status.RED
+        assert res.detail == "docker ps timeout"
+        assert res.fixable is False
+
+    def test_stack_restart_refused_when_nova_restarted_recently(self, monkeypatch):
+        healed: list[str] = []
+        monkeypatch.setattr(healthcheck, "_pm2_app_age_sec", lambda app: 12.0)
+        monkeypatch.setattr(healthcheck, "_heal_pm2_app", lambda app, **kw: healed.append(app) or True)
+        assert healthcheck.fix_deerflow_containers() is False
+        assert healed == []
+
+    def test_stack_restart_allowed_when_nova_is_old(self, monkeypatch):
+        healed: list[str] = []
+        monkeypatch.setattr(healthcheck, "_pm2_app_age_sec", lambda app: 3600.0)
+        monkeypatch.setattr(healthcheck, "_heal_pm2_app", lambda app, **kw: healed.append(app) or True)
+        assert healthcheck.fix_deerflow_containers() is True
+        assert healed == ["nova"]
+
+
+class TestFixGatewayContainer:
+    def _fake_docker(self, monkeypatch, status: str | None):
+        calls: list[list[str]] = []
+
+        def _run(cmd, **kw):
+            calls.append(cmd)
+            if cmd[:2] == ["docker", "inspect"]:
+                if status is None:
+                    return subprocess.CompletedProcess(cmd, 1, "", "No such object")
+                return subprocess.CompletedProcess(cmd, 0, status + "\n", "")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", _run)
+        return calls
+
+    def test_starts_a_stopped_container(self, monkeypatch):
+        calls = self._fake_docker(monkeypatch, "exited")
+        assert healthcheck.fix_gateway_container() is True
+        assert ["docker", "start", healthcheck.GATEWAY_CONTAINER] in calls
+
+    def test_leaves_a_running_container_alone(self, monkeypatch):
+        calls = self._fake_docker(monkeypatch, "running")
+        assert healthcheck.fix_gateway_container() is False
+        assert not any(c[:2] in (["docker", "start"], ["docker", "restart"]) for c in calls)
+
+    def test_missing_container_is_left_to_p7(self, monkeypatch):
+        calls = self._fake_docker(monkeypatch, None)
+        assert healthcheck.fix_gateway_container() is False
+        assert not any(c[:2] == ["docker", "start"] for c in calls)
+
+    def test_dispatch_wires_p2_to_gateway_fix(self, monkeypatch):
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_gateway_container", lambda: attempts.append(1) or True)
+        state = healthcheck.WatchdogState()
+        for _ in range(2):
+            state.cycle_id += 1
+            report = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
+            report.add(healthcheck.ProbeResult("P2_gateway", healthcheck.Status.RED, "ConnectError", 1.0))
+            healthcheck.dispatch_fixes(report, state)
+        assert attempts == [1]
+        assert report.probes[0].fixed is True
+        assert "docker start gateway" in report.probes[0].detail
+
+
+class TestJobsWorkerProbe:
+    """P15_jobs_worker: the job runner is a separate container; a missing or
+    stale worker row means background work (campaign sends, imports) silently
+    stops while every other probe stays green."""
+
+    def _client(self, payload, status_code=200):
+        class R:
+            def __init__(self):
+                self.status_code = status_code
+
+            def json(self):
+                return payload
+
+        class C:
+            def __init__(self, *a, **k):
+                self.headers = k.get("headers") or {}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url, headers=None):
+                self.headers = headers or {}
+                return R()
+
+        return C
+
+    @pytest.mark.anyio
+    async def test_green_with_a_fresh_worker(self, monkeypatch):
+        client = self._client({"queued": 0, "running": 1, "retrying": 0, "dead_letter": 0, "workers": [{"worker_id": "w1", "last_seen_age_s": 4.0}]})
+        monkeypatch.setattr(healthcheck.httpx, "AsyncClient", client)
+        monkeypatch.setenv("NOVA_OPS_TOKEN", "tok")
+        healthcheck._jobs_dead_letter_seen = None
+        res = await healthcheck.probe_jobs_worker()
+        assert res.status == healthcheck.Status.GREEN
+        assert "1 worker" in res.detail
+
+    @pytest.mark.anyio
+    async def test_red_when_no_worker_is_fresh(self, monkeypatch):
+        client = self._client({"queued": 3, "running": 0, "retrying": 0, "dead_letter": 0, "workers": [{"worker_id": "w1", "last_seen_age_s": 400.0}]})
+        monkeypatch.setattr(healthcheck.httpx, "AsyncClient", client)
+        monkeypatch.setenv("NOVA_OPS_TOKEN", "tok")
+        res = await healthcheck.probe_jobs_worker()
+        assert res.status == healthcheck.Status.RED
+        assert "no live worker" in res.detail and "3 queued" in res.detail
+
+    @pytest.mark.anyio
+    async def test_yellow_when_dead_letter_grows(self, monkeypatch):
+        client = self._client({"queued": 0, "running": 0, "retrying": 0, "dead_letter": 2, "workers": [{"worker_id": "w1", "last_seen_age_s": 1.0}]})
+        monkeypatch.setattr(healthcheck.httpx, "AsyncClient", client)
+        monkeypatch.setenv("NOVA_OPS_TOKEN", "tok")
+        healthcheck._jobs_dead_letter_seen = 1
+        res = await healthcheck.probe_jobs_worker()
+        assert res.status == healthcheck.Status.YELLOW and "dead-letter" in res.detail
+        # steady state afterwards: same count → green again
+        res = await healthcheck.probe_jobs_worker()
+        assert res.status == healthcheck.Status.GREEN
+
+    @pytest.mark.anyio
+    async def test_skipped_without_ops_token(self, monkeypatch):
+        monkeypatch.setattr(healthcheck, "_ops_token", lambda: "")
+        res = await healthcheck.probe_jobs_worker()
+        assert res.status == healthcheck.Status.GREEN and "skipped" in res.detail
+
+    def test_ops_token_falls_back_to_dotenv(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("NOVA_OPS_TOKEN", raising=False)
+        (tmp_path / ".env").write_text('OTHER=1\nNOVA_OPS_TOKEN="from-dotenv"\n', encoding="utf-8")
+        monkeypatch.setattr(healthcheck, "__file__", str(tmp_path / "scripts" / "healthcheck-daemon.py"))
+        assert healthcheck._ops_token() == "from-dotenv"
+        monkeypatch.setenv("NOVA_OPS_TOKEN", "from-env")
+        assert healthcheck._ops_token() == "from-env"
+
+    def test_registered_with_a_fixer(self):
+        names = [n for n, _ in healthcheck.build_probe_factories()]
+        assert "P15_jobs_worker" in names
+        assert "P15_jobs_worker" in healthcheck.FIX_DISPATCH
+
+    def test_fix_restarts_a_stopped_jobs_container(self, monkeypatch):
+        calls: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+
+            class R:
+                returncode = 0
+                stdout = "exited"
+
+            return R()
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
+        assert healthcheck.fix_jobs_container() is True
+        assert ["docker", "restart", healthcheck.JOBS_CONTAINER] in calls
+
+    def test_fix_leaves_a_running_container_alone(self, monkeypatch):
+        def fake_run(cmd, **kwargs):
+            class R:
+                returncode = 0
+                stdout = "running"
+
+            return R()
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
+        assert healthcheck.fix_jobs_container() is False

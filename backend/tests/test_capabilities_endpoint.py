@@ -236,3 +236,16 @@ class TestReadOnlyContract:
         # different counts if skills discovery is racy, but the SET must match).
         assert {t["name"] for t in first["tools"]} == {t["name"] for t in second["tools"]}
         assert {h["name"] for h in first["hooks"]} == {h["name"] for h in second["hooks"]}
+
+
+def test_features_reflect_config_sections():
+    """Feature flags come from `<section>.enabled`; unknown/missing reads off."""
+    from app.gateway.routers.capabilities import _safe_features
+    from deerflow.config.app_config import AppConfig
+    from deerflow.config.sandbox_config import SandboxConfig
+
+    off = AppConfig(sandbox=SandboxConfig(use="deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"))
+    assert _safe_features(off).model_dump() == {"jobs": False, "integrations": False, "email_marketing": False, "acp_agents": False}
+    on = AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}, "jobs": {"enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
+    flags = _safe_features(on)
+    assert flags.jobs is True and flags.acp_agents is True and flags.integrations is False

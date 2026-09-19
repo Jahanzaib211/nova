@@ -6,6 +6,9 @@ import type { usePanelWidth } from "./use-panel-width";
 
 type HandleProps = ReturnType<typeof usePanelWidth>["handleProps"];
 
+/** The seam's hit area (`w-2`), which the panel column must leave room for. */
+export const RESIZE_HANDLE_WIDTH = 8;
+
 /**
  * The draggable seam of a <SidePanel>.
  *
