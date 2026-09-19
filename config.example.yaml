@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 23
+config_version: 24
 
 # ============================================================================
 # Logging
@@ -1736,6 +1736,35 @@ run_events:
 #     browserless:
 #       kind: browser
 #       url: http://browserless:3000
+
+# ============================================================================
+# Email marketing (lists, contacts, templates, campaigns, tracking, bounces)
+# ============================================================================
+# Sends go through the `email:` SMTP relay below (Mailcow on this box); this
+# block holds what is specific to campaigns. Hot-reloaded. The `jobs` worker
+# runs the pipeline (em.campaign.start → em.campaign.batch on the `email`
+# queue) and the IMAP bounce poll; the public tracking/unsubscribe links are
+# served under /api/em/t/* and /api/em/u/* with HMAC tokens. Suppressions
+# (hard bounces, complaints, unsubscribes) are never mailed again.
+# tracking_secret: generate once (`openssl rand -hex 32`) and keep it — every
+# link in every sent mail is signed with it.
+# email_marketing:
+#   enabled: false
+#   public_base_url: https://nova.example.com
+#   tracking_secret: $NOVA_EM_TRACKING_SECRET
+#   bounce_domain: cloud.example.com          # VERP: bounce+<send>@<domain>; defaults to the sender's domain
+#   default_throttle_per_minute: 120
+#   per_domain_per_minute: 20
+#   batch_size: 50
+#   bounce_mailbox:                            # receives bounce+*@ and unsubscribe+*@ (Mailcow catch-all alias)
+#     host: host.docker.internal
+#     port: 993
+#     use_ssl: true
+#     username: bounces@cloud.example.com
+#     password: $NOVA_EM_BOUNCE_PASSWORD
+#     folder: INBOX
+#   bounce_poll_cron: "*/5 * * * *"
+#   events_retention_days: 180
 
 # ============================================================
 # Email (self-service password reset)

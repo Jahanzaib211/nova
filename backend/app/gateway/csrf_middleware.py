@@ -65,6 +65,15 @@ _AUTH_EXEMPT_PATHS: frozenset[str] = frozenset(
 )
 
 
+# Paths that carry their own credential in the URL and are called by third
+# parties with no cookie and no Origin: RFC 8058 one-click unsubscribe.
+_CSRF_EXEMPT_PREFIXES: tuple[str, ...] = ("/api/em/u/",)
+
+
+def is_csrf_exempt_path(path: str) -> bool:
+    return any(path.startswith(prefix) for prefix in _CSRF_EXEMPT_PREFIXES)
+
+
 def is_auth_endpoint(request: Request) -> bool:
     """Check if the request is to an auth endpoint.
 
@@ -196,7 +205,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Cross-site auth request denied."},
             )
 
-        if should_check_csrf(request) and not _is_auth:
+        if should_check_csrf(request) and not _is_auth and not is_csrf_exempt_path(request.url.path):
             cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
             header_token = request.headers.get(CSRF_HEADER_NAME)
 

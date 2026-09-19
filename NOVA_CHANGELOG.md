@@ -48,6 +48,19 @@
 
 ---
 
+## v9.11 — Email marketing backend (2026-09-19)
+
+Phase P7 of the upgrade program. See `backend/docs/EMAIL_MARKETING.md`.
+
+- **Tables + repository** (`em_lists`, `em_contacts`, `em_list_members`, `em_templates`, `em_campaigns`, `em_sends`, `em_events`, `em_suppressions`, `em_bounce_cursor`; migration `2026_09_19_email_marketing`, schema snapshot refreshed). A new gate test proves the migration alone reproduces the ORM column for column on a database that predates the tables.
+- **Templates** render in a Jinja2 sandbox (autoescape, strict undefined, no loaders, allowlisted context); links are rewritten through the click tracker, the open pixel is injected, a text alternative is derived. `jinja2` is now an explicit harness dependency.
+- **Tracking**: HMAC tokens per send/purpose; click redirects verify a URL HMAC (no open redirect); one-click unsubscribe (RFC 8058) works with a bare POST — `/api/em/t/*` and `/api/em/u/*` are public and CSRF-exempt.
+- **Sending**: `em.campaign.start` snapshots recipients minus suppressions; `em.campaign.batch` sends through the `email:` relay with one connection per batch, RSET between messages, reconnect, 4xx/5xx classification, VERP envelopes, `List-Unsubscribe`, a per-domain token bucket that reschedules instead of sleeping, and batch chaining spaced by the campaign throttle. Pause/resume/cancel.
+- **Bounces & complaints**: DSN/ARF parsing, UID-cursor IMAP poll (`em.bounce.poll`), VERP / `X-Nova-Send` matching, suppression; mailto unsubscribes.
+- **API** `/api/em`: lists, contacts (+ CSV import as a job with header guessing), templates (+ sandboxed preview), campaigns (preflight, send-now, schedule, pause, resume, cancel, test-send, stats, events, sends), suppressions. `config_version` 24 (`email_marketing:` block, disabled by default).
+
+---
+
 ## v9.10 — Claude inside Nova: ACP agents with live transcripts and permission policy (2026-09-19)
 
 Phase P6 of the upgrade program.

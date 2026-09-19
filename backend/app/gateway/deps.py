@@ -446,6 +446,23 @@ get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_st
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
 
 
+def get_em_repo(request: Request):
+    """Email-marketing repository, built lazily on the app's session factory."""
+    from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+
+    state = request.app.state
+    repo = getattr(state, "em_repo", None)
+    if repo is None:
+        from deerflow.persistence.engine import get_session_factory
+
+        sf = get_session_factory()
+        if sf is None:
+            raise HTTPException(status_code=503, detail="Email marketing not available")
+        repo = EmailMarketingRepository(sf)
+        state.em_repo = repo
+    return repo
+
+
 def get_integrations_registry(request: Request):
     """The integrations registry for the freshest ``integrations:`` config.
 

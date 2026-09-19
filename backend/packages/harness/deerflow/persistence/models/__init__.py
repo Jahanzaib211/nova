@@ -23,6 +23,17 @@ from deerflow.persistence.channel_connections.model import (
 )
 from deerflow.persistence.credit_grant.model import CreditGrantRow
 from deerflow.persistence.credit_request.model import CreditRequestRow
+from deerflow.persistence.email_marketing.model import (
+    EmBounceCursorRow,
+    EmCampaignRow,
+    EmContactRow,
+    EmEventRow,
+    EmListMemberRow,
+    EmListRow,
+    EmSendRow,
+    EmSuppressionRow,
+    EmTemplateRow,
+)
 from deerflow.persistence.feedback.model import FeedbackRow
 from deerflow.persistence.job.model import JobEventRow, JobRow, JobScheduleRow, JobWorkerRow
 from deerflow.persistence.models.agent_config_row import AgentConfigRow
@@ -36,6 +47,15 @@ from deerflow.persistence.user.model import UserRow
 from deerflow.persistence.user_api_key.model import UserApiKeyRow
 
 __all__ = [
+    "EmBounceCursorRow",
+    "EmCampaignRow",
+    "EmContactRow",
+    "EmEventRow",
+    "EmListMemberRow",
+    "EmListRow",
+    "EmSendRow",
+    "EmSuppressionRow",
+    "EmTemplateRow",
     "JobEventRow",
     "JobRow",
     "JobScheduleRow",

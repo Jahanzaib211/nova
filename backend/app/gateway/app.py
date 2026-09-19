@@ -30,6 +30,8 @@ from app.gateway.routers import (
     channel_connections,
     channels,
     credits,
+    email_marketing,
+    email_marketing_public,
     feedback,
     igino,
     integrations,
@@ -535,6 +537,8 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # enqueue and steer. 503 when no SQL backend (jobs_repo unset).
     app.include_router(jobs.router)
     app.include_router(integrations.router)
+    app.include_router(email_marketing.router)
+    app.include_router(email_marketing_public.router)
     app.include_router(admin_jobs.router)
 
     @app.get("/health", tags=["health"])

@@ -108,3 +108,25 @@ def test_version_table_is_widened(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{db}")
     col = next(c for c in inspect(engine).get_columns("alembic_version") if c["name"] == "version_num")
     assert getattr(col["type"], "length", None) == 128
+
+
+def test_new_tables_are_created_by_their_migration_alone(tmp_path, monkeypatch):
+    """A database that predates a feature's tables must get them from the
+    migration, matching the ORM column for column — create_all at boot masks
+    a wrong or missing migration on a fresh database, so this test creates
+    everything *except* the newest feature's tables first."""
+    from sqlalchemy import MetaData
+
+    import deerflow.persistence.models  # noqa: F401
+
+    db = tmp_path / "older.db"
+    engine = create_engine(f"sqlite:///{db}")
+    older = MetaData()
+    for table in Base.metadata.sorted_tables:
+        if not table.name.startswith("em_"):
+            table.to_metadata(older)
+    older.create_all(engine)
+    engine.dispose()
+    _upgrade_head(db, monkeypatch)
+    diff = _diff(db)
+    assert diff == [], "the email-marketing migration disagrees with the ORM:\n" + "\n".join(str(d) for d in diff)

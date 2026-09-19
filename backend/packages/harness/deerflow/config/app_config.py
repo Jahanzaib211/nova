@@ -16,6 +16,7 @@ from deerflow.config.channel_connections_config import ChannelConnectionsConfig
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from deerflow.config.database_config import DatabaseConfig
 from deerflow.config.email_config import EmailConfig
+from deerflow.config.email_marketing_config import EmailMarketingConfig
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
 from deerflow.config.integrations_config import IntegrationsConfig
@@ -149,6 +150,10 @@ class AppConfig(BaseModel):
             "database",
             field_doc="Unified database backend for run/feedback metadata (memory, sqlite, or postgres).",
         ),
+    )
+    email_marketing: EmailMarketingConfig = Field(
+        default_factory=EmailMarketingConfig,
+        description=("Email marketing: public link origin, tracking secret, throttles, bounce mailbox, retention. Read per request / per job, so edits hot-reload."),
     )
     integrations: IntegrationsConfig = Field(
         default_factory=IntegrationsConfig,

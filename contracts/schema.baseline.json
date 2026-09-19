@@ -558,6 +558,603 @@
       ],
       "unique": []
     },
+    "em_bounce_cursor": {
+      "columns": {
+        "has_processed": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "BOOLEAN"
+        },
+        "last_error": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "last_polled_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "last_uid": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "mailbox": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(64)"
+        },
+        "uidvalidity": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        }
+      },
+      "indexes": [],
+      "unique": []
+    },
+    "em_campaigns": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "error": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "finished_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "from_email": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "from_name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "job_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "list_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "reply_to": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "scheduled_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "started_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "stats_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "template_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "throttle_per_minute": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "INTEGER"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_campaigns_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_em_campaigns_status",
+          [
+            "status"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "em_contacts": {
+      "columns": {
+        "attributes_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "email": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "email_normalized": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "first_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "last_name": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_contacts_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_em_contacts_status",
+          [
+            "status"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "email_normalized",
+          "owner_user_id"
+        ]
+      ]
+    },
+    "em_events": {
+      "columns": {
+        "campaign_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "contact_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "payload_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "send_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "type": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_events_campaign_id",
+          [
+            "campaign_id"
+          ]
+        ],
+        [
+          "ix_em_events_contact_id",
+          [
+            "contact_id"
+          ]
+        ],
+        [
+          "ix_em_events_created_at",
+          [
+            "created_at"
+          ]
+        ],
+        [
+          "ix_em_events_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_em_events_send_id",
+          [
+            "send_id"
+          ]
+        ],
+        [
+          "ix_em_events_type",
+          [
+            "type"
+          ]
+        ]
+      ],
+      "unique": []
+    },
+    "em_list_members": {
+      "columns": {
+        "added_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "contact_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "list_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_list_members_contact_id",
+          [
+            "contact_id"
+          ]
+        ],
+        [
+          "ix_em_list_members_list_id",
+          [
+            "list_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "contact_id",
+          "list_id"
+        ]
+      ]
+    },
+    "em_lists": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "description": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_lists_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "name",
+          "owner_user_id"
+        ]
+      ]
+    },
+    "em_sends": {
+      "columns": {
+        "attempts": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        },
+        "campaign_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "contact_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(36)"
+        },
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "email": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "last_error": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "message_id": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "VARCHAR(255)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "sent_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "status": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_sends_campaign_id",
+          [
+            "campaign_id"
+          ]
+        ],
+        [
+          "ix_em_sends_campaign_status",
+          [
+            "campaign_id",
+            "status"
+          ]
+        ],
+        [
+          "ix_em_sends_contact_id",
+          [
+            "contact_id"
+          ]
+        ],
+        [
+          "ix_em_sends_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_em_sends_status",
+          [
+            "status"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "message_id"
+        ]
+      ]
+    },
+    "em_suppressions": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "detail": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "email_normalized": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(320)"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "INTEGER"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "reason": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_suppressions_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ]
+      ],
+      "unique": [
+        [
+          "email_normalized",
+          "owner_user_id"
+        ]
+      ]
+    },
+    "em_templates": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "html": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "subject": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(998)"
+        },
+        "text": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "TEXT"
+        },
+        "updated_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "version": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "INTEGER"
+        }
+      },
+      "indexes": [
+        [
+          "ix_em_templates_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ]
+      ],
+      "unique": []
+    },
     "feedback": {
       "columns": {
         "comment": {
