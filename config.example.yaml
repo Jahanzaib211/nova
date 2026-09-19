@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 24
+config_version: 25
 
 # ============================================================================
 # Logging
@@ -1072,6 +1072,12 @@ sandbox:
 # Subagents are background workers delegated tasks by the lead agent
 
 # subagents:
+#   # Expose delegate_async / check_delegation: the lead agent hands a task to a
+#   # subagent or ACP agent as an `agents.task` job in the jobs container
+#   # (survives gateway reloads, visible on the Jobs page) and polls the result.
+#   # Needs jobs.enabled. The worker has no sandbox, so a subagent that calls
+#   # bash/file tools fails there with a clear error; ACP agents are unaffected.
+#   async_enabled: false
 #   # How many task tool calls may run in parallel (2-4, default 3). Until this
 #   # existed the limit could only be changed by editing MAX_CONCURRENT_SUBAGENTS
 #   # in source, and the Agent's Computer bar reported that constant while a run

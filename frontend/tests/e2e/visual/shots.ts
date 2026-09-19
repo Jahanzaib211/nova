@@ -145,6 +145,49 @@ async function mockEverything(page: Page) {
       }),
     ),
   );
+  await page.route("**/api/agents/registry", (r) =>
+    r.fulfill(
+      json({
+        async_enabled: true,
+        agents: [
+          {
+            id: "lead",
+            kind: "lead",
+            name: "Nova",
+            description: "The lead agent every chat talks to.",
+            model: "minimax-m3-free",
+            runner: "gateway",
+            async_capable: false,
+            queued: 0,
+            running: 0,
+          },
+          {
+            id: "subagent:general-purpose",
+            kind: "subagent",
+            name: "general-purpose",
+            description: "Research, code, browse.",
+            model: "inherit",
+            runner: "jobs",
+            async_capable: true,
+            queued: 1,
+            running: 1,
+          },
+          {
+            id: "acp:claude_code",
+            kind: "acp",
+            name: "claude_code",
+            description:
+              "Claude Code for implementation, refactoring, and debugging",
+            model: null,
+            runner: "jobs",
+            async_capable: true,
+            queued: 0,
+            running: 0,
+          },
+        ],
+      }),
+    ),
+  );
   await page.route("**/api/em/lists", (r) =>
     r.fulfill(
       json({

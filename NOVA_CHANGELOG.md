@@ -48,6 +48,16 @@
 
 ---
 
+## v9.13 — Agent registry and async delegation (2026-09-19)
+
+Phase P9 of the upgrade program — swarm step 1. See `backend/docs/AGENTS_REGISTRY.md`.
+
+- **`GET /api/agents/registry`**: lead agent, built-in and custom subagents, custom agents and ACP agents with the caller's live queued/running `agents.task` counts. Shown on `/workspace/agents` and as the Agents card on the Jobs page.
+- **`delegate_async` / `check_delegation`** (lead agent only, `subagents.async_enabled`, `config_version` 25): a task runs as an `agents.task` job in the jobs container — survives gateway reloads, visible on the Jobs page, result also written to `outputs/agent-tasks/<job_id>.md`. The acp/cli-auth overlays now mount into the `jobs` service too.
+- Documented limit: the worker has no sandbox, so subagents needing bash/file tools fail there with a clear error; ACP agents are unaffected.
+
+---
+
 ## v9.12 — Email marketing UI + Mailcow / Twenty / Chatwoot bridges (2026-09-19)
 
 Phase P8 of the upgrade program.

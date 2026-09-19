@@ -163,6 +163,17 @@ def get_available_tools(
     if subagent_enabled:
         builtin_tools.extend(SUBAGENT_TOOLS)
         logger.info("Including subagent tools (task)")
+        if getattr(getattr(config, "subagents", None), "async_enabled", False) and getattr(getattr(config, "jobs", None), "enabled", False):
+            from deerflow.persistence.engine import get_session_factory
+            from deerflow.persistence.job.sql import JobRepository
+            from deerflow.tools.builtins.delegate_async_tool import build_delegate_tools
+
+            def _jobs_repo():
+                sf = get_session_factory()
+                return JobRepository(sf) if sf is not None else None
+
+            builtin_tools.extend(build_delegate_tools(config, _jobs_repo))
+            logger.info("Including async delegation tools (delegate_async, check_delegation)")
 
     # If no model_name specified, use the first model (default)
     if model_name is None and config.models:

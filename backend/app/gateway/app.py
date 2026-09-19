@@ -20,6 +20,7 @@ from app.gateway.routers import (
     admin_infra,
     admin_jobs,
     agents,
+    agents_registry,
     artifacts,
     assistants_compat,
     auth,
@@ -539,6 +540,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     app.include_router(integrations.router)
     app.include_router(email_marketing.router)
     app.include_router(email_marketing_public.router)
+    app.include_router(agents_registry.router)
     app.include_router(admin_jobs.router)
 
     @app.get("/health", tags=["health"])

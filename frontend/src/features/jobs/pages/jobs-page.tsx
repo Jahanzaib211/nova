@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useI18n } from "@/core/i18n/hooks";
+import { AgentsRegistryList } from "@/features/agents-registry/components/agents-registry-list";
 
 import { JobEvents } from "../components/job-events";
 import { JobProgress } from "../components/job-progress";
@@ -123,6 +124,12 @@ export function JobsPage() {
         </ul>
       )}
 
+      <section data-testid="jobs-agents">
+        <h2 className="mb-1 text-base font-semibold">
+          {t.features.agentsRegistry.title}
+        </h2>
+        <AgentsRegistryList compact />
+      </section>
       <SchedulesPanel />
     </div>
   );

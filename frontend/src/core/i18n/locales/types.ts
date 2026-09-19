@@ -282,12 +282,25 @@ export interface EmailFeatureTranslations {
   };
 }
 
+export interface AgentsRegistryTranslations {
+  title: string;
+  description: string;
+  loadFailed: string;
+  asyncOn: string;
+  asyncOff: string;
+  activeNow: (running: number, queued: number) => string;
+  counts: (running: number, queued: number) => string;
+  kinds: { lead: string; subagent: string; custom: string; acp: string };
+  runner: { gateway: string; jobs: string };
+}
+
 export interface Translations {
   features: {
     jobs: JobsFeatureTranslations;
     integrations: IntegrationsFeatureTranslations;
     voice: VoiceFeatureTranslations;
     email: EmailFeatureTranslations;
+    agentsRegistry: AgentsRegistryTranslations;
   };
   // Locale meta
   locale: {

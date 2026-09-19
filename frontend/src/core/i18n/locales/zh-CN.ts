@@ -343,6 +343,25 @@ export const zhCN: Translations = {
         jobStarted: "任务已启动——请在任务页面查看",
       },
     },
+    agentsRegistry: {
+      title: "智能体注册表",
+      description:
+        "Nova 可以把工作交给的所有智能体——主智能体、内置与自定义子智能体、ACP 智能体——以及它们此刻在做什么。",
+      loadFailed: "无法加载智能体注册表。",
+      asyncOn:
+        "异步委派已开启：delegate_async 将智能体作为可在重启后存活的任务运行。",
+      asyncOff:
+        "异步委派已关闭（subagents.async_enabled）；子智能体在对话请求内运行。",
+      activeNow: (running, queued) => `${running} 个运行中，${queued} 个排队中`,
+      counts: (running, queued) => `${running} 运行中 · ${queued} 排队中`,
+      kinds: {
+        lead: "主智能体",
+        subagent: "子智能体",
+        custom: "自定义智能体",
+        acp: "ACP 智能体",
+      },
+      runner: { gateway: "进程内", jobs: "作为任务" },
+    },
   },
   // Locale meta
   locale: {

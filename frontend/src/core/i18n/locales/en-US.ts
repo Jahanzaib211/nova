@@ -355,6 +355,25 @@ export const enUS: Translations = {
         jobStarted: "Job started — follow it on the Jobs page",
       },
     },
+    agentsRegistry: {
+      title: "Agent registry",
+      description:
+        "Everyone Nova can hand work to — the lead agent, built-in and custom subagents, and ACP agents — with what each is doing right now.",
+      loadFailed: "Could not load the agent registry.",
+      asyncOn:
+        "Async delegation is on: delegate_async runs agents as jobs that survive restarts.",
+      asyncOff:
+        "Async delegation is off (subagents.async_enabled); subagents run inside the chat request.",
+      activeNow: (running, queued) => `${running} running, ${queued} queued`,
+      counts: (running, queued) => `${running} running · ${queued} queued`,
+      kinds: {
+        lead: "Lead agent",
+        subagent: "Subagents",
+        custom: "Custom agents",
+        acp: "ACP agents",
+      },
+      runner: { gateway: "in-process", jobs: "as jobs" },
+    },
   },
   // Locale meta
   locale: {

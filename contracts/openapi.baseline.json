@@ -6919,6 +6919,29 @@
         ]
       }
     },
+    "/api/agents/registry": {
+      "get": {
+        "operationId": "agents_registry_api_agents_registry_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Agents Registry Api Agents Registry Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Every agent Nova can run, with queued/running counts",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/api/agents/{name}": {
       "delete": {
         "description": "Delete a custom agent and all its files (config, SOUL.md, memory).",
