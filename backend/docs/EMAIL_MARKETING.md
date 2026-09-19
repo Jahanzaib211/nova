@@ -25,10 +25,11 @@ Event types, campaign/contact statuses and suppression reasons are pinned by
 
 1. `.env`: `NOVA_EM_TRACKING_SECRET=$(openssl rand -hex 32)` and the bounce
    mailbox password (`NOVA_EM_BOUNCE_PASSWORD`).
-2. Mailcow: create `bounces@<domain>` and catch-all aliases `bounce+*@` and
-   `unsubscribe+*@` → that mailbox (the Settings › Integrations Mailcow card
-   needs `MAILCOW_API_KEY` for the P8 "ensure sender" bridge to do this for
-   you). DKIM/SPF/DMARC stay Mailcow's job.
+2. Mailcow: a `bounce@<domain>` mailbox (Postfix's `recipient_delimiter=+`
+   delivers `bounce+<send>@` and `reply+<send>@` there) and an
+   `unsubscribe@<domain>` alias pointing at it. Settings › Email › "Ensure
+   sender" does this through the Mailcow API once `MAILCOW_API_KEY` is set.
+   DKIM/SPF/DMARC stay Mailcow's job; the same button reports DKIM status.
 3. `config.yaml` → `email_marketing.enabled: true`, `public_base_url`,
    `tracking_secret: $NOVA_EM_TRACKING_SECRET`, `bounce_mailbox.password:
    $NOVA_EM_BOUNCE_PASSWORD`. Hot-reloads; the jobs container reads it per job.
@@ -53,3 +54,19 @@ curl -s -X POST $NOVA/api/em/campaigns/$ID/send-now
 # the mail; send one to a non-existent address on a real domain and the
 # bounce poll marks it bounced_hard + suppressed within 5 minutes.
 ```
+
+## Bridges
+
+`deerflow/email_marketing/bridges.py`, built on each service's REST API and
+reached through `nova-host-bridge`. URLs and API keys come from
+`integrations.services.{mailcow,twenty,chatwoot}`; switches from
+`email_marketing.bridges`.
+
+| Bridge | Endpoint / job | What it does |
+|---|---|---|
+| Mailcow | `POST /api/em/bridges/mailcow/ensure-sender`, `GET …/mailcow/dkim/{domain}` | bounce mailbox + unsubscribe alias + DKIM status |
+| Twenty | `POST …/twenty/sync-contacts` → job `em.twenty.sync`; `POST …/twenty/import` → job `em.twenty.import` | people ⇄ contacts by primary email |
+| Chatwoot | inside `em.bounce.poll` | a human reply to `reply+<send>@` becomes a conversation in `bridges.chatwoot_inbox_id`, labelled `nova-campaign`, event `replied` |
+
+`GET /api/em/bridges/status` says, per bridge, whether it is configured and why not.
+

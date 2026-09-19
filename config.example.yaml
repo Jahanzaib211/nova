@@ -1756,15 +1756,22 @@ run_events:
 #   default_throttle_per_minute: 120
 #   per_domain_per_minute: 20
 #   batch_size: 50
-#   bounce_mailbox:                            # receives bounce+*@ and unsubscribe+*@ (Mailcow catch-all alias)
+#   bounce_mailbox:                            # the bounce@ mailbox (bounce+<send>@ lands there via recipient_delimiter)
 #     host: host.docker.internal
 #     port: 993
 #     use_ssl: true
-#     username: bounces@cloud.example.com
+#     username: bounce@cloud.example.com
 #     password: $NOVA_EM_BOUNCE_PASSWORD
 #     folder: INBOX
 #   bounce_poll_cron: "*/5 * * * *"
 #   events_retention_days: 180
+#   bridges:                                   # keys/URLs come from integrations.services.*
+#     mailcow: true
+#     twenty: true
+#     chatwoot: false
+#     chatwoot_account_id: 1
+#     chatwoot_inbox_id: null                  # inbox that receives campaign replies
+#     reply_local_part: reply                  # reply+<send>@<bounce_domain> → Chatwoot
 
 # ============================================================
 # Email (self-service password reset)

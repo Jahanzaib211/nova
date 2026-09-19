@@ -1,3 +1,4 @@
+import { emailMarketingManifest } from "./email-marketing/manifest";
 import { integrationsManifest } from "./integrations/manifest";
 import { jobsManifest } from "./jobs/manifest";
 import { settingsCoreManifest } from "./settings-core/manifest";
@@ -20,6 +21,7 @@ export const FEATURE_MANIFESTS: readonly FeatureManifest[] = [
   jobsManifest,
   integrationsManifest,
   voiceManifest,
+  emailMarketingManifest,
 ];
 
 /** All registered sidebar entries, in order. */

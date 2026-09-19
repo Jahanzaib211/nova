@@ -18,6 +18,7 @@ export const EMAIL_EVENT_TYPES = [
   "unsubscribed",
   "suppressed",
   "failed",
+  "replied",
 ] as const;
 export type EmailEventType = (typeof EMAIL_EVENT_TYPES)[number];
 

@@ -32,6 +32,7 @@ const SETTINGS_SECTIONS = [
   "voice",
   "jobs",
   "integrations",
+  "email",
   "channels",
   "models",
   "about",
@@ -144,10 +145,111 @@ async function mockEverything(page: Page) {
       }),
     ),
   );
+  await page.route("**/api/em/lists", (r) =>
+    r.fulfill(
+      json({
+        lists: [
+          {
+            id: "l1",
+            name: "Newsletter",
+            description: null,
+            member_count: 42,
+            created_at: "2026-09-19T12:00:00Z",
+            updated_at: "2026-09-19T12:00:00Z",
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route("**/api/em/templates", (r) =>
+    r.fulfill(json({ templates: [] })),
+  );
+  await page.route("**/api/em/contacts?**", (r) =>
+    r.fulfill(json({ contacts: [], total: 0 })),
+  );
+  await page.route("**/api/em/suppressions", (r) =>
+    r.fulfill(json({ suppressions: [] })),
+  );
+  await page.route("**/api/em/campaigns", (r) =>
+    r.fulfill(
+      json({
+        campaigns: [
+          {
+            id: "c1",
+            name: "September update",
+            list_id: "l1",
+            template_id: "t1",
+            from_email: "hello@example.com",
+            from_name: "Nova",
+            reply_to: null,
+            status: "sending",
+            scheduled_at: null,
+            throttle_per_minute: null,
+            stats: {
+              recipients: 42,
+              queued: 10,
+              sent: 32,
+              opened: 12,
+              clicked: 3,
+            },
+            job_id: "j1",
+            error: null,
+            created_at: "2026-09-19T12:00:00Z",
+            started_at: "2026-09-19T12:00:00Z",
+            finished_at: null,
+          },
+          {
+            id: "c2",
+            name: "Welcome series",
+            list_id: "l1",
+            template_id: "t1",
+            from_email: "hello@example.com",
+            from_name: "Nova",
+            reply_to: null,
+            status: "draft",
+            scheduled_at: null,
+            throttle_per_minute: null,
+            stats: {},
+            job_id: null,
+            error: null,
+            created_at: "2026-09-19T12:00:00Z",
+            started_at: null,
+            finished_at: null,
+          },
+        ],
+      }),
+    ),
+  );
+  await page.route("**/api/em/bridges/status", (r) =>
+    r.fulfill(
+      json({
+        bridges: {
+          mailcow: {
+            enabled: true,
+            configured: false,
+            problems: ["MAILCOW_API_KEY is not set"],
+            endpoint: "http://host.docker.internal:8080",
+          },
+          twenty: {
+            enabled: true,
+            configured: false,
+            problems: ["TWENTY_API_KEY is not set"],
+            endpoint: "http://host.docker.internal:3008",
+          },
+          chatwoot: {
+            enabled: false,
+            configured: false,
+            problems: ["email_marketing.bridges.chatwoot is false"],
+            endpoint: null,
+          },
+        },
+      }),
+    ),
+  );
   await page.route("**/api/runtime/capabilities", (r) =>
     r.fulfill(
       json({
-        features: { jobs: true, integrations: true },
+        features: { jobs: true, integrations: true, email_marketing: true },
         skills: [],
         tools: [],
         hooks: [],
@@ -350,6 +452,12 @@ export function defineVisualTests() {
     await page.goto("/workspace/agents");
     await page.waitForLoadState("networkidle");
     await snap(page, "agents");
+  });
+
+  test("email page", async ({ page }) => {
+    await page.goto("/workspace/email");
+    await page.waitForLoadState("networkidle");
+    await snap(page, "email");
   });
 
   test("jobs page", async ({ page }) => {

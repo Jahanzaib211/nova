@@ -127,3 +127,29 @@ def test_suppressions_and_import_job(world):
 def test_disabled_feature_is_404(world, monkeypatch):
     monkeypatch.setattr(email_marketing, "get_config", lambda: AppConfig.model_validate({"sandbox": SANDBOX, "email_marketing": {"enabled": False}}))
     assert _client(world, _user("a@x.y")).get("/api/em/lists").status_code == 404
+
+
+def test_bridges_status_and_honest_409s(world, monkeypatch):
+    alice = _user("a@x.y")
+    a = _client(world, alice)
+    st = a.get("/api/em/bridges/status").json()["bridges"]
+    assert set(st) == {"mailcow", "twenty", "chatwoot"}
+    assert st["mailcow"]["configured"] is False and "integrations.services.mailcow is not configured" in st["mailcow"]["problems"]
+    assert st["chatwoot"]["enabled"] is False
+    r = a.post("/api/em/bridges/mailcow/ensure-sender", json={"domain": "cloud.example.com", "mailbox_password": "longenough1"})
+    assert r.status_code == 409 and "mailcow" in r.json()["detail"]
+    lst = a.post("/api/em/lists", json={"name": "L"}).json()
+    assert a.post("/api/em/bridges/twenty/sync-contacts", json={"list_id": lst["id"]}).status_code == 409
+    # Configured Twenty → the sync is a job.
+    monkeypatch.setenv("TWENTY_API_KEY", "t")
+    cfg = AppConfig.model_validate(
+        {
+            "sandbox": SANDBOX,
+            "email_marketing": {"enabled": True, "public_base_url": "https://n", "tracking_secret": "k"},
+            "integrations": {"enabled": True, "services": {"twenty": {"kind": "crm", "url": "http://twenty:3008", "api_key_env": "TWENTY_API_KEY"}}},
+        }
+    )
+    monkeypatch.setattr(email_marketing, "get_config", lambda: cfg)
+    assert a.get("/api/em/bridges/status").json()["bridges"]["twenty"]["configured"] is True
+    job = a.post("/api/em/bridges/twenty/sync-contacts", json={"list_id": lst["id"]}).json()
+    assert job["job_id"]

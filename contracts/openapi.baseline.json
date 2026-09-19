@@ -953,6 +953,19 @@
         "title": "Body_upload_files_api_threads__thread_id__uploads_post",
         "type": "object"
       },
+      "BridgeListRequest": {
+        "properties": {
+          "list_id": {
+            "title": "List Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id"
+        ],
+        "title": "BridgeListRequest",
+        "type": "object"
+      },
       "ByokAdminResponse": {
         "description": "One user's BYOK state, as visible to an admin.",
         "properties": {
@@ -2058,6 +2071,28 @@
           "models"
         ],
         "title": "DiscoveredEndpoint",
+        "type": "object"
+      },
+      "EnsureSenderRequest": {
+        "properties": {
+          "domain": {
+            "maxLength": 253,
+            "minLength": 3,
+            "title": "Domain",
+            "type": "string"
+          },
+          "mailbox_password": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Mailbox Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "mailbox_password"
+        ],
+        "title": "EnsureSenderRequest",
         "type": "object"
       },
       "Fact": {
@@ -7471,6 +7506,203 @@
         "summary": "Configure Channel Provider Runtime",
         "tags": [
           "channel-connections"
+        ]
+      }
+    },
+    "/api/em/bridges/mailcow/dkim/{domain}": {
+      "get": {
+        "operationId": "mailcow_dkim_api_em_bridges_mailcow_dkim__domain__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "title": "Domain",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Mailcow Dkim Api Em Bridges Mailcow Dkim  Domain  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mailcow Dkim",
+        "tags": [
+          "email-marketing"
+        ]
+      }
+    },
+    "/api/em/bridges/mailcow/ensure-sender": {
+      "post": {
+        "description": "Create the bounce mailbox + unsubscribe alias for a domain and report DKIM.",
+        "operationId": "mailcow_ensure_sender_api_em_bridges_mailcow_ensure_sender_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnsureSenderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Mailcow Ensure Sender Api Em Bridges Mailcow Ensure Sender Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mailcow Ensure Sender",
+        "tags": [
+          "email-marketing"
+        ]
+      }
+    },
+    "/api/em/bridges/status": {
+      "get": {
+        "operationId": "bridges_status_api_em_bridges_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bridges Status Api Em Bridges Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bridges Status",
+        "tags": [
+          "email-marketing"
+        ]
+      }
+    },
+    "/api/em/bridges/twenty/import": {
+      "post": {
+        "operationId": "twenty_import_people_api_em_bridges_twenty_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BridgeListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Twenty Import People Api Em Bridges Twenty Import Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Twenty Import People",
+        "tags": [
+          "email-marketing"
+        ]
+      }
+    },
+    "/api/em/bridges/twenty/sync-contacts": {
+      "post": {
+        "operationId": "twenty_sync_contacts_api_em_bridges_twenty_sync_contacts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BridgeListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Twenty Sync Contacts Api Em Bridges Twenty Sync Contacts Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Twenty Sync Contacts",
+        "tags": [
+          "email-marketing"
         ]
       }
     },

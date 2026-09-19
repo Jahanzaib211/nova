@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.gateway.authz import AuthContext, require_auth
 from app.gateway.deps import get_config, get_em_repo, get_jobs_repo
+from deerflow.email_marketing.bridge_factory import bridge_status, mailcow_bridge
 from deerflow.email_marketing.contacts_import import guess_mapping, parse_contacts_csv
 from deerflow.email_marketing.events import CONTACT_STATUSES, SUPPRESSION_REASONS
 from deerflow.email_marketing.pipeline import JOB_BATCH, JOB_IMPORT, JOB_START, QUEUE
@@ -610,3 +611,77 @@ async def remove_suppression(email: str, request: Request) -> dict[str, Any]:
     if not await get_em_repo(request).unsuppress(_user_id(request), email):
         raise HTTPException(status_code=404, detail="Suppression not found")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- bridges
+
+
+class EnsureSenderRequest(BaseModel):
+    domain: str = Field(min_length=3, max_length=253)
+    mailbox_password: str = Field(min_length=8, max_length=128)
+
+
+class BridgeListRequest(BaseModel):
+    list_id: str
+
+
+@router.get("/bridges/status")
+@require_auth
+async def bridges_status(request: Request) -> dict[str, Any]:
+    _enabled()
+    cfg = get_config()
+    return {"bridges": bridge_status(cfg.email_marketing, cfg.integrations)}
+
+
+@router.post("/bridges/mailcow/ensure-sender")
+@require_auth
+async def mailcow_ensure_sender(body: EnsureSenderRequest, request: Request) -> dict[str, Any]:
+    """Create the bounce mailbox + unsubscribe alias for a domain and report DKIM."""
+    _enabled()
+    cfg = get_config()
+    bridge = mailcow_bridge(cfg.email_marketing, cfg.integrations)
+    if bridge is None:
+        raise HTTPException(status_code=409, detail="; ".join(bridge_status(cfg.email_marketing, cfg.integrations)["mailcow"]["problems"]))
+    try:
+        return await bridge.ensure_sender(body.domain, mailbox_password=body.mailbox_password)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+
+
+@router.get("/bridges/mailcow/dkim/{domain}")
+@require_auth
+async def mailcow_dkim(domain: str, request: Request) -> dict[str, Any]:
+    _enabled()
+    cfg = get_config()
+    bridge = mailcow_bridge(cfg.email_marketing, cfg.integrations)
+    if bridge is None:
+        raise HTTPException(status_code=409, detail="; ".join(bridge_status(cfg.email_marketing, cfg.integrations)["mailcow"]["problems"]))
+    return await bridge.dkim(domain)
+
+
+@router.post("/bridges/twenty/sync-contacts", status_code=202)
+@require_auth
+async def twenty_sync_contacts(body: BridgeListRequest, request: Request) -> dict[str, Any]:
+    _enabled()
+    cfg = get_config()
+    status = bridge_status(cfg.email_marketing, cfg.integrations)["twenty"]
+    if not status["configured"]:
+        raise HTTPException(status_code=409, detail="; ".join(status["problems"]))
+    owner = _user_id(request)
+    _found(await get_em_repo(request).get_list(owner, body.list_id), "List")
+    job_id = await JobQueue(get_jobs_repo(request)).enqueue("em.twenty.sync", {"list_id": body.list_id}, queue=QUEUE, owner_user_id=owner)
+    return {"job_id": job_id}
+
+
+@router.post("/bridges/twenty/import", status_code=202)
+@require_auth
+async def twenty_import_people(body: BridgeListRequest, request: Request) -> dict[str, Any]:
+    _enabled()
+    cfg = get_config()
+    status = bridge_status(cfg.email_marketing, cfg.integrations)["twenty"]
+    if not status["configured"]:
+        raise HTTPException(status_code=409, detail="; ".join(status["problems"]))
+    owner = _user_id(request)
+    _found(await get_em_repo(request).get_list(owner, body.list_id), "List")
+    job_id = await JobQueue(get_jobs_repo(request)).enqueue("em.twenty.import", {"list_id": body.list_id}, queue=QUEUE, owner_user_id=owner)
+    return {"job_id": job_id}

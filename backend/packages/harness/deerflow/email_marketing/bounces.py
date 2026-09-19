@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from email import message_from_bytes, policy
 from email.message import Message
 
-_VERP_RE = re.compile(r"(?:bounce|unsubscribe)\+([A-Za-z0-9._-]+)@", re.IGNORECASE)
+_VERP_RE = re.compile(r"(?:bounce|unsubscribe|reply)\+([A-Za-z0-9._-]+)@", re.IGNORECASE)
 _XNOVA_RE = re.compile(r"^X-Nova-Send:\s*([A-Za-z0-9._-]+)\s*$", re.IGNORECASE | re.MULTILINE)
 
 

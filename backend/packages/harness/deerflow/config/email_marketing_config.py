@@ -20,6 +20,18 @@ class BounceMailboxConfig(BaseModel):
     folder: str = Field(default="INBOX", description="Folder to poll.")
 
 
+class BridgesConfig(BaseModel):
+    """Which host services email marketing may talk to. URLs and API keys
+    come from ``integrations.services.{mailcow,twenty,chatwoot}``."""
+
+    mailcow: bool = Field(default=True, description="Allow the Mailcow bridge (ensure bounce mailbox/alias, DKIM status).")
+    twenty: bool = Field(default=True, description="Allow the Twenty CRM bridge (people ⇄ contacts).")
+    chatwoot: bool = Field(default=False, description="Route human replies to campaigns into a Chatwoot inbox.")
+    chatwoot_account_id: int = Field(default=1, ge=1)
+    chatwoot_inbox_id: int | None = Field(default=None, description="Chatwoot inbox that receives campaign replies.")
+    reply_local_part: str = Field(default="reply", description="Replies to reply+<send>@<bounce_domain> are ingested into Chatwoot.")
+
+
 class EmailMarketingConfig(BaseModel):
     enabled: bool = Field(default=False, description="Enable email marketing (/api/em, the Email pages, the campaign jobs).")
     public_base_url: str = Field(default="", description="Public origin for tracking/unsubscribe links, e.g. https://nova.example.com. Required to send.")
@@ -31,6 +43,7 @@ class EmailMarketingConfig(BaseModel):
     bounce_mailbox: BounceMailboxConfig = Field(default_factory=BounceMailboxConfig)
     bounce_poll_cron: str = Field(default="*/5 * * * *", description="Cron for the IMAP bounce/complaint poll.")
     events_retention_days: int = Field(default=180, ge=1, description="Prune em_events older than this.")
+    bridges: BridgesConfig = Field(default_factory=BridgesConfig)
 
     def send_ready(self) -> tuple[bool, str]:
         """Whether campaigns can actually go out, and why not."""

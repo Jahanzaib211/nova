@@ -27,6 +27,7 @@ from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
 logger = logging.getLogger(__name__)
 
 _UNSUB_RE = re.compile(r"unsubscribe\+([A-Za-z0-9._-]+)@", re.IGNORECASE)
+_REPLY_RE = re.compile(r"reply\+([A-Za-z0-9._-]+)@", re.IGNORECASE)
 
 
 @dataclass(slots=True)
@@ -78,10 +79,19 @@ def fetch_new_messages(cfg: BounceMailboxConfig, *, last_uid: int, uidvalidity: 
 
 
 class BouncePoller:
-    def __init__(self, repo: EmailMarketingRepository, cfg: BounceMailboxConfig, *, imap_factory: Callable[..., Any] | None = None) -> None:
+    def __init__(
+        self,
+        repo: EmailMarketingRepository,
+        cfg: BounceMailboxConfig,
+        *,
+        imap_factory: Callable[..., Any] | None = None,
+        on_reply: Callable[[dict[str, Any], bytes], Any] | None = None,
+    ) -> None:
         self.repo = repo
         self.cfg = cfg
         self._imap_factory = imap_factory
+        # Optional: hand a human reply (reply+<send>@) to a bridge (Chatwoot).
+        self._on_reply = on_reply
 
     async def poll(self, owner: str) -> dict[str, int]:
         cursor = await self.repo.get_bounce_cursor(owner) or {}
@@ -92,7 +102,7 @@ class BouncePoller:
         except Exception as exc:
             await self.repo.set_bounce_cursor(owner, mailbox=self.cfg.username, last_uid=last_uid, uidvalidity=uidvalidity, error=str(exc)[:500])
             raise
-        summary = {"fetched": len(fetched.messages), "bounced_hard": 0, "bounced_soft": 0, "complained": 0, "unsubscribed": 0, "unmatched": 0}
+        summary = {"fetched": len(fetched.messages), "bounced_hard": 0, "bounced_soft": 0, "complained": 0, "unsubscribed": 0, "replied": 0, "unmatched": 0}
         high = last_uid if not fetched.reset else 0
         for uid, raw in fetched.messages:
             high = max(high, uid)
@@ -115,6 +125,17 @@ class BouncePoller:
             return
         parsed = parse_bounce(raw)
         if parsed.kind is None:
+            if _REPLY_RE.search(head) and self._on_reply is not None:
+                try:
+                    result = self._on_reply(send, raw)
+                    if asyncio.iscoroutine(result):
+                        await result
+                    summary["replied"] += 1
+                    await self.repo.record_event(owner, type="replied", campaign_id=send["campaign_id"], send_id=send["id"], contact_id=send["contact_id"], payload={"via": "chatwoot"})
+                except Exception as exc:  # a bridge outage must not stall the poll
+                    logger.warning("reply ingestion failed for send %s: %s", send["id"], exc)
+                    summary["unmatched"] += 1
+                return
             summary["unmatched"] += 1
             return
         await self.repo.record_event(owner, type=parsed.kind, campaign_id=send["campaign_id"], send_id=send["id"], contact_id=send["contact_id"], payload={"status": parsed.status, "diagnostic": parsed.diagnostic[:500]})

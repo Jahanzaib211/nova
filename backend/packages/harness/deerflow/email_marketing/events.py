@@ -22,6 +22,8 @@ class EmailEventType(str, Enum):
     UNSUBSCRIBED = "unsubscribed"
     SUPPRESSED = "suppressed"
     FAILED = "failed"
+    # A human answered a campaign mail (reply+<send>@); routed to Chatwoot.
+    REPLIED = "replied"
 
 
 class CampaignStatus(str, Enum):

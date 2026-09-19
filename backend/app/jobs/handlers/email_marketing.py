@@ -10,6 +10,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from deerflow.config.app_config import get_app_config
+from deerflow.email_marketing.bridge_factory import chatwoot_bridge, twenty_bridge
 from deerflow.email_marketing.contacts_import import parse_contacts_csv
 from deerflow.email_marketing.imap import BouncePoller
 from deerflow.email_marketing.pipeline import JOB_BATCH, JOB_BOUNCE_POLL, JOB_IMPORT, JOB_START, CampaignPipeline, PipelineDeps
@@ -22,6 +23,8 @@ from deerflow.persistence.engine import get_session_factory
 logger = logging.getLogger(__name__)
 
 JOB_PRUNE = "em.events.prune"
+JOB_TWENTY_SYNC = "em.twenty.sync"
+JOB_TWENTY_IMPORT = "em.twenty.import"
 
 
 def _repo() -> EmailMarketingRepository:
@@ -51,7 +54,59 @@ async def bounce_poll(ctx: JobContext) -> dict:
     owner = ctx.owner_user_id or str(ctx.payload.get("owner_user_id") or "")
     if not owner:
         return {"skipped": "no owner"}
-    return await BouncePoller(_repo(), cfg.bounce_mailbox).poll(owner)
+    repo = _repo()
+    app_cfg = get_app_config()
+    chatwoot = chatwoot_bridge(app_cfg.email_marketing, app_cfg.integrations)
+
+    async def on_reply(send: dict, raw: bytes) -> None:
+        if chatwoot is None:
+            raise RuntimeError("chatwoot bridge not configured")
+        from email import message_from_bytes, policy
+
+        msg = message_from_bytes(raw, policy=policy.default)
+        body_part = msg.get_body(preferencelist=("plain", "html"))
+        body = body_part.get_content() if body_part is not None else ""
+        contact = await repo.get_contact(owner, send["contact_id"]) or {}
+        name = " ".join(p for p in (contact.get("first_name"), contact.get("last_name")) if p) or None
+        await chatwoot.ingest_reply(email=send["email"], name=name, subject=str(msg.get("Subject", "")), body=str(body)[:10000], campaign_id=send["campaign_id"])
+
+    return await BouncePoller(repo, cfg.bounce_mailbox, on_reply=on_reply if chatwoot else None).poll(owner)
+
+
+async def twenty_sync(ctx: JobContext) -> dict:
+    """Push a list's subscribed contacts into Twenty as people."""
+    owner = ctx.owner_user_id or ""
+    app_cfg = get_app_config()
+    bridge = twenty_bridge(app_cfg.email_marketing, app_cfg.integrations)
+    if bridge is None:
+        raise RuntimeError("Twenty bridge not configured (integrations.services.twenty + TWENTY_API_KEY)")
+    repo = _repo()
+    contacts = await repo.recipients_for_list(owner, str(ctx.payload["list_id"]))
+    await ctx.progress(10, f"{len(contacts)} contacts to sync")
+    result = await bridge.upsert_people(contacts)
+    await ctx.progress(100, f"{result['created']} created, {result['existing']} already in Twenty")
+    return result
+
+
+async def twenty_import(ctx: JobContext) -> dict:
+    """Pull Twenty people into a Nova list."""
+    owner = ctx.owner_user_id or ""
+    app_cfg = get_app_config()
+    bridge = twenty_bridge(app_cfg.email_marketing, app_cfg.integrations)
+    if bridge is None:
+        raise RuntimeError("Twenty bridge not configured (integrations.services.twenty + TWENTY_API_KEY)")
+    repo = _repo()
+    people = await bridge.list_people()
+    await ctx.progress(30, f"{len(people)} people in Twenty")
+    ids = []
+    for i, person in enumerate(people, 1):
+        contact = await repo.upsert_contact(owner, email=person["email"], first_name=person["first_name"], last_name=person["last_name"], attributes=person["attributes"])
+        ids.append(contact["id"])
+        if i % 50 == 0:
+            await ctx.heartbeat()
+    added = await repo.add_members(owner, str(ctx.payload["list_id"]), ids) if ids else 0
+    await ctx.progress(100, f"{len(ids)} contacts, {added} added to list")
+    return {"imported": len(ids), "added_to_list": added}
 
 
 async def contacts_import(ctx: JobContext) -> dict:
@@ -89,3 +144,5 @@ def register(registry: JobRegistry) -> None:
     registry.register(JOB_BOUNCE_POLL, bounce_poll)
     registry.register(JOB_IMPORT, contacts_import)
     registry.register(JOB_PRUNE, events_prune)
+    registry.register(JOB_TWENTY_SYNC, twenty_sync)
+    registry.register(JOB_TWENTY_IMPORT, twenty_import)

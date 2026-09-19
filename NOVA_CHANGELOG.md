@@ -48,6 +48,17 @@
 
 ---
 
+## v9.12 — Email marketing UI + Mailcow / Twenty / Chatwoot bridges (2026-09-19)
+
+Phase P8 of the upgrade program.
+
+- **`/workspace/email`** (sidebar "Email", behind the server `email_marketing` flag): Campaigns (create, preflight that names what blocks a send, send-now/pause/resume/cancel, test send, live progress from sends, stat tiles with rates against *sent* — never a rate of nothing, event log), Lists, Contacts (search, add, CSV import with header guessing → mapping → job progress), Templates (editor, sandboxed `<iframe sandbox>` preview), Suppressions. Empty states say so. Both locales (~120 strings).
+- **Settings › Email**: bridge cards (configured / not, with the exact reason), Mailcow "ensure sender" (creates `bounce@<domain>` + `unsubscribe@` alias, reports DKIM), Twenty push/pull as jobs.
+- **Bridges** (`deerflow.email_marketing.bridges`, first principles on each REST API, URLs/keys from `integrations.services`): Mailcow (domain check, mailbox, alias, DKIM), Twenty (people ⇄ contacts, paginated, batch create), Chatwoot (a human reply to `reply+<send>@` becomes a labelled conversation — wired into the IMAP poll). `email_marketing.bridges` config. New contract event `replied` (contract v2, both sides).
+- Corrected the VERP guidance: Postfix's `recipient_delimiter=+` folds `bounce+<send>@` into the `bounce@` mailbox, so no wildcard aliases are needed.
+
+---
+
 ## v9.11 — Email marketing backend (2026-09-19)
 
 Phase P7 of the upgrade program. See `backend/docs/EMAIL_MARKETING.md`.

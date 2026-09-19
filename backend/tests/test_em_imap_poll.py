@@ -129,7 +129,7 @@ async def test_poller_records_bounces_and_unsubscribes(repo):
     FakeIMAP.uidvalidity = b"7"
     poller = BouncePoller(repo, BounceMailboxConfig(host="h", username="u", password="p"), imap_factory=FakeIMAP)
     summary = await poller.poll("alice")
-    assert summary == {"fetched": 3, "bounced_hard": 1, "bounced_soft": 0, "complained": 0, "unsubscribed": 1, "unmatched": 1}
+    assert summary == {"fetched": 3, "bounced_hard": 1, "bounced_soft": 0, "complained": 0, "unsubscribed": 1, "replied": 0, "unmatched": 1}
     assert await repo.is_suppressed("alice", "gone@nowhere.example")
     assert await repo.is_suppressed("alice", "tired@example.com")
     assert (await repo.get_contact("alice", c2["id"]))["status"] == "unsubscribed"
@@ -139,3 +139,28 @@ async def test_poller_records_bounces_and_unsubscribes(repo):
     assert cursor["last_uid"] == 12 and cursor["uidvalidity"] == 7
     # Second poll: nothing new, cursor unchanged.
     assert (await poller.poll("alice"))["fetched"] == 0
+
+
+async def test_poller_hands_human_replies_to_the_bridge(repo):
+    lst = await repo.create_list("alice", name="L")
+    tpl = await repo.create_template("alice", name="T", subject="s", html="h")
+    c = await repo.upsert_contact("alice", email="fan@example.com")
+    await repo.add_members("alice", lst["id"], [c["id"]])
+    camp = await repo.create_campaign("alice", name="C", list_id=lst["id"], template_id=tpl["id"], from_email="n@x.y", from_name="N")
+    send = (await repo.create_sends("alice", camp["id"], await repo.recipients_for_list("alice", lst["id"])))[0]
+    m = EmailMessage()
+    m["From"] = "fan@example.com"
+    m["To"] = f"reply+{send['id']}@x.y"
+    m["Subject"] = "Re: hello"
+    m.set_content("love it")
+    FakeIMAP.messages = {1: bytes(m)}
+    FakeIMAP.uidvalidity = b"7"
+    handed: list[str] = []
+
+    async def on_reply(s, raw):
+        handed.append(s["id"])
+
+    poller = BouncePoller(repo, BounceMailboxConfig(host="h", username="u", password="p"), imap_factory=FakeIMAP, on_reply=on_reply)
+    summary = await poller.poll("alice")
+    assert summary["replied"] == 1 and handed == [send["id"]]
+    assert [e["type"] for e in await repo.list_events("alice", campaign_id=camp["id"])] == ["replied"]

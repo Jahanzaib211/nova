@@ -144,11 +144,150 @@ export interface VoiceFeatureTranslations {
   };
 }
 
+export interface EmailFeatureTranslations {
+  title: string;
+  description: string;
+  failed: string;
+  tabs: {
+    campaigns: string;
+    lists: string;
+    contacts: string;
+    templates: string;
+    suppressions: string;
+  };
+  campaignStatus: Record<
+    | "draft"
+    | "scheduled"
+    | "sending"
+    | "paused"
+    | "completed"
+    | "cancelled"
+    | "failed",
+    string
+  >;
+  contactStatus: Record<
+    "pending" | "subscribed" | "unsubscribed" | "bounced" | "complained",
+    string
+  >;
+  suppressionReason: Record<
+    "hard_bounce" | "complaint" | "unsubscribe" | "manual" | "invalid",
+    string
+  >;
+  lists: {
+    create: string;
+    namePlaceholder: string;
+    created: string;
+    deleted: string;
+    delete: string;
+    empty: string;
+    members: (n: number) => string;
+  };
+  contacts: {
+    search: string;
+    add: string;
+    added: string;
+    delete: string;
+    deleted: string;
+    emailPlaceholder: string;
+    empty: string;
+    total: (n: number) => string;
+    columns: { email: string; name: string; status: string };
+    importCsv: string;
+    csvPlaceholder: string;
+    fields: { email: string; first_name: string; last_name: string };
+    intoList: string;
+    startImport: string;
+    importStarted: (valid: number, skipped: number) => string;
+  };
+  templates: {
+    hint: string;
+    new: string;
+    editor: string;
+    name: string;
+    subject: string;
+    html: string;
+    save: string;
+    saved: string;
+    preview: string;
+    previewAfterSave: string;
+    noPreview: string;
+    cancel: string;
+    delete: string;
+    deleted: string;
+    empty: string;
+  };
+  campaigns: {
+    hint: string;
+    new: string;
+    create: string;
+    created: string;
+    cancel: string;
+    delete: string;
+    deleted: string;
+    empty: string;
+    name: string;
+    list: string;
+    template: string;
+    fromEmail: string;
+    fromName: string;
+    recipients: (n: number) => string;
+    preflightOk: (recipients: number, suppressed: number) => string;
+    preflightBlocked: string;
+    progress: (pct: number, left: number) => string;
+    stats: {
+      sent: string;
+      opened: string;
+      clicked: string;
+      bounced: string;
+      unsubscribed: string;
+      failed: string;
+    };
+    actions: Record<"send-now" | "pause" | "resume" | "cancel", string>;
+    actionDone: Record<"send-now" | "pause" | "resume" | "cancel", string>;
+    testSend: string;
+    testTo: string;
+    testSent: (to: string) => string;
+  };
+  suppressions: {
+    hint: string;
+    add: string;
+    added: string;
+    remove: string;
+    removed: string;
+    emailPlaceholder: string;
+    empty: string;
+  };
+  settings: {
+    title: string;
+    description: string;
+    openPage: string;
+    bridgesTitle: string;
+    bridgesDescription: string;
+    bridgesUnavailable: string;
+    bridge: { mailcow: string; twenty: string; chatwoot: string };
+    configured: string;
+    notConfigured: string;
+    mailcowTitle: string;
+    mailcowDescription: string;
+    domain: string;
+    mailboxPassword: string;
+    ensureSender: string;
+    senderReady: (mailbox: string, dkim: boolean) => string;
+    twentyTitle: string;
+    twentyDescription: string;
+    list: string;
+    twentySync: string;
+    twentyImport: string;
+    jobStarted: string;
+  };
+}
+
 export interface Translations {
   features: {
     jobs: JobsFeatureTranslations;
     integrations: IntegrationsFeatureTranslations;
     voice: VoiceFeatureTranslations;
+    email: EmailFeatureTranslations;
   };
   // Locale meta
   locale: {
@@ -277,6 +416,7 @@ export interface Translations {
     demoChats: string;
     agents: string;
     jobs: string;
+    email: string;
     channels: string;
   };
 
@@ -487,6 +627,7 @@ export interface Translations {
     sections: {
       jobs: string;
       integrations: string;
+      email: string;
       account: string;
       appearance: string;
       channels: string;

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Cross-language contract for the Nova email-marketing feature (deerflow.email_marketing). Send/event types are written by the SMTP batch job, the tracking endpoints and the IMAP bounce poller; campaign statuses drive the campaign state machine; suppression reasons explain why an address is never mailed again. The frontend email-marketing feature loads the same file.",
   "event_types": [
     "queued",
@@ -12,7 +12,8 @@
     "clicked",
     "unsubscribed",
     "suppressed",
-    "failed"
+    "failed",
+    "replied"
   ],
   "campaign_statuses": [
     "draft",
