@@ -8,6 +8,7 @@ import {
   type SettingsPageId,
   type SettingsPageSpec,
 } from "./types";
+import { voiceManifest } from "./voice/manifest";
 
 /**
  * Every feature module, in one list. Adding a feature = one import + one
@@ -18,6 +19,7 @@ export const FEATURE_MANIFESTS: readonly FeatureManifest[] = [
   settingsCoreManifest,
   jobsManifest,
   integrationsManifest,
+  voiceManifest,
 ];
 
 /** All registered sidebar entries, in order. */

@@ -73,10 +73,82 @@ export interface IntegrationsFeatureTranslations {
   };
 }
 
+export interface VoiceFeatureTranslations {
+  title: string;
+  tagline: string;
+  description: string;
+  testPhrase: string;
+  state: { off: string; ready: string; notLoading: string; fellBack: string };
+  enable: string;
+  enableHint: string;
+  listening: string;
+  model: string;
+  modelHint: string;
+  device: string;
+  language: string;
+  languageHint: string;
+  speaking: string;
+  engine: string;
+  voice: string;
+  turnTaking: string;
+  waitWhileThinking: string;
+  waitWhileThinkingHint: string;
+  confidence: string;
+  confidenceHint: string;
+  devices: {
+    auto: string;
+    autoHint: string;
+    cuda: string;
+    cudaHint: string;
+    cpu: string;
+    cpuHint: string;
+  };
+  checks: {
+    title: string;
+    description: string;
+    testSpeaker: string;
+    testMicrophone: string;
+    autoplayBlocked: string;
+    realTime: (rtf: string) => string;
+    slowerThanPlayback: string;
+    heard: (words: string) => string;
+    nothingRecognised: string;
+  };
+  lab: {
+    title: string;
+    description: string;
+    placeholder: string;
+    defaultText: string;
+    speakIt: string;
+    auditionAll: string;
+    speakToNova: string;
+    stop: string;
+    firstAudio: string;
+    audioLength: string;
+    realTimeFactor: string;
+    autoplayBlocked: string;
+    playIt: string;
+    slowerThanRealTime: string;
+    novaHeard: string;
+    nothingRecognised: (seconds: number) => string;
+    voicesHint: string;
+    failed: string;
+  };
+  overridesNote: string;
+  reset: string;
+  toasts: {
+    saved: string;
+    saveFailed: string;
+    listening: string;
+    reverted: string;
+  };
+}
+
 export interface Translations {
   features: {
     jobs: JobsFeatureTranslations;
     integrations: IntegrationsFeatureTranslations;
+    voice: VoiceFeatureTranslations;
   };
   // Locale meta
   locale: {

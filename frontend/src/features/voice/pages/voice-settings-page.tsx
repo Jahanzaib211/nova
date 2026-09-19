@@ -9,9 +9,9 @@
  * perfectly valid and still not work. Showing measured latency and the words
  * Nova actually heard turns "voice is broken" into a specific, fixable fact.
  *
- * Copy here is intentionally in English rather than i18n keys: these strings
- * name model files, devices and measured numbers, and a half-translated
- * diagnostic is worse than an untranslated one. The nav label is translated.
+ * Labels, hints, states and toasts come from `t.features.voice`; model names,
+ * device ids and measured numbers are shown verbatim on purpose — a
+ * translated model file name is worse than an untranslated one.
  */
 
 import {
@@ -29,6 +29,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { SettingsSection } from "@/components/workspace/settings/settings-section";
+import { useI18n } from "@/core/i18n/hooks";
+import type { Translations } from "@/core/i18n/locales/types";
 import {
   getVoiceConfig,
   getVoiceStatus,
@@ -44,25 +47,18 @@ import {
 } from "@/core/voice/config";
 import { cn } from "@/lib/utils";
 
-import { SettingsSection } from "./settings-section";
-import { VoiceLab } from "./voice-lab";
+import { VoiceLab } from "../components/voice-lab";
 
-const TEST_PHRASE = "Nova is online. All systems are green.";
+type VoiceCopy = Translations["features"]["voice"];
 
 /** Devices offered per engine. `auto` is the only one safe on every host. */
-const DEVICES = [
-  {
-    value: "auto",
-    label: "Auto",
-    hint: "Use the GPU when it is really available, CPU otherwise.",
-  },
-  {
-    value: "cuda",
-    label: "GPU (CUDA)",
-    hint: "Falls back to CPU with a warning if CUDA is unusable.",
-  },
-  { value: "cpu", label: "CPU", hint: "Never touch the GPU." },
-];
+function devices(v: VoiceCopy) {
+  return [
+    { value: "auto", label: v.devices.auto, hint: v.devices.autoHint },
+    { value: "cuda", label: v.devices.cuda, hint: v.devices.cudaHint },
+    { value: "cpu", label: v.devices.cpu, hint: v.devices.cpuHint },
+  ];
+}
 
 function Row({
   label,
@@ -111,6 +107,9 @@ function Choice({
 }
 
 export function VoiceSettingsPage() {
+  const { t } = useI18n();
+  const v = t.features.voice;
+  const DEVICES = devices(v);
   const [config, setConfig] = useState<VoiceConfig | null>(null);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -156,16 +155,14 @@ export function VoiceSettingsPage() {
         // just dropped, so the old readiness describes objects that no longer
         // exist. This is the whole reason the panel can be trusted.
         setStatus(await getVoiceStatus(true));
-        toast.success("Voice settings saved");
+        toast.success(v.toasts.saved);
       } catch (e) {
-        toast.error(
-          e instanceof Error ? e.message : "Could not save voice settings",
-        );
+        toast.error(e instanceof Error ? e.message : v.toasts.saveFailed);
       } finally {
         setSaving(false);
       }
     },
-    [config],
+    [config, v.toasts.saveFailed, v.toasts.saved],
   );
 
   const section = useCallback(
@@ -180,7 +177,7 @@ export function VoiceSettingsPage() {
     setBusy("speaker");
     setSpeaker(null);
     abort.current = new AbortController();
-    setSpeaker(await testSpeaker(TEST_PHRASE, abort.current.signal));
+    setSpeaker(await testSpeaker(v.testPhrase, abort.current.signal));
     setBusy(null);
   };
 
@@ -188,27 +185,21 @@ export function VoiceSettingsPage() {
     setBusy("mic");
     setMic(null);
     abort.current = new AbortController();
-    toast.info("Listening for 4 seconds — say something.");
+    toast.info(v.toasts.listening);
     setMic(await testMicrophone(4, abort.current.signal));
     setBusy(null);
   };
 
   if (loadError) {
     return (
-      <SettingsSection
-        title="Voice"
-        description="Talk to Nova, and Nova talks back."
-      >
+      <SettingsSection title={v.title} description={v.tagline}>
         <p className="text-destructive text-sm">{loadError}</p>
       </SettingsSection>
     );
   }
   if (!config) {
     return (
-      <SettingsSection
-        title="Voice"
-        description="Talk to Nova, and Nova talks back."
-      >
+      <SettingsSection title={v.title} description={v.tagline}>
         <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
       </SettingsSection>
     );
@@ -227,10 +218,7 @@ export function VoiceSettingsPage() {
   const turnChoice = config.catalog.turn?.[0];
 
   return (
-    <SettingsSection
-      title="Voice"
-      description="Runs entirely on this machine — no API key, no per-minute cost, and no audio leaves the box."
-    >
+    <SettingsSection title={v.title} description={v.description}>
       <div className="space-y-6">
         {/* Live state. device_requested vs device_actual is the useful bit:
             `auto` resolves silently and `cuda` can fall back. */}
@@ -238,22 +226,22 @@ export function VoiceSettingsPage() {
           className={cn(
             "rounded-lg border px-3 py-2.5 text-sm",
             enabled && ready
-              ? "border-emerald-500/30 bg-emerald-500/5"
-              : "border-amber-500/30 bg-amber-500/5",
+              ? "border-success/30 bg-success/5"
+              : "border-warning/30 bg-warning/5",
           )}
         >
           <div className="flex items-center gap-2">
             {enabled && ready ? (
-              <CheckCircle2Icon className="size-4 text-emerald-500" />
+              <CheckCircle2Icon className="text-success size-4" />
             ) : (
-              <AlertTriangleIcon className="size-4 text-amber-500" />
+              <AlertTriangleIcon className="text-warning size-4" />
             )}
             <span className="font-medium">
               {!enabled
-                ? "Voice is off"
+                ? v.state.off
                 : ready
-                  ? "Voice is ready"
-                  : "Voice is on, but the engines are not loading"}
+                  ? v.state.ready
+                  : v.state.notLoading}
             </span>
           </div>
           {status?.reason && (
@@ -285,9 +273,7 @@ export function VoiceSettingsPage() {
                       </Badge>
                     )}
                     {fellBack && (
-                      <span className="text-amber-500">
-                        asked for GPU, running on CPU
-                      </span>
+                      <span className="text-warning">{v.state.fellBack}</span>
                     )}
                   </div>
                 );
@@ -297,10 +283,7 @@ export function VoiceSettingsPage() {
         </div>
 
         <div className="divide-border/50 divide-y">
-          <Row
-            label="Enable voice"
-            hint="Off by default. Turning this on loads the models, which takes a few seconds."
-          >
+          <Row label={v.enable} hint={v.enableHint}>
             <Switch
               checked={enabled}
               disabled={saving}
@@ -311,17 +294,14 @@ export function VoiceSettingsPage() {
 
         {/* ── Speech to text ─────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-1 text-sm font-semibold">Listening</h3>
+          <h3 className="mb-1 text-sm font-semibold">{v.listening}</h3>
           {sttChoice?.languages && (
             <p className="text-muted-foreground mb-2 text-xs">
               {sttChoice.languages}
             </p>
           )}
           <div className="divide-border/50 divide-y">
-            <Row
-              label="Model"
-              hint="Bigger is more accurate and slower. On a GPU, accuracy becomes affordable."
-            >
+            <Row label={v.model} hint={v.modelHint}>
               <Choice
                 options={(sttChoice?.models ?? []).map((m) => ({
                   value: m,
@@ -332,7 +312,7 @@ export function VoiceSettingsPage() {
               />
             </Row>
             <Row
-              label="Device"
+              label={v.device}
               hint={
                 DEVICES.find((d) => d.value === (stt.device ?? "auto"))?.hint
               }
@@ -343,10 +323,7 @@ export function VoiceSettingsPage() {
                 onChange={(v) => section("stt", { device: v })}
               />
             </Row>
-            <Row
-              label="Language"
-              hint="Blank auto-detects. Setting it explicitly is faster and more accurate."
-            >
+            <Row label={v.language} hint={v.languageHint}>
               <Input
                 className="h-7 w-24 text-xs"
                 placeholder="auto"
@@ -363,14 +340,14 @@ export function VoiceSettingsPage() {
 
         {/* ── Text to speech ─────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-1 text-sm font-semibold">Speaking</h3>
+          <h3 className="mb-1 text-sm font-semibold">{v.speaking}</h3>
           {ttsChoice?.note && (
             <p className="text-muted-foreground mb-2 text-xs">
               {ttsChoice.note}
             </p>
           )}
           <div className="divide-border/50 divide-y">
-            <Row label="Engine">
+            <Row label={v.engine}>
               <Choice
                 options={config.catalog.tts.map((c) => ({
                   value: c.use,
@@ -380,7 +357,7 @@ export function VoiceSettingsPage() {
                 onChange={(v) => section("tts", { use: v })}
               />
             </Row>
-            <Row label="Voice">
+            <Row label={v.voice}>
               <Choice
                 options={(ttsChoice?.voices ?? [])
                   .slice(0, 4)
@@ -390,7 +367,7 @@ export function VoiceSettingsPage() {
               />
             </Row>
             <Row
-              label="Device"
+              label={v.device}
               hint={
                 DEVICES.find((d) => d.value === (tts.device ?? "auto"))?.hint
               }
@@ -406,15 +383,12 @@ export function VoiceSettingsPage() {
 
         {/* ── Turn-taking ────────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-1 text-sm font-semibold">Turn-taking</h3>
+          <h3 className="mb-1 text-sm font-semibold">{v.turnTaking}</h3>
           <p className="text-muted-foreground mb-2 text-xs">
             {turnChoice?.note}
           </p>
           <div className="divide-border/50 divide-y">
-            <Row
-              label="Wait while you think"
-              hint="Off by default. Judges whether you finished a thought rather than just stopping — verify it with your own voice using the microphone test below."
-            >
+            <Row label={v.waitWhileThinking} hint={v.waitWhileThinkingHint}>
               <Switch
                 checked={Boolean(turn.enabled)}
                 disabled={saving || !enabled}
@@ -424,10 +398,7 @@ export function VoiceSettingsPage() {
               />
             </Row>
             {Boolean(turn.enabled) && (
-              <Row
-                label="Confidence"
-                hint="Higher means Nova waits more readily. A wrong wait costs you real time, so this is not free."
-              >
+              <Row label={v.confidence} hint={v.confidenceHint}>
                 <Choice
                   options={[
                     { value: "0.5", label: "0.5" },
@@ -452,10 +423,9 @@ export function VoiceSettingsPage() {
 
         {/* ── Quick tests ────────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-1 text-sm font-semibold">One-click checks</h3>
+          <h3 className="mb-1 text-sm font-semibold">{v.checks.title}</h3>
           <p className="text-muted-foreground mb-3 text-xs">
-            The same paths as the lab above, with fixed inputs — for when you
-            just want a yes or no.
+            {v.checks.description}
           </p>
 
           <div className="space-y-3">
@@ -471,7 +441,7 @@ export function VoiceSettingsPage() {
                 ) : (
                   <Volume2Icon className="size-3.5" />
                 )}
-                Test speaker
+                {v.checks.testSpeaker}
               </Button>
               {speaker && (
                 <span
@@ -484,8 +454,8 @@ export function VoiceSettingsPage() {
                     <>
                       {speaker.blocked && (
                         <>
-                          <span className="text-amber-500">
-                            browser blocked autoplay
+                          <span className="text-warning">
+                            {v.checks.autoplayBlocked}
                           </span>
                           {" · "}
                         </>
@@ -496,11 +466,11 @@ export function VoiceSettingsPage() {
                           {" · "}
                           <span
                             className={
-                              speaker.rtf > 1 ? "text-amber-500" : undefined
+                              speaker.rtf > 1 ? "text-warning" : undefined
                             }
                           >
-                            {speaker.rtf.toFixed(2)}× real time
-                            {speaker.rtf > 1 && " — slower than playback"}
+                            {v.checks.realTime(speaker.rtf.toFixed(2))}
+                            {speaker.rtf > 1 && v.checks.slowerThanPlayback}
                           </span>
                         </>
                       )}
@@ -524,7 +494,7 @@ export function VoiceSettingsPage() {
                 ) : (
                   <MicIcon className="size-3.5" />
                 )}
-                Test microphone
+                {v.checks.testMicrophone}
               </Button>
               {mic && (
                 <span
@@ -535,8 +505,8 @@ export function VoiceSettingsPage() {
                 >
                   {mic.ok
                     ? mic.heard
-                      ? `heard: “${mic.heard}”`
-                      : "recorded, but no words were recognised"
+                      ? v.checks.heard(mic.heard)
+                      : v.checks.nothingRecognised
                     : mic.error}
                 </span>
               )}
@@ -546,11 +516,7 @@ export function VoiceSettingsPage() {
 
         {config.has_overrides && (
           <div className="border-panel-border flex items-center justify-between gap-4 border-t pt-4">
-            <p className="text-muted-foreground text-xs">
-              These settings are saved separately from{" "}
-              <code className="font-mono">config.yaml</code>, which is never
-              modified.
-            </p>
+            <p className="text-muted-foreground text-xs">{v.overridesNote}</p>
             <Button
               size="sm"
               variant="ghost"
@@ -558,11 +524,11 @@ export function VoiceSettingsPage() {
               onClick={async () => {
                 setConfig(await resetVoiceConfig());
                 setStatus(await getVoiceStatus(true));
-                toast.success("Reverted to config.yaml");
+                toast.success(v.toasts.reverted);
               }}
             >
               <RotateCcwIcon className="size-3.5" />
-              Reset
+              {v.reset}
             </Button>
           </div>
         )}

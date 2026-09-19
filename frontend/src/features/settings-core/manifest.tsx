@@ -4,7 +4,6 @@ import {
   CableIcon,
   CpuIcon,
   InfoIcon,
-  MicIcon,
   PaletteIcon,
   ServerIcon,
   SparklesIcon,
@@ -22,7 +21,6 @@ import { NotificationSettingsPage } from "@/components/workspace/settings/notifi
 import { RuntimeSettingsPage } from "@/components/workspace/settings/runtime-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
-import { VoiceSettingsPage } from "@/components/workspace/settings/voice-settings-page";
 
 import type { FeatureManifest } from "../types";
 
@@ -82,13 +80,6 @@ export const settingsCoreManifest: FeatureManifest = {
       icon: BellIcon,
       label: (t) => t.settings.sections.notification,
       Page: NotificationSettingsPage,
-    },
-    {
-      id: "voice",
-      order: 80,
-      icon: MicIcon,
-      label: (t) => t.settings.sections.voice,
-      Page: VoiceSettingsPage,
     },
     {
       id: "channels",

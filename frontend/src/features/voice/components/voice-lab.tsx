@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useI18n } from "@/core/i18n/hooks";
 import {
   stopSpeaking,
   testMicrophone,
@@ -34,10 +35,6 @@ import {
   type SpeakerTest,
 } from "@/core/voice/config";
 import { cn } from "@/lib/utils";
-
-/** Long enough to be a fair timing sample, short enough not to be a wait. */
-const DEFAULT_TEXT =
-  "Nova is online. All systems are green, and the deploy finished successfully.";
 
 type VoiceSample = { voice: string; result: SpeakerTest };
 
@@ -55,7 +52,7 @@ function Metric({
       <div className="text-muted-foreground text-[10px] tracking-wide uppercase">
         {label}
       </div>
-      <div className={cn("font-mono text-sm", warn && "text-amber-500")}>
+      <div className={cn("font-mono text-sm", warn && "text-warning")}>
         {value}
       </div>
     </div>
@@ -73,7 +70,10 @@ export function VoiceLab({
   activeVoice: string;
   onPickVoice: (voice: string) => void;
 }) {
-  const [text, setText] = useState(DEFAULT_TEXT);
+  const { t } = useI18n();
+  const l = t.features.voice.lab;
+  // Long enough to be a fair timing sample, short enough not to be a wait.
+  const [text, setText] = useState(l.defaultText);
   const [speaking, setSpeaking] = useState(false);
   const [last, setLast] = useState<SpeakerTest | null>(null);
   const [samples, setSamples] = useState<VoiceSample[]>([]);
@@ -154,19 +154,16 @@ export function VoiceLab({
   return (
     <div className="border-panel-border rounded-lg border p-4">
       <div className="mb-1 flex items-center gap-2">
-        <GaugeIcon className="size-4 text-sky-400" />
-        <h3 className="text-sm font-semibold">Voice lab</h3>
+        <GaugeIcon className="text-info size-4" />
+        <h3 className="text-sm font-semibold">{l.title}</h3>
       </div>
-      <p className="text-muted-foreground mb-3 text-xs">
-        Drive the real engines and see what they actually do. Numbers are
-        measured end to end, including the network hop.
-      </p>
+      <p className="text-muted-foreground mb-3 text-xs">{l.description}</p>
 
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={2}
-        placeholder="Type anything for Nova to say…"
+        placeholder={l.placeholder}
         className="mb-3 text-sm"
         disabled={!enabled}
       />
@@ -182,7 +179,7 @@ export function VoiceLab({
           ) : (
             <PlayIcon className="size-3.5" />
           )}
-          Speak it
+          {l.speakIt}
         </Button>
         <Button
           size="sm"
@@ -195,7 +192,7 @@ export function VoiceLab({
           ) : (
             <GaugeIcon className="size-3.5" />
           )}
-          Audition every voice
+          {l.auditionAll}
         </Button>
         <Button
           size="sm"
@@ -208,12 +205,12 @@ export function VoiceLab({
           ) : (
             <MicIcon className="size-3.5" />
           )}
-          Speak to Nova
+          {l.speakToNova}
         </Button>
         {busy && (
           <Button size="sm" variant="ghost" onClick={stop}>
             <SquareIcon className="size-3 fill-current" />
-            Stop
+            {l.stop}
           </Button>
         )}
       </div>
@@ -223,41 +220,36 @@ export function VoiceLab({
           {last.ok ? (
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               <Metric
-                label="first audio"
+                label={l.firstAudio}
                 value={`${Math.round(last.latencyMs)} ms`}
                 warn={last.latencyMs > 1000}
               />
               <Metric
-                label="audio length"
+                label={l.audioLength}
                 value={last.durationS ? `${last.durationS.toFixed(2)} s` : "—"}
               />
               {/* RTF above 1 means synthesis is slower than playback — it
                   stutters rather than failing, so naming it matters. */}
               <Metric
-                label="real-time factor"
+                label={l.realTimeFactor}
                 value={last.rtf != null ? `${last.rtf.toFixed(2)}×` : "—"}
                 warn={(last.rtf ?? 0) > 1}
               />
               {last.blocked && (
-                <div className="flex w-full items-center gap-2 text-xs text-amber-500">
-                  <span>
-                    Your browser blocked autoplay — the audio arrived fine.
-                  </span>
+                <div className="text-warning flex w-full items-center gap-2 text-xs">
+                  <span>{l.autoplayBlocked}</span>
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-6 text-xs"
                     onClick={() => void last.play?.()}
                   >
-                    Play it
+                    {l.playIt}
                   </Button>
                 </div>
               )}
               {(last.rtf ?? 0) > 1 && (
-                <p className="text-xs text-amber-500">
-                  Slower than real time — audio cannot keep up with playback.
-                  Check the device setting above.
-                </p>
+                <p className="text-warning text-xs">{l.slowerThanRealTime}</p>
               )}
             </div>
           ) : (
@@ -271,13 +263,12 @@ export function VoiceLab({
           {heard.ok ? (
             heard.heard ? (
               <>
-                <span className="text-muted-foreground">Nova heard: </span>
+                <span className="text-muted-foreground">{l.novaHeard} </span>
                 <span className="font-medium">“{heard.heard}”</span>
               </>
             ) : (
-              <span className="text-amber-500">
-                Recorded {heard.durationS ?? 0}s but recognised no words — check
-                the input device or speak louder.
+              <span className="text-warning">
+                {l.nothingRecognised(heard.durationS ?? 0)}
               </span>
             )
           ) : (
@@ -289,7 +280,7 @@ export function VoiceLab({
       {samples.length > 0 && (
         <div className="space-y-1">
           <div className="text-muted-foreground text-[10px] tracking-wide uppercase">
-            Voices — click one to make it Nova&apos;s
+            {l.voicesHint}
           </div>
           {samples.map(({ voice, result }) => (
             <button
@@ -299,7 +290,7 @@ export function VoiceLab({
               className={cn(
                 "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition-colors",
                 voice === activeVoice
-                  ? "bg-sky-500/10 text-sky-300"
+                  ? "bg-info/10 text-info"
                   : "hover:bg-muted/50",
               )}
             >
@@ -307,7 +298,7 @@ export function VoiceLab({
               <span className="text-muted-foreground">
                 {result.ok
                   ? `${Math.round(result.latencyMs)} ms · ${result.rtf?.toFixed(2) ?? "—"}×`
-                  : "failed"}
+                  : l.failed}
               </span>
             </button>
           ))}

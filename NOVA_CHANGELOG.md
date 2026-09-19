@@ -56,6 +56,7 @@ Phase P4 of the upgrade program.
 - **Host bridge**: `nova-host-bridge` PM2 app (`scripts/host-bridge.sh`) forwards the loopback-only host services (OpenClaw 18789, Mailcow API 8080, Chatwoot 4800, Twenty 3008) from the docker bridge IP to 127.0.0.1, so containers reach them at `host.docker.internal:<port>`; bound to 172.17.0.1 only. Watchdog probe `P16_host_bridge` + pm2 auto-heal.
 - **Settings › Integrations**: cards grouped by kind (model gateways; mail/CRM/helpdesk; search/crawl/browser; agent gateways; MCP & skills) with status dot, endpoint, detail, capability chips, latency, last-checked, per-card Probe and Probe all. Behind the server `integrations` feature flag. `SettingsSection` gained an `action` slot.
 - Visual gate waits for `document.fonts.ready` before every capture (glyph anti-aliasing flake).
+- **Voice is a feature module (P5)**: `src/features/voice/` with its own manifest; the settings page and voice lab are fully translated (en-US / zh-CN, ~60 strings under `t.features.voice`; model names, device ids and measured numbers stay verbatim) and use the semantic tokens instead of raw emerald/amber/sky. The raw-palette ratchet now also covers `src/features`.
 
 ---
 

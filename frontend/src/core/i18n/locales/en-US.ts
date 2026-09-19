@@ -98,6 +98,94 @@ export const enUS: Translations = {
         other: "Other",
       },
     },
+    voice: {
+      title: "Voice",
+      tagline: "Talk to Nova, and Nova talks back.",
+      description:
+        "Runs entirely on this machine — no API key, no per-minute cost, and no audio leaves the box.",
+      testPhrase: "Nova is online. All systems are green.",
+      state: {
+        off: "Voice is off",
+        ready: "Voice is ready",
+        notLoading: "Voice is on, but the engines are not loading",
+        fellBack: "asked for GPU, running on CPU",
+      },
+      enable: "Enable voice",
+      enableHint:
+        "Off by default. Turning this on loads the models, which takes a few seconds.",
+      listening: "Listening",
+      model: "Model",
+      modelHint:
+        "Bigger is more accurate and slower. On a GPU, accuracy becomes affordable.",
+      device: "Device",
+      language: "Language",
+      languageHint:
+        "Blank auto-detects. Setting it explicitly is faster and more accurate.",
+      speaking: "Speaking",
+      engine: "Engine",
+      voice: "Voice",
+      turnTaking: "Turn-taking",
+      waitWhileThinking: "Wait while you think",
+      waitWhileThinkingHint:
+        "Off by default. Judges whether you finished a thought rather than just stopping — verify it with your own voice using the microphone test below.",
+      confidence: "Confidence",
+      confidenceHint:
+        "Higher means Nova waits more readily. A wrong wait costs you real time, so this is not free.",
+      devices: {
+        auto: "Auto",
+        autoHint: "Use the GPU when it is really available, CPU otherwise.",
+        cuda: "GPU (CUDA)",
+        cudaHint: "Falls back to CPU with a warning if CUDA is unusable.",
+        cpu: "CPU",
+        cpuHint: "Never touch the GPU.",
+      },
+      checks: {
+        title: "One-click checks",
+        description:
+          "The same paths as the lab above, with fixed inputs — for when you just want a yes or no.",
+        testSpeaker: "Test speaker",
+        testMicrophone: "Test microphone",
+        autoplayBlocked: "browser blocked autoplay",
+        realTime: (rtf) => `${rtf}× real time`,
+        slowerThanPlayback: " — slower than playback",
+        heard: (words) => `heard: “${words}”`,
+        nothingRecognised: "recorded, but no words were recognised",
+      },
+      lab: {
+        title: "Voice lab",
+        description:
+          "Drive the real engines and see what they actually do. Numbers are measured end to end, including the network hop.",
+        placeholder: "Type anything for Nova to say…",
+        defaultText:
+          "Nova is online. All systems are green, and the deploy finished successfully.",
+        speakIt: "Speak it",
+        auditionAll: "Audition every voice",
+        speakToNova: "Speak to Nova",
+        stop: "Stop",
+        firstAudio: "first audio",
+        audioLength: "audio length",
+        realTimeFactor: "real-time factor",
+        autoplayBlocked:
+          "Your browser blocked autoplay — the audio arrived fine.",
+        playIt: "Play it",
+        slowerThanRealTime:
+          "Slower than real time — audio cannot keep up with playback. Check the device setting above.",
+        novaHeard: "Nova heard:",
+        nothingRecognised: (seconds) =>
+          `Recorded ${seconds}s but recognised no words — check the input device or speak louder.`,
+        voicesHint: "Voices — click one to make it Nova's",
+        failed: "failed",
+      },
+      overridesNote:
+        "These settings are saved separately from config.yaml, which is never modified.",
+      reset: "Reset",
+      toasts: {
+        saved: "Voice settings saved",
+        saveFailed: "Could not save voice settings",
+        listening: "Listening for 4 seconds — say something.",
+        reverted: "Reverted to config.yaml",
+      },
+    },
   },
   // Locale meta
   locale: {
