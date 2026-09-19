@@ -240,6 +240,11 @@ start() {
         fi
         echo -e "${YELLOW}Mounting host Docker socket into gateway (DooD = host root-equivalent). See SECURITY.md.${NC}"
         COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.dood.yaml"
+        # ACP agents overlay (Claude Code + OpenClaw), opt-in via NOVA_ACP_AGENTS=1.
+        if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
+            "$PROJECT_ROOT/scripts/acp-secrets.sh" || true
+            COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.cli-auth.yaml -f $DOCKER_DIR/docker-compose.acp.yaml"
+        fi
     fi
 
     # Voice needs two things the base compose file cannot assume: the model

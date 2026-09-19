@@ -332,3 +332,11 @@ def test_contract_rejects_missing_required_on_task_started(contract):
     payload = {"type": "task_started", "task_id": "x"}
     errors = _check(contract, "task_started", payload)
     assert any("description" in e for e in errors)
+
+
+def test_acp_update_payload_conforms(contract):
+    """P6: live transcript of an ACP agent (invoke_acp_agent_tool)."""
+    payload = {"type": "acp_update", "agent": "claude_code", "session_id": "s-1", "kind": "text", "delta": "Hello"}
+    assert _check(contract, "acp_update", payload) == []
+    assert _check(contract, "acp_update", {**payload, "kind": "thought"}) != []
+    assert _check(contract, "acp_update", {**payload, "extra": 1}) != []

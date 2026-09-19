@@ -48,6 +48,18 @@
 
 ---
 
+## v9.10 — Claude inside Nova: ACP agents with live transcripts and permission policy (2026-09-19)
+
+Phase P6 of the upgrade program.
+
+- **Two ACP agents declared** in `config.yaml` (`config_version` 23): `claude_code` (the Claude Code agent via `@zed-industries/claude-agent-acp@0.23.1`, using the user's own `claude` login mounted read-only — Nova never reads it) and `openclaw` (OpenClaw's ACP bridge to the host gateway through `nova-host-bridge`, token from `~/.nova/secrets`, 0600). Opt-in with `NOVA_ACP_AGENTS=1`: `scripts/pm2-deerflow.sh` / `scripts/docker.sh` add `docker-compose.cli-auth.yaml` + the new `docker-compose.acp.yaml`; `scripts/acp-secrets.sh` writes the token file; the entrypoint warms the adapter into a `gateway-npm-cache` volume. See `backend/docs/ACP_AGENTS.md`.
+- **Per-kind permission policy** (`acp_agents.<name>.permission_policy`): `deny_kinds` always deny, `allow_kinds` auto-approve, everything else is denied unless `auto_approve_permissions`. Previously it was all-or-nothing.
+- **Live transcript**: every agent text chunk and every tool-call/permission decision streams to the chat as an `acp_update` custom event (contract-pinned on both sides) and renders under the "Working with <agent>" step, settling on the final answer.
+- Fixed a contract lie: `contracts/README.md` listed a frontend custom-events contract test that did not exist; it exists now and pins all 12 event types the stream handler switches on.
+- `SECURITY.md` gains deployment notes for the host bridge and the ACP mounts.
+
+---
+
 ## v9.9 — Integrations registry, host bridge, Settings › Integrations (2026-09-19)
 
 Phase P4 of the upgrade program.

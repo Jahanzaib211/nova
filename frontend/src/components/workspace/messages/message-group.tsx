@@ -7,6 +7,7 @@ import {
   CameraIcon,
   CandlestickChartIcon,
   ChevronUp,
+  BotIcon,
   CoinsIcon,
   FlaskConicalIcon,
   FolderOpenIcon,
@@ -54,6 +55,8 @@ import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
 
+import { AcpTranscriptView } from "./acp-transcript";
+import { useThread } from "./context";
 import { MarkdownContent } from "./markdown-content";
 
 export function MessageGroup({
@@ -475,6 +478,7 @@ function ToolCall({
   const { t } = useI18n();
   const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
     useArtifacts();
+  const { acpTranscripts } = useThread();
   const tokenLabel = tokenDebugStep
     ? formatDebugToken(tokenDebugStep, t)
     : null;
@@ -719,6 +723,23 @@ function ToolCall({
         label={resolveLabel(description)}
         icon={SquareTerminalIcon}
       />
+    );
+  } else if (name === "invoke_acp_agent") {
+    const agent =
+      typeof args.agent === "string" && args.agent ? args.agent : "agent";
+    const running = isLoading && isLast && !result;
+    return (
+      <ChainOfThoughtStep
+        key={id}
+        label={resolveLabel(t.toolCalls.acp.invoke(agent))}
+        icon={BotIcon}
+      >
+        <AcpTranscriptView
+          transcript={acpTranscripts?.[agent]}
+          result={typeof result === "string" ? result : undefined}
+          running={running}
+        />
+      </ChainOfThoughtStep>
     );
   } else if (name === "ask_clarification") {
     return (

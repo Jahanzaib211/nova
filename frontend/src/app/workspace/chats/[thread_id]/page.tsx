@@ -38,6 +38,10 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
 import {
+  type AcpTranscripts,
+  applyAcpUpdate,
+} from "@/core/threads/acp-transcript";
+import {
   activeWriteFilePathFromActivity,
   currentToolFromActivity,
   messagesToActivityEvents,
@@ -96,6 +100,7 @@ export default function ChatPage() {
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [llmError, setLlmError] = useState<LlmError | null>(null);
+  const [acpTranscripts, setAcpTranscripts] = useState<AcpTranscripts>({});
 
   useEffect(() => {
     mountedRef.current = true;
@@ -110,6 +115,7 @@ export default function ChatPage() {
     setTaskProgress(null);
     setVerifyResult(null);
     setLlmError(null);
+    setAcpTranscripts({});
   }, [threadId]);
 
   const { showNotification } = useNotification();
@@ -171,6 +177,9 @@ export default function ChatPage() {
     },
     onLlmError: (event) => {
       setLlmError(event);
+    },
+    onAcpUpdate: (event) => {
+      setAcpTranscripts((prev) => applyAcpUpdate(prev, event));
     },
   });
 
@@ -286,6 +295,7 @@ export default function ChatPage() {
         llmError,
         activityEvents,
         activeWriteFilePath,
+        acpTranscripts,
         onAgentMessage: handleAgentMessage,
       }}
     >

@@ -8,7 +8,7 @@ fails the build rather than surfacing later as "the apps are out of sync".
 
 | File | Description | Pinned by |
 |---|---|---|
-| `custom_events_contract.json` | JSON Schema for the four SSE `custom` stream-mode payloads (`task_progress`, `verify_result`, `llm_error`, `task_running`) | `backend/tests/test_custom_events_contract.py`, `frontend/tests/unit/core/threads/custom-event-contract.test.ts` |
+| `custom_events_contract.json` | JSON Schema for the SSE `custom` stream-mode payloads (`task_*` lifecycle, `task_progress`, `verify_result`, `llm_error`, `llm_retry`, `safety_termination`, `acp_update`) | `backend/tests/test_custom_events_contract.py`, `frontend/tests/unit/core/threads/custom-event-contract.test.ts` |
 | `subagent_status_contract.json` | The `ToolMessage.additional_kwargs.subagent_status` values and the result-text prefixes each maps from | `backend/tests/test_subagent_status_contract.py`, `frontend/tests/unit/core/tasks/subtask-result.test.ts` |
 | `job_status_contract.json` | Job runner statuses, terminal set, event types and the progress payload schema | `backend/tests/test_job_status_contract.py`, `frontend/tests/unit/contracts/job-status.contract.test.ts` |
 | `email_marketing_events_contract.json` | Email-marketing send/tracking event types, campaign + contact statuses, suppression reasons | `backend/tests/test_email_marketing_events_contract.py`, `frontend/tests/unit/contracts/email-marketing-events.contract.test.ts` |

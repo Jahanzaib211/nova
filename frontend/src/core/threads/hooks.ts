@@ -26,6 +26,7 @@ import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
 import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
+import { type AcpUpdateEvent, isAcpUpdateEvent } from "./acp-transcript";
 import { buildActivitySummary } from "./activity";
 import { fetchThreadTokenUsage } from "./api";
 import {
@@ -135,6 +136,7 @@ export type ThreadStreamOptions = {
   onTaskProgress?: (progress: TaskProgressEvent) => void;
   onVerifyResult?: (event: VerifyResultEvent) => void;
   onLlmError?: (event: LlmErrorEvent) => void;
+  onAcpUpdate?: (event: AcpUpdateEvent) => void;
 };
 
 type SendMessageOptions = {
@@ -559,6 +561,7 @@ export function useThreadStream({
   onLlmError,
   onToolActivity,
   onToolActivityDone,
+  onAcpUpdate,
 }: ThreadStreamOptions) {
   const { t } = useI18n();
   const currentViewThreadId = displayThreadId ?? threadId ?? null;
@@ -600,6 +603,7 @@ export function useThreadStream({
     onLlmError,
     onToolActivity,
     onToolActivityDone,
+    onAcpUpdate,
   });
 
   const {
@@ -622,6 +626,7 @@ export function useThreadStream({
       onLlmError,
       onToolActivity,
       onToolActivityDone,
+      onAcpUpdate,
     };
   }, [
     onSend,
@@ -633,6 +638,7 @@ export function useThreadStream({
     onLlmError,
     onToolActivity,
     onToolActivityDone,
+    onAcpUpdate,
   ]);
 
   useEffect(() => {
@@ -1063,6 +1069,13 @@ export function useThreadStream({
           http_status: typeof e.http_status === "number" ? e.http_status : null,
           code: typeof e.code === "string" ? e.code : null,
         });
+      }
+
+      // Live transcript of an ACP agent (contract: acp_update). Off-contract
+      // shapes are ignored by construction — the bundle and the gateway
+      // deploy independently.
+      if (isAcpUpdateEvent(event)) {
+        listeners.current.onAcpUpdate?.(event);
       }
     },
     onError(error) {

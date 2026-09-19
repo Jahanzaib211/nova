@@ -71,6 +71,15 @@ case "$NOVA_STACK" in
     else
       echo "[pm2-deerflow] voice overlay skipped (speech disabled or weights missing in $_voice_dir)" >&2
     fi
+    # ACP agents (Claude Code + OpenClaw inside Nova): opt-in, because the
+    # cli-auth overlay exposes ~/.claude to the gateway (see its header).
+    if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
+      "$DEER_FLOW_ROOT/scripts/acp-secrets.sh" || true
+      COMPOSE_FILES+=(
+        -f "$DEER_FLOW_ROOT/docker/docker-compose.cli-auth.yaml"
+        -f "$DEER_FLOW_ROOT/docker/docker-compose.acp.yaml"
+      )
+    fi
     # provisioner stays at 0: nothing in the dev flow provisions sandboxes over
     # HTTP, and nginx already resolves its upstream at request time so the route
     # simply 502s if anyone tries.

@@ -4,7 +4,7 @@
   "description": "Shape of the custom-event payloads the gateway emits over the SSE `custom` stream mode. Pinned by backend/tests/test_custom_events_contract.py and frontend/tests/unit/core/threads/custom-event-contract.test.ts so any drift in either side fails the build.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["task_progress", "verify_result", "llm_error", "task_running", "safety_termination", "llm_retry", "task_started", "task_completed", "task_failed", "task_timed_out", "task_activity"],
+  "required": ["task_progress", "verify_result", "llm_error", "task_running", "safety_termination", "llm_retry", "task_started", "task_completed", "task_failed", "task_timed_out", "task_activity", "acp_update"],
   "properties": {
     "task_progress": {
       "type": "object",
@@ -136,6 +136,18 @@
         "type": {"const": "task_activity"},
         "tool_call_id": {"type": "string"},
         "status": {"type": "string"}
+      }
+    },
+    "acp_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "agent", "session_id", "kind", "delta"],
+      "properties": {
+        "type": {"const": "acp_update"},
+        "agent": {"type": "string"},
+        "session_id": {"type": "string"},
+        "kind": {"enum": ["text", "status"]},
+        "delta": {"type": "string"}
       }
     }
   }

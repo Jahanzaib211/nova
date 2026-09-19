@@ -488,6 +488,10 @@ export const zhCN: Translations = {
     presentFiles: "展示文件",
     needYourHelp: "需要你的协助",
     useTool: (toolName: string) => `使用 “${toolName}” 工具`,
+    acp: {
+      invoke: (agent: string) => `正在与 ${agent} 协作`,
+      waiting: "正在启动智能体……",
+    },
     searchFor: (query: string) => `搜索 “${query}”`,
     searchForRelatedInfo: "搜索相关信息",
     searchForRelatedImages: "搜索相关图片",

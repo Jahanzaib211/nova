@@ -394,6 +394,7 @@ export interface Translations {
 
   // Tool calls
   toolCalls: {
+    acp: { invoke: (agent: string) => string; waiting: string };
     moreSteps: (count: number) => string;
     lessSteps: string;
     executeCommand: string;

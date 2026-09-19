@@ -166,6 +166,13 @@ if [ "${NOVA_DB_MIGRATE:-1}" = "1" ]; then
     NOVA_BACKEND_DIR=/app/backend /usr/local/bin/db-migrate.sh
 fi
 
+# ── ACP agents: warm the Claude adapter so the first invoke is not a download ─
+# Best-effort and backgrounded: a slow registry must never delay the gateway.
+if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
+    ( npx -y "@zed-industries/claude-agent-acp@${NOVA_CLAUDE_ACP_VERSION:-0.23.1}" --version \
+        >/app/logs/acp-warm.log 2>&1 || echo "acp warm-up failed (see logs/acp-warm.log)" >&2 ) &
+fi
+
 # ── Hand off to uvicorn ─────────────────────────────────────────────────────
 
 PYTHONPATH=. exec uv run uvicorn app.gateway.app:app \

@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from langchain_core.runnables import RunnableConfig
@@ -94,18 +95,40 @@ def _build_acp_mcp_servers() -> list[dict[str, Any]]:
     return mcp_servers
 
 
-def _build_permission_response(options: list[Any], *, auto_approve: bool) -> Any:
+def _stream_writer() -> Callable[[dict[str, Any]], None] | None:
+    """The run's custom-event writer, or None outside a graph run.
+
+    ``get_stream_writer()`` raises when no runnable context is active (unit
+    tests, direct invocation); the tool must still work there, just silently.
+    """
+    try:
+        from langgraph.config import get_stream_writer
+
+        return get_stream_writer()
+    except Exception:
+        return None
+
+
+def _build_permission_response(
+    options: list[Any],
+    *,
+    auto_approve: bool,
+    policy: Any | None = None,
+    kind: str | None = None,
+) -> Any:
     """Build an ACP permission response.
 
-    When ``auto_approve`` is True, selects the first ``allow_once`` (preferred)
-    or ``allow_always`` option.  When False (the default), always cancels —
-    permission requests must be handled by the ACP agent's own policy or the
-    agent must be configured to operate without requesting permissions.
+    Approval is decided by the agent's ``permission_policy`` for the tool
+    call's ``kind`` (``deny_kinds`` always wins, ``allow_kinds`` approves,
+    ``auto_approve`` approves everything else); an approved request selects
+    the first ``allow_once`` (preferred) or ``allow_always`` option. Anything
+    else cancels — the agent must then work without that permission.
     """
     from acp import RequestPermissionResponse
     from acp.schema import AllowedOutcome, DeniedOutcome
 
-    if auto_approve:
+    approved = policy.decide(kind, auto_approve=auto_approve) if policy is not None else auto_approve
+    if approved:
         for preferred_kind in ("allow_once", "allow_always"):
             for option in options:
                 if getattr(option, "kind", None) != preferred_kind:
@@ -178,6 +201,17 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         except ImportError:
             return "Error: agent-client-protocol package is not installed. Run `uv sync` to install project dependencies."
 
+        writer = _stream_writer()
+
+        def emit(session_id: str, kind: str, delta: str) -> None:
+            # Contract: contracts/custom_events_contract.json → acp_update.
+            if writer is None or not delta:
+                return
+            try:
+                writer({"type": "acp_update", "agent": agent, "session_id": session_id, "kind": kind, "delta": delta})
+            except Exception:  # never let telemetry break the invocation
+                logger.debug("acp_update emit failed", exc_info=True)
+
         class _CollectingClient(Client):
             """Minimal ACP Client that collects streamed text from session updates."""
 
@@ -194,16 +228,38 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
 
                     if hasattr(update, "content") and isinstance(update.content, TextContentBlock):
                         self._chunks.append(update.content.text)
+                        emit(session_id, "text", update.content.text)
+                        return
+                    title = getattr(update, "title", None)
+                    if title:
+                        # Tool-call start/progress: name the step so the transcript
+                        # shows what the agent is doing between text chunks.
+                        emit(session_id, "status", f"{getattr(update, 'kind', 'tool')}: {title}")
                 except Exception:
                     pass
 
             async def request_permission(self, options, session_id: str, tool_call, **kwargs):  # type: ignore[override]
-                response = _build_permission_response(options, auto_approve=agent_config.auto_approve_permissions)
+                kind = getattr(tool_call, "kind", None)
+                response = _build_permission_response(
+                    options,
+                    auto_approve=agent_config.auto_approve_permissions,
+                    policy=agent_config.permission_policy,
+                    kind=kind,
+                )
                 outcome = response.outcome.outcome
+                title = getattr(tool_call, "title", None) or getattr(tool_call, "tool_call_id", "")
                 if outcome == "selected":
-                    logger.info("ACP permission auto-approved for tool call %s in session %s", tool_call.tool_call_id, session_id)
+                    logger.info("ACP permission approved for tool call %s (%s) in session %s", tool_call.tool_call_id, kind, session_id)
+                    emit(session_id, "status", f"permission approved: {kind or 'tool'} — {title}")
                 else:
-                    logger.warning("ACP permission denied for tool call %s in session %s (set auto_approve_permissions: true in config.yaml to enable)", tool_call.tool_call_id, session_id)
+                    logger.warning(
+                        "ACP permission denied for tool call %s (%s) in session %s — add the kind to acp_agents.%s.permission_policy.allow_kinds to approve it",
+                        tool_call.tool_call_id,
+                        kind,
+                        session_id,
+                        agent,
+                    )
+                    emit(session_id, "status", f"permission denied: {kind or 'tool'} — {title}")
                 return response
 
         client = _CollectingClient()

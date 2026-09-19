@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 22
+config_version: 23
 
 # ============================================================================
 # Logging
@@ -1128,18 +1128,49 @@ sandbox:
 # ACP Agents Configuration
 # ============================================================================
 # Configure external ACP-compatible agents for the built-in `invoke_acp_agent` tool.
+# The agent's text streams into the chat as it is produced (acp_update events);
+# permission requests are decided per tool kind by `permission_policy`:
+# deny_kinds always deny, allow_kinds auto-approve, everything else is denied
+# unless auto_approve_permissions is true. Kinds: read, edit, delete, move,
+# search, execute, think, fetch, switch_mode, other.
+# "Claude inside Nova" needs NOVA_ACP_AGENTS=1 in .env (see .env.example); it
+# runs the real Claude Code binary against the user's own `claude` login,
+# mounted read-only. Nova never reads that credential.
 
 # acp_agents:
 #   claude_code:
 #     # DeerFlow expects an ACP adapter here. The standard `claude` CLI does not
-#     # speak ACP directly. Install `claude-agent-acp` separately or use:
+#     # speak ACP directly; the Zed adapter wraps the Claude Agent SDK.
 #     command: npx
-#     args: ["-y", "@zed-industries/claude-agent-acp"]
+#     args: ["-y", "@zed-industries/claude-agent-acp@0.23.1"]
 #     description: Claude Code for implementation, refactoring, and debugging
 #     model: null
-#     # auto_approve_permissions: false  # Set to true to auto-approve ACP permission requests
-#     # env:                             # Optional: inject environment variables into the agent subprocess
-#     #   ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY  # $VAR resolves from host environment
+#     env:
+#       HOME: /root
+#       CLAUDE_CONFIG_DIR: /root/.claude
+#     auto_approve_permissions: false
+#     permission_policy:
+#       allow_kinds: [read, search, fetch, think]
+#       deny_kinds: [delete]
+#
+#   openclaw:
+#     # OpenClaw's own ACP bridge, talking to the host OpenClaw gateway through
+#     # nova-host-bridge (docker/docker-compose.acp.yaml mounts the package and
+#     # the token file; scripts/acp-secrets.sh writes the token file).
+#     command: node
+#     args:
+#       - /opt/openclaw/openclaw.mjs
+#       - acp
+#       - --url
+#       - ws://host.docker.internal:18789
+#       - --token-file
+#       - /run/nova/openclaw_token
+#       - --session-label
+#       - nova
+#     description: OpenClaw — the personal assistant gateway with its own channels, memory and skills
+#     auto_approve_permissions: false
+#     permission_policy:
+#       allow_kinds: [read, search, fetch, think]
 #
 #   codex:
 #     # DeerFlow expects an ACP adapter here. The standard `codex` CLI does not

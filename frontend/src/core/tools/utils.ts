@@ -21,6 +21,11 @@ export function explainToolCall(toolCall: ToolCall, t: Translations) {
     return t.toolCalls.presentFiles;
   } else if (toolCall.name === "write_todos") {
     return t.toolCalls.writeTodos;
+  } else if (toolCall.name === "invoke_acp_agent") {
+    const agent = toolCall.args.agent;
+    return t.toolCalls.acp.invoke(
+      typeof agent === "string" && agent ? agent : "agent",
+    );
   } else if (toolCall.args.description) {
     // Agent-authored and task-specific, so it beats any static label.
     return toolCall.args.description;
