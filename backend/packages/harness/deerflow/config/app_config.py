@@ -18,6 +18,7 @@ from deerflow.config.database_config import DatabaseConfig
 from deerflow.config.email_config import EmailConfig
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
+from deerflow.config.integrations_config import IntegrationsConfig
 from deerflow.config.jobs_config import JobsConfig
 from deerflow.config.loop_detection_config import LoopDetectionConfig
 from deerflow.config.memory_config import MemoryConfig, load_memory_config_from_dict
@@ -148,6 +149,10 @@ class AppConfig(BaseModel):
             "database",
             field_doc="Unified database backend for run/feedback metadata (memory, sqlite, or postgres).",
         ),
+    )
+    integrations: IntegrationsConfig = Field(
+        default_factory=IntegrationsConfig,
+        description=("Integrations registry (Settings › Integrations, /api/integrations): services Nova can reach and how to probe them. Read per-request, so edits hot-reload."),
     )
     jobs: JobsConfig = Field(
         default_factory=JobsConfig,

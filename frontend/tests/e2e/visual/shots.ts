@@ -31,6 +31,7 @@ const SETTINGS_SECTIONS = [
   "notification",
   "voice",
   "jobs",
+  "integrations",
   "channels",
   "models",
   "about",
@@ -89,10 +90,64 @@ async function mockEverything(page: Page) {
   await page.route("**/api/jobs/schedules", (r) =>
     r.fulfill(json({ schedules: [] })),
   );
+  await page.route("**/api/integrations**", (r) =>
+    r.fulfill(
+      json({
+        enabled: true,
+        probe_cache_seconds: 20,
+        integrations: [
+          {
+            id: "ollama",
+            kind: "llm_gateway",
+            display_name: "Ollama",
+            endpoint: "http://host.docker.internal:11434",
+            status: "healthy",
+            latency_ms: 31,
+            checked_at: "2026-09-19T12:00:00Z",
+            detail: "4 models",
+            capabilities: ["qwen3:8b", "nomic-embed"],
+          },
+          {
+            id: "mailcow",
+            kind: "mail",
+            display_name: "Mailcow",
+            endpoint: "http://host.docker.internal:8080",
+            status: "degraded",
+            latency_ms: 40,
+            checked_at: "2026-09-19T12:00:00Z",
+            detail: "reachable, MAILCOW_API_KEY not set",
+            capabilities: [],
+          },
+          {
+            id: "mcp:github",
+            kind: "mcp_server",
+            display_name: "github",
+            endpoint: null,
+            status: "healthy",
+            latency_ms: null,
+            checked_at: "2026-09-19T12:00:00Z",
+            detail: "12 tools",
+            capabilities: ["stdio"],
+          },
+          {
+            id: "acp:claude_code",
+            kind: "acp_agent",
+            display_name: "claude_code",
+            endpoint: null,
+            status: "down",
+            latency_ms: null,
+            checked_at: null,
+            detail: "npx not found on PATH",
+            capabilities: ["acp"],
+          },
+        ],
+      }),
+    ),
+  );
   await page.route("**/api/runtime/capabilities", (r) =>
     r.fulfill(
       json({
-        features: { jobs: true },
+        features: { jobs: true, integrations: true },
         skills: [],
         tools: [],
         hooks: [],
@@ -161,6 +216,9 @@ async function snap(page: Page, name: string) {
   // Let entrance transitions (motion/react) settle.
   await page.waitForTimeout(1_500);
   await settlePanels(page);
+  // A capture taken while a web font is still swapping in differs from the
+  // baseline in every glyph's anti-aliasing (seen as a ~0.3 % "flake").
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
   await expect(page).toHaveScreenshot(`${name}.png`, {
     animations: "disabled",
     caret: "hide",

@@ -444,6 +444,28 @@ get_run_service: Callable[[Request], RunService] = _require("run_service", "Run 
 get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "Checkpointer")
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
+
+
+def get_integrations_registry(request: Request):
+    """The integrations registry for the freshest ``integrations:`` config.
+
+    Rebuilt when that section changes (hot reload); a registry a test placed
+    on ``app.state`` directly (no recorded source) is used as-is.
+    """
+    from deerflow.integrations.registry import build_registry
+
+    state = request.app.state
+    config = get_config().integrations
+    source = config.model_dump_json()
+    registry = getattr(state, "integrations_registry", None)
+    recorded = getattr(state, "integrations_registry_source", None)
+    if registry is None or (recorded is not None and recorded != source):
+        registry = build_registry(config)
+        state.integrations_registry = registry
+        state.integrations_registry_source = source
+    return registry
+
+
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
 get_jobs_repo: Callable[[Request], JobRepository] = _require("jobs_repo", "Job runner")
 

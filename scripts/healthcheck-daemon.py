@@ -42,6 +42,7 @@ Auto-fixes (only safe, reversible ones):
   - P11 Dify dead → pm2 restart nova-dify (start from ecosystem.config.js if missing)
   - P2 gateway dead + container exists but stopped → docker start deer-flow-gateway
   - P12 tunnel dead → sudo systemctl restart cloudflared-nova.service
+  - P16 host bridge dead → pm2 restart nova-host-bridge (start from ecosystem.config.js if missing)
 
 Status:
   - Exits 0 every cycle when all probes are GREEN.
@@ -114,6 +115,11 @@ GATEWAY_CONTAINER = os.environ.get("NOVA_GATEWAY_CONTAINER", "deer-flow-gateway"
 JOBS_CONTAINER = os.environ.get("NOVA_JOBS_CONTAINER", "deer-flow-jobs")
 # A worker that has not written its heartbeat row in this long is gone.
 JOBS_WORKER_MAX_AGE_S = float(os.environ.get("NOVA_JOBS_WORKER_MAX_AGE_S", "90"))
+HOST_BRIDGE_BIND = os.environ.get("NOVA_HOST_BRIDGE_BIND", "172.17.0.1")
+HOST_BRIDGE_PORTS = tuple(
+    int(p)
+    for p in os.environ.get("NOVA_HOST_BRIDGE_PORTS", "18789 8080 4800 3008").split()
+)
 
 
 def disabled_probes() -> set[str]:
@@ -583,6 +589,45 @@ async def probe_litellm(host: str = "172.17.0.1", port: int = 4000) -> ProbeResu
         body_validator=lambda d: (
             isinstance(d.get("data"), list) and len(d["data"]) >= 1
         ),
+    )
+
+
+async def probe_host_bridge(
+    host: str = HOST_BRIDGE_BIND, ports: tuple[int, ...] = HOST_BRIDGE_PORTS
+) -> ProbeResult:
+    """Probe the nova-host-bridge socat forwarders on the docker bridge IP.
+
+    Mailcow's admin API, Chatwoot, Twenty and OpenClaw bind 127.0.0.1 only,
+    so without the bridge every Settings › Integrations card for them says
+    "connection refused" while the services are fine. A TCP accept on each
+    forwarded port is enough: the upstream's own health is the gateway's
+    /api/integrations job, not the watchdog's."""
+    name = "P16_host_bridge"
+    if not ports:
+        return ProbeResult(name, Status.GREEN, "skipped (no ports configured)", 0.0)
+    t0 = time.perf_counter()
+    refused: list[int] = []
+    for port in ports:
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), 3.0)
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+        except (OSError, TimeoutError):
+            refused.append(port)
+    latency = (time.perf_counter() - t0) * 1000
+    if refused:
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"{host} not listening on {', '.join(str(p) for p in refused)} "
+            f"({len(ports) - len(refused)}/{len(ports)} up)",
+            latency,
+        )
+    return ProbeResult(
+        name, Status.GREEN, f"{len(ports)}/{len(ports)} ports forwarded", latency
     )
 
 
@@ -1220,6 +1265,12 @@ def fix_gateway_container() -> bool:
         return False
 
 
+def fix_host_bridge() -> bool:
+    """Heal the nova-host-bridge PM2 app for a RED P16_host_bridge: restart,
+    or re-register from ecosystem.config.js if the app is missing."""
+    return _heal_pm2_app("nova-host-bridge")
+
+
 def fix_jobs_container() -> bool:
     """Heal a RED P15 when the jobs container exists but is not running:
     `docker restart` it. A running container that still fails the probe is
@@ -1446,6 +1497,10 @@ FIX_DISPATCH: dict[str, tuple[Callable[[], bool], str]] = {
         lambda: fix_jobs_container(),
         " [deer-flow-jobs restarted]",
     ),
+    "P16_host_bridge": (
+        lambda: fix_host_bridge(),
+        " [nova-host-bridge healed via pm2]",
+    ),
     "P12_tunnel": (
         lambda: fix_tunnel(),
         " [systemctl reset-failed+restart issued, verified active]",
@@ -1614,6 +1669,7 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
                 port=int(os.environ.get("NOVA_NGINX_PORT", "2026"))
             ),
         ),
+        ("P16_host_bridge", probe_host_bridge),
     ]
     return probe_factories
 

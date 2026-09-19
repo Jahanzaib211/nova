@@ -2539,6 +2539,112 @@
         "title": "InitializeAdminRequest",
         "type": "object"
       },
+      "IntegrationItem": {
+        "description": "One integration in the contract's ``item_schema`` shape.",
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "display_name",
+          "status"
+        ],
+        "title": "IntegrationItem",
+        "type": "object"
+      },
+      "IntegrationsListResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "integrations": {
+            "items": {
+              "$ref": "#/components/schemas/IntegrationItem"
+            },
+            "title": "Integrations",
+            "type": "array"
+          },
+          "probe_cache_seconds": {
+            "title": "Probe Cache Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "enabled",
+          "probe_cache_seconds",
+          "integrations"
+        ],
+        "title": "IntegrationsListResponse",
+        "type": "object"
+      },
       "JobEventResponse": {
         "properties": {
           "created_at": {
@@ -3275,18 +3381,6 @@
             "title": "Hidden",
             "type": "boolean"
           },
-          "max_input_tokens": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Context window wired onto the chat model's LangChain profile; drives fraction-based summarization triggers",
-            "title": "Max Input Tokens"
-          },
           "model": {
             "description": "Actual provider model identifier",
             "title": "Model",
@@ -3420,25 +3514,6 @@
               }
             ],
             "title": "Display Name"
-          },
-          "hidden": {
-            "default": false,
-            "description": "Hide from the chat model picker. False (the default) surfaces the model in chat.",
-            "title": "Hidden",
-            "type": "boolean"
-          },
-          "max_input_tokens": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Context window in tokens. For a local model this is the value the serving runtime was actually launched with (llama.cpp -c, Ollama num_ctx, vLLM --max-model-len) \u2014 setting it higher here does not enlarge the real window, it only misinforms summarization.",
-            "title": "Max Input Tokens"
           },
           "model": {
             "description": "Provider model identifier",
@@ -7142,6 +7217,135 @@
         "summary": "Toggle Privacy",
         "tags": [
           "igino"
+        ]
+      }
+    },
+    "/api/integrations": {
+      "get": {
+        "operationId": "list_integrations_api_integrations_get",
+        "parameters": [
+          {
+            "description": "Bypass the probe cache.",
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Bypass the probe cache.",
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List every integration with its last probe result",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/api/integrations/{integration_id}": {
+      "get": {
+        "operationId": "get_integration_api_integrations__integration_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "integration_id",
+            "required": true,
+            "schema": {
+              "title": "Integration Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One integration's last probe result",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
+    "/api/integrations/{integration_id}/probe": {
+      "post": {
+        "operationId": "probe_integration_api_integrations__integration_id__probe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "integration_id",
+            "required": true,
+            "schema": {
+              "title": "Integration Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Probe one integration now",
+        "tags": [
+          "integrations"
         ]
       }
     },

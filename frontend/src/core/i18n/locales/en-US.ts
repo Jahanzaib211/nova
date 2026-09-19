@@ -66,6 +66,38 @@ export const enUS: Translations = {
         failed: "Request failed",
       },
     },
+    integrations: {
+      title: "Integrations",
+      description:
+        "Everything Nova can reach from this machine — model gateways, mail, CRM, helpdesk, web tools, MCP servers, skills and agents — with what the last probe found.",
+      probeAll: "Probe all",
+      probe: "Probe",
+      empty:
+        "No integrations configured. Add services under integrations.services in config.yaml.",
+      disabledHint:
+        "Integrations are switched off. Set integrations.enabled: true in config.yaml.",
+      loadFailed: "Could not load integrations.",
+      capabilities: "Capabilities",
+      neverChecked: "never checked",
+      justNow: "just now",
+      secondsAgo: (n) => `${n}s ago`,
+      minutesAgo: (n) => `${n} min ago`,
+      status: {
+        healthy: "healthy",
+        degraded: "degraded",
+        down: "down",
+        unknown: "unknown",
+        disabled: "disabled",
+      },
+      groups: {
+        models: "Model gateways",
+        business: "Mail, CRM & helpdesk",
+        web: "Search, crawl & browser",
+        agents: "Agent gateways",
+        extensions: "MCP servers & skills",
+        other: "Other",
+      },
+    },
   },
   // Locale meta
   locale: {
@@ -478,6 +510,7 @@ export const enUS: Translations = {
     description: "Adjust how Nova looks and behaves for you.",
     sections: {
       jobs: "Jobs",
+      integrations: "Integrations",
       account: "Account",
       appearance: "Appearance",
       channels: "Channels",

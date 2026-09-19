@@ -1,6 +1,8 @@
-"""Nova integrations registry (harness side).
+"""Integrations registry: what Nova can reach and whether it works.
 
-Phase 0 ships only the health vocabulary so the cross-language contract in
-``contracts/integrations_health_contract.json`` is load-bearing from day
-one. Clients, probes and the registry land in a later phase.
+Health vocabulary is pinned to ``contracts/integrations_health_contract.json``.
 """
+
+from deerflow.integrations.health import HealthResult, IntegrationKind, IntegrationStatus
+
+__all__ = ["HealthResult", "IntegrationKind", "IntegrationStatus"]

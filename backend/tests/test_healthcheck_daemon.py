@@ -343,6 +343,7 @@ class TestRunCycleSmoke:
             "probe_tunnel",
             "probe_drift",
             "probe_searxng",
+            "probe_host_bridge",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
@@ -381,6 +382,7 @@ class TestRunCycleSmoke:
             "probe_tunnel",
             "probe_drift",
             "probe_searxng",
+            "probe_host_bridge",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
         monkeypatch.setattr(healthcheck, "probe_binary_attestation", fake_boom)
@@ -849,3 +851,68 @@ class TestJobsWorkerProbe:
 
         monkeypatch.setattr(healthcheck.subprocess, "run", fake_run)
         assert healthcheck.fix_jobs_container() is False
+
+
+class TestHostBridgeProbe:
+    """P16_host_bridge: loopback-only host services (OpenClaw, Mailcow API,
+    Chatwoot, Twenty) are reachable from containers only through the
+    nova-host-bridge socat forwarders on the docker bridge IP."""
+
+    @pytest.mark.anyio
+    async def test_green_when_every_port_accepts(self, monkeypatch):
+        async def fake_open(host, port):
+            class W:
+                def close(self):
+                    pass
+
+                async def wait_closed(self):
+                    pass
+
+            return (None, W())
+
+        monkeypatch.setattr(healthcheck.asyncio, "open_connection", fake_open)
+        res = await healthcheck.probe_host_bridge(ports=(18789, 8080))
+        assert res.status == healthcheck.Status.GREEN
+        assert "2/2" in res.detail
+
+    @pytest.mark.anyio
+    async def test_red_when_a_port_refuses(self, monkeypatch):
+        async def fake_open(host, port):
+            if port == 8080:
+                raise ConnectionRefusedError()
+
+            class W:
+                def close(self):
+                    pass
+
+                async def wait_closed(self):
+                    pass
+
+            return (None, W())
+
+        monkeypatch.setattr(healthcheck.asyncio, "open_connection", fake_open)
+        res = await healthcheck.probe_host_bridge(ports=(18789, 8080))
+        assert res.status == healthcheck.Status.RED
+        assert "8080" in res.detail
+
+    @pytest.mark.anyio
+    async def test_disabled_when_no_ports_configured(self):
+        res = await healthcheck.probe_host_bridge(ports=())
+        assert res.status == healthcheck.Status.GREEN
+        assert "skipped" in res.detail
+
+    def test_fix_heals_the_pm2_app(self, monkeypatch):
+        seen = {}
+
+        def heal(app, **kw):
+            seen["app"] = app
+            return True
+
+        monkeypatch.setattr(healthcheck, "_heal_pm2_app", heal)
+        assert healthcheck.fix_host_bridge() is True
+        assert seen["app"] == "nova-host-bridge"
+        assert "P16_host_bridge" in healthcheck.FIX_DISPATCH
+
+    def test_registered_in_probe_factories(self):
+        names = [name for name, _ in healthcheck.build_probe_factories()]
+        assert "P16_host_bridge" in names

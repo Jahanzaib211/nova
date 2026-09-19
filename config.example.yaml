@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 21
+config_version: 22
 
 # ============================================================================
 # Logging
@@ -1631,8 +1631,6 @@ run_events:
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
 
-# ============================================================
-# Email (self-service password reset)
 # ============================================================================
 # Job runner (background work: campaign sends, imports, long agent tasks)
 # ============================================================================
@@ -1652,6 +1650,64 @@ run_events:
 #   shutdown_grace_seconds: 30
 #   events_retention_days: 14
 
+# ============================================================================
+# Integrations registry (Settings › Integrations, GET /api/integrations)
+# ============================================================================
+# What Nova can reach and whether it works: LLM gateways, mail, CRM, helpdesk,
+# search/crawl/browser services, plus the MCP servers, skills and ACP agents
+# the gateway already knows (those need no entry here). Hot-reloaded.
+# URLs are as seen from the gateway container: host services go through
+# host.docker.internal, and loopback-only host services additionally need the
+# nova-host-bridge PM2 app (scripts/host-bridge.sh) to be reachable at all.
+# api_key_env is the NAME of an environment variable (never the value); when
+# it is unset the card says so instead of the config failing to load.
+# kinds: llm_gateway, mail, crm, helpdesk, search, crawler, browser, database,
+# agent_gateway. Ids ollama/litellm/mailcow/chatwoot/twenty/openclaw/searxng/
+# crawl4ai/browserless get a service-aware probe; other ids use health_path.
+# integrations:
+#   enabled: true
+#   probe_cache_seconds: 20
+#   probe_timeout_seconds: 3
+#   services:
+#     ollama:
+#       kind: llm_gateway
+#       url: http://host.docker.internal:11434
+#       display_name: Ollama
+#     litellm:
+#       kind: llm_gateway
+#       url: http://host.docker.internal:4000
+#       display_name: LiteLLM
+#     mailcow:
+#       kind: mail
+#       url: http://host.docker.internal:8080
+#       display_name: Mailcow
+#       api_key_env: MAILCOW_API_KEY
+#     chatwoot:
+#       kind: helpdesk
+#       url: http://host.docker.internal:4800
+#       display_name: Chatwoot
+#       api_key_env: CHATWOOT_API_TOKEN
+#     twenty:
+#       kind: crm
+#       url: http://host.docker.internal:3008
+#       display_name: Twenty CRM
+#       api_key_env: TWENTY_API_KEY
+#     openclaw:
+#       kind: agent_gateway
+#       url: http://host.docker.internal:18789
+#       display_name: OpenClaw
+#     searxng:
+#       kind: search
+#       url: http://searxng:8080
+#     crawl4ai:
+#       kind: crawler
+#       url: http://crawl4ai:11235
+#     browserless:
+#       kind: browser
+#       url: http://browserless:3000
+
+# ============================================================
+# Email (self-service password reset)
 # ============================================================
 # Outbound SMTP for the forgot-password flow. When enabled, POST
 # /api/v1/auth/forgot-password emails a one-time reset link

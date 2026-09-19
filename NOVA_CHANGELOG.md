@@ -48,6 +48,17 @@
 
 ---
 
+## v9.9 — Integrations registry, host bridge, Settings › Integrations (2026-09-19)
+
+Phase P4 of the upgrade program.
+
+- **Integrations registry** (`deerflow.integrations`): services from `integrations.services` in config.yaml (hot-reloaded, `config_version` 22) plus the MCP servers, skills and ACP agents the gateway already knows, probed concurrently with 3 s timeouts and a 20 s cache. Service-aware probes for Ollama, LiteLLM, Mailcow, Chatwoot, Twenty, OpenClaw, SearXNG, Crawl4AI and Browserless; `api_key_env` names a variable instead of inlining a secret. `GET /api/integrations`, `?refresh=1`, `POST /api/integrations/{id}/probe`. See `backend/docs/INTEGRATIONS.md`.
+- **Host bridge**: `nova-host-bridge` PM2 app (`scripts/host-bridge.sh`) forwards the loopback-only host services (OpenClaw 18789, Mailcow API 8080, Chatwoot 4800, Twenty 3008) from the docker bridge IP to 127.0.0.1, so containers reach them at `host.docker.internal:<port>`; bound to 172.17.0.1 only. Watchdog probe `P16_host_bridge` + pm2 auto-heal.
+- **Settings › Integrations**: cards grouped by kind (model gateways; mail/CRM/helpdesk; search/crawl/browser; agent gateways; MCP & skills) with status dot, endpoint, detail, capability chips, latency, last-checked, per-card Probe and Probe all. Behind the server `integrations` feature flag. `SettingsSection` gained an `action` slot.
+- Visual gate waits for `document.fonts.ready` before every capture (glyph anti-aliasing flake).
+
+---
+
 ## v9.8 — Upgrade program: baseline, tokens, migrations, a job runner (2026-09-18/19)
 
 Phases P0–P3 of the upgrade program (`~/.claude/plans/ui-upgrades-from-side-cozy-melody.md`).

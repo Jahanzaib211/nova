@@ -64,6 +64,38 @@ export const zhCN: Translations = {
         failed: "请求失败",
       },
     },
+    integrations: {
+      title: "集成",
+      description:
+        "Nova 在这台机器上能连到的一切——模型网关、邮件、CRM、客服、网页工具、MCP 服务器、技能与智能体——以及最近一次探测的结果。",
+      probeAll: "全部探测",
+      probe: "探测",
+      empty:
+        "尚未配置集成。请在 config.yaml 的 integrations.services 下添加服务。",
+      disabledHint:
+        "集成功能已关闭。请在 config.yaml 中设置 integrations.enabled: true。",
+      loadFailed: "无法加载集成列表。",
+      capabilities: "能力",
+      neverChecked: "从未探测",
+      justNow: "刚刚",
+      secondsAgo: (n) => `${n} 秒前`,
+      minutesAgo: (n) => `${n} 分钟前`,
+      status: {
+        healthy: "正常",
+        degraded: "降级",
+        down: "不可用",
+        unknown: "未知",
+        disabled: "已禁用",
+      },
+      groups: {
+        models: "模型网关",
+        business: "邮件、CRM 与客服",
+        web: "搜索、抓取与浏览器",
+        agents: "智能体网关",
+        extensions: "MCP 服务器与技能",
+        other: "其他",
+      },
+    },
   },
   // Locale meta
   locale: {
@@ -457,6 +489,7 @@ export const zhCN: Translations = {
     description: "根据你的偏好调整 Nova 的界面和行为。",
     sections: {
       jobs: "任务",
+      integrations: "集成",
       account: "账号",
       appearance: "外观",
       channels: "渠道",

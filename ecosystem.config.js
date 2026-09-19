@@ -75,6 +75,25 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
+      // Forwards loopback-only host services (OpenClaw 18789, Mailcow API 8080,
+      // Chatwoot 4800, Twenty 3008) from the docker bridge IP to 127.0.0.1 so
+      // Nova's containers reach them at host.docker.internal:<port>. Bound to
+      // 172.17.0.1 only — same "never 0.0.0.0" rule as nova-litellm; upstream
+      // auth (API keys/tokens) is untouched. Watchdog probe P16_host_bridge
+      // auto-heals this app. Ports: NOVA_HOST_BRIDGE_PORTS in the script.
+      name: "nova-host-bridge",
+      script: `${require("path").resolve(__dirname, "scripts/host-bridge.sh")}`,
+      interpreter: "none",
+      cwd: __dirname,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-host-bridge-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-host-bridge-error.log")}`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+    {
       // Keeps the Nova Ops gate status files fresh.
       //
       // The gate producers write JSON that the operator console reads. Without

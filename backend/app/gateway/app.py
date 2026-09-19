@@ -32,6 +32,7 @@ from app.gateway.routers import (
     credits,
     feedback,
     igino,
+    integrations,
     jobs,
     legal,
     mcp,
@@ -533,6 +534,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # The worker is a separate process (app.jobs.worker); these only read,
     # enqueue and steer. 503 when no SQL backend (jobs_repo unset).
     app.include_router(jobs.router)
+    app.include_router(integrations.router)
     app.include_router(admin_jobs.router)
 
     @app.get("/health", tags=["health"])

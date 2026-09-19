@@ -332,6 +332,8 @@ Runs every 30 s. Auto-fixes known issues:
 | P10    | LiteLLM down                          | pm2 restart nova-litellm |
 | P11    | Dify stack down                       | pm2 restart nova-dify |
 | **P12** | **cloudflared tunnel down**         | **systemctl reset-failed + restart (with verification)** |
+| P15    | job runner worker missing/stale       | docker restart deer-flow-jobs |
+| P16    | host bridge (socat) not listening     | pm2 restart nova-host-bridge |
 
 ---
 

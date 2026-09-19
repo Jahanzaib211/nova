@@ -17,6 +17,7 @@ export const SETTINGS_PAGE_IDS = [
   "notification",
   "voice",
   "jobs",
+  "integrations",
   "channels",
   "models",
   "about",

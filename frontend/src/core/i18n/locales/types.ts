@@ -43,9 +43,40 @@ export interface JobsFeatureTranslations {
   toasts: { cancelled: string; retried: string; failed: string };
 }
 
+export interface IntegrationsFeatureTranslations {
+  title: string;
+  description: string;
+  probeAll: string;
+  probe: string;
+  empty: string;
+  disabledHint: string;
+  loadFailed: string;
+  capabilities: string;
+  neverChecked: string;
+  justNow: string;
+  secondsAgo: (n: number) => string;
+  minutesAgo: (n: number) => string;
+  status: {
+    healthy: string;
+    degraded: string;
+    down: string;
+    unknown: string;
+    disabled: string;
+  };
+  groups: {
+    models: string;
+    business: string;
+    web: string;
+    agents: string;
+    extensions: string;
+    other: string;
+  };
+}
+
 export interface Translations {
   features: {
     jobs: JobsFeatureTranslations;
+    integrations: IntegrationsFeatureTranslations;
   };
   // Locale meta
   locale: {
@@ -382,6 +413,7 @@ export interface Translations {
     description: string;
     sections: {
       jobs: string;
+      integrations: string;
       account: string;
       appearance: string;
       channels: string;

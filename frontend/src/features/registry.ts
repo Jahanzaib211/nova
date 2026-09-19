@@ -1,3 +1,4 @@
+import { integrationsManifest } from "./integrations/manifest";
 import { jobsManifest } from "./jobs/manifest";
 import { settingsCoreManifest } from "./settings-core/manifest";
 import {
@@ -16,6 +17,7 @@ import {
 export const FEATURE_MANIFESTS: readonly FeatureManifest[] = [
   settingsCoreManifest,
   jobsManifest,
+  integrationsManifest,
 ];
 
 /** All registered sidebar entries, in order. */
