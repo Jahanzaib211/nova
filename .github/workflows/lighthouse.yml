@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM }}
 
@@ -66,15 +66,23 @@ jobs:
           DEER_FLOW_AUTH_DISABLED: "1"
           NODE_OPTIONS: --max-old-space-size=4096
 
+      # Retried once: the observed failure mode on hosted runners is a Chrome
+      # DevTools protocol timeout (`Network.getResponseBody`), not a budget
+      # miss -- a genuine regression fails both attempts identically.
       - name: Run Lighthouse CI
-        run: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 12
+          max_attempts: 2
+          retry_on: error
+          command: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
         env:
           SKIP_ENV_VALIDATION: "1"
           DEER_FLOW_AUTH_DISABLED: "1"
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: lighthouse-reports
           path: frontend/.lighthouseci/

@@ -41,6 +41,15 @@ module.exports = {
       numberOfRuns: 3,
       settings: {
         preset: "desktop",
+        // Hosted runners: /dev/shm is 64 MB and there is no GPU. Without these
+        // flags Chrome stalls mid-trace and the run dies with a DevTools
+        // protocol timeout (`Network.getResponseBody`) that has nothing to do
+        // with the page. Same fix docker/dev-entrypoint.sh applies to the
+        // sandbox browser.
+        chromeFlags: "--no-sandbox --disable-dev-shm-usage --disable-gpu",
+        // Keep the profile between the 3 runs of a URL: a cold storage reset
+        // re-triggers the first-load fetches that the timeout was hit on.
+        disableStorageReset: true,
         // The sandbox/CDP surface and SSE streams keep sockets open, which
         // makes Lighthouse's network-idle heuristic wait forever.
         maxWaitForLoad: 45000,

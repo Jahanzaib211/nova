@@ -58,6 +58,7 @@ jobs:
             --ignore "frontend/test-results/**" \
             --ignore "frontend/playwright-report/**" \
             --ignore "graphify-out/**" \
+            --ignore "modular-main/**" \
             "**/*.md"
 
       - name: Verify documented counts match reality

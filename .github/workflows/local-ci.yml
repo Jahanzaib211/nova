@@ -99,7 +99,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE }}
       - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
@@ -112,7 +112,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE }}
       - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
@@ -124,7 +124,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE }}
       - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
@@ -144,7 +144,7 @@ jobs:
       - run: cd backend && uv sync --group dev
       - run: cd backend && uv export --no-hashes --no-dev > /tmp/reqs.txt
       - run: uvx pip-audit --no-deps --disable-pip -r /tmp/reqs.txt || true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE }}
       - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate

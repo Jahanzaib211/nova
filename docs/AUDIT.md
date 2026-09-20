@@ -72,7 +72,7 @@ backend/packages/harness/deerflow/    390 Python files, ~70K LOC
 ├── sandbox/               Sandbox + tools ← v7 hardening target
 ├── skills/                Skills discovery, loading, parsing, security scanner
 ├── subagents/             Subagent registry + executor + 2 builtins
-├── tools/                 Tool registry + 26 builtin tools
+├── tools/                 Tool registry + 27 builtin tools (2 upstream + 25 Nova; upstream ships 3 today)
 ├── tracing/               LangSmith tracing config
 ├── uploads/               File upload handling
 └── utils/                 Network, JSON helpers

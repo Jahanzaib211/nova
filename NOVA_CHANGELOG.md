@@ -797,7 +797,7 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 ### Streaming hardening (Phases 1–6)
 
-- **Phase 1:** Watchdog with 12 probes (P1–P12) covering nginx, gateway, frontend, local LLM stack, containers, binary attestation, and Cloudflare tunnel.
+- **Phase 1:** Watchdog with **14 probes** (P1–P14, registered via `build_probe_factories()`) covering nginx, gateway, frontend, local LLM stack, containers, binary attestation, and Cloudflare tunnel. *(Originally entered as 12 probes — extended to 14 on 2026-09-08.)*
 - **Phase 2:** Bounded Stop + Force Disconnect — stop is a state machine with configurable timeout.
 - **Phase 3:** Active-run polling — never fully disabled while a run exists.
 - **Phase 4:** Convergent teardown — deterministic cleanup on disconnect.
@@ -1087,6 +1087,7 @@ The full backend suite had been hanging at ~47% and carrying 41 pre-existing fai
 
 - `NOVA_VS_DEERFLOW.md` — verified upstream-vs-Nova attribution map (fork base deer-flow v2.0.0-rc1, reproducible diff commands); README "What Nova adds" rewritten to match.
 - Attribution numbers recomputed pre-commit: 338 files, +35,738/−1,278 vs v2.0.0-rc1 (152 new files ~28.7k lines; 37 new backend test files).
+  > **Superseded 2026-09-08.** These figures were already ~2 months stale when published — they describe the tree as of roughly early July 2026, and understate the delta by about 4×. Re-audited: 1,148 files, +145,947/−11,844; 698 new files / 120,533 lines; 152 new backend test files. See `NOVA_VS_DEERFLOW.md`, which now publishes the exclusion pathspec alongside the raw number.
 - README hero: `docs/images/nova-workspace.png` — real capture of a MiniMax M3 (free) session building a tip calculator, previewed live in the Agent's Computer Browser tab (zero console errors at capture).
 
 ---
