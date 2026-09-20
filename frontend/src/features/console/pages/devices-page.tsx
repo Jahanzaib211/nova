@@ -128,7 +128,11 @@ export function DevicesPage() {
           <OpTable
             empty={s.tokensEmpty}
             keyOf={(r) => String(r.id)}
-            rows={tokens.data?.items ?? []}
+            rows={(tokens.data?.items ?? []).filter(
+              // Per-turn runtime tokens are minted and revoked by the
+              // gateway itself; once revoked they are noise here.
+              (r) => !(r.revoked_at && String(r.name).startsWith("runtime:")),
+            )}
             columns={[
               { key: "name", label: s.colName },
               {

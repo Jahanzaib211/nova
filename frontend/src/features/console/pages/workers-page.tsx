@@ -67,7 +67,7 @@ export function WorkersPage() {
               {
                 key: "last_heartbeat_at",
                 label: s.colHeartbeat,
-                render: (r) => tsToLocal(r.last_heartbeat_at ?? r.heartbeat_at),
+                render: (r) => tsToLocal(r.last_seen_at ?? r.last_heartbeat_at),
               },
             ]}
           />

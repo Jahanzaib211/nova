@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
@@ -13,16 +14,55 @@ from deerflow.capabilities.modules._common import Empty
 from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
+def _locate(binary: str) -> list[str] | None:
+    """argv for a CLI: on PATH, or where the gateway container has it —
+    Claude Code as the ACP adapter's bundled ``cli.js`` (warmed by npx into
+    ~/.npm/_npx), OpenClaw as the package mounted at /opt/openclaw."""
+    path = shutil.which(binary)
+    if path:
+        return [path]
+    if binary == "claude":
+        home = Path(os.environ.get("HOME") or Path.home())
+        node = shutil.which("node")
+        hits = sorted(home.glob(".npm/_npx/*/node_modules/@anthropic-ai/claude-agent-sdk/cli.js"))
+        if node and hits:
+            return [node, str(hits[-1])]
+    if binary == "openclaw":
+        node = shutil.which("node")
+        mjs = Path(os.environ.get("NOVA_OPENCLAW_PACKAGE") or "/opt/openclaw") / "openclaw.mjs"
+        if node and mjs.is_file():
+            return [node, str(mjs)]
+    return None
+
+
+def _git_sha() -> str | None:
+    """HEAD of the bind-mounted repo (the container is not a git checkout
+    of its own; the repo root is two levels above ``backend``)."""
+    for root in (Path(__file__).resolve().parents[5], Path("/app")):
+        head = root / ".git" / "HEAD"
+        try:
+            ref = head.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if ref.startswith("ref: "):
+            try:
+                return (root / ".git" / ref[5:]).read_text(encoding="utf-8").strip()[:12]
+            except OSError:
+                continue
+        return ref[:12]
+    return None
+
+
 async def _version_of(binary: str, *args: str) -> str | None:
     """``<binary> --version`` through the Execution Kernel (the one sanctioned
     process-spawning site), bounded to 10 s."""
-    path = shutil.which(binary)
-    if not path:
+    argv = _locate(binary)
+    if not argv:
         return None
     try:
         from deerflow.execution import ExecutionClass, ExecutionKernel, ExecutionRequest, ResourceLimits
 
-        result = await ExecutionKernel().execute(ExecutionRequest(argv=(path, *(args or ("--version",))), execution_class=ExecutionClass.SHELL, limits=ResourceLimits(timeout=10), intent=f"{binary} version for Settings › Updates"))
+        result = await ExecutionKernel().execute(ExecutionRequest(argv=(*argv, *(args or ("--version",))), execution_class=ExecutionClass.SHELL, limits=ResourceLimits(timeout=10), intent=f"{binary} version for Settings › Updates"))
         out = (result.stdout or result.stderr or "").strip()
         return out.splitlines()[0][:120] if out else (result.error or "")
     except Exception as exc:
@@ -41,7 +81,7 @@ async def _versions(ctx: OpContext, inp: Empty) -> VersionsOut:
     return VersionsOut(
         components={
             "config_version": getattr(cfg, "config_version", None),
-            "git_sha": os.environ.get("NOVA_GIT_SHA") or os.environ.get("GIT_SHA"),
+            "git_sha": os.environ.get("NOVA_GIT_SHA") or os.environ.get("GIT_SHA") or _git_sha(),
             "image": os.environ.get("NOVA_IMAGE") or os.environ.get("IMAGE_TAG"),
             "claude_cli": claude,
             "openclaw": openclaw,
