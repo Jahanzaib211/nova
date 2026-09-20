@@ -36,7 +36,236 @@ const SETTINGS_SECTIONS = [
   "channels",
   "models",
   "about",
+  // Console parity (P13): views over capability operations.
+  "gateway",
+  "devices",
+  "workers",
+  "agents",
+  "labs",
+  "automation",
+  "secrets",
+  "updates",
 ] as const;
+
+/** Deterministic capability registry: what every console page renders from. */
+const CAPABILITY_OPS_RESPONSES: Record<string, unknown> = {
+  "acp.agents": {
+    items: [
+      {
+        name: "claude_code",
+        command: ["npx", "-y", "@zed-industries/claude-agent-acp@0.23.1"],
+        binary_on_path: true,
+        auto_approve_permissions: false,
+        permission_policy: {
+          allow_kinds: ["read", "search"],
+          deny_kinds: ["delete"],
+        },
+        description: "Claude Code",
+        model: null,
+      },
+      {
+        name: "openclaw",
+        command: ["node", "/opt/openclaw/openclaw.mjs", "acp"],
+        binary_on_path: false,
+        auto_approve_permissions: false,
+        permission_policy: { allow_kinds: [], deny_kinds: [] },
+        description: "OpenClaw",
+        model: null,
+      },
+    ],
+    total: 2,
+  },
+  "updates.versions": {
+    components: {
+      config_version: 27,
+      git_sha: "abc1234",
+      image: null,
+      claude_cli: "2.1.271 (Claude Code)",
+      openclaw: "OpenClaw 2026.9.2",
+      node: "v26.8.1",
+      acp_adapter: "@zed-industries/claude-agent-acp@0.23.1",
+    },
+  },
+  "sessions.get": {
+    token_version: 3,
+    last_sign_in_at: "2026-09-19T10:00:00Z",
+    detail: "Browser sessions are stateless JWTs.",
+  },
+  "sessions.tokens": {
+    items: [
+      {
+        id: "t1",
+        owner_user_id: "u",
+        name: "claude-code on laptop",
+        prefix: "nhk_abcd1234",
+        scopes: ["*"],
+        created_at: "2026-09-19T10:00:00Z",
+        last_used_at: "2026-09-19T11:00:00Z",
+        revoked_at: null,
+      },
+    ],
+    total: 1,
+  },
+  "jobs.workers": {
+    items: [
+      {
+        worker_id: "gw-1234",
+        hostname: "nova",
+        pid: 42,
+        queues: ["default"],
+        version: "1",
+        current_job_ids: [],
+        last_heartbeat_at: "2026-09-19T11:00:00Z",
+      },
+    ],
+    total: 1,
+  },
+  "jobs.list": {
+    items: [
+      {
+        id: "job-0001-abcd",
+        status: "succeeded",
+        type: "agents.task",
+        payload_json: { agent: "researcher" },
+        created_at: "2026-09-19T10:30:00Z",
+      },
+    ],
+    total: 1,
+  },
+  "jobs.schedules": {
+    items: [
+      {
+        id: "s1",
+        name: "nightly-digest",
+        type: "em.bounce.poll",
+        cron: "0 3 * * *",
+        enabled: true,
+        next_run_at: "2026-09-20T03:00:00Z",
+      },
+    ],
+    total: 1,
+  },
+  "agents.registry": {
+    items: [
+      {
+        name: "lead",
+        kind: "lead",
+        description: "Nova's lead agent",
+        counts: { queued: 0, running: 1 },
+      },
+      {
+        name: "claude_code",
+        kind: "acp",
+        description: "Claude Code over ACP",
+        counts: { queued: 0, running: 0 },
+      },
+    ],
+    total: 2,
+  },
+  "runtimes.list": {
+    enabled: true,
+    default: "native",
+    runtimes: [
+      {
+        id: "claude_code",
+        kind: "acp",
+        label: "Claude Code",
+        description: "The Claude Code agent over ACP.",
+        command: ["npx"],
+        binary_on_path: true,
+        accounts: [
+          {
+            id: "claude-login",
+            label: "Claude login",
+            kind: "claude-login",
+            available: true,
+            detail: "",
+          },
+          {
+            id: "anthropic-api-key",
+            label: "Anthropic API key",
+            kind: "api-key",
+            available: false,
+            detail: "",
+          },
+        ],
+      },
+      {
+        id: "native",
+        kind: "native",
+        label: "Nova (native)",
+        description: "Nova's own agent.",
+        command: [],
+        binary_on_path: true,
+        accounts: [
+          {
+            id: "configured-models",
+            label: "Configured models",
+            kind: "configured-models",
+            available: true,
+            detail: "",
+          },
+        ],
+      },
+      {
+        id: "openclaw",
+        kind: "acp",
+        label: "OpenClaw",
+        description: "OpenClaw's ACP bridge.",
+        command: ["node"],
+        binary_on_path: false,
+        accounts: [
+          {
+            id: "gateway-token",
+            label: "OpenClaw gateway token",
+            kind: "gateway-token",
+            available: false,
+            detail: "",
+          },
+        ],
+      },
+    ],
+    permission_modes: ["full", "standard", "plan"],
+    modes: [
+      { id: "full", label: "Default (Full Access)", description: "" },
+      { id: "standard", label: "Standard", description: "" },
+      { id: "plan", label: "Plan (read-only)", description: "" },
+    ],
+  },
+  "features.get": {
+    flags: {
+      jobs: true,
+      integrations: true,
+      email_marketing: true,
+      acp_agents: true,
+      capabilities: true,
+      runtimes: true,
+    },
+  },
+  "secrets.list": {
+    items: [
+      {
+        name: "openclaw_token",
+        source: "file",
+        present: true,
+        bytes: 48,
+        mode: "0o600",
+        secure: true,
+        modified_at: 1758300000,
+      },
+      {
+        name: "MAILCOW_API_KEY",
+        source: "env",
+        present: false,
+        bytes: null,
+        mode: null,
+        secure: true,
+        modified_at: null,
+      },
+    ],
+    total: 2,
+  },
+};
 
 const json = (body: unknown, status = 200) => ({
   status,
@@ -289,10 +518,85 @@ async function mockEverything(page: Page) {
       }),
     ),
   );
+  await page.route("**/api/capabilities/ops", (r) =>
+    r.fulfill(
+      json({
+        snapshot: {
+          version: 1,
+          modules: [
+            {
+              id: "jobs",
+              title: "Jobs",
+              flag: "jobs",
+              config_key: "jobs",
+              description: "Background job runner.",
+              operations: ["jobs.list", "jobs.workers"],
+            },
+            {
+              id: "runtimes",
+              title: "Runtimes",
+              flag: "runtimes",
+              config_key: "runtimes",
+              description: "What can run a chat turn.",
+              operations: ["runtimes.list"],
+            },
+            {
+              id: "secrets",
+              title: "Secrets",
+              flag: null,
+              config_key: null,
+              description: "Named secrets.",
+              operations: ["secrets.list"],
+            },
+          ],
+          operations: [],
+        },
+        status: {
+          jobs: {
+            configured: true,
+            healthy: true,
+            detail: "1 worker(s) heartbeating",
+          },
+          runtimes: {
+            configured: true,
+            healthy: true,
+            detail: "ready: claude_code, native",
+          },
+          secrets: { configured: true, healthy: true, detail: "all 0600" },
+        },
+        flags: {
+          jobs: true,
+          integrations: true,
+          email_marketing: true,
+          acp_agents: true,
+          capabilities: true,
+          runtimes: true,
+        },
+      }),
+    ),
+  );
+  await page.route("**/api/capabilities/ops/*", (r) => {
+    const name = decodeURIComponent(
+      r.request().url().split("/api/capabilities/ops/")[1] ?? "",
+    );
+    const result = CAPABILITY_OPS_RESPONSES[name];
+    return r.fulfill(
+      result
+        ? json({ name, result })
+        : json({ detail: `unmocked op ${name}` }, 404),
+    );
+  });
   await page.route("**/api/runtime/capabilities", (r) =>
     r.fulfill(
       json({
-        features: { jobs: true, integrations: true, email_marketing: true },
+        features: {
+          jobs: true,
+          integrations: true,
+          email_marketing: true,
+          acp_agents: true,
+          capabilities: true,
+          runtimes: true,
+        },
         skills: [],
         tools: [],
         hooks: [],

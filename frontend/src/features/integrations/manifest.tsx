@@ -10,6 +10,7 @@ export const integrationsManifest: FeatureManifest = {
     {
       id: "integrations",
       order: 87,
+      group: "connections",
       icon: PlugZapIcon,
       label: (t) => t.settings.sections.integrations,
       Page: IntegrationsSettingsPage,

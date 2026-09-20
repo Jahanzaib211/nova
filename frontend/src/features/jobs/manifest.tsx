@@ -10,6 +10,7 @@ export const jobsManifest: FeatureManifest = {
     {
       id: "jobs",
       order: 85,
+      group: "system",
       icon: ListChecksIcon,
       label: (t) => t.settings.sections.jobs,
       Page: JobsSettingsPage,

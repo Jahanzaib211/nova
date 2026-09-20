@@ -65,8 +65,9 @@ import { getModelLabel } from "@/core/models/types";
 import type { Skill } from "@/core/skills";
 import { useSkills } from "@/core/skills/hooks";
 import { useSuggestionsConfig } from "@/core/suggestions/hooks";
-import type { AgentThreadContext } from "@/core/threads";
+import type { AgentThreadContext, RuntimeContextFields } from "@/core/threads";
 import { textOfMessage } from "@/core/threads/utils";
+import { RuntimePicker } from "@/features/console/components/runtime-picker";
 import { cn } from "@/lib/utils";
 
 import {
@@ -175,7 +176,7 @@ export function InputBox({
   > & {
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
-  };
+  } & RuntimeContextFields;
   extraHeader?: React.ReactNode;
   /**
    * Whether to render the input in welcome layout (vertically centered,
@@ -192,7 +193,7 @@ export function InputBox({
     > & {
       mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
       reasoning_effort?: "minimal" | "low" | "medium" | "high";
-    },
+    } & RuntimeContextFields,
   ) => void;
   onFollowupsVisibilityChange?: (visible: boolean) => void;
   onSubmit?: (message: PromptInputMessage) => void | Promise<void>;
@@ -1044,6 +1045,15 @@ export function InputBox({
                       {selectedModel ? getModelLabel(selectedModel) : ""}
                     </ModelSelectorName>
                   </div>
+                  {context.runtime && context.runtime !== "native" ? (
+                    <Badge
+                      variant="outline"
+                      className="border-info/30 bg-info/10 text-info ml-1 hidden shrink-0 text-[9px] font-medium sm:inline-flex"
+                      data-testid="runtime-badge"
+                    >
+                      {context.runtime}
+                    </Badge>
+                  ) : null}
                   {selectedModel?.amd_compute ? (
                     <Badge
                       variant="outline"
@@ -1089,6 +1099,21 @@ export function InputBox({
                       </ModelSelectorItem>
                     ))}
                 </ModelSelectorList>
+                <RuntimePicker
+                  value={{
+                    runtime: context.runtime,
+                    runtime_account: context.runtime_account,
+                    permission_mode: context.permission_mode,
+                  }}
+                  onChange={(next) =>
+                    onContextChange?.({
+                      ...context,
+                      runtime: next.runtime,
+                      runtime_account: next.runtime_account,
+                      permission_mode: next.permission_mode,
+                    })
+                  }
+                />
               </ModelSelectorContent>
             </ModelSelector>
             <PromptInputSubmit

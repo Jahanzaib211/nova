@@ -48,6 +48,17 @@
 
 ---
 
+## v9.16 — Console parity: grouped settings rail, eight capability-backed pages, per-chat runtime picker (2026-09-20)
+
+Phase P13 of the upgrade program.
+
+- **Grouped settings rail** (General · Connections · Agents & tools · Privacy & security · System): `SettingsPageSpec.group` + `settingsGroups()` in the feature registry; existing pages keep their ids and deep links. `adminOnly` pages are filtered by `system_role`.
+- **New pages, each a view over capability operations** (`src/core/capabilities`: `useCapability`, `useCapabilityMutation`, typed `invoke`): **Gateway** (module health, ACP adapters + policies, versions), **Devices** (browser sessions, sign out everywhere, harness-token mint/revoke with the MCP endpoint), **Cloud workers** (job-runner heartbeats, agent tasks), **Agents** (runtimes × accounts, "Check model", permission modes, agent registry), **Labs** (feature flags ↔ config sections), **Automation** (cron schedule CRUD), **Secrets** (admin; presence-only, write/remove), **Updates** (versions, "Check again").
+- **Runtime picker** in the chat model menu: runtime (Nova / Claude Code / OpenClaw), "Account for this chat", permission chip (Default (Full Access) / Standard / Plan), reset — rides the run context like `model_name`; a badge on the model button shows a non-native runtime.
+- i18n en-US + zh-CN (~160 strings under `t.features.console` / `t.features.runtimePicker`, `settings.groups`); visual baseline +8 screens ×2 projects. Frontend 785 unit tests.
+
+---
+
 ## v9.15 — Runtimes: Claude Code and OpenClaw power whole chats (2026-09-20)
 
 Phase P12 of the upgrade program. See `backend/docs/RUNTIMES.md`.

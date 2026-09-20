@@ -10,6 +10,7 @@ export const voiceManifest: FeatureManifest = {
     {
       id: "voice",
       order: 80,
+      group: "connections",
       icon: MicIcon,
       label: (t) => t.settings.sections.voice,
       Page: VoiceSettingsPage,

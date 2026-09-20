@@ -10,6 +10,7 @@ export const emailMarketingManifest: FeatureManifest = {
     {
       id: "email",
       order: 88,
+      group: "connections",
       icon: MailIcon,
       label: (t) => t.settings.sections.email,
       Page: EmailSettingsPage,

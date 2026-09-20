@@ -294,6 +294,156 @@ export interface AgentsRegistryTranslations {
   runner: { gateway: string; jobs: string };
 }
 
+export interface ConsoleFeatureTranslations {
+  gateway: {
+    title: string;
+    description: string;
+    refresh: string;
+    loadFailed: string;
+    ops: string;
+    acpTitle: string;
+    acpDescription: string;
+    acpEmpty: string;
+    colAgent: string;
+    colBinary: string;
+    colModel: string;
+    colPolicy: string;
+    allow: string;
+    deny: string;
+    versionsTitle: string;
+    versionsDescription: string;
+  };
+  devices: {
+    sessionsTitle: string;
+    sessionsDescription: string;
+    signOutEverywhere: string;
+    signedOut: string;
+    loadFailed: string;
+    lastSignIn: string;
+    tokenVersion: string;
+    tokensTitle: string;
+    tokensDescription: string;
+    tokenName: string;
+    tokenNamePlaceholder: string;
+    tokenScopes: string;
+    mint: string;
+    mintedOnce: string;
+    mintedHint: string;
+    tokensEmpty: string;
+    colName: string;
+    colPrefix: string;
+    colScopes: string;
+    colLastUsed: string;
+    colStatus: string;
+    active: string;
+    revoked: string;
+    revoke: string;
+  };
+  workers: {
+    title: string;
+    description: string;
+    unavailable: string;
+    empty: string;
+    colWorker: string;
+    colHost: string;
+    colQueues: string;
+    colRunning: string;
+    colHeartbeat: string;
+    tasksTitle: string;
+    tasksDescription: string;
+    tasksEmpty: string;
+    colStatus: string;
+    colAgent: string;
+    colCreated: string;
+    colJob: string;
+  };
+  agents: {
+    runtimesTitle: string;
+    runtimesDescription: string;
+    loadFailed: string;
+    disabledHint: string;
+    default: string;
+    checkModel: string;
+    checking: string;
+    probeOk: string;
+    probeFailed: string;
+    binaryMissing: string;
+    modes: string;
+    registryTitle: string;
+    registryDescription: string;
+    registryEmpty: string;
+    colName: string;
+    colKind: string;
+    colDescription: string;
+    colQueued: string;
+    colRunning: string;
+  };
+  labs: {
+    title: string;
+    description: string;
+    loadFailed: string;
+    on: string;
+    off: string;
+    configuredIn: string;
+    howToToggle: string;
+  };
+  automation: {
+    title: string;
+    description: string;
+    unavailable: string;
+    empty: string;
+    badPayload: string;
+    name: string;
+    type: string;
+    cron: string;
+    payload: string;
+    save: string;
+    nextRun: string;
+    delete: string;
+  };
+  secrets: {
+    title: string;
+    description: string;
+    adminOnly: string;
+    empty: string;
+    name: string;
+    value: string;
+    write: string;
+    source: string;
+    mode: string;
+    modified: string;
+    remove: string;
+    envHint: string;
+  };
+  updates: {
+    title: string;
+    description: string;
+    checkAgain: string;
+    loadFailed: string;
+    labels: {
+      config_version: string;
+      git_sha: string;
+      image: string;
+      claude_cli: string;
+      openclaw: string;
+      node: string;
+      acp_adapter: string;
+    };
+  };
+}
+
+export interface RuntimePickerTranslations {
+  runtime: string;
+  runtimeNative: string;
+  account: string;
+  accountAuto: string;
+  permission: string;
+  modes: { full: string; standard: string; plan: string };
+  reset: string;
+  appliesToThisChat: string;
+  disabled: string;
+}
+
 export interface Translations {
   features: {
     jobs: JobsFeatureTranslations;
@@ -301,6 +451,8 @@ export interface Translations {
     voice: VoiceFeatureTranslations;
     email: EmailFeatureTranslations;
     agentsRegistry: AgentsRegistryTranslations;
+    console: ConsoleFeatureTranslations;
+    runtimePicker: RuntimePickerTranslations;
   };
   // Locale meta
   locale: {
@@ -652,6 +804,21 @@ export interface Translations {
       notification: string;
       voice: string;
       about: string;
+      gateway: string;
+      devices: string;
+      workers: string;
+      agents: string;
+      labs: string;
+      automation: string;
+      secrets: string;
+      updates: string;
+    };
+    groups: {
+      general: string;
+      connections: string;
+      agents: string;
+      privacy: string;
+      system: string;
     };
     runtime: {
       title: string;

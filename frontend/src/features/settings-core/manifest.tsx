@@ -35,6 +35,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "account",
       order: 10,
+      group: "general",
       icon: UserIcon,
       label: (t) => t.settings.sections.account,
       Page: AccountSettingsPage,
@@ -42,6 +43,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "appearance",
       order: 20,
+      group: "general",
       icon: PaletteIcon,
       label: (t) => t.settings.sections.appearance,
       Page: AppearanceSettingsPage,
@@ -49,6 +51,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "memory",
       order: 30,
+      group: "agents",
       icon: BrainIcon,
       label: (t) => t.settings.sections.memory,
       Page: MemorySettingsPage,
@@ -56,6 +59,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "runtime",
       order: 40,
+      group: "system",
       icon: ServerIcon,
       label: (t) => t.settings.sections.runtime,
       Page: RuntimeSettingsPage,
@@ -63,6 +67,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "tools",
       order: 50,
+      group: "agents",
       icon: WrenchIcon,
       label: (t) => t.settings.sections.tools,
       Page: ToolSettingsPage,
@@ -70,6 +75,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "skills",
       order: 60,
+      group: "agents",
       icon: SparklesIcon,
       label: (t) => t.settings.sections.skills,
       Page: SkillSettingsPage,
@@ -77,6 +83,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "notification",
       order: 70,
+      group: "general",
       icon: BellIcon,
       label: (t) => t.settings.sections.notification,
       Page: NotificationSettingsPage,
@@ -84,6 +91,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "channels",
       order: 90,
+      group: "connections",
       icon: CableIcon,
       label: (t) => t.settings.sections.channels,
       Page: ChannelsSettingsPage,
@@ -91,6 +99,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "models",
       order: 100,
+      group: "agents",
       icon: CpuIcon,
       label: (t) => t.settings.sections.models,
       Page: ModelsSettingsPage,
@@ -98,6 +107,7 @@ export const settingsCoreManifest: FeatureManifest = {
     {
       id: "about",
       order: 110,
+      group: "system",
       icon: InfoIcon,
       label: (t) => t.settings.sections.about,
       Page: AboutSettingsPage,

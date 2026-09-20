@@ -22,8 +22,32 @@ export const SETTINGS_PAGE_IDS = [
   "channels",
   "models",
   "about",
+  // Console parity (P13): every page is a view over capability operations.
+  "gateway",
+  "devices",
+  "workers",
+  "agents",
+  "labs",
+  "automation",
+  "secrets",
+  "updates",
 ] as const;
 export type SettingsPageId = (typeof SETTINGS_PAGE_IDS)[number];
+
+/**
+ * Settings rail groups, in rail order. A page declares the group it lives
+ * under; the rail renders a heading per non-empty group. Mirrors the
+ * console layout users already know: general → connections → agents &
+ * tools → privacy & security → system.
+ */
+export const SETTINGS_GROUPS = [
+  "general",
+  "connections",
+  "agents",
+  "privacy",
+  "system",
+] as const;
+export type SettingsGroup = (typeof SETTINGS_GROUPS)[number];
 
 /** Server-declared feature switches (see useFeatureFlags). */
 export type FeatureFlagKey =
@@ -36,8 +60,12 @@ export type FeatureFlagKey =
 
 export interface SettingsPageSpec {
   id: SettingsPageId;
-  /** Ascending; the rail renders in this order. */
+  /** Ascending within its group; the rail renders groups in SETTINGS_GROUPS order. */
   order: number;
+  /** Rail group. Pages that predate groups default to "general". */
+  group?: SettingsGroup;
+  /** Listed only for admins (system_role === "admin"). */
+  adminOnly?: boolean;
   icon: LucideIcon;
   label: (t: Translations) => string;
   Page: React.ComponentType<{ onClose?: () => void }>;
