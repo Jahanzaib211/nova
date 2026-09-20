@@ -1171,7 +1171,7 @@ capabilities:
 runtimes:
   enabled: false
   default: native
-  nova_mcp_url: http://127.0.0.1:2026/api/mcp/nova
+  nova_mcp_url: http://127.0.0.1:8001/api/mcp/nova
   turn_timeout_seconds: 1800
 
 # ============================================================================
@@ -1197,7 +1197,7 @@ runtimes:
 #     model: null
 #     env:
 #       HOME: /root
-#       CLAUDE_CONFIG_DIR: /root/.claude
+#       # (no CLAUDE_CONFIG_DIR: the CLI must find ~/.claude.json beside ~/.claude)
 #     auto_approve_permissions: false
 #     permission_policy:
 #       allow_kinds: [read, search, fetch, think]

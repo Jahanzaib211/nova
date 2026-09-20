@@ -201,3 +201,24 @@ async def test_dispatch_middleware_reports_failures_as_a_message_not_an_exceptio
     result = await mw.awrap_model_call(Req(), handler)
     assert "openclaw" in result.content and "adapter exited 1" in result.content
     assert result.response_metadata["runtime_error"] is True
+
+
+# ---------------------------------------------------------------- Nova MCP tools under presets
+
+
+def test_nova_mcp_tool_calls_are_judged_by_operation_kind_not_acp_kind():
+    """Claude Code surfaces MCP tool calls with ACP kind `other`; Nova's own
+    tools (`mcp__nova__<module>__<op>`) are judged by the operation's kind
+    from the capability registry: reads everywhere, writes/executes in
+    standard and full, never in plan."""
+    from deerflow.runtimes.acp_transport import nova_tool_decision
+
+    kinds = {"jobs.list": "read", "jobs.enqueue": "execute", "jobs.cancel": "write", "secrets.set": "secret"}
+    lookup = lambda name: kinds.get(name)  # noqa: E731
+    assert nova_tool_decision("mcp__nova__jobs__list", "plan", lookup) is True
+    assert nova_tool_decision("mcp__nova__jobs__enqueue", "plan", lookup) is False
+    assert nova_tool_decision("mcp__nova__jobs__enqueue", "standard", lookup) is True
+    assert nova_tool_decision("mcp__nova__jobs__cancel", "full", lookup) is True
+    assert nova_tool_decision("mcp__nova__secrets__set", "full", lookup) is False
+    assert nova_tool_decision("mcp__nova__nope__x", "full", lookup) is None  # unknown op: fall back to the ACP policy
+    assert nova_tool_decision("Bash", "full", lookup) is None  # not a Nova tool

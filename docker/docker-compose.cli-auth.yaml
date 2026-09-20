@@ -26,6 +26,13 @@ services:
         source: ${HOME:?HOME must be set}/.claude
         target: /root/.claude
         read_only: true
+      # Claude Code keeps account/onboarding state beside the directory, in
+      # ~/.claude.json; without it the CLI reports "configuration file not
+      # found" and never authenticates. Same read-only contract.
+      - type: bind
+        source: ${HOME:?HOME must be set}/.claude.json
+        target: /root/.claude.json
+        read_only: true
         bind:
           create_host_path: true
       - type: bind
@@ -41,6 +48,13 @@ services:
       - type: bind
         source: ${HOME:?HOME must be set}/.claude
         target: /root/.claude
+        read_only: true
+      # Claude Code keeps account/onboarding state beside the directory, in
+      # ~/.claude.json; without it the CLI reports "configuration file not
+      # found" and never authenticates. Same read-only contract.
+      - type: bind
+        source: ${HOME:?HOME must be set}/.claude.json
+        target: /root/.claude.json
         read_only: true
         bind:
           create_host_path: true

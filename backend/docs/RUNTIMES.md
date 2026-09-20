@@ -75,7 +75,7 @@ read-only), `anthropic-api-key` (`ANTHROPIC_API_KEY` set), `gateway-token`
 runtimes:
   enabled: true          # config.yaml; hot-reloads
   default: native
-  nova_mcp_url: http://127.0.0.1:2026/api/mcp/nova
+  nova_mcp_url: http://127.0.0.1:8001/api/mcp/nova
 ```
 
 plus `NOVA_ACP_AGENTS=1` in `.env` and `pm2 restart nova` so the

@@ -46,7 +46,7 @@ def _default_nova_mcp(user_id: str | None, thread_id: str | None) -> tuple[dict[
 
     sf = get_session_factory()
     rt = getattr(get_app_config(), "runtimes", None)
-    url = getattr(rt, "nova_mcp_url", None) or "http://127.0.0.1:2026/api/mcp/nova"
+    url = getattr(rt, "nova_mcp_url", None) or "http://127.0.0.1:8001/api/mcp/nova"
     if sf is None or not user_id:
         return None, lambda: None
     from deerflow.persistence.harness_token.sql import HarnessTokenRepository

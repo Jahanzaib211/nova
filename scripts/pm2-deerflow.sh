@@ -73,6 +73,12 @@ case "$NOVA_STACK" in
     fi
     # ACP agents (Claude Code + OpenClaw inside Nova): opt-in, because the
     # cli-auth overlay exposes ~/.claude to the gateway (see its header).
+    # PM2 does not pass .env to this wrapper (only DEER_FLOW_ROOT), so the
+    # documented opt-in `NOVA_ACP_AGENTS=1` in .env is honoured here too;
+    # a value already in the process environment wins.
+    if [ -z "${NOVA_ACP_AGENTS:-}" ] && grep -qsE '^NOVA_ACP_AGENTS=("1"|1)[[:space:]]*$' "$DEER_FLOW_ROOT/.env"; then
+      NOVA_ACP_AGENTS=1
+    fi
     if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
       "$DEER_FLOW_ROOT/scripts/acp-secrets.sh" || true
       COMPOSE_FILES+=(

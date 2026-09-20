@@ -12,9 +12,16 @@ configured (`acp_agents` in `config.yaml`):
 ## Enabling
 
 ```bash
-echo NOVA_ACP_AGENTS=1 >> .env          # opt-in: mounts ~/.claude (ro) + OpenClaw package/token
-pm2 restart nova                         # scripts/pm2-deerflow.sh adds cli-auth + acp overlays
+echo NOVA_ACP_AGENTS=1 >> .env          # opt-in: mounts ~/.claude + ~/.claude.json (ro) + OpenClaw package/token
+pm2 restart nova                         # scripts/pm2-deerflow.sh reads the flag from .env and adds cli-auth + acp overlays
 ```
+
+Two things learned activating this on 2026-09-20: Claude Code keeps its
+account/onboarding state in `~/.claude.json` *beside* `~/.claude/`, so the
+cli-auth overlay mounts both (the CLI otherwise reports "configuration
+file not found" and never authenticates), and the agent's `env` must not
+set `CLAUDE_CONFIG_DIR` — with it the CLI looks for `.claude.json` *inside*
+the directory.
 
 `docker/dev-entrypoint.sh` warms the Claude adapter (`npx … --version`) into
 the `gateway-npm-cache` volume in the background so the first invocation is

@@ -298,6 +298,19 @@ def check_frontend_build_freshness() -> dict:
     )
 
 
+def _acp_agents_enabled() -> bool:
+    """Mirror scripts/pm2-deerflow.sh: process env first, then `.env`."""
+    value = os.environ.get("NOVA_ACP_AGENTS")
+    if value is None:
+        try:
+            for line in (REPO_ROOT / ".env").read_text(encoding="utf-8").splitlines():
+                if line.startswith("NOVA_ACP_AGENTS="):
+                    value = line.split("=", 1)[1].strip().strip("\"'")
+        except OSError:
+            value = None
+    return value == "1"
+
+
 def check_compose_chain() -> dict:
     """Union of per-service config_files vs the canonical chain."""
     canonical = {
@@ -314,6 +327,11 @@ def check_compose_chain() -> dict:
         pass
     if speech_on:
         canonical.add("docker-compose.voice.yaml")
+    # ACP agents (Claude Code + OpenClaw inside Nova) are an opt-in pair of
+    # overlays, selected by NOVA_ACP_AGENTS=1 in .env exactly as
+    # scripts/pm2-deerflow.sh selects them.
+    if _acp_agents_enabled():
+        canonical.update({"docker-compose.cli-auth.yaml", "docker-compose.acp.yaml"})
 
     seen: set[str] = set()
     missing_containers = []

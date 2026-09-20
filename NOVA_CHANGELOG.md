@@ -48,6 +48,18 @@
 
 ---
 
+## v9.18 — Deployed: console UI live, Claude Code powering chats inside the gateway (2026-09-20)
+
+Phase P15 of the upgrade program — the deploy that makes P11–P13 visible.
+
+- **Frontend image rebuilt and recreated** (`BUILD_ID RZ5fBpaMOV5OL08M1_RSF`): the grouped settings rail, the eight console pages and the runtime picker are what nova.alilabsx.com serves. Build cache (22 GB) pruned first; the image must be built with the `prod-frontend` overlay (or `docker build --target prod`) — the plain `dev` target has no `.next` and crash-loops. BuildKit's bridge network was too slow for the registry (14 KiB/s, timeouts); `--network=host` installs 1,198 packages in 25 s.
+- **ACP overlays activated** (`NOVA_ACP_AGENTS=1` in `.env`; `scripts/pm2-deerflow.sh` now honours the flag from `.env`, PM2 never passed it). Two fixes for Claude Code inside the container: mount `~/.claude.json` beside `~/.claude` (the CLI's account/onboarding state) and drop `CLAUDE_CONFIG_DIR` from the agent env.
+- **Runtime fixes found live**: `runtimes.nova_mcp_url` defaults to the in-container `127.0.0.1:8001` (2026 is the host port); Nova's own MCP tools arrive as ACP kind `other`, so `nova_tool_decision` judges them by the operation's registry kind (reads in every mode, writes/executes in standard and full); the adapter's stderr is drained into the gateway log (the ACP lib piped it and never read it); each session logs its attached MCP servers.
+- **Proof**: `runtimes.probe` → Claude Code answered inside the gateway under the user's login (27 s cold); a chat turn on the Claude Code runtime called `mcp__nova__jobs__list` and `mcp__nova__runtimes__list` through `/api/mcp/nova` with a per-turn token (minted, used, revoked) and answered as the assistant message.
+- Ops: the drift gate expects the two ACP overlays when opted in; nginx's pinned IP (192.168.200.2) must not be claimed by a per-service recreate while nginx is down (a `pm2 restart nova` loop of "Address already in use" — fixed by removing the squatter and restarting through PM2).
+
+---
+
 ## v9.17 — Ops: capabilities gate (2026-09-20)
 
 Phase P14 of the upgrade program.

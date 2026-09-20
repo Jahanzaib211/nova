@@ -75,6 +75,42 @@ def build_permission_response(options: Any, *, auto_approve: bool, policy: Any |
     return RequestPermissionResponse(outcome=DeniedOutcome(outcome="cancelled"))
 
 
+NOVA_TOOL_PREFIX = "mcp__nova__"
+
+
+def nova_tool_decision(title: str | None, mode: str, kind_of: Callable[[str], str | None]) -> bool | None:
+    """Decide a call to one of Nova's own MCP tools by the *operation's* kind.
+
+    Claude Code reports every MCP tool call with ACP kind ``other``, so the
+    per-kind ACP policy alone would deny Nova's tools in every mode but
+    ``full``. ``mcp__nova__jobs__list`` maps to operation ``jobs.list`` whose
+    registry kind decides: ``read`` is allowed in every mode; ``write`` and
+    ``execute`` in ``standard`` and ``full``; ``secret``/``admin`` never
+    (they are not served on the MCP server anyway). ``None`` means "not a
+    known Nova tool — apply the ACP policy".
+    """
+    if not title or not title.startswith(NOVA_TOOL_PREFIX):
+        return None
+    op_name = title[len(NOVA_TOOL_PREFIX) :].replace("__", ".", 1)
+    kind = kind_of(op_name)
+    if kind is None:
+        return None
+    if kind == "read":
+        return True
+    if kind in ("write", "execute"):
+        return mode in ("standard", "full")
+    return False
+
+
+def _registry_kind(op_name: str) -> str | None:
+    try:
+        from deerflow.capabilities import get_registry
+
+        return get_registry().get(op_name).kind
+    except Exception:
+        return None
+
+
 def resolve_env(agent_cfg: ACPAgentConfig) -> dict[str, str] | None:
     if not agent_cfg.env:
         return None
@@ -114,20 +150,46 @@ async def run_acp_prompt(
 
         async def request_permission(self, options, session_id: str, tool_call, **kwargs):  # type: ignore[override]
             kind = getattr(tool_call, "kind", None)
-            response = build_permission_response(options, auto_approve=permission.auto_approve, policy=permission.policy, kind=kind)
             title = getattr(tool_call, "title", None) or getattr(tool_call, "tool_call_id", "")
+            nova = nova_tool_decision(getattr(tool_call, "title", None), permission.mode, _registry_kind)
+            if nova is None:
+                response = build_permission_response(options, auto_approve=permission.auto_approve, policy=permission.policy, kind=kind)
+            else:
+                response = build_permission_response(options, auto_approve=nova, policy=None, kind=kind)
             verdict = "approved" if response.outcome.outcome == "selected" else "denied"
             on_status(session_id, f"permission {verdict}: {kind or 'tool'} — {title}")
             return response
 
+    async def _drain_stderr(proc: Any) -> None:
+        """The ACP lib pipes the adapter's stderr and never reads it: a chatty
+        adapter would block on a full pipe, and its errors would vanish. Log
+        it (bounded) instead."""
+        stream = getattr(proc, "stderr", None)
+        if stream is None:
+            return
+        kept = 0
+        try:
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                if kept < 200:
+                    logger.info("acp[%s] %s", agent_cfg.command, line.decode(errors="replace").rstrip()[:400])
+                    kept += 1
+        except Exception:
+            pass
+
     async def _run() -> str:
-        async with spawn_agent_process(_Client(), agent_cfg.command, *(agent_cfg.args or []), env=resolve_env(agent_cfg), cwd=cwd) as (conn, _proc):
+        async with spawn_agent_process(_Client(), agent_cfg.command, *(agent_cfg.args or []), env=resolve_env(agent_cfg), cwd=cwd) as (conn, proc):
+            drain = asyncio.create_task(_drain_stderr(proc))
             await conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0"))
             kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
+            logger.info("acp session for %s: cwd=%s mcp_servers=%s", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers])
             if model or agent_cfg.model:
                 kwargs["model"] = model or agent_cfg.model
             session = await conn.new_session(**kwargs)
             await conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)])
+            drain.cancel()
         return "".join(chunks)
 
     if timeout:
