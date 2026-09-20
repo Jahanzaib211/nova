@@ -86,6 +86,18 @@
       "title": "Models"
     },
     {
+      "config_key": "runtimes",
+      "description": "What can run a chat turn \u2014 Nova's native agent, Claude Code or OpenClaw over ACP \u2014 with accounts, a live probe and permission modes.",
+      "flag": "runtimes",
+      "id": "runtimes",
+      "operations": [
+        "runtimes.list",
+        "runtimes.probe",
+        "runtimes.sessions"
+      ],
+      "title": "Runtimes"
+    },
+    {
       "config_key": null,
       "description": "Named secrets (0600 files under ~/.nova/secrets) and the env-var names config.yaml references. Values are never read back.",
       "flag": null,
@@ -1123,6 +1135,198 @@
           "ok"
         ],
         "title": "ProbeOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Runtimes, the accounts each can use (presence only), the default, and permission modes.",
+      "flag": "runtimes",
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "runtimes",
+      "name": "runtimes.list",
+      "output_schema": {
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "modes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Modes",
+            "type": "array"
+          },
+          "permission_modes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permission Modes",
+            "type": "array"
+          },
+          "runtimes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Runtimes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "default",
+          "runtimes",
+          "permission_modes",
+          "modes"
+        ],
+        "title": "DescribeOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Round-trip one word through a runtime \u2014 the \"Check model\" button.",
+      "flag": "runtimes",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Account id, or omit for automatic selection",
+            "title": "Account"
+          },
+          "runtime": {
+            "description": "Runtime id from runtimes.list (e.g. claude_code)",
+            "title": "Runtime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runtime"
+        ],
+        "title": "ProbeIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "runtimes",
+      "name": "runtimes.probe",
+      "output_schema": {
+        "properties": {
+          "account": {
+            "title": "Account",
+            "type": "string"
+          },
+          "checked_at": {
+            "default": "",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Latency Ms"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "runtime": {
+            "title": "Runtime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runtime",
+          "account",
+          "ok"
+        ],
+        "title": "ProbeOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Claude Code sessions on this gateway, grouped by project (names and times only).",
+      "flag": "runtimes",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "runtime": {
+            "default": "claude_code",
+            "title": "Runtime",
+            "type": "string"
+          }
+        },
+        "title": "SessionsIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "runtimes",
+      "name": "runtimes.sessions",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
         "type": "object"
       }
     },

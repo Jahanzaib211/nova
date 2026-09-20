@@ -48,6 +48,18 @@
 
 ---
 
+## v9.15 — Runtimes: Claude Code and OpenClaw power whole chats (2026-09-20)
+
+Phase P12 of the upgrade program. See `backend/docs/RUNTIMES.md`.
+
+- **Runtime registry** (`deerflow.runtimes`): `native` plus every `acp_agents` entry as a chat runtime; selection is chat (`runtime` / `runtime_account` / `permission_mode` in the run context) > model (`runtime: claude_code` on a `models:` entry) > `runtimes.default` — OpenClaw's `agentRuntime.id`, in Nova.
+- **`RuntimeDispatchMiddleware`**: on an ACP runtime the model call becomes one ACP prompt with Nova's own MCP server mounted under an ephemeral harness token (revoked after the turn), streamed as `acp_update` events, returned as the turn's `AIMessage`. Threads, checkpoints, titles, memory unchanged; failures become a message.
+- **Permission modes** `full` / `standard` / `plan` → ACP policies (`policy_for_mode`); the `invoke_acp_agent` tool now shares the transport (`deerflow.runtimes.acp_transport`) with the runtime.
+- **Accounts** presence-checked (Claude login, Anthropic API key, OpenClaw gateway token); `runtimes.list` / `runtimes.probe` ("Check model") / `runtimes.sessions` operations. Probe verified on the host: Claude Code answered through the adapter under the user's own login in 18.7 s.
+- `runtimes:` config block, `config_version` 27; flag `runtimes`. 12 modules / 36 operations in the capability contract.
+
+---
+
 ## v9.14 — Capability registry: declared once, reachable by UI, harness and MCP (2026-09-20)
 
 Phase P11 of the upgrade program. See `backend/docs/CAPABILITIES.md`.

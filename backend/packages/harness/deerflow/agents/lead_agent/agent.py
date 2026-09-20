@@ -328,6 +328,18 @@ def build_middlewares(
     # UI/REST path. Non-fatal by construction.
     middlewares.append(StripErrorFallbackMiddleware())
 
+    # RuntimeDispatchMiddleware — when the chat (or the model) selects an ACP
+    # runtime (claude_code, openclaw), the model call becomes one ACP prompt
+    # with Nova's MCP server mounted; native runs are untouched. Registered
+    # here so every earlier middleware still shapes the messages it sees.
+    runtimes_config = getattr(resolved_app_config, "runtimes", None)
+    if runtimes_config is not None and getattr(runtimes_config, "enabled", False):
+        from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+
+        runtime_model_config = resolved_app_config.get_model_config(model_name) if model_name else None
+        model_runtime = getattr(runtime_model_config, "runtime", None) if runtime_model_config is not None else None
+        middlewares.append(RuntimeDispatchMiddleware(model_runtime=model_runtime, turn_timeout=getattr(runtimes_config, "turn_timeout_seconds", 1800.0)))
+
     # PreflightQuotaMiddleware — short-circuit the LLM call when the
     # provider's quota is exhausted. Only probes OpenAI-compatible
     # providers that expose /v1/dashboard/billing/credit. Fail-open

@@ -218,6 +218,44 @@ export interface ModelsProbeOutput {
   ok: boolean;
 }
 
+export interface RuntimesListInput {
+  // no fields
+}
+
+export interface RuntimesListOutput {
+  default: string;
+  enabled: boolean;
+  modes: Array<Record<string, unknown>>;
+  permission_modes: Array<string>;
+  runtimes: Array<Record<string, unknown>>;
+}
+
+export interface RuntimesProbeInput {
+  /** Account id, or omit for automatic selection */
+  account?: null | string;
+  /** Runtime id from runtimes.list (e.g. claude_code) */
+  runtime: string;
+}
+
+export interface RuntimesProbeOutput {
+  account: string;
+  checked_at?: string;
+  detail?: string;
+  latency_ms?: null | number;
+  ok: boolean;
+  runtime: string;
+}
+
+export interface RuntimesSessionsInput {
+  limit?: number;
+  runtime?: string;
+}
+
+export interface RuntimesSessionsOutput {
+  items: Array<Record<string, unknown>>;
+  total: number;
+}
+
 export interface SecretsListInput {
   // no fields
 }
@@ -372,6 +410,12 @@ export interface CapabilityOps {
   "mcp.tools": { input: McpToolsInput; output: McpToolsOutput };
   "models.list": { input: ModelsListInput; output: ModelsListOutput };
   "models.probe": { input: ModelsProbeInput; output: ModelsProbeOutput };
+  "runtimes.list": { input: RuntimesListInput; output: RuntimesListOutput };
+  "runtimes.probe": { input: RuntimesProbeInput; output: RuntimesProbeOutput };
+  "runtimes.sessions": {
+    input: RuntimesSessionsInput;
+    output: RuntimesSessionsOutput;
+  };
   "secrets.list": { input: SecretsListInput; output: SecretsListOutput };
   "secrets.set": { input: SecretsSetInput; output: SecretsSetOutput };
   "secrets.unset": { input: SecretsUnsetInput; output: SecretsUnsetOutput };
@@ -620,6 +664,36 @@ export const OP_META: Record<CapabilityOpName, OpMeta> = {
     harness: true,
     mcp: true,
   },
+  "runtimes.list": {
+    module: "runtimes",
+    kind: "read",
+    description:
+      "Runtimes, the accounts each can use (presence only), the default, and permission modes.",
+    flag: "runtimes",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "runtimes.probe": {
+    module: "runtimes",
+    kind: "execute",
+    description:
+      'Round-trip one word through a runtime — the "Check model" button.',
+    flag: "runtimes",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "runtimes.sessions": {
+    module: "runtimes",
+    kind: "read",
+    description:
+      "Claude Code sessions on this gateway, grouped by project (names and times only).",
+    flag: "runtimes",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
   "secrets.list": {
     module: "secrets",
     kind: "read",
@@ -797,6 +871,15 @@ export const CAPABILITY_MODULES = [
     flag: null,
     config_key: "models",
     operations: ["models.list", "models.probe"],
+  },
+  {
+    id: "runtimes",
+    title: "Runtimes",
+    description:
+      "What can run a chat turn — Nova's native agent, Claude Code or OpenClaw over ACP — with accounts, a live probe and permission modes.",
+    flag: "runtimes",
+    config_key: "runtimes",
+    operations: ["runtimes.list", "runtimes.probe", "runtimes.sessions"],
   },
   {
     id: "secrets",

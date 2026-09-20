@@ -19,10 +19,11 @@ def register_builtin_modules(registry: CapabilityRegistry) -> None:
         jobs,
         mcp,
         models,
+        runtimes,
         secrets,
         skills,
         updates,
     )
 
-    for mod in (jobs, integrations, agents, acp, models, skills, mcp, secrets, features, updates):
+    for mod in (jobs, integrations, agents, acp, models, skills, mcp, secrets, features, updates, runtimes):
         registry.register(mod.MODULE)

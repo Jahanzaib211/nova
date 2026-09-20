@@ -179,6 +179,12 @@ _CONTEXT_CONFIGURABLE_KEYS: frozenset[str] = frozenset(
         "max_concurrent_subagents",
         "agent_name",
         "is_bootstrap",
+        # Runtime registry (P12): which runtime runs this chat, under which
+        # account, with which permission preset. Read by
+        # deerflow.runtimes.middleware.RuntimeDispatchMiddleware.
+        "runtime",
+        "runtime_account",
+        "permission_mode",
     }
 )
 

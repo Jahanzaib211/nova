@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 26
+config_version: 27
 
 # ============================================================================
 # Logging
@@ -1153,6 +1153,26 @@ sandbox:
 capabilities:
   mcp_server:
     enabled: true
+
+# ============================================================================
+# Runtimes — Claude Code / OpenClaw as chat runtimes (like OpenClaw's agentRuntime.id)
+# ============================================================================
+# With `enabled: true`, a chat can run on an ACP runtime instead of the native
+# LangGraph agent: the chat's model picker sets `runtime` / `runtime_account`
+# / `permission_mode` in the run context, or a model declares `runtime:
+# claude_code` under `models:` so every chat on it uses Claude Code. The
+# external agent gets Nova's own MCP server (capabilities above) mounted with
+# an ephemeral, per-turn harness token, so it can use jobs, integrations,
+# agents, models, … as the signed-in user. Requires the acp_agents overlays
+# (NOVA_ACP_AGENTS=1); accounts are presence-checked, never read.
+# Permission modes: full ("Default (Full Access)": everything but deletes),
+# standard (reads/searches only; edits and commands denied and shown),
+# plan (read-only).
+runtimes:
+  enabled: false
+  default: native
+  nova_mcp_url: http://127.0.0.1:2026/api/mcp/nova
+  turn_timeout_seconds: 1800
 
 # ============================================================================
 # ACP Agents Configuration

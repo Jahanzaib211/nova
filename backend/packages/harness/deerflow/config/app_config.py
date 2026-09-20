@@ -28,6 +28,7 @@ from deerflow.config.model_config import ModelConfig
 from deerflow.config.reload_boundary import format_field_description
 from deerflow.config.run_events_config import RunEventsConfig
 from deerflow.config.runtime_paths import existing_project_file
+from deerflow.config.runtimes_config import RuntimesConfig
 from deerflow.config.safety_finish_reason_config import SafetyFinishReasonConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.skill_evolution_config import SkillEvolutionConfig
@@ -170,6 +171,10 @@ class AppConfig(BaseModel):
             "jobs",
             field_doc="Job runner (separate worker process): queues, concurrency, lease/reaper/scheduler cadence.",
         ),
+    )
+    runtimes: RuntimesConfig = Field(
+        default_factory=RuntimesConfig,
+        description=("Runtime registry: run a chat on Claude Code / OpenClaw over ACP instead of the native agent; default runtime, Nova MCP URL, account paths. Read per run, so edits hot-reload."),
     )
     run_events: RunEventsConfig = Field(
         default_factory=RunEventsConfig,

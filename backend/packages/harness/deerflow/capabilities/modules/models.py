@@ -22,6 +22,9 @@ def _describe(m: Any, *, default: bool) -> dict[str, Any]:
         "supports_thinking": bool(getattr(m, "supports_thinking", False)),
         "supports_vision": bool(getattr(m, "supports_vision", False)),
         "max_input_tokens": getattr(m, "max_input_tokens", None),
+        # `runtime: claude_code` on a model routes chats using it to that
+        # runtime (deerflow.runtimes); absent means native.
+        "runtime": getattr(m, "runtime", None),
         "base_url": getattr(m, "base_url", None) or (getattr(m, "extra", {}) or {}).get("base_url"),
     }
 
