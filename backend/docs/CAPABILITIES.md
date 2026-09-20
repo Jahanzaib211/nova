@@ -21,20 +21,28 @@ external harness:
 ```python
 from deerflow.capabilities import CapabilityModule, Operation, OpContext, ModuleStatus
 
+
 class ListIn(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
 
+
 class Items(BaseModel):
-    items: list[dict]; total: int
+    items: list[dict]
+    total: int
+
 
 async def _list(ctx: OpContext, inp: ListIn) -> Items: ...
 async def _status() -> ModuleStatus: ...
 
+
 MODULE = CapabilityModule(
-    id="jobs", title="Jobs", flag="jobs", config_key="jobs", status=_status,
+    id="jobs",
+    title="Jobs",
+    flag="jobs",
+    config_key="jobs",
+    status=_status,
     operations=[
-        Operation(name="jobs.list", kind="read", input=ListIn, output=Items, handler=_list,
-                  description="List the caller's jobs."),
+        Operation(name="jobs.list", kind="read", input=ListIn, output=Items, handler=_list, description="List the caller's jobs."),
     ],
 )
 ```
