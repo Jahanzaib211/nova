@@ -111,7 +111,7 @@ def main() -> int:
     os.environ["DEER_FLOW_HOME"] = str(home)
     os.environ["DEER_FLOW_CONFIG_PATH"] = str(cfg)
     os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(prepare_hermetic_extras(home))
-    os.environ.setdefault("AUTH_JWT_SECRET", "record-secret")
+    os.environ.setdefault("AUTH_JWT_SECRET", "record-secret-0123456789abcdef0123456789abcd")
     os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (str(_BACKEND), str(_BACKEND / "tests"), os.environ.get("PYTHONPATH", "")) if p)
 
     _install_capture(out)
