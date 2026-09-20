@@ -711,6 +711,10 @@ export interface Translations {
       fieldThinking: string;
       fieldReasoningEffort: string;
       fieldVision: string;
+      fieldShowInChat: string;
+      fieldShowInChatHint: string;
+      fieldMaxInputTokens: string;
+      fieldMaxInputTokensHint: string;
       apiKeyUnchanged: string;
       providerOpenAICompatible: string;
       providerAnthropic: string;

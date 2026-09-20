@@ -39,6 +39,7 @@ class ModelResponse(BaseModel):
     has_api_key: bool = Field(default=False, description="Whether an API key is configured (the key itself is never returned)")
     amd_compute: str | None = Field(None, description="AMD-compute backing label (e.g. 'AMD Instinct MI300X (Fireworks)'); None if not AMD-backed")
     hidden: bool = Field(default=False, description="Excluded from the frontend's default quick model picker; still fully usable via settings/API")
+    max_input_tokens: int | None = Field(None, description="Context window wired onto the chat model's LangChain profile; drives fraction-based summarization triggers")
 
 
 class TokenUsageResponse(BaseModel):
@@ -71,6 +72,17 @@ class ModelWriteRequest(BaseModel):
     supports_reasoning_effort: bool = False
     supports_vision: bool = False
     amd_compute: str | None = Field(None, description="Optional AMD-compute label for self-hosted AMD endpoints (e.g. vLLM/ROCm on AMD Developer Cloud). Fireworks endpoints are auto-detected and need not set this.")
+    hidden: bool = Field(default=False, description="Hide from the chat model picker. False (the default) surfaces the model in chat.")
+    max_input_tokens: int | None = Field(
+        None,
+        gt=0,
+        description=(
+            "Context window in tokens. For a local model this is the value the "
+            "serving runtime was actually launched with (llama.cpp -c, Ollama "
+            "num_ctx, vLLM --max-model-len) — setting it higher here does not "
+            "enlarge the real window, it only misinforms summarization."
+        ),
+    )
 
 
 class ModelWriteResponse(BaseModel):
@@ -155,6 +167,7 @@ def _to_response(model: ModelConfig, runtime_names: set[str]) -> ModelResponse:
         has_api_key=bool(_extra(model, "api_key")),
         amd_compute=detect_amd_compute(model),
         hidden=model.hidden,
+        max_input_tokens=model.max_input_tokens,
     )
 
 

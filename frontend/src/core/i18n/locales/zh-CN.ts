@@ -836,6 +836,12 @@ export const zhCN: Translations = {
       fieldThinking: "支持思考",
       fieldReasoningEffort: "支持推理强度",
       fieldVision: "支持视觉",
+      fieldShowInChat: "在对话中显示",
+      fieldShowInChatHint:
+        "在对话的模型选择器中提供此模型。关闭后仍保留配置，但不在选择器中显示。",
+      fieldMaxInputTokens: "最大上下文",
+      fieldMaxInputTokensHint:
+        "上下文窗口（tokens）。必须与服务实际启动时的设置一致——在此填写更大的数值并不会真正扩大窗口。",
       apiKeyUnchanged: "（保持不变）",
       providerOpenAICompatible:
         "OpenAI 兼容（llama.cpp、Ollama、vLLM、OpenAI）",

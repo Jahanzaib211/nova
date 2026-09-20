@@ -17,6 +17,8 @@ export interface Model {
   amd_compute?: string | null;
   /** Excluded from the default quick model picker; still fully usable via settings. */
   hidden?: boolean;
+  /** Context window in tokens, as the serving runtime was actually launched. */
+  max_input_tokens?: number | null;
 }
 
 export interface TokenUsageSettings {
@@ -42,6 +44,10 @@ export interface ModelWriteRequest {
   supports_vision?: boolean;
   /** AMD-compute label for self-hosted AMD endpoints (Fireworks is auto-detected). */
   amd_compute?: string | null;
+  /** Hide from the chat model picker; false surfaces the model in chat. */
+  hidden?: boolean;
+  /** Context window in tokens. Must match what the serving runtime was launched with. */
+  max_input_tokens?: number | null;
 }
 
 export interface ModelWriteResponse {

@@ -870,6 +870,12 @@ export const enUS: Translations = {
       fieldThinking: "Supports thinking",
       fieldReasoningEffort: "Supports reasoning effort",
       fieldVision: "Supports vision",
+      fieldShowInChat: "Show in chat",
+      fieldShowInChatHint:
+        "Offer this model in the chat model picker. Turn off to keep it configured but out of the way.",
+      fieldMaxInputTokens: "Max context",
+      fieldMaxInputTokensHint:
+        "Context window in tokens. Must match what the server was actually started with — a larger number here does not buy a larger window.",
       apiKeyUnchanged: "(unchanged)",
       providerOpenAICompatible:
         "OpenAI-compatible (llama.cpp, Ollama, vLLM, OpenAI)",
