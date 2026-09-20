@@ -74,5 +74,5 @@ The `.actrc` file configures act with appropriate defaults for Nova's Docker-bas
 | Backend unit tests | 7,141 | `cd backend && make test` | 2026-09-19 |
 | Frontend unit tests | 778 | `cd frontend && pnpm test` | 2026-09-19 |
 | Playwright E2E | 144 | `cd frontend && pnpm test:e2e` | 2026-09-19 |
-| Blocking IO gate | 19 | `cd backend && make test-blocking-io` | 2026-09-19 |
+| Blocking IO gate | 22 | `cd backend && make test-blocking-io` | 2026-09-19 |
 | Cross-ref check | 1 | `python3 backend/tests/test_no_cross_references.py` | 2026-09-19 |
