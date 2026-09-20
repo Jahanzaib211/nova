@@ -259,6 +259,18 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_JOBRUNNER_INTERVAL", 120),
             timeout_sec=30,
         ),
+        # Capability registry (P11–P12): every module's live status, the
+        # live snapshot against contracts/capabilities.baseline.json (the UI
+        # client and the MCP tool list are generated from it), runtime
+        # readiness (Claude Code / OpenClaw), and the MCP server answering.
+        # Five minutes: config hot-reloads, and a contract break shows up on
+        # the next cycle after a deploy.
+        Producer(
+            "capabilities",
+            ["scripts/gates/capabilities-gate.py"],
+            env_float("NOVA_GATE_CAPABILITIES_INTERVAL", 300),
+            timeout_sec=60,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took

@@ -48,6 +48,15 @@
 
 ---
 
+## v9.17 — Ops: capabilities gate (2026-09-20)
+
+Phase P14 of the upgrade program.
+
+- **`scripts/gates/capabilities-gate.py` → `~/.nova/gates/capabilities.json`** (nova-gates producer, every 300 s): every capability module's live health; the live registry snapshot against `contracts/capabilities.baseline.json` (a missing or retyped operation is red — the generated UI client and the MCP tool list come from that contract; additions are yellow until the baseline is refreshed); runtime readiness (Claude Code / OpenClaw: adapter on PATH + an available account); `/api/mcp/nova` answering 401. Service POSTs satisfy the CSRF double-submit the way nova-ops does. nova-ops shows it as "Capabilities & runtimes" next to the job-runner card.
+- CI: the capability-client drift check moved into the frontend lint job (it needs the pinned prettier) and now fails loudly when prettier is unavailable instead of comparing unformatted output.
+
+---
+
 ## v9.16 — Console parity: grouped settings rail, eight capability-backed pages, per-chat runtime picker (2026-09-20)
 
 Phase P13 of the upgrade program.

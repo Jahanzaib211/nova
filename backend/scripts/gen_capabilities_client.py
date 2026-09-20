@@ -129,24 +129,41 @@ def generate(contract: dict[str, Any]) -> str:
     return "\n".join(out) + "\n"
 
 
-def _prettier(text: str) -> str:
+class PrettierUnavailable(RuntimeError):
+    pass
+
+
+def _prettier(text: str, *, required: bool) -> str:
     """Format with the frontend's pinned prettier so `pnpm format` agrees.
-    Falls back to the raw text when node_modules is absent (the drift check
-    in CI always has it installed)."""
+
+    The committed file is always prettier-formatted, so a drift check
+    without prettier would compare against unformatted output and fail for
+    the wrong reason; ``required`` makes that a clear error instead."""
     import shutil
     import subprocess
 
     frontend = ROOT / "frontend"
     binary = frontend / "node_modules" / ".bin" / "prettier"
     if not binary.exists() or shutil.which("node") is None:
+        if required:
+            raise PrettierUnavailable("frontend/node_modules/.bin/prettier not found — run `pnpm install` in frontend/ first")
         return text
     proc = subprocess.run([str(binary), "--stdin-filepath", str(OUT)], input=text, capture_output=True, text=True, cwd=frontend, check=False)
-    return proc.stdout if proc.returncode == 0 and proc.stdout else text
+    if proc.returncode != 0 or not proc.stdout:
+        if required:
+            raise PrettierUnavailable(f"prettier failed: {proc.stderr.strip()[:300]}")
+        return text
+    return proc.stdout
 
 
 def main(argv: list[str]) -> int:
-    text = _prettier(generate(json.loads(CONTRACT.read_text(encoding="utf-8"))))
-    if "--check" in argv:
+    check = "--check" in argv
+    try:
+        text = _prettier(generate(json.loads(CONTRACT.read_text(encoding="utf-8"))), required=check)
+    except PrettierUnavailable as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
+    if check:
         current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
         if current != text:
             sys.stderr.write(f"{OUT.relative_to(ROOT)} is out of date; run scripts/gen_capabilities_client.py\n")

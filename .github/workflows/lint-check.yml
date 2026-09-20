@@ -36,14 +36,6 @@ jobs:
         working-directory: backend
         run: make lint
 
-      # The capability contract and the frontend client generated from it
-      # must be committed together: the registry snapshot is pinned by
-      # tests/test_capability_registry.py, and this step fails if
-      # frontend/src/core/capabilities/generated.ts drifts from the contract.
-      - name: Capability client is generated from the contract
-        working-directory: backend
-        run: python3 scripts/gen_capabilities_client.py --check
-
   lint-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -69,6 +61,15 @@ jobs:
         run: |
           cd frontend
           pnpm format
+
+      # The capability contract and the frontend client generated from it
+      # must be committed together: the registry snapshot is pinned by
+      # backend/tests/test_capability_registry.py, and this step fails if
+      # frontend/src/core/capabilities/generated.ts drifts from the contract.
+      # Runs here (not in lint-backend) because the generator formats its
+      # output with the frontend's pinned prettier from node_modules.
+      - name: Capability client is generated from the contract
+        run: python3 backend/scripts/gen_capabilities_client.py --check
 
       - name: Run frontend linting
         run: |
