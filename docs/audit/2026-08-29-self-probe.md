@@ -196,4 +196,5 @@ The standout delta is the **write-file truncation** going from a HIGH-risk open 
 - **Post-fix E2E rerun log:** `.nova/self-audit/rerun/e2e.log`
 - **Comparison baseline:** `docs/audit/2026-08-14-self-probe.md`
 </content>
+
 </invoke>

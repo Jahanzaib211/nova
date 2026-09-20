@@ -16,7 +16,7 @@ bounce/complaint handling. Everything is owner-scoped.
 | `deerflow/email_marketing/bounces.py`, `imap.py` | DSN (RFC 3464) + ARF (RFC 5965) parsing; UID-cursor IMAP poll (`em.bounce.poll`) that matches VERP / `X-Nova-Send`, suppresses, and handles `unsubscribe+*@` mailto replies |
 | `deerflow/email_marketing/contacts_import.py` | CSV header guessing, normalisation, in-file dedupe, validation (`em.contacts.import` job) |
 | `app/gateway/routers/email_marketing.py` | `/api/em/*` (session auth) |
-| `app/gateway/routers/email_marketing_public.py` | `/api/em/t/o/{token}.gif`, `/api/em/t/c/{token}?u=&sig=`, `GET|POST /api/em/u/{token}` — public, token-authenticated, CSRF-exempt for the RFC 8058 POST |
+| `app/gateway/routers/email_marketing_public.py` | `/api/em/t/o/{token}.gif`, `/api/em/t/c/{token}?u=&sig=`, `GET` and `POST` on `/api/em/u/{token}` — public, token-authenticated, CSRF-exempt for the RFC 8058 POST |
 
 Event types, campaign/contact statuses and suppression reasons are pinned by
 `contracts/email_marketing_events_contract.json` on both sides.
@@ -69,4 +69,3 @@ reached through `nova-host-bridge`. URLs and API keys come from
 | Chatwoot | inside `em.bounce.poll` | a human reply to `reply+<send>@` becomes a conversation in `bridges.chatwoot_inbox_id`, labelled `nova-campaign`, event `replied` |
 
 `GET /api/em/bridges/status` says, per bridge, whether it is configured and why not.
-

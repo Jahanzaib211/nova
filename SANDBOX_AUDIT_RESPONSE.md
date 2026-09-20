@@ -10,7 +10,7 @@ It audited the disposable container Nova *spawns* and inferred the identity of t
 Of 20 claims examined: **10 overturned, 6 upheld, 4 partly upheld.** The split is not random — it
 was a good toolchain auditor and a poor architecture auditor.
 
-Full ledger with evidence: https://claude.ai/code/artifact/5513bcb1-1f7f-4091-85ec-2760f44f7f51
+Full ledger with evidence: <https://claude.ai/code/artifact/5513bcb1-1f7f-4091-85ec-2760f44f7f51>
 
 ---
 

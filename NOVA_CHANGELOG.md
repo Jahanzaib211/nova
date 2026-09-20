@@ -282,7 +282,6 @@ tell them apart. Unconfigured is now **501** — an absent optional feature — 
 renders as a neutral note, while a configured-but-unreachable provisioner keeps
 503 and keeps the alarm.
 
-
 ## v9.6 — Agent's Computer: the panel that is Nova's face
 
 **Session pattern:** the agent built a site correctly and the product looked
@@ -398,7 +397,6 @@ swap are swap doing its job, and this box legitimately runs a long tail of them
 freeze was a full swapfile *while pages were moving*. The check now samples
 `pswpin`/`pswpout` over 2 s and separates the two: a quiet full swapfile is the
 warning it is, and only sustained paging is the emergency it is not yet.
-
 
 ## v9.5 — the 59 GB database behind v9.4, and the gates that make it visible
 
