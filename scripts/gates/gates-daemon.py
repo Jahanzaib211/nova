@@ -271,6 +271,17 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_CAPABILITIES_INTERVAL", 300),
             timeout_sec=60,
         ),
+        # Regression ledger: every inventory Nova has shipped (overlays, sandbox
+        # image + toolchain + security arsenal, harness extras, config
+        # prerequisites, services, e2e toolchain, counts vs the pinned
+        # baseline). Fifteen minutes: it boots the sandbox image to read the
+        # manifest, which is not free.
+        Producer(
+            "regression",
+            ["scripts/gates/regression-gate.py"],
+            env_float("NOVA_GATE_REGRESSION_INTERVAL", 900),
+            timeout_sec=600,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took

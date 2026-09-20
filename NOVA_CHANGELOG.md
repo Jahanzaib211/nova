@@ -48,6 +48,14 @@
 
 ---
 
+## v9.19 — Regression ledger: what Nova shipped, probed from its source of truth (2026-09-20)
+
+- **The finding that prompted it**: `nova-sandbox-android:latest` — the Agent's Computer — was no longer on the Docker daemon, and no self-probe or gate noticed: they check the stack containers, never the sandbox image. The chain is being rebuilt from `docker/sandbox/vendor` (all toolchains incl. the Android SDK were still staged).
+- **`scripts/gates/regression-gate.py` → `~/.nova/gates/regression.json`** (nova-gates, every 900 s; nova-ops card "Regression ledger"; also the first section of `make self-audit`): compose overlays the PM2 chain must run (from `scripts/pm2-deerflow.sh`'s own rules: `.env NOVA_ACP_AGENTS`, `speech.enabled` + weights); the sandbox image exists, boots and exposes `/etc/nova-sandbox.json`; all 58 toolchain + security-arsenal binaries `Dockerfile.tools`/`Dockerfile.android` install are present in it; the Security-Toolkit mount; the harness extras (postgres/voice/trading) import in the gateway venv; prerequisites of every enabled config section; PM2 apps, tunnels, local LLM endpoints, nova-ops, public health, served frontend build == image build; Playwright's pinned Chromium; and inventory counts (skills, tools, ops, modules, MCP servers, sandbox tools, overlays) pinned in `contracts/regression.baseline.json` — they can only fall by editing the baseline on purpose.
+- First live run: one regression (sandbox image), everything else green.
+
+---
+
 ## v9.18 — Deployed: console UI live, Claude Code powering chats inside the gateway (2026-09-20)
 
 Phase P15 of the upgrade program — the deploy that makes P11–P13 visible.

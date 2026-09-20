@@ -1,0 +1,9 @@
+{
+  "capability_modules": 12,
+  "capability_ops": 36,
+  "config_tools": 13,
+  "mcp_servers": 2,
+  "overlays": 6,
+  "sandbox_tools": 58,
+  "skills": 28
+}

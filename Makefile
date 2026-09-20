@@ -298,6 +298,9 @@ self-audit: ## Run full-stack self-audit and write timestamped report
 	mkdir -p docs/audit .nova/self-audit; \
 	(echo "# Self-probe $$(date -Iseconds)" > "$$REPORT"; \
 	 echo "" >> "$$REPORT"; \
+	 echo "## Regression ledger (scripts/gates/regression-gate.py)" >> "$$REPORT"; \
+	 (python3 scripts/gates/regression-gate.py 2>&1 | tee -a "$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
 	 echo "## Backend hermetic gate" >> "$$REPORT"; \
 	 (cd backend && PYTHONPATH=. uv run pytest tests/ -x -q --tb=line 2>&1 | tee -a "../$$REPORT") || true; \
 	 echo "" >> "$$REPORT"; \
