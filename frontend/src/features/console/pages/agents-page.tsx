@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -7,22 +8,13 @@ import { SettingsSection } from "@/components/workspace/settings/settings-sectio
 import { useCapability, useCapabilityMutation } from "@/core/capabilities";
 import { useI18n } from "@/core/i18n/hooks";
 
-import { OpTable, StatusDot } from "../components/op-table";
+import { StatusDot } from "../components/op-table";
 
-function countOf(
-  row: Record<string, unknown>,
-  key: "queued" | "running",
-): string {
-  const counts = row.counts as Record<string, unknown> | undefined;
-  const value = counts?.[key] ?? row[key];
-  return typeof value === "number" ? String(value) : "0";
-}
-
-/** Agents & runtimes: who can run a turn, under which account, and a live check. */
+/** Runtimes: who can run a chat turn, under which account, and a live check.
+ * The agent registry itself lives on /workspace/agents — not repeated here. */
 export function AgentsPage() {
   const { t } = useI18n();
   const s = t.features.console.agents;
-  const registry = useCapability("agents.registry", {});
   const runtimes = useCapability("runtimes.list", {});
   const probe = useCapabilityMutation("runtimes.probe");
   const [probing, setProbing] = useState<string | null>(null);
@@ -164,39 +156,15 @@ export function AgentsPage() {
         )}
       </SettingsSection>
 
-      <SettingsSection
-        title={s.registryTitle}
-        description={s.registryDescription}
-      >
-        {registry.isLoading ? (
-          <p className="text-muted-foreground text-sm">{t.common.loading}</p>
-        ) : (
-          <OpTable
-            empty={s.registryEmpty}
-            keyOf={(r) => String(r.name)}
-            rows={registry.data?.items ?? []}
-            columns={[
-              { key: "name", label: s.colName },
-              { key: "kind", label: s.colKind },
-              {
-                key: "description",
-                label: s.colDescription,
-                className: "max-w-md",
-              },
-              {
-                key: "queued",
-                label: s.colQueued,
-                render: (r) => countOf(r, "queued"),
-              },
-              {
-                key: "running",
-                label: s.colRunning,
-                render: (r) => countOf(r, "running"),
-              },
-            ]}
-          />
-        )}
-      </SettingsSection>
+      <p className="text-muted-foreground text-xs">
+        {s.registryElsewhere}{" "}
+        <Link
+          href="/workspace/agents"
+          className="text-primary underline-offset-2 hover:underline"
+        >
+          {s.registryLink}
+        </Link>
+      </p>
     </div>
   );
 }

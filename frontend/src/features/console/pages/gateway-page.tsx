@@ -4,26 +4,18 @@ import { RefreshCwIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/workspace/settings/settings-section";
-import {
-  useCapability,
-  useCapabilityMutation,
-  useCapabilityOps,
-} from "@/core/capabilities";
+import { useCapability, useCapabilityOps } from "@/core/capabilities";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
-import { OpTable, StatusDot, formatCell } from "../components/op-table";
+import { OpTable, StatusDot } from "../components/op-table";
 
-/** Gateway: every module's live status, the ACP adapters, and versions. */
+/** Gateway: every module's live status and the ACP adapters (versions live under Updates). */
 export function GatewayPage() {
   const { t } = useI18n();
   const s = t.features.console.gateway;
   const ops = useCapabilityOps();
   const acp = useCapability("acp.agents", {});
-  const versions = useCapability("updates.versions", {});
-  const probe = useCapabilityMutation("integrations.probe", [
-    "integrations.list",
-  ]);
 
   const modules = ops.data?.snapshot.modules ?? [];
   const status = ops.data?.status ?? {};
@@ -130,25 +122,6 @@ export function GatewayPage() {
           />
         )}
       </SettingsSection>
-
-      <SettingsSection
-        title={s.versionsTitle}
-        description={s.versionsDescription}
-      >
-        {versions.isLoading ? (
-          <p className="text-muted-foreground text-sm">{t.common.loading}</p>
-        ) : (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-            {Object.entries(versions.data?.components ?? {}).map(([k, v]) => (
-              <div key={k} className="contents">
-                <dt className="text-muted-foreground">{k}</dt>
-                <dd className="font-mono text-xs">{formatCell(v)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </SettingsSection>
-      <span className="hidden">{probe.isPending ? "" : ""}</span>
     </div>
   );
 }

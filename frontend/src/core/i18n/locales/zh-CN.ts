@@ -426,15 +426,8 @@ export const zhCN: Translations = {
         probeFailed: "失败",
         binaryMissing: "适配器二进制不在 PATH 中",
         modes: "权限模式",
-        registryTitle: "智能体注册表",
-        registryDescription:
-          "主智能体、内置与自定义子智能体、ACP 智能体，以及你当前排队/运行中的任务数。",
-        registryEmpty: "尚未注册智能体。",
-        colName: "名称",
-        colKind: "类型",
-        colDescription: "描述",
-        colQueued: "排队",
-        colRunning: "运行中",
+        registryElsewhere: "有哪些智能体、各自在运行什么，见“智能体”页面。",
+        registryLink: "打开智能体",
       },
       labs: {
         title: "实验室",
@@ -507,6 +500,7 @@ export const zhCN: Translations = {
       },
       reset: "重置本次对话的运行时",
       appliesToThisChat: "仅对本次对话生效，新对话的默认设置不变。",
+      modelOwnedByRuntime: "该运行时自带模型；Nova 的模型列表在此不适用。",
       disabled: "运行时已关闭（config.yaml 中的 runtimes.enabled）。",
     },
     agentsRegistry: {
@@ -943,6 +937,7 @@ export const zhCN: Translations = {
       devices: "设备",
       workers: "云端工作进程",
       agents: "智能体",
+      runtimes: "运行时",
       labs: "实验室",
       automation: "自动化",
       secrets: "密钥",

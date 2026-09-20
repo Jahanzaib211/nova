@@ -61,7 +61,7 @@ export const consoleManifest: FeatureManifest = {
       order: 5,
       group: "agents",
       icon: BotIcon,
-      label: (t) => t.settings.sections.agents,
+      label: (t) => t.settings.sections.runtimes,
       Page: AgentsPage,
       flag: "capabilities",
     },

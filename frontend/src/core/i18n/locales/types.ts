@@ -369,14 +369,8 @@ export interface ConsoleFeatureTranslations {
     probeFailed: string;
     binaryMissing: string;
     modes: string;
-    registryTitle: string;
-    registryDescription: string;
-    registryEmpty: string;
-    colName: string;
-    colKind: string;
-    colDescription: string;
-    colQueued: string;
-    colRunning: string;
+    registryElsewhere: string;
+    registryLink: string;
   };
   labs: {
     title: string;
@@ -441,6 +435,7 @@ export interface RuntimePickerTranslations {
   modes: { full: string; standard: string; plan: string };
   reset: string;
   appliesToThisChat: string;
+  modelOwnedByRuntime: string;
   disabled: string;
 }
 
@@ -808,6 +803,7 @@ export interface Translations {
       devices: string;
       workers: string;
       agents: string;
+      runtimes: string;
       labs: string;
       automation: string;
       secrets: string;

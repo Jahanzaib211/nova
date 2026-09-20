@@ -439,15 +439,9 @@ export const enUS: Translations = {
         probeFailed: "Failed",
         binaryMissing: "adapter binary not on PATH",
         modes: "Permission modes",
-        registryTitle: "Agent registry",
-        registryDescription:
-          "Lead agent, built-in and custom subagents, ACP agents — with your live queued and running task counts.",
-        registryEmpty: "No agents registered.",
-        colName: "Name",
-        colKind: "Kind",
-        colDescription: "Description",
-        colQueued: "Queued",
-        colRunning: "Running",
+        registryElsewhere:
+          "Which agents exist, and what each is running, lives on the Agents page.",
+        registryLink: "Open Agents",
       },
       labs: {
         title: "Labs",
@@ -522,6 +516,8 @@ export const enUS: Translations = {
       reset: "Reset session runtime",
       appliesToThisChat:
         "Applies only to this chat. Your new-chat default is unchanged.",
+      modelOwnedByRuntime:
+        "The runtime brings its own model; Nova's model list does not apply.",
       disabled: "Runtimes are off (runtimes.enabled in config.yaml).",
     },
     agentsRegistry: {
@@ -977,6 +973,7 @@ export const enUS: Translations = {
       devices: "Devices",
       workers: "Cloud workers",
       agents: "Agents",
+      runtimes: "Runtimes",
       labs: "Labs",
       automation: "Automation",
       secrets: "Secrets",

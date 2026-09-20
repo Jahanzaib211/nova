@@ -1,8 +1,16 @@
 "use client";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCapability } from "@/core/capabilities";
 import { useI18n } from "@/core/i18n/hooks";
 import { useFeatureFlags } from "@/core/runtime/feature-flags";
+import { cn } from "@/lib/utils";
 
 export interface RuntimeChoice {
   runtime?: string;
@@ -10,131 +18,201 @@ export interface RuntimeChoice {
   permission_mode?: "full" | "standard" | "plan";
 }
 
+export interface RuntimeOption {
+  id: string;
+  label: string;
+  kind: string;
+  binary_on_path: boolean;
+  accounts: Array<{ id: string; label: string; available: boolean }>;
+}
+
 const MODES = ["full", "standard", "plan"] as const;
 
+/** The runtime list the picker and the trigger label both read from. */
+export function useRuntimeOptions() {
+  const flags = useFeatureFlags();
+  const query = useCapability("runtimes.list", {}, { enabled: flags.runtimes });
+  const runtimes = (query.data?.runtimes ?? []) as unknown as RuntimeOption[];
+  return {
+    enabled: flags.runtimes && Boolean(query.data?.enabled),
+    runtimes,
+    defaultRuntime: query.data?.default ?? "native",
+  };
+}
+
+/** Whether `runtime` names an ACP runtime (the model is then the runtime's own). */
+export function isAcpRuntime(
+  runtime: string | undefined,
+  runtimes: RuntimeOption[],
+) {
+  return Boolean(
+    runtime &&
+    runtime !== "native" &&
+    runtimes.find((r) => r.id === runtime)?.kind === "acp",
+  );
+}
+
+/** What the model button should say: the runtime when it owns the model, the model otherwise. */
+export function runtimeTriggerLabel(
+  runtime: string | undefined,
+  runtimes: RuntimeOption[],
+  value: RuntimeChoice,
+  autoLabel: string,
+): { title: string; subtitle: string } | null {
+  const rt = runtimes.find((r) => r.id === runtime);
+  if (rt?.kind !== "acp") return null;
+  const account =
+    value.runtime_account && value.runtime_account !== "auto"
+      ? rt.accounts.find((a) => a.id === value.runtime_account)
+      : rt.accounts.find((a) => a.available);
+  return { title: rt.label, subtitle: account?.label ?? autoLabel };
+}
+
 /**
- * Per-chat runtime controls under the model list: which runtime runs the
- * chat (Nova / Claude Code / OpenClaw), which account, and the permission
- * preset — the "Account for this chat" + permission chip pattern. Values
- * ride along the run context exactly like model_name.
+ * Per-chat runtime controls: which runtime runs the chat (Nova / Claude Code /
+ * OpenClaw), which account, and the permission preset. Runtime comes first —
+ * when an ACP runtime is chosen it owns the model, so the model list is the
+ * runtime's concern, not this menu's. Values ride the run context like
+ * model_name.
  */
 export function RuntimePicker({
   value,
   onChange,
+  className,
 }: {
   value: RuntimeChoice;
   onChange: (next: RuntimeChoice) => void;
+  className?: string;
 }) {
   const { t } = useI18n();
   const s = t.features.runtimePicker;
-  const flags = useFeatureFlags();
-  const runtimes = useCapability(
-    "runtimes.list",
-    {},
-    { enabled: flags.runtimes },
-  );
+  const { enabled, runtimes, defaultRuntime } = useRuntimeOptions();
+  if (runtimes.length === 0) return null;
 
-  if (!flags.runtimes) return null;
-  const list = (runtimes.data?.runtimes ?? []) as Array<{
-    id: string;
-    label: string;
-    kind: string;
-    accounts: Array<{ id: string; label: string; available: boolean }>;
-  }>;
-  const runtime = value.runtime ?? runtimes.data?.default ?? "native";
-  const current = list.find((r) => r.id === runtime);
+  const runtime = value.runtime ?? defaultRuntime;
+  const current = runtimes.find((r) => r.id === runtime);
   const isAcp = current?.kind === "acp";
-  const selectClass =
-    "bg-background w-full rounded-md border px-2 py-1 text-xs";
+  const ready = (r: RuntimeOption) =>
+    r.kind === "native" ||
+    (r.binary_on_path && r.accounts.some((a) => a.available));
 
   return (
     <div
-      className="space-y-2 border-t p-2 text-xs"
+      className={cn("space-y-2 p-2 text-xs", className)}
       data-testid="runtime-picker"
     >
-      {!runtimes.data?.enabled ? (
-        <p className="text-muted-foreground">{s.disabled}</p>
+      {/* pr-8: the dialog's close button is absolutely positioned top-right. */}
+      <div className="text-muted-foreground px-1 pr-8 text-[11px] font-semibold tracking-wider uppercase">
+        {s.runtime}
+      </div>
+      {!enabled ? (
+        <p className="text-muted-foreground px-1">{s.disabled}</p>
       ) : null}
-      <label className="flex flex-col gap-1">
-        <span className="text-muted-foreground">{s.runtime}</span>
-        <select
-          className={selectClass}
-          value={runtime}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              runtime: e.target.value,
-              runtime_account: "auto",
-            })
-          }
+      <Select
+        value={runtime}
+        onValueChange={(v) =>
+          onChange({ ...value, runtime: v, runtime_account: "auto" })
+        }
+        disabled={!enabled}
+      >
+        <SelectTrigger
+          size="sm"
+          className="w-[calc(100%-2rem)]"
           aria-label={s.runtime}
+          data-testid="runtime-select"
         >
-          {list.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.id === "native" ? s.runtimeNative : r.label}
-            </option>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {runtimes.map((r) => (
+            <SelectItem key={r.id} value={r.id} disabled={!ready(r)}>
+              <span className="inline-flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    ready(r) ? "bg-success" : "bg-muted-foreground/40",
+                  )}
+                />
+                {r.id === "native" ? s.runtimeNative : r.label}
+              </span>
+            </SelectItem>
           ))}
-        </select>
-      </label>
+        </SelectContent>
+      </Select>
       {isAcp ? (
-        <>
-          <label className="flex flex-col gap-1">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-muted-foreground">{s.account}</span>
-            <select
-              className={selectClass}
+            <Select
               value={value.runtime_account ?? "auto"}
-              onChange={(e) =>
-                onChange({ ...value, runtime_account: e.target.value })
-              }
-              aria-label={s.account}
+              onValueChange={(v) => onChange({ ...value, runtime_account: v })}
             >
-              <option value="auto">{s.accountAuto}</option>
-              {(current?.accounts ?? []).map((a) => (
-                <option key={a.id} value={a.id} disabled={!a.available}>
-                  {a.label}
-                  {a.available ? "" : " — unavailable"}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                size="sm"
+                className="w-full"
+                aria-label={s.account}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{s.accountAuto}</SelectItem>
+                {(current?.accounts ?? []).map((a) => (
+                  <SelectItem key={a.id} value={a.id} disabled={!a.available}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-muted-foreground">{s.permission}</span>
-            <select
-              className={selectClass}
+            <Select
               value={value.permission_mode ?? "standard"}
-              onChange={(e) =>
+              onValueChange={(v) =>
                 onChange({
                   ...value,
-                  permission_mode: e.target
-                    .value as RuntimeChoice["permission_mode"],
+                  permission_mode: v as RuntimeChoice["permission_mode"],
                 })
               }
-              aria-label={s.permission}
             >
-              {MODES.map((m) => (
-                <option key={m} value={m}>
-                  {s.modes[m]}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                size="sm"
+                className="w-full"
+                aria-label={s.permission}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODES.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {s.modes[m]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
-        </>
+        </div>
       ) : null}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground">{s.appliesToThisChat}</span>
-        <button
-          type="button"
-          className="text-primary underline-offset-2 hover:underline"
-          onClick={() =>
-            onChange({
-              runtime: undefined,
-              runtime_account: undefined,
-              permission_mode: undefined,
-            })
-          }
-        >
-          {s.reset}
-        </button>
+      <div className="flex items-center justify-between gap-2 px-1">
+        <span className="text-muted-foreground">
+          {isAcp ? s.modelOwnedByRuntime : s.appliesToThisChat}
+        </span>
+        {value.runtime ? (
+          <button
+            type="button"
+            className="text-primary shrink-0 underline-offset-2 hover:underline"
+            onClick={() =>
+              onChange({
+                runtime: undefined,
+                runtime_account: undefined,
+                permission_mode: undefined,
+              })
+            }
+          >
+            {s.reset}
+          </button>
+        ) : null}
       </div>
     </div>
   );

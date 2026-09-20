@@ -72,7 +72,7 @@ jobs:
       - name: Run Lighthouse CI
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 12
+          timeout_minutes: 10
           max_attempts: 2
           retry_on: error
           command: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs

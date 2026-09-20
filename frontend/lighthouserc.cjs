@@ -58,6 +58,13 @@ module.exports = {
           "canonical",
           "is-on-https",
           "redirects-http",
+          // Their gatherers (MainDocumentContent, ResponseCompression) call
+          // `Network.getResponseBody`, which the landing page's WebGL
+          // starfield wedges in headless Chrome: PROTOCOL_TIMEOUT on `/`,
+          // run #1, on every attempt (2026-09-16, 2026-09-20). Neither audit
+          // feeds a budget we assert.
+          "charset",
+          "uses-text-compression",
         ],
       },
     },
