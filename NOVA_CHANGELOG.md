@@ -48,6 +48,18 @@
 
 ---
 
+## v9.14 — Capability registry: declared once, reachable by UI, harness and MCP (2026-09-20)
+
+Phase P11 of the upgrade program. See `backend/docs/CAPABILITIES.md`.
+
+- **`deerflow.capabilities`**: every feature declares its operations once (`CapabilityModule` → `Operation(name, kind, input, output, handler)`); the registry's sorted, JSON-schema snapshot is the contract (`contracts/capabilities.baseline.json`, gate: removals/retypes fail).
+- **Derived surfaces**: `GET/POST /api/capabilities/ops[/{name}]` (validated, owner/admin-checked); lead-agent tools per op, gated by `tool_groups: nova:<module>` exactly like `web`/`bash`; **Nova's own MCP server** at `/api/mcp/nova` (streamable HTTP, stateless) so Claude Code / OpenClaw can drive jobs, integrations, agents, models, skills, MCP from outside; `features` flags computed in one place; a **generated typed frontend client** (`src/core/capabilities/generated.ts`, `invoke("jobs.list", …)`) with a CI drift check.
+- **Harness tokens** (`harness_tokens` table, migration `2026_09_20_harness_tokens`): `nhk_…` bearer credentials shown once, stored hashed, scoped to modules, revocable immediately; minted under Settings › Devices (`sessions.token_create`).
+- Modules: jobs, integrations, agents, acp, models (with a live "Check model" probe), skills, mcp, secrets (presence-only, 0600), features, updates, sessions. 11 modules / 33 operations. `config_version` 26 (`capabilities:` block; `nova:*` tool groups in `config.example.yaml`).
+- CI: `backend-unit-tests.yml` now installs the `postgres` extra (the checkpoint-schema pin test needs it; it also skips cleanly without it); the replay/record gateways use a 32-byte JWT secret the 2026-09 hardening requires.
+
+---
+
 ## v9.13 — Agent registry and async delegation (2026-09-19)
 
 Phase P9 of the upgrade program — swarm step 1. See `backend/docs/AGENTS_REGISTRY.md`.

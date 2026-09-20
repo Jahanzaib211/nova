@@ -225,6 +225,27 @@ class ExtensionsConfig(BaseModel):
         return skill_config.enabled
 
 
+def persist_extensions_config(config: ExtensionsConfig, config_path: str | Path | None = None) -> Path:
+    """Write ``config`` back to ``extensions_config.json`` atomically and reload.
+
+    The file is read on every agent run, so the write is temp-file + replace:
+    a truncating ``open()`` left it empty for every subsequent request when a
+    write once failed partway (2026-07 audit C4). Returns the path written.
+    """
+    from deerflow.utils.atomic_write import atomic_write_text
+
+    path = Path(config_path) if config_path else ExtensionsConfig.resolve_config_path()
+    if path is None:
+        path = Path.cwd().parent / "extensions_config.json"
+    data = {
+        "mcpServers": {name: server.model_dump() for name, server in config.mcp_servers.items()},
+        "skills": {name: {"enabled": state.enabled} for name, state in config.skills.items()},
+    }
+    atomic_write_text(Path(path), json.dumps(data, indent=2))
+    reload_extensions_config(str(path))
+    return Path(path)
+
+
 _extensions_config: ExtensionsConfig | None = None
 
 

@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 25
+config_version: 26
 
 # ============================================================================
 # Logging
@@ -529,6 +529,16 @@ tool_groups:
   - name: file:write
   - name: bash
   - name: trading
+  # Nova's own capabilities as lead-agent tools, one group per capability
+  # module (see `GET /api/capabilities/ops` for the full list). Uncomment a
+  # group to let the agent call that module's operations; admin-only and
+  # secret operations are never exposed this way.
+  # - name: nova:jobs
+  # - name: nova:integrations
+  # - name: nova:agents
+  # - name: nova:models
+  # - name: nova:skills
+  # - name: nova:mcp
 
 # ============================================================================
 # Tools Configuration
@@ -1129,6 +1139,20 @@ sandbox:
 #   # Model override: by default, subagents inherit the lead agent's model.
 #   # Set `model` to use a different model (e.g., a local Ollama model for cost savings).
 #   # The model name must match a name defined in the `models:` section above.
+
+# ============================================================================
+# Capabilities (declared once, reachable by the UI, the harness and MCP)
+# ============================================================================
+# Every feature declares its operations in the capability registry
+# (deerflow.capabilities). From that one declaration Nova derives the generic
+# `/api/capabilities/ops` API, the typed frontend client, lead-agent tools
+# (gated by `tool_groups` above) and its own MCP server, so an external
+# harness — Claude Code over ACP, OpenClaw, a script — can drive jobs,
+# integrations, agents, models, … with a harness token minted under
+# Settings › Devices.
+capabilities:
+  mcp_server:
+    enabled: true
 
 # ============================================================================
 # ACP Agents Configuration

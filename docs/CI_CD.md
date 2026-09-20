@@ -18,7 +18,7 @@ Requires [nektos/act](https://github.com/nektos/act) installed. Configuration is
 
 | Workflow | Trigger | What it validates |
 |---|---|---|
-| `backend-unit-tests.yml` | push/PR to main | 7,141 backend unit tests (`make test`) — 418 backend test files (266 upstream + 152 Nova) |
+| `backend-unit-tests.yml` | push/PR to main | 7,170 backend unit tests (`make test`) — 418 backend test files (266 upstream + 152 Nova) |
 | `backend-blocking-io-tests.yml` | push/PR to main | Blockbuster runtime gate on async blocking IO |
 | `frontend-unit-tests.yml` | push/PR to main | 778 frontend unit tests (`pnpm test`) |
 | `frontend-build.yml` | push/PR to main | Next.js production build (`pnpm build`) |
@@ -71,8 +71,8 @@ The `.actrc` file configures act with appropriate defaults for Nova's Docker-bas
 
 | Suite | Count | Command | Verified |
 |---|---|---|---|
-| Backend unit tests | 7,141 | `cd backend && make test` | 2026-09-19 |
-| Frontend unit tests | 778 | `cd frontend && pnpm test` | 2026-09-19 |
+| Backend unit tests | 7,170 | `cd backend && make test` | 2026-09-19 |
+| Frontend unit tests | 783 | `cd frontend && pnpm test` | 2026-09-19 |
 | Playwright E2E | 144 | `cd frontend && pnpm test:e2e` | 2026-09-19 |
 | Blocking IO gate | 22 | `cd backend && make test-blocking-io` | 2026-09-19 |
 | Cross-ref check | 1 | `python3 backend/tests/test_no_cross_references.py` | 2026-09-19 |

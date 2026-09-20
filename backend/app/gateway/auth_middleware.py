@@ -42,6 +42,11 @@ _PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     # the credential (routers/email_marketing_public.py).
     "/api/em/t/",
     "/api/em/u/",
+    # Nova's MCP *server* authenticates with a harness token (Bearer nhk_…)
+    # inside its own ASGI handler (app/gateway/mcp_server.py); no cookie
+    # path. Exact path only: /api/mcp/config and /api/mcp/cache/* are the
+    # MCP *client* routers and stay session-gated.
+    "/api/mcp/nova",
 )
 
 # Exact auth paths that are public (login/register/status check).

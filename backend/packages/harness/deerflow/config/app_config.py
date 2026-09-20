@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from deerflow.config.acp_config import ACPAgentConfig, load_acp_config_from_dict
 from deerflow.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
+from deerflow.config.capabilities_config import CapabilitiesConfig
 from deerflow.config.channel_connections_config import ChannelConnectionsConfig
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from deerflow.config.database_config import DatabaseConfig
@@ -150,6 +151,10 @@ class AppConfig(BaseModel):
             "database",
             field_doc="Unified database backend for run/feedback metadata (memory, sqlite, or postgres).",
         ),
+    )
+    capabilities: CapabilitiesConfig = Field(
+        default_factory=CapabilitiesConfig,
+        description=("Capability registry surfaces: Nova's own MCP server. Lead-agent exposure is gated by `tool_groups` (`nova:<module>`). Read per request, so edits hot-reload."),
     )
     email_marketing: EmailMarketingConfig = Field(
         default_factory=EmailMarketingConfig,

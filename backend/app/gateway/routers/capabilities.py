@@ -100,6 +100,8 @@ class FeatureFlags(BaseModel):
     integrations: bool = False
     email_marketing: bool = False
     acp_agents: bool = False
+    capabilities: bool = False
+    runtimes: bool = False
 
 
 class CapabilitiesResponse(BaseModel):
@@ -358,19 +360,16 @@ async def _safe_igino() -> IGINOSummary:
 
 
 def _safe_features(config: AppConfig) -> FeatureFlags:
-    """Flags derived from config; a missing section reads as off."""
+    """Flags from the one place that computes them (the ``features``
+    capability module); a flag this response model does not declare is
+    dropped, so the two lists are pinned together by test."""
+    from deerflow.capabilities.modules.features import compute_flags
 
-    def enabled(section: str) -> bool:
-        block = getattr(config, section, None)
-        return bool(getattr(block, "enabled", False)) if block is not None else False
-
-    acp = getattr(config, "acp_agents", None)
-    return FeatureFlags(
-        jobs=enabled("jobs"),
-        integrations=enabled("integrations"),
-        email_marketing=enabled("email_marketing"),
-        acp_agents=bool(acp),
-    )
+    try:
+        flags = compute_flags(config)
+    except Exception:  # config unreadable mid-reload: everything reads as off
+        flags = {}
+    return FeatureFlags(**{k: v for k, v in flags.items() if k in FeatureFlags.model_fields})
 
 
 # ---------- endpoint ----------

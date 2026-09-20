@@ -1226,6 +1226,70 @@
         ]
       ]
     },
+    "harness_tokens": {
+      "columns": {
+        "created_at": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "id": {
+          "nullable": false,
+          "primary_key": true,
+          "type": "VARCHAR(36)"
+        },
+        "last_used_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "name": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(128)"
+        },
+        "owner_user_id": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        },
+        "prefix": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(16)"
+        },
+        "revoked_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
+        "scopes_json": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "JSON"
+        },
+        "token_hash": {
+          "nullable": false,
+          "primary_key": false,
+          "type": "VARCHAR(64)"
+        }
+      },
+      "indexes": [
+        [
+          "ix_harness_tokens_owner_user_id",
+          [
+            "owner_user_id"
+          ]
+        ],
+        [
+          "ix_harness_tokens_token_hash",
+          [
+            "token_hash"
+          ]
+        ]
+      ],
+      "unique": []
+    },
     "job_events": {
       "columns": {
         "created_at": {

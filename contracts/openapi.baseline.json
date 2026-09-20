@@ -2236,6 +2236,11 @@
             "title": "Acp Agents",
             "type": "boolean"
           },
+          "capabilities": {
+            "default": false,
+            "title": "Capabilities",
+            "type": "boolean"
+          },
           "email_marketing": {
             "default": false,
             "title": "Email Marketing",
@@ -2249,6 +2254,11 @@
           "jobs": {
             "default": false,
             "title": "Jobs",
+            "type": "boolean"
+          },
+          "runtimes": {
+            "default": false,
+            "title": "Runtimes",
             "type": "boolean"
           }
         },
@@ -2942,6 +2952,24 @@
           "integrations"
         ],
         "title": "IntegrationsListResponse",
+        "type": "object"
+      },
+      "InvokeResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "result": {
+            "additionalProperties": true,
+            "title": "Result",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "InvokeResponse",
         "type": "object"
       },
       "JobEventResponse": {
@@ -4018,6 +4046,37 @@
           "token_usage"
         ],
         "title": "ModelsListResponse",
+        "type": "object"
+      },
+      "OpsListResponse": {
+        "properties": {
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Flags",
+            "type": "object"
+          },
+          "snapshot": {
+            "additionalProperties": true,
+            "title": "Snapshot",
+            "type": "object"
+          },
+          "status": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Status",
+            "type": "object"
+          }
+        },
+        "required": [
+          "snapshot",
+          "status",
+          "flags"
+        ],
+        "title": "OpsListResponse",
         "type": "object"
       },
       "PlanRequest": {
@@ -7284,6 +7343,69 @@
         "summary": "Get Assistant Schemas",
         "tags": [
           "assistants-compat"
+        ]
+      }
+    },
+    "/api/capabilities/ops": {
+      "get": {
+        "operationId": "list_ops_api_capabilities_ops_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpsListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Every capability operation, module status and feature flags",
+        "tags": [
+          "capabilities"
+        ]
+      }
+    },
+    "/api/capabilities/ops/{name}": {
+      "post": {
+        "operationId": "invoke_op_api_capabilities_ops__name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvokeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Invoke one capability operation",
+        "tags": [
+          "capabilities"
         ]
       }
     },

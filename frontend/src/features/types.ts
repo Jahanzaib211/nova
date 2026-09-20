@@ -30,7 +30,9 @@ export type FeatureFlagKey =
   | "jobs"
   | "integrations"
   | "email_marketing"
-  | "acp_agents";
+  | "acp_agents"
+  | "capabilities"
+  | "runtimes";
 
 export interface SettingsPageSpec {
   id: SettingsPageId;

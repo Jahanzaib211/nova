@@ -15,6 +15,8 @@ const ALL_OFF: FeatureFlags = {
   integrations: false,
   email_marketing: false,
   acp_agents: false,
+  capabilities: false,
+  runtimes: false,
 };
 
 /**

@@ -40,7 +40,9 @@ def pruner():
 @pytest.fixture(scope="module")
 def schema() -> dict[str, set[str]]:
     """Real column sets, parsed from LangGraph's own CREATE TABLE statements."""
-    from langgraph.checkpoint.postgres import base
+    # The Postgres checkpointer is an optional extra (`uv sync --extra
+    # postgres`); without it there is no schema to pin against.
+    base = pytest.importorskip("langgraph.checkpoint.postgres.base", reason="langgraph-checkpoint-postgres extra not installed")
 
     tables: dict[str, set[str]] = {}
     for statement in base.MIGRATIONS:

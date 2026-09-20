@@ -245,7 +245,9 @@ def test_features_reflect_config_sections():
     from deerflow.config.sandbox_config import SandboxConfig
 
     off = AppConfig(sandbox=SandboxConfig(use="deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"))
-    assert _safe_features(off).model_dump() == {"jobs": False, "integrations": False, "email_marketing": False, "acp_agents": False}
+    # `capabilities` is always on (the registry is not optional); everything
+    # section-gated reads off.
+    assert _safe_features(off).model_dump() == {"jobs": False, "integrations": False, "email_marketing": False, "acp_agents": False, "capabilities": True, "runtimes": False}
     on = AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}, "jobs": {"enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
     flags = _safe_features(on)
     assert flags.jobs is True and flags.acp_agents is True and flags.integrations is False

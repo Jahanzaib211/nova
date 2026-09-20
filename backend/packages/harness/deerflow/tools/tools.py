@@ -231,12 +231,32 @@ def get_available_tools(
     except Exception as e:
         logger.warning(f"Failed to load ACP tool: {e}")
 
-    logger.info(f"Total tools loaded: {len(loaded_tools)}, built-in tools: {len(builtin_tools)}, MCP tools: {len(mcp_tools)}, ACP tools: {len(acp_tools)}")
+    # Nova's own capabilities (jobs, integrations, agents, models, …) as tools,
+    # derived from the capability registry. Gated exactly like `web`/`bash`:
+    # a `nova:<module>` entry under `tool_groups` in config.yaml enables the
+    # module's operations; an agent's own `tool_groups` list narrows further.
+    capability_tools: list[BaseTool] = []
+    try:
+        from deerflow.capabilities import get_registry
+        from deerflow.capabilities.modules.features import compute_flags
+        from deerflow.tools.capability_tools import GROUP_PREFIX, build_capability_tools
+
+        configured_groups = {g.name for g in config.tool_groups if g.name.startswith(GROUP_PREFIX)}
+        if groups is not None:
+            configured_groups &= set(groups)
+        if configured_groups:
+            enabled_flags = {k for k, v in compute_flags().items() if v}
+            capability_tools = build_capability_tools(get_registry(), enabled_flags=enabled_flags, groups=configured_groups)
+    except Exception as e:
+        logger.warning(f"Failed to load capability tools: {e}")
+
+    logger.info(f"Total tools loaded: {len(loaded_tools)}, built-in tools: {len(builtin_tools)}, MCP tools: {len(mcp_tools)}, ACP tools: {len(acp_tools)}, capability tools: {len(capability_tools)}")
 
     # Deduplicate by tool name — config-loaded tools take priority, followed by
-    # built-ins, MCP tools, and ACP tools.  Duplicate names cause the LLM to
-    # receive ambiguous or concatenated function schemas (issue #1803).
-    all_tools = [_ensure_sync_invocable_tool(t) for t in loaded_tools + builtin_tools + mcp_tools + acp_tools]
+    # built-ins, MCP tools, ACP tools and capability tools.  Duplicate names
+    # cause the LLM to receive ambiguous or concatenated function schemas
+    # (issue #1803).
+    all_tools = [_ensure_sync_invocable_tool(t) for t in loaded_tools + builtin_tools + mcp_tools + acp_tools + capability_tools]
     seen_names: set[str] = set()
     unique_tools: list[BaseTool] = []
     for t in all_tools:

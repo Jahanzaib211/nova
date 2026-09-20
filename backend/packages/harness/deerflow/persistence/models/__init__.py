@@ -35,6 +35,7 @@ from deerflow.persistence.email_marketing.model import (
     EmTemplateRow,
 )
 from deerflow.persistence.feedback.model import FeedbackRow
+from deerflow.persistence.harness_token.model import HarnessTokenRow
 from deerflow.persistence.job.model import JobEventRow, JobRow, JobScheduleRow, JobWorkerRow
 from deerflow.persistence.models.agent_config_row import AgentConfigRow
 from deerflow.persistence.models.model_config_row import ModelConfigRow
@@ -69,6 +70,7 @@ __all__ = [
     "CreditGrantRow",
     "CreditRequestRow",
     "FeedbackRow",
+    "HarnessTokenRow",
     "ModelConfigRow",
     "PasswordResetTokenRow",
     "RunEventRow",
