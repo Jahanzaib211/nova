@@ -290,13 +290,16 @@ monitoring-verify:
 
 # ── Self-audit ──────────────────────────────────────────────────────────────
 
-.PHONY: self-audit self-audit-clean
+.PHONY: self-audit self-audit-clean sandbox-health sandbox-rebuild
 
 self-audit: ## Run full-stack self-audit and write timestamped report
 	@REPORT="docs/audit/$$(date +%Y-%m-%d)-self-probe.md"; \
 	echo "=== Self-audit starting ($$REPORT) ==="; \
 	mkdir -p docs/audit .nova/self-audit; \
-	(echo "# Self-probe $$(date -Iseconds)" > "$$REPORT"; \
+	 (echo "# Self-probe $$(date -Iseconds)" > "$$REPORT"; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Sandbox health (scripts/gates/sandbox-health-gate.py)" >> "$$REPORT"; \
+	 (python3 scripts/gates/sandbox-health-gate.py 2>&1 | tee -a "$$REPORT") || true; \
 	 echo "" >> "$$REPORT"; \
 	 echo "## Regression ledger (scripts/gates/regression-gate.py)" >> "$$REPORT"; \
 	 (python3 scripts/gates/regression-gate.py 2>&1 | tee -a "$$REPORT") || true; \
@@ -325,6 +328,12 @@ self-audit: ## Run full-stack self-audit and write timestamped report
 self-audit-clean: ## Remove self-audit outputs
 	@rm -rf .nova/self-audit/Novaselfprobe-*.zip
 	@echo "Self-audit outputs cleaned."
+
+sandbox-health: ## Run sandbox health gate (image chain, tools, vendor, host resources)
+	@python3 scripts/gates/sandbox-health-gate.py
+
+sandbox-rebuild: ## Auto-rebuild sandbox image if missing (requires vendor/ intact)
+	@python3 scripts/gates/sandbox-health-gate.py --rebuild
 
 # ── Local CI (nektos/act) ──────────────────────────────────────────────────
 

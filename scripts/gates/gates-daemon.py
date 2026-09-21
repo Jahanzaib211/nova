@@ -282,6 +282,17 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_REGRESSION_INTERVAL", 900),
             timeout_sec=600,
         ),
+        # Sandbox health: image chain integrity, tool inventory, vendor
+        # integrity, host resources. Catches the class of failure where the
+        # sandbox image disappears and nothing notices. Five minutes —
+        # the image existence check is cheap; the manifest read is the
+        # expensive part (same as regression).
+        Producer(
+            "sandbox_health",
+            ["scripts/gates/sandbox-health-gate.py"],
+            env_float("NOVA_GATE_SANDBOX_HEALTH_INTERVAL", 300),
+            timeout_sec=300,
+        ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
         # original outage: LangGraph checkpoints grow without bound and took

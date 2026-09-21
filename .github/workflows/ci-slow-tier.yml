@@ -1,0 +1,72 @@
+name: CI Slow Tier (Weekly)
+
+on:
+  schedule:
+    # Weekly on Sunday at 03:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-slow-tier
+  cancel-in-progress: true
+
+env:
+  PYTHON: "3.12"
+  NODE: "22"
+  PNPM: "10.26.2"
+
+jobs:
+  backend-pytest:
+    name: Backend pytest (full suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cd backend && PYTHONPATH=. uv run pytest tests/ -x -q --tb=short
+
+  frontend-build:
+    name: Frontend production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE }}
+      - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && pnpm build
+
+  docs-sync:
+    name: Documentation sync check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON }}
+      - uses: astral-sh/setup-uv@v7
+      - run: cd backend && uv sync --group dev
+      - run: cd backend && PYTHONPATH=. uv run python scripts/check_docs_sync.py
+
+  replay-golden:
+    name: Replay golden tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE }}
+      - run: corepack enable && corepack prepare pnpm@${{ env.PNPM }} --activate
+      - run: cd frontend && pnpm install --frozen-lockfile
+      - run: cd frontend && pnpm test:replay

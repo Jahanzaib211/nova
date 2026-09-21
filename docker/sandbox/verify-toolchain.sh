@@ -186,7 +186,6 @@ check_shared_dirs_readable() {
 WARN_CHECKS=(
     "testssl.sh:testssl.sh -v 2>&1 | head -1"
     "sherlock:sherlock --version 2>&1 | head -1"
-    "theHarvester:theHarvester --version 2>&1 | head -1"
 )
 
 EXTRA_CHECKS=(

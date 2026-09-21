@@ -291,18 +291,22 @@ def probe_nova_stack() -> list[dict]:
 
 def probe_llm() -> list[dict]:
     items = []
-    status, latency, body = http_probe("http://127.0.0.1:11434/api/tags")
+    ollama_host = os.environ.get("OLLAMA_HOST", "127.0.0.1")
+    ollama_port = os.environ.get("OLLAMA_PORT", "11434")
+    ollama_url = f"http://{ollama_host}:{ollama_port}/api/tags"
+    status, latency, body = http_probe(ollama_url)
     if status == 200:
         try:
             models = [m.get("name", "?") for m in json.loads(body).get("models", [])]
         except (json.JSONDecodeError, AttributeError):
             models = []
         items.append(
-            item("ollama", kind="llm_gateway", display_name="Ollama", health="healthy", detail=f"{len(models)} models: {', '.join(models)[:160]}", endpoint="http://host.docker.internal:11434", latency_ms=latency, capabilities=models)
+            item("ollama", kind="llm_gateway", display_name="Ollama", health="healthy", detail=f"{len(models)} models: {', '.join(models)[:160]}", endpoint=ollama_url, latency_ms=latency, capabilities=models)
         )
     else:
-        items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="down", detail=f"HTTP {status}" if status else body[:120], endpoint="http://host.docker.internal:11434", latency_ms=latency))
+        items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="down", detail=f"HTTP {status}" if status else body[:120], endpoint=ollama_url, latency_ms=latency))
     items.append(_http_item("litellm", "llm_gateway", "LiteLLM (pm2 nova-litellm)", f"http://{DOCKER_BRIDGE}:4000/health/liveliness"))
+    items.append(_http_item("llama_server", "llm_gateway", "llama-server (:8086)", "http://127.0.0.1:8086/v1/models"))
     return items
 
 
@@ -412,7 +416,7 @@ def probe_cli_tools() -> list[dict]:
 def probe_pm2() -> list[dict]:
     apps = parse_pm2_jlist(run(["pm2", "jlist"], timeout=20) or "")
     items = []
-    for name in ("nova", "nova-litellm", "nova-healthcheck", "nova-gates", "nova-ops", "tunnel-nova"):
+    for name in ("nova", "nova-litellm", "nova-healthcheck", "nova-gates", "nova-ops", "nova-host-bridge", "tunnel-nova"):
         app = apps.get(name)
         health = "healthy" if app and app["status"] == "online" else ("down" if app else "unknown")
         items.append(item(f"pm2_{name}", kind="agent_gateway", display_name=f"pm2: {name}", health=health, detail=f"{app['status']} · {app['restarts']} restarts" if app else "not registered", capabilities=[]))

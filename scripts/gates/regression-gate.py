@@ -56,23 +56,39 @@ BASELINE = REPO_ROOT / "contracts" / "regression.baseline.json"
 GREEN, YELLOW, RED = "green", "yellow", "red"
 
 # Binaries Dockerfile.tools / Dockerfile.android install into the sandbox.
-# Grouped as the Dockerfile documents them; a missing one is a regression of
-# the image build, not of the host.
+# SOURCE OF TRUTH: docker/sandbox/verify-toolchain.sh's CHECKS array.
+# This dictionary MUST match that script — a tool here that the image does
+# not ship is a false green; a tool the image ships that is missing here
+# is a missed regression. Grouped by the Dockerfile's install sections.
 SANDBOX_TOOLCHAIN = {
-    "languages": ["python3", "node", "npm", "pnpm", "go", "cargo", "rustc", "uv", "java"],
-    "dev": ["git", "jq", "make", "gcc", "psql", "redis-cli", "pandoc", "wkhtmltopdf", "tesseract", "gs", "dig"],
-    "cloud": ["docker", "kubectl", "helm", "terraform"],
+    # Security arsenal (mapped 1:1 to Security-Toolkit domain cheatsheets)
     "network": ["nmap", "masscan", "tshark"],
     "vulnscan": ["nuclei", "trivy", "nikto", "wapiti", "whatweb"],
     "webapp": ["sqlmap", "gobuster", "ffuf", "dirb", "dalfox"],
-    "secrets": ["gitleaks", "trufflehog"],
-    "osint": ["subfinder", "httpx"],
-    "creds": ["hydra", "john", "hashcat", "smbclient"],
-    "forensics": ["binwalk", "foremost", "exiftool", "yara"],
+    "secrets": ["gitleaks", "trufflehog", "ropper", "detect-secrets"],
+    "osint": ["subfinder", "httpx", "amass", "dnsrecon", "sherlock", "arjun"],
+    "creds": ["hydra", "john", "hashcat", "smbclient", "secretsdump.py"],
+    "forensics": ["binwalk", "foremost", "exiftool", "yara", "fls", "sslscan"],
     "wireless": ["aircrack-ng", "bettercap", "wifite"],
     "blueteam": ["suricata", "lynis", "chkrootkit"],
-    "android": ["sdkmanager", "gradle", "kotlinc"],
+    # Software-house completeness
+    "software_house": ["gh", "ansible", "sqlite3", "strace", "ltrace",
+                       "composer", "php", "ruby", "dotnet", "pre-commit"],
+    # Languages and runtimes
+    "languages": ["python3", "node", "npm", "go", "rustc", "cargo", "uv", "python"],
+    # Dev tools and document processing
+    "dev": ["pandoc", "wkhtmltopdf", "tesseract", "psql", "redis-cli",
+            "jq", "fd", "bat", "rg", "figlet", "soffice", "pdftotext",
+            "pdfinfo", "qpdf", "unoconv", "fzf", "httpie", "cwebp", "magick",
+            "playwright", "chromium"],
+    # Cloud CLIs (static Go binaries)
+    "cloud": ["kubectl", "helm", "terraform"],
 }
+
+# Flattened set for quick lookup — all tools across all groups.
+_ALL_SANDBOX_TOOLS: set[str] = set()
+for _tools in SANDBOX_TOOLCHAIN.values():
+    _ALL_SANDBOX_TOOLS.update(_tools)
 
 # Host-side security tooling the README lists as host-only (Metasploit, IDS,
 # hardening). Reported, never red: the host is not built from this repo.
@@ -194,6 +210,7 @@ def evaluate_sandbox_image(image: str | None, exists: bool, manifest: dict | Non
 
 
 def sandbox_missing_tools(image: str, groups: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Check all tools in the image. Uses the full inventory including extended tools."""
     names = sorted({b for tools in groups.values() for b in tools})
     script = "for b in " + " ".join(names) + "; do command -v $b >/dev/null 2>&1 || echo MISSING:$b; done"
     rc, out = run(["docker", "run", "--rm", "--entrypoint", "sh", image, "-lc", script], timeout=180)
@@ -201,14 +218,28 @@ def sandbox_missing_tools(image: str, groups: dict[str, list[str]]) -> dict[str,
     return {g: [b for b in tools if b in missing] for g, tools in groups.items()}
 
 
-def evaluate_sandbox_tools(image_ok: bool, layer: str | None, missing_by_group: dict[str, list[str]]) -> dict:
+def sandbox_manifest_tools(image: str) -> dict[str, str]:
+    """Read the tool inventory from the image's /etc/nova-sandbox.json manifest."""
+    rc, out = run(["docker", "run", "--rm", "--entrypoint", "cat", image, "/etc/nova-sandbox.json"], timeout=60)
+    if rc != 0:
+        return {}
+    try:
+        manifest = json.loads(out)
+        return manifest.get("toolchain", {})
+    except (ValueError, KeyError):
+        return {}
+
+
+def evaluate_sandbox_tools(image_ok: bool, layer: str | None, missing_by_group: dict[str, list[str]], manifest_tool_count: int = 0) -> dict:
     if not image_ok:
         return check("sandbox_tools", RED, "no sandbox image to inspect")
     groups = dict(missing_by_group)
     if layer != "android":
         groups.pop("android", None)  # a lower rung is a deliberate choice
     missing = {g: v for g, v in groups.items() if v}
-    total = sum(len(v) for v in SANDBOX_TOOLCHAIN.values())
+    total_from_groups = sum(len(v) for v in SANDBOX_TOOLCHAIN.values())
+    # Use manifest count if available (more accurate than hardcoded groups)
+    total = manifest_tool_count if manifest_tool_count > 0 else total_from_groups
     if missing:
         return check("sandbox_tools", YELLOW, "missing in the sandbox image: " + "; ".join(f"{g}: {', '.join(v)}" for g, v in missing.items()), missing=missing)
     return check("sandbox_tools", GREEN, f"all {total} toolchain/arsenal binaries present (layer {layer})", missing={})
@@ -394,7 +425,8 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
     manifest = sandbox_manifest(image) if exists else None
     checks.append(evaluate_sandbox_image(image, exists, manifest))
     missing = sandbox_missing_tools(image, SANDBOX_TOOLCHAIN) if exists else {}
-    checks.append(evaluate_sandbox_tools(exists, (manifest or {}).get("layer"), missing))
+    manifest_tools = sandbox_manifest_tools(image) if exists else {}
+    checks.append(evaluate_sandbox_tools(exists, (manifest or {}).get("layer"), missing, len(manifest_tools)))
     checks.append(
         evaluate_security_toolkit(config_value(text, "sandbox", "DEER_FLOW_SECURITY_TOOLKIT") or re.search(r"DEER_FLOW_SECURITY_TOOLKIT:\s*(\S+)", text).group(1) if re.search(r"DEER_FLOW_SECURITY_TOOLKIT:\s*(\S+)", text) else None)
     )
@@ -441,7 +473,10 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
     except (urllib.error.URLError, OSError, ValueError):
         caps = None
     config_tools = len(re.findall(r"^- name: [a-z_]+\n  group:", text, re.MULTILINE))
-    sandbox_tool_count = sum(len(v) for v in SANDBOX_TOOLCHAIN.values()) - sum(len(v) for v in missing.values()) if exists else 0
+    # Use manifest tool count (most accurate) or fall back to groups minus missing
+    sandbox_tool_count = len(manifest_tools) if manifest_tools else (
+        sum(len(v) for v in SANDBOX_TOOLCHAIN.values()) - sum(len(v) for v in missing.values()) if exists else 0
+    )
     counts = {
         "skills": int(skills.get("total", 0)),
         "config_tools": config_tools,

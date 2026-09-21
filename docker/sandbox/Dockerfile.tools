@@ -333,9 +333,9 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
     # semgrep is most often used for. Install in-sandbox with `pip install
     # semgrep` if a future use case needs it.
     python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
-        impacket sherlock theHarvester arjun detect-secrets ropper; \
+        impacket sherlock-project arjun detect-secrets ropper; \
     for b in secretsdump.py GetUserSPNs.py wmiexec.py psexec.py semgrep \
-             sherlock theHarvester arjun detect-secrets ropper; do \
+             sherlock arjun detect-secrets ropper; do \
         if [ -e "/opt/python3.12/bin/$b" ]; then \
             ln -sf "/opt/python3.12/bin/$b" "/usr/local/bin/$b"; fi; \
     done
@@ -397,10 +397,10 @@ RUN set -eux; \
         gh ansible sqlite3 mysql-client strace ltrace zip unzip rsync \
         network-manager net-tools php-cli ruby-full maven gradle; \
     rm -rf /var/lib/apt/lists/*; \
-    curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer --quiet; \
-    curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && chmod +x /tmp/dotnet-install.sh && \
-        /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet && \
-        ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet && rm -f /tmp/dotnet-install.sh
+    curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer --quiet
+# Stage .NET SDK from host (avoids CDN throttle on dot.net)
+COPY vendor/dotnet-sdk /usr/share/dotnet
+RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
 
 RUN python3.12 -m pip install --no-cache-dir pre-commit && \
     ln -sf /opt/python3.12/bin/pre-commit /usr/local/bin/pre-commit
@@ -435,7 +435,7 @@ ARG VERIFY_TIMESTAMP=2026-08-25.3
 RUN set -eux; \
     [ -e /usr/sbin/john ] && ln -sf /usr/sbin/john /usr/local/bin/john || true; \
     [ -e /usr/bin/testssl.sh ] && ln -sf /usr/bin/testssl.sh /usr/local/bin/testssl.sh || true; \
-    for b in sherlock theHarvester arjun detect-secrets ropper secretsdump.py; do \
+    for b in sherlock arjun detect-secrets ropper secretsdump.py; do \
         [ -e "/opt/python3.12/bin/$b" ] && ln -sf "/opt/python3.12/bin/$b" "/usr/local/bin/$b" || true; \
     done
 
