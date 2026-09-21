@@ -308,16 +308,15 @@ def probe_llm() -> list[dict]:
         ollama_disabled = False
         try:
             config_text = (REPO_ROOT / "config.yaml").read_text(encoding="utf-8")
-            for line in config_text.splitlines():
-                if "ollama" in line.lower() and "enabled" in line and "false" in line:
-                    ollama_disabled = True
-                    break
-                if "ollama" in line.lower() and line.strip().endswith(":"):
-                    # Found ollama section, check next lines for enabled: false
-                    idx = config_text.index(line)
-                    section = config_text[idx:idx+200]
-                    if "enabled: false" in section:
-                        ollama_disabled = True
+            # Find ollama section and check for enabled: false within next 10 lines
+            lines = config_text.splitlines()
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith("ollama:") and not stripped.startswith("#"):
+                    for j in range(i + 1, min(len(lines), i + 10)):
+                        if lines[j].strip().startswith("enabled:") and "false" in lines[j]:
+                            ollama_disabled = True
+                            break
                     break
         except Exception:
             pass
