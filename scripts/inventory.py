@@ -305,8 +305,22 @@ def probe_llm() -> list[dict]:
         )
     else:
         # If ollama is unreachable and config disables it, report as disabled
-        config_text = (REPO_ROOT / "config.yaml").read_text(encoding="utf-8") if (REPO_ROOT / "config.yaml").exists() else ""
-        ollama_disabled = "enabled: false" in config_text.split("ollama:")[-1].split("\n    ")[0] if "ollama:" in config_text else False
+        ollama_disabled = False
+        try:
+            config_text = (REPO_ROOT / "config.yaml").read_text(encoding="utf-8")
+            for line in config_text.splitlines():
+                if "ollama" in line.lower() and "enabled" in line and "false" in line:
+                    ollama_disabled = True
+                    break
+                if "ollama" in line.lower() and line.strip().endswith(":"):
+                    # Found ollama section, check next lines for enabled: false
+                    idx = config_text.index(line)
+                    section = config_text[idx:idx+200]
+                    if "enabled: false" in section:
+                        ollama_disabled = True
+                    break
+        except Exception:
+            pass
         items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="disabled" if ollama_disabled else "down", detail="retired (enabled: false)" if ollama_disabled else (f"HTTP {status}" if status else body[:120]), endpoint=ollama_url, latency_ms=latency))
     items.append(_http_item("litellm", "llm_gateway", "LiteLLM (pm2 nova-litellm)", f"http://{DOCKER_BRIDGE}:4000/health/liveliness"))
     items.append(_http_item("llama_server", "llm_gateway", "llama-server (:8086)", "http://127.0.0.1:8086/v1/models"))
