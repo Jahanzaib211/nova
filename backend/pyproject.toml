@@ -8,7 +8,7 @@ dependencies = [
     "deerflow-harness",
     "fastapi>=0.115.0",
     "orjson>=3.10.0",
-    "httpx>=0.28.0",
+    "httpx>=0.28.1",
     "python-multipart>=0.0.31",
     "sse-starlette>=2.1.0",
     "uvicorn[standard]>=0.34.0",
