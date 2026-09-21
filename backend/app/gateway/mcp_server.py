@@ -40,10 +40,38 @@ logger = logging.getLogger(__name__)
 MOUNT_PATH = "/api/mcp/nova"
 
 
+#: Per-turn runtime tokens are minted as ``runtime:<thread_id>`` by
+#: ``RuntimeDispatchMiddleware``. Parsing it back is what lets an MCP caller
+#: act on the thread it was minted for.
+_RUNTIME_TOKEN_PREFIX = "runtime:"
+
+
+def _thread_from_token_name(name: str | None) -> str | None:
+    """The thread a per-turn runtime token was minted for, if any.
+
+    Without this an MCP caller has no thread: ``OpContext.thread_id`` stayed
+    ``None``, so every thread-scoped capability — anything touching the
+    Agent's Computer — had nothing to act on. That is the concrete reason the
+    ACP path could manage Nova but never drive its sandbox, while the native
+    lead agent (which always has the thread) could.
+
+    A long-lived token minted by a human has an arbitrary name and yields
+    ``None``, which is correct: it is not bound to any one thread.
+    """
+    if not name or not name.startswith(_RUNTIME_TOKEN_PREFIX):
+        return None
+    thread_id = name[len(_RUNTIME_TOKEN_PREFIX) :].strip()
+    if not thread_id or thread_id == "chat":
+        return None
+    return thread_id
+
+
 @dataclass(frozen=True)
 class Principal:
     user_id: str
     scopes: frozenset[str]
+    #: Set only for a per-turn runtime token; None for a long-lived one.
+    thread_id: str | None = None
 
     def allows(self, module_id: str) -> bool:
         return "*" in self.scopes or module_id in self.scopes
@@ -101,7 +129,13 @@ class NovaMcpServer:
                 return _error(f"unknown tool {name!r}")
             if op not in self._visible_ops(principal):
                 return _error(f"tool {name!r} is not available to this token")
-            ctx = OpContext(user_id=principal.user_id, is_admin=False, surface="mcp", extras={"scopes": sorted(principal.scopes)})
+            ctx = OpContext(
+                user_id=principal.user_id,
+                is_admin=False,
+                thread_id=principal.thread_id,
+                surface="mcp",
+                extras={"scopes": sorted(principal.scopes)},
+            )
             try:
                 result = await self.registry.invoke(op_name, ctx, arguments or {})
             except Exception as exc:
@@ -163,7 +197,11 @@ class NovaMcpServer:
         resolved = await self.tokens.resolve(authorization[7:].strip())
         if resolved is None:
             return None
-        return Principal(user_id=str(resolved["owner_user_id"]), scopes=frozenset(resolved["scopes"] or ["*"]))
+        return Principal(
+            user_id=str(resolved["owner_user_id"]),
+            scopes=frozenset(resolved["scopes"] or ["*"]),
+            thread_id=_thread_from_token_name(resolved.get("name")),
+        )
 
 
 class _AuthedASGI:

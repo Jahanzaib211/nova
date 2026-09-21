@@ -828,6 +828,24 @@ class AioSandboxProvider(SandboxProvider):
 
         logger.warning(f"Dropped unhealthy sandbox {sandbox_id}: {reason}")
 
+    #: Fallback when ``sandbox.startup_timeout`` is unset. Three minutes,
+    #: because the image brings up supervisord, code-server, Jupyter, a VNC
+    #: server and a browser before it answers, and the old hardcoded 60 s
+    #: destroyed healthy containers on a loaded host.
+    DEFAULT_STARTUP_TIMEOUT = 180
+
+    def _startup_timeout(self) -> int:
+        """Seconds to allow a new sandbox to answer on its port."""
+        try:
+            from deerflow.config.app_config import get_app_config
+
+            configured = getattr(getattr(get_app_config(), "sandbox", None), "startup_timeout", None)
+        except Exception:  # noqa: BLE001 - never fail a start over reading a knob
+            configured = None
+        if isinstance(configured, int) and configured > 0:
+            return configured
+        return self.DEFAULT_STARTUP_TIMEOUT
+
     def _replica_count(self) -> tuple[int, int]:
         """Return configured replicas and currently tracked sandbox count."""
         replicas = self._config.get("replicas", DEFAULT_REPLICAS)
@@ -1043,7 +1061,7 @@ class AioSandboxProvider(SandboxProvider):
         info = self._backend.create(thread_id, sandbox_id, extra_mounts=extra_mounts or None)
 
         # Wait for sandbox to be ready
-        if not wait_for_sandbox_ready(info.sandbox_url, timeout=60):
+        if not wait_for_sandbox_ready(info.sandbox_url, timeout=self._startup_timeout()):
             self._backend.destroy(info)
             raise RuntimeError(f"Sandbox {sandbox_id} failed to become ready within timeout at {info.sandbox_url}")
 
@@ -1063,7 +1081,7 @@ class AioSandboxProvider(SandboxProvider):
         info = await asyncio.to_thread(self._backend.create, thread_id, sandbox_id, extra_mounts=extra_mounts or None)
 
         # Wait for sandbox to be ready without blocking the event loop.
-        if not await wait_for_sandbox_ready_async(info.sandbox_url, timeout=60):
+        if not await wait_for_sandbox_ready_async(info.sandbox_url, timeout=self._startup_timeout()):
             await asyncio.to_thread(self._backend.destroy, info)
             raise RuntimeError(f"Sandbox {sandbox_id} failed to become ready within timeout at {info.sandbox_url}")
 

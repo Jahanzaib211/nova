@@ -77,6 +77,18 @@ class SandboxConfig(BaseModel):
         default=None,
         description="Idle timeout in seconds before sandbox is released (default: 600 = 10 minutes). Set to 0 to disable.",
     )
+    startup_timeout: int | None = Field(
+        default=None,
+        description=(
+            "Seconds to wait for a newly created sandbox to answer on its port "
+            "(default: 180). This was hardcoded to 60, which is enough for a warm "
+            "host and not enough for a cold one: the image boots supervisord, "
+            "code-server, Jupyter, a VNC server and a browser, so under memory or "
+            "IO pressure it routinely needs longer. A container that misses the "
+            "deadline is destroyed and the turn fails with 'failed to become "
+            "ready', even though the image is healthy and would have answered."
+        ),
+    )
     privileged: bool = Field(
         default=False,
         description=(

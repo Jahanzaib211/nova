@@ -256,6 +256,104 @@ export interface RuntimesSessionsOutput {
   total: number;
 }
 
+export interface SandboxBashInput {
+  /** Shell command to run inside the thread's sandbox container. */
+  command: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+  timeout_seconds?: number;
+}
+
+export interface SandboxBashOutput {
+  output: string;
+  truncated?: boolean;
+}
+
+export interface SandboxGlobInput {
+  max_results?: number;
+  /** Directory to search under. */
+  path?: string;
+  /** Glob pattern (glob) or regular expression (grep). */
+  pattern: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxGlobOutput {
+  items: Array<Record<string, unknown>>;
+  total: number;
+}
+
+export interface SandboxGrepInput {
+  max_results?: number;
+  /** Directory to search under. */
+  path?: string;
+  /** Glob pattern (glob) or regular expression (grep). */
+  pattern: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxGrepOutput {
+  items: Array<Record<string, unknown>>;
+  total: number;
+}
+
+export interface SandboxLsInput {
+  /** Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py */
+  path: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxLsOutput {
+  items: Array<Record<string, unknown>>;
+  total: number;
+}
+
+export interface SandboxReadFileInput {
+  /** Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py */
+  path: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxReadFileOutput {
+  content: string;
+  exists: boolean;
+  path: string;
+}
+
+export interface SandboxStrReplaceInput {
+  /** Replacement text. */
+  new_str: string;
+  /** Exact text to replace; must occur exactly once. */
+  old_str: string;
+  /** Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py */
+  path: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxStrReplaceOutput {
+  output: string;
+  truncated?: boolean;
+}
+
+export interface SandboxWriteFileInput {
+  /** Full new file contents. */
+  content: string;
+  /** Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py */
+  path: string;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxWriteFileOutput {
+  bytes_written: number;
+  path: string;
+}
+
 export interface SecretsListInput {
   // no fields
 }
@@ -415,6 +513,22 @@ export interface CapabilityOps {
   "runtimes.sessions": {
     input: RuntimesSessionsInput;
     output: RuntimesSessionsOutput;
+  };
+  "sandbox.bash": { input: SandboxBashInput; output: SandboxBashOutput };
+  "sandbox.glob": { input: SandboxGlobInput; output: SandboxGlobOutput };
+  "sandbox.grep": { input: SandboxGrepInput; output: SandboxGrepOutput };
+  "sandbox.ls": { input: SandboxLsInput; output: SandboxLsOutput };
+  "sandbox.read_file": {
+    input: SandboxReadFileInput;
+    output: SandboxReadFileOutput;
+  };
+  "sandbox.str_replace": {
+    input: SandboxStrReplaceInput;
+    output: SandboxStrReplaceOutput;
+  };
+  "sandbox.write_file": {
+    input: SandboxWriteFileInput;
+    output: SandboxWriteFileOutput;
   };
   "secrets.list": { input: SecretsListInput; output: SecretsListOutput };
   "secrets.set": { input: SecretsSetInput; output: SecretsSetOutput };
@@ -694,6 +808,69 @@ export const OP_META: Record<CapabilityOpName, OpMeta> = {
     harness: true,
     mcp: true,
   },
+  "sandbox.bash": {
+    module: "sandbox",
+    kind: "execute",
+    description: "Run a shell command inside the thread's sandbox.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "sandbox.glob": {
+    module: "sandbox",
+    kind: "read",
+    description: "Find files by glob pattern in the thread's sandbox.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "sandbox.grep": {
+    module: "sandbox",
+    kind: "read",
+    description: "Search file contents by regex in the thread's sandbox.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "sandbox.ls": {
+    module: "sandbox",
+    kind: "read",
+    description: "List a directory in the thread's sandbox.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "sandbox.read_file": {
+    module: "sandbox",
+    kind: "read",
+    description: "Read a file from the thread's sandbox.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "sandbox.str_replace": {
+    module: "sandbox",
+    kind: "write",
+    description: "Replace one exact, unique string in a sandbox file.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "sandbox.write_file": {
+    module: "sandbox",
+    kind: "write",
+    description: "Create or overwrite a file in the thread's sandbox.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
   "secrets.list": {
     module: "secrets",
     kind: "read",
@@ -880,6 +1057,23 @@ export const CAPABILITY_MODULES = [
     flag: "runtimes",
     config_key: "runtimes",
     operations: ["runtimes.list", "runtimes.probe", "runtimes.sessions"],
+  },
+  {
+    id: "sandbox",
+    title: "Agent's Computer",
+    description:
+      "The per-thread sandbox: run commands, read and write files, search. The same tools the lead agent uses, reachable by an external harness.",
+    flag: "sandbox",
+    config_key: "sandbox",
+    operations: [
+      "sandbox.bash",
+      "sandbox.glob",
+      "sandbox.grep",
+      "sandbox.ls",
+      "sandbox.read_file",
+      "sandbox.str_replace",
+      "sandbox.write_file",
+    ],
   },
   {
     id: "secrets",

@@ -98,6 +98,22 @@
       "title": "Runtimes"
     },
     {
+      "config_key": "sandbox",
+      "description": "The per-thread sandbox: run commands, read and write files, search. The same tools the lead agent uses, reachable by an external harness.",
+      "flag": "sandbox",
+      "id": "sandbox",
+      "operations": [
+        "sandbox.bash",
+        "sandbox.glob",
+        "sandbox.grep",
+        "sandbox.ls",
+        "sandbox.read_file",
+        "sandbox.str_replace",
+        "sandbox.write_file"
+      ],
+      "title": "Agent's Computer"
+    },
+    {
       "config_key": null,
       "description": "Named secrets (0600 files under ~/.nova/secrets) and the env-var names config.yaml references. Values are never read back.",
       "flag": null,
@@ -1327,6 +1343,459 @@
           "total"
         ],
         "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Run a shell command inside the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "command": {
+            "description": "Shell command to run inside the thread's sandbox container.",
+            "title": "Command",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          },
+          "timeout_seconds": {
+            "default": 120,
+            "maximum": 1800,
+            "minimum": 1,
+            "title": "Timeout Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "BashIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.bash",
+      "output_schema": {
+        "properties": {
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output"
+        ],
+        "title": "TextOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Find files by glob pattern in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "max_results": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "path": {
+            "default": "/mnt/user-data",
+            "description": "Directory to search under.",
+            "title": "Path",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Glob pattern (glob) or regular expression (grep).",
+            "title": "Pattern",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "title": "SearchIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.glob",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Search file contents by regex in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "max_results": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "path": {
+            "default": "/mnt/user-data",
+            "description": "Directory to search under.",
+            "title": "Path",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Glob pattern (glob) or regular expression (grep).",
+            "title": "Pattern",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "title": "SearchIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.grep",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "List a directory in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PathIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.ls",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Read a file from the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PathIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.read_file",
+      "output_schema": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content",
+          "exists"
+        ],
+        "title": "FileOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Replace one exact, unique string in a sandbox file.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "new_str": {
+            "description": "Replacement text.",
+            "title": "New Str",
+            "type": "string"
+          },
+          "old_str": {
+            "description": "Exact text to replace; must occur exactly once.",
+            "title": "Old Str",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path",
+          "old_str",
+          "new_str"
+        ],
+        "title": "ReplaceIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.str_replace",
+      "output_schema": {
+        "properties": {
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output"
+        ],
+        "title": "TextOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Create or overwrite a file in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "content": {
+            "description": "Full new file contents.",
+            "title": "Content",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "WriteIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.write_file",
+      "output_schema": {
+        "properties": {
+          "bytes_written": {
+            "title": "Bytes Written",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "bytes_written"
+        ],
+        "title": "WriteOut",
         "type": "object"
       }
     },
