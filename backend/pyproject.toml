@@ -43,7 +43,7 @@ dev = [
     # route left is an image rebuild. Cheap to carry, and it keeps the running
     # container debuggable.
     "pip>=25.0",
-    "blockbuster>=1.5.26,<1.6",
+    "blockbuster>=1.5.28,<1.6",
     "fakeredis>=2.26.0",
     "prompt-toolkit>=3.0.0",
     "pytest>=9.0.3",
