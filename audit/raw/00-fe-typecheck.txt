@@ -1,0 +1,8 @@
+
+> nova-frontend@2.1.0 typecheck /home/jahanzaib/Desktop/nova/frontend
+> tsc --noEmit
+
+
+real	0m10.317s
+user	0m5.839s
+sys	0m0.863s

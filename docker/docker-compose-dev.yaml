@@ -656,7 +656,11 @@ services:
       gateway:
         condition: service_healthy
     networks:
-      - deer-flow-dev
+      # Pinned like every other service: after a reboot the jobs container came
+      # up first, took the gateway's 192.168.200.3, and `pm2 restart nova`
+      # looped on "Address already in use" until it was removed by hand.
+      deer-flow-dev:
+        ipv4_address: 192.168.200.9
     env_file:
       - ../.env
     environment:

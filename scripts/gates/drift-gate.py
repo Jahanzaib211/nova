@@ -44,6 +44,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GREEN, YELLOW, RED = "green", "yellow", "red"
 NOVA_SERVICES = ("deer-flow-gateway", "deer-flow-frontend", "deer-flow-nginx")
 
+
+def _resolve_container(name: str) -> str | None:
+    """Resolve a container name that may have a compose project prefix."""
+    rc, out, _ = _run(["docker", "inspect", name, "--format", "{{.Name}}"], timeout=10)
+    if rc == 0 and out:
+        return name
+    # Try partial name match (compose-prefixed containers)
+    rc2, names, _ = _run(
+        ["docker", "ps", "--format", "{{.Names}}", "--filter", f"name={name}"],
+        timeout=10,
+    )
+    if rc2 == 0 and names:
+        return names.strip().split("\n")[0]
+    return None
+
 # Restarts below this are noise regardless of rate -- a couple over an app's
 # lifetime says nothing.
 PM2_RESTART_MIN = 5
@@ -152,8 +167,12 @@ def check_frontend_build_freshness() -> dict:
     the working tree answers the question exactly, and needs no build-pipeline
     change or recorded marker.
     """
+    # Container name may have a compose project prefix (e.g. 48352e221a29_deer-flow-frontend)
+    container = _resolve_container("deer-flow-frontend")
+    if not container:
+        return check("frontend_build", YELLOW, "frontend container not running")
     rc, image, _ = _run(
-        ["docker", "inspect", "deer-flow-frontend", "--format", "{{.Config.Image}}"],
+        ["docker", "inspect", container, "--format", "{{.Config.Image}}"],
         timeout=30,
     )
     if rc != 0 or not image:
@@ -173,7 +192,7 @@ def check_frontend_build_freshness() -> dict:
     # Dev mode is only trustworthy if the mount is actually there, so both are
     # required before this short-circuits.
     rc_c, cmd, _ = _run(
-        ["docker", "inspect", "deer-flow-frontend", "--format", "{{json .Config.Cmd}}"],
+        ["docker", "inspect", container, "--format", "{{json .Config.Cmd}}"],
         timeout=30,
     )
     is_dev_server = rc_c == 0 and ("next dev" in cmd or "run dev" in cmd)
@@ -182,7 +201,7 @@ def check_frontend_build_freshness() -> dict:
         [
             "docker",
             "inspect",
-            "deer-flow-frontend",
+            container,
             "--format",
             "{{range .Mounts}}{{.Source}}=>{{.Destination}} {{end}}",
         ],
@@ -275,7 +294,7 @@ def check_frontend_build_freshness() -> dict:
         )
 
     rc_b, build_id, _ = _run(
-        ["docker", "exec", "deer-flow-frontend", "cat", "/app/frontend/.next/BUILD_ID"],
+        ["docker", "exec", container, "cat", "/app/frontend/.next/BUILD_ID"],
         timeout=30,
     )
     build = build_id.strip() or "unknown"

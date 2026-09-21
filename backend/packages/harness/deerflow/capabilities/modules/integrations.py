@@ -67,7 +67,7 @@ async def _status() -> ModuleStatus:
     if not section_enabled("integrations"):
         return ModuleStatus(configured=False, healthy=False, detail="integrations.enabled is false")
     results = await _registry().probe_all()
-    bad = [r for r in results if getattr(getattr(r, "status", None), "value", r.status) not in ("healthy", "configured")]
+    bad = [r for r in results if getattr(getattr(r, "status", None), "value", r.status) not in ("healthy", "configured", "disabled", "degraded")]
     return ModuleStatus(configured=True, healthy=not bad, detail=f"{len(results) - len(bad)}/{len(results)} healthy")
 
 
