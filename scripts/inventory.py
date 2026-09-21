@@ -304,7 +304,10 @@ def probe_llm() -> list[dict]:
             item("ollama", kind="llm_gateway", display_name="Ollama", health="healthy", detail=f"{len(models)} models: {', '.join(models)[:160]}", endpoint=ollama_url, latency_ms=latency, capabilities=models)
         )
     else:
-        items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="down", detail=f"HTTP {status}" if status else body[:120], endpoint=ollama_url, latency_ms=latency))
+        # If ollama is unreachable and config disables it, report as disabled
+        config_text = (REPO_ROOT / "config.yaml").read_text(encoding="utf-8") if (REPO_ROOT / "config.yaml").exists() else ""
+        ollama_disabled = "enabled: false" in config_text.split("ollama:")[-1].split("\n    ")[0] if "ollama:" in config_text else False
+        items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="disabled" if ollama_disabled else "down", detail="retired (enabled: false)" if ollama_disabled else (f"HTTP {status}" if status else body[:120]), endpoint=ollama_url, latency_ms=latency))
     items.append(_http_item("litellm", "llm_gateway", "LiteLLM (pm2 nova-litellm)", f"http://{DOCKER_BRIDGE}:4000/health/liveliness"))
     items.append(_http_item("llama_server", "llm_gateway", "llama-server (:8086)", "http://127.0.0.1:8086/v1/models"))
     return items
