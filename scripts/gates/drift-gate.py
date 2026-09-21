@@ -59,9 +59,14 @@ def _resolve_container(name: str) -> str | None:
         return names.strip().split("\n")[0]
     return None
 
+
 # Restarts below this are noise regardless of rate -- a couple over an app's
 # lifetime says nothing.
 PM2_RESTART_MIN = 5
+
+# A container held up this long since its last restart is stable now — its
+# cumulative RestartCount is history, not an active loop.
+RESTART_STORM_GRACE_MIN = 15
 
 # How long an app must have been up before its cumulative restart count stops
 # counting as churn. See check_pm2_apps for why this is a plain uptime floor
@@ -71,9 +76,7 @@ PM2_STABLE_HOURS = 6.0
 
 def _status_path() -> Path:
     override = os.environ.get("NOVA_DRIFT_GATE_STATUS_PATH", "").strip()
-    return (
-        Path(override) if override else Path.home() / ".nova" / "gates" / "drift.json"
-    )
+    return Path(override) if override else Path.home() / ".nova" / "gates" / "drift.json"
 
 
 def check(name: str, status: str, detail: str, **extra) -> dict:
@@ -100,8 +103,7 @@ def check_git_clean() -> dict:
     return check(
         "git_worktree",
         YELLOW,
-        f"{len(changed)} uncommitted change(s) — running code is not "
-        "reproducible from any commit",
+        f"{len(changed)} uncommitted change(s) — running code is not reproducible from any commit",
         files=[c[3:] for c in changed[:20]],
     )
 
@@ -129,8 +131,7 @@ def check_config_version() -> dict:
     return check(
         "config_version",
         status,
-        f"config.yaml is v{live}, config.example.yaml is v{example} "
-        "— run `make config-upgrade`",
+        f"config.yaml is v{live}, config.example.yaml is v{example} — run `make config-upgrade`",
         live=live,
         example=example,
     )
@@ -140,10 +141,7 @@ def check_config_version() -> dict:
 # load-bearing: the host sorts with a locale-aware collation and the container
 # with C, so `./app/[lang]/...` lands in a different position and the digests
 # differ for two byte-identical trees.
-_SRC_HASH_CMD = (
-    "export LC_ALL=C; cd {path} && find . -type f -print0 | sort -z "
-    "| xargs -0 sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1"
-)
+_SRC_HASH_CMD = "export LC_ALL=C; cd {path} && find . -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1"
 
 
 def check_frontend_build_freshness() -> dict:
@@ -219,8 +217,7 @@ def check_frontend_build_freshness() -> dict:
         return check(
             "frontend_build",
             RED,
-            "running a dev server but frontend/src is NOT bind-mounted — it is "
-            "compiling the image's baked copy, so your edits are invisible",
+            "running a dev server but frontend/src is NOT bind-mounted — it is compiling the image's baked copy, so your edits are invisible",
         )
 
     # `next start` reads .next/BUILD_ID once at boot and refuses to start
@@ -238,14 +235,10 @@ def check_frontend_build_freshness() -> dict:
         return check(
             "frontend_build",
             RED,
-            "frontend/.next/BUILD_ID is missing — the last `next build` did not "
-            "finish, so deer-flow-frontend cannot be restarted and lazily "
-            "loaded route chunks 500",
+            "frontend/.next/BUILD_ID is missing — the last `next build` did not finish, so deer-flow-frontend cannot be restarted and lazily loaded route chunks 500",
         )
 
-    rc_h, host_hash, _ = _run(
-        ["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120
-    )
+    rc_h, host_hash, _ = _run(["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120)
     if rc_h != 0 or not host_hash:
         return check("frontend_build", YELLOW, "could not hash frontend/src")
 
@@ -283,14 +276,12 @@ def check_frontend_build_freshness() -> dict:
             return check(
                 "frontend_build",
                 YELLOW,
-                f"frontend/src is {drift_s}s newer than build {build_id_path.read_text().strip()} "
-                f"— those edits are not being served; run `pnpm build`",
+                f"frontend/src is {drift_s}s newer than build {build_id_path.read_text().strip()} — those edits are not being served; run `pnpm build`",
             )
         return check(
             "frontend_build",
             GREEN,
-            f"build {build_id_path.read_text().strip()} is newer than frontend/src "
-            f"(image bakes no source: {err[:60] or 'no /app/frontend/src'})",
+            f"build {build_id_path.read_text().strip()} is newer than frontend/src (image bakes no source: {err[:60] or 'no /app/frontend/src'})",
         )
 
     rc_b, build_id, _ = _run(
@@ -309,8 +300,7 @@ def check_frontend_build_freshness() -> dict:
     return check(
         "frontend_build",
         RED,
-        f"frontend/src differs from the source baked into the served "
-        f"build ({build}) — those changes are NOT live; rebuild the image",
+        f"frontend/src differs from the source baked into the served build ({build}) — those changes are NOT live; rebuild the image",
         build_id=build,
         host_hash=host_hash.strip()[:16],
         image_hash=image_hash.strip()[:16],
@@ -374,9 +364,7 @@ def check_compose_chain() -> dict:
         return check("compose_chain", YELLOW, "no Nova containers running")
 
     if seen == canonical:
-        return check(
-            "compose_chain", GREEN, f"{len(seen)} overlay(s) match the canonical chain"
-        )
+        return check("compose_chain", GREEN, f"{len(seen)} overlay(s) match the canonical chain")
     extra, absent = seen - canonical, canonical - seen
     bits = []
     if absent:
@@ -386,8 +374,7 @@ def check_compose_chain() -> dict:
     return check(
         "compose_chain",
         YELLOW,
-        "; ".join(bits) + " — containers were not brought up by "
-        "scripts/pm2-deerflow.sh",
+        "; ".join(bits) + " — containers were not brought up by scripts/pm2-deerflow.sh",
         seen=sorted(seen),
         canonical=sorted(canonical),
     )
@@ -442,9 +429,7 @@ def check_services_running() -> dict:
         return check("services_running", YELLOW, f"cannot read chain: {err[:120]}")
     declared = {line.strip() for line in declared_out.splitlines() if line.strip()}
 
-    rc, running_out, err = _run(
-        ["docker", "compose", "-p", "deer-flow-dev", "ps", "--services"]
-    )
+    rc, running_out, err = _run(["docker", "compose", "-p", "deer-flow-dev", "ps", "--services"])
     if rc != 0:
         return check("services_running", YELLOW, f"cannot list running: {err[:120]}")
     running = {line.strip() for line in running_out.splitlines() if line.strip()}
@@ -465,9 +450,7 @@ def check_services_running() -> dict:
     return check(
         "services_running",
         RED,
-        f"declared but not running: {', '.join(missing)} "
-        f"({len(running)}/{len(declared)} up) -- bring the stack up with "
-        f"scripts/pm2-deerflow.sh (pm2 restart nova), not a per-service up",
+        f"declared but not running: {', '.join(missing)} ({len(running)}/{len(declared)} up) -- bring the stack up with scripts/pm2-deerflow.sh (pm2 restart nova), not a per-service up",
         missing=missing,
         declared=sorted(declared),
     )
@@ -485,11 +468,7 @@ def check_pm2_apps() -> dict:
     if rc != 0:
         return check("pm2_apps", YELLOW, "pm2 not reachable")
     try:
-        running = {
-            a["name"]: a["pm2_env"].get("status")
-            for a in json.loads(out)
-            if a.get("name") in declared
-        }
+        running = {a["name"]: a["pm2_env"].get("status") for a in json.loads(out) if a.get("name") in declared}
     except (json.JSONDecodeError, KeyError, TypeError):
         return check("pm2_apps", YELLOW, "could not parse pm2 output")
 
@@ -517,9 +496,7 @@ def check_pm2_apps() -> dict:
                 continue
             env = a.get("pm2_env") or {}
             restarts = int(env.get("restart_time") or 0)
-            up_h = max(
-                (now_ms - float(env.get("pm_uptime") or now_ms)) / 3_600_000, 0.0
-            )
+            up_h = max((now_ms - float(env.get("pm_uptime") or now_ms)) / 3_600_000, 0.0)
             if restarts >= PM2_RESTART_MIN and up_h < PM2_STABLE_HOURS:
                 churn.append(f"{a['name']}={restarts} restarts, last {up_h:.1f}h ago")
     except (json.JSONDecodeError, KeyError, TypeError, ValueError):
@@ -568,7 +545,7 @@ def check_restart_storm() -> dict:
                 "inspect",
                 name,
                 "--format",
-                "{{.RestartCount}}|{{.State.StartedAt}}|{{.State.OOMKilled}}",
+                "{{.RestartCount}}|{{.State.StartedAt}}|{{.State.OOMKilled}}|{{.Created}}",
             ],
             timeout=30,
         )
@@ -583,16 +560,22 @@ def check_restart_storm() -> dict:
             continue
         oom = parts[2].strip().lower() == "true"
 
-        started = parts[1].strip()
-        hours = None
-        try:
-            # Docker emits RFC3339 with nanoseconds, which %f cannot parse.
-            cleaned = re.sub(r"\.(\d{6})\d*", r".\1", started).replace("Z", "+00:00")
-            hours = (
-                _dt.datetime.now(_dt.timezone.utc) - _dt.datetime.fromisoformat(cleaned)
-            ).total_seconds() / 3600
-        except (ValueError, TypeError):
-            pass
+        def _age_hours(value: str) -> float | None:
+            try:
+                # Docker emits RFC3339 with nanoseconds, which %f cannot parse.
+                cleaned = re.sub(r"\.(\d{6})\d*", r".\1", value.strip()).replace("Z", "+00:00")
+                return (_dt.datetime.now(_dt.UTC) - _dt.datetime.fromisoformat(cleaned)).total_seconds() / 3600
+            except (ValueError, TypeError):
+                return None
+
+        # StartedAt is when the container LAST (re)started; Created is when it
+        # was made and RestartCount began at 0. The honest rate divides the
+        # cumulative count by time since Created, not since the last restart —
+        # otherwise a container that flapped during an outage and then held
+        # reads as an infinite storm (208 restarts "in 0.6h") forever, because
+        # StartedAt keeps resetting while the count only grows.
+        uptime_h = _age_hours(parts[1])
+        lifetime_h = _age_hours(parts[3]) if len(parts) > 3 else None
 
         if oom:
             findings.append(f"{name}: OOM-killed")
@@ -601,17 +584,31 @@ def check_restart_storm() -> dict:
         if restarts == 0:
             continue
 
-        if hours is not None and hours > 0:
-            rate = restarts / hours
-            if rate >= 2:
-                findings.append(f"{name}: {restarts} restarts in {hours:.1f}h")
-                worst = RED
-            elif restarts >= 3:
-                findings.append(f"{name}: {restarts} restarts over {hours:.1f}h")
+        # An active crash loop keeps restarting, so it can never stay up long:
+        # a container held past the grace window is stable *now*, whatever its
+        # lifetime count. That is the signal the gate actually wants — autoheal
+        # masking a loop that is happening, not the scar of one that is over.
+        uptime_min = uptime_h * 60 if uptime_h is not None else None
+        stable_now = uptime_min is not None and uptime_min >= RESTART_STORM_GRACE_MIN
+
+        if uptime_min is not None and uptime_min < RESTART_STORM_GRACE_MIN and restarts >= 3:
+            findings.append(f"{name}: up only {uptime_min:.0f}m after {restarts} restarts")
+            worst = RED
+        elif stable_now:
+            # Stable. Cumulative churn is history; note a genuinely high
+            # lifetime rate as yellow, but a currently-healthy container is
+            # never red for restarts it is no longer doing.
+            if lifetime_h and lifetime_h > 0 and restarts / lifetime_h >= 2:
+                findings.append(f"{name}: {restarts} restarts over {lifetime_h:.1f}h lifetime (stable now, up {uptime_min:.0f}m)")
                 worst = YELLOW if worst == GREEN else worst
         elif restarts >= 3:
-            findings.append(f"{name}: {restarts} restarts")
-            worst = YELLOW if worst == GREEN else worst
+            # Uptime unreadable; fall back to the lifetime rate.
+            if lifetime_h and lifetime_h > 0 and restarts / lifetime_h >= 2:
+                findings.append(f"{name}: {restarts} restarts over {lifetime_h:.1f}h")
+                worst = RED
+            else:
+                findings.append(f"{name}: {restarts} restarts")
+                worst = YELLOW if worst == GREEN else worst
 
     if not findings:
         return check("restart_storm", GREEN, "no repeated restarts")
@@ -680,9 +677,7 @@ def check_gateway_freshness() -> dict:
 
     now = time.time()
     # `docker top` rejects a format without a pid column.
-    rc_p, top_out, _ = _run(
-        ["docker", "top", "deer-flow-gateway", "-eo", "pid,etimes,args"], timeout=30
-    )
+    rc_p, top_out, _ = _run(["docker", "top", "deer-flow-gateway", "-eo", "pid,etimes,args"], timeout=30)
     worker_start = 0.0
     if rc_p == 0:
         for line in top_out.splitlines()[1:]:
@@ -699,9 +694,7 @@ def check_gateway_freshness() -> dict:
         return check(
             "gateway_freshness",
             RED,
-            f"{newest_file} is {drift_s}s newer than the running uvicorn worker "
-            f"— the --reload watcher did not pick it up (wedged reloader); "
-            f"restart deer-flow-gateway",
+            f"{newest_file} is {drift_s}s newer than the running uvicorn worker — the --reload watcher did not pick it up (wedged reloader); restart deer-flow-gateway",
             newest_file=newest_file,
             drift_seconds=drift_s,
         )
@@ -730,14 +723,8 @@ def build_report() -> dict:
         try:
             results.append(fn())
         except Exception as exc:  # noqa: BLE001 - a gate must not crash the console
-            results.append(
-                check(fn.__name__.replace("check_", ""), YELLOW, f"check raised: {exc}")
-            )
-    overall = (
-        RED
-        if any(r["status"] == RED for r in results)
-        else (YELLOW if any(r["status"] == YELLOW for r in results) else GREEN)
-    )
+            results.append(check(fn.__name__.replace("check_", ""), YELLOW, f"check raised: {exc}"))
+    overall = RED if any(r["status"] == RED for r in results) else (YELLOW if any(r["status"] == YELLOW for r in results) else GREEN)
     return {
         "gate": "drift",
         "checked_at_epoch": time.time(),
@@ -765,9 +752,7 @@ def write_atomic(path: Path, payload: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--print", dest="print_only", action="store_true")
     ap.add_argument("--status-path", type=Path, default=_status_path())
