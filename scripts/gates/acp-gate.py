@@ -23,6 +23,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -143,12 +145,74 @@ def check_workspace_dirs() -> dict:
 
 
 def check_live_invoke() -> dict:
-    """Optional live invoke probe."""
+    """Optional live round trip through a real ACP agent.
+
+    Driven through the gateway's own ``runtimes.probe`` operation rather than
+    by constructing a runtime here. That is deliberate and not stylistic: the
+    sandbox provider is a process-local singleton that registers shutdown
+    hooks over *shared* containers, so a throwaway process that builds one
+    destroys the live gateway's sandboxes when it exits (2026-08-25). Probing
+    over HTTP keeps every adapter inside the process that owns it.
+
+    Costs a real model call, hence opt-in via NOVA_GATE_ACP_PROBE=1.
+    """
     if os.environ.get("NOVA_GATE_ACP_PROBE", "0") != "1":
         return check("invoke", GREEN, "Skipped (set NOVA_GATE_ACP_PROBE=1 to enable)")
 
-    # This is a placeholder - a real invoke would need the full ACP runtime
-    return check("invoke", GREEN, "Invoke probe not yet implemented")
+    runtime = os.environ.get("NOVA_GATE_ACP_PROBE_RUNTIME", "claude_code")
+    base = os.environ.get("NOVA_GATE_BASE", "http://127.0.0.1:2026")
+    token = _ops_token()
+    if not token:
+        return check("invoke", YELLOW, "NOVA_OPS_TOKEN not set — cannot reach the gateway to probe")
+
+    csrf = os.urandom(16).hex()
+    payload = json.dumps({"runtime": runtime}).encode()
+    req = urllib.request.Request(
+        f"{base}/api/capabilities/ops/runtimes.probe",
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "X-Nova-Ops-Token": token,
+            "X-CSRF-Token": csrf,
+            "Cookie": f"csrf_token={csrf}",
+        },
+    )
+    started = time.time()
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=180) as resp:  # noqa: S310
+            body = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        return check("invoke", RED, f"{runtime}: gateway returned HTTP {exc.code}")
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return check("invoke", RED, f"{runtime}: probe could not run: {exc}")
+
+    result = body.get("result") or {}
+    elapsed_ms = int((time.time() - started) * 1000)
+    if result.get("ok"):
+        return check(
+            "invoke",
+            GREEN,
+            f"{runtime} answered in {result.get('latency_ms', elapsed_ms)}ms",
+            runtime=runtime,
+            latency_ms=result.get("latency_ms", elapsed_ms),
+        )
+    return check("invoke", RED, f"{runtime}: {str(result.get('detail', 'no detail'))[:160]}", runtime=runtime)
+
+
+def _ops_token() -> str:
+    """NOVA_OPS_TOKEN from the environment, else from the repo's .env."""
+    token = os.environ.get("NOVA_OPS_TOKEN", "").strip()
+    if token:
+        return token
+    env_file = REPO_ROOT / ".env"
+    try:
+        for line in env_file.read_text().splitlines():
+            if line.startswith("NOVA_OPS_TOKEN="):
+                return line.split("=", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    return ""
 
 
 def run_checks() -> dict:

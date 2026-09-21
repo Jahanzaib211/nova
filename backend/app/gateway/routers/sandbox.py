@@ -23,10 +23,12 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 
 from app.gateway.csrf_middleware import get_configured_cors_origins
 from app.gateway.deps import get_checkpointer
 from app.gateway.services import SSE_HEADERS
+from app.gateway.utils import sanitize_log_param
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id, reset_current_user, set_current_user
 from deerflow.sandbox.dev_server import (
@@ -499,6 +501,70 @@ async def get_sandbox_file(
         return {"content": content, "path": path, "exists": True, "size": host_path.stat().st_size}
     except Exception:
         return {"content": "", "path": path, "exists": False, "size": 0}
+
+
+# ──────────────────────────────────────────────────────────
+# PUT /api/sandbox/file
+# ──────────────────────────────────────────────────────────
+
+
+class SandboxFileWrite(BaseModel):
+    thread_id: str
+    path: str
+    content: str
+    #: The size the editor last read. When it no longer matches, the agent (or
+    #: another tab) wrote the file since, and saving would silently discard
+    #: that work -- so the write is refused and the caller re-reads.
+    expected_size: int | None = None
+
+
+@router.put("/file")
+async def put_sandbox_file(body: SandboxFileWrite, request: Request) -> dict:
+    """Write a file in the thread's ``/mnt/user-data/`` tree from the editor.
+
+    The read side of this pair is ``GET /api/sandbox/file``; every guarantee
+    there applies here, in the same order: the caller must own the thread, the
+    path must be inside the virtual user-data tree, and ``resolve_virtual_path``
+    is what keeps ``..`` from escaping it.
+
+    Writing is the reason the Agent's Computer editor can stop being a viewer.
+    The agent writes the same files, so the lost-update case is real rather
+    than theoretical: ``expected_size`` makes a stale save fail loudly (409)
+    instead of overwriting whatever the agent just produced.
+    """
+    if not _caller_owns_thread(body.thread_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    user_id = get_effective_user_id()
+    paths = get_paths()
+
+    if not body.path.startswith("/mnt/user-data/"):
+        raise HTTPException(status_code=400, detail="Path must be inside /mnt/user-data/")
+
+    try:
+        host_path = paths.resolve_virtual_path(body.thread_id, body.path, user_id=user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid path") from None
+
+    if body.expected_size is not None:
+        current = host_path.stat().st_size if host_path.exists() else 0
+        if current != body.expected_size:
+            raise HTTPException(
+                status_code=409,
+                detail=f"File changed on disk (expected {body.expected_size} bytes, found {current}). Reload before saving.",
+            )
+
+    try:
+        host_path.parent.mkdir(parents=True, exist_ok=True)
+        # Write to a sibling temp file and replace, so a reader never observes
+        # a half-written file -- the agent polls these paths continuously.
+        tmp = host_path.with_suffix(host_path.suffix + ".editor-tmp")
+        tmp.write_text(body.content, encoding="utf-8")
+        tmp.replace(host_path)
+    except OSError as exc:
+        logger.warning("sandbox file write failed for %s: %s", sanitize_log_param(body.path), exc)
+        raise HTTPException(status_code=500, detail="Could not write file") from None
+
+    return {"path": body.path, "size": host_path.stat().st_size, "saved": True}
 
 
 # ──────────────────────────────────────────────────────────

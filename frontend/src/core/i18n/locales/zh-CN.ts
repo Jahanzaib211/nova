@@ -1281,7 +1281,7 @@ export const zhCN: Translations = {
     thinking: "正在思考",
     usingTerminal: "正在使用终端",
     usingBrowser: "正在使用浏览器",
-    usingViewer: "正在使用查看器",
+    usingViewer: "正在使用编辑器",
     taskProgress: "任务进度",
     noLogs: "暂无输出",
     close: "关闭",
@@ -1307,7 +1307,7 @@ export const zhCN: Translations = {
     tabs: {
       files: "文件",
       terminal: "终端",
-      viewer: "查看器",
+      viewer: "编辑器",
       browser: "浏览器",
       activity: "活动",
       telemetry: "遥测",
@@ -1354,7 +1354,7 @@ export const zhCN: Translations = {
     status: {
       writing: (filename: string, lines?: string) =>
         `正在写入 ${filename}${lines ? ` (${lines})` : ""}`,
-      usingViewer: "正在使用查看器",
+      usingViewer: "正在使用编辑器",
       editing: (filename: string) => `正在编辑 ${filename}`,
       reading: (filename: string) => `正在读取 ${filename}`,
       usingTerminal: "正在使用终端",

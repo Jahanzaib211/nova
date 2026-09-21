@@ -1326,7 +1326,7 @@ export const enUS: Translations = {
     thinking: "is thinking",
     usingTerminal: "is using Terminal",
     usingBrowser: "is using Browser",
-    usingViewer: "is using Viewer",
+    usingViewer: "is using Editor",
     taskProgress: "Task progress",
     noLogs: "No output yet",
     close: "Close",
@@ -1354,7 +1354,9 @@ export const enUS: Translations = {
     tabs: {
       files: "Files",
       terminal: "Terminal",
-      viewer: "Viewer",
+      // The tab key stays "viewer" (data-tab selectors, visual baselines);
+      // the surface is a real editor now, so the label says so.
+      viewer: "Editor",
       browser: "Browser",
       activity: "Activity",
       telemetry: "Telemetry",
@@ -1404,7 +1406,7 @@ export const enUS: Translations = {
     status: {
       writing: (filename: string, lines?: string) =>
         `is writing ${filename}${lines ? ` (${lines})` : ""}`,
-      usingViewer: "is using Viewer",
+      usingViewer: "is using Editor",
       editing: (filename: string) => `is editing ${filename}`,
       reading: (filename: string) => `is reading ${filename}`,
       usingTerminal: "is using Terminal",

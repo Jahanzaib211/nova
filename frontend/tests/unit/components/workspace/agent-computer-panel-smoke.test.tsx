@@ -87,7 +87,7 @@ describe("AgentComputerPanel smoke", () => {
     for (const tab of [
       "Files",
       "Terminal",
-      "Viewer",
+      "Editor",
       "Browser",
       // Activity and Audit merged into one Telemetry inspector: they drew on the
       // same tool-call stream and answered adjacent questions, so they are now
