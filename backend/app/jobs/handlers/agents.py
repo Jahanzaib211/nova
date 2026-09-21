@@ -68,7 +68,7 @@ async def _run_subagent(ctx: JobContext, agent: str, task: str) -> str:
             last = messages[-1]
             text = last.get("content") if isinstance(last, dict) else str(last)
             await ctx.progress(min(90, 10 + seen * 5), (str(text) if text else f"turn {seen}")[:200])
-        if result.status in (SubagentStatus.COMPLETED, SubagentStatus.FAILED, SubagentStatus.TIMEOUT, SubagentStatus.CANCELLED):
+        if result.status in (SubagentStatus.COMPLETED, SubagentStatus.FAILED, SubagentStatus.TIMED_OUT, SubagentStatus.CANCELLED):
             break
         await asyncio.sleep(2)
     if result.status != SubagentStatus.COMPLETED:
