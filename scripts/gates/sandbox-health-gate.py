@@ -162,22 +162,41 @@ def tool_inventory_from_manifest(manifest: dict) -> dict[str, str]:
     return manifest.get("toolchain", {})
 
 
-def tool_inventory_live(image: str) -> dict[str, str]:
-    """Run verify-toolchain.sh --manifest inside the image to get live inventory."""
+def tool_inventory_live(image: str) -> dict[str, str] | None:
+    """Live inventory from inside the image, or None when the probe could not run.
+
+    The distinction matters more than it looks. This returned ``{}`` on any
+    failure -- non-zero exit, timeout, unparseable output -- and the evaluator
+    below reads an empty inventory as "every tool in the manifest is missing".
+    On 2026-09-21 the probe container could not start under IO pressure and
+    the gate reported all 78 tools gone from a perfectly intact image. Every
+    one of them was verified present by hand minutes later.
+
+    A gate that reports catastrophe when it merely could not look is worse
+    than one that stays quiet: it is the fastest way to teach everyone to
+    ignore the board.
+    """
     rc, out = run(["docker", "run", "--rm", "--entrypoint", "sh", image,
                     "-c", "HOME=/tmp /usr/local/bin/verify-toolchain.sh --manifest"],
                    timeout=180)
     if rc != 0:
-        return {}
+        return None
     try:
-        return json.loads(out.strip())
+        parsed = json.loads(out.strip())
     except ValueError:
-        return {}
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
-def evaluate_tool_inventory(image_ok: bool, manifest_tools: dict, live_tools: dict) -> dict:
+def evaluate_tool_inventory(image_ok: bool, manifest_tools: dict, live_tools: dict | None) -> dict:
     if not image_ok:
         return check("tool_inventory", RED, "no sandbox image to inspect")
+
+    if live_tools is None:
+        # Could not look. Say so, rather than reporting the image as gutted.
+        return check("tool_inventory", YELLOW,
+                      "could not probe the image (container would not start or returned no manifest) — "
+                      "tool inventory unverified, not known-bad")
 
     # Compare manifest vs live — a mismatch means the image was modified after build
     manifest_names = set(manifest_tools.keys())

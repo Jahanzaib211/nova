@@ -257,6 +257,14 @@ def run_checks() -> dict:
 
     doc = {
         "gate": "acp",
+        # `overall`, `ok` and `checked_at_epoch` are the three fields every
+        # other gate file carries and the console keys its rendering and its
+        # staleness rule off. Without them this gate rendered as "No data"
+        # with an age of ~57 years (epoch 0) no matter how recently it ran —
+        # a passing gate that looked like a dead one.
+        "overall": status,
+        "ok": status == GREEN,
+        "checked_at_epoch": time.time(),
         "status": status,
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "elapsed_ms": round(elapsed * 1000),
