@@ -139,6 +139,42 @@ class SubagentResult:
 _background_tasks: dict[str, SubagentResult] = {}
 _background_tasks_lock = threading.Lock()
 
+# TTL for completed background tasks — prevents unbounded memory growth
+# when a parent run crashes before polling completes.
+_BACKGROUND_TASK_TTL_SEC = 3600  # 1 hour
+
+
+def _sweep_background_tasks() -> None:
+    """Evict terminal tasks older than TTL to prevent unbounded memory growth.
+
+    Runs on every async launch, so it must never be the thing that fails one.
+    ``completed_at`` is tz-aware everywhere it is set today, but a naive value
+    would make ``now - completed_at`` raise TypeError and take down all async
+    subagent execution — and naive datetimes in this exact file are a known
+    finding (BUG-001). Bookkeeping degrades instead: a skipped sweep costs
+    memory, a raised one costs the feature.
+    """
+    now = datetime.now(UTC)
+
+    def _expired(r) -> bool:
+        if r.status not in (SubagentStatus.COMPLETED, SubagentStatus.FAILED, SubagentStatus.TIMED_OUT):
+            return False
+        completed = r.completed_at
+        if completed is None:
+            return False
+        if completed.tzinfo is None:  # defensive: treat a naive stamp as UTC
+            completed = completed.replace(tzinfo=UTC)
+        return (now - completed).total_seconds() > _BACKGROUND_TASK_TTL_SEC
+
+    try:
+        with _background_tasks_lock:
+            expired = [tid for tid, r in _background_tasks.items() if _expired(r)]
+            for tid in expired:
+                del _background_tasks[tid]
+    except Exception:
+        logger.debug("background task sweep failed", exc_info=True)
+
+
 # Thread pool for background task scheduling and orchestration
 _scheduler_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="subagent-scheduler-")
 
@@ -731,8 +767,14 @@ class SubagentExecutor:
         except FuturesTimeoutError:
             if result_holder is not None:
                 result_holder.cancel_event.set()
+                result_holder.try_set_terminal(
+                    SubagentStatus.TIMED_OUT,
+                    error=f"Execution timed out after {self.config.timeout_seconds} seconds",
+                )
             if future is not None:
                 future.cancel()
+            if result_holder is not None:
+                return result_holder
             raise
         except Exception:
             if future is None:
@@ -813,6 +855,8 @@ class SubagentExecutor:
         )
 
         logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} starting async execution, task_id={task_id}, timeout={self.config.timeout_seconds}s")
+
+        _sweep_background_tasks()
 
         with _background_tasks_lock:
             _background_tasks[task_id] = result

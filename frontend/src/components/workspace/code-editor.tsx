@@ -34,6 +34,46 @@ const customLightTheme = basicLightInit({
   },
 });
 
+/**
+ * Pick ONE language extension from the filename.
+ *
+ * CodeMirror 6 resolves `language` as a facet that keeps the first value, so
+ * passing `[css(), html(), javascript(), json(), markdown(), python()]` does
+ * not mean "detect the right one" — it means **every document is highlighted
+ * as CSS**, which is what the Agent's Computer editor was doing to every file
+ * it showed. Verified directly: a Python document under `[css(), python()]`
+ * resolves to `css`.
+ */
+export function languageFor(filename: string | undefined) {
+  const ext = filename?.split(".").at(-1)?.toLowerCase() ?? "";
+  switch (ext) {
+    case "css":
+    case "scss":
+      return css();
+    case "html":
+    case "htm":
+      return html();
+    case "js":
+    case "jsx":
+    case "mjs":
+    case "cjs":
+      return javascript({ jsx: ext === "jsx" });
+    case "ts":
+    case "tsx":
+      return javascript({ typescript: true, jsx: ext === "tsx" });
+    case "json":
+    case "jsonc":
+      return json();
+    case "md":
+    case "markdown":
+      return markdown({ base: markdownLanguage, codeLanguages: languages });
+    case "py":
+      return python();
+    default:
+      return null;
+  }
+}
+
 export function CodeEditor({
   className,
   placeholder,
@@ -42,6 +82,8 @@ export function CodeEditor({
   disabled,
   autoFocus,
   settings,
+  filename,
+  onChange,
 }: {
   className?: string;
   placeholder?: string;
@@ -50,6 +92,9 @@ export function CodeEditor({
   disabled?: boolean;
   autoFocus?: boolean;
   settings?: unknown;
+  /** Drives syntax highlighting. Without it the document is left unhighlighted. */
+  filename?: string;
+  onChange?: (value: string) => void;
 }) {
   const {
     thread: { isLoading },
@@ -57,18 +102,9 @@ export function CodeEditor({
   const { resolvedTheme } = useTheme();
 
   const extensions = useMemo(() => {
-    return [
-      css(),
-      html(),
-      javascript({}),
-      json(),
-      markdown({
-        base: markdownLanguage,
-        codeLanguages: languages,
-      }),
-      python(),
-    ];
-  }, []);
+    const lang = languageFor(filename);
+    return lang ? [lang] : [];
+  }, [filename]);
 
   return (
     <div
@@ -107,6 +143,7 @@ export function CodeEditor({
           }}
           autoFocus={autoFocus}
           value={value}
+          onChange={onChange}
         />
       )}
     </div>

@@ -13,8 +13,10 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from app.gateway.authz import require_auth
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/assistants", tags=["assistants-compat"])
@@ -86,7 +88,8 @@ def _list_assistants() -> list[AssistantResponse]:
 
 
 @router.post("/search", response_model=list[AssistantResponse])
-async def search_assistants(body: AssistantSearchRequest | None = None) -> list[AssistantResponse]:
+@require_auth
+async def search_assistants(request: Request, body: AssistantSearchRequest | None = None) -> list[AssistantResponse]:
     """Search assistants.
 
     Returns all registered assistants (lead_agent + custom agents from config).
@@ -104,7 +107,8 @@ async def search_assistants(body: AssistantSearchRequest | None = None) -> list[
 
 
 @router.get("/{assistant_id}", response_model=AssistantResponse)
-async def get_assistant_compat(assistant_id: str) -> AssistantResponse:
+@require_auth
+async def get_assistant_compat(assistant_id: str, request: Request) -> AssistantResponse:
     """Get an assistant by ID."""
     for a in _list_assistants():
         if a.assistant_id == assistant_id:
@@ -113,7 +117,8 @@ async def get_assistant_compat(assistant_id: str) -> AssistantResponse:
 
 
 @router.get("/{assistant_id}/graph")
-async def get_assistant_graph(assistant_id: str) -> dict:
+@require_auth
+async def get_assistant_graph(assistant_id: str, request: Request) -> dict:
     """Get the graph structure for an assistant.
 
     Returns a minimal graph description. Full graph introspection is
@@ -131,7 +136,8 @@ async def get_assistant_graph(assistant_id: str) -> dict:
 
 
 @router.get("/{assistant_id}/schemas")
-async def get_assistant_schemas(assistant_id: str) -> dict:
+@require_auth
+async def get_assistant_schemas(assistant_id: str, request: Request) -> dict:
     """Get JSON schemas for an assistant's input/output/state.
 
     Returns empty schemas — full introspection not supported in Gateway.

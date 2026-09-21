@@ -3,6 +3,7 @@
 import { CodeIcon, LoaderCircleIcon, PencilIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { CodeEditor } from "@/components/workspace/code-editor";
 import { useI18n } from "@/core/i18n/hooks";
 import { useLiveFileContent } from "@/core/sandbox/hooks";
 import { diffStats, lineDiff, type DiffLine } from "@/lib/line-diff";
@@ -12,18 +13,6 @@ import type { ActiveEdit } from "./message-helpers";
 
 // Tab 2: Editor — live code view as agent writes
 // ──────────────────────────────────────────────────────────
-function getCodeColor(filename: string): string {
-  const ext = filename.split(".").at(-1)?.toLowerCase() ?? "";
-  if (ext === "html" || ext === "htm") return "text-warning";
-  if (ext === "css" || ext === "scss") return "text-info";
-  if (ext === "js" || ext === "jsx" || ext === "mjs") return "text-warning";
-  if (ext === "ts" || ext === "tsx") return "text-info";
-  if (ext === "json") return "text-success";
-  if (ext === "md") return "text-info";
-  if (ext === "py") return "text-success";
-  return "text-muted-foreground";
-}
-
 // Renders an interleaved red/green line diff (zai/cursor style).
 function DiffView({ lines }: { lines: DiffLine[] }) {
   return (
@@ -69,7 +58,6 @@ export function Editor({
   );
   const bottomRef = useRef<HTMLDivElement>(null);
   const filename = filePath?.split("/").at(-1) ?? "";
-  const codeColor = getCodeColor(filename);
 
   // The diff is only meaningful for the file currently shown.
   const editForFile = activeEdit?.path === filePath ? activeEdit : null;
@@ -181,15 +169,27 @@ export function Editor({
         {showDiff && diff ? (
           <DiffView lines={diff} />
         ) : exists && content ? (
-          <pre
-            className={cn(
-              "p-3 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap",
-              codeColor,
+          <div className="relative h-full">
+            <CodeEditor
+              value={content}
+              filename={filePath ?? undefined}
+              readonly
+              className="h-full"
+              settings={{ lineNumbers: true }}
+            />
+            {isWriting && (
+              // The "agent is typing into this file" affordance. It lived in
+              // the old <pre> as a trailing block cursor; without it a live
+              // write is indistinguishable from a static file.
+              <span
+                aria-hidden
+                className="text-foreground pointer-events-none absolute right-2 bottom-1 animate-pulse font-mono text-xs"
+                data-testid="editor-writing-cursor"
+              >
+                █
+              </span>
             )}
-          >
-            {content}
-            {isWriting && <span className="animate-pulse text-white">█</span>}
-          </pre>
+          </div>
         ) : isLoading ? (
           // Genuinely still fetching — the only state a spinner means.
           <div className="flex h-full items-center justify-center">

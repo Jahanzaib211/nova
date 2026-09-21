@@ -312,6 +312,7 @@ export function ArtifactFileDetail({
           <CodeEditor
             className="size-full resize-none rounded-none border-none"
             value={visibleContent ?? ""}
+            filename={filepath}
             readonly
           />
         )}
