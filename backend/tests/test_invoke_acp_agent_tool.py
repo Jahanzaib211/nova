@@ -246,7 +246,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -371,7 +371,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -463,7 +463,7 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -556,7 +556,7 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -643,7 +643,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -750,7 +750,7 @@ def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(mo
         SimpleNamespace(
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -888,7 +888,7 @@ async def test_invoke_acp_agent_streams_acp_update_events(monkeypatch, tmp_path)
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestPermissionResponse=lambda outcome: SimpleNamespace(outcome=outcome),
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )

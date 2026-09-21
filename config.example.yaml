@@ -1742,6 +1742,10 @@ run_events:
 # nova-host-bridge PM2 app (scripts/host-bridge.sh) to be reachable at all.
 # api_key_env is the NAME of an environment variable (never the value); when
 # it is unset the card says so instead of the config failing to load.
+# required (default true): false marks a service that is expected to be
+# unavailable or partly configured on this deployment. It is still probed and
+# still shows its real status, but it cannot make the integrations capability
+# module unhealthy -- a gate that is permanently yellow is one nobody reads.
 # kinds: llm_gateway, mail, crm, helpdesk, search, crawler, browser, database,
 # agent_gateway. Ids ollama/litellm/mailcow/chatwoot/twenty/openclaw/searxng/
 # crawl4ai/browserless get a service-aware probe; other ids use health_path.
@@ -1763,6 +1767,7 @@ run_events:
 #       url: http://host.docker.internal:8080
 #       display_name: Mailcow
 #       api_key_env: MAILCOW_API_KEY
+#       required: false
 #     chatwoot:
 #       kind: helpdesk
 #       url: http://host.docker.internal:4800

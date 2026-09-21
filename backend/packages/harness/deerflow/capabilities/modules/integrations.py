@@ -66,9 +66,39 @@ async def _probe(ctx: OpContext, inp: ProbeIn) -> ItemOut:
 async def _status() -> ModuleStatus:
     if not section_enabled("integrations"):
         return ModuleStatus(configured=False, healthy=False, detail="integrations.enabled is false")
-    results = await _registry().probe_all()
-    bad = [r for r in results if getattr(getattr(r, "status", None), "value", r.status) not in ("healthy", "configured", "disabled", "degraded")]
-    return ModuleStatus(configured=True, healthy=not bad, detail=f"{len(results) - len(bad)}/{len(results)} healthy")
+    registry = _registry()
+    results = await registry.probe_all()
+    # IntegrationStatus (integrations/health.py) is healthy/degraded/down/
+    # unknown/disabled. "configured" was never a member — a dead string that
+    # excluded nothing. "disabled" is a deliberate operator choice, so it never
+    # counts against the module.
+    #
+    # "degraded" means alive-but-broken ("alive, /v1/models failed",
+    # "reachable, API key not accepted"), so it must not read as healthy in
+    # general. But some services are *expected* to sit degraded on a given
+    # deployment — Mailcow with no MAILCOW_API_KEY, say — and pinning the gate
+    # yellow forever teaches everyone to ignore the board, which is how the
+    # sandbox image vanished unnoticed. Those are marked ``required: false``
+    # in config: still probed, still showing their real status on the card,
+    # just unable to make the module unhealthy.
+    ok = ("healthy", "disabled")
+    services = getattr(registry.config, "services", {}) or {}
+
+    def _counts_against_module(result: Any) -> bool:
+        status = getattr(getattr(result, "status", None), "value", result.status)
+        if status in ok:
+            return False
+        service = services.get(getattr(result, "id", ""))
+        return getattr(service, "required", True)
+
+    bad = [r for r in results if _counts_against_module(r)]
+    healthy_now = [r for r in results if getattr(getattr(r, "status", None), "value", r.status) in ok]
+    detail = f"{len(healthy_now)}/{len(results)} healthy"
+    if bad:
+        detail += f", {len(bad)} required failing: " + ", ".join(sorted(getattr(r, "id", "?") for r in bad))[:120]
+    elif len(healthy_now) != len(results):
+        detail += f", {len(results) - len(healthy_now)} optional degraded"
+    return ModuleStatus(configured=True, healthy=not bad, detail=detail)
 
 
 MODULE = CapabilityModule(

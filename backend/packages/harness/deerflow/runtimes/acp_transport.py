@@ -8,9 +8,12 @@ the runtime dispatch middleware (a whole chat turn run by the agent).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
+import signal
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from deerflow.config.acp_config import ACPAgentConfig
@@ -20,6 +23,51 @@ logger = logging.getLogger(__name__)
 
 #: ``(acp_session_id, text)`` — the session id is the agent's, surfaced in ``acp_update``.
 TextSink = Callable[[str, str], None]
+
+#: Max bytes in one ACP JSON-RPC frame.
+#:
+#: asyncio's StreamReader defaults to 64 KiB, and a single ACP frame routinely
+#: exceeds that: ``new_session`` carries the full MCP tool list (Nova alone
+#: contributes 19 capability tools with their JSON schemas), and a tool *result*
+#: carrying a file or a command's output is unbounded in practice. Past the
+#: limit ``readline()`` raises ``ValueError: Separator is found, but chunk is
+#: longer than limit`` and the whole turn dies — which is exactly how the
+#: ``claude_code`` runtime failed on 2026-09-20. Applies to stdout and stderr
+#: both, so it also covers the stderr drain below.
+_DEFAULT_STREAM_LIMIT = 8 * 1024 * 1024
+
+
+def _stream_limit() -> int:
+    """Parse the override, falling back rather than failing the import.
+
+    This runs at module scope, and the module is imported on the gateway's
+    startup path: a typo'd or empty ``NOVA_ACP_STREAM_LIMIT`` raising here
+    would turn one bad env var into a gateway that cannot boot at all. A
+    non-positive value is equally unusable, so it is refused the same way.
+    """
+    raw = os.environ.get("NOVA_ACP_STREAM_LIMIT", "").strip()
+    if not raw:
+        return _DEFAULT_STREAM_LIMIT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("NOVA_ACP_STREAM_LIMIT=%r is not an integer — using %d", raw, _DEFAULT_STREAM_LIMIT)
+        return _DEFAULT_STREAM_LIMIT
+    if value <= 0:
+        logger.warning("NOVA_ACP_STREAM_LIMIT=%d must be positive — using %d", value, _DEFAULT_STREAM_LIMIT)
+        return _DEFAULT_STREAM_LIMIT
+    return value
+
+
+ACP_STREAM_LIMIT = _stream_limit()
+
+
+class ACPFrameTooLarge(RuntimeError):
+    """One ACP frame exceeded :data:`ACP_STREAM_LIMIT`.
+
+    Raised in place of asyncio's bare ``ValueError`` so the failure names the
+    limit and the knob instead of reading as a generic parse error.
+    """
 
 
 def build_acp_mcp_servers() -> list[dict[str, Any]]:
@@ -117,6 +165,64 @@ def resolve_env(agent_cfg: ACPAgentConfig) -> dict[str, str] | None:
     return {k: (os.environ.get(v[1:], "") if v.startswith("$") else v) for k, v in agent_cfg.env.items()}
 
 
+def _descendants(pid: int) -> set[int]:
+    """Every PID below *pid*, read from ``/proc`` (the gateway runs in the container).
+
+    Needed because the tracked process is usually ``npx``, a launcher: the real
+    adapter is its child, so killing only the tracked PID leaves the adapter
+    behind.
+    """
+    found: set[int] = set()
+    stack = [pid]
+    while stack:
+        cur = stack.pop()
+        try:
+            kids = Path(f"/proc/{cur}/task/{cur}/children").read_text().split()
+        except OSError:
+            continue
+        for raw in kids:
+            try:
+                kid = int(raw)
+            except ValueError:
+                continue
+            if kid not in found:
+                found.add(kid)
+                stack.append(kid)
+    return found
+
+
+def _reap_adapter(proc: Any, descendants: set[int] | None = None) -> None:
+    """Kill the ACP adapter *and its children* if they outlived the turn.
+
+    Two independent leaks, both observed live on 2026-09-21 (five orphaned
+    ``claude-agent-acp`` node processes, the oldest 24 h old, against six
+    sessions ever):
+
+    1. **Cancellation.** The transport's teardown is correct but every step of
+       it *awaits*. Inside an already-cancelled task — a turn that hit its
+       timeout, or a client that disconnected mid-stream — those awaits raise
+       ``CancelledError`` immediately, so terminate/kill never run.
+    2. **The launcher.** ``npx`` is what asyncio tracks; the adapter is its
+       child. The transport kills ``npx``, the child is orphaned onto the
+       container's PID 1 (which *is* the gateway's uvicorn), and nothing ever
+       reaps it. ``returncode`` is set, so the tracked process looks clean.
+
+    ``kill``/``os.kill`` are synchronous, so both still land while the task
+    unwinds.
+    """
+    # Cleanup must never be the thing that fails a turn, so every step is
+    # suppressed independently.
+    with contextlib.suppress(Exception):
+        if proc is not None and proc.returncode is None:
+            proc.kill()
+            logger.warning("acp adapter pid=%s outlived its turn — killed", proc.pid)
+
+    for pid in sorted(descendants or ()):
+        with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+            os.kill(pid, signal.SIGKILL)
+            logger.warning("acp adapter child pid=%s orphaned by its launcher — killed", pid)
+
+
 async def run_acp_prompt(
     agent_cfg: ACPAgentConfig,
     prompt: str,
@@ -139,8 +245,22 @@ async def run_acp_prompt(
         async def session_update(self, session_id: str, update, **kwargs) -> None:  # type: ignore[override]
             try:
                 if hasattr(update, "content") and isinstance(update.content, TextContentBlock):
-                    chunks.append(update.content.text)
-                    on_text(session_id, update.content.text)
+                    # ACP streams three kinds of text on the same field. Only
+                    # ``agent_message_chunk`` is the answer: a thought chunk is
+                    # the model reasoning aloud, and a user chunk is our own
+                    # prompt echoed back. Appending all three is why a reply
+                    # once read "The user wants me to call a Nova MCP tool...
+                    # Let me search for relevant tools.**28 modules.**" — the
+                    # reasoning was concatenated onto the answer.
+                    update_kind = str(getattr(update, "session_update", "") or "")
+                    text = update.content.text
+                    if update_kind == "agent_thought_chunk":
+                        on_status(session_id, f"thinking: {text}")
+                        return
+                    if update_kind == "user_message_chunk":
+                        return
+                    chunks.append(text)
+                    on_text(session_id, text)
                     return
                 title = getattr(update, "title", None)
                 if title:
@@ -180,18 +300,46 @@ async def run_acp_prompt(
             pass
 
     async def _run() -> str:
-        async with spawn_agent_process(_Client(), agent_cfg.command, *(agent_cfg.args or []), env=resolve_env(agent_cfg), cwd=cwd) as (conn, proc):
-            drain = asyncio.create_task(_drain_stderr(proc))
-            await conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0"))
-            kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
-            logger.info("acp session for %s: cwd=%s mcp_servers=%s", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers])
-            if model or agent_cfg.model:
-                kwargs["model"] = model or agent_cfg.model
-            session = await conn.new_session(**kwargs)
-            await conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)])
-            drain.cancel()
+        proc_ref: Any = None
+        kids: set[int] = set()
+        try:
+            async with spawn_agent_process(
+                _Client(),
+                agent_cfg.command,
+                *(agent_cfg.args or []),
+                env=resolve_env(agent_cfg),
+                cwd=cwd,
+                transport_kwargs={"limit": ACP_STREAM_LIMIT},
+            ) as (conn, proc):
+                proc_ref = proc
+                drain = asyncio.create_task(_drain_stderr(proc))
+                try:
+                    await conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0"))
+                    kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
+                    logger.info("acp session for %s: cwd=%s mcp_servers=%s", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers])
+                    if model or agent_cfg.model:
+                        kwargs["model"] = model or agent_cfg.model
+                    session = await conn.new_session(**kwargs)
+                    await conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)])
+                finally:
+                    # Was only cancelled on the success path, so a failed
+                    # initialize/prompt leaked the drain task too.
+                    drain.cancel()
+                    # Snapshot the tree *here*, while the launcher is still
+                    # alive. Once the transport's teardown kills it the
+                    # children reparent to PID 1 and are no longer findable
+                    # from this process.
+                    with contextlib.suppress(Exception):
+                        kids = _descendants(proc.pid)
+        finally:
+            _reap_adapter(proc_ref, kids)
         return "".join(chunks)
 
-    if timeout:
-        return await asyncio.wait_for(_run(), timeout=timeout)
-    return await _run()
+    try:
+        if timeout:
+            return await asyncio.wait_for(_run(), timeout=timeout)
+        return await _run()
+    except ValueError as exc:  # asyncio StreamReader overrun
+        if "chunk is longer than limit" not in str(exc):
+            raise
+        raise ACPFrameTooLarge(f"an ACP frame from {agent_cfg.command} exceeded {ACP_STREAM_LIMIT} bytes (raise NOVA_ACP_STREAM_LIMIT)") from exc

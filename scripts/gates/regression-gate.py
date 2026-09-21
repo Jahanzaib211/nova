@@ -300,8 +300,19 @@ def evaluate_config_prereqs(text: str, facts: dict) -> dict:
 # ---------------------------------------------------------------- services
 
 
+#: Sent on every probe. Without it urllib identifies itself as
+#: ``Python-urllib/3.x``, which Cloudflare blocks outright: the public probe
+#: of https://nova.alilabsx.com/health reported **403 while the site was
+#: perfectly healthy** (curl got 200 from this same host at the same moment).
+#: A gate that cries wolf about production being down is worse than no gate,
+#: so identify honestly instead — any descriptive agent is allowed through.
+_PROBE_UA = "Nova-RegressionGate/1.0 (+https://nova.alilabsx.com)"
+
+
 def http_status(url: str, timeout: float = 5.0, headers: dict | None = None) -> int | None:
-    req = urllib.request.Request(url, headers=headers or {})
+    merged = {"User-Agent": _PROBE_UA}
+    merged.update(headers or {})
+    req = urllib.request.Request(url, headers=merged)
     try:
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout) as resp:  # noqa: S310
             return resp.status

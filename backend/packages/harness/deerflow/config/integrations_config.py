@@ -27,6 +27,15 @@ class IntegrationServiceConfig(BaseModel):
     api_key_env: str | None = Field(default=None, description="Name of the environment variable holding the API key/token (never the value).")
     health_path: str | None = Field(default=None, description="Override the probe path for generic HTTP services.")
     capabilities: list[str] = Field(default_factory=list, description="Static capability chips shown on the card.")
+    required: bool = Field(
+        default=True,
+        description=(
+            "False when this service is expected to be unavailable or partly configured "
+            "on some deployments (e.g. Mailcow with no MAILCOW_API_KEY). It is still probed "
+            "and still shows its real status on the card, but it cannot make the integrations "
+            "module unhealthy. A permanently-yellow gate is one nobody reads."
+        ),
+    )
 
     @field_validator("kind")
     @classmethod

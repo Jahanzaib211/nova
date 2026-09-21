@@ -188,6 +188,8 @@ class Producer:
         else:
             log.info("%s: exit=%s in %.1fs — %s", self.name, rc, duration, detail)
 
+        self._stamp_interval()
+
         return {
             "gate": self.name,
             "kind": self.kind,
@@ -196,6 +198,35 @@ class Producer:
             "duration_sec": round(duration, 2),
             "detail": detail,
         }
+
+    def _stamp_interval(self) -> None:
+        """Record this producer's real cadence in the gate file it just wrote.
+
+        The console decides staleness as ``3 x interval``, and that interval
+        used to be declared a second time in ``nova-ops/src/lib/gates.ts``.
+        Two declarations drift: on 2026-09-21 the ci producer ran every
+        21,600 s while the console assumed 86,400 s, and lighthouse ran every
+        21,600 s against an assumed 172,800 s — in both cases the console was
+        the *more* tolerant side, so a genuinely dead producer would have
+        stayed invisible for days.
+
+        Writing it here makes the daemon the single source of truth: the
+        console reads this value and falls back to its own only when a gate
+        has no live producer (``healthcheck``, written by another daemon).
+        """
+        if self.kind != "gate":
+            return
+        path = Path.home() / ".nova" / "gates" / f"{self.name}.json"
+        try:
+            payload = json.loads(path.read_text())
+            if not isinstance(payload, dict):
+                return
+            payload["producer_interval_sec"] = self.interval_sec
+            path.write_text(json.dumps(payload, indent=2))
+        except (OSError, json.JSONDecodeError):
+            # A gate that could not write its own file is already reported by
+            # its exit code; never let bookkeeping mask that.
+            return
 
 
 def build_producers() -> list[Producer]:
@@ -288,10 +319,20 @@ def build_producers() -> list[Producer]:
         # the image existence check is cheap; the manifest read is the
         # expensive part (same as regression).
         Producer(
-            "sandbox_health",
+            # Hyphen, matching the status file and the console's card id.
+            # As "sandbox_health" this producer could never be addressed:
+            # `gates-daemon.py --only sandbox-health` matched nothing and
+            # exited silently having run no gate at all.
+            "sandbox-health",
             ["scripts/gates/sandbox-health-gate.py"],
             env_float("NOVA_GATE_SANDBOX_HEALTH_INTERVAL", 300),
             timeout_sec=300,
+        ),
+        Producer(
+            "acp",
+            ["scripts/gates/acp-gate.py"],
+            env_float("NOVA_GATE_ACP_INTERVAL", 300),
+            timeout_sec=60,
         ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the
