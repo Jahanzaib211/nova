@@ -11,7 +11,15 @@ import { languageFor } from "@/components/workspace/code-editor";
  */
 describe("languageFor", () => {
   it("returns at most one language, chosen by extension", () => {
-    for (const name of ["a.py", "a.ts", "a.tsx", "a.json", "a.md", "a.css", "a.html"]) {
+    for (const name of [
+      "a.py",
+      "a.ts",
+      "a.tsx",
+      "a.json",
+      "a.md",
+      "a.css",
+      "a.html",
+    ]) {
       const ext = languageFor(name);
       expect(ext, `${name} should resolve to a language`).not.toBeNull();
       expect(Array.isArray(ext)).toBe(false);

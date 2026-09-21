@@ -2134,6 +2134,8 @@ def _capture_external_dev_server(
                         port,
                         handle.status,
                     )
+                    with _capture_guard_lock:
+                        _capture_in_flight.discard(guard_key)
                     return
             except Exception as exc:  # noqa: BLE001 - best-effort capture
                 logger.debug("dev-server probe failed: %s", exc)

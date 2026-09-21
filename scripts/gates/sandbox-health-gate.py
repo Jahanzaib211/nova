@@ -311,15 +311,20 @@ def evaluate_host_resources() -> dict:
     except (OSError, ValueError):
         pass
 
-    # IO pressure
+    # IO pressure — /proc/pressure/io has "some" and "full" lines, each
+    # with avg10/avg60/avg300/total. We read the "full" line (all tasks
+    # stalled) and extract avg60. The old code checked
+    # line.startswith("avg60=") which never matches the file format.
     try:
         with open("/proc/pressure/io") as f:
             for line in f:
-                if line.startswith("avg60="):
-                    avg60 = float(line.split("=")[1].split()[0])
-                    metrics["io_pressure_avg60"] = avg60
-                    if avg60 >= IO_PRESSURE_WARN:
-                        problems.append(f"IO pressure avg60={avg60:.1f}%")
+                if line.startswith("full"):
+                    for token in line.split():
+                        if token.startswith("avg60="):
+                            avg60 = float(token.split("=")[1])
+                            metrics["io_pressure_avg60"] = avg60
+                            if avg60 >= IO_PRESSURE_WARN:
+                                problems.append(f"IO pressure avg60={avg60:.1f}%")
     except (OSError, ValueError):
         pass
 

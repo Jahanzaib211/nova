@@ -308,6 +308,11 @@ async def create_thread(body: ThreadCreateRequest, request: Request) -> ThreadRe
         await checkpointer.aput(config, empty_checkpoint(), ckpt_metadata, {})
     except Exception:
         logger.exception("Failed to create checkpoint for thread %s", sanitize_log_param(thread_id))
+        # Clean up the orphaned thread_meta so it doesn't appear in search results
+        try:
+            await thread_store.delete(thread_id, **thread_owner_kwargs)
+        except Exception:
+            logger.warning("Failed to clean up orphaned thread_meta for %s", sanitize_log_param(thread_id))
         raise HTTPException(status_code=500, detail="Failed to create thread")
 
     logger.info("Thread created: %s", sanitize_log_param(thread_id))
