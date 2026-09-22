@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Nova custom-event wire contract",
-  "description": "Shape of the four custom-event payloads the gateway emits over the SSE `custom` stream mode. Pinned by backend/tests/test_custom_events_contract.py and frontend/tests/unit/core/threads/custom-event-contract.test.ts so any drift in either side fails the build.",
+  "description": "Shape of the custom-event payloads the gateway emits over the SSE `custom` stream mode. Pinned by backend/tests/test_custom_events_contract.py and frontend/tests/unit/core/threads/custom-event-contract.test.ts so any drift in either side fails the build.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["task_progress", "verify_result", "llm_error", "task_running"],
+  "required": ["task_progress", "verify_result", "llm_error", "task_running", "safety_termination", "llm_retry", "task_started", "task_completed", "task_failed", "task_timed_out", "task_activity", "acp_update"],
   "properties": {
     "task_progress": {
       "type": "object",
@@ -52,6 +52,102 @@
         "type": {"const": "task_running"},
         "task_id": {"type": "string"},
         "message": {"type": "object"}
+      }
+    },
+    "safety_termination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "detector", "reason_field", "reason_value", "suppressed_tool_call_count", "suppressed_tool_call_names"],
+      "properties": {
+        "type": {"const": "safety_termination"},
+        "detector": {"type": "string"},
+        "reason_field": {"type": "string"},
+        "reason_value": {"type": "string"},
+        "suppressed_tool_call_count": {"type": "integer", "minimum": 0},
+        "suppressed_tool_call_names": {"type": "array"},
+        "thread_id": {"type": ["string", "null"]}
+      }
+    },
+    "llm_retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "attempt", "max_attempts", "wait_ms", "reason", "message"],
+      "properties": {
+        "type": {"const": "llm_retry"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "max_attempts": {"type": "integer", "minimum": 1},
+        "wait_ms": {"type": "integer", "minimum": 0},
+        "reason": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    },
+    "task_started": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "task_id", "description", "todo_indexes"],
+      "properties": {
+        "type": {"const": "task_started"},
+        "task_id": {"type": "string"},
+        "description": {"type": "string"},
+        "todo_indexes": {"type": "array"}
+      }
+    },
+    "task_completed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "task_id", "result", "usage", "todo_indexes"],
+      "properties": {
+        "type": {"const": "task_completed"},
+        "task_id": {"type": "string"},
+        "result": {"type": "string"},
+        "usage": {"type": "object"},
+        "todo_indexes": {"type": "array"}
+      }
+    },
+    "task_failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "task_id", "error"],
+      "properties": {
+        "type": {"const": "task_failed"},
+        "task_id": {"type": "string"},
+        "error": {"type": "string"},
+        "usage": {"type": "object"},
+        "todo_indexes": {"type": "array"}
+      }
+    },
+    "task_timed_out": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "task_id", "usage"],
+      "properties": {
+        "type": {"const": "task_timed_out"},
+        "task_id": {"type": "string"},
+        "error": {"type": "string"},
+        "usage": {"type": "object"},
+        "todo_indexes": {"type": "array"}
+      }
+    },
+    "task_activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "tool_call_id", "status"],
+      "properties": {
+        "type": {"const": "task_activity"},
+        "tool_call_id": {"type": "string"},
+        "status": {"type": "string"}
+      }
+    },
+    "acp_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "agent", "session_id", "kind", "delta"],
+      "properties": {
+        "type": {"const": "acp_update"},
+        "agent": {"type": "string"},
+        "session_id": {"type": "string"},
+        "kind": {"enum": ["text", "status"]},
+        "delta": {"type": "string"}
       }
     }
   }

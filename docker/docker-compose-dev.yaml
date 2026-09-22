@@ -96,6 +96,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # 2026-09 hardening: nginx gets the same `autoheal=true` label as the
+    # gateway and frontend so a hung proxy gets the same restart treatment.
+    # Without it nginx was the ONLY healthchecked service in this compose
+    # file that the sidecar did NOT touch — a hung-but-Up nginx would
+    # silently stay down until a human noticed.
+    labels:
+      - autoheal=true
     # Hardening parity with docker-compose.yaml's nginx service: drop all
     # capabilities, add back only what nginx's master/worker model needs
     # (NET_BIND_SERVICE for the listen port, CHOWN/SETUID/SETGID/DAC_OVERRIDE
@@ -143,12 +150,20 @@ services:
       # and matches the value pinned in nginx.conf (Batch 2A). For
       # production deployments behind a real LB, override via .env.
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
-      # Heap ceiling *below* mem_limit (4 GiB). Without this Node grows until
-      # the kernel OOM-kills it — abrupt, nothing in the log, and an nginx 502
-      # for whoever is using the app. With it, V8 collects harder as it nears
-      # the limit and the process stays alive. 3 GiB leaves room for the
-      # non-heap side (Turbopack's native allocations, buffers, the runtime).
-      - NODE_OPTIONS=--max-old-space-size=3072
+      # Heap ceiling deliberately *below* mem_limit (8 GiB, below). Without one
+      # Node grows until the kernel OOM-kills it — abrupt, nothing in the log,
+      # and an nginx 502 for whoever is using the app. With it, V8 collects
+      # harder as it nears the ceiling and the process stays alive.
+      #
+      # 4 GiB heap against an 8 GiB limit leaves 4 GiB for the non-heap side
+      # (Turbopack's native allocations, buffers, the runtime) — the gap matters
+      # as much as the ceiling, because that side is not what V8 collects.
+      #
+      # Sizing note: under `prod-frontend` (the default stack) this process sits
+      # at ~120 MiB, so the ceiling is headroom for the dev target, where
+      # Turbopack will fill whatever it is given — it held ~2.9 GiB against the
+      # previous 3 GiB ceiling, which was the cap working, not a leak.
+      - NODE_OPTIONS=--max-old-space-size=4096
       # Match the gateway: dev mode skips the sign-in gate so the user
       # can interact with the app immediately. Production must set
       # DEER_FLOW_AUTH_DISABLED=0 (or DEER_FLOW_ENV=prod).
@@ -159,6 +174,30 @@ services:
       deer-flow-dev:
         ipv4_address: 192.168.200.4
     restart: unless-stopped
+    # Detect a hung-but-"Up" Next dev server the same way the gateway does
+    # (uvicorn dead, container still Up, nginx upstream timing out → 502).
+    # v9.8 hardening: without this, the autoheal sidecar and PM2 both treat
+    # the frontend as healthy when only the port binding is alive, and a
+    # SIGTERMed Next process leaves the name held by an exited container.
+    # That was the 2026-08-28 outage: autoheal kept recreating and failing
+    # with "name already in use"; nginx saw SERVFAIL and 502'd every
+    # non-/api request for ~41 minutes. wget is in the image (BusyBox); a
+    # 200 on / shows Next is actually serving, not just listening.
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - --spider
+        - http://127.0.0.1:3000/
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Dev mode does `pnpm install` on boot and Turbopack cold-warms the
+      # module graph; 90s covers that without flapping the new check.
+      start_period: 90s
+    labels:
+      - autoheal=true
     # Hardening parity with docker-compose.yaml's frontend service (prod
     # target runs as USER node already; no cap_add needed).
     security_opt:
@@ -186,7 +225,7 @@ services:
     # after a long HMR session accumulated. 6g keeps the container healthy
     # through sustained edit cycles without giving it free rein to take the
     # host down.
-    mem_limit: 6g
+    mem_limit: 8g
 
   # Backend - Gateway API
   gateway:
@@ -200,6 +239,8 @@ services:
         UV_IMAGE: ${UV_IMAGE:-ghcr.io/astral-sh/uv:0.7.20}
         UV_INDEX_URL: ${UV_INDEX_URL:-https://pypi.org/simple}
     container_name: deer-flow-gateway
+    ports:
+      - "127.0.0.1:8001:8001"
     # Pin the IP so downstream services (nginx, frontend SSR) can pin to a
     # stable address across container restarts. Without this, Docker's
     # internal DNS at 127.0.0.11 occasionally returns SERVFAIL for the
@@ -241,6 +282,9 @@ services:
       # Mount the dev entrypoint as a read-only file so edits to the script
       # take effect on `make docker-restart` without requiring an image rebuild.
       - ./dev-entrypoint.sh:/usr/local/bin/dev-entrypoint.sh:ro
+      # Boot-time schema step (create_all, then alembic upgrade head); mounted
+      # like the entrypoint so it needs no image rebuild.
+      - ../scripts/db-migrate.sh:/usr/local/bin/db-migrate.sh:ro
       - ../backend/:/app/backend/
       # Preserve the .venv built during Docker image build — mounting the full backend/
       # directory above would otherwise shadow it with the (empty) host directory.
@@ -346,8 +390,8 @@ services:
       - AUTH_TRUSTED_PROXIES=${AUTH_TRUSTED_PROXIES:-192.168.200.0/24}
       # Proxy values (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY) are inherited from ../.env via env_file.
       # Only NO_PROXY is declared here so internal service hostnames are always exempt from the proxy.
-      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,host.docker.internal
-      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,host.docker.internal
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,searxng,crawl4ai,browserless,postgres,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,frontend,nginx,provisioner,searxng,crawl4ai,browserless,postgres,host.docker.internal
     env_file:
       - ../.env
     extra_hosts:
@@ -425,6 +469,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # 2026-09 hardening: autoheal label parity with nova-prod and base
+    # compose files. A Postgres connection storm or full disk would
+    # otherwise keep the container "Up" until a human noticed.
+    labels:
+      - autoheal=true
     restart: unless-stopped
     mem_limit: 2g
     mem_reservation: 512m
@@ -471,6 +520,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    # 2026-09 hardening: autoheal label parity with nova-prod.
+    labels:
+      - autoheal=true
     # Chrome is memory-hungry and this box has an OOM history; two concurrent
     # sessions inside 1.5g is enough for fetch-a-page work without competing
     # with the gateway.
@@ -520,6 +572,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    # 2026-09 hardening: autoheal label parity with nova-prod.
+    labels:
+      - autoheal=true
     # Chrome again, and a crawler drives several tabs at once. Bounded for the
     # same reason browserless is.
     mem_limit: 2g
@@ -540,18 +595,36 @@ services:
       - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:?Set SEARXNG_SECRET_KEY in .env}
       - SEARXNG_BASE_URL=http://searxng:8080
     networks:
-      - deer-flow-dev
+      deer-flow-dev:
+        # Static, like every other service on this network. Without one, IPAM
+        # allocated the lowest free address -- which was .2, nginx's static
+        # address -- and nginx then died with "failed to set up container
+        # networking: Address already in use". It stayed latent only because
+        # searxng was scaled to 0, so nothing ever contended for .2.
+        # Allocated: .2 nginx, .3 gateway, .4 frontend, .5 postgres,
+        # .6 searxng, .7 browserless, .8 crawl4ai.
+        ipv4_address: 192.168.200.6
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
+      # SearXNG + uwsgi boot slower than 3x30s on a contended host, and without a
+      # grace period the container flaps to `unhealthy` before it is ever ready.
+      start_period: 30s
     mem_limit: 256m
     mem_reservation: 128m
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
       - ALL
+    # 2026-09 hardening: autoheal label parity with nova-prod and the
+    # rest of the dev stack. SearXNG had a healthcheck for weeks but
+    # never had its label set, so when SearXNG went red the sidecar
+    # silently did nothing — the privacy panel's SearXNG card stayed
+    # red for weeks because web_search falls back to DuckDuckGo quietly.
+    labels:
+      - autoheal=true
     restart: unless-stopped
 
   # TOR proxy removed: it crash-looped under the non-root hardening (setgid
@@ -559,11 +632,69 @@ services:
   # service here if iGIN0 anonymized fetching is required.
 
   # Autoheal: restarts any container marked `autoheal=true` (currently the
-  # gateway) when its Docker healthcheck reports unhealthy. This is the
-  # missing auto-recovery from the 2026-07-16 outage — a hung-but-Up gateway
-  # now self-heals within ~15s instead of taking the site down until a human
-  # notices. Watches the Docker socket read-only-ish (needs it to issue the
+  # gateway and the frontend) when its Docker healthcheck reports unhealthy.
+  # This is the missing auto-recovery from the 2026-07-16 outage (hung-but-Up
+  # gateway) and the 2026-08-28 41-minute outage where the frontend SIGTERM'd,
+  # its exited container still held the service name, and Docker Compose's
+  # recreate loop failed with "name already in use" on every retry. With both
+  # services now healthchecked + labelled, autoheal tears the dead frontend
+  # down by ID (no name collision) and lets `docker compose up` recreate it
+  # cleanly. Watches the Docker socket read-only-ish (needs it to issue the
   # restart); no ports, minimal footprint.
+  # Job runner — the worker process behind /api/jobs (campaign sends, imports,
+  # long agent tasks). Same image and bind mounts as the gateway, no ports, no
+  # Docker socket (the dood overlay touches only `gateway`), so a gateway
+  # --reload or restart cannot kill an in-flight job. It reuses the gateway's
+  # built image and .venv volume, so it never needs its own build; it waits
+  # for a *healthy* gateway because that is what runs the schema step.
+  # Scale to zero with NOVA_JOBS_SCALE=0 (scripts/pm2-deerflow.sh).
+  jobs:
+    image: deer-flow-dev-gateway:latest
+    container_name: deer-flow-jobs
+    command: ["sh", "-c", "cd /app/backend && PYTHONPATH=. exec uv run --no-sync python -m app.jobs.worker"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      # Pinned like every other service: after a reboot the jobs container came
+      # up first, took the gateway's 192.168.200.3, and `pm2 restart nova`
+      # looped on "Address already in use" until it was removed by hand.
+      deer-flow-dev:
+        ipv4_address: 192.168.200.9
+    env_file:
+      - ../.env
+    environment:
+      - DEER_FLOW_PROJECT_ROOT=/app
+      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - DEER_FLOW_CONFIG_PATH=/app/config.yaml
+      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
+      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}
+      - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-dev}
+      - NOVA_VERSION=${DEERFLOW_VERSION:-nova-dev}
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../backend/:/app/backend/
+      - gateway-venv:/app/backend/.venv
+      - ../config.yaml:/app/config.yaml:ro
+      - ../extensions_config.json:/app/extensions_config.json:ro
+      - ../skills:/app/skills
+      - ../logs:/app/logs
+    healthcheck:
+      test: ["CMD", "sh", "-c", "cd /app/backend && PYTHONPATH=. uv run --no-sync python -m app.jobs.healthcheck --max-age 90"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    labels:
+      - autoheal=true
+    mem_limit: 3g
+    pids_limit: 256
+    restart: unless-stopped
+
   autoheal:
     # Digest-pinned; see the crawl4ai service above for the reasoning.
     image: willfarrell/autoheal@sha256:2ae2ff2c4047be936db416005262978b0d20d98d8f8dbfd2bc8bb97bbfc1a7b5
@@ -576,6 +707,23 @@ services:
       - DOCKER_SOCK=/var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    # Sidecar liveness: the autoheal script (PID 1, ``sh /docker-entrypoint
+    # autoheal``) polls Docker via the mounted socket and a curl ``/_ping`` to
+    # that endpoint succeeds against the mounted socket. Without this check,
+    # a stuck autoheal process leaves every ``autoheal=true`` container
+    # silently unmonitored — and because autoheal has no other supervisor,
+    # the failure mode reads as "the sidecar just stops doing its job" with
+    # nothing in `docker ps` flagging it. start_period is set below
+    # AUTOHEAL_START_PERIOD (60s in the env above) so the healthcheck only
+    # counts failures AFTER the script has actually entered its poll loop.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "curl -s --unix-socket /var/run/docker.sock -f http://localhost/_ping >/dev/null && pgrep -f docker-entrypoint >/dev/null || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 75s
 
 volumes:
   # Persist .venv across container restarts so dependencies installed during

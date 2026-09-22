@@ -1,7 +1,7 @@
 /**
  * E2E spec: workspace-aware Agent Computer panel tabs (C10).
  *
- * Drives the real Files / Activity / Review tabs against a mocked
+ * Drives the real Files / Telemetry / Review tabs against a mocked
  * /api/workspace/* surface (mockWorkspaceAPI in ./utils/mock-api) instead
  * of a live backend or the intelligence_enabled flag, closing the gap left
  * by agent-computer.spec.ts (chrome-only: opens the panel, asserts a tab
@@ -41,7 +41,7 @@ test.describe("Workspace-aware panel tabs", () => {
     await page.getByRole("tab", { name: "Files", exact: true }).click();
     // Scoped to the Files tab's own DOM subtree (`data-tab="files"`): tabs
     // stay mounted-but-hidden across switches (agent-computer-panel.tsx),
-    // so an unscoped page-wide text match is ambiguous — the Activity tab
+    // so an unscoped page-wide text match is ambiguous — the Telemetry tab
     // renders the same mocked snapshot's symbol count in its own banner.
     const filesTab = page.locator('[data-tab="files"]');
     // WorkspaceCard renders project_count/symbol_count/command_count from
@@ -53,12 +53,12 @@ test.describe("Workspace-aware panel tabs", () => {
     await expect(filesTab.getByText(/1,234|1234/)).toBeVisible();
   });
 
-  test("Activity tab shows the live-indexed banner and a live scan event", async ({
+  test("Telemetry tab shows the live-indexed banner and a live scan event", async ({
     page,
   }) => {
     if (!(await openPanel(page))) return;
 
-    await page.getByRole("tab", { name: "Activity", exact: true }).click();
+    await page.getByRole("tab", { name: "Telemetry", exact: true }).click();
     // Static banner from useWorkspaceSnapshot (mocked /snapshot).
     await expect(page.getByText(/workspace indexed/i)).toBeVisible({
       timeout: 10_000,

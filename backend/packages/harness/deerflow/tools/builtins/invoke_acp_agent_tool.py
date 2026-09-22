@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+from collections.abc import Callable
 from typing import Annotated, Any
 
 from langchain_core.runnables import RunnableConfig
@@ -59,69 +60,31 @@ def _build_mcp_servers() -> dict[str, dict[str, Any]]:
 
 
 def _build_acp_mcp_servers() -> list[dict[str, Any]]:
-    """Build ACP ``mcpServers`` payload for ``new_session``.
+    """ACP ``mcpServers`` payload for ``new_session`` (shared with the runtime dispatch)."""
+    from deerflow.runtimes.acp_transport import build_acp_mcp_servers
 
-    The ACP client expects a list of server objects, while DeerFlow's MCP helper
-    returns a name -> config mapping for the LangChain MCP adapter. This helper
-    converts the enabled servers into the ACP wire format.
+    return build_acp_mcp_servers()
+
+
+def _stream_writer() -> Callable[[dict[str, Any]], None] | None:
+    """The run's custom-event writer, or None outside a graph run.
+
+    ``get_stream_writer()`` raises when no runnable context is active (unit
+    tests, direct invocation); the tool must still work there, just silently.
     """
-    from deerflow.config.extensions_config import ExtensionsConfig
+    try:
+        from langgraph.config import get_stream_writer
 
-    extensions_config = ExtensionsConfig.from_file()
-    enabled_servers = extensions_config.get_enabled_mcp_servers()
-
-    mcp_servers: list[dict[str, Any]] = []
-    for name, server_config in enabled_servers.items():
-        transport_type = server_config.type or "stdio"
-        payload: dict[str, Any] = {"name": name, "type": transport_type}
-
-        if transport_type == "stdio":
-            if not server_config.command:
-                raise ValueError(f"MCP server '{name}' with stdio transport requires 'command' field")
-            payload["command"] = server_config.command
-            payload["args"] = server_config.args
-            payload["env"] = [{"name": key, "value": value} for key, value in server_config.env.items()]
-        elif transport_type in ("http", "sse"):
-            if not server_config.url:
-                raise ValueError(f"MCP server '{name}' with {transport_type} transport requires 'url' field")
-            payload["url"] = server_config.url
-            payload["headers"] = [{"name": key, "value": value} for key, value in server_config.headers.items()]
-        else:
-            raise ValueError(f"MCP server '{name}' has unsupported transport type: {transport_type}")
-
-        mcp_servers.append(payload)
-
-    return mcp_servers
+        return get_stream_writer()
+    except Exception:
+        return None
 
 
-def _build_permission_response(options: list[Any], *, auto_approve: bool) -> Any:
-    """Build an ACP permission response.
+def _build_permission_response(options: Any, *, auto_approve: bool, policy: Any | None = None, kind: str | None = None):
+    """Select a permission option per policy (delegates to the shared transport)."""
+    from deerflow.runtimes.acp_transport import build_permission_response
 
-    When ``auto_approve`` is True, selects the first ``allow_once`` (preferred)
-    or ``allow_always`` option.  When False (the default), always cancels —
-    permission requests must be handled by the ACP agent's own policy or the
-    agent must be configured to operate without requesting permissions.
-    """
-    from acp import RequestPermissionResponse
-    from acp.schema import AllowedOutcome, DeniedOutcome
-
-    if auto_approve:
-        for preferred_kind in ("allow_once", "allow_always"):
-            for option in options:
-                if getattr(option, "kind", None) != preferred_kind:
-                    continue
-
-                option_id = getattr(option, "option_id", None)
-                if option_id is None:
-                    option_id = getattr(option, "optionId", None)
-                if option_id is None:
-                    continue
-
-                return RequestPermissionResponse(
-                    outcome=AllowedOutcome(outcome="selected", optionId=option_id),
-                )
-
-    return RequestPermissionResponse(outcome=DeniedOutcome(outcome="cancelled"))
+    return build_permission_response(options, auto_approve=auto_approve, policy=policy, kind=kind)
 
 
 def _format_invocation_error(agent: str, cmd: str, exc: Exception) -> str:
@@ -173,42 +136,21 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         thread_id: str | None = ((config or {}).get("configurable") or {}).get("thread_id")
 
         try:
-            from acp import PROTOCOL_VERSION, Client, text_block
-            from acp.schema import ClientCapabilities, Implementation
+            from deerflow.runtimes.acp_transport import run_acp_prompt
         except ImportError:
             return "Error: agent-client-protocol package is not installed. Run `uv sync` to install project dependencies."
 
-        class _CollectingClient(Client):
-            """Minimal ACP Client that collects streamed text from session updates."""
+        writer = _stream_writer()
 
-            def __init__(self) -> None:
-                self._chunks: list[str] = []
+        def emit(session_id: str, kind: str, delta: str) -> None:
+            # Contract: contracts/custom_events_contract.json → acp_update.
+            if writer is None or not delta:
+                return
+            try:
+                writer({"type": "acp_update", "agent": agent, "session_id": session_id, "kind": kind, "delta": delta})
+            except Exception:  # never let telemetry break the invocation
+                logger.debug("acp_update emit failed", exc_info=True)
 
-            @property
-            def collected_text(self) -> str:
-                return "".join(self._chunks)
-
-            async def session_update(self, session_id: str, update, **kwargs) -> None:  # type: ignore[override]
-                try:
-                    from acp.schema import TextContentBlock
-
-                    if hasattr(update, "content") and isinstance(update.content, TextContentBlock):
-                        self._chunks.append(update.content.text)
-                except Exception:
-                    pass
-
-            async def request_permission(self, options, session_id: str, tool_call, **kwargs):  # type: ignore[override]
-                response = _build_permission_response(options, auto_approve=agent_config.auto_approve_permissions)
-                outcome = response.outcome.outcome
-                if outcome == "selected":
-                    logger.info("ACP permission auto-approved for tool call %s in session %s", tool_call.tool_call_id, session_id)
-                else:
-                    logger.warning("ACP permission denied for tool call %s in session %s (set auto_approve_permissions: true in config.yaml to enable)", tool_call.tool_call_id, session_id)
-                return response
-
-        client = _CollectingClient()
-        cmd = agent_config.command
-        args = agent_config.args or []
         physical_cwd = _get_work_dir(thread_id)
         try:
             mcp_servers = _build_acp_mcp_servers()
@@ -219,35 +161,30 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
                 exc,
             )
             mcp_servers = []
-        agent_env: dict[str, str] | None = None
-        if agent_config.env:
-            agent_env = {k: (os.environ.get(v[1:], "") if v.startswith("$") else v) for k, v in agent_config.env.items()}
+
+        # The agent's own config decides permissions for a delegated subtask:
+        # deny_kinds always deny, allow_kinds auto-approve, the rest follows
+        # auto_approve_permissions (see backend/docs/ACP_AGENTS.md).
+        from deerflow.runtimes.types import PermissionPreset
+
+        permission = PermissionPreset(mode="standard", auto_approve=agent_config.auto_approve_permissions, policy=agent_config.permission_policy, label="agent policy", description="")
 
         try:
-            from acp import spawn_agent_process
-
-            async with spawn_agent_process(client, cmd, *args, env=agent_env, cwd=physical_cwd) as (conn, proc):
-                logger.info("Spawning ACP agent '%s' with command '%s' and args %s in cwd %s", agent, cmd, args, physical_cwd)
-                await conn.initialize(
-                    protocol_version=PROTOCOL_VERSION,
-                    client_capabilities=ClientCapabilities(),
-                    client_info=Implementation(name="deerflow", title="DeerFlow", version="0.1.0"),
-                )
-                session_kwargs: dict[str, Any] = {"cwd": physical_cwd, "mcp_servers": mcp_servers}
-                if agent_config.model:
-                    session_kwargs["model"] = agent_config.model
-                session = await conn.new_session(**session_kwargs)
-                await conn.prompt(
-                    session_id=session.session_id,
-                    prompt=[text_block(prompt)],
-                )
-            result = client.collected_text
-            logger.info("ACP agent '%s' returned %s", agent, result[:1000])
+            logger.info("Spawning ACP agent '%s' with command '%s' and args %s in cwd %s", agent, agent_config.command, agent_config.args, physical_cwd)
+            result = await run_acp_prompt(
+                agent_config,
+                prompt,
+                cwd=physical_cwd,
+                mcp_servers=mcp_servers,
+                permission=permission,
+                on_text=lambda sid, d: emit(sid, "text", d),
+                on_status=lambda sid, s: emit(sid, "status", s),
+            )
             logger.info("ACP agent '%s' returned %d characters", agent, len(result))
             return result or "(no response)"
         except Exception as e:
             logger.error("ACP agent '%s' invocation failed: %s", agent, e)
-            return _format_invocation_error(agent, cmd, e)
+            return _format_invocation_error(agent, agent_config.command, e)
 
     return StructuredTool.from_function(
         name="invoke_acp_agent",

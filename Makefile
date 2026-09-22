@@ -11,7 +11,7 @@
 #
 # DO NOT commit monitoring.env to git.
 
-.PHONY: help setup doctor config config-upgrade check install setup-sandbox sandbox-image \
+.PHONY: help setup doctor db-migrate jobs-demo config config-upgrade check install setup-sandbox sandbox-image \
 	dev dev-daemon start start-daemon stop \
 	docker-init docker-start docker-stop docker-logs up down \
 	monitoring-up monitoring-down monitoring-status monitoring-verify monitoring-logs monitoring-screenshots monitoring-chaos sloth-generate \
@@ -89,6 +89,12 @@ config:
 
 config-upgrade:
 	@bash scripts/config-upgrade.sh
+
+db-migrate: ## Create missing tables and apply Alembic head to the app database (host, :5433)
+	@DATABASE_URL="$${DATABASE_URL:-postgresql://$${NOVA_PG_USER:-nova}:$${NOVA_PG_PASSWORD}@127.0.0.1:$${NOVA_PG_PORT:-5433}/$${NOVA_PG_DB:-nova}}" scripts/db-migrate.sh
+
+jobs-demo: ## Enqueue the demo job into the live stack and wait for the worker to finish it
+	docker exec deer-flow-gateway sh -c 'cd /app/backend && PYTHONPATH=. uv run --no-sync python -m app.jobs.enqueue jobs.demo.sleep "{\"seconds\": 3}" --wait'
 
 doctor:
 	@python3 scripts/doctor.py
@@ -284,13 +290,19 @@ monitoring-verify:
 
 # ── Self-audit ──────────────────────────────────────────────────────────────
 
-.PHONY: self-audit self-audit-clean
+.PHONY: self-audit self-audit-clean sandbox-health sandbox-rebuild
 
 self-audit: ## Run full-stack self-audit and write timestamped report
 	@REPORT="docs/audit/$$(date +%Y-%m-%d)-self-probe.md"; \
 	echo "=== Self-audit starting ($$REPORT) ==="; \
 	mkdir -p docs/audit .nova/self-audit; \
-	(echo "# Self-probe $$(date -Iseconds)" > "$$REPORT"; \
+	 (echo "# Self-probe $$(date -Iseconds)" > "$$REPORT"; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Sandbox health (scripts/gates/sandbox-health-gate.py)" >> "$$REPORT"; \
+	 (python3 scripts/gates/sandbox-health-gate.py 2>&1 | tee -a "$$REPORT") || true; \
+	 echo "" >> "$$REPORT"; \
+	 echo "## Regression ledger (scripts/gates/regression-gate.py)" >> "$$REPORT"; \
+	 (python3 scripts/gates/regression-gate.py 2>&1 | tee -a "$$REPORT") || true; \
 	 echo "" >> "$$REPORT"; \
 	 echo "## Backend hermetic gate" >> "$$REPORT"; \
 	 (cd backend && PYTHONPATH=. uv run pytest tests/ -x -q --tb=line 2>&1 | tee -a "../$$REPORT") || true; \
@@ -316,6 +328,12 @@ self-audit: ## Run full-stack self-audit and write timestamped report
 self-audit-clean: ## Remove self-audit outputs
 	@rm -rf .nova/self-audit/Novaselfprobe-*.zip
 	@echo "Self-audit outputs cleaned."
+
+sandbox-health: ## Run sandbox health gate (image chain, tools, vendor, host resources)
+	@python3 scripts/gates/sandbox-health-gate.py
+
+sandbox-rebuild: ## Auto-rebuild sandbox image if missing (requires vendor/ intact)
+	@python3 scripts/gates/sandbox-health-gate.py --rebuild
 
 # ── Local CI (nektos/act) ──────────────────────────────────────────────────
 

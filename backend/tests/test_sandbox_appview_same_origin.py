@@ -115,7 +115,7 @@ class TestWebSocketShim:
     """
 
     def _shim(self, thread_id: str = "t1") -> str:
-        return sandbox_router._APPVIEW_WS_SHIM % {"ws_prefix": json.dumps(f"/api/sandbox/appview-ws/{thread_id}")}
+        return sandbox_router._ws_shim(f"/api/sandbox/appview-ws/{thread_id}")
 
     def test_shim_targets_the_ws_route(self) -> None:
         assert '"/api/sandbox/appview-ws/t1"' in self._shim()
@@ -142,14 +142,20 @@ class TestWsSameOriginGuard:
         return SimpleNamespace(headers=headers)
 
     def test_matching_origin_allowed(self) -> None:
-        assert sandbox_router._ws_same_origin(self._ws("https://nova.example", "nova.example")) is True
+        from app.gateway.ws_guards import ws_same_origin
+
+        assert ws_same_origin(self._ws("https://nova.example", "nova.example")) is True
 
     def test_foreign_origin_rejected(self) -> None:
-        assert sandbox_router._ws_same_origin(self._ws("https://evil.example", "nova.example")) is False
+        from app.gateway.ws_guards import ws_same_origin
+
+        assert ws_same_origin(self._ws("https://evil.example", "nova.example")) is False
 
     def test_absent_origin_allowed(self) -> None:
         """Non-browser clients omit Origin; the thread-ownership check still applies."""
-        assert sandbox_router._ws_same_origin(self._ws(None, "nova.example")) is True
+        from app.gateway.ws_guards import ws_same_origin
+
+        assert ws_same_origin(self._ws(None, "nova.example")) is True
 
 
 class TestFramedCsp:
@@ -191,7 +197,13 @@ class TestFramedCsp:
             receive=receive,
         )
         resp = __import__("asyncio").run(sandbox_router._proxy_appview("thread-abc", "terminal", request))
-        assert resp.headers.get("content-security-policy") == sandbox_router._FRAMED_SANDBOX_CSP
+        csp = resp.headers.get("content-security-policy")
+        # The framed CSP, plus the frame-ancestors restriction added alongside
+        # `Sec-Fetch-Dest` selection — `allow-same-origin` is only safe while
+        # something limits who can frame the response in the first place.
+        assert csp.startswith(sandbox_router._FRAMED_SANDBOX_CSP)
+        assert "allow-same-origin" in csp
+        assert "frame-ancestors 'self'" in csp
 
 
 class _FakeAsyncClient:
@@ -237,3 +249,65 @@ class TestPrefixHtmlUrls:
     def test_empty_and_prefixless_input_are_noops(self) -> None:
         assert sandbox_router._prefix_html_urls("", "/p") == ""
         assert sandbox_router._prefix_html_urls("<html/>", "") == "<html/>"
+
+
+# ── The upstream-socket leak (ttyd PTY held after the browser closed) ─────────
+
+import asyncio as _aio  # noqa: E402
+import contextlib as _ctx  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock  # noqa: E402
+
+
+class _SilentUpstream:
+    """An upstream that never sends and never closes -- exactly ttyd at idle.
+
+    Under the old ``asyncio.gather(...)`` this is what pinned the bridge open:
+    the client pump returned on disconnect, but this side stayed parked in
+    ``async for`` forever, holding the socket and its PTY until the container
+    died.
+    """
+
+    def __init__(self):
+        self.closed = False
+        self.send = AsyncMock()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        self.closed = True
+        return False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        await _aio.Event().wait()  # never resolves
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.asyncio
+async def test_client_disconnect_releases_the_upstream(monkeypatch):
+    """The bridge must finish promptly when the browser goes away."""
+    from app.gateway.routers import sandbox as mod
+
+    upstream = _SilentUpstream()
+    monkeypatch.setattr(mod, "_ws", MagicMock(connect=MagicMock(return_value=upstream)), raising=False)
+
+    ws = MagicMock()
+    ws.receive = AsyncMock(return_value={"type": "websocket.disconnect"})
+    ws.close = AsyncMock()
+
+    import sys
+    import types
+
+    fake = types.ModuleType("websockets")
+    fake.connect = MagicMock(return_value=upstream)
+    monkeypatch.setitem(sys.modules, "websockets", fake)
+
+    # Under gather() this never returns; the timeout is the assertion.
+    with _ctx.suppress(TimeoutError):
+        await _aio.wait_for(mod._bridge_ws(ws, "ws://sandbox:7681/ws"), timeout=5.0)
+
+    assert upstream.closed, "the upstream connection was never exited -- the PTY leaked"
+    ws.close.assert_awaited()

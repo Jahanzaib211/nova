@@ -163,3 +163,41 @@ def test_app_config_reload_without_acp_agents_clears_previous_state(tmp_path, mo
     config_path.write_text(yaml.safe_dump(config_without_acp), encoding="utf-8")
     AppConfig.from_file(str(config_path))
     assert get_acp_agents() == {}
+
+
+# ---------------------------------------------------------------------------
+# P6: per-kind permission policy
+# ---------------------------------------------------------------------------
+
+
+def test_permission_policy_defaults_to_deny_everything():
+    cfg = ACPAgentConfig(command="a", description="d")
+    assert cfg.permission_policy.allow_kinds == []
+    assert cfg.permission_policy.deny_kinds == []
+    assert cfg.permission_policy.decide("read", auto_approve=False) is False
+
+
+def test_permission_policy_allows_listed_kinds_and_deny_wins():
+    cfg = ACPAgentConfig(
+        command="a",
+        description="d",
+        permission_policy={"allow_kinds": ["read", "search", "execute"], "deny_kinds": ["execute"]},
+    )
+    policy = cfg.permission_policy
+    assert policy.decide("read", auto_approve=False) is True
+    assert policy.decide("search", auto_approve=False) is True
+    assert policy.decide("execute", auto_approve=False) is False  # explicit deny beats allow
+    assert policy.decide("delete", auto_approve=False) is False  # unlisted → deny
+    assert policy.decide("other", auto_approve=False) is False
+
+
+def test_permission_policy_auto_approve_still_respects_deny_list():
+    cfg = ACPAgentConfig(command="a", description="d", auto_approve_permissions=True, permission_policy={"deny_kinds": ["delete"]})
+    assert cfg.permission_policy.decide("edit", auto_approve=True) is True
+    assert cfg.permission_policy.decide("delete", auto_approve=True) is False
+    assert cfg.permission_policy.decide(None, auto_approve=True) is True
+
+
+def test_permission_policy_rejects_unknown_kind():
+    with pytest.raises(ValidationError):
+        ACPAgentConfig(command="a", description="d", permission_policy={"allow_kinds": ["teleport"]})

@@ -113,7 +113,7 @@ function VoiceSetupHint({ onClose }: { onClose: () => void }) {
       role="status"
       className="absolute bottom-full left-0 z-20 mb-2 w-full px-1"
     >
-      <div className="border-border/50 bg-background/95 rounded-xl border px-3 py-2.5 text-[11px] shadow-xl backdrop-blur">
+      <div className="border-panel-border bg-background/95 rounded-xl border px-3 py-2.5 text-[11px] shadow-xl backdrop-blur">
         <div className="flex items-start gap-2">
           <MicIcon className="mt-0.5 size-3.5 shrink-0 text-sky-400" />
           <div className="min-w-0 flex-1">
@@ -176,7 +176,7 @@ function VoicePanel({
       aria-live="polite"
       className="absolute bottom-full left-0 z-20 mb-2 w-full px-1"
     >
-      <div className="border-border/50 bg-background/95 flex items-center gap-3 rounded-xl border px-3 py-2.5 shadow-xl backdrop-blur">
+      <div className="border-panel-border bg-background/95 flex items-center gap-3 rounded-xl border px-3 py-2.5 shadow-xl backdrop-blur">
         <VoiceOrb phase={phase} size={40} />
 
         <div className="min-w-0 flex-1">

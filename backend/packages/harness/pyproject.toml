@@ -18,6 +18,12 @@ dependencies = [
     "websockets>=15.0.1,<16",
     "agent-client-protocol>=0.4.0",
     "agent-sandbox>=0.0.19",
+    # Job runner schedules (deerflow.jobs.scheduler). Was only transitive via
+    # langgraph-runtime-inmem; a floor pin so it cannot vanish underneath us.
+    "croniter>=6",
+    # Email-marketing templates (deerflow.email_marketing.templates): sandboxed
+    # rendering of user-authored HTML with an allowlisted context.
+    "jinja2>=3.1",
     "dotenv>=0.9.9",
     "exa-py>=1.0.0",
     "httpx>=0.28.0",

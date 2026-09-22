@@ -72,7 +72,9 @@ export function TodoList({
       <main
         className={cn(
           "bg-accent flex grow px-2 transition-all duration-300 ease-out",
-          collapsed ? "h-0 pb-3" : "h-28 pb-4",
+          collapsed
+            ? "h-0 overflow-hidden pb-3"
+            : "max-h-28 overflow-y-auto pb-4",
         )}
       >
         <div role="status" aria-live="polite" className="sr-only">

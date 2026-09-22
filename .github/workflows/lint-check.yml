@@ -42,7 +42,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -61,6 +61,15 @@ jobs:
         run: |
           cd frontend
           pnpm format
+
+      # The capability contract and the frontend client generated from it
+      # must be committed together: the registry snapshot is pinned by
+      # backend/tests/test_capability_registry.py, and this step fails if
+      # frontend/src/core/capabilities/generated.ts drifts from the contract.
+      # Runs here (not in lint-backend) because the generator formats its
+      # output with the frontend's pinned prettier from node_modules.
+      - name: Capability client is generated from the contract
+        run: python3 backend/scripts/gen_capabilities_client.py --check
 
       - name: Run frontend linting
         run: |

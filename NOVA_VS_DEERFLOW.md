@@ -114,7 +114,7 @@ None of the following existed in DeerFlow 2.0.
 - `agents/manifest.py` — spawn-time agent self-knowledge primer with tool
   inventory auto-derived from the builtin registry.
 
-### 3. 32 agent tools (backend)
+### 3. 27 built-in agent tools (backend)
 
 `backend/packages/harness/deerflow/tools/builtins/workspace_tools.py` (1,075 lines)
 
@@ -123,7 +123,14 @@ None of the following existed in DeerFlow 2.0.
 - Build loop: `scaffold_project`, `start/stop_dev_server`, `dev_verify`,
   `code_review`, `free_port`, `system_probe`, `deploy_expose`
 - Workspace: `search_files`, `grep_files`, `save_skill`, `agent_notify`
-- Plus `igino_research_tool.py` for the privacy research pipeline.
+- Preview escape hatch: `register_external_dev_server` — wires a server started
+  outside the pipeline (raw bash, PM2, manual `node`) into the Browser tab.
+- Research: `igino_research` for the privacy pipeline.
+
+The old figure here was **32**, which counted `@tool`-decorated functions in
+the source rather than tools the agent can call — and so silently included
+`igino_research`, which was not bound into `BUILTIN_TOOLS` at all and would
+have failed at call time. It is bound now; the count is of reachable tools.
 
 ### 4. Gateway API surface (backend)
 

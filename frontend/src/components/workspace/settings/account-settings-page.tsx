@@ -171,9 +171,11 @@ export function AccountSettingsPage() {
             onChange={(e) => setEmailPassword(e.target.value)}
             required
           />
-          {emailError && <p className="text-sm text-red-500">{emailError}</p>}
+          {emailError && (
+            <p className="text-destructive text-sm">{emailError}</p>
+          )}
           {emailMessage && (
-            <p className="text-sm text-green-500">{emailMessage}</p>
+            <p className="text-success text-sm">{emailMessage}</p>
           )}
           <Button
             type="submit"
@@ -216,8 +218,8 @@ export function AccountSettingsPage() {
             required
             minLength={8}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          {message && <p className="text-sm text-green-500">{message}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          {message && <p className="text-success text-sm">{message}</p>}
           <Button type="submit" variant="outline" size="sm" disabled={loading}>
             {loading
               ? t.settings.account.updating

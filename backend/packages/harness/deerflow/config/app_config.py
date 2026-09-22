@@ -12,18 +12,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from deerflow.config.acp_config import ACPAgentConfig, load_acp_config_from_dict
 from deerflow.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
+from deerflow.config.capabilities_config import CapabilitiesConfig
 from deerflow.config.channel_connections_config import ChannelConnectionsConfig
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from deerflow.config.database_config import DatabaseConfig
 from deerflow.config.email_config import EmailConfig
+from deerflow.config.email_marketing_config import EmailMarketingConfig
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
+from deerflow.config.integrations_config import IntegrationsConfig
+from deerflow.config.jobs_config import JobsConfig
 from deerflow.config.loop_detection_config import LoopDetectionConfig
 from deerflow.config.memory_config import MemoryConfig, load_memory_config_from_dict
 from deerflow.config.model_config import ModelConfig
 from deerflow.config.reload_boundary import format_field_description
 from deerflow.config.run_events_config import RunEventsConfig
 from deerflow.config.runtime_paths import existing_project_file
+from deerflow.config.runtimes_config import RuntimesConfig
 from deerflow.config.safety_finish_reason_config import SafetyFinishReasonConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.skill_evolution_config import SkillEvolutionConfig
@@ -147,6 +152,29 @@ class AppConfig(BaseModel):
             "database",
             field_doc="Unified database backend for run/feedback metadata (memory, sqlite, or postgres).",
         ),
+    )
+    capabilities: CapabilitiesConfig = Field(
+        default_factory=CapabilitiesConfig,
+        description=("Capability registry surfaces: Nova's own MCP server. Lead-agent exposure is gated by `tool_groups` (`nova:<module>`). Read per request, so edits hot-reload."),
+    )
+    email_marketing: EmailMarketingConfig = Field(
+        default_factory=EmailMarketingConfig,
+        description=("Email marketing: public link origin, tracking secret, throttles, bounce mailbox, retention. Read per request / per job, so edits hot-reload."),
+    )
+    integrations: IntegrationsConfig = Field(
+        default_factory=IntegrationsConfig,
+        description=("Integrations registry (Settings › Integrations, /api/integrations): services Nova can reach and how to probe them. Read per-request, so edits hot-reload."),
+    )
+    jobs: JobsConfig = Field(
+        default_factory=JobsConfig,
+        description=format_field_description(
+            "jobs",
+            field_doc="Job runner (separate worker process): queues, concurrency, lease/reaper/scheduler cadence.",
+        ),
+    )
+    runtimes: RuntimesConfig = Field(
+        default_factory=RuntimesConfig,
+        description=("Runtime registry: run a chat on Claude Code / OpenClaw over ACP instead of the native agent; default runtime, Nova MCP URL, account paths. Read per run, so edits hot-reload."),
     )
     run_events: RunEventsConfig = Field(
         default_factory=RunEventsConfig,

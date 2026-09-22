@@ -143,6 +143,48 @@ class TestArtifactsLocation:
         assert text.index(ARTIFACTS_LOCATION) < text.index(general), f"{name}: artifacts location must precede the general /api/threads location or it never matches"
 
 
+COMPUTER_WS_LOCATION = "location ~ ^/api/threads/[^/]+/computer-ws$"
+
+
+class TestComputerWsLocation:
+    """The multiplexed Agent's Computer feed (task_* + browser + workspace channels).
+
+    The frontend migrated from ``tasks-ws`` to ``computer-ws`` while the
+    nginx configs only carried a ``tasks-ws`` location. The generic
+    ``/api/threads`` catch-all sets no ``Upgrade`` header, so every browser
+    attempt to open ``/api/threads/{id}/computer-ws`` returns 400 (logged
+    as 404 on the gateway) — subagent cards never receive status updates,
+    the Browser tab stays blank, and the Activity timeline never gets
+    fresh events. ``make dev`` (no nginx) and the static-demo mode hide
+    this entirely. Same asymmetry that hid tasks-ws initially.
+    """
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_location_exists(self, name: str) -> None:
+        assert COMPUTER_WS_LOCATION in _read(name), f"{name}: computer-ws needs its own location — frontend WS-G returns 400 without it"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_supports_websocket_upgrade(self, name: str) -> None:
+        body = _location_body(_read(name), COMPUTER_WS_LOCATION)
+        assert "Upgrade $http_upgrade" in body.replace("  ", " "), f"{name}: no Upgrade header on computer-ws"
+        assert "Connection $connection_upgrade" in body.replace("  ", " "), f"{name}: no Connection upgrade on computer-ws"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_ordered_before_the_general_threads_location(self, name: str) -> None:
+        text = _read(name)
+        general = "location ~ ^/api/threads {"
+        if general not in text:
+            pytest.skip(f"{name} has no general /api/threads regex location")
+        assert text.index(COMPUTER_WS_LOCATION) < text.index(general), f"{name}: computer-ws location must precede the general /api/threads location or it never matches"
+
+    @pytest.mark.parametrize("name", ALL)
+    def test_long_read_timeout_for_idle_sockets(self, name: str) -> None:
+        body = _location_body(_read(name), COMPUTER_WS_LOCATION)
+        match = re.search(r"proxy_read_timeout\s+(\d+)s", body)
+        assert match is not None, f"{name}: computer-ws has no read timeout override"
+        assert int(match.group(1)) >= 600, f"{name}: computer sockets idle between events; a short timeout kills them"
+
+
 class TestGlobalPostureUnchanged:
     """The fix must not weaken the app shell's own headers."""
 
@@ -272,3 +314,112 @@ class TestMicrophonePermission:
         text = _read(name)
         assert "camera=()" in text, f"{name}: camera should remain disabled"
         assert "geolocation=()" in text, f"{name}: geolocation should remain disabled"
+
+
+class TestConfigsActuallyParse:
+    """Every config must survive `nginx -t`, not merely contain the right text.
+
+    Each assertion in this module reads the file as a string, which is exactly
+    why a real defect sat here undetected: ``nginx.local.conf`` proxied to
+    ``$gateway_upstream``, a variable only ever ``set`` in ``nginx.conf``. nginx
+    resolves variables in ``proxy_pass`` at parse time, so the config was an
+    immediate ``[emerg] unknown "gateway_upstream" variable`` — ``make dev``
+    could not start its proxy at all — while every text assertion here passed.
+    """
+
+    @staticmethod
+    def _nginx_available() -> bool:
+        import shutil
+        import subprocess
+
+        if shutil.which("docker") is None:
+            return False
+        try:
+            return (
+                subprocess.run(
+                    ["docker", "image", "inspect", "nginx:alpine"],
+                    capture_output=True,
+                    timeout=30,
+                ).returncode
+                == 0
+            )
+        except Exception:
+            return False
+
+    @pytest.mark.parametrize("name", sorted(CONFIGS))
+    def test_config_passes_nginx_syntax_check(self, name: str, tmp_path) -> None:
+        if not self._nginx_available():
+            pytest.skip("docker with a local nginx:alpine image is required")
+
+        import shutil
+        import subprocess
+
+        path = CONFIGS[name]
+        # nginx.tls.conf is a bare server block, appended into nginx.conf's
+        # http{} by the container entrypoint; it cannot be parsed standalone.
+        if name == "docker-tls":
+            base = CONFIGS["docker"].read_text(encoding="utf-8")
+            tls = path.read_text(encoding="utf-8")
+            closing = base.rfind("}")
+            assert closing != -1, "nginx.conf has no closing brace"
+            candidate = base[:closing] + tls + "\n}\n"
+        else:
+            candidate = path.read_text(encoding="utf-8")
+
+        # The k8s config is a Helm template; `{{ .Values.namespace }}` is not
+        # nginx syntax until rendered. Substitute a plausible value so the check
+        # tests our structure rather than Helm's.
+        candidate = re.sub(r"\{\{[^}]*\}\}", "nova", candidate)
+
+        (tmp_path / "t.conf").write_text(candidate, encoding="utf-8")
+        certs = tmp_path / "certs"
+        certs.mkdir()
+
+        if "ssl_certificate" in candidate:
+            # nginx validates certificates at parse time, and nginx:alpine ships
+            # no openssl. Generate a throwaway pair on the host so the TLS config
+            # fails on syntax, never on certs the operator mounts at deploy time.
+            if shutil.which("openssl") is None:
+                pytest.skip("openssl is required to check the TLS config")
+            subprocess.run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-newkey",
+                    "rsa:2048",
+                    "-nodes",
+                    "-keyout",
+                    str(certs / "tls.key"),
+                    "-out",
+                    str(certs / "tls.crt"),
+                    "-days",
+                    "1",
+                    "-subj",
+                    "/CN=localhost",
+                ],
+                capture_output=True,
+                check=True,
+                timeout=120,
+            )
+
+        proc = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{tmp_path}:/work:ro",
+                "-v",
+                f"{certs}:/etc/nginx/certs:ro",
+                "nginx:alpine",
+                "sh",
+                "-c",
+                # A prefix with logs/ and the visitor-log dir so the check fails
+                # on syntax, never on a missing runtime path.
+                "mkdir -p /tmp/px/logs /var/log/nova && nginx -t -c /work/t.conf -p /tmp/px",
+            ],
+            capture_output=True,
+            timeout=180,
+        )
+        assert proc.returncode == 0, f"{name} ({path}) failed nginx -t:\n{proc.stderr.decode('utf-8', 'replace')}"

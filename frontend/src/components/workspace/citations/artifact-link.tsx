@@ -23,7 +23,12 @@ export function ArtifactLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
     <a
       {...rest}
       className={cn(
-        "text-primary decoration-primary/30 hover:decoration-primary/60 underline underline-offset-2 transition-colors",
+        // `wrap-anywhere` is not decoration. Streamdown's own <a> ships with it,
+        // and overriding the component silently dropped it -- so a long bare
+        // URL (auto-linked, no spaces to break on) overflowed its container
+        // instead of wrapping. Terminal output already gets this right via
+        // `break-all`; this is the same problem in the chat and reader.
+        "text-primary decoration-primary/30 hover:decoration-primary/60 wrap-anywhere underline underline-offset-2 transition-colors",
         className,
       )}
       target={target ?? (external ? "_blank" : undefined)}

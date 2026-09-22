@@ -43,7 +43,8 @@ def main() -> int:
     os.environ["DEER_FLOW_CONFIG_PATH"] = str(cfg)
     os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(prepare_hermetic_extras(home))
     os.environ["DEERFLOW_REPLAY_FIXTURE"] = args.fixture
-    os.environ.setdefault("AUTH_JWT_SECRET", "ci-replay-secret")
+    # 32+ bytes: the gateway enforces RFC 7518 §3.2 for HS256 (2026-09 hardening).
+    os.environ.setdefault("AUTH_JWT_SECRET", "ci-replay-secret-0123456789abcdef0123456789")
     os.environ["GATEWAY_CORS_ORIGINS"] = args.cors
     # Child / dynamic imports (resolve_class) search PYTHONPATH too.
     os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (str(_BACKEND), str(_BACKEND / "tests"), os.environ.get("PYTHONPATH", "")) if p)

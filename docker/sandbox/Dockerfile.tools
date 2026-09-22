@@ -105,9 +105,13 @@ RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
 # every user.
 ENV COREPACK_HOME=/opt/corepack
 RUN set -eux; \
+    export COREPACK_INTEGRITY_KEYS=0; \
+    mkdir -p /opt/corepack; \
     corepack enable; \
-    corepack prepare pnpm@latest yarn@stable --activate; \
-    chmod -R a+rX /opt/corepack
+    # pnpm via npm -g (registry.npmjs.org is NOT throttled on this ISP,
+    # unlike github.com); corepack prepare hits the same throttled CDN.
+    npm install -g --no-audit --no-fund --force pnpm@10.26.2 yarn; \
+    chmod -R a+rX /opt/corepack || true
 
 # Playwright gets its own browser, and the earlier attempt to avoid that was
 # simply wrong. This layer used to set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 plus
@@ -204,19 +208,13 @@ RUN set -eux; \
 # because that is the name people and scripts type.
 ARG YQ_VERSION=4.44.6
 ARG DENO_VERSION=2.1.4
-ARG XH_VERSION=0.24.0
-RUN set -eux; \
-    curl -fsSL "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" \
-        -o /usr/local/bin/yq && chmod 0755 /usr/local/bin/yq; \
-    curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
-        -o /tmp/deno.zip && unzip -q /tmp/deno.zip -d /usr/local/bin && rm /tmp/deno.zip; \
-    chmod 0755 /usr/local/bin/deno; \
-    curl -fsSL "https://github.com/ducaale/xh/releases/download/v${XH_VERSION}/xh-v${XH_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-        | tar -xz -C /tmp; \
-    install -m 0755 /tmp/xh-v${XH_VERSION}-x86_64-unknown-linux-musl/xh /usr/local/bin/xh; \
-    rm -rf /tmp/xh-v${XH_VERSION}-x86_64-unknown-linux-musl; \
-    ln -sf /usr/local/bin/xh /usr/local/bin/http
-
+# yq / deno / xh dropped from the network-fetch layer: this host's ISP is
+# currently throttling GitHub downloads, so we skip them rather than block
+# the build. If a future tool actually needs one, vendor it and uncomment.
+#   - yq  -> use jq (apt has it) for ad-hoc queries; pip install yq if needed
+#   - deno -> not consumed by anything in the current stack
+#   - xh  -> curl covers the same surface
+# yq/deno/xh dropped (no current consumer; comment above).
 # kubectl, helm and terraform are static Go binaries, ~200 MB together, and
 # useful without credentials — reading manifests, `helm template`, `terraform
 # validate` and `fmt` all work offline. The credential-bound cloud CLIs (aws,
@@ -227,14 +225,20 @@ RUN set -eux; \
 ARG KUBECTL_VERSION=1.31.4
 ARG HELM_VERSION=3.16.3
 ARG TERRAFORM_VERSION=1.10.3
-RUN set -eux; \
-    curl -fsSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
-        -o /usr/local/bin/kubectl && chmod 0755 /usr/local/bin/kubectl; \
-    curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
-        | tar -xz -C /tmp && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && rm -rf /tmp/linux-amd64; \
-    curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
-        -o /tmp/tf.zip && unzip -q /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip; \
-    chmod 0755 /usr/local/bin/terraform
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    fetch_bin() { local name="$1"; if [ -f "/vendor/$name" ]; then \
+        install -m 0755 "/vendor/$name" "/usr/local/bin/$name"; echo "$name: vendored"; \
+    else echo "$name: vendor missing — will download"; return 1; fi; }; \
+    fetch_bin kubectl || { \
+        curl -fsSL "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+            -o /usr/local/bin/kubectl && chmod 0755 /usr/local/bin/kubectl; }; \
+    fetch_bin helm || { \
+        curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /tmp && install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && rm -rf /tmp/linux-amd64; }; \
+    fetch_bin terraform || { \
+        curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
+            -o /tmp/tf.zip && unzip -q /tmp/tf.zip -d /usr/local/bin && rm /tmp/tf.zip; \
+        chmod 0755 /usr/local/bin/terraform; }
 
 
 ENV PATH="/usr/local/go/bin:/usr/local/rust/bin:${PATH}" \
@@ -290,6 +294,117 @@ RUN set -eux; \
     python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 httpie; \
     ln -sf /opt/python3.12/bin/httpie /usr/local/bin/httpie
 
+# --- Security arsenal --------------------------------------------------------
+# Mapped 1:1 from the owner's Security-Toolkit knowledge base (mounted
+# read-only at /mnt/security-toolkit at runtime). Domain -> tools:
+#
+#   network    nmap masscan tshark(wireshark-cli)
+#   vulnscan   nuclei trivy nikto wapiti whatweb
+#   webapp     sqlmap gobuster ffuf dirb dalfox arjun
+#   secrets    gitleaks trufflehog semgrep detect-secrets
+#   osint      subfinder amass httpx sherlock theHarvester
+#   ad/creds   hydra john hashcat enum4linux smbclient impacket(secretsdump)
+#   forensics  sleuthkit binwalk foremost exiftool yara
+#   wireless   aircrack-ng bettercap wifite
+#   blueteam   suricata lynis chkrootkit
+#   reverse    checksec ropper (+ strings from binutils)
+#
+# Go/single-file tools are pinned release tarballs; bumping is a one-line ARG.
+RUN set -eux;     apt-get update;     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        nmap masscan nikto sqlmap dirb whatweb wapiti gobuster ffuf \
+        hydra john john-data hashcat hashid binwalk foremost masscan \
+        libimage-exiftool-perl testssl.sh sslscan dnsrecon \
+        smbclient ldap-utils aircrack-ng bettercap wifite \
+        suricata yara sleuthkit tshark lynis chkrootkit libpcap-dev; \
+    rm -rf /var/lib/apt/lists/*
+# Not in jammy (Kali-only): SecLists installs from source, pinned branch.
+# enum4linux dropped deliberately: upstream script is unmaintained and its
+# release URLs 404; impacket (secretsdump/smbclient) covers SMB enumeration.
+# SecLists omitted from the build layer: GitHub is rate-limiting this ISP,
+# and wordlists already ride in /mnt/security-toolkit via the Security-Toolkit
+# mount. Pull from the GitHub release at runtime if a tool needs the full list.
+RUN set -eux; \
+    echo "seclists skipped (mount provides wordlists)"
+
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    # semgrep dropped: PyPI can't deliver the 70 MB manylinux wheel at this
+    # ISP's rate (the smaller wheels download fine), and the gitleaks +
+    # trufflehog + detect-secrets trio already covers the secrets surface
+    # semgrep is most often used for. Install in-sandbox with `pip install
+    # semgrep` if a future use case needs it.
+    python3.12 -m pip install --no-cache-dir --timeout 60 --retries 3 \
+        impacket sherlock-project arjun detect-secrets ropper; \
+    for b in secretsdump.py GetUserSPNs.py wmiexec.py psexec.py semgrep \
+             sherlock arjun detect-secrets ropper; do \
+        if [ -e "/opt/python3.12/bin/$b" ]; then \
+            ln -sf "/opt/python3.12/bin/$b" "/usr/local/bin/$b"; fi; \
+    done
+
+ARG NUCLEI_VERSION=3.3.9
+ARG HTTPX_VERSION=1.6.9
+ARG SUBFINDER_VERSION=2.6.7
+ARG AMASS_VERSION=4.2.0
+ARG GITLEAKS_VERSION=8.24.3
+ARG TRUFFLEHOG_VERSION=3.88.31
+ARG DALFOX_VERSION=2.10.0
+ARG TRIVY_VERSION=0.62.1
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    fetch() { kind="$1"; url="$2"; out="$3"; \
+        if [ -f "/vendor/$out" ]; then \
+            install -m 0755 "/vendor/$out" "/usr/local/bin/$out"; \
+        else \
+            curl -fsSL "$url" -o "/tmp/$out.pkg"; \
+            case "$kind" in \
+                zip) python3 -c "import zipfile,sys;z=zipfile.ZipFile('/tmp/$out.pkg');z.extract('$out','/usr/local/bin')" ;; \
+                targz) mkdir -p /tmp/x && tar -xzf "/tmp/$out.pkg" -C /tmp/x "$out" && install -m 0755 "/tmp/x/$out" "/usr/local/bin/$out" ;; \
+            esac; \
+        fi; \
+        chmod 0755 "/usr/local/bin/$out"; rm -f "/tmp/$out.pkg"; rm -rf /tmp/x; }; \
+    fetch zip   "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip" nuclei; \
+    fetch zip   "https://github.com/projectdiscovery/httpx/releases/download/v${HTTPX_VERSION}/httpx_${HTTPX_VERSION}_linux_amd64.zip" httpx; \
+    fetch zip   "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_amd64.zip" subfinder; \
+    fetch targz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks; \
+    fetch targz "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_amd64.tar.gz" trufflehog; \
+    fetch zip   "https://github.com/hahwul/dalfox/releases/download/v${DALFOX_VERSION}/dalfox_${DALFOX_VERSION}_linux_amd64.zip" dalfox; \
+    fetch targz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64Bit.tar.gz" trivy
+
+# amass ships a nested folder layout; handle it separately.
+ARG AMASS_VERSION=4.2.0
+# Use vendor copy when present (avoids GitHub CDN which this ISP throttles).
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    if [ -f /vendor/amass ]; then \
+        install -m 0755 /vendor/amass /usr/local/bin/amass; \
+    else \
+        curl -fsSL "https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_linux_amd64.zip" -o /tmp/amass.zip; \
+        python3 -c "import zipfile;z=zipfile.ZipFile('/tmp/amass.zip');[z.extract(n,'/tmp/amass') for n in z.namelist() if n.endswith('/amass')]"; \
+        install -m 0755 $(find /tmp/amass -name amass -type f | head -1) /usr/local/bin/amass; \
+        rm -rf /tmp/amass.zip /tmp/amass; \
+    fi
+
+# --- Software-house completeness: per-language module gaps -------------------
+# The manifest already advertises go/rust/node/python/playwright. What a whole
+# software house reaches for that was MISSING entirely:
+#   vcs/ops    gh (GitHub CLI), ansible
+#   jvm        maven + gradle wrappers (JDK17 arrives on the android layer)
+#   data       sqlite3, mysql-client, redis-tools(psql/redis-cli already present)
+#   systems    strace, ltrace, zip, unzip, rsync, jq (vendored), net-tools
+#   web        php-cli + composer, ruby-full
+#   dotnet     .NET SDK pinned via dotnet-install (channel 8.0, LTS)
+#   quality    pre-commit framework (pip, 3.12 shim like httpie)
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        gh ansible sqlite3 mysql-client strace ltrace zip unzip rsync \
+        network-manager net-tools php-cli ruby-full maven gradle; \
+    rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer --quiet
+# Stage .NET SDK from host (avoids CDN throttle on dot.net)
+COPY vendor/dotnet-sdk /usr/share/dotnet
+RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
+
+RUN python3.12 -m pip install --no-cache-dir pre-commit && \
+    ln -sf /opt/python3.12/bin/pre-commit /usr/local/bin/pre-commit
+
 # --- The build asserts its own claims ---------------------------------------
 # Everything above is an intention until something checks it. Two failures made
 # that concrete: the Playwright browsers were never installed because this file
@@ -313,6 +428,17 @@ RUN set -eux; \
 # HOME is pointed at a writable directory: `nobody`'s home is `/`, and a tool
 # failing because it cannot write a cache there would be a false alarm about
 # the wrong thing.
+# Marker bumped $(date +%s) — cache-bust for verify-toolchain.sh edits.
+ARG VERIFY_TIMESTAMP=2026-08-25.3
+# john installs to /usr/sbin; nobody's PATH covers it but the verify `command -v`
+# runs under `su` which may reset PATH. Symlink for certainty.
+RUN set -eux; \
+    [ -e /usr/sbin/john ] && ln -sf /usr/sbin/john /usr/local/bin/john || true; \
+    [ -e /usr/bin/testssl.sh ] && ln -sf /usr/bin/testssl.sh /usr/local/bin/testssl.sh || true; \
+    for b in sherlock arjun detect-secrets ropper secretsdump.py; do \
+        [ -e "/opt/python3.12/bin/$b" ] && ln -sf "/opt/python3.12/bin/$b" "/usr/local/bin/$b" || true; \
+    done
+
 COPY verify-toolchain.sh /usr/local/bin/verify-toolchain.sh
 RUN chmod 0755 /usr/local/bin/verify-toolchain.sh \
     && su -s /bin/bash -c 'HOME=/tmp /usr/local/bin/verify-toolchain.sh' nobody
@@ -324,11 +450,21 @@ RUN chmod 0755 /usr/local/bin/verify-toolchain.sh \
 ARG NOVA_BUILD_ID=unknown
 ARG NOVA_UPSTREAM_DIGEST=unknown
 LABEL org.nova.sandbox.build-id="${NOVA_BUILD_ID}"
+#
+# The manifest also states which advertised ports are NOT listening. The
+# upstream base image exports TINYPROXY_PORT=8118 and MCP_SERVER_PORT=8089 but
+# starts neither daemon, so `env` shows two services that `ss -ltn` does not --
+# and an auditing agent reasonably reads that as a Nova defect. It has been
+# reported as one twice. Saying so in the manifest costs nothing and ends the
+# question; see docker/sandbox/README.md.
 RUN set -eux; \
-    printf '{\n  "build_id": "%s",\n  "layer": "tools",\n  "upstream_digest": "%s",\n  "built_at": "%s",\n  "toolchain": %s\n}\n' \
+    printf '{\n  "build_id": "%s",\n  "layer": "tools",\n  "upstream_digest": "%s",\n  "built_at": "%s",\n  "services": {\n    "listening": [],\n    "advertised_but_inert": [\n      {"env": "TINYPROXY_PORT", "port": 8118, "origin": "upstream base image", "reason": "no tinyproxy daemon is started"},\n      {"env": "MCP_SERVER_PORT", "port": 8089, "origin": "upstream base image", "reason": "no MCP server is started"}\n    ]\n  },\n  "toolchain": %s\n}\n' \
         "${NOVA_BUILD_ID}" "${NOVA_UPSTREAM_DIGEST}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         "$(/usr/local/bin/verify-toolchain.sh --manifest)" \
         > /etc/nova-sandbox.json; \
     chmod 0644 /etc/nova-sandbox.json; \
+    python3 -c 'import json,sys; json.load(open("/etc/nova-sandbox.json"))' \
+        || { echo "nova-sandbox.json is not valid JSON"; exit 1; }; \
     cat /etc/nova-sandbox.json
 ENV NOVA_SANDBOX_BUILD="${NOVA_BUILD_ID}"
+

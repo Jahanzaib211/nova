@@ -1,0 +1,86 @@
+# The search backend `web_search` is bound to.
+#
+# Absent from this chart until now, which meant `searxng_healthy` was
+# permanently false on k3s and `web_search` ran permanently on its DuckDuckGo
+# fallback — silently, because that fallback is the whole reason the Compose
+# stack ran for weeks with searxng never started at all. Mirrors the Compose
+# service (docker/docker-compose-dev.yaml) so the two deployments answer the
+# same question the same way.
+#
+# Single replica: SearXNG holds no state worth spreading, and the result cache
+# lives in the gateway, not here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "searxng") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "nova.selectorLabels" (dict "component" "searxng") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nova.labels" . | nindent 8 }}
+        {{- include "nova.selectorLabels" (dict "component" "searxng") | nindent 8 }}
+      annotations:
+        # Roll the pod when settings change; a ConfigMap edit alone does not.
+        checksum/settings: {{ .Files.Get "files/searxng-settings.yml" | sha256sum }}
+    spec:
+      enableServiceLinks: false   # see deployment-gateway.yaml's comment on this
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 977      # the `searxng` user baked into the upstream image
+        runAsGroup: 977
+      containers:
+        - name: searxng
+          image: {{ .Values.images.searxng }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SEARXNG_BASE_URL
+              value: http://searxng:8080
+            - name: SEARXNG_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nova-secrets
+                  key: SEARXNG_SECRET_KEY
+          volumeMounts:
+            - name: settings
+              mountPath: /etc/searxng/settings.yml
+              subPath: settings.yml
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            # SearXNG + uwsgi boot slower than the probe defaults on a contended
+            # node; without the delay the pod is killed before it is ever ready.
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: settings
+          configMap:
+            name: searxng-settings

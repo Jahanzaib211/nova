@@ -3,6 +3,7 @@
 import { CodeIcon, LoaderCircleIcon, PencilIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { CodeEditor } from "@/components/workspace/code-editor";
 import { useI18n } from "@/core/i18n/hooks";
 import { useLiveFileContent } from "@/core/sandbox/hooks";
 import { diffStats, lineDiff, type DiffLine } from "@/lib/line-diff";
@@ -12,18 +13,6 @@ import type { ActiveEdit } from "./message-helpers";
 
 // Tab 2: Editor — live code view as agent writes
 // ──────────────────────────────────────────────────────────
-function getCodeColor(filename: string): string {
-  const ext = filename.split(".").at(-1)?.toLowerCase() ?? "";
-  if (ext === "html" || ext === "htm") return "text-orange-300";
-  if (ext === "css" || ext === "scss") return "text-pink-300";
-  if (ext === "js" || ext === "jsx" || ext === "mjs") return "text-yellow-300";
-  if (ext === "ts" || ext === "tsx") return "text-blue-300";
-  if (ext === "json") return "text-green-300";
-  if (ext === "md") return "text-sky-300";
-  if (ext === "py") return "text-emerald-300";
-  return "text-slate-300";
-}
-
 // Renders an interleaved red/green line diff (zai/cursor style).
 function DiffView({ lines }: { lines: DiffLine[] }) {
   return (
@@ -33,8 +22,8 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
           key={i}
           className={cn(
             "flex px-2 break-all whitespace-pre-wrap",
-            l.type === "add" && "bg-emerald-500/10 text-emerald-300",
-            l.type === "del" && "bg-red-500/10 text-red-300/90",
+            l.type === "add" && "bg-success/10 text-success",
+            l.type === "del" && "bg-destructive/10 text-destructive/90",
             l.type === "ctx" && "text-muted-foreground/70",
           )}
         >
@@ -62,14 +51,13 @@ export function Editor({
   activeEdit: ActiveEdit | null;
 }) {
   const { t } = useI18n();
-  const { content, exists, lineCount } = useLiveFileContent(
+  const { content, exists, lineCount, isLoading } = useLiveFileContent(
     threadId,
     filePath,
     activeTab && Boolean(filePath),
   );
   const bottomRef = useRef<HTMLDivElement>(null);
   const filename = filePath?.split("/").at(-1) ?? "";
-  const codeColor = getCodeColor(filename);
 
   // The diff is only meaningful for the file currently shown.
   const editForFile = activeEdit?.path === filePath ? activeEdit : null;
@@ -89,10 +77,13 @@ export function Editor({
   // Depending on the object meant this effect refired continuously while the
   // agent wrote, so a user who clicked "File" to read the whole thing was
   // yanked back to "Diff" a fraction of a second later, every time — the toggle
-  // was effectively unusable during streaming. The path+kind key still resets
-  // the view when the agent moves to a genuinely different edit.
+  // was effectively unusable during streaming.
+  //
+  // The key includes the tool-call id: path+kind alone could NOT distinguish
+  // two consecutive str_replace calls on the same file, so edit #2 silently
+  // kept "File" view and its diff badge was never shown.
   const editKey = editForFile
-    ? `${editForFile.path}:${editForFile.kind}`
+    ? `${editForFile.callId}:${editForFile.path}:${editForFile.kind}`
     : null;
   const [mode, setMode] = useState<"diff" | "file">("diff");
   useEffect(() => {
@@ -100,17 +91,20 @@ export function Editor({
   }, [editKey]);
   const showDiff = mode === "diff" && diff !== null;
 
-  // Auto-scroll while writing
+  // Auto-scroll while writing — gated on the tab being visible: every tab
+  // stays mounted via CSS `hidden`, and an ungated scrollIntoView drags a
+  // hidden subtree on every streamed chunk (the v9.6 Terminal bug class).
   useEffect(() => {
-    if (isWriting) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [content, isWriting, showDiff]);
+    if (isWriting && activeTab)
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeTab, content, isWriting, showDiff]);
 
   if (!filePath) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
         <PencilIcon className="text-muted-foreground/30 h-6 w-6" />
         <span className="text-muted-foreground/50 text-xs">
-          {t.agentComputer.editor.startWriting}
+          {t.agentComputer.viewer.startWriting}
         </span>
       </div>
     );
@@ -119,20 +113,20 @@ export function Editor({
   return (
     <div className="flex h-full flex-col bg-black/50">
       {/* File header */}
-      <div className="border-border/30 flex shrink-0 items-center gap-2 border-b bg-black/40 px-3 py-1.5">
+      <div className="border-panel-border flex shrink-0 items-center gap-2 border-b bg-black/40 px-3 py-1.5">
         <CodeIcon className="text-muted-foreground/60 h-3 w-3" />
         <span className="text-muted-foreground/80 truncate font-mono text-xs">
           {filename}
         </span>
         {showDiff && stats && (stats.added > 0 || stats.removed > 0) && (
           <span className="ml-1 shrink-0 font-mono text-[10px]">
-            <span className="text-emerald-400">+{stats.added}</span>{" "}
-            <span className="text-red-400">−{stats.removed}</span>
+            <span className="text-success">+{stats.added}</span>{" "}
+            <span className="text-destructive">−{stats.removed}</span>
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {diff !== null && (
-            <div className="border-border/40 flex items-center rounded border text-[10px]">
+            <div className="border-panel-border flex items-center rounded border text-[10px]">
               <button
                 onClick={() => setMode("diff")}
                 className={cn(
@@ -142,7 +136,7 @@ export function Editor({
                     : "text-muted-foreground/60 hover:text-muted-foreground",
                 )}
               >
-                {t.agentComputer.editor.diff}
+                {t.agentComputer.viewer.diff}
               </button>
               <button
                 onClick={() => setMode("file")}
@@ -153,19 +147,19 @@ export function Editor({
                     : "text-muted-foreground/60 hover:text-muted-foreground",
                 )}
               >
-                {t.agentComputer.editor.file}
+                {t.agentComputer.viewer.file}
               </button>
             </div>
           )}
           {!showDiff && lineCount > 1 && (
             <span className="text-muted-foreground/50 text-[10px]">
-              {t.agentComputer.editor.lines(lineCount)}
+              {t.agentComputer.viewer.lines(lineCount)}
             </span>
           )}
           {isWriting && (
-            <span className="inline-flex items-center gap-1 rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-400">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-              {t.agentComputer.editor.writing}
+            <span className="bg-info/20 text-info inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]">
+              <span className="bg-info h-1.5 w-1.5 animate-pulse rounded-full" />
+              {t.agentComputer.viewer.writing}
             </span>
           )}
         </div>
@@ -175,18 +169,47 @@ export function Editor({
         {showDiff && diff ? (
           <DiffView lines={diff} />
         ) : exists && content ? (
-          <pre
-            className={cn(
-              "p-3 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap",
-              codeColor,
+          <div className="relative h-full">
+            <CodeEditor
+              value={content}
+              filename={filePath ?? undefined}
+              readonly
+              className="h-full"
+              settings={{ lineNumbers: true }}
+            />
+            {isWriting && (
+              // The "agent is typing into this file" affordance. It lived in
+              // the old <pre> as a trailing block cursor; without it a live
+              // write is indistinguishable from a static file.
+              <span
+                aria-hidden
+                className="text-foreground pointer-events-none absolute right-2 bottom-1 animate-pulse font-mono text-xs"
+                data-testid="editor-writing-cursor"
+              >
+                █
+              </span>
             )}
-          >
-            {content}
-            {isWriting && <span className="animate-pulse text-white">█</span>}
-          </pre>
-        ) : (
+          </div>
+        ) : isLoading ? (
+          // Genuinely still fetching — the only state a spinner means.
           <div className="flex h-full items-center justify-center">
             <LoaderCircleIcon className="text-muted-foreground/30 h-5 w-5 animate-spin" />
+          </div>
+        ) : !exists ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1 px-6 text-center">
+            <span className="text-muted-foreground/50 text-xs">
+              {t.agentComputer.viewer.fileNotWritten}
+            </span>
+            <span className="text-muted-foreground/35 font-mono text-[10px] break-all">
+              {filePath}
+            </span>
+          </div>
+        ) : (
+          // exists === true with empty content: a real, empty file.
+          <div className="flex h-full items-center justify-center">
+            <span className="text-muted-foreground/40 text-xs">
+              {t.agentComputer.viewer.emptyFile}
+            </span>
           </div>
         )}
         <div ref={bottomRef} />

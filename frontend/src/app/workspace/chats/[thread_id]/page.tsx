@@ -38,6 +38,11 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
 import {
+  type AcpTranscripts,
+  applyAcpUpdate,
+} from "@/core/threads/acp-transcript";
+import {
+  acpTranscriptActivityEvents,
   activeWriteFilePathFromActivity,
   currentToolFromActivity,
   messagesToActivityEvents,
@@ -45,6 +50,7 @@ import {
 import {
   useActiveRun,
   useThreadMetadata,
+  takeQueuedMessage,
   useThreadStream,
   useThreadTokenUsage,
 } from "@/core/threads/hooks";
@@ -52,6 +58,7 @@ import { recordComposer } from "@/core/threads/stream-trace";
 import { composerShouldStream } from "@/core/threads/stream-trace";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
+import { useTodoCollapse } from "@/core/todos";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +101,7 @@ export default function ChatPage() {
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [llmError, setLlmError] = useState<LlmError | null>(null);
+  const [acpTranscripts, setAcpTranscripts] = useState<AcpTranscripts>({});
 
   useEffect(() => {
     mountedRef.current = true;
@@ -108,6 +116,7 @@ export default function ChatPage() {
     setTaskProgress(null);
     setVerifyResult(null);
     setLlmError(null);
+    setAcpTranscripts({});
   }, [threadId]);
 
   const { showNotification } = useNotification();
@@ -138,6 +147,14 @@ export default function ChatPage() {
       setIsNewThread(false);
     },
     onFinish: (state) => {
+      // H2 steering flush: a message typed mid-run was parked on 409; send it
+      // now that the run ended. Slight delay lets run teardown settle first.
+      const queued = takeQueuedMessage(threadId);
+      if (queued) {
+        window.setTimeout(() => {
+          void sendMessage(threadId, { text: queued, files: [] });
+        }, 400);
+      }
       if (document.hidden || !document.hasFocus()) {
         let body = "Conversation finished";
         const lastMessage = state.messages.at(-1);
@@ -162,6 +179,9 @@ export default function ChatPage() {
     onLlmError: (event) => {
       setLlmError(event);
     },
+    onAcpUpdate: (event) => {
+      setAcpTranscripts((prev) => applyAcpUpdate(prev, event));
+    },
   });
 
   const hasThreadMessages = thread.messages.length > 0;
@@ -171,9 +191,16 @@ export default function ChatPage() {
   // from `onLangChainEvent` (on_tool_start/on_tool_end), but the gateway worker
   // doesn't emit LangGraph `events` mode, so that path is dead at runtime. The
   // `messages` mode is supported and carries the same tool_calls + results.
+  // A turn on an ACP runtime has no tool_calls in the stream; its actions
+  // come from the acp_update transcript instead (see activity.ts).
   const activityEvents = useMemo(
-    () => messagesToActivityEvents(thread.messages),
-    [thread.messages],
+    () => [
+      ...messagesToActivityEvents(thread.messages),
+      ...acpTranscriptActivityEvents(acpTranscripts, {
+        running: thread.isLoading,
+      }),
+    ],
+    [thread.messages, acpTranscripts, thread.isLoading],
   );
   const currentTool = useMemo(
     () => currentToolFromActivity(activityEvents),
@@ -262,6 +289,8 @@ export default function ChatPage() {
     ? localSettings.tokenUsage.inlineMode
     : "off";
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  const { collapsed: todosCollapsed, toggle: toggleTodos } =
+    useTodoCollapse(threadId);
 
   return (
     <ThreadContext.Provider
@@ -274,6 +303,7 @@ export default function ChatPage() {
         llmError,
         activityEvents,
         activeWriteFilePath,
+        acpTranscripts,
         onAgentMessage: handleAgentMessage,
       }}
     >
@@ -374,7 +404,8 @@ export default function ChatPage() {
                         <TodoList
                           className="bg-background/5"
                           todos={thread.values.todos ?? []}
-                          hidden={false}
+                          collapsed={todosCollapsed}
+                          onToggle={toggleTodos}
                         />
                       </div>
                     </div>

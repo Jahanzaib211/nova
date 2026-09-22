@@ -9,6 +9,18 @@ export interface AgentThreadState extends Record<string, unknown> {
   todos?: Todo[];
 }
 
+/** Per-chat runtime selection (P12). Kept as a named type because
+ * `Omit<AgentThreadContext, …>` collapses over the index signature and
+ * callers intersect this back in. */
+export interface RuntimeContextFields {
+  /** `native` or an acp_agents name (claude_code, openclaw). */
+  runtime?: string;
+  /** Account id for the runtime, or "auto". */
+  runtime_account?: string;
+  /** Permission preset for ACP runtimes. */
+  permission_mode?: "full" | "standard" | "plan";
+}
+
 export interface AgentThreadContext extends Record<string, unknown> {
   thread_id: string;
   model_name: string | undefined;
@@ -17,6 +29,9 @@ export interface AgentThreadContext extends Record<string, unknown> {
   subagent_enabled: boolean;
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
   agent_name?: string;
+  runtime?: RuntimeContextFields["runtime"];
+  runtime_account?: RuntimeContextFields["runtime_account"];
+  permission_mode?: RuntimeContextFields["permission_mode"];
 }
 
 export interface AgentThread extends Thread<AgentThreadState> {

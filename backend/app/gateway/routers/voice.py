@@ -50,7 +50,7 @@ from collections.abc import AsyncIterator, Callable
 from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 
 from app.gateway.authz import require_auth
-from app.gateway.ws_guards import caller_owns_thread, reject, ws_same_origin
+from app.gateway.ws_guards import reject, ws_caller_owns_thread, ws_same_origin
 
 logger = logging.getLogger(__name__)
 
@@ -694,7 +694,7 @@ async def voice_session(websocket: WebSocket, thread_id: str) -> None:
 
 async def _voice_session_after_auth(websocket: WebSocket, thread_id: str) -> None:
     """The session loop, run with the authenticated user's context set."""
-    if not caller_owns_thread(thread_id):
+    if not await ws_caller_owns_thread(websocket, thread_id):
         await reject(websocket)
         return
     if not ws_same_origin(websocket):

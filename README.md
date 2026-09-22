@@ -328,10 +328,10 @@ for event in client.stream("hello"):
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 6,928 | `cd backend && make test` |
-| Frontend unit tests | 689 | `cd frontend && pnpm test` |
-| Playwright E2E | 85 | `cd frontend && pnpm test:e2e` |
-| Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
+| Backend unit tests | 7,303 | `cd backend && make test` |
+| Frontend unit tests | 799 | `cd frontend && pnpm test` |
+| Playwright E2E | 167 | `cd frontend && pnpm test:e2e` |
+| Blocking IO gate | 22 | `cd backend && make test-blocking-io` |
 
 ```bash
 make ci          # full local CI
@@ -339,7 +339,7 @@ make ci-fast     # lint + tests only
 make self-audit  # full self-probe
 ```
 
-14 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
+20 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
 
 ## Contributing
 

@@ -46,6 +46,8 @@ _AIO_POLL_INTERVAL = 1.5
 _MAX_AIO_MISSES = 60
 # Read short, well-known constant names for the new "crashed" terminal state.
 _STATUS_CRASHED = "crashed"
+#: Dev-server lines are a live tail, not a payload -- one line, bounded.
+_DEVLOG_SUMMARY_MAX = 200
 _READINESS_TIMEOUT_S = 12.0  # panel flips starting → ready/crashed inside this window
 
 
@@ -68,6 +70,27 @@ class DevServerHandle:
     _logpath: str | None = None
     _poller_task: asyncio.Task | None = None
     _watchdog_task: asyncio.Task | None = None  # port-readiness watchdog (local + AIO)
+
+
+def _notify_dev_server_status(handle: DevServerHandle) -> None:
+    """Announce a status transition to registered listeners (gateway WS).
+
+    Non-fatal by contract: listener failures are contained inside the emitter.
+    """
+    try:
+        from deerflow.sandbox.computer_events import emit_dev_server_status
+
+        emit_dev_server_status(
+            {
+                "thread_id": handle.thread_id,
+                "label": handle.label,
+                "status": handle.status,
+                "port": handle.port,
+                "container_port": handle.container_port,
+            }
+        )
+    except Exception:  # noqa: BLE001 - observability must never break a run
+        logger.debug("dev-server status notify failed", exc_info=True)
 
 
 _servers: dict[str, DevServerHandle] = {}
@@ -147,6 +170,124 @@ def allocate_container_port(thread_id: str, label: str = DEFAULT_LABEL) -> int:
     return _PREVIEW_CONTAINER_PORTS[-1]
 
 
+# Ports the sandbox container owns for its own services, never an app's preview.
+# 8080 is the AIO sandbox API itself (ttyd / noVNC / the /absproxy gateway).
+_SANDBOX_INFRA_PORTS = frozenset({8080})
+
+
+def _sandbox_for_thread(thread_id: str):
+    """The live sandbox object for a thread, or ``None``.
+
+    Deliberately does not *acquire* — these helpers are diagnostics, and
+    acquiring from a probe would create a container as a side effect of asking
+    whether one has a server running.
+    """
+    from deerflow.sandbox import get_sandbox_provider
+
+    try:
+        provider = get_sandbox_provider()
+        # Look the thread's existing sandbox up; never `acquire`. Acquiring here
+        # would *create* a container as a side effect of asking whether one has a
+        # server running -- which also made `discover_live_preview` adopt ports
+        # belonging to a sandbox it had just spun up itself.
+        mapping = getattr(provider, "_thread_sandboxes", None) or {}
+        sandbox_id = mapping.get(thread_id)
+        if not sandbox_id:
+            return None
+        return provider.get(sandbox_id)
+    except Exception:
+        logger.debug("no sandbox for thread %s", thread_id, exc_info=True)
+        return None
+
+
+async def probe_container_port(thread_id: str, port: int) -> bool:
+    """True if something is listening on ``port`` *inside* the sandbox.
+
+    This is the correct liveness test for an in-container port, and it is not
+    ``port_alive``. ``port_alive`` connects from the **gateway** process, so for
+    an AIO sandbox it tests the gateway's own loopback -- which is why
+    registering a server the agent started inside the sandbox on, say, 8787
+    always failed with "nothing is listening there". Only 4100-4102 and the
+    sandbox API port are published to the host; every other in-container port is
+    reachable solely through the sandbox's own ``/absproxy/{port}/`` gateway,
+    which is exactly what ``_absproxy_impl`` proxies to.
+
+    Measured against a live sandbox: a listening port answers (``308`` for a
+    dev server that redirects), an idle one comes back ``500``. So "the sandbox
+    gateway answered, and not with a 5xx" is the discriminator.
+
+    Falls back to ``port_alive`` for local (non-AIO) sandboxes, where the dev
+    server really does run on the gateway host.
+    """
+    # `provider.acquire()` does blocking Docker work, so it must not run on the
+    # event loop -- see the blocking-IO gate in backend/Makefile.
+    sandbox = await asyncio.to_thread(_sandbox_for_thread, thread_id)
+    base_url = getattr(sandbox, "base_url", None) if sandbox is not None else None
+    if not base_url:
+        # Local sandbox (or no sandbox): the server, if any, is on this host.
+        return await port_alive("127.0.0.1", port)
+
+    import httpx
+
+    url = f"{base_url.rstrip('/')}/absproxy/{int(port)}/"
+    try:
+        async with httpx.AsyncClient(timeout=2.0, follow_redirects=False) as client:
+            resp = await client.get(url)
+    except Exception:
+        return False
+    return resp.status_code < 500
+
+
+async def list_listening_ports(thread_id: str) -> list[int]:
+    """TCP ports listening inside the sandbox, lowest first.
+
+    This is the agent's (and the preview's) map of its own network. Parses the
+    same ``ss -ltnp`` output ``system_probe`` shows the agent, so the two can
+    never disagree about what is up.
+
+    Best-effort by contract: an empty list means "could not tell", never
+    "nothing is running", so no caller may treat it as proof of absence.
+    """
+    sandbox = await asyncio.to_thread(_sandbox_for_thread, thread_id)
+    if sandbox is None:
+        return []
+    cmd = "(ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null) | grep -i listen"
+    try:
+        out = await asyncio.to_thread(sandbox.execute_command, cmd)
+    except Exception:
+        logger.debug("listening-port probe failed for %s", thread_id, exc_info=True)
+        return []
+    return parse_listening_ports(out or "")
+
+
+def parse_listening_ports(text: str) -> list[int]:
+    """Extract listening TCP ports from ``ss``/``netstat`` output.
+
+    Pure and separately testable: the local-address column is the 4th field for
+    ``ss`` and the 4th for ``netstat -ltn`` too, but the address forms vary
+    (``0.0.0.0:4100``, ``[::]:4100``, ``*:4100``), so match on the trailing
+    ``:port`` rather than trusting the column split.
+    """
+    import re
+
+    ports: set[int] = set()
+    for line in text.splitlines():
+        # First field carrying a ``:port`` / ``.port`` suffix is the local
+        # address; break there so the peer column (``0.0.0.0:*``) is ignored.
+        for field_ in line.split():
+            m = re.fullmatch(r".*[:.]([0-9]{1,5})", field_)
+            if not m:
+                continue
+            try:
+                value = int(m.group(1))
+            except ValueError:
+                continue
+            if 1 <= value <= 65535:
+                ports.add(value)
+                break
+    return sorted(ports)
+
+
 async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
     """Find a live HTTP server among the thread's published preview ports.
 
@@ -172,6 +313,22 @@ async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
         host, host_port = endpoint
         if await port_alive(host, host_port):
             return (container_port, host, host_port)
+
+    # Nothing on the published ports. A server started outside the pipeline
+    # (raw bash, PM2, a manual `node`) binds whatever port it likes, and only
+    # 4100-4102 are published -- so the sweep above is structurally blind to it
+    # and the Browser tab sat on "Start Live Preview" forever. Ask the sandbox
+    # what is actually listening and adopt the first real candidate; it is
+    # reachable through the sandbox's own absproxy gateway even though no host
+    # port maps to it.
+    for candidate in await list_listening_ports(thread_id):
+        if candidate in _PREVIEW_CONTAINER_PORTS or candidate in _SANDBOX_INFRA_PORTS:
+            continue
+        if await probe_container_port(thread_id, candidate):
+            # host/host_port are the *published* pair, which does not exist for
+            # this port. The absproxy URL is keyed on the container port, so
+            # report that and let the caller route through absproxy.
+            return (candidate, "", 0)
     return None
 
 
@@ -181,6 +338,7 @@ def register_external_dev_server(
     *,
     host: str = "127.0.0.1",
     label: str = DEFAULT_LABEL,
+    container_port: int | None = None,
 ) -> DevServerHandle:
     """Register a dev server that is already listening on ``host:port``.
 
@@ -201,10 +359,16 @@ def register_external_dev_server(
         command="(external)",
         label=label,
         host=host,
+        # For a server inside the sandbox the registered port *is* the
+        # in-container port, and that is what the absproxy URL must be keyed on.
+        # Leaving this at the 4100 default pointed the Browser tab's fallback at
+        # a port the server was not on.
+        container_port=int(container_port) if container_port else port,
         _order=_order_counter,
     )
     handle.status = "ready"
-    handle.log_buffer.append(f"[deerflow] registered external dev server at {host}:{port}")
+    _notify_dev_server_status(handle)
+    handle.log_buffer.append(f"[nova] registered external dev server at {host}:{port}")
     _servers[_server_key(thread_id, label)] = handle
     return handle
 
@@ -237,7 +401,7 @@ def adopt_handle(
         status="ready",
         _order=_order_counter,
     )
-    handle.log_buffer.append(f"[deerflow] adopted live dev server on {host}:{host_port}")
+    handle.log_buffer.append(f"[nova] adopted live dev server on {host}:{host_port}")
     _servers[_server_key(thread_id, label)] = handle
     return handle
 
@@ -356,34 +520,56 @@ def _allocate_port() -> int:
 
 
 def _append_devlog_to_sandbox_log(thread_id: str, text: str) -> None:
-    """Mirror a dev-server output line into the per-thread sandbox.log so the
-    frontend Terminal (which tails sandbox.log via SSE) shows live dev output."""
+    """Mirror a dev-server output line into the thread's sandbox.log.
+
+    Routed through ``_write_sandbox_observation`` rather than hand-rolling the
+    JSON, which is what this used to do. That duplicate writer caused two bugs:
+
+    * it tagged every line ``type: "bash"``, so dev-server chatter counted as
+      executed commands. Measured across 89 live logs, **44% of the Terminal's
+      command total was this noise** -- one thread was inflated 7.9x.
+    * it wrote ``summary`` raw, so ANSI cursor codes and runs of NUL bytes from
+      the dev server's own terminal output reached the panel and rendered as
+      garbage.
+
+    ``dev_server`` is a Terminal-surface type but deliberately not a *command*
+    type, so this output stays visible where it is useful without being counted.
+    """
     try:
-        import datetime as _dt
-        import json as _json
+        from deerflow.sandbox.tools import _write_sandbox_observation
 
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
-
-        try:
-            user_id = get_effective_user_id()
-        except Exception:
-            user_id = None
-        thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)
-        thread_dir.mkdir(parents=True, exist_ok=True)
-        entry = _json.dumps(
-            {
-                "ts": _dt.datetime.now().strftime("%H:%M:%S"),
-                "type": "bash",
-                "path": None,
-                "summary": "[dev] " + text[:200],
-                "output": "",
-            }
+        _write_sandbox_observation(
+            _sandbox_id_for_thread(thread_id),
+            "dev_server",
+            None,
+            "[dev] " + text[:_DEVLOG_SUMMARY_MAX],
         )
-        with open(thread_dir / "sandbox.log", "a", encoding="utf-8") as fh:
-            fh.write(entry + "\n")
+    except Exception as exc:
+        # Must not propagate -- this mirrors output for the UI and is called from
+        # the readiness watchdog and the output pumps, neither of which should die
+        # over a log write. A bare `pass` made a wrong user bucket completely
+        # invisible, so it warns.
+        logger.warning("dev-server log mirror failed for thread=%s: %s", thread_id, exc)
+
+
+def _sandbox_id_for_thread(thread_id: str) -> str:
+    """A sandbox id the observation writer can resolve back to ``thread_id``.
+
+    The writer resolves AIO ids through the provider's reverse map and treats a
+    ``local:`` prefix as carrying the thread directly. Prefer the real id when the
+    provider knows one, so an AIO thread is resolved the same way every other tool
+    is; fall back to the local form, which the writer can always resolve.
+    """
+    try:
+        from deerflow.sandbox import get_sandbox_provider
+
+        mapping = getattr(get_sandbox_provider(), "_thread_sandboxes", None) or {}
+        sandbox_id = mapping.get(thread_id)
+        if sandbox_id:
+            return str(sandbox_id)
     except Exception:
-        pass
+        logger.debug("could not resolve sandbox id for %s", thread_id, exc_info=True)
+    return f"local:{thread_id}"
 
 
 def _ingest_line(handle: DevServerHandle, text: str) -> None:
@@ -394,6 +580,7 @@ def _ingest_line(handle: DevServerHandle, text: str) -> None:
     low = text.lower()
     if handle.status == "starting" and any(m in low for m in _READY_MARKERS):
         handle.status = "ready"
+        _notify_dev_server_status(handle)
         logger.info("Dev server for thread %s (%s) is ready on %s:%s", handle.thread_id, handle.label, handle.host, handle.port)
     # Count recompiles so the frontend can auto-reload the preview iframe.
     if "compiled" in low or "hmr" in low or "hot updated" in low:
@@ -420,6 +607,7 @@ async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _REA
             if handle.host and handle.port and await port_alive(handle.host, handle.port):
                 if handle.status == "starting":
                     handle.status = "ready"
+                    _notify_dev_server_status(handle)
                     logger.info(
                         "Dev server for thread %s (%s) bound %s:%s within readiness window",
                         handle.thread_id,
@@ -431,8 +619,9 @@ async def _watch_dev_server_start(handle: DevServerHandle, timeout: float = _REA
             if loop.time() >= deadline:
                 if handle.status == "starting":
                     handle.status = _STATUS_CRASHED
+                    _notify_dev_server_status(handle)
                     msg = f"dev server crashed: did not bind {handle.host}:{handle.port} within {timeout:g}s"
-                    handle.log_buffer.append(f"[deerflow] {msg}")
+                    handle.log_buffer.append(f"[nova] {msg}")
                     _append_devlog_to_sandbox_log(handle.thread_id, msg)
                     logger.warning(msg)
                 return
@@ -461,8 +650,10 @@ async def _pump_output(handle: DevServerHandle) -> None:
         # Process exited
         if handle.status not in ("stopped", "ready"):
             handle.status = "error"
+            _notify_dev_server_status(handle)
         elif handle.status == "ready" and proc.returncode is not None:
             handle.status = "stopped"
+            _notify_dev_server_status(handle)
 
 
 async def _pump_output_aio(handle: DevServerHandle) -> None:
@@ -491,15 +682,18 @@ async def _pump_output_aio(handle: DevServerHandle) -> None:
                 content = await asyncio.to_thread(sandbox.read_file, logpath)
             except Exception:
                 content = ""
-            # A closed/replaced sandbox client surfaces as an attribute error from
-            # the SDK ("'NoneType' object has no attribute 'file'"). The log tail
-            # can't recover — stop the LOOP so it doesn't spin forever and saturate
-            # the thread pool. But do NOT drop the handle or mark it stopped: the
+            # A released sandbox can never serve another read, so stop the LOOP
+            # rather than spin forever and saturate the thread pool. Asked
+            # directly via `sandbox.closed`; this used to string-match the SDK's
+            # AttributeError text ("has no attribute"), so rewording that
+            # exception would have silently resurrected the spin.
+            #
+            # Do NOT drop the handle or mark it stopped: the
             # dev server itself is almost certainly still listening on its port, and
             # liveness is judged by a real TCP check in /dev-status. Killing the
             # handle here is what caused "preview showed once then went blank".
-            if isinstance(content, str) and ("has no attribute" in content or "is closed" in content or "client has been closed" in content):
-                handle.log_buffer.append("[deerflow] preview log tail stopped (sandbox client reset); server still served by port check")
+            if sandbox.closed:
+                handle.log_buffer.append("[nova] preview log tail stopped (sandbox client reset); server still served by port check")
                 break
             # read_file returns "Error: ..." until the file exists; treat as empty.
             if not content or content.startswith("Error:"):
@@ -510,7 +704,8 @@ async def _pump_output_aio(handle: DevServerHandle) -> None:
                 if misses >= _MAX_AIO_MISSES:
                     if handle.status == "starting":
                         handle.status = "error"
-                        handle.log_buffer.append("[deerflow] dev server produced no output; stopping log tail")
+                        _notify_dev_server_status(handle)
+                        handle.log_buffer.append("[nova] dev server produced no output; stopping log tail")
                     break
                 continue
             misses = 0
@@ -593,7 +788,7 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
     }
 
     handle.log_buffer.append(f"$ PORT={port} {command}")
-    handle.log_buffer.append(f"[deerflow] starting dev server on port {port} in {cwd}")
+    handle.log_buffer.append(f"[nova] starting dev server on port {port} in {cwd}")
 
     try:
         from deerflow.execution import ExecutionClass, ExecutionRequest, ResourceLimits
@@ -614,7 +809,8 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
         )
     except Exception as e:
         handle.status = "error"
-        handle.log_buffer.append(f"[deerflow] failed to start: {e}")
+        _notify_dev_server_status(handle)
+        handle.log_buffer.append(f"[nova] failed to start: {e}")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 
@@ -659,26 +855,27 @@ async def _start_dev_server_aio(
 
     if endpoint is None:
         handle.status = "error"
-        handle.log_buffer.append(f"[deerflow] no published preview port {container_port} for this thread's sandbox")
+        _notify_dev_server_status(handle)
+        handle.log_buffer.append(f"[nova] no published preview port {container_port} for this thread's sandbox")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 
     handle.host, handle.port = endpoint
-    logpath = f"/mnt/user-data/workspace/.deerflow-dev-{container_port}.log"
+    logpath = f"/mnt/user-data/workspace/.nova-dev-{container_port}.log"
     handle._logpath = logpath
 
-    # Ensure the log/pid files exist BEFORE the child runs so the SSE tail at
+    # The log/pid files must exist BEFORE the child runs so the SSE tail at
     # /api/sandbox/logs always has something to read — even when the child
-    # crashes immediately and never writes a single line. The wrapper's PID file
-    # is overwritten by the `echo $! > …` in the inner command; this touch just
-    # creates the inode so the file is present on the first poll.
-    try:
-        Path(logpath).touch(exist_ok=True)
-        Path(logpath + ".pid").touch(exist_ok=True)
-    except Exception:
-        # Touching must never block startup; the poller handles missing files.
-        logger.debug("failed to touch dev-server log files before launch", exc_info=True)
-
+    # crashes immediately and never writes a single line.
+    #
+    # This used to be `Path(logpath).touch()` right here, which never once
+    # worked under the AIO provider: `logpath` is a path *inside the sandbox
+    # container* (/mnt/user-data/workspace/...), while this code runs in the
+    # gateway, where /mnt is empty. Every call raised FileNotFoundError into the
+    # debug-level except below, so the window this guard exists to close stayed
+    # open for every dev server — and the resulting 404-per-poll was logged at
+    # ERROR by `read_file` about once a second. The touch is now part of the
+    # in-container command instead, where the path actually resolves.
     # Background the dev server inside the container, binding 0.0.0.0 so the
     # published port reaches it (HOSTNAME covers Next.js; the host flag covers
     # Vite). Launch under `setsid` so the server is its own process-group leader:
@@ -691,20 +888,22 @@ async def _start_dev_server_aio(
     # execs the dev command. This is robust even if the command retains a stray
     # leading assignment, avoiding `setsid: failed to execute PORT=…`.
     inner = (
+        f"touch {shlex.quote(logpath)} {shlex.quote(logpath + '.pid')}; "
         f"cd {shlex.quote(cwd)} && "
         f"setsid env PORT={container_port} HOST=0.0.0.0 HOSTNAME=0.0.0.0 BROWSER=none CI=1 "
         f"{bound_command} > {shlex.quote(logpath)} 2>&1 < /dev/null & "
-        f"echo $! > {shlex.quote(logpath + '.pid')}; echo deerflow-dev-started"
+        f"echo $! > {shlex.quote(logpath + '.pid')}; echo nova-dev-started"
     )
 
     handle.log_buffer.append(f"$ PORT={container_port} {command}")
-    handle.log_buffer.append(f"[deerflow] starting dev server in container at {cwd} (preview {handle.host}:{handle.port})")
+    handle.log_buffer.append(f"[nova] starting dev server in container at {cwd} (preview {handle.host}:{handle.port})")
 
     try:
         await asyncio.to_thread(sandbox.execute_command, inner)
     except Exception as e:
         handle.status = "error"
-        handle.log_buffer.append(f"[deerflow] failed to start in container: {e}")
+        _notify_dev_server_status(handle)
+        handle.log_buffer.append(f"[nova] failed to start in container: {e}")
         _servers[_server_key(thread_id, label)] = handle
         return handle
 
@@ -719,6 +918,7 @@ async def stop_dev_server(thread_id: str, label: str = DEFAULT_LABEL) -> bool:
     if handle is None:
         return False
     handle.status = "stopped"
+    _notify_dev_server_status(handle)
 
     # Cancel the AIO log poller if any.
     poller = handle._poller_task

@@ -1358,7 +1358,7 @@ class TestThreadSafety:
 
         class BlockingDateTime:
             @staticmethod
-            def now():
+            def now(tz=None):
                 now_entered.set()
                 release_now.wait(timeout=5)
                 return completed_at

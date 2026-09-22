@@ -1,0 +1,8 @@
+
+> nova-frontend@2.1.0 lint /home/jahanzaib/Desktop/nova/frontend
+> eslint . --ext .ts,.tsx
+
+
+real	0m19.878s
+user	0m25.131s
+sys	0m2.527s

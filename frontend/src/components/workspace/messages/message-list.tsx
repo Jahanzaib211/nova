@@ -3,7 +3,14 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
 import { ChevronUpIcon, Loader2Icon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import {
   Conversation,
@@ -30,13 +37,21 @@ import {
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
-import { useUpdateSubtask } from "@/core/tasks/context";
 import {
+  subtaskWriteIsNoop,
+  useSubtasks,
+  useUpdateSubtask,
+  type SubtaskUpdateSource,
+} from "@/core/tasks/context";
+import {
+  DERIVED_FAILURE_SETTLE_MS,
+  derivedFailureHasSettled,
   derivePendingSubtaskStatus,
   findSubtaskResultMessage,
   parseSubtaskResult,
 } from "@/core/tasks/subtask-result";
 import type { AgentThreadState } from "@/core/threads";
+import { runtimeTranscripts } from "@/core/threads/acp-transcript";
 import { useActiveRunState } from "@/core/threads/hooks";
 import {
   recordRender,
@@ -48,6 +63,8 @@ import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { CopyButton } from "../copy-button";
 import { StreamingIndicator } from "../streaming-indicator";
 
+import { RuntimeTranscriptCard } from "./acp-transcript";
+import { useThread } from "./context";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -188,6 +205,34 @@ function LoadMoreHistoryIndicator({
   );
 }
 
+/**
+ * Decide whether a derived `failed` may paint yet.
+ *
+ * Returns `in_progress` while the failure is still inside its settle window,
+ * and schedules a re-render for when the window closes so the real answer is
+ * not stuck behind a render that never comes. A status that came from a parsed
+ * ToolMessage (`fromResult`) is evidence, not a guess, and passes straight
+ * through.
+ */
+function holdDerivedFailure(
+  status: Subtask["status"],
+  fromResult: boolean,
+  taskId: string,
+  since: Map<string, number>,
+  scheduleResettle: (delay: number) => void,
+): Subtask["status"] {
+  if (fromResult || status !== "failed") {
+    since.delete(taskId);
+    return status;
+  }
+  const now = Date.now();
+  const first = since.get(taskId) ?? now;
+  if (!since.has(taskId)) since.set(taskId, now);
+  if (derivedFailureHasSettled(first, now)) return "failed";
+  scheduleResettle(DERIVED_FAILURE_SETTLE_MS - (now - first) + 20);
+  return "in_progress";
+}
+
 export function MessageList({
   className,
   threadId,
@@ -218,6 +263,18 @@ export function MessageList({
     prevIsLoading.current = thread.isLoading;
   }, [thread.isLoading]);
   const messages = thread.messages;
+  // A turn running *on* an ACP runtime (Claude Code / OpenClaw) produces no
+  // assistant message until the runtime is done — only acp_update events.
+  // Before this, the chat showed "is thinking" for the whole session while
+  // Claude Code made dozens of tool calls (live 2026-09-22: 30+ calls, ~5
+  // minutes, nothing on screen). Surface that transcript where the
+  // indicator would be.
+  const { acpTranscripts } = useThread();
+  const liveRuntimeTranscripts = useMemo(
+    () =>
+      thread.isLoading ? runtimeTranscripts(acpTranscripts, messages) : [],
+    [acpTranscripts, messages, thread.isLoading],
+  );
   const groupedMessages = getMessageGroups(messages);
   const lastHumanGroupIndex = useMemo(() => {
     for (let i = groupedMessages.length - 1; i >= 0; i--) {
@@ -235,6 +292,70 @@ export function MessageList({
   }, [groupedMessages, lastHumanGroupIndex]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
+
+  // Subtask state is *derived* from the message list, and that derivation
+  // happens while building the message JSX below. Calling `updateSubtask`
+  // straight from there writes to SubtasksProvider during MessageList's render,
+  // which React rejects:
+  //
+  //   Cannot update a component (`SubtasksProvider`) while rendering a
+  //   different component (`MessageList`)
+  //
+  // The derivation itself is fine where it is — it needs the same walk over
+  // messages the rendering does. Only the *write* has to wait, so updates are
+  // queued during render and flushed in the effect below. The queue is reset at
+  // the top of every render so a re-render cannot replay stale entries.
+  //
+  // Flushing on every render is safe because `updateSubtask` hands back the
+  // same state reference when nothing observable changed (see the identity note
+  // in `core/tasks/context.tsx`), so React bails out instead of looping.
+  // When a derived failure was first seen, per task. A derived `failed` is a
+  // conclusion drawn from absence -- no tool result, no active run -- and the
+  // two channels it reads are not synchronised, so it can be momentarily early.
+  // Holding it for DERIVED_FAILURE_SETTLE_MS removes the red-then-green flash
+  // without ever hiding a failure that is real: after the window it paints.
+  const derivedFailureSince = useRef<Map<string, number>>(new Map());
+  const [, forceResettle] = useReducer((n: number) => n + 1, 0);
+  const resettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // One timer for all held tasks: they share a window, so the earliest expiry
+  // is enough to re-render and let every settled one through.
+  const scheduleResettle = useCallback((delay: number) => {
+    if (resettleTimer.current !== null) return;
+    resettleTimer.current = setTimeout(() => {
+      resettleTimer.current = null;
+      forceResettle();
+    }, delay);
+  }, []);
+  useEffect(
+    () => () => {
+      if (resettleTimer.current !== null) clearTimeout(resettleTimer.current);
+    },
+    [],
+  );
+
+  const queuedSubtaskUpdates = useRef<
+    Array<[Partial<Subtask> & { id: string }, SubtaskUpdateSource]>
+  >([]);
+  queuedSubtaskUpdates.current = [];
+  const queueSubtaskUpdate = (
+    task: Partial<Subtask> & { id: string },
+    source: SubtaskUpdateSource,
+  ) => {
+    queuedSubtaskUpdates.current.push([task, source]);
+  };
+
+  // Skip writes the provider already renders. The identity bail-out inside
+  // `updateSubtask` is not sufficient by itself: under load the functional
+  // updater can run against a base older than the last commit, so the same
+  // accepted transition was re-issued every render until React #185 took the
+  // whole route down (2026-09-18, thread with an orphaned `task` call).
+  const renderedTasks = useSubtasks();
+  useEffect(() => {
+    for (const [task, source] of queuedSubtaskUpdates.current) {
+      if (subtaskWriteIsNoop(renderedTasks[task.id], task)) continue;
+      updateSubtask(task, source);
+    }
+  });
   // Server-truth liveness: a dropped stream must not paint still-running
   // subtasks as failed. Read-only consumer — `enabled: false` means this never
   // issues its own request, it only reads what useThreadStream's rejoin query
@@ -278,7 +399,7 @@ export function MessageList({
       }
 
       return (
-        <div className="mt-2 flex justify-start opacity-0 transition-opacity delay-200 duration-300 group-hover/assistant-turn:opacity-100">
+        <div className="mt-2 flex justify-start opacity-0 transition-opacity delay-200 duration-300 group-hover/assistant-turn:opacity-100 max-md:opacity-100">
           <CopyButton clipboardData={clipboardData} />
         </div>
       );
@@ -463,7 +584,7 @@ export function MessageList({
                           resultMessage.additional_kwargs,
                         )
                       : undefined;
-                    const status =
+                    const derived =
                       parsed?.status ??
                       derivePendingSubtaskStatus(
                         taskId,
@@ -472,6 +593,18 @@ export function MessageList({
                         hasActiveRun && groupIsCurrentTurn,
                         runStateKnown,
                       );
+                    // Hold a *derived* failure briefly before painting it. The
+                    // runs cache and the task-event socket are independent, so
+                    // the cache can say "no pending run" a beat before the
+                    // socket delivers task_completed -- and the badge flashed
+                    // red, then green. See DERIVED_FAILURE_SETTLE_MS.
+                    const status = holdDerivedFailure(
+                      derived,
+                      parsed?.status !== undefined,
+                      taskId,
+                      derivedFailureSince.current,
+                      scheduleResettle,
+                    );
                     const task: Subtask = {
                       id: taskId,
                       subagent_type: toolCall.args.subagent_type,
@@ -504,7 +637,23 @@ export function MessageList({
                             }
                           : {}),
                     };
-                    updateSubtask(task, parsed ? "result" : "derived");
+                    // Authority follows the parsed *status*, not the mere
+                    // existence of a ToolMessage.
+                    //
+                    // `parseSubtaskResult` deliberately returns `in_progress`
+                    // for a ToolMessage whose shape it does not recognise, so
+                    // contract drift surfaces instead of being masked as a
+                    // failure. But stamping that with "result" authority made it
+                    // permanent: the FSM rejects every later derived correction,
+                    // and supersede cannot help while the tool_call id is still
+                    // live -- so the card spun forever with no path back.
+                    // A non-terminal status is never a final answer.
+                    const isTerminal =
+                      task.status === "completed" || task.status === "failed";
+                    queueSubtaskUpdate(
+                      task,
+                      parsed && isTerminal ? "result" : "derived",
+                    );
                     tasks.add(task);
                   }
                 }
@@ -515,7 +664,12 @@ export function MessageList({
                     extractTextFromMessage(message),
                     message.additional_kwargs,
                   );
-                  updateSubtask({ id: taskId, ...parsed }, "result");
+                  // Same rule as above: only a terminal status may claim
+                  // "result" authority and lock the row.
+                  queueSubtaskUpdate(
+                    { id: taskId, ...parsed },
+                    parsed.status === "in_progress" ? "derived" : "result",
+                  );
                 }
               }
             }
@@ -608,6 +762,15 @@ export function MessageList({
               true,
               thread.isLoading,
             );
+          }
+          if (indicatorVisible && liveRuntimeTranscripts.length > 0) {
+            return liveRuntimeTranscripts.map(([agent, transcript]) => (
+              <RuntimeTranscriptCard
+                key={`runtime-${agent}`}
+                agent={agent}
+                transcript={transcript}
+              />
+            ));
           }
           return indicatorVisible ? (
             <div

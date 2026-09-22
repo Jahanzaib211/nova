@@ -2,6 +2,10 @@
 
 > **Purpose:** Single-source-of-truth audit of the Nova platform — architecture, data flow, control flow, test coverage, deployment topology, observability gaps, frontend UI/UX, component tree, API surface, and a prioritized improvement plan.
 > **Generated:** post-v7 sprint (browser/computer hardening) + frontend UI audit (Nova).
+> **Counts refreshed:** 2026-08-31. The figures in §1.2 and §13 are measured; the
+> prose, diagrams and §14 status list still describe the v7 sprint and are known
+> stale — they claimed as `pending` work that has since shipped. Treat narrative
+> here as historical until it is regenerated.
 > **Scope:** Read-only analysis. No files modified during audit.
 
 ---
@@ -55,7 +59,7 @@
 ### 1.2 Backend (harness) modules
 
 ```
-backend/packages/harness/deerflow/    252 Python files, ~32K LOC
+backend/packages/harness/deerflow/    390 Python files, ~70K LOC
 ├── agents/                Lead agent factory + 19 middlewares + memory + thread state
 ├── community/             3rd-party provider integrations (browserless, tavily, jina, ...)
 ├── config/                Typed config (AppConfig, ModelConfig, SandboxConfig, ...)
@@ -68,7 +72,7 @@ backend/packages/harness/deerflow/    252 Python files, ~32K LOC
 ├── sandbox/               Sandbox + tools ← v7 hardening target
 ├── skills/                Skills discovery, loading, parsing, security scanner
 ├── subagents/             Subagent registry + executor + 2 builtins
-├── tools/                 Tool registry + 26 builtin tools
+├── tools/                 Tool registry + 27 builtin tools (2 upstream + 25 Nova; upstream ships 3 today)
 ├── tracing/               LangSmith tracing config
 ├── uploads/               File upload handling
 └── utils/                 Network, JSON helpers
@@ -775,19 +779,19 @@ Steps 1-7 verified working. Steps 8-9 are the gaps this sprint addresses.
 
 | Metric | Value |
 |---|---|
-| Backend files | 252 |
-| Backend LOC | ~32k |
-| Frontend files | ~120 |
-| Frontend LOC | ~12k (incl. node_modules) |
-| Backend tests | 483 (all green) |
-| Frontend tests | 339 (all green) |
+| Backend files | 390 (harness) · 978 (backend total) |
+| Backend LOC | ~70k (harness) |
+| Frontend files | 372 (src) |
+| Frontend LOC | ~57k (src, excl. node_modules) |
+| Backend unit tests | 7,303 |
+| Frontend unit tests | 799 |
 | Tags on origin | 14 v7 + fork-v7 |
-| Live services | 4 (gateway, frontend, nginx, pm2 wrapper) |
+| Live services | 8 containers (gateway, frontend, nginx, postgres, searxng, crawl4ai, browserless, autoheal) |
 | Browser tool actions | 5 (navigate, click, input, eval, screenshot) |
 | Shell tool actions | 5 (session, view, wait, write, kill) |
 | Skills system | Public + custom, parser + storage + security scanner |
 | Subagents | 2 builtins (bash, general-purpose) |
-| Middlewares | 10 (one responsibility each) |
+| Middlewares | 23 in the live chain (28 modules on disk) |
 | LLM providers | OpenAI + compatible (Together, Groq, custom) |
 | MCP servers | dynamic, OAuth support |
 | Channels | 6 (Telegram, Slack, Discord, Feishu, DingTalk, WeChat/WeCom) |

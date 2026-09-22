@@ -1,0 +1,288 @@
+=== .github/workflows/backend-blocking-io-tests.yml
+1:name: Backend Blocking IO
+3:on:
+4:  push:
+6:    paths:
+9:  pull_request:
+11:    paths:
+23:  backend-blocking-io:
+25:    runs-on: ubuntu-latest
+28:    steps:
+34:        with:
+42:        run: uv sync --group dev
+45:        run: cp config.example.yaml config.yaml
+49:        run: make test-blocking-io
+=== .github/workflows/backend-unit-tests.yml
+1:name: Unit Tests
+3:on:
+4:  push:
+6:  pull_request:
+17:  backend-unit-tests:
+19:    runs-on: ubuntu-latest
+22:    steps:
+28:        with:
+36:        run: uv sync --group dev
+39:        run: cp config.example.yaml config.yaml
+43:        run: make test
+=== .github/workflows/codeql.yml
+7:name: CodeQL
+9:on:
+10:  push:
+12:  pull_request:
+14:  schedule:
+33:  analyze:
+34:    name: Analyze (${{ matrix.language }})
+35:    runs-on: ubuntu-latest
+37:    strategy:
+39:      matrix:
+41:        python:
+43:        javascript-typescript:
+46:    steps:
+52:        with:
+59:        with:
+=== .github/workflows/cross-ref.yml
+1:name: Cross-Reference Isolation
+3:on:
+4:  push:
+6:  pull_request:
+17:  cross-ref-check:
+18:    name: Fail if ali-kernel or ornith literal appears in source
+19:    runs-on: ubuntu-latest
+21:    steps:
+26:        with:
+30:        run: |
+34:        run: |
+=== .github/workflows/docs-check.yml
+1:name: Documentation Check
+3:on:
+4:  push:
+6:    paths:
+12:  pull_request:
+14:    paths:
+29:  docs-check:
+31:    runs-on: ubuntu-latest
+34:    steps:
+40:        with:
+44:        run: npm install -g markdownlint-cli@0.43.0
+47:        run: |
+68:        run: python3 scripts/check_docs_sync.py
+71:        run: |
+92:        run: |
+105:        run: |
+112:        run: |
+=== .github/workflows/e2e-tests.yml
+1:name: E2E Tests
+3:on:
+4:  push:
+6:    paths:
+9:  pull_request:
+11:    paths:
+25:    runs-on: ubuntu-latest
+28:    steps:
+34:        with:
+38:        run: corepack enable
+41:        run: corepack prepare pnpm@10.26.2 --activate
+45:        run: pnpm install --frozen-lockfile
+49:        run: npx playwright install chromium --with-deps
+53:        run: pnpm exec playwright test
+54:        env:
+60:        with:
+61:          name: playwright-report
+=== .github/workflows/frontend-build.yml
+1:name: Frontend Build + Typecheck
+3:on:
+4:  push:
+6:    paths:
+9:  pull_request:
+11:    paths:
+23:  frontend-build:
+25:    runs-on: ubuntu-latest
+28:    steps:
+34:        with:
+40:        with:
+47:        run: pnpm install --frozen-lockfile
+51:        run: pnpm typecheck
+55:        env:
+59:        run: |
+=== .github/workflows/frontend-unit-tests.yml
+1:name: Frontend Unit Tests
+3:on:
+4:  push:
+6:  pull_request:
+17:  frontend-unit-tests:
+19:    runs-on: ubuntu-latest
+22:    steps:
+28:        with:
+32:        run: corepack enable
+35:        run: corepack prepare pnpm@10.26.2 --activate
+39:        run: pnpm install --frozen-lockfile
+43:        run: make test
+=== .github/workflows/label-sync.yml
+1:name: Label Sync
+7:on:
+8:  push:
+10:    paths:
+14:  workflow_dispatch:
+25:  sync:
+26:    runs-on: ubuntu-latest
+27:    steps:
+35:        run: uv run --with pyyaml python scripts/sync_labels.py
+36:        env:
+=== .github/workflows/lighthouse.yml
+1:name: Lighthouse CI
+15:on:
+16:  push:
+18:    paths:
+21:  pull_request:
+23:    paths:
+26:  workflow_dispatch:
+40:  lighthouse:
+41:    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+43:    steps:
+47:        with:
+51:        with:
+57:        run: cd frontend && pnpm install --frozen-lockfile
+63:        run: cd frontend && pnpm build
+64:        env:
+70:        run: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
+71:        env:
+78:        with:
+79:          name: lighthouse-reports
+=== .github/workflows/lint-check.yml
+1:name: Lint Check
+3:on:
+4:  push:
+6:  pull_request:
+17:  lint-backend:
+18:    runs-on: ubuntu-latest
+19:    steps:
+24:        with:
+32:        run: |
+37:        run: make lint
+39:  lint-frontend:
+40:    runs-on: ubuntu-latest
+41:    steps:
+46:        with:
+50:        run: corepack enable
+53:        run: corepack prepare pnpm@10.26.2 --activate
+56:        run: |
+61:        run: |
+66:        run: |
+71:        run: |
+76:        run: |
+=== .github/workflows/local-ci.yml
+1:name: Local CI
+3:on:
+4:  push:
+6:  pull_request:
+23:  backend-lint:
+24:    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+26:    steps:
+29:        with:
+32:      - run: cd backend && uv sync --group dev
+33:      - run: cd backend && make lint
+35:  backend-format:
+36:    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+38:    steps:
+41:        with:
+44:      - run: cd backend && uv sync --group dev
+45:      - run: cd backend && make format-check
+47:  backend-tests:
+48:    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+50:    steps:
+53:        with:
+56:      - run: cd backend && uv sync --group dev
+57:      - run: cp config.example.yaml config.yaml
+58:      - run: cd backend && PYTHONPATH=. make test
+60:  backend-blocking-io:
+61:    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+=== .github/workflows/replay-e2e.yml
+1:name: Replay E2E (front-back contract)
+11:on:
+12:  push:
+14:    paths:
+25:  pull_request:
+27:    paths:
+47:  backend-replay-golden:
+48:    name: Layer 1 — backend golden (no API key)
+50:    runs-on: ubuntu-latest
+52:    steps:
+56:        with:
+62:        run: uv sync --group dev
+65:        run: PYTHONPATH=. uv run pytest tests/test_replay_golden.py -v
+67:  fullstack-replay-render:
+68:    name: Layer 2 — full-stack render (no API key)
+70:    runs-on: ubuntu-latest
+72:    steps:
+76:        with:
+82:        run: uv sync --group dev
+85:        with:
+88:        run: corepack enable
+90:        run: corepack prepare pnpm@10.26.2 --activate
+93:        run: pnpm install --frozen-lockfile
+96:        run: npx playwright install chromium --with-deps
+99:        run: pnpm exec playwright test -c playwright.real-backend.config.ts
+=== .github/workflows/stale.yml
+4:name: Stale
+6:on:
+7:  schedule:
+9:  workflow_dispatch:
+20:  stale:
+21:    runs-on: ubuntu-latest
+23:    steps:
+26:        with:
+=== .github/workflows/triage.yml
+1:name: Triage
+18:on:
+19:  pull_request_target:
+21:  pull_request_review:
+23:  issues:
+33:  pr-labels:
+35:    runs-on: ubuntu-latest
+36:    concurrency:
+39:    steps:
+42:        with:
+142:  reviewing:
+144:    runs-on: ubuntu-latest
+145:    concurrency:
+148:    steps:
+151:        with:
+187:  issue-triage:
+189:    runs-on: ubuntu-latest
+190:    concurrency:
+193:    steps:
+196:        with:
+=== .github/workflows/welcome.yml
+4:name: Welcome
+6:on:
+7:  pull_request_target:
+18:  welcome:
+19:    runs-on: ubuntu-latest
+20:    steps:
+23:        with:
+=== .github/workflows/container.yaml
+1:name: Publish Containers
+3:on:
+4:  push:
+5:    tags:
+14:  backend-container:
+15:    runs-on: ubuntu-latest
+16:    permissions:
+21:    env:
+24:    steps:
+29:        with:
+36:        with:
+48:        with:
+58:        with:
+70:        with:
+81:        run: |
+92:        with:
+99:        with:
+107:        with:
+119:        run: cosign sign --yes "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+121:  frontend-container:
+122:    runs-on: ubuntu-latest
+123:    permissions:
+128:    env:
+132:    steps:
+137:        with:

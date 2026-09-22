@@ -71,13 +71,75 @@ case "$NOVA_STACK" in
     else
       echo "[pm2-deerflow] voice overlay skipped (speech disabled or weights missing in $_voice_dir)" >&2
     fi
-    SCALE_FLAGS=(--scale provisioner=0 --scale searxng=0)
+    # ACP agents (Claude Code + OpenClaw inside Nova): opt-in, because the
+    # cli-auth overlay exposes ~/.claude to the gateway (see its header).
+    # PM2 does not pass .env to this wrapper (only DEER_FLOW_ROOT), so the
+    # documented opt-in `NOVA_ACP_AGENTS=1` in .env is honoured here too;
+    # a value already in the process environment wins.
+    if [ -z "${NOVA_ACP_AGENTS:-}" ] && grep -qsE '^NOVA_ACP_AGENTS=("1"|1)[[:space:]]*$' "$DEER_FLOW_ROOT/.env"; then
+      NOVA_ACP_AGENTS=1
+    fi
+    if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
+      "$DEER_FLOW_ROOT/scripts/acp-secrets.sh" || true
+      COMPOSE_FILES+=(
+        -f "$DEER_FLOW_ROOT/docker/docker-compose.cli-auth.yaml"
+        -f "$DEER_FLOW_ROOT/docker/docker-compose.acp.yaml"
+      )
+    fi
+    # provisioner stays at 0: nothing in the dev flow provisions sandboxes over
+    # HTTP, and nginx already resolves its upstream at request time so the route
+    # simply 502s if anyone tries.
+    #
+    # searxng does NOT stay at 0. config.yaml binds web_search to
+    # http://searxng:8080, and that tool falls back to DuckDuckGo *silently* --
+    # so scaling it away meant every search quietly used the fallback while the
+    # P14 probe and the privacy panel's SearXNG card sat red. Either the service
+    # runs or the config should not point at it; it runs.
+    SCALE_FLAGS=(--scale provisioner=0)
+    # The job runner is part of the chain; NOVA_JOBS_SCALE=0 keeps it off on a
+    # host that does not want background work (it still needs jobs.enabled in
+    # config.yaml to actually start).
+    if [ "${NOVA_JOBS_SCALE:-1}" = "0" ]; then
+      SCALE_FLAGS+=(--scale jobs=0)
+    fi
     ;;
   *)
     echo "ERROR: NOVA_STACK='$NOVA_STACK' is not valid (expected 'dev' or 'prod')" >&2
     exit 2
     ;;
 esac
+
+# ── Stale-frontend warning ────────────────────────────────────────────────
+# `up --no-build` can start, restart and recreate the frontend container, but
+# it can never rebuild the image -- and the frontend is prod-baked (`next start`
+# serves the image's .next) while frontend/src is still bind-mounted over it, so
+# a stale build looks live. That combination hid a four-day-old bundle behind a
+# current-looking container through every `pm2 restart nova`, while the drift
+# gate sat red and unread the whole time.
+#
+# Warn only, never block: refusing to start the stack over a stale frontend
+# would turn a cosmetic drift into an outage. The point is that the operator
+# cannot miss it.
+_drift="${NOVA_GATE_DRIFT_PATH:-$HOME/.nova/gates/drift.json}"
+if [ -r "$_drift" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"frontend_build"' "$_drift" \
+   && python3 -c "
+import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any(c.get('name')=='frontend_build' and c.get('status')=='red'
+                  for c in d.get('checks',[])) else 1)
+" "$_drift" 2>/dev/null; then
+  echo "[pm2-deerflow] WARNING: the drift gate reports frontend_build RED -- the served" >&2
+  echo "[pm2-deerflow]          bundle does not match frontend/src. 'up --no-build' CANNOT" >&2
+  echo "[pm2-deerflow]          fix this. Rebuild the image:" >&2
+  echo "[pm2-deerflow]            docker compose -p deer-flow-dev \\" >&2
+  echo "[pm2-deerflow]              -f docker/docker-compose-dev.yaml \\" >&2
+  echo "[pm2-deerflow]              -f docker/docker-compose.dood.yaml \\" >&2
+  echo "[pm2-deerflow]              -f docker/docker-compose.prod-frontend.yaml \\" >&2
+  echo "[pm2-deerflow]              build frontend" >&2
+fi
 
 exec /usr/bin/docker compose \
   "${COMPOSE_FILES[@]}" \

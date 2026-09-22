@@ -39,7 +39,17 @@ export interface ServerInfo {
   max_concurrent_subagents?: number;
 }
 
+/** Server-declared feature switches (mirrors FeatureFlags in capabilities.py). */
+export interface ServerFeatureFlags {
+  jobs?: boolean;
+  integrations?: boolean;
+  email_marketing?: boolean;
+  acp_agents?: boolean;
+}
+
 export interface CapabilitiesResponse {
+  /** Absent on gateways older than 2026-09-19; treated as all-off. */
+  features?: ServerFeatureFlags;
   skills: SkillSummary[];
   tools: ToolSummary[];
   hooks: HookSummary[];

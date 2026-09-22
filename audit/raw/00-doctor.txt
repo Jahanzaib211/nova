@@ -1,0 +1,44 @@
+
+DeerFlow Health Check
+════════════════════════════════════════
+
+System Requirements
+  ✓ Python  (3.12.13)
+  ✓ Node.js  (26.8.1)
+  ✓ pnpm  (10.26.2)
+  ✓ uv  (0.11.33)
+  ✗ nginx
+      → macOS:   brew install nginx
+      → Ubuntu:  sudo apt install nginx
+      → Windows: use WSL or Docker mode
+
+Configuration
+  ✓ .env found
+  ✓ frontend/.env found
+  ✓ config.yaml found
+  ✓ config.yaml version  (v20)
+  ✗ config.yaml loadable  (Environment variable DATABASE_URL not found for config value $DATABASE_URL)
+      → Run 'make setup' again, or compare with config.example.yaml
+  ✓ models configured  (5 model(s))
+
+LLM Provider
+  ✓ MINIMAX_API_KEY set (model: minimax-m3)
+  ✓ FIREWORKS_API_KEY set (model: fireworks-minimax-m3)
+  ✓ FIREWORKS_API_KEY set (model: fireworks-gemma-4-31b)
+  ✓ FIREWORKS_API_KEY set (model: fireworks-kimi-k2p7)
+  ✓ deerflow installed
+  ✓ langchain-openai installed
+
+Web Capabilities
+  ✓ web search configured
+  ✓ web fetch configured
+  ✓ image search configured  (DuckDuckGo Images (no key needed))
+
+Sandbox
+  ✓ sandbox configured  (Container sandbox)
+  ✓ docker daemon reachable  (docker 29.6.2)
+
+════════════════════════════════════════
+Status: 2 error(s), 0 warning(s)
+Fix the errors above, then run 'make doctor' again.
+

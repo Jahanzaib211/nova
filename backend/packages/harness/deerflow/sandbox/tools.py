@@ -6,6 +6,9 @@ import os
 import posixpath
 import re
 import shlex
+import threading
+import time
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -27,6 +30,8 @@ from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
 from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
 from deerflow.tools.types import Runtime
+from deerflow.utils.atomic_write import atomic_write_text
+from deerflow.utils.sanitize import sanitize_terminal_text
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
 # A ``{...}`` block holding a single identifier-like placeholder (e.g. ``{id}``
@@ -138,7 +143,286 @@ def _thread_id_for_observation(sandbox_id: str) -> str | None:
                 return thread_id
     except Exception as exc:
         logger.debug("_find_thread_id_for_sandbox failed: %s", exc)
+    # Every return path above that yields None silently drops the observation,
+    # and sandbox.log is the *only* transport carrying command text to the
+    # Terminal (computer-ws carries counters, never output). A drop here is
+    # indistinguishable in the UI from an idle agent, so say it out loud.
+    logger.warning(
+        "observation dropped: no thread for sandbox_id=%r (legacy global sandbox, or id absent from the provider map)",
+        sandbox_id,
+    )
     return None
+
+
+def _observation_max_chars() -> int:
+    """How much tool output one observation line may carry.
+
+    This was a bare ``output[:2000]`` with no marker, while the model got
+    ``sandbox.bash_output_max_chars`` (20 000) for the same command -- so the
+    Terminal showed a *silently* shorter answer than the agent acted on, and a
+    reader had no way to tell a 2 000-char command from a truncated one.
+    """
+    try:
+        cfg = get_app_config().sandbox
+        return cfg.observation_max_chars if cfg else 20000
+    except Exception as exc:  # noqa: BLE001 - observations must never raise
+        logger.debug("Failed to read observation_max_chars: %s", exc)
+        return 20000
+
+
+def _sandbox_log_file(thread_id: str):
+    """Resolve the per-thread ``sandbox.log`` path, or None.
+
+    Shared by the observation writer and the stale-id finalizer so both always
+    agree on where the log lives. All failures degrade to None (the writer's
+    contract: observations must never break the agent loop).
+    """
+    try:
+        if not thread_id:
+            return None
+
+        from deerflow.config.paths import get_paths
+        from deerflow.runtime.user_context import get_effective_user_id
+
+        try:
+            user_id = get_effective_user_id()
+        except Exception as exc:
+            logger.debug("get_effective_user_id failed: %s", exc)
+            user_id = None
+
+        thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)
+        thread_dir.mkdir(parents=True, exist_ok=True)
+        return thread_dir / "sandbox.log"
+    except Exception as exc:
+        logger.debug("Failed to resolve sandbox.log for %s: %s", thread_id, exc)
+        return None
+
+
+def _finalize_stale_open_ids(sandbox_id: str) -> None:
+    """Close any streamed command still marked ``running`` in sandbox.log.
+
+    A crashed run (or a released warm-pool client racing a background task)
+    can leave an opening frame without its closing frame — the Terminal then
+    renders that command as perpetually running. Before opening a NEW stream,
+    finalize every dangling id with a synthetic ``done`` frame so the log
+    keeps the invariant *at most one open id*, no matter how the previous
+    command died. Best-effort by the same contract as the writer itself.
+    """
+    thread_id = _thread_id_for_observation(sandbox_id)
+    log_path = _sandbox_log_file(thread_id) if thread_id else None
+    if log_path is None or not log_path.exists():
+        return
+    try:
+        open_ids: set[str] = set()
+        with open(log_path, encoding="utf-8") as fh:
+            # Tail only: the window a Terminal actually renders is bounded, and
+            # scanning a multi-MB log on every command would be pure waste.
+            lines = fh.readlines()[-512:]
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+            obs_id = entry.get("id")
+            if not obs_id:
+                continue
+            # Interactive shell sessions use long-lived ``shell:<session>`` ids
+            # that are running BY DESIGN while the process lives; they are
+            # closed by shell_wait/shell_kill, never by this sweep.
+            if obs_id.startswith("shell:"):
+                continue
+            if entry.get("state") == "done":
+                open_ids.discard(obs_id)
+            elif entry.get("state") == "running":
+                open_ids.add(obs_id)
+        for stale in sorted(open_ids):
+            _write_sandbox_observation(
+                sandbox_id,
+                "bash",
+                None,
+                "",
+                output="(interrupted)",
+                obs_id=stale,
+                state="done",
+            )
+            logger.info("Finalized stale open observation %s for sandbox %s", stale, sandbox_id)
+    except Exception as exc:  # noqa: BLE001 - observations must never raise
+        logger.debug("_finalize_stale_open_ids failed: %s", exc)
+
+
+# Serialises every terminal_stats.json read-modify-write.
+#
+# Subagents share their parent thread's sandbox and run on a thread pool, so
+# several commands touch this counter at once -- the Agent's Computer header
+# routinely reads "4 running". A bare read-modify-write loses those updates:
+# with 200 threads issuing one command each the counter landed on **2**, and on
+# a real thread 216 commands were recorded as 146. The UI renders the value
+# without a "~" prefix, i.e. as exact, so the number simply did not hold. One
+# process owns this file (uvicorn runs a single worker), so a thread lock
+# suffices; the atomic write is what keeps concurrent *readers* honest.
+_terminal_stats_lock = threading.Lock()
+
+#: A summary is a one-line header for a Terminal row, not a payload. Bounded
+#: separately from `output` so a runaway summary cannot dominate the panel.
+_SUMMARY_MAX_CHARS = 2000
+
+_TERMINAL_STATS_FILE = "terminal_stats.json"
+
+#: Tools whose invocation is one executed *command* for the Terminal header's
+#: count. Mirrored by ``isCommandTool`` in the frontend's tool-surface module;
+#: ``tests/test_frontend_contract.py`` fails if the two drift.
+COMMAND_TOOL_NAMES = frozenset({"bash", "shell_session", "shell_write"})
+
+#: Prefix the dev-server mirror stamps on its summaries. Load-bearing for the
+#: legacy exclusion in ``is_command_line`` -- see the note there.
+_DEVLOG_SUMMARY_PREFIX = "[dev] "
+
+
+def is_command_line(record: dict) -> bool:
+    """True if one sandbox.log record represents exactly one *command*.
+
+    The single definition of "a command". It used to live inline in
+    ``_write_sandbox_observation`` and was re-implemented by its own test, so
+    the test could pass while the shipped predicate was wrong.
+
+    A *command*, not a frame: ``on_chunk`` writes every delta/replace frame with
+    the same ``id`` and ``state="running"``, so matching those too made one
+    streamed command emitting 50 chunks count as 51. Only the opening frame of
+    a streamed command counts, plus every non-framed command line.
+
+    **The population, and it is the authority.** The Terminal header renders this
+    as "N cmds", so a *command* is work the sandbox executed:
+
+    * ``bash`` -- one-shot, and the opening frame of a streamed one;
+    * ``shell_session`` -- starting a command in a persistent PTY;
+    * ``shell_write`` -- input sent to a live session; the agent answering a
+      prompt or driving a REPL is executed work, and it is a row in the
+      Terminal transcript.
+
+    Everything else the Terminal *renders* -- ``read_file``, ``write_file``,
+    ``str_replace``, ``ls``, ``glob``, ``grep`` -- is file work, not a command,
+    and is excluded. ``shell_view`` / ``shell_wait`` / ``shell_kill`` are session
+    bookkeeping, not new commands.
+
+    The frontend mirrors exactly this set in ``isCommandTool``
+    (``core/threads/tool-surface.ts``); the two are pinned against each other by
+    ``tests/test_frontend_contract.py``. They used to disagree -- the header's
+    socket branch counted this set while its fallback branch counted every
+    terminal-surface event, so the same thread read "1 cmd" or "~3" depending on
+    whether the socket happened to be up.
+    """
+    if record.get("delta") is not None or record.get("replace") is not None:
+        return False
+    # Legacy dev-server lines. Before the mirror was retagged `dev_server`, it
+    # wrote `type: "bash"`, so every line of dev-server chatter counted as a
+    # command -- 44% of the total across the live logs, 7.9x on the worst thread.
+    # Those lines are already on disk and reconcile_terminal_stats replays the log
+    # on read, so excluding them by their `[dev] ` prefix is what heals existing
+    # threads. New lines are excluded by type and never reach this check.
+    if str(record.get("summary") or "").startswith(_DEVLOG_SUMMARY_PREFIX):
+        return False
+    obs_id = record.get("id")
+    if obs_id is not None:
+        return record.get("state") == "running" and record.get("type") in COMMAND_TOOL_NAMES
+    return record.get("type") in COMMAND_TOOL_NAMES
+
+
+def reconcile_terminal_stats(log_path: Path) -> int | None:
+    """Recompute the command total from sandbox.log, cheaply and idempotently.
+
+    The counter is a *cache*; ``sandbox.log`` is the durable ground truth. An
+    incrementally-maintained integer can only ever be as correct as every write
+    that ever touched it -- and the unlocked version that shipped before this
+    lost 32% of one thread's commands, which no amount of future locking
+    repairs. Deriving the total from the log instead makes it self-healing:
+    wrong values converge on the next call.
+
+    State is ``{"total": N, "log_offset": B}``. Only the bytes past
+    ``log_offset`` are parsed, so steady-state cost is one short read.
+
+    A legacy bare-int file is discarded rather than trusted -- it is exactly the
+    value that may have lost increments -- and the whole log is rescanned once,
+    which is what repairs already-damaged threads.
+
+    Returns the total, or ``None`` if there is no log to count.
+    """
+    if not log_path.exists():
+        return None
+    stats_path = log_path.parent / _TERMINAL_STATS_FILE
+
+    with _terminal_stats_lock:
+        total = 0
+        offset = 0
+        try:
+            raw = stats_path.read_text()
+            state = json.loads(raw) if raw.strip() else {}
+            if isinstance(state, dict):
+                total = int(state.get("total", 0))
+                offset = int(state.get("log_offset", 0))
+            # Anything else (a legacy bare int) leaves total/offset at 0, so the
+            # log is rescanned in full and the stale value is replaced.
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            total, offset = 0, 0
+
+        try:
+            size = log_path.stat().st_size
+        except OSError:
+            return None
+        # Truncated or rotated out from under us: the offset is meaningless, so
+        # recount rather than resuming past the end of a shorter file.
+        if size < offset:
+            total, offset = 0, 0
+        if size > offset:
+            try:
+                with open(log_path, "rb") as fh:
+                    fh.seek(offset)
+                    chunk = fh.read()
+            except OSError:
+                return total
+            # Whole lines only. The writer appends from other threads, so a read
+            # can land mid-append; advancing past a partial line would drop it
+            # silently. Same discipline as sandbox.py::_read_from.
+            cut = chunk.rfind(b"\n")
+            if cut != -1:
+                for line in chunk[: cut + 1].decode("utf-8", errors="replace").splitlines():
+                    if not line.strip():
+                        continue
+                    try:
+                        if is_command_line(json.loads(line)):
+                            total += 1
+                    except (ValueError, json.JSONDecodeError):
+                        continue
+                offset += cut + 1
+
+        try:
+            # mode=0o644 explicitly: atomic_write_text writes through
+            # NamedTemporaryFile, which creates at 0600. Without this the
+            # counter silently became unreadable to every non-root reader.
+            atomic_write_text(stats_path, json.dumps({"total": total, "log_offset": offset}), mode=0o644)
+        except Exception as exc:  # noqa: BLE001 - the count is best-effort
+            logger.debug("terminal_stats write failed: %s", exc)
+        return total
+
+
+def record_runtime_observation(thread_id: str, *, agent: str, kind: str, title: str) -> None:
+    """Log one action an ACP runtime (Claude Code, OpenClaw) took *with its
+    own tools* into the thread's sandbox.log, as ``type="acp_<kind>"``.
+
+    A chat running on an ACP runtime has no tool_calls in the message stream;
+    the Agent's Computer builds its completed-action cards from this log and
+    takes only in-flight spinners from the stream, so without these lines the
+    panel read "0 actions" through a turn in which Claude Code made eighty
+    (live 2026-09-22). Actions the runtime takes *through* Nova's
+    ``sandbox__*`` tools are logged by those tools themselves and must not be
+    mirrored again — callers pass only the runtime's own tool titles.
+
+    Keyed by thread rather than sandbox id because the runtime never
+    acquires a sandbox for its own tools. Never raises.
+    """
+    if not thread_id:
+        return
+    safe_kind = "".join(ch if ch.isalnum() else "_" for ch in (kind or "other").strip().lower()) or "other"
+    _write_sandbox_observation(f"local:{thread_id}", f"acp_{safe_kind}", None, f"{agent}: {title}")
 
 
 def _write_sandbox_observation(
@@ -147,6 +431,11 @@ def _write_sandbox_observation(
     path: "str | None",
     summary: str,
     output: str = "",
+    *,
+    obs_id: "str | None" = None,
+    state: "str | None" = None,
+    delta: "str | None" = None,
+    replace: "str | None" = None,
 ) -> None:
     """Append a structured JSON-line event to the per-thread sandbox.log.
 
@@ -158,6 +447,22 @@ def _write_sandbox_observation(
         {"ts":"14:23:01","type":"bash","path":null,"summary":"$ echo hi","output":"hi"}
         {"ts":"14:23:05","type":"write_file","path":"/mnt/...","summary":"Wrote 3412 bytes","output":""}
 
+    Streaming (optional, additive)
+    ------------------------------
+    A command that produces output before it exits emits several lines sharing
+    one ``id``; the frontend folds them into a single Terminal entry:
+
+        {"ts":"…","type":"bash","id":"x1","summary":"$ npm install","state":"running"}
+        {"ts":"…","type":"bash","id":"x1","delta":"added 12 packages\n","state":"running"}
+        {"ts":"…","type":"bash","id":"x1","state":"done","output":"<full>"}
+
+    ``delta`` appends; ``replace`` swaps the whole body, which is what a ``\r``
+    progress bar needs (the AIO backend returns *rendered* terminal state, not
+    an append-only log, so a redrawn line must not be appended twice).
+
+    **Lines without ``id`` keep exactly today's meaning**, so every existing
+    tool, every already-written log, and any older frontend are unaffected.
+
     Works for per-thread local sandboxes (``local:{thread_id}``) and AIO/container
     sandboxes (hash ids, resolved to their thread via the provider). Silently
     skips the legacy global ``local`` sandbox. All errors are suppressed so
@@ -165,45 +470,221 @@ def _write_sandbox_observation(
     """
     try:
         thread_id = _thread_id_for_observation(sandbox_id)
-        if not thread_id:
+        log_path = _sandbox_log_file(thread_id) if thread_id else None
+        if log_path is None:
             return
 
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
-
-        try:
-            user_id = get_effective_user_id()
-        except Exception as exc:
-            logger.debug("get_effective_user_id failed: %s", exc)
-            user_id = None
-
-        paths = get_paths()
-        thread_dir = paths.thread_dir(thread_id, user_id=user_id)
-        thread_dir.mkdir(parents=True, exist_ok=True)
-
         ts = datetime.datetime.now().strftime("%H:%M:%S")
-        entry = json.dumps(
-            {
-                "ts": ts,
-                "type": tool,
-                "path": path,
-                "summary": summary,
-                "output": output[:2000] if output else "",
-            }
-        )
+        max_chars = _observation_max_chars()
+        # Sanitise every text field, summary included. summary was the one field
+        # that got neither truncation nor sanitisation, which is how raw ANSI and
+        # runs of NUL bytes from the dev-server mirror reached the Terminal and
+        # rendered as garbage. SGR colour survives; cursor/erase codes and control
+        # bytes do not. See deerflow.utils.sanitize.
+        record: dict = {
+            "ts": ts,
+            "type": tool,
+            "path": path,
+            "summary": _truncate_bash_output(sanitize_terminal_text(summary), _SUMMARY_MAX_CHARS) if summary else "",
+            "output": _truncate_bash_output(sanitize_terminal_text(output), max_chars) if output else "",
+        }
+        # Only the streaming shapes carry these, so a non-streaming caller
+        # writes a byte-identical line to the one it wrote before.
+        if obs_id is not None:
+            record["id"] = obs_id
+        if state is not None:
+            record["state"] = state
+        if delta is not None:
+            record["delta"] = _truncate_bash_output(sanitize_terminal_text(delta), max_chars)
+        if replace is not None:
+            record["replace"] = _truncate_bash_output(sanitize_terminal_text(replace), max_chars)
+        entry = json.dumps(record)
 
-        log_path = thread_dir / "sandbox.log"
         with open(log_path, "a", encoding="utf-8") as fh:
             fh.write(entry + "\n")
 
-        # sandbox_status.json — read by /api/sandbox/status
-        status_path = thread_dir / "sandbox_status.json"
-        status_path.write_text(
-            json.dumps({"tool": tool, "path": path, "ts": ts}),
-            encoding="utf-8",
-        )
+        # sandbox_status.json — read by /api/sandbox/status. Skipped for the
+        # intermediate frames of a streamed command: they are the same tool on
+        # the same path, so rewriting this file every 300 ms would be pure IO
+        # for an unchanged value.
+        # Deterministic command count. Derived from the log we just appended
+        # to, not tracked as a running integer -- see reconcile_terminal_stats.
+        # Only recomputed on frames that can change the total, so the chatty
+        # delta/replace frames cost nothing.
+        stats_total: int | None = None
+        if is_command_line(record):
+            stats_total = reconcile_terminal_stats(log_path)
+
+        if delta is None and replace is None:
+            status_path = log_path.parent / "sandbox_status.json"
+            status_path.write_text(
+                json.dumps({"tool": tool, "path": path, "ts": ts}),
+                encoding="utf-8",
+            )
+            # Push the fact (not the payload) to the gateway's computer-ws so
+            # stale previews invalidate instantly instead of waiting for a
+            # poll. Non-fatal by contract; delta/replace frames are skipped —
+            # one signal per command, not per chunk.
+            try:
+                from deerflow.sandbox.computer_events import (
+                    emit_channel,
+                    emit_observation,
+                )
+
+                if stats_total is not None:
+                    # Dedicated frame: the Terminal's deterministic counter.
+                    # `type` mirrors `channel` so thin clients can route on
+                    # either field without special-casing.
+                    emit_channel(
+                        "terminal_stats",
+                        {
+                            "thread_id": thread_id,
+                            "type": "terminal_stats",
+                            "total_commands": stats_total,
+                        },
+                    )
+                emit_observation(
+                    {
+                        "thread_id": thread_id,
+                        "tool": tool,
+                        "path": path,
+                        "ts": ts,
+                        "state": state,
+                        "id": obs_id,
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("observation emit failed for thread=%s: %s", thread_id, exc)
     except Exception as exc:
-        logger.debug("_write_sandbox_observation failed: %s", exc)  # observation failures must never propagate
+        # Never propagate -- a failed observation must not break the tool call.
+        # But warn: this is the sole path feeding the Terminal, and at debug
+        # level a persistent failure was invisible for days.
+        logger.warning("_write_sandbox_observation failed: %s", exc, exc_info=True)
+
+
+def _terminal_streaming_enabled() -> bool:
+    """Whether to emit the incremental `delta`/`replace` frames.
+
+    Off unless the deployment's frontend understands them. The backend
+    hot-reloads and the frontend serves a prebuilt bundle, so the producer of
+    this format can go live while its consumer is still an older build -- and an
+    older build renders every intermediate frame as a blank Terminal row *and*
+    evicts real events from the 200-entry window. Measured on a live thread
+    before this gate existed: 54 blank rows out of 366 log lines, which broke
+    Terminal, Activity and Editor at once.
+    """
+    try:
+        cfg = get_app_config().sandbox
+        return bool(cfg and cfg.stream_terminal_output)
+    except Exception as exc:  # noqa: BLE001 - never break a command over a flag
+        logger.debug("Failed to read stream_terminal_output: %s", exc)
+        return False
+
+
+def _readopt_released(sandbox: Sandbox):
+    """Ask the provider for a live replacement of a released-but-pooled sandbox.
+
+    Warm-pool release closes the host-side HTTP client but leaves the container
+    running; a command that raced the release fails with
+    ``SandboxError("has been released…")`` even though one retry on a fresh
+    handle would succeed. Returns None for anything that is not exactly that
+    situation — destroyed containers must surface as errors, never resurrect.
+    """
+    try:
+        from deerflow.sandbox import get_sandbox_provider
+
+        readopt = getattr(get_sandbox_provider(), "readopt_released", None)
+        if readopt is None:
+            return None
+        return readopt(sandbox)
+    except Exception as exc:  # noqa: BLE001 - retry plumbing must never mask the real error
+        logger.debug("_readopt_released failed: %s", exc)
+        return None
+
+
+def _run_command_both_ways(sandbox: Sandbox, command: str, on_chunk) -> str:
+    """Streaming execution with the blocking path as fallback."""
+    try:
+        return sandbox.execute_command_streaming(command, on_chunk)
+    except Exception:
+        logger.warning("streaming execution failed; falling back to blocking exec", exc_info=True)
+        return sandbox.execute_command(command)
+
+
+def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -> str:
+    """Run ``command`` on a streaming backend, narrating it into sandbox.log.
+
+    Emits one opening frame, a frame per output change, and one closing frame,
+    all sharing an ``id`` so the Terminal folds them into a single entry. The
+    alternative -- what this replaces -- was a single line written after the
+    command exited, which is why a five-minute ``npm install`` appeared in the
+    panel as one row at the very end.
+
+    Failure contract: whatever happens, the frame is CLOSED before this
+    returns or raises. A released-client race gets exactly one provider-mediated
+    readopt and retry; anything after that propagates with the closing frame in
+    place, so the Terminal never shows a spinner that outlives the command.
+
+    Returns the full output, so the agent's view of the command is unchanged.
+    """
+    obs_id = uuid.uuid4().hex[:12]
+    summary = f"$ {command}"
+    # Close yesterday's dangling ids first — see _finalize_stale_open_ids.
+    _finalize_stale_open_ids(sandbox_id)
+    _write_sandbox_observation(sandbox_id, "bash", None, summary, obs_id=obs_id, state="running")
+
+    def on_chunk(text: str, replace: bool) -> None:
+        if not text:
+            return
+        _write_sandbox_observation(
+            sandbox_id,
+            "bash",
+            None,
+            "",
+            obs_id=obs_id,
+            state="running",
+            **({"replace": text} if replace else {"delta": text}),
+        )
+
+    # The closing frame carries the complete output, so a client that joined
+    # late (opened the panel mid-command) still ends up with the whole thing
+    # rather than the deltas it happened to catch.
+    try:
+        output = _run_command_both_ways(sandbox, command, on_chunk)
+    except Exception:
+        fresh = _readopt_released(sandbox)
+        if fresh is None:
+            _write_sandbox_observation(
+                sandbox_id,
+                "bash",
+                None,
+                summary,
+                "(failed: sandbox unavailable mid-command)",
+                obs_id=obs_id,
+                state="done",
+            )
+            raise
+        logger.info(
+            "sandbox %s was released mid-command; reclaimed from warm pool and retried once",
+            sandbox.id,
+        )
+        sandbox = fresh
+        try:
+            output = _run_command_both_ways(sandbox, command, on_chunk)
+        except Exception:
+            _write_sandbox_observation(
+                sandbox_id,
+                "bash",
+                None,
+                summary,
+                "(failed: sandbox unavailable mid-command)",
+                obs_id=obs_id,
+                state="done",
+            )
+            raise
+
+    _write_sandbox_observation(sandbox_id, "bash", None, summary, output, obs_id=obs_id, state="done")
+    return output
 
 
 def _get_skills_container_path() -> str:
@@ -1548,8 +2029,34 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
         except Exception as exc:
             logger.debug("Failed to read bash_output_max_chars: %s", exc)
             max_chars = 20000
-        raw_output = sandbox.execute_command(command)
-        _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
+        if _terminal_streaming_enabled() and getattr(sandbox, "supports_streaming", False):
+            raw_output = _stream_bash_observations(sandbox, sandbox_id, command)
+        else:
+            try:
+                raw_output = sandbox.execute_command(command)
+            except SandboxError:
+                # Same released-client race the streaming path handles; one
+                # provider-mediated readopt and retry before surfacing the error.
+                fresh = _readopt_released(sandbox)
+                if fresh is None:
+                    raise
+                sandbox = fresh
+                raw_output = sandbox.execute_command(command)
+            _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
+
+        # A dev server started via raw bash is invisible to the panel (no
+        # handle, no preview URL) — capture it so Browser/preview light up.
+        # Fire-and-forget; failures here can never affect the tool result.
+        try:
+            _capture_external_dev_server(
+                sandbox,
+                sandbox_id,
+                _thread_id_for_observation(sandbox_id) or "",
+                command,
+                aio_mode=not is_local_sandbox(runtime),
+            )
+        except Exception as exc:  # noqa: BLE001 - observability seam
+            logger.debug("dev-server capture skipped: %s", exc)
         return _truncate_bash_output(raw_output, max_chars)
     except SandboxError as e:
         return f"Error: {e}"
@@ -1557,6 +2064,111 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
         return f"Error: {e}"
     except Exception as e:
         return f"Error: Unexpected error executing command: {_sanitize_error(e, runtime)}"
+
+
+# Ports a raw-bash dev server most likely bound, by framework hint. Only used
+# when the command itself does not say (--port/-p/PORT=).
+_FRAMEWORK_DEFAULT_PORTS: list[tuple[str, int]] = [
+    ("vite", 5173),
+    ("next dev", 3000),
+    ("next start", 3000),
+    ("serve -s", 3000),
+    ("http.server", 8000),
+    ("uvicorn", 8000),
+    ("flask", 5000),
+    ("php artisan serve", 8000),
+]
+
+_PORT_FLAGS_RE = re.compile(r"(?:--port[= ]|-p\s+|PORT[ =])(\d{2,5})")
+
+
+def _extract_dev_server_port(command: str) -> int | None:
+    m = _PORT_FLAGS_RE.search(command)
+    if m:
+        return int(m.group(1))
+    low = command.lower()
+    for hint, port in _FRAMEWORK_DEFAULT_PORTS:
+        if hint in low:
+            return port
+    return None
+
+
+_capture_in_flight: set[tuple[str, int]] = set()
+_capture_guard_lock = threading.Lock()
+
+
+def _capture_external_dev_server(
+    sandbox: Sandbox,
+    sandbox_id: str,
+    thread_id: str,
+    command: str,
+    *,
+    aio_mode: bool,
+) -> None:
+    """Auto-register a dev server the agent started via raw bash.
+
+    The panel can only show what has a handle. ``start_dev_server`` creates
+    one; a bare ``npm run dev`` in bash does not — so the site worked while
+    the Browser tab showed nothing (live: PakWheel on :5180). This fires
+    after the bash tool succeeds, probes the sandbox for the listening port,
+    and registers an external handle — which also emits the dev-server event
+    onto the computer WebSocket.
+
+    Fire-and-forget daemon thread: verification polls up to ~12s and must
+    never block the tool result. Duplicate guards keep parallel commands
+    from racing duplicates.
+    """
+    if not thread_id or not _looks_like_dev_server(command):
+        return
+    port = _extract_dev_server_port(command)
+    if port is None:
+        return
+    label = f"ext-{port}"
+    guard_key = (thread_id, port)
+    with _capture_guard_lock:
+        if guard_key in _capture_in_flight:
+            return
+        _capture_in_flight.add(guard_key)
+    try:
+        existing = get_dev_server(thread_id, label)
+        if existing is not None and existing.status in ("starting", "ready"):
+            return
+    except Exception:  # noqa: BLE001
+        pass
+
+    host = "host.docker.internal" if aio_mode else "127.0.0.1"
+
+    def _worker() -> None:
+        probe = f"curl -fsS -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{port}/ 2>/dev/null || true"
+        for _ in range(12):
+            try:
+                out = (sandbox.execute_command(probe) or "").strip()
+                if out[:1] in ("2", "3"):
+                    from deerflow.sandbox.dev_server import (
+                        register_external_dev_server,
+                    )
+
+                    handle = register_external_dev_server(thread_id, port, host=host, label=label)
+                    logger.info(
+                        "Captured external dev server %s on port %d (%s)",
+                        thread_id,
+                        port,
+                        handle.status,
+                    )
+                    with _capture_guard_lock:
+                        _capture_in_flight.discard(guard_key)
+                    return
+            except Exception as exc:  # noqa: BLE001 - best-effort capture
+                logger.debug("dev-server probe failed: %s", exc)
+            time.sleep(1)
+        with _capture_guard_lock:
+            _capture_in_flight.discard(guard_key)
+
+    threading.Thread(
+        target=_worker,
+        name=f"dev-capture-{thread_id[:8]}-{port}",
+        daemon=True,
+    ).start()
 
 
 _DEV_SERVER_RE = re.compile(

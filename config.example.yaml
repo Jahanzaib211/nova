@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 20
+config_version: 27
 
 # ============================================================================
 # Logging
@@ -529,6 +529,16 @@ tool_groups:
   - name: file:write
   - name: bash
   - name: trading
+  # Nova's own capabilities as lead-agent tools, one group per capability
+  # module (see `GET /api/capabilities/ops` for the full list). Uncomment a
+  # group to let the agent call that module's operations; admin-only and
+  # secret operations are never exposed this way.
+  # - name: nova:jobs
+  # - name: nova:integrations
+  # - name: nova:agents
+  # - name: nova:models
+  # - name: nova:skills
+  # - name: nova:mcp
 
 # ============================================================================
 # Tools Configuration
@@ -918,6 +928,21 @@ speech:
   #   tts: { use: deerflow.speech.engines.null:ToneTTS }
 
 sandbox:
+  # Environment injected into every sandbox container. Values starting with $
+  # are resolved from the host environment.
+  #
+  # TZ is set because the upstream base image displays CST while the host,
+  # gateway and sandbox clocks all agree in UTC. That cosmetic mismatch has
+  # been reported as an 8-hour clock skew; `date -u` inside the sandbox and on
+  # the host match to the second. Displaying UTC removes the illusion.
+  environment:
+    TZ: UTC
+  # Stream bash output into the Agent's Computer Terminal as it is produced,
+  # instead of one entry when the command exits. Emits extra `delta`/`replace`
+  # frames on a NAMED SSE event (`sandbox_delta`), which any frontend that does
+  # not subscribe ignores by spec. Leave false unless the frontend serving this
+  # deployment is built from source that understands it.
+  stream_terminal_output: false
   use: deerflow.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is
   # not a secure isolation boundary for shell access. Enable only for fully
@@ -1057,6 +1082,12 @@ sandbox:
 # Subagents are background workers delegated tasks by the lead agent
 
 # subagents:
+#   # Expose delegate_async / check_delegation: the lead agent hands a task to a
+#   # subagent or ACP agent as an `agents.task` job in the jobs container
+#   # (survives gateway reloads, visible on the Jobs page) and polls the result.
+#   # Needs jobs.enabled. The worker has no sandbox, so a subagent that calls
+#   # bash/file tools fails there with a clear error; ACP agents are unaffected.
+#   async_enabled: false
 #   # How many task tool calls may run in parallel (2-4, default 3). Until this
 #   # existed the limit could only be changed by editing MAX_CONCURRENT_SUBAGENTS
 #   # in source, and the Agent's Computer bar reported that constant while a run
@@ -1110,21 +1141,94 @@ sandbox:
 #   # The model name must match a name defined in the `models:` section above.
 
 # ============================================================================
+# Capabilities (declared once, reachable by the UI, the harness and MCP)
+# ============================================================================
+# Every feature declares its operations in the capability registry
+# (deerflow.capabilities). From that one declaration Nova derives the generic
+# `/api/capabilities/ops` API, the typed frontend client, lead-agent tools
+# (gated by `tool_groups` above) and its own MCP server, so an external
+# harness — Claude Code over ACP, OpenClaw, a script — can drive jobs,
+# integrations, agents, models, … with a harness token minted under
+# Settings › Devices.
+capabilities:
+  mcp_server:
+    enabled: true
+
+# ============================================================================
+# Runtimes — Claude Code / OpenClaw as chat runtimes (like OpenClaw's agentRuntime.id)
+# ============================================================================
+# With `enabled: true`, a chat can run on an ACP runtime instead of the native
+# LangGraph agent: the chat's model picker sets `runtime` / `runtime_account`
+# / `permission_mode` in the run context, or a model declares `runtime:
+# claude_code` under `models:` so every chat on it uses Claude Code. The
+# external agent gets Nova's own MCP server (capabilities above) mounted with
+# an ephemeral, per-turn harness token, so it can use jobs, integrations,
+# agents, models, … as the signed-in user. Requires the acp_agents overlays
+# (NOVA_ACP_AGENTS=1); accounts are presence-checked, never read.
+# Permission modes: full ("Default (Full Access)": everything but deletes),
+# standard (reads/searches only; edits and commands denied and shown),
+# plan (read-only).
+runtimes:
+  enabled: false
+  default: native
+  nova_mcp_url: http://127.0.0.1:8001/api/mcp/nova
+  turn_timeout_seconds: 1800
+  # If the ACP runtime fails the turn (Claude Code usage cap, adapter crash,
+  # timeout), run that same turn on the native Nova agent — sandbox,
+  # subagents and skills included — instead of replying with the error.
+  fallback_to_native: true
+  # Model for Nova subagents that an ACP runtime delegates to via
+  # agents.delegate (a job has no parent model to inherit). Unset = the
+  # deployment's default model, which may be a different provider.
+  # delegate_model: claude-sonnet-4-6
+
+# ============================================================================
 # ACP Agents Configuration
 # ============================================================================
 # Configure external ACP-compatible agents for the built-in `invoke_acp_agent` tool.
+# The agent's text streams into the chat as it is produced (acp_update events);
+# permission requests are decided per tool kind by `permission_policy`:
+# deny_kinds always deny, allow_kinds auto-approve, everything else is denied
+# unless auto_approve_permissions is true. Kinds: read, edit, delete, move,
+# search, execute, think, fetch, switch_mode, other.
+# "Claude inside Nova" needs NOVA_ACP_AGENTS=1 in .env (see .env.example); it
+# runs the real Claude Code binary against the user's own `claude` login,
+# mounted read-only. Nova never reads that credential.
 
 # acp_agents:
 #   claude_code:
 #     # DeerFlow expects an ACP adapter here. The standard `claude` CLI does not
-#     # speak ACP directly. Install `claude-agent-acp` separately or use:
+#     # speak ACP directly; the Zed adapter wraps the Claude Agent SDK.
 #     command: npx
-#     args: ["-y", "@zed-industries/claude-agent-acp"]
+#     args: ["-y", "@zed-industries/claude-agent-acp@0.23.1"]
 #     description: Claude Code for implementation, refactoring, and debugging
 #     model: null
-#     # auto_approve_permissions: false  # Set to true to auto-approve ACP permission requests
-#     # env:                             # Optional: inject environment variables into the agent subprocess
-#     #   ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY  # $VAR resolves from host environment
+#     env:
+#       HOME: /root
+#       # (no CLAUDE_CONFIG_DIR: the CLI must find ~/.claude.json beside ~/.claude)
+#     auto_approve_permissions: false
+#     permission_policy:
+#       allow_kinds: [read, search, fetch, think]
+#       deny_kinds: [delete]
+#
+#   openclaw:
+#     # OpenClaw's own ACP bridge, talking to the host OpenClaw gateway through
+#     # nova-host-bridge (docker/docker-compose.acp.yaml mounts the package and
+#     # the token file; scripts/acp-secrets.sh writes the token file).
+#     command: node
+#     args:
+#       - /opt/openclaw/openclaw.mjs
+#       - acp
+#       - --url
+#       - ws://host.docker.internal:18789
+#       - --token-file
+#       - /run/nova/openclaw_token
+#       - --session-label
+#       - nova
+#     description: OpenClaw — the personal assistant gateway with its own channels, memory and skills
+#     auto_approve_permissions: false
+#     permission_policy:
+#       allow_kinds: [read, search, fetch, think]
 #
 #   codex:
 #     # DeerFlow expects an ACP adapter here. The standard `codex` CLI does not
@@ -1394,10 +1498,18 @@ stream_bridge:
 #   backend: memory
 #   max_trace_content: 10240    # Truncation threshold for trace content (db backend, bytes)
 #   track_token_usage: true     # Accumulate token counts to RunRow
+#   retention_days: 0           # Delete events older than N days. 0 = keep everything.
+#
+# retention_days is 0 by default because silently deleting a user's conversation
+# history on upgrade would be worse than the growth -- but the table IS unbounded
+# and nothing else trims it. On the reference deployment it reached 366 MB (335 MB
+# of genuine content, so vacuuming does not help) and was the largest object in the
+# database once the checkpoint tables were vacuumed. Set it deliberately.
 run_events:
   backend: memory
   max_trace_content: 10240
   track_token_usage: true
+  retention_days: 0
 
 # ============================================================================
 # User-Owned IM Channel Connections
@@ -1607,6 +1719,122 @@ run_events:
 #   failure_threshold: 5
 #   # Time in seconds before attempting to recover (default: 60)
 #   recovery_timeout_sec: 60
+
+# ============================================================================
+# Job runner (background work: campaign sends, imports, long agent tasks)
+# ============================================================================
+# A separate worker process (`docker compose … up jobs`, `python -m app.jobs.worker`)
+# claims jobs from the `jobs` table with leases and heartbeats; the reaper
+# retries leases nobody renews and dead-letters after max_attempts; cron rows
+# in `job_schedules` enqueue on their cadence. The gateway only enqueues and
+# exposes /api/jobs. startup-only: the worker reads this block once.
+# jobs:
+#   enabled: true
+#   queues: [default, email, agents]
+#   concurrency: 4
+#   lease_ttl_seconds: 60
+#   poll_interval_seconds: 1.0
+#   reaper_interval_seconds: 15
+#   scheduler_interval_seconds: 30
+#   shutdown_grace_seconds: 30
+#   events_retention_days: 14
+
+# ============================================================================
+# Integrations registry (Settings › Integrations, GET /api/integrations)
+# ============================================================================
+# What Nova can reach and whether it works: LLM gateways, mail, CRM, helpdesk,
+# search/crawl/browser services, plus the MCP servers, skills and ACP agents
+# the gateway already knows (those need no entry here). Hot-reloaded.
+# URLs are as seen from the gateway container: host services go through
+# host.docker.internal, and loopback-only host services additionally need the
+# nova-host-bridge PM2 app (scripts/host-bridge.sh) to be reachable at all.
+# api_key_env is the NAME of an environment variable (never the value); when
+# it is unset the card says so instead of the config failing to load.
+# required (default true): false marks a service that is expected to be
+# unavailable or partly configured on this deployment. It is still probed and
+# still shows its real status, but it cannot make the integrations capability
+# module unhealthy -- a gate that is permanently yellow is one nobody reads.
+# kinds: llm_gateway, mail, crm, helpdesk, search, crawler, browser, database,
+# agent_gateway. Ids ollama/litellm/mailcow/chatwoot/twenty/openclaw/searxng/
+# crawl4ai/browserless get a service-aware probe; other ids use health_path.
+# integrations:
+#   enabled: true
+#   probe_cache_seconds: 20
+#   probe_timeout_seconds: 3
+#   services:
+#     ollama:
+#       kind: llm_gateway
+#       url: http://host.docker.internal:11434
+#       display_name: Ollama
+#     litellm:
+#       kind: llm_gateway
+#       url: http://host.docker.internal:4000
+#       display_name: LiteLLM
+#     mailcow:
+#       kind: mail
+#       url: http://host.docker.internal:8080
+#       display_name: Mailcow
+#       api_key_env: MAILCOW_API_KEY
+#       required: false
+#     chatwoot:
+#       kind: helpdesk
+#       url: http://host.docker.internal:4800
+#       display_name: Chatwoot
+#       api_key_env: CHATWOOT_API_TOKEN
+#     twenty:
+#       kind: crm
+#       url: http://host.docker.internal:3008
+#       display_name: Twenty CRM
+#       api_key_env: TWENTY_API_KEY
+#     openclaw:
+#       kind: agent_gateway
+#       url: http://host.docker.internal:18789
+#       display_name: OpenClaw
+#     searxng:
+#       kind: search
+#       url: http://searxng:8080
+#     crawl4ai:
+#       kind: crawler
+#       url: http://crawl4ai:11235
+#     browserless:
+#       kind: browser
+#       url: http://browserless:3000
+
+# ============================================================================
+# Email marketing (lists, contacts, templates, campaigns, tracking, bounces)
+# ============================================================================
+# Sends go through the `email:` SMTP relay below (Mailcow on this box); this
+# block holds what is specific to campaigns. Hot-reloaded. The `jobs` worker
+# runs the pipeline (em.campaign.start → em.campaign.batch on the `email`
+# queue) and the IMAP bounce poll; the public tracking/unsubscribe links are
+# served under /api/em/t/* and /api/em/u/* with HMAC tokens. Suppressions
+# (hard bounces, complaints, unsubscribes) are never mailed again.
+# tracking_secret: generate once (`openssl rand -hex 32`) and keep it — every
+# link in every sent mail is signed with it.
+# email_marketing:
+#   enabled: false
+#   public_base_url: https://nova.example.com
+#   tracking_secret: $NOVA_EM_TRACKING_SECRET
+#   bounce_domain: cloud.example.com          # VERP: bounce+<send>@<domain>; defaults to the sender's domain
+#   default_throttle_per_minute: 120
+#   per_domain_per_minute: 20
+#   batch_size: 50
+#   bounce_mailbox:                            # the bounce@ mailbox (bounce+<send>@ lands there via recipient_delimiter)
+#     host: host.docker.internal
+#     port: 993
+#     use_ssl: true
+#     username: bounce@cloud.example.com
+#     password: $NOVA_EM_BOUNCE_PASSWORD
+#     folder: INBOX
+#   bounce_poll_cron: "*/5 * * * *"
+#   events_retention_days: 180
+#   bridges:                                   # keys/URLs come from integrations.services.*
+#     mailcow: true
+#     twenty: true
+#     chatwoot: false
+#     chatwoot_account_id: 1
+#     chatwoot_inbox_id: null                  # inbox that receives campaign replies
+#     reply_local_part: reply                  # reply+<send>@<bounce_domain> → Chatwoot
 
 # ============================================================
 # Email (self-service password reset)

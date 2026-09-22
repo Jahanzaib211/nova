@@ -1,0 +1,2321 @@
+{
+  "modules": [
+    {
+      "config_key": "acp_agents",
+      "description": "External agents reachable over the Agent Client Protocol and the permission policy applied to each.",
+      "flag": "acp_agents",
+      "id": "acp",
+      "operations": [
+        "acp.agents"
+      ],
+      "title": "ACP agents"
+    },
+    {
+      "config_key": "subagents",
+      "description": "Lead agent, built-in and custom subagents, ACP agents; async delegation as jobs.",
+      "flag": null,
+      "id": "agents",
+      "operations": [
+        "agents.delegate",
+        "agents.registry"
+      ],
+      "title": "Agents"
+    },
+    {
+      "config_key": null,
+      "description": "Server-declared feature switches; each maps to a config.yaml section.",
+      "flag": null,
+      "id": "features",
+      "operations": [
+        "features.get"
+      ],
+      "title": "Labs"
+    },
+    {
+      "config_key": "integrations",
+      "description": "External services (model gateways, mail/CRM/helpdesk, search/crawl/browser, agent gateways) and their live health.",
+      "flag": "integrations",
+      "id": "integrations",
+      "operations": [
+        "integrations.list",
+        "integrations.probe"
+      ],
+      "title": "Integrations"
+    },
+    {
+      "config_key": "jobs",
+      "description": "Background job runner: queue, schedules (cron), workers.",
+      "flag": "jobs",
+      "id": "jobs",
+      "operations": [
+        "jobs.cancel",
+        "jobs.enqueue",
+        "jobs.events",
+        "jobs.get",
+        "jobs.list",
+        "jobs.retry",
+        "jobs.schedule_delete",
+        "jobs.schedule_upsert",
+        "jobs.schedules",
+        "jobs.summary",
+        "jobs.workers"
+      ],
+      "title": "Jobs"
+    },
+    {
+      "config_key": "extensions_config.json",
+      "description": "Model Context Protocol servers Nova connects to and the tools they contribute.",
+      "flag": null,
+      "id": "mcp",
+      "operations": [
+        "mcp.servers",
+        "mcp.toggle",
+        "mcp.tools"
+      ],
+      "title": "MCP"
+    },
+    {
+      "config_key": "models",
+      "description": "Chat models the gateway can route to, with a live per-model probe.",
+      "flag": null,
+      "id": "models",
+      "operations": [
+        "models.list",
+        "models.probe"
+      ],
+      "title": "Models"
+    },
+    {
+      "config_key": "runtimes",
+      "description": "What can run a chat turn \u2014 Nova's native agent, Claude Code or OpenClaw over ACP \u2014 with accounts, a live probe and permission modes.",
+      "flag": "runtimes",
+      "id": "runtimes",
+      "operations": [
+        "runtimes.list",
+        "runtimes.probe",
+        "runtimes.sessions"
+      ],
+      "title": "Runtimes"
+    },
+    {
+      "config_key": "sandbox",
+      "description": "The per-thread sandbox: run commands, read and write files, search. The same tools the lead agent uses, reachable by an external harness.",
+      "flag": "sandbox",
+      "id": "sandbox",
+      "operations": [
+        "sandbox.bash",
+        "sandbox.glob",
+        "sandbox.grep",
+        "sandbox.ls",
+        "sandbox.read_file",
+        "sandbox.str_replace",
+        "sandbox.write_file"
+      ],
+      "title": "Agent's Computer"
+    },
+    {
+      "config_key": null,
+      "description": "Named secrets (0600 files under ~/.nova/secrets) and the env-var names config.yaml references. Values are never read back.",
+      "flag": null,
+      "id": "secrets",
+      "operations": [
+        "secrets.list",
+        "secrets.set",
+        "secrets.unset"
+      ],
+      "title": "Secrets"
+    },
+    {
+      "config_key": null,
+      "description": "Browser sessions and harness tokens (how Claude Code / OpenClaw authenticate to Nova's MCP server).",
+      "flag": null,
+      "id": "sessions",
+      "operations": [
+        "sessions.get",
+        "sessions.revoke_all",
+        "sessions.token_create",
+        "sessions.token_revoke",
+        "sessions.tokens"
+      ],
+      "title": "Devices & sessions"
+    },
+    {
+      "config_key": "skills",
+      "description": "SKILL.md packages available to the lead agent.",
+      "flag": null,
+      "id": "skills",
+      "operations": [
+        "skills.list",
+        "skills.toggle"
+      ],
+      "title": "Skills"
+    },
+    {
+      "config_key": null,
+      "description": "Versions of the gateway, adapters and CLIs this deployment runs.",
+      "flag": null,
+      "id": "updates",
+      "operations": [
+        "updates.versions"
+      ],
+      "title": "Updates"
+    }
+  ],
+  "operations": [
+    {
+      "admin_only": false,
+      "description": "Configured ACP agents, whether their adapter binary is present, and their permission policy.",
+      "flag": "acp_agents",
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "acp",
+      "name": "acp.agents",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Run a task on an agent as a background job (survives reloads).",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "agent": {
+            "description": "Agent from agents.registry: its id (`subagent:bash`, `acp:claude_code`) or bare name (`bash`, `claude_code`).",
+            "title": "Agent",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model for a subagent (name from models.list). Default: the deployment's default model.",
+            "title": "Model"
+          },
+          "task": {
+            "description": "What the agent should do; the result lands in outputs/agent-tasks/<job_id>.md",
+            "title": "Task",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "task"
+        ],
+        "title": "DelegateIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "agents",
+      "name": "agents.delegate",
+      "output_schema": {
+        "properties": {
+          "job": {
+            "additionalProperties": true,
+            "title": "Job",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "All agents with their kind and the caller's live queued/running task counts.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "agents",
+      "name": "agents.registry",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Every feature flag and whether it is on.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "features",
+      "name": "features.get",
+      "output_schema": {
+        "properties": {
+          "flags": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Flags",
+            "type": "object"
+          }
+        },
+        "required": [
+          "flags"
+        ],
+        "title": "FlagsOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Every integration with status, endpoint, capabilities and latency.",
+      "flag": "integrations",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "refresh": {
+            "default": false,
+            "description": "Bypass the probe cache",
+            "title": "Refresh",
+            "type": "boolean"
+          }
+        },
+        "title": "ListIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "integrations",
+      "name": "integrations.list",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Re-probe one integration now.",
+      "flag": "integrations",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "integration_id": {
+            "title": "Integration Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "integration_id"
+        ],
+        "title": "ProbeIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "integrations",
+      "name": "integrations.probe",
+      "output_schema": {
+        "properties": {
+          "item": {
+            "additionalProperties": true,
+            "title": "Item",
+            "type": "object"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "ItemOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Request cooperative cancellation of a job.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobIdIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.cancel",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Enqueue a job of a registered type.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "queue": {
+            "default": "default",
+            "title": "Queue",
+            "type": "string"
+          },
+          "run_after_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Delay before the job becomes claimable",
+            "title": "Run After Seconds"
+          },
+          "type": {
+            "description": "Registered job type",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "EnqueueIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.enqueue",
+      "output_schema": {
+        "properties": {
+          "job": {
+            "additionalProperties": true,
+            "title": "Job",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "A job's event log (progress, logs, retries).",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobIdIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.events",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "One job with its current status, attempts and result.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobIdIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.get",
+      "output_schema": {
+        "properties": {
+          "job": {
+            "additionalProperties": true,
+            "title": "Job",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "List the caller's jobs (all jobs for admins), newest first.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "queued | running | succeeded | failed | dead_letter | cancelled",
+            "title": "Status"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Job type, e.g. em.campaign.start or agents.task",
+            "title": "Type"
+          }
+        },
+        "title": "ListJobsIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.list",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Requeue a failed or dead-letter job.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "JobIdIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.retry",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Delete a cron schedule.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "schedule_id": {
+            "title": "Schedule Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_id"
+        ],
+        "title": "ScheduleIdIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.schedule_delete",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Create or update a cron schedule by name.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "cron": {
+            "description": "5-field cron expression",
+            "title": "Cron",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "queue": {
+            "default": "default",
+            "title": "Queue",
+            "type": "string"
+          },
+          "timezone": {
+            "default": "UTC",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "cron"
+        ],
+        "title": "ScheduleIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.schedule_upsert",
+      "output_schema": {
+        "properties": {
+          "job": {
+            "additionalProperties": true,
+            "title": "Job",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "List cron schedules.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.schedules",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": true,
+      "description": "Queue depth by status.",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.summary",
+      "output_schema": {
+        "properties": {
+          "job": {
+            "additionalProperties": true,
+            "title": "Job",
+            "type": "object"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "title": "JobOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Worker processes and their heartbeats (Cloud workers).",
+      "flag": "jobs",
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "jobs",
+      "name": "jobs.workers",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Configured MCP servers, transport, enabled state and loaded tool count.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "mcp",
+      "name": "mcp.servers",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": true,
+      "description": "Enable or disable an MCP server.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "MCP server name",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "enabled"
+        ],
+        "title": "ToggleIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "mcp",
+      "name": "mcp.toggle",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Tools currently loaded from MCP servers.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "mcp",
+      "name": "mcp.tools",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Configured models with provider, capabilities and context window; the first is the default.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "models",
+      "name": "models.list",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Send one tiny completion to a model and report latency or the exact error.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "Model name from models.list",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ProbeIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "models",
+      "name": "models.probe",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Latency Ms"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ok"
+        ],
+        "title": "ProbeOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Runtimes, the accounts each can use (presence only), the default, and permission modes.",
+      "flag": "runtimes",
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "runtimes",
+      "name": "runtimes.list",
+      "output_schema": {
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "modes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Modes",
+            "type": "array"
+          },
+          "permission_modes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permission Modes",
+            "type": "array"
+          },
+          "runtimes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Runtimes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "default",
+          "runtimes",
+          "permission_modes",
+          "modes"
+        ],
+        "title": "DescribeOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Round-trip one word through a runtime \u2014 the \"Check model\" button.",
+      "flag": "runtimes",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Account id, or omit for automatic selection",
+            "title": "Account"
+          },
+          "runtime": {
+            "description": "Runtime id from runtimes.list (e.g. claude_code)",
+            "title": "Runtime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runtime"
+        ],
+        "title": "ProbeIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "runtimes",
+      "name": "runtimes.probe",
+      "output_schema": {
+        "properties": {
+          "account": {
+            "title": "Account",
+            "type": "string"
+          },
+          "checked_at": {
+            "default": "",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Latency Ms"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "runtime": {
+            "title": "Runtime",
+            "type": "string"
+          }
+        },
+        "required": [
+          "runtime",
+          "account",
+          "ok"
+        ],
+        "title": "ProbeOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Claude Code sessions on this gateway, grouped by project (names and times only).",
+      "flag": "runtimes",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "runtime": {
+            "default": "claude_code",
+            "title": "Runtime",
+            "type": "string"
+          }
+        },
+        "title": "SessionsIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "runtimes",
+      "name": "runtimes.sessions",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Run a shell command inside the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "command": {
+            "description": "Shell command to run inside the thread's sandbox container.",
+            "title": "Command",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          },
+          "timeout_seconds": {
+            "default": 120,
+            "maximum": 1800,
+            "minimum": 1,
+            "title": "Timeout Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "BashIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.bash",
+      "output_schema": {
+        "properties": {
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output"
+        ],
+        "title": "TextOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Find files by glob pattern in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "max_results": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "path": {
+            "default": "/mnt/user-data",
+            "description": "Directory to search under.",
+            "title": "Path",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Glob pattern (glob) or regular expression (grep).",
+            "title": "Pattern",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "title": "SearchIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.glob",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Search file contents by regex in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "max_results": {
+            "default": 100,
+            "maximum": 1000,
+            "minimum": 1,
+            "title": "Max Results",
+            "type": "integer"
+          },
+          "path": {
+            "default": "/mnt/user-data",
+            "description": "Directory to search under.",
+            "title": "Path",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Glob pattern (glob) or regular expression (grep).",
+            "title": "Pattern",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "title": "SearchIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.grep",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "List a directory in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PathIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.ls",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Read a file from the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PathIn",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.read_file",
+      "output_schema": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content",
+          "exists"
+        ],
+        "title": "FileOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Replace one exact, unique string in a sandbox file.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "new_str": {
+            "description": "Replacement text.",
+            "title": "New Str",
+            "type": "string"
+          },
+          "old_str": {
+            "description": "Exact text to replace; must occur exactly once.",
+            "title": "Old Str",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path",
+          "old_str",
+          "new_str"
+        ],
+        "title": "ReplaceIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.str_replace",
+      "output_schema": {
+        "properties": {
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output"
+        ],
+        "title": "TextOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Create or overwrite a file in the thread's sandbox.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "content": {
+            "description": "Full new file contents.",
+            "title": "Content",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path inside the sandbox, e.g. /mnt/user-data/workspace/app.py",
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "WriteIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.write_file",
+      "output_schema": {
+        "properties": {
+          "bytes_written": {
+            "title": "Bytes Written",
+            "type": "integer"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "bytes_written"
+        ],
+        "title": "WriteOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": true,
+      "description": "Which secrets exist (presence only), with file mode and age.",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": false,
+      "module": "secrets",
+      "name": "secrets.list",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": true,
+      "description": "Write a secret file (0600, atomic).",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "File name under the secrets dir (letters, digits, _ . -)",
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "description": "The secret. Stored 0600; never echoed back.",
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "SetIn",
+        "type": "object"
+      },
+      "kind": "secret",
+      "mcp": false,
+      "module": "secrets",
+      "name": "secrets.set",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": true,
+      "description": "Remove a secret file.",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "NameIn",
+        "type": "object"
+      },
+      "kind": "secret",
+      "mcp": false,
+      "module": "secrets",
+      "name": "secrets.unset",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "The caller's session state.",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": false,
+      "module": "sessions",
+      "name": "sessions.get",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "last_sign_in_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Last Sign In At"
+          },
+          "token_version": {
+            "title": "Token Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "token_version",
+          "detail"
+        ],
+        "title": "SessionsOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Sign out every device.",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": false,
+      "module": "sessions",
+      "name": "sessions.revoke_all",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Mint a harness token; the plaintext is returned once.",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "What will use this token, e.g. 'claude-code on laptop'",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scopes": {
+            "description": "Capability module ids this token may invoke, or ['*']",
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TokenCreateIn",
+        "type": "object"
+      },
+      "kind": "secret",
+      "mcp": false,
+      "module": "sessions",
+      "name": "sessions.token_create",
+      "output_schema": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mcp_url": {
+            "description": "Where to point the harness: Nova's MCP endpoint",
+            "title": "Mcp Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "token": {
+            "description": "Shown once. Put it in the harness's Authorization: Bearer header.",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "id",
+          "name",
+          "prefix",
+          "scopes",
+          "mcp_url"
+        ],
+        "title": "TokenCreatedOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Revoke a harness token immediately.",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "properties": {
+          "token_id": {
+            "title": "Token Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token_id"
+        ],
+        "title": "TokenIdIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": false,
+      "module": "sessions",
+      "name": "sessions.token_revoke",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "The caller's harness tokens (never the secret).",
+      "flag": null,
+      "harness": false,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": false,
+      "module": "sessions",
+      "name": "sessions.tokens",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Every installed skill, its category and whether it is enabled.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "skills",
+      "name": "skills.list",
+      "output_schema": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "Items",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": true,
+      "description": "Enable or disable a skill.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "Skill name",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "enabled"
+        ],
+        "title": "ToggleIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "skills",
+      "name": "skills.toggle",
+      "output_schema": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Version of each component (config, git, Claude CLI, OpenClaw, Node, ACP adapter).",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "updates",
+      "name": "updates.versions",
+      "output_schema": {
+        "properties": {
+          "components": {
+            "additionalProperties": true,
+            "title": "Components",
+            "type": "object"
+          }
+        },
+        "required": [
+          "components"
+        ],
+        "title": "VersionsOut",
+        "type": "object"
+      }
+    }
+  ],
+  "version": 1
+}

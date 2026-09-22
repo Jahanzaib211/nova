@@ -127,9 +127,9 @@ function deriveStatusVisuals(
   if (openCircuits === 0) {
     return {
       tone: {
-        bg: "bg-emerald-500/10",
-        dot: "bg-emerald-500",
-        icon: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-success/10",
+        dot: "bg-success",
+        icon: "text-success dark:text-success",
       },
       label: {
         text: t.runtimeBar.status.healthy,
@@ -143,9 +143,9 @@ function deriveStatusVisuals(
   if (openCircuits <= 2) {
     return {
       tone: {
-        bg: "bg-amber-500/10",
-        dot: "bg-amber-500",
-        icon: "text-amber-600 dark:text-amber-400",
+        bg: "bg-warning/10",
+        dot: "bg-warning",
+        icon: "text-warning dark:text-warning",
       },
       label: {
         text: t.runtimeBar.status.degraded(openCircuits),
@@ -158,9 +158,9 @@ function deriveStatusVisuals(
   }
   return {
     tone: {
-      bg: "bg-red-500/10",
-      dot: "bg-red-500",
-      icon: "text-red-600 dark:text-red-400",
+      bg: "bg-destructive/10",
+      dot: "bg-destructive",
+      icon: "text-destructive dark:text-destructive",
     },
     label: {
       text: t.runtimeBar.status.critical(openCircuits),
@@ -188,7 +188,11 @@ function SkillPill({
           <Badge
             variant={skill.enabled ? "secondary" : "outline"}
             className={cn(
-              "h-6 cursor-default gap-1 rounded-md px-1.5 font-mono text-[11px] font-medium",
+              // max-w + truncate, not just the parent's overflow-hidden: the
+              // rail clips at the container edge, so a long name was hard-cut
+              // mid-word ("academic-paper-review" -> "academ") with no
+              // ellipsis to signal it. The full name stays in the tooltip.
+              "h-6 max-w-[14ch] cursor-default gap-1 rounded-md px-1.5 font-mono text-[11px] font-medium",
               skill.enabled
                 ? "bg-secondary/60 hover:bg-secondary/80"
                 : "opacity-60",
@@ -197,8 +201,11 @@ function SkillPill({
             data-enabled={skill.enabled}
             data-category={skill.category}
           >
-            <SparklesIcon className="size-2.5 opacity-70" aria-hidden />
-            {skill.name}
+            <SparklesIcon
+              className="size-2.5 shrink-0 opacity-70"
+              aria-hidden
+            />
+            <span className="truncate">{skill.name}</span>
           </Badge>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
@@ -226,10 +233,17 @@ function SkillRail({
 }) {
   const enabled = skills.filter((s) => s.enabled);
   const total = skills.length;
-  const overflow = total - MAX_VISIBLE_SKILLS;
+  // Overflow counts what this rail actually hides, which is drawn from
+  // `enabled` -- not from `total`. Computing it from `total` claimed "+20 more"
+  // with 28 installed and 5 enabled, while rendering all 5 and hiding nothing.
+  // Invisible whenever every skill is enabled, which is the common case.
+  const overflow = enabled.length - MAX_VISIBLE_SKILLS;
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="flex min-w-0 items-center gap-1.5">
+      {/* shrink-0: the bar scrolls horizontally on purpose. Letting this rail
+          shrink instead crushed "no skills loaded" to zero width on phones and
+          ran the tools counter into the skills count. */}
+      <div className="flex shrink-0 items-center gap-1.5">
         <LayersIcon
           className="text-muted-foreground/70 size-3.5 shrink-0"
           aria-hidden
@@ -238,7 +252,7 @@ function SkillRail({
           {enabled.length}
           <span className="text-muted-foreground/50">/{total}</span>
         </span>
-        <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+        <div className="flex items-center gap-1">
           {enabled.length === 0 ? (
             <span className="text-muted-foreground/70 text-[11px]">
               {t.runtimeBar.skills.none}
@@ -276,24 +290,34 @@ function MetricCounter({
   count,
   testId,
   detail,
+  emptyWarning,
 }: {
   icon: typeof BoxesIcon;
   label: string;
   count: number;
   testId: string;
   detail?: string;
+  /**
+   * When set, a count of zero is a problem, not an idle state: the pill turns
+   * amber and this text replaces `detail`. Used for tools — a "Healthy" pill
+   * next to a dimmed "0 tools" read as fine when the agent could not act.
+   */
+  emptyWarning?: string;
 }) {
   const disabled = count === 0;
+  const warn = disabled && emptyWarning !== undefined;
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
-              disabled && "opacity-50",
+              "border-panel-border bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
+              disabled && !warn && "opacity-50",
+              warn && "border-warning/60 bg-warning/10 text-warning",
             )}
             data-testid={testId}
+            data-state={warn ? "empty" : undefined}
             aria-label={`${label}: ${count}`}
           >
             <Icon className="text-muted-foreground/80 size-3" aria-hidden />
@@ -307,8 +331,10 @@ function MetricCounter({
           <p className="font-medium">
             {count} {label.toLowerCase()}
           </p>
-          {detail && (
-            <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
+          {(warn ? emptyWarning : detail) && (
+            <p className="text-muted-foreground mt-1 text-xs">
+              {warn ? emptyWarning : detail}
+            </p>
           )}
         </TooltipContent>
       </Tooltip>
@@ -326,7 +352,7 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
         <TooltipTrigger asChild>
           <span
             className={cn(
-              "border-border/40 bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
+              "border-panel-border bg-background/50 hover:bg-muted/60 inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] transition-colors",
             )}
             data-testid="runtime-igino-pill"
           >
@@ -340,7 +366,7 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
                 not "Pipeline": the badge names the broken step, and the whole
                 pipeline is not down when one step is. */}
             {status.fetch && !status.fetch.healthy && (
-              <span className="rounded bg-amber-500/20 px-1 text-[9px] text-amber-400">
+              <span className="bg-warning/20 text-warning rounded px-1 text-[9px]">
                 {t.agentComputer.privacy.fetchHealth}
               </span>
             )}
@@ -360,7 +386,12 @@ function IGINOPill({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
                       : t.agentComputer.privacy.unhealthy
                   }`
                 : t.agentComputer.privacy.unhealthy,
-              `${status.cache.size}/${status.cache.max_size}`,
+              // `/api/igino/status` omits `cache` entirely on its error path
+              // (`{enabled: true, error: ...}`), where this read threw and took
+              // the whole runtime bar down with it.
+              status.cache
+                ? `${status.cache.size}/${status.cache.max_size}`
+                : t.agentComputer.privacy.noData,
             )}
           </p>
         </TooltipContent>
@@ -420,7 +451,7 @@ export function RuntimeCapabilitiesBar({
     return (
       <div
         className={cn(
-          "bg-muted/30 text-muted-foreground border-border/40 flex items-center gap-2 border-b px-3 py-1.5 text-xs",
+          "bg-muted/30 text-muted-foreground border-panel-border flex items-center gap-2 border-b px-3 py-1.5 text-xs",
           className,
         )}
         data-testid="runtime-bar-offline"
@@ -443,7 +474,7 @@ export function RuntimeCapabilitiesBar({
     return (
       <div
         className={cn(
-          "bg-muted/10 border-border/40 flex items-center gap-2 border-b px-3 py-1.5 text-xs",
+          "bg-muted/10 border-panel-border flex items-center gap-2 border-b px-3 py-1.5 text-xs",
           className,
         )}
         aria-hidden
@@ -463,7 +494,7 @@ export function RuntimeCapabilitiesBar({
     <TooltipProvider delayDuration={150}>
       <div
         className={cn(
-          "border-border/40 bg-background/80 supports-[backdrop-filter]:bg-background/60 flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 text-xs backdrop-blur-sm",
+          "border-panel-border bg-background/80 supports-[backdrop-filter]:bg-background/60 flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 text-xs backdrop-blur-sm",
           ROW_HEIGHT,
           className,
         )}
@@ -485,6 +516,7 @@ export function RuntimeCapabilitiesBar({
           count={tools.length}
           testId="runtime-tools-pill"
           detail={t.runtimeBar.metrics.toolsDetail}
+          emptyWarning={t.runtimeBar.metrics.toolsEmpty}
         />
         <MetricCounter
           icon={CpuIcon}
@@ -547,7 +579,7 @@ export function RuntimeCapabilitiesBar({
 
         {installState && (
           <span
-            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 font-mono text-[11px] font-medium text-amber-600 dark:text-amber-400"
+            className="border-warning/30 bg-warning/10 text-warning dark:text-warning inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 font-mono text-[11px] font-medium"
             data-testid="runtime-installing-pill"
           >
             <Loader2Icon className="size-3 animate-spin" aria-hidden />
@@ -572,7 +604,7 @@ export function RuntimeCapabilitiesBar({
             />
           ) : (
             <span
-              className="inline-flex size-1.5 shrink-0 rounded-full bg-emerald-500/60"
+              className="bg-success/60 inline-flex size-1.5 shrink-0 rounded-full"
               aria-label="ready"
               data-testid="runtime-bar-ready-dot"
             />

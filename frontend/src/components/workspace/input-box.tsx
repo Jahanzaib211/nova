@@ -65,8 +65,13 @@ import { getModelLabel } from "@/core/models/types";
 import type { Skill } from "@/core/skills";
 import { useSkills } from "@/core/skills/hooks";
 import { useSuggestionsConfig } from "@/core/suggestions/hooks";
-import type { AgentThreadContext } from "@/core/threads";
+import type { AgentThreadContext, RuntimeContextFields } from "@/core/threads";
 import { textOfMessage } from "@/core/threads/utils";
+import {
+  RuntimePicker,
+  runtimeTriggerLabel,
+  useRuntimeOptions,
+} from "@/features/console/components/runtime-picker";
 import { cn } from "@/lib/utils";
 
 import {
@@ -175,7 +180,7 @@ export function InputBox({
   > & {
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
-  };
+  } & RuntimeContextFields;
   extraHeader?: React.ReactNode;
   /**
    * Whether to render the input in welcome layout (vertically centered,
@@ -192,7 +197,7 @@ export function InputBox({
     > & {
       mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
       reasoning_effort?: "minimal" | "low" | "medium" | "high";
-    },
+    } & RuntimeContextFields,
   ) => void;
   onFollowupsVisibilityChange?: (visible: boolean) => void;
   onSubmit?: (message: PromptInputMessage) => void | Promise<void>;
@@ -256,6 +261,18 @@ export function InputBox({
   }, [context.model_name, models]);
 
   const resolvedModelName = selectedModel?.name;
+
+  const { runtimes: runtimeOptions } = useRuntimeOptions();
+  const runtimeLabel = runtimeTriggerLabel(
+    context.runtime,
+    runtimeOptions,
+    {
+      runtime: context.runtime,
+      runtime_account: context.runtime_account,
+      permission_mode: context.permission_mode,
+    },
+    t.features.runtimePicker.accountAuto,
+  );
 
   const supportThinking = useMemo(
     () => selectedModel?.supports_thinking ?? false,
@@ -611,7 +628,7 @@ export function InputBox({
     <div
       ref={promptRootRef}
       className={cn(
-        "relative flex min-w-0 flex-col",
+        "relative flex min-w-0 flex-col pb-[env(safe-area-inset-bottom)]",
         isWelcomeMode ? "gap-4" : "gap-2",
       )}
     >
@@ -710,7 +727,15 @@ export function InputBox({
         <PromptInputAttachments>
           {(attachment) => <PromptInputAttachment data={attachment} />}
         </PromptInputAttachments>
-        <PromptInputBody className="absolute top-0 right-0 left-0 z-3">
+        {/* No positioning here: PromptInputBody renders `display: contents`, which
+            suppresses its own box, so `absolute`/`top`/`z-*` on it were silently
+            ignored -- the textarea has always been in normal flow. The classes
+            were removed rather than made to work: newly applying absolute
+            positioning to the main composer would change a layout that has
+            shipped this way, and the layering it was reaching for (textarea at
+            z-3 under the z-10 <Welcome> overlay) needs a visual check first.
+            The Welcome banner is still an unreserved overlay above this. */}
+        <PromptInputBody>
           <PromptInputTextarea
             className={cn("size-full")}
             disabled={disabled}
@@ -1031,15 +1056,29 @@ export function InputBox({
             >
               <ModelSelectorTrigger asChild>
                 <PromptInputButton className="max-w-40 min-w-0 sm:max-w-56">
-                  <div className="flex min-w-0 flex-col items-start text-left">
-                    <ModelSelectorName className="text-xs font-normal">
-                      {selectedModel ? getModelLabel(selectedModel) : ""}
-                    </ModelSelectorName>
-                  </div>
-                  {selectedModel?.amd_compute ? (
+                  {runtimeLabel ? (
+                    <div
+                      className="flex min-w-0 flex-col items-start text-left"
+                      data-testid="runtime-trigger"
+                    >
+                      <ModelSelectorName className="text-xs font-normal">
+                        {runtimeLabel.title}
+                      </ModelSelectorName>
+                      <span className="text-muted-foreground w-full truncate text-[10px]">
+                        {runtimeLabel.subtitle}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-col items-start text-left">
+                      <ModelSelectorName className="text-xs font-normal">
+                        {selectedModel ? getModelLabel(selectedModel) : ""}
+                      </ModelSelectorName>
+                    </div>
+                  )}
+                  {!runtimeLabel && selectedModel?.amd_compute ? (
                     <Badge
                       variant="outline"
-                      className="ml-1 hidden shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 sm:inline-flex dark:text-red-400"
+                      className="border-destructive/30 bg-destructive/10 text-destructive dark:text-destructive ml-1 hidden shrink-0 text-[9px] font-medium sm:inline-flex"
                     >
                       AMD
                     </Badge>
@@ -1047,40 +1086,62 @@ export function InputBox({
                 </PromptInputButton>
               </ModelSelectorTrigger>
               <ModelSelectorContent>
-                <ModelSelectorInput placeholder={t.inputBox.searchModels} />
-                <ModelSelectorList>
-                  {models
-                    .filter((m) => !m.hidden || m.name === context.model_name)
-                    .map((m) => (
-                      <ModelSelectorItem
-                        key={m.name}
-                        value={m.name}
-                        onSelect={() => handleModelSelect(m.name)}
-                      >
-                        <div className="flex min-w-0 flex-1 flex-col">
-                          <ModelSelectorName>
-                            {getModelLabel(m)}
-                          </ModelSelectorName>
-                          <span className="text-muted-foreground truncate text-[10px]">
-                            {m.model}
-                          </span>
-                        </div>
-                        {m.amd_compute ? (
-                          <Badge
-                            variant="outline"
-                            className="ml-2 shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 dark:text-red-400"
+                <RuntimePicker
+                  className="border-b"
+                  value={{
+                    runtime: context.runtime,
+                    runtime_account: context.runtime_account,
+                    permission_mode: context.permission_mode,
+                  }}
+                  onChange={(next) =>
+                    onContextChange?.({
+                      ...context,
+                      runtime: next.runtime,
+                      runtime_account: next.runtime_account,
+                      permission_mode: next.permission_mode,
+                    })
+                  }
+                />
+                {runtimeLabel ? null : (
+                  <>
+                    <ModelSelectorInput placeholder={t.inputBox.searchModels} />
+                    <ModelSelectorList>
+                      {models
+                        .filter(
+                          (m) => !m.hidden || m.name === context.model_name,
+                        )
+                        .map((m) => (
+                          <ModelSelectorItem
+                            key={m.name}
+                            value={m.name}
+                            onSelect={() => handleModelSelect(m.name)}
                           >
-                            {m.amd_compute}
-                          </Badge>
-                        ) : null}
-                        {m.name === context.model_name ? (
-                          <CheckIcon className="ml-auto size-4" />
-                        ) : (
-                          <div className="ml-auto size-4" />
-                        )}
-                      </ModelSelectorItem>
-                    ))}
-                </ModelSelectorList>
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <ModelSelectorName>
+                                {getModelLabel(m)}
+                              </ModelSelectorName>
+                              <span className="text-muted-foreground truncate text-[10px]">
+                                {m.model}
+                              </span>
+                            </div>
+                            {m.amd_compute ? (
+                              <Badge
+                                variant="outline"
+                                className="border-destructive/30 bg-destructive/10 text-destructive dark:text-destructive ml-2 shrink-0 text-[9px] font-medium"
+                              >
+                                {m.amd_compute}
+                              </Badge>
+                            ) : null}
+                            {m.name === context.model_name ? (
+                              <CheckIcon className="ml-auto size-4" />
+                            ) : (
+                              <div className="ml-auto size-4" />
+                            )}
+                          </ModelSelectorItem>
+                        ))}
+                    </ModelSelectorList>
+                  </>
+                )}
               </ModelSelectorContent>
             </ModelSelector>
             <PromptInputSubmit

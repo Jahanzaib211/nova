@@ -58,6 +58,10 @@ jobs:
             --ignore "frontend/test-results/**" \
             --ignore "frontend/playwright-report/**" \
             --ignore "graphify-out/**" \
+            --ignore "modular-main/**" \
+            --ignore "nova-engine/**" \
+            --ignore "audit/**" \
+            --ignore "docker/sandbox/vendor/**" \
             "**/*.md"
 
       - name: Verify documented counts match reality

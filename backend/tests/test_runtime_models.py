@@ -175,3 +175,36 @@ def test_env_override_for_store_path(tmp_path, monkeypatch, config_env):
     save_runtime_model_dicts([LLAMA_ENTRY])
     assert override.exists()
     assert load_runtime_model_dicts() == [LLAMA_ENTRY]
+
+
+def test_post_persists_visibility_and_context_window(client, config_env):
+    """`hidden` and `max_input_tokens` round-trip through the write API.
+
+    Both drive real behaviour — `hidden` gates the chat model picker and
+    `max_input_tokens` feeds the fraction-based summarization trigger — so a
+    model added from the settings UI must carry them into the runtime store,
+    not silently drop them the way an unmodelled field would.
+    """
+    entry = {**LLAMA_ENTRY, "hidden": False, "max_input_tokens": 32768}
+    res = client.post("/api/models", json=entry)
+    assert res.status_code == 201, res.text
+    assert res.json()["model"]["hidden"] is False
+    assert res.json()["model"]["max_input_tokens"] == 32768
+
+    stored = load_runtime_model_dicts(runtime_models_path())
+    assert stored[0]["hidden"] is False
+    assert stored[0]["max_input_tokens"] == 32768
+
+
+def test_put_can_hide_a_model_from_the_chat_picker(client, config_env):
+    client.post("/api/models", json={**LLAMA_ENTRY, "hidden": False})
+    res = client.put("/api/models/local-llm", json={**LLAMA_ENTRY, "hidden": True})
+    assert res.status_code == 200, res.text
+    assert res.json()["model"]["hidden"] is True
+    assert load_runtime_model_dicts(runtime_models_path())[0]["hidden"] is True
+
+
+def test_non_positive_context_window_is_rejected(client):
+    """A zero/negative window would make the summarization fraction meaningless."""
+    assert client.post("/api/models", json={**LLAMA_ENTRY, "max_input_tokens": 0}).status_code == 422
+    assert client.post("/api/models", json={**LLAMA_ENTRY, "max_input_tokens": -1}).status_code == 422

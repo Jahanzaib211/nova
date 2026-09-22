@@ -164,3 +164,54 @@ class TestSearxngTools:
         mock_client.search.assert_called_once()
         call_kwargs = mock_client.search.call_args.kwargs
         assert call_kwargs["max_results"] == 3
+
+
+@pytest.mark.asyncio
+class TestProbeHealthMatchesHealth:
+    """``probe_health()`` and ``health()`` must agree about the same instance.
+
+    ``probe_health()`` (capabilities bar) tried ``/healthz`` only, while
+    ``health()`` (Privacy panel) also falls back to ``/``. A SearXNG behind a
+    proxy that forwards ``/search`` but not ``/healthz`` therefore read healthy
+    in one surface and unhealthy in the other.
+    """
+
+    async def _client(self):
+        from deerflow.community.searxng.searxng_client import SearxngClient
+
+        return SearxngClient(base_url="http://searxng:8080")
+
+    async def test_healthz_ok_is_healthy(self):
+        client = await self._client()
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=200)):
+            assert await client.probe_health() is True
+
+    async def test_falls_back_to_root_when_healthz_404s(self):
+        """The behaviour change: 404 on /healthz must not end the probe."""
+        client = await self._client()
+        responses = [MagicMock(status_code=404), MagicMock(status_code=200)]
+
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=responses)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+            assert await client.probe_health() is True
+        assert mock_client.get.await_count == 2, "the root fallback should have been tried"
+
+    async def test_both_paths_failing_is_unhealthy(self):
+        client = await self._client()
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=Exception("connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+            assert await client.probe_health() is False
+        assert mock_client.get.await_count == 2
+
+    async def test_server_error_on_both_paths_is_unhealthy(self):
+        client = await self._client()
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=502)):
+            assert await client.probe_health() is False

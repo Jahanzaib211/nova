@@ -185,6 +185,19 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Semantic status tokens (P1-1a). Status colours used to be raw palette
+     classes (text-emerald-400, text-amber-500, ...) that could not follow
+     the theme; these are the only colours a status should use. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  /* Panel chrome: one divider colour instead of border-border/20..60. */
+  --color-panel: var(--panel);
+  --color-panel-border: var(--panel-border);
+  --color-panel-header: var(--panel-header);
   --animate-aurora: aurora 8s ease-in-out infinite alternate;
   @keyframes aurora {
     0% {
@@ -241,7 +254,22 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0.0098 87.47);
   --input: oklch(0.88 0.0098 87.47);
-  --ring: transparent;
+  /* Visible again: a transparent ring hid keyboard focus everywhere. */
+  --ring: oklch(0.55 0.0098 87.47);
+  --success: oklch(0.55 0.15 150);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.72 0.16 70);
+  --warning-foreground: oklch(0.2 0 0);
+  --info: oklch(0.58 0.13 235);
+  --info-foreground: oklch(0.985 0 0);
+  --panel: oklch(0.99 0.0098 87.47);
+  --panel-border: oklch(0.9 0.0098 87.47);
+  --panel-header: oklch(0.975 0.0098 87.47);
+  --brand-gradient: linear-gradient(
+    135deg,
+    oklch(0.55 0.25 290),
+    oklch(0.7 0.15 210)
+  );
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -275,7 +303,21 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: transparent;
+  --ring: oklch(0.8 0 0);
+  --success: oklch(0.75 0.16 155);
+  --success-foreground: oklch(0.2 0 0);
+  --warning: oklch(0.8 0.16 75);
+  --warning-foreground: oklch(0.2 0 0);
+  --info: oklch(0.75 0.12 230);
+  --info-foreground: oklch(0.2 0 0);
+  --panel: oklch(0.23 0.0036 106.64);
+  --panel-border: oklch(1 0 0 / 12%);
+  --panel-header: oklch(0.255 0.0036 106.64);
+  --brand-gradient: linear-gradient(
+    135deg,
+    oklch(0.65 0.22 290),
+    oklch(0.78 0.14 210)
+  );
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -289,7 +331,8 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-  font-weight: 300;
+  /* No global 300 weight here any more — thin text on a dark surface failed the
+     contrast the light theme met, and it overrode every heading and button. */
 }
 
 @layer base {
@@ -298,6 +341,12 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Keyboard focus is an accessibility requirement; components that draw
+     their own focus ring opt out with `outline-none`. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   .container-md {
@@ -389,4 +438,15 @@
   --container-width-sm: calc(var(--spacing) * 144);
   --container-width-md: calc(var(--spacing) * 204);
   --container-width-lg: calc(var(--spacing) * 256);
+}
+
+/* One brand gradient, used by the wordmark and the active-tab underline. */
+@utility bg-brand-gradient {
+  background-image: var(--brand-gradient);
+}
+@utility text-brand-gradient {
+  background-image: var(--brand-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }

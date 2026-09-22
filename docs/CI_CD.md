@@ -1,6 +1,6 @@
 # CI/CD Pipeline
 
-Nova's CI/CD runs on GitHub Actions with 17 workflows. You can also run the full CI locally using `nektos/act`.
+Nova's CI/CD runs on GitHub Actions with 20 workflows. You can also run the full CI locally using `nektos/act`.
 
 ## Local CI
 
@@ -18,9 +18,9 @@ Requires [nektos/act](https://github.com/nektos/act) installed. Configuration is
 
 | Workflow | Trigger | What it validates |
 |---|---|---|
-| `backend-unit-tests.yml` | push/PR to main | 6,537 backend unit tests (`make test`) |
+| `backend-unit-tests.yml` | push/PR to main | 7,303 backend unit tests (`make test`) — 418 backend test files (266 upstream + 152 Nova) |
 | `backend-blocking-io-tests.yml` | push/PR to main | Blockbuster runtime gate on async blocking IO |
-| `frontend-unit-tests.yml` | push/PR to main | 581 frontend unit tests (`pnpm test`) |
+| `frontend-unit-tests.yml` | push/PR to main | 778 frontend unit tests (`pnpm test`) |
 | `frontend-build.yml` | push/PR to main | Next.js production build (`pnpm build`) |
 | `e2e-tests.yml` | push/PR to main | Playwright E2E tests (Chromium, mocked backend) |
 | `replay-e2e.yml` | push/PR to main | Replay golden E2E tests (deterministic regression) |
@@ -69,10 +69,10 @@ The `.actrc` file configures act with appropriate defaults for Nova's Docker-bas
 
 ## Test Counts (canonical)
 
-| Suite | Count | Command |
-|---|---|---|
-| Backend unit tests | 6,537 | `cd backend && make test` |
-| Frontend unit tests | 581 | `cd frontend && pnpm test` |
-| Playwright E2E | 80 | `cd frontend && pnpm test:e2e` |
-| Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
-| Cross-ref check | 1 | `python3 backend/tests/test_no_cross_references.py` |
+| Suite | Count | Command | Verified |
+|---|---|---|---|
+| Backend unit tests | 7,303 | `cd backend && make test` | 2026-09-22 |
+| Frontend unit tests | 799 | `cd frontend && pnpm test` | 2026-09-22 |
+| Playwright E2E | 167 | `cd frontend && pnpm test:e2e` | 2026-09-22 |
+| Blocking IO gate | 22 | `cd backend && make test-blocking-io` | 2026-09-19 |
+| Cross-ref check | 1 | `python3 backend/tests/test_no_cross_references.py` | 2026-09-19 |

@@ -2,13 +2,14 @@ import { fetch } from "@/core/api/fetcher";
 
 import { getBackendBaseURL } from "../config";
 
+import { isUserMemory, MalformedMemoryError } from "./guards";
 import type {
   MemoryFactInput,
   MemoryFactPatchInput,
   UserMemory,
 } from "./types";
 
-async function readMemoryResponse(
+export async function readMemoryResponse(
   response: Response,
   fallbackMessage: string,
 ): Promise<UserMemory> {
@@ -78,7 +79,11 @@ async function readMemoryResponse(
     );
   }
 
-  return response.json() as Promise<UserMemory>;
+  const payload: unknown = await response.json();
+  if (!isUserMemory(payload)) {
+    throw new MalformedMemoryError();
+  }
+  return payload;
 }
 
 export async function loadMemory(): Promise<UserMemory> {

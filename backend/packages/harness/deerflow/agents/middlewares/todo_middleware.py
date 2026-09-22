@@ -15,6 +15,7 @@ of being persisted into graph state as a normal user-visible message.
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Awaitable, Callable
 from typing import Any, override
@@ -26,6 +27,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.runtime import Runtime
 
 from deerflow.agents.thread_state import ThreadState
+from deerflow.sandbox.computer_events import emit_channel
 
 
 def _todos_in_messages(messages: list[Any]) -> bool:
@@ -99,6 +101,9 @@ def _has_tool_call_intent_or_error(message: AIMessage) -> bool:
 
     response_metadata = getattr(message, "response_metadata", {}) or {}
     return response_metadata.get("finish_reason") in _TOOL_CALL_FINISH_REASONS
+
+
+logger = logging.getLogger(__name__)
 
 
 class TodoMiddleware(TodoListMiddleware):
@@ -331,12 +336,44 @@ class TodoMiddleware(TodoListMiddleware):
         ]
         return request.override(messages=new_messages)
 
+    def _seed_progress_row_if_bare(self, request: ModelRequest) -> None:
+        """Deterministic progress: a run with NO todos ever written still
+        fires the panel with one honest row ("Working on your request").
+
+        The old behavior depended on the model choosing write_todos — runs
+        that skipped it left the checklist dead and users read that as a
+        broken panel. The seed is replaced wholesale the first time the model
+        writes a real list, so there is no conflict, only a floor.
+        """
+        try:
+            messages = getattr(request.state, "messages", None) or []
+            if not _todos_in_messages(list(messages)):
+                user_turns = sum(1 for m in messages if getattr(m, "type", "") == "human")
+                if user_turns >= 1:
+                    emit_channel(
+                        "todos",
+                        {
+                            "thread_id": str(((getattr(runtime := getattr(request, "runtime", None), "config", None) or {}).get("configurable") or {}).get("thread_id") or ""),
+                            "todos": [
+                                {
+                                    "content": "Working on your request",
+                                    "status": "in_progress",
+                                }
+                            ],
+                            "seeded": True,
+                        },
+                    )
+        except Exception:  # noqa: BLE001 - observability must never break a run
+            logger.debug("todo seed emit failed", exc_info=True)
+
     @override
     def wrap_model_call(
         self,
         request: ModelRequest,
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelCallResult:
+        self._emit_todo_snapshots(request)
+        self._seed_progress_row_if_bare(request)
         return handler(self._augment_request(request))
 
     @override
@@ -345,7 +382,48 @@ class TodoMiddleware(TodoListMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
     ) -> ModelCallResult:
+        self._emit_todo_snapshots(request)
+        self._seed_progress_row_if_bare(request)
         return await handler(self._augment_request(request))
+
+    def _emit_todo_snapshots(self, request: ModelRequest) -> None:
+        """Push the latest todo snapshot onto the computer-ws feed.
+
+        Emitted BEFORE the model call: the args of an in-flight write_todos
+        call are already visible in the request state/messages, so the panel's
+        checklist updates on the same tick the tool is decided — not a poll
+        later. Non-fatal by contract.
+        """
+        try:
+            from deerflow.sandbox.computer_events import emit_channel
+
+            messages = getattr(request, "state", None) and getattr(request.state, "messages", None)
+            if not messages:
+                return
+            latest: list[dict] | None = None
+            for msg in reversed(messages):
+                for tc in getattr(msg, "tool_calls", None) or []:
+                    if tc.get("name") != "write_todos":
+                        continue
+                    todos = (tc.get("args") or {}).get("todos")
+                    if isinstance(todos, list):
+                        latest = todos
+                        break
+                if latest is not None:
+                    break
+            if latest is None:
+                return
+            runtime = getattr(request, "runtime", None)
+            cfg = getattr(runtime, "config", None) or {}
+            thread_id = (cfg.get("configurable") or {}).get("thread_id") or (getattr(runtime, "context", None) or {}).get("thread_id")
+            if not thread_id:
+                return
+            emit_channel(
+                "todos",
+                {"thread_id": str(thread_id), "todos": latest},
+            )
+        except Exception:  # noqa: BLE001 - observability must never break a run
+            logger.debug("todo snapshot emit failed", exc_info=True)
 
     @override
     def after_agent(self, state: ThreadState, runtime: Runtime) -> dict[str, Any] | None:

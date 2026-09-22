@@ -77,7 +77,7 @@ export function ByokSettings() {
       description={t.settings.account.byokDescription}
     >
       {status.has_key && (
-        <p className="mb-3 text-sm text-green-600 dark:text-green-500">
+        <p className="text-success dark:text-success mb-3 text-sm">
           {t.settings.account.byokActive}
           {status.provider ? ` (${status.provider})` : ""}
         </p>
@@ -96,7 +96,7 @@ export function ByokSettings() {
           required
           minLength={8}
         />
-        {message && <p className="text-sm text-green-500">{message}</p>}
+        {message && <p className="text-success text-sm">{message}</p>}
         <div className="flex gap-2">
           <Button type="submit" variant="outline" size="sm" disabled={busy}>
             {t.settings.account.byokSave}

@@ -41,7 +41,7 @@ curl -s https://nova.alilabsx.com/health | python3 -m json.tool
 
 ### Continuous watchdog
 
-`nova-healthcheck` (PM2) runs `scripts/healthcheck-daemon.py` every 30 s. Twelve probes (P1–P12) cover nginx, gateway, frontend, the local LLM stack, and the Cloudflare Tunnel. Logs at `/home/jahanzaib/.pm2/logs/nova-healthcheck-out.log`. Auto-fixes are issued for known-good cases (see §5).
+`nova-healthcheck` (PM2) runs `scripts/healthcheck-daemon.py` every 30 s. Fourteen probes cover nginx, gateway, frontend, the local LLM stack (gateway, loopback, VRAM, bridge, LiteLLM), containers, binary attestation, config drift, SearXNG, Dify, and the Cloudflare Tunnel. The registry is `build_probe_factories()` — inspect it rather than trusting this count. Logs at `/home/jahanzaib/.pm2/logs/nova-healthcheck-out.log`. Auto-fixes are issued for known-good cases (see §5).
 
 ```bash
 pm2 ls                              # process state
@@ -332,6 +332,8 @@ Runs every 30 s. Auto-fixes known issues:
 | P10    | LiteLLM down                          | pm2 restart nova-litellm |
 | P11    | Dify stack down                       | pm2 restart nova-dify |
 | **P12** | **cloudflared tunnel down**         | **systemctl reset-failed + restart (with verification)** |
+| P15    | job runner worker missing/stale       | docker restart deer-flow-jobs |
+| P16    | host bridge (socat) not listening     | pm2 restart nova-host-bridge |
 
 ---
 

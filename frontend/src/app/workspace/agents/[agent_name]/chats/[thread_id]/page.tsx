@@ -34,6 +34,10 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
 import {
+  type AcpTranscripts,
+  applyAcpUpdate,
+} from "@/core/threads/acp-transcript";
+import {
   activeWriteFilePathFromActivity,
   currentToolFromActivity,
   messagesToActivityEvents,
@@ -45,6 +49,7 @@ import {
 } from "@/core/threads/hooks";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
+import { useTodoCollapse } from "@/core/todos";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +76,7 @@ export default function AgentChatPage() {
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [llmError, setLlmError] = useState<LlmError | null>(null);
+  const [acpTranscripts, setAcpTranscripts] = useState<AcpTranscripts>({});
   const [settings, setSettings] = useThreadSettings(threadId);
   const [localSettings, setLocalSettings] = useLocalSettings();
   const { tokenUsageEnabled } = useModels();
@@ -85,6 +91,10 @@ export default function AgentChatPage() {
   const backendTokenUsage = threadTokenUsageToTokenUsage(threadTokenUsage.data);
 
   const { showNotification } = useNotification();
+
+  useEffect(() => {
+    setAcpTranscripts({});
+  }, [threadId]);
 
   useEffect(() => {
     setIsWelcomeMode(isNewThread);
@@ -140,6 +150,9 @@ export default function AgentChatPage() {
     },
     onLlmError: (event) => {
       setLlmError(event);
+    },
+    onAcpUpdate: (event) => {
+      setAcpTranscripts((prev) => applyAcpUpdate(prev, event));
     },
   });
 
@@ -228,6 +241,8 @@ export default function AgentChatPage() {
     ? localSettings.tokenUsage.inlineMode
     : "off";
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  const { collapsed: todosCollapsed, toggle: toggleTodos } =
+    useTodoCollapse(threadId);
 
   return (
     <ThreadContext.Provider
@@ -239,6 +254,7 @@ export default function AgentChatPage() {
         llmError,
         activityEvents,
         activeWriteFilePath,
+        acpTranscripts,
         onAgentMessage: handleAgentMessage,
       }}
     >
@@ -360,7 +376,8 @@ export default function AgentChatPage() {
                       <TodoList
                         className="bg-background/5"
                         todos={thread.values.todos ?? []}
-                        hidden={false}
+                        collapsed={todosCollapsed}
+                        onToggle={toggleTodos}
                       />
                     </div>
                   </div>

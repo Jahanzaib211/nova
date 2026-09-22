@@ -136,9 +136,14 @@ class AuditTrail:
         different reasons and are served by different components: a dead
         SearXNG and a dead crawler both showed up only as a bump in the single
         ``errors`` number, which told an operator nothing about which half was
-        down. ``fetch()`` has existed on this class for a while with no caller,
-        so these fetch counters read zero until the web_fetch tool records
-        through it.
+        down.
+
+        ``fetch()`` is recorded through by ``browserless.tools`` (web_fetch),
+        ``crawl4ai.tools`` (web_fetch_many), ``crawl4ai.crawl_tool``
+        (web_crawl) and ``igino_research_tool``, so the fetch counters are live.
+        They are zero only when the trail is disabled or nothing has fetched
+        yet -- the Recon panel distinguishes "no data" from a real zero rather
+        than rendering both as ``0``.
         """
         with self._lock:
             total = len(self._records)

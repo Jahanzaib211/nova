@@ -80,6 +80,9 @@ const LLAMA_CPP_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: false,
   amd_compute: "",
+  showInChat: true,
+  // Left blank on purpose: only whoever started llama-server knows its `-c`.
+  max_input_tokens: "",
 };
 
 // Ollama models served through the nova-litellm proxy (docker/litellm/config.yaml).
@@ -88,7 +91,7 @@ const LLAMA_CPP_PRESET: FormState = {
 const OLLAMA_PRESET: FormState = {
   name: "",
   display_name: "",
-  model: "minimax-m3-free",
+  model: "qwen2.5-7b-local",
   providerChoice: OPENAI_COMPATIBLE,
   customUse: "",
   base_url: "http://host.docker.internal:4000/v1",
@@ -97,6 +100,10 @@ const OLLAMA_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: false,
   amd_compute: "",
+  showInChat: true,
+  // Benchmarked for qwen2.5:7b-instruct on this host (docs/LOCAL_MODELS.md).
+  // Change it with the model — it is not a global default.
+  max_input_tokens: "32768",
 };
 
 // Fireworks AI — managed inference served on AMD Instinct MI300X GPUs
@@ -116,6 +123,8 @@ const FIREWORKS_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: true,
   amd_compute: "",
+  showInChat: true,
+  max_input_tokens: "",
 };
 
 // AMD Developer Cloud — Nova's own inference on a bare-metal AMD Instinct GPU via
@@ -133,6 +142,8 @@ const AMD_CLOUD_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: false,
   amd_compute: "AMD Instinct MI300X (vLLM/ROCm)",
+  showInChat: true,
+  max_input_tokens: "",
 };
 
 interface FormState {
@@ -147,6 +158,10 @@ interface FormState {
   supports_reasoning_effort: boolean;
   supports_vision: boolean;
   amd_compute: string;
+  /** Inverted in the UI: the switch reads "Show in chat", the API field is `hidden`. */
+  showInChat: boolean;
+  /** Kept as a string so the input can be cleared; "" means "no explicit window". */
+  max_input_tokens: string;
 }
 
 function emptyForm(): FormState {
@@ -162,6 +177,8 @@ function emptyForm(): FormState {
     supports_reasoning_effort: false,
     supports_vision: false,
     amd_compute: "",
+    showInChat: true,
+    max_input_tokens: "",
   };
 }
 
@@ -181,6 +198,10 @@ function formFromModel(model: Model): FormState {
     supports_reasoning_effort: model.supports_reasoning_effort ?? false,
     supports_vision: model.supports_vision ?? false,
     amd_compute: model.amd_compute ?? "",
+    showInChat: !(model.hidden ?? false),
+    max_input_tokens: model.max_input_tokens
+      ? String(model.max_input_tokens)
+      : "",
   };
 }
 
@@ -196,7 +217,12 @@ function formToRequest(form: FormState, isEdit: boolean): ModelWriteRequest {
     supports_thinking: form.supports_thinking,
     supports_reasoning_effort: form.supports_reasoning_effort,
     supports_vision: form.supports_vision,
+    hidden: !form.showInChat,
   };
+  const ctx = Number.parseInt(form.max_input_tokens.trim(), 10);
+  if (Number.isFinite(ctx) && ctx > 0) {
+    request.max_input_tokens = ctx;
+  }
   if (form.display_name.trim()) {
     request.display_name = form.display_name.trim();
   }
@@ -365,6 +391,32 @@ function ModelFormDialog({
               onCheckedChange={(v) => set("supports_vision", v)}
             />
           </FieldRow>
+          <FieldRow label={strings.fieldShowInChat}>
+            <div className="flex flex-col gap-1">
+              <Switch
+                checked={form.showInChat}
+                onCheckedChange={(v) => set("showInChat", v)}
+              />
+              <span className="text-muted-foreground text-xs">
+                {strings.fieldShowInChatHint}
+              </span>
+            </div>
+          </FieldRow>
+          <FieldRow label={strings.fieldMaxInputTokens}>
+            <div className="flex flex-col gap-1">
+              <Input
+                inputMode="numeric"
+                value={form.max_input_tokens}
+                placeholder="32768"
+                onChange={(e) =>
+                  set("max_input_tokens", e.target.value.replace(/[^0-9]/g, ""))
+                }
+              />
+              <span className="text-muted-foreground text-xs">
+                {strings.fieldMaxInputTokensHint}
+              </span>
+            </div>
+          </FieldRow>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -466,7 +518,7 @@ function ModelItem({
           {testModel.isPending ? (
             <LoaderCircleIcon className="size-4 animate-spin" />
           ) : testModel.data?.ok === true ? (
-            <CircleCheckIcon className="size-4 text-green-600" />
+            <CircleCheckIcon className="text-success size-4" />
           ) : testModel.data?.ok === false ? (
             <CircleXIcon className="text-destructive size-4" />
           ) : null}
@@ -524,7 +576,7 @@ export function ModelsSettingsPage() {
           {models.map((model) => (
             <ModelItem key={model.name} model={model} onEdit={openEdit} />
           ))}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => openAdd()}>
               <PlusIcon className="size-4" />
               {strings.addButton}

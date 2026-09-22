@@ -9,6 +9,7 @@ Project-level documentation for Nova.
 | `AUDIT.md` | Hermetic gate audit log |
 | `RUNBOOK.md` | Operational runbook (dev-server, voice, deployment) |
 | `Install.md` | One-line agent installation |
+| `LOCAL_MODELS.md` | On-device model benchmarks and context configuration |
 | `ops/SESSION-HANDOFF.md` | Session handoff notes |
 | `ops/README.md` | Operations directory index |
 | `audit/2026-08-14-self-probe.md` | Self-probe output (write_file integrity) |

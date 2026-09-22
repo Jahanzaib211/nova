@@ -1,4 +1,4 @@
-import type { AIMessage, Message, Run } from "@langchain/langgraph-sdk";
+import type { Message, Run } from "@langchain/langgraph-sdk";
 import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import {
@@ -26,6 +26,8 @@ import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
 import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
+import { type AcpUpdateEvent, isAcpUpdateEvent } from "./acp-transcript";
+import { buildActivitySummary } from "./activity";
 import { fetchThreadTokenUsage } from "./api";
 import {
   classifyVerifyOutcome,
@@ -42,6 +44,7 @@ import {
   recordStateMerge,
   shouldArmWatchdog,
 } from "./stream-trace";
+import { applyTaskEvent, type TaskLifecycleEvent } from "./task-events-ws";
 import { threadTokenUsageQueryKey } from "./token-usage";
 import type {
   AgentThread,
@@ -87,6 +90,16 @@ export type LlmErrorEvent = {
   code: string | null;
 };
 
+// Queued steering messages per thread (H2). A message sent while a run is
+// active used to bounce off the 409 with a toast and was LOST. Now it parks
+// here and flushes automatically when that run finishes.
+const queuedSteerMessages = new Map<string, string>();
+export function takeQueuedMessage(threadId: string): string | undefined {
+  const text = queuedSteerMessages.get(threadId);
+  if (text !== undefined) queuedSteerMessages.delete(threadId);
+  return text;
+}
+
 export type AgentActivityEvent = {
   id: string;
   ts: string;
@@ -97,24 +110,11 @@ export type AgentActivityEvent = {
   status: "running" | "done" | "error";
 };
 
-function _buildActivitySummary(
-  name: string,
-  { path, cmd }: { path?: string | null; cmd?: string | null },
-): string {
-  const filename = path?.split("/").at(-1);
-  if (name === "write_file")
-    return filename ? `Writing ${filename}` : "Writing file";
-  if (name === "str_replace")
-    return filename ? `Editing ${filename}` : "Editing file";
-  if (name === "read_file")
-    return filename ? `Reading ${filename}` : "Reading file";
-  if (name === "bash" || name === "execute_command")
-    return cmd ? `$ ${cmd.slice(0, 60)}` : "Running command";
-  if (name === "search_files") return "Searching files";
-  if (name === "grep_files") return "Searching content";
-  if (name === "task") return "Delegating to subagent";
-  return name;
-}
+// One summary builder for both render paths — the live streaming callback and
+// the message-derived reconstruction must produce the same string for the same
+// event, or a card changes text mid-flight when the reconstruction replaces it.
+// This used to be a drifted private copy that lacked `scaffold_project`, so a
+// live card read "scaffold_project" and then flipped to "Scaffolding project".
 
 export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
@@ -136,6 +136,7 @@ export type ThreadStreamOptions = {
   onTaskProgress?: (progress: TaskProgressEvent) => void;
   onVerifyResult?: (event: VerifyResultEvent) => void;
   onLlmError?: (event: LlmErrorEvent) => void;
+  onAcpUpdate?: (event: AcpUpdateEvent) => void;
 };
 
 type SendMessageOptions = {
@@ -560,6 +561,7 @@ export function useThreadStream({
   onLlmError,
   onToolActivity,
   onToolActivityDone,
+  onAcpUpdate,
 }: ThreadStreamOptions) {
   const { t } = useI18n();
   const currentViewThreadId = displayThreadId ?? threadId ?? null;
@@ -601,6 +603,7 @@ export function useThreadStream({
     onLlmError,
     onToolActivity,
     onToolActivityDone,
+    onAcpUpdate,
   });
 
   const {
@@ -623,6 +626,7 @@ export function useThreadStream({
       onLlmError,
       onToolActivity,
       onToolActivityDone,
+      onAcpUpdate,
     };
   }, [
     onSend,
@@ -634,6 +638,7 @@ export function useThreadStream({
     onLlmError,
     onToolActivity,
     onToolActivityDone,
+    onAcpUpdate,
   ]);
 
   useEffect(() => {
@@ -777,7 +782,7 @@ export function useThreadStream({
           ts,
           type: event.name,
           path,
-          summary: _buildActivitySummary(event.name, { path, cmd }),
+          summary: buildActivitySummary(event.name, { path, cmd }),
           output: "",
           status: "running",
         });
@@ -928,66 +933,12 @@ export function useThreadStream({
         event.type.startsWith("task_") &&
         "task_id" in event
       ) {
-        const e = event as {
-          type: string;
-          task_id: string;
-          message?: AIMessage;
-          description?: string;
-          result?: string;
-          error?: string;
-        };
-        switch (e.type) {
-          case "task_started":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "in_progress",
-                ...(e.description !== undefined
-                  ? { description: e.description }
-                  : {}),
-              },
-              "result",
-            );
-            return;
-          case "task_running":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "in_progress",
-                ...(e.message !== undefined
-                  ? { latestMessage: e.message }
-                  : {}),
-              },
-              "result",
-            );
-            return;
-          case "task_completed":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "completed",
-                ...(e.result !== undefined ? { result: e.result } : {}),
-              },
-              "result",
-            );
-            return;
-          // Cancelled and timed-out are failures as far as the card is
-          // concerned; the error string is what distinguishes them.
-          case "task_failed":
-          case "task_cancelled":
-          case "task_timed_out":
-            updateSubtask(
-              {
-                id: e.task_id,
-                status: "failed",
-                ...(e.error ? { error: e.error } : {}),
-              },
-              "result",
-            );
-            return;
-          default:
-            break;
-        }
+        // The per-event handling is shared verbatim with the tasks WebSocket
+        // (core/threads/task-events-ws.ts) - one writer for both transports,
+        // so their semantics cannot drift. The FSM's authority rules make the
+        // double delivery a no-op.
+        applyTaskEvent(event as TaskLifecycleEvent, updateSubtask);
+        return;
       }
 
       // A second, independent "this subagent finished" signal, emitted by
@@ -1119,6 +1070,13 @@ export function useThreadStream({
           code: typeof e.code === "string" ? e.code : null,
         });
       }
+
+      // Live transcript of an ACP agent (contract: acp_update). Off-contract
+      // shapes are ignored by construction — the bundle and the gateway
+      // deploy independently.
+      if (isAcpUpdateEvent(event)) {
+        listeners.current.onAcpUpdate?.(event);
+      }
     },
     onError(error) {
       setOptimisticMessages([]);
@@ -1173,6 +1131,8 @@ export function useThreadStream({
     },
     onFinish(state) {
       listeners.current.onFinish?.(state.values);
+      // Queued steering flush happens in the page's own onFinish, where
+      // sendMessage is in scope.
       pendingUsageBaselineMessageIdsRef.current = new Set(
         messagesRef.current
           .map(messageIdentity)
@@ -1745,10 +1705,12 @@ export function useThreadStream({
               ...context,
               thinking_enabled: context.mode !== "flash",
               is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-              // Subagents available in pro + ultra (not just ultra) so delegation
-              // can fire from the get-go on substantial tasks.
-              subagent_enabled:
-                context.mode === "pro" || context.mode === "ultra",
+              // Subagents are ALWAYS bound. Coupling them to pro/ultra meant
+              // any lower-mode run had no `task` tool at all - the lead agent
+              // then did everything solo and ballooned its context (observed
+              // live: 341K input tokens, "Subagent tool isn't actually wired
+              // up"). Fan-out stays bounded by MAX_CONCURRENT + timeouts.
+              subagent_enabled: true,
               reasoning_effort:
                 context.reasoning_effort ??
                 (context.mode === "ultra"
@@ -1776,6 +1738,14 @@ export function useThreadStream({
         // not a failure to surface as a red error overlay. Show a calm hint and
         // swallow it — the optimistic message was already rolled back above.
         if (getHttpStatus(error) === 409) {
+          // Steering: park the message; it auto-sends when this run ends.
+          const tid = threadIdRef.current ?? "";
+          if (tid) {
+            const prev = queuedSteerMessages.get(tid);
+            queuedSteerMessages.set(tid, prev ? `${prev}\n\n${text}` : text);
+            toast.info(t.common.agentBusy);
+            return;
+          }
           toast.info(t.common.agentBusy);
           return;
         }

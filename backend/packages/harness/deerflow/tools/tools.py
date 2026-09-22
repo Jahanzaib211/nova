@@ -7,6 +7,7 @@ from deerflow.config.app_config import AppConfig
 from deerflow.reflection import resolve_variable
 from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
+from deerflow.tools.builtins.igino_research_tool import igino_research_tool
 from deerflow.tools.builtins.workspace_tools import (
     agent_notify_tool,
     browser_check_tool,
@@ -19,6 +20,7 @@ from deerflow.tools.builtins.workspace_tools import (
     dev_verify_tool,
     free_port_tool,
     grep_files_tool,
+    register_external_dev_server_tool,
     save_skill_tool,
     scaffold_project_tool,
     screenshot_tool,
@@ -45,9 +47,22 @@ BUILTIN_TOOLS = [
     scaffold_project_tool,
     start_dev_server_tool,
     stop_dev_server_tool,
+    # The escape hatch for a server started outside the pipeline (raw bash,
+    # PM2, a manual `node`). Without it the only route to the Browser tab is
+    # discover_live_preview, which probes just _PREVIEW_CONTAINER_PORTS
+    # (4100-4102) -- so anything on another port was unpreviewable.
+    register_external_dev_server_tool,
     code_review_tool,
     browser_check_tool,
     save_skill_tool,
+    # Advertised by name in the lead-agent prompt ("for privacy-sensitive
+    # research, use igino_research instead of web_search") and carried in the
+    # manifest, but never imported here -- so every agent that followed that
+    # instruction got `igino_research is not a valid tool`. Dead since
+    # 462bcf80 (2026-06-26). Same defect as register_external_dev_server.
+    # Bound unconditionally: it degrades to an error string when SearXNG/TOR is
+    # unavailable (never raises), so a flag would only re-create the gap.
+    igino_research_tool,
     # Enterprise nodes (wrap the native AIO SDK)
     shell_session_tool,
     shell_view_tool,
@@ -148,6 +163,17 @@ def get_available_tools(
     if subagent_enabled:
         builtin_tools.extend(SUBAGENT_TOOLS)
         logger.info("Including subagent tools (task)")
+        if getattr(getattr(config, "subagents", None), "async_enabled", False) and getattr(getattr(config, "jobs", None), "enabled", False):
+            from deerflow.persistence.engine import get_session_factory
+            from deerflow.persistence.job.sql import JobRepository
+            from deerflow.tools.builtins.delegate_async_tool import build_delegate_tools
+
+            def _jobs_repo():
+                sf = get_session_factory()
+                return JobRepository(sf) if sf is not None else None
+
+            builtin_tools.extend(build_delegate_tools(config, _jobs_repo))
+            logger.info("Including async delegation tools (delegate_async, check_delegation)")
 
     # If no model_name specified, use the first model (default)
     if model_name is None and config.models:
@@ -205,12 +231,32 @@ def get_available_tools(
     except Exception as e:
         logger.warning(f"Failed to load ACP tool: {e}")
 
-    logger.info(f"Total tools loaded: {len(loaded_tools)}, built-in tools: {len(builtin_tools)}, MCP tools: {len(mcp_tools)}, ACP tools: {len(acp_tools)}")
+    # Nova's own capabilities (jobs, integrations, agents, models, …) as tools,
+    # derived from the capability registry. Gated exactly like `web`/`bash`:
+    # a `nova:<module>` entry under `tool_groups` in config.yaml enables the
+    # module's operations; an agent's own `tool_groups` list narrows further.
+    capability_tools: list[BaseTool] = []
+    try:
+        from deerflow.capabilities import get_registry
+        from deerflow.capabilities.modules.features import compute_flags
+        from deerflow.tools.capability_tools import GROUP_PREFIX, build_capability_tools
+
+        configured_groups = {g.name for g in config.tool_groups if g.name.startswith(GROUP_PREFIX)}
+        if groups is not None:
+            configured_groups &= set(groups)
+        if configured_groups:
+            enabled_flags = {k for k, v in compute_flags().items() if v}
+            capability_tools = build_capability_tools(get_registry(), enabled_flags=enabled_flags, groups=configured_groups)
+    except Exception as e:
+        logger.warning(f"Failed to load capability tools: {e}")
+
+    logger.info(f"Total tools loaded: {len(loaded_tools)}, built-in tools: {len(builtin_tools)}, MCP tools: {len(mcp_tools)}, ACP tools: {len(acp_tools)}, capability tools: {len(capability_tools)}")
 
     # Deduplicate by tool name — config-loaded tools take priority, followed by
-    # built-ins, MCP tools, and ACP tools.  Duplicate names cause the LLM to
-    # receive ambiguous or concatenated function schemas (issue #1803).
-    all_tools = [_ensure_sync_invocable_tool(t) for t in loaded_tools + builtin_tools + mcp_tools + acp_tools]
+    # built-ins, MCP tools, ACP tools and capability tools.  Duplicate names
+    # cause the LLM to receive ambiguous or concatenated function schemas
+    # (issue #1803).
+    all_tools = [_ensure_sync_invocable_tool(t) for t in loaded_tools + builtin_tools + mcp_tools + acp_tools + capability_tools]
     seen_names: set[str] = set()
     unique_tools: list[BaseTool] = []
     for t in all_tools:

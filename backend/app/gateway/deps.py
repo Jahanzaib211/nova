@@ -97,6 +97,7 @@ async def _drain_inflight_runs(run_manager: RunManager) -> None:
 if TYPE_CHECKING:
     from app.gateway.auth.local_provider import LocalAuthProvider
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+    from deerflow.persistence.job.sql import JobRepository
     from deerflow.persistence.thread_meta.base import ThreadMetaStore
     from deerflow.runtime import RunRecord
 
@@ -192,12 +193,38 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
     from deerflow.persistence.engine import close_engine, get_session_factory, init_engine_from_config
     from deerflow.runtime import make_store, make_stream_bridge
     from deerflow.runtime.checkpointer.async_provider import make_checkpointer
+    from deerflow.runtime.events.retention import start_run_event_pruner, stop_run_event_pruner
     from deerflow.runtime.events.store import make_run_event_store
 
     async with AsyncExitStack() as stack:
         config = startup_config
 
         app.state.stream_bridge = await stack.enter_async_context(make_stream_bridge(config))
+
+        # Mirror subagent task_* custom events into the thread-scoped WS hub
+        # (app.gateway.task_events). The resolver is lazy: the RunManager does
+        # not exist yet at this line, and resolution only happens when a
+        # task_* event actually fires.
+        from app.gateway.task_events import MirroringStreamBridge, TaskEventHub
+
+        app.state.task_event_hub = TaskEventHub()
+        _inner_bridge = app.state.stream_bridge
+
+        async def _resolve_run_thread(run_id: str) -> str | None:
+            manager = getattr(app.state, "run_manager", None)
+            if manager is None:
+                return None
+            try:
+                record = await manager.get(run_id)
+            except Exception:
+                return None
+            return getattr(record, "thread_id", None)
+
+        app.state.stream_bridge = MirroringStreamBridge(
+            inner=_inner_bridge,
+            hub=app.state.task_event_hub,
+            resolve_run_thread=_resolve_run_thread,
+        )
 
         # Initialize persistence engine BEFORE checkpointer so that
         # auto-create-database logic runs first (postgres backend).
@@ -210,10 +237,13 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         sf = get_session_factory()
         if sf is not None:
             from deerflow.persistence.feedback import FeedbackRepository
+            from deerflow.persistence.job.sql import JobRepository
             from deerflow.persistence.run import RunRepository
 
             app.state.run_store = RunRepository(sf)
             app.state.feedback_repo = FeedbackRepository(sf)
+            # Job runner read/enqueue side; the worker process runs the jobs.
+            app.state.jobs_repo = JobRepository(sf)
         else:
             from deerflow.runtime.runs.store.memory import MemoryRunStore
 
@@ -231,6 +261,61 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         run_events_config = getattr(config, "run_events", None)
         app.state.run_events_config = run_events_config
         app.state.run_event_store = make_run_event_store(run_events_config)
+
+        # Retention. run_events is the only unbounded table left after the
+        # checkpoint tables were vacuumed -- 366 MB here, of which 335 MB is
+        # genuine content rather than bloat, so no amount of VACUUM bounds it.
+        # Off unless the operator sets run_events.retention_days.
+        app.state.run_events_pruner = start_run_event_pruner(
+            store=app.state.run_event_store,
+            retention_days=getattr(run_events_config, "retention_days", 0) or 0,
+        )
+
+        # ── Computer panel live feeds (WS-G) ──────────────────────────────
+        # One multiplexed socket (/computer-ws) carries subagent tasks,
+        # dev-server transitions, and workspace observations. The harness
+        # announces facts through plain callbacks; we marshal them onto this
+        # loop. Listeners are removed on lifespan exit so repeated app
+        # construction in tests never stacks duplicates.
+        import asyncio as _asyncio
+
+        from deerflow.sandbox.computer_events import (
+            add_dev_server_listener,
+            add_observation_listener,
+            remove_dev_server_listener,
+            remove_observation_listener,
+        )
+
+        _loop = _asyncio.get_running_loop()
+        app.state.task_event_hub.attach_loop(_loop)
+        computer_event_hub = TaskEventHub(buffer_size=32)
+        computer_event_hub.attach_loop(_loop)
+        app.state.computer_event_hub = computer_event_hub
+
+        def _on_dev_server(payload: dict) -> None:
+            thread_id = payload.get("thread_id")
+            if thread_id:
+                computer_event_hub.publish_threadsafe(
+                    str(thread_id),
+                    {"channel": "browser", "kind": "dev_server", **payload},
+                )
+
+        def _on_observation(payload: dict) -> None:
+            thread_id = payload.get("thread_id")
+            if thread_id:
+                computer_event_hub.publish_threadsafe(
+                    str(thread_id),
+                    {"channel": payload.get("channel") or "workspace", "kind": "observation", **payload},
+                )
+
+        add_dev_server_listener(_on_dev_server)
+        add_observation_listener(_on_observation)
+        stack.callback(remove_dev_server_listener, _on_dev_server)
+        stack.callback(remove_observation_listener, _on_observation)
+        # Same reason the listeners are unregistered: repeated app construction
+        # in tests would otherwise leave a sweep task per app, all sharing a
+        # loop that is about to close.
+        stack.push_async_callback(stop_run_event_pruner, app.state.run_events_pruner)
 
         # Cross-replica cancel signal — see cancel_signal.py. Reuses the same
         # stream_bridge.redis_url config key rather than introducing a
@@ -359,7 +444,47 @@ get_run_service: Callable[[Request], RunService] = _require("run_service", "Run 
 get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "Checkpointer")
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
+
+
+def get_em_repo(request: Request):
+    """Email-marketing repository, built lazily on the app's session factory."""
+    from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+
+    state = request.app.state
+    repo = getattr(state, "em_repo", None)
+    if repo is None:
+        from deerflow.persistence.engine import get_session_factory
+
+        sf = get_session_factory()
+        if sf is None:
+            raise HTTPException(status_code=503, detail="Email marketing not available")
+        repo = EmailMarketingRepository(sf)
+        state.em_repo = repo
+    return repo
+
+
+def get_integrations_registry(request: Request):
+    """The integrations registry for the freshest ``integrations:`` config.
+
+    Rebuilt when that section changes (hot reload); a registry a test placed
+    on ``app.state`` directly (no recorded source) is used as-is.
+    """
+    from deerflow.integrations.registry import build_registry
+
+    state = request.app.state
+    config = get_config().integrations
+    source = config.model_dump_json()
+    registry = getattr(state, "integrations_registry", None)
+    recorded = getattr(state, "integrations_registry_source", None)
+    if registry is None or (recorded is not None and recorded != source):
+        registry = build_registry(config)
+        state.integrations_registry = registry
+        state.integrations_registry_source = source
+    return registry
+
+
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
+get_jobs_repo: Callable[[Request], JobRepository] = _require("jobs_repo", "Job runner")
 
 # Typed service getters — gateway routers should use these instead of
 # importing from deerflow.* directly (Phase C6 platform decoupling).
@@ -369,7 +494,6 @@ get_workspace_service: Callable[[Request], WorkspaceService] = _require("workspa
 get_browser_service: Callable[[Request], BrowserService] = _require("browser_service", "Browser service")
 get_terminal_service: Callable[[Request], TerminalService] = _require("terminal_service", "Terminal service")
 get_artifact_service: Callable[[Request], ArtifactService] = _require("artifact_service", "Artifact service")
-get_health_service: Callable[[Request], HealthService] = _require("health_service", "Health service")
 get_recovery_service: Callable[[Request], RecoveryService] = _require("recovery_service", "Recovery service")
 get_execution_kernel: Callable[[Request], Any] = _require("execution_kernel", "Execution kernel")
 

@@ -21,6 +21,8 @@ Probes:
       container actually uses via host.docker.internal)
   P10. nova-litellm proxy reachability (172.17.0.1:4000/v1/models — the
       unified gateway for Ollama cloud models)
+  P14. SearXNG reachability (127.0.0.1:8088/healthz; skipped when no tool
+       is bound to it) — the silent DDG fallback hides an outage otherwise
   P11. Dify stack health (127.0.0.1:8088/console/api/setup → step=finished;
       pm2 app nova-dify running the compose stack)
   P12. Cloudflare Tunnel — systemd unit active + public URL reachable.
@@ -38,7 +40,9 @@ Auto-fixes (only safe, reversible ones):
   - P9 llama-bridge dead → pm2 restart (re-register from ecosystem.config.js on drift)
   - P10 nova-litellm dead → pm2 restart (start from ecosystem.config.js if missing)
   - P11 Dify dead → pm2 restart nova-dify (start from ecosystem.config.js if missing)
+  - P2 gateway dead + container exists but stopped → docker start deer-flow-gateway
   - P12 tunnel dead → sudo systemctl restart cloudflared-nova.service
+  - P16 host bridge dead → pm2 restart nova-host-bridge (start from ecosystem.config.js if missing)
 
 Status:
   - Exits 0 every cycle when all probes are GREEN.
@@ -89,8 +93,32 @@ CYCLE_DEADLINE_SEC = float(os.environ.get("HEALTHCHECK_CYCLE_DEADLINE_SEC", "60"
 # and stop attempting it. The breaker closes again as soon as the probe
 # recovers on its own, so a genuinely transient failure still self-heals.
 FIX_FAILURE_LIMIT = int(os.environ.get("HEALTHCHECK_FIX_FAILURE_LIMIT", "5"))
-FIX_BACKOFF_MAX_CYCLES = int(
-    os.environ.get("HEALTHCHECK_FIX_BACKOFF_MAX_CYCLES", "60")
+FIX_BACKOFF_MAX_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_BACKOFF_MAX_CYCLES", "60"))
+# A repair that *succeeds* also needs a quiet period. On 2026-09-13 the host
+# rebooted, docker was slow, P7 went RED twice, and the daemon issued
+# `pm2 restart nova` at 08:29:15 and again at 08:29:40. The second restart
+# SIGINT'd the first `docker compose up` while it was still bringing the stack
+# up; that compose run stopped deer-flow-gateway on its way out *after* the
+# new compose run had already seen it running, so nothing ever started it
+# again (`unless-stopped` does not recover from an explicit stop). Gateway
+# down for four hours, nova-ops reporting "Could not reach the Nova gateway".
+#
+# So: after a successful repair, skip that probe's repairs for
+# FIX_GRACE_CYCLES cycles (default 8 × 30s = 4 min, longer than the ~3 min the
+# stack takes to come up), and refuse to restart the `nova` stack at all if
+# it was restarted — by anyone — less than STACK_RESTART_MIN_AGE_SEC ago.
+FIX_GRACE_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_GRACE_CYCLES", "8"))
+STACK_RESTART_MIN_AGE_SEC = int(
+    os.environ.get("HEALTHCHECK_STACK_RESTART_MIN_AGE_SEC", "240")
+)
+GATEWAY_CONTAINER = os.environ.get("NOVA_GATEWAY_CONTAINER", "deer-flow-gateway")
+JOBS_CONTAINER = os.environ.get("NOVA_JOBS_CONTAINER", "deer-flow-jobs")
+# A worker that has not written its heartbeat row in this long is gone.
+JOBS_WORKER_MAX_AGE_S = float(os.environ.get("NOVA_JOBS_WORKER_MAX_AGE_S", "90"))
+HOST_BRIDGE_BIND = os.environ.get("NOVA_HOST_BRIDGE_BIND", "172.17.0.1")
+HOST_BRIDGE_PORTS = tuple(
+    int(p)
+    for p in os.environ.get("NOVA_HOST_BRIDGE_PORTS", "18789 8080 4800 3008").split()
 )
 
 
@@ -104,6 +132,7 @@ def disabled_probes() -> set[str]:
     """
     raw = os.environ.get("HEALTHCHECK_DISABLED_PROBES", "")
     return {name.strip() for name in raw.split(",") if name.strip()}
+
 
 # Logs go to stderr so they don't get mixed with the per-cycle JSON status
 # line on stdout. PM2 captures stderr into error_file, stdout into out_file;
@@ -140,9 +169,15 @@ class ProbeResult:
     detail: str = ""
     latency_ms: float = 0.0
     fixed: bool = False  # True if auto-fix was applied this cycle
+    # False when the probe itself knows a repair would be wrong (e.g. docker
+    # daemon unresponsive: the containers may be fine, only `docker ps` is
+    # slow). dispatch_fixes skips such probes; they stay RED on the dashboard.
+    fixable: bool = True
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        d.pop("fixable")  # control flag for dispatch_fixes, not report data
+        return d
 
 
 @dataclass
@@ -198,27 +233,41 @@ async def probe_drift() -> ProbeResult:
     try:
         payload = json.loads(target.read_text())
     except FileNotFoundError:
-        return ProbeResult(name, Status.YELLOW, "no drift gate status file yet", latency)
+        return ProbeResult(
+            name, Status.YELLOW, "no drift gate status file yet", latency
+        )
     except (OSError, json.JSONDecodeError) as exc:
         return ProbeResult(name, Status.YELLOW, f"unreadable: {exc}", latency)
 
     age = time.time() - (payload.get("checked_at_epoch") or 0)
     if age > 3 * 900:  # three drift-gate intervals
-        return ProbeResult(name, Status.YELLOW,
-                           f"drift gate is stale ({age / 60:.0f} min old)", latency)
+        return ProbeResult(
+            name,
+            Status.YELLOW,
+            f"drift gate is stale ({age / 60:.0f} min old)",
+            latency,
+        )
 
     overall = payload.get("overall")
-    failing = [c.get("name") for c in payload.get("checks", [])
-               if c.get("status") == "red"]
+    failing = [
+        c.get("name") for c in payload.get("checks", []) if c.get("status") == "red"
+    ]
     if overall == "red":
-        return ProbeResult(name, Status.RED,
-                           f"deployment drift: {', '.join(failing) or 'see drift.json'}",
-                           latency)
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"deployment drift: {', '.join(failing) or 'see drift.json'}",
+            latency,
+        )
     if overall == "yellow":
-        warn = [c.get("name") for c in payload.get("checks", [])
-                if c.get("status") == "yellow"]
-        return ProbeResult(name, Status.YELLOW,
-                           f"{', '.join(warn) or 'see drift.json'}", latency)
+        warn = [
+            c.get("name")
+            for c in payload.get("checks", [])
+            if c.get("status") == "yellow"
+        ]
+        return ProbeResult(
+            name, Status.YELLOW, f"{', '.join(warn) or 'see drift.json'}", latency
+        )
     return ProbeResult(name, Status.GREEN, "no drift", latency)
 
 
@@ -261,8 +310,12 @@ def write_status(report: CycleReport, interval_sec: float) -> None:
         # Same directory as the target so the rename is atomic (a rename across
         # filesystems is a copy, which a reader can observe half-written).
         with tempfile.NamedTemporaryFile(
-            "w", encoding="utf-8", dir=path.parent,
-            prefix=".healthcheck-", suffix=".tmp", delete=False,
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=".healthcheck-",
+            suffix=".tmp",
+            delete=False,
         ) as handle:
             json.dump(payload, handle, indent=2)
             handle.flush()
@@ -342,6 +395,40 @@ async def probe_nginx(port: int = 2026) -> ProbeResult:
         f"http://localhost:{port}/health",
         body_validator=lambda d: d.get("status") == "healthy",
     )
+
+
+async def probe_searxng(port: int = 8088) -> ProbeResult:
+    """Is the search backend `web_search` is bound to actually up?
+
+    SearXNG was defined in compose, wired into `config.yaml` as `web_search`'s
+    backend, and never started by the launcher — for weeks. Nothing caught it,
+    because `web_search` falls back to DuckDuckGo silently: search kept working
+    while the Recon card stayed red, and a red card in one panel is easy to
+    scroll past. This is the check that would have said so out loud.
+
+    Skipped, not failed, when this deployment does not point a tool at SearXNG:
+    a probe that is permanently red on a deployment that never wanted the
+    service teaches people to ignore the whole daemon.
+    """
+    if not _searxng_is_configured():
+        return ProbeResult(
+            "P14_searxng", Status.GREEN, "skipped (no tool bound to searxng)", 0.0
+        )
+    return await _http_probe("P14_searxng", f"http://localhost:{port}/healthz")
+
+
+def _searxng_is_configured() -> bool:
+    """Does config.yaml bind any tool to a searxng base_url?
+
+    Deliberately a substring check rather than a YAML parse: this daemon starts
+    before the venv on some hosts, and adding a dependency to answer one boolean
+    is a worse trade than a slightly blunt read.
+    """
+    try:
+        config = Path(__file__).resolve().parent.parent / "config.yaml"
+        return "searxng" in config.read_text()
+    except OSError:
+        return False
 
 
 async def probe_gateway(port: int = 2026) -> ProbeResult:
@@ -505,6 +592,130 @@ async def probe_litellm(host: str = "172.17.0.1", port: int = 4000) -> ProbeResu
     )
 
 
+async def probe_host_bridge(
+    host: str = HOST_BRIDGE_BIND, ports: tuple[int, ...] = HOST_BRIDGE_PORTS
+) -> ProbeResult:
+    """Probe the nova-host-bridge socat forwarders on the docker bridge IP.
+
+    Mailcow's admin API, Chatwoot, Twenty and OpenClaw bind 127.0.0.1 only,
+    so without the bridge every Settings › Integrations card for them says
+    "connection refused" while the services are fine. A TCP accept on each
+    forwarded port is enough: the upstream's own health is the gateway's
+    /api/integrations job, not the watchdog's."""
+    name = "P16_host_bridge"
+    if not ports:
+        return ProbeResult(name, Status.GREEN, "skipped (no ports configured)", 0.0)
+    t0 = time.perf_counter()
+    refused: list[int] = []
+    for port in ports:
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), 3.0)
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+        except (OSError, TimeoutError):
+            refused.append(port)
+    latency = (time.perf_counter() - t0) * 1000
+    if refused:
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"{host} not listening on {', '.join(str(p) for p in refused)} "
+            f"({len(ports) - len(refused)}/{len(ports)} up)",
+            latency,
+        )
+    return ProbeResult(
+        name, Status.GREEN, f"{len(ports)}/{len(ports)} ports forwarded", latency
+    )
+
+
+def _ops_token() -> str:
+    """NOVA_OPS_TOKEN from the environment, else from the repo's .env.
+
+    PM2 does not pass the token to this daemon (ecosystem.config.js keeps
+    secrets out of its env block), but the gateway's admin surface is the
+    only honest source for "is a worker alive". Reading the same .env the
+    stack itself uses keeps one source of truth.
+    """
+    token = os.environ.get("NOVA_OPS_TOKEN", "").strip()
+    if token:
+        return token
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    try:
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("NOVA_OPS_TOKEN="):
+                return line.split("=", 1)[1].strip().strip("\"'")
+    except OSError:
+        pass
+    return ""
+
+
+# Dead-letter count from the previous cycle, so growth (not the absolute
+# number) is what turns the probe yellow: a backlog you already know about
+# should not page every 30 seconds.
+_jobs_dead_letter_seen: int | None = None
+
+
+async def probe_jobs_worker(port: int = 2026) -> ProbeResult:
+    """P15: is the job runner alive? Asks the gateway's admin summary (ops
+    token) for worker heartbeats and queue depth. RED when no worker has
+    heartbeated within JOBS_WORKER_MAX_AGE_S, YELLOW when the dead-letter
+    queue grew since the last cycle. Skipped when NOVA_OPS_TOKEN is unset —
+    the probe cannot see anything without it, and saying RED would be a lie."""
+    global _jobs_dead_letter_seen
+    name = "P15_jobs_worker"
+    token = _ops_token()
+    if not token:
+        return ProbeResult(
+            name, Status.GREEN, "skipped (NOVA_OPS_TOKEN unset)", 0.0, fixable=False
+        )
+    t0 = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                f"http://127.0.0.1:{port}/api/v1/admin/jobs/summary",
+                headers={"X-Nova-Ops-Token": token},
+            )
+        latency = (time.perf_counter() - t0) * 1000
+        if res.status_code != 200:
+            return ProbeResult(
+                name, Status.RED, f"summary HTTP {res.status_code}", latency
+            )
+        data = res.json()
+    except Exception as e:  # noqa: BLE001 - any transport failure is the finding
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"summary unreachable: {e}",
+            (time.perf_counter() - t0) * 1000,
+        )
+    workers = [
+        w
+        for w in data.get("workers", [])
+        if float(w.get("last_seen_age_s", 1e9)) <= JOBS_WORKER_MAX_AGE_S
+    ]
+    queued = int(data.get("queued", 0))
+    running = int(data.get("running", 0))
+    dead = int(data.get("dead_letter", 0))
+    if not workers:
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"no live worker (heartbeat older than {JOBS_WORKER_MAX_AGE_S:.0f}s); {queued} queued",
+            latency,
+        )
+    grew = _jobs_dead_letter_seen is not None and dead > _jobs_dead_letter_seen
+    _jobs_dead_letter_seen = dead
+    summary = f"{len(workers)} worker(s), {running} running, {queued} queued, {dead} dead-letter"
+    if grew:
+        return ProbeResult(
+            name, Status.YELLOW, f"dead-letter grew: {summary}", latency, fixable=False
+        )
+    return ProbeResult(name, Status.GREEN, summary, latency)
+
+
 async def probe_dify(host: str = "127.0.0.1", port: int = 8088) -> ProbeResult:
     """Probe the Dify stack (pm2 app nova-dify, fork at ~/Desktop/dify) via
     its localhost-bound nginx. /console/api/setup returns step=finished on a
@@ -613,12 +824,17 @@ async def probe_containers(
                 "docker binary not found",
                 (time.perf_counter() - t0) * 1000,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
+            # The daemon being slow to answer is not the same as containers
+            # being gone, and restarting the stack cannot cure a busy docker
+            # daemon — it only piles a compose stop/up onto it. Stay RED for
+            # visibility but mark it unfixable so dispatch_fixes leaves it.
             return ProbeResult(
                 "P7_containers",
                 Status.RED,
                 "docker ps timeout",
                 (time.perf_counter() - t0) * 1000,
+                fixable=False,
             )
         latency = (time.perf_counter() - t0) * 1000
         if proc.returncode != 0:
@@ -741,7 +957,9 @@ async def probe_binary_attestation() -> ProbeResult:
     return await _do()
 
 
-async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> ProbeResult:
+async def probe_tunnel(
+    public_url: str = "https://nova.alilabsx.com/health",
+) -> ProbeResult:
     """Probe the Cloudflare Tunnel public-domain reachability.
 
     Two layers, two checks (both must be GREEN for an overall GREEN):
@@ -761,7 +979,16 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
     public_url = os.environ.get("CLOUDFLARE_TUNNEL_URL", public_url).strip()
     t0 = time.perf_counter()
 
-    # Layer 1: systemd unit must be active.
+    # Layer 1: the local connector must be running — under systemd *or* PM2.
+    #
+    # This probe used to demand `cloudflared-nova.service`, but that unit was
+    # never installed on this host: the tunnel runs as the PM2 app `tunnel-nova`
+    # (see ecosystem.config.js). Layer 1 was therefore permanently red, so the
+    # whole probe got switched off — and with P1/P2/P3 all terminating at
+    # localhost:2026, nothing was left watching the public hostname at all. A
+    # check that only recognises one deployment shape gets disabled rather than
+    # fixed, and takes its layer-2 coverage down with it.
+    connector = ""
     try:
         proc = subprocess.run(
             ["systemctl", "is-active", "cloudflared-nova.service"],
@@ -769,17 +996,31 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
             text=True,
             timeout=5,
         )
-        systemd_state = proc.stdout.strip() if proc.returncode == 0 else "inactive"
-        systemd_green = proc.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        systemd_state = f"err:{type(e).__name__}"
-        systemd_green = False
+        if proc.returncode == 0:
+            connector = "systemd=active"
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
 
-    if not systemd_green:
+    if not connector:
+        try:
+            proc = subprocess.run(
+                ["pm2", "jlist"], capture_output=True, text=True, timeout=15
+            )
+            if proc.returncode == 0:
+                for app in json.loads(proc.stdout or "[]"):
+                    if app.get("name") == "tunnel-nova" and (
+                        app.get("pm2_env", {}).get("status") == "online"
+                    ):
+                        connector = "pm2=online"
+                        break
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            pass
+
+    if not connector:
         return ProbeResult(
             "P12_tunnel",
             Status.RED,
-            f"systemd={systemd_state}",
+            "no cloudflared connector (systemd inactive and tunnel-nova not online)",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -788,7 +1029,7 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
         return ProbeResult(
             "P12_tunnel",
             Status.GREEN,
-            "systemd=active (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
+            f"{connector} (CLOUDFLARE_TUNNEL_URL unset; layer-2 skipped)",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -800,20 +1041,20 @@ async def probe_tunnel(public_url: str = "https://nova.alilabsx.com/health") -> 
             return ProbeResult(
                 "P12_tunnel",
                 Status.RED,
-                f"systemd=active edge={public_url} HTTP {res.status_code}",
+                f"{connector} edge={public_url} HTTP {res.status_code}",
                 latency,
             )
         return ProbeResult(
             "P12_tunnel",
             Status.GREEN,
-            f"systemd=active edge HTTP 200 {latency:.0f}ms",
+            f"{connector} edge HTTP 200 {latency:.0f}ms",
             latency,
         )
     except Exception as e:
         return ProbeResult(
             "P12_tunnel",
             Status.RED,
-            f"systemd=active edge={type(e).__name__}",
+            f"{connector} edge={type(e).__name__}",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -940,7 +1181,137 @@ def fix_deerflow_containers() -> bool:
     never existed, so the repair could only ever fail — and did, every cycle,
     forever.
     """
+    age = _pm2_app_age_sec("nova")
+    if age is not None and age < STACK_RESTART_MIN_AGE_SEC:
+        # Somebody (this daemon, an operator, a deploy script) restarted the
+        # stack moments ago and compose is still bringing it up. A second
+        # restart now interrupts the first one mid-flight and can strand
+        # containers — see the 2026-09-13 note next to FIX_GRACE_CYCLES.
+        log.warning(
+            "auto-fix: nova was restarted %.0fs ago (< %ds) — not restarting again, letting the stack finish coming up",
+            age,
+            STACK_RESTART_MIN_AGE_SEC,
+        )
+        return False
     return _heal_pm2_app("nova", timeout=60)
+
+
+def _pm2_app_age_sec(app: str) -> float | None:
+    """Seconds since pm2 last (re)started ``app``; None if unknown."""
+    try:
+        out = subprocess.run(
+            ["pm2", "jlist"], timeout=15, capture_output=True, text=True, check=True
+        ).stdout
+        for proc in json.loads(out):
+            if proc.get("name") == app:
+                uptime_ms = proc.get("pm2_env", {}).get("pm_uptime")
+                if uptime_ms:
+                    return max(0.0, time.time() - uptime_ms / 1000)
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+        ValueError,
+    ):
+        pass
+    return None
+
+
+def fix_gateway_container() -> bool:
+    """Heal a RED P2_gateway when the gateway container exists but is not
+    running: `docker start` it.
+
+    That is exactly the shape a stopped-but-never-restarted container takes
+    (restart policy `unless-stopped` stays down after an explicit stop, and
+    `docker compose up` never re-launches a container that exits after it
+    attached). A running container that still fails the probe is left alone —
+    it is most likely mid-boot (`uv sync` + uvicorn reload takes a while), and
+    a `docker restart` there would only reset the clock.
+    """
+    try:
+        inspected = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", GATEWAY_CONTAINER],
+            timeout=15,
+            capture_output=True,
+            text=True,
+        )
+        if inspected.returncode != 0:
+            log.warning(
+                "auto-fix: %s not found — stack not up, leaving it to P7",
+                GATEWAY_CONTAINER,
+            )
+            return False
+        status = inspected.stdout.strip()
+        if status == "running":
+            log.warning(
+                "auto-fix: %s is running but unhealthy — not restarting it (probably still booting)",
+                GATEWAY_CONTAINER,
+            )
+            return False
+        log.warning("auto-fix: docker start %s (was %s)", GATEWAY_CONTAINER, status)
+        subprocess.run(
+            ["docker", "start", GATEWAY_CONTAINER],
+            check=True,
+            timeout=60,
+            capture_output=True,
+        )
+        return True
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
+        log.error("auto-fix: failed to start %s: %s", GATEWAY_CONTAINER, e)
+        return False
+
+
+def fix_host_bridge() -> bool:
+    """Heal the nova-host-bridge PM2 app for a RED P16_host_bridge: restart,
+    or re-register from ecosystem.config.js if the app is missing."""
+    return _heal_pm2_app("nova-host-bridge")
+
+
+def fix_jobs_container() -> bool:
+    """Heal a RED P15 when the jobs container exists but is not running:
+    `docker restart` it. A running container that still fails the probe is
+    left alone — the worker heartbeats every 10 s once its engine is up, so
+    a fresh container is usually seconds from green; restarting it would only
+    reset that clock (and its lease-release grace)."""
+    try:
+        inspected = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}}", JOBS_CONTAINER],
+            timeout=15,
+            capture_output=True,
+            text=True,
+        )
+        if inspected.returncode != 0:
+            log.warning(
+                "auto-fix: %s not found — stack not up, leaving it to P7",
+                JOBS_CONTAINER,
+            )
+            return False
+        status = inspected.stdout.strip()
+        if status == "running":
+            log.warning(
+                "auto-fix: %s is running but no worker heartbeat — not restarting it (probably booting)",
+                JOBS_CONTAINER,
+            )
+            return False
+        log.warning("auto-fix: docker restart %s (was %s)", JOBS_CONTAINER, status)
+        subprocess.run(
+            ["docker", "restart", JOBS_CONTAINER],
+            check=True,
+            timeout=60,
+            capture_output=True,
+        )
+        return True
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
+        log.error("auto-fix: failed to restart %s: %s", JOBS_CONTAINER, e)
+        return False
 
 
 def fix_llama_bridge() -> bool:
@@ -1004,11 +1375,12 @@ def fix_tunnel() -> bool:
             text=True,
             timeout=5,
         )
-        if sudo_l.returncode == 0 and "reset-failed cloudflared-nova" not in sudo_l.stdout:
+        if (
+            sudo_l.returncode == 0
+            and "reset-failed cloudflared-nova" not in sudo_l.stdout
+        ):
             log.warning(
-                "auto-fix: sudoers is missing 'reset-failed cloudflared-nova' — "
-                "next start-limit-hit outage WILL NOT auto-recover. "
-                "Re-run scripts/install-cloudflared-nova.sh as a sudo-capable user."
+                "auto-fix: sudoers is missing 'reset-failed cloudflared-nova' — next start-limit-hit outage WILL NOT auto-recover. Re-run scripts/install-cloudflared-nova.sh as a sudo-capable user."
             )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
@@ -1026,8 +1398,7 @@ def fix_tunnel() -> bool:
             # Not fatal — the unit may simply not be in failed state, OR
             # sudoers may not permit reset-failed (Step 0 warning).
             log.info(
-                "auto-fix: reset-failed returned %d (stderr=%s) — likely already clean "
-                "or sudoers missing",
+                "auto-fix: reset-failed returned %d (stderr=%s) — likely already clean or sudoers missing",
                 reset_proc.returncode,
                 reset_proc.stderr.strip()[:200],
             )
@@ -1046,9 +1417,7 @@ def fix_tunnel() -> bool:
         )
     except subprocess.CalledProcessError as e:
         log.error(
-            "auto-fix: systemctl restart failed (%s). If sudo requires a "
-            "password, run: sudo systemctl restart cloudflared-nova.service "
-            "manually.",
+            "auto-fix: systemctl restart failed (%s). If sudo requires a password, run: sudo systemctl restart cloudflared-nova.service manually.",
             e,
         )
         return False
@@ -1063,20 +1432,28 @@ def fix_tunnel() -> bool:
     deadline = time.monotonic() + 10.0
     while time.monotonic() < deadline:
         try:
-            if subprocess.run(
-                ["sudo", "-n", "systemctl", "is-active", "cloudflared-nova.service"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            ).stdout.strip() == "active":
+            if (
+                subprocess.run(
+                    [
+                        "sudo",
+                        "-n",
+                        "systemctl",
+                        "is-active",
+                        "cloudflared-nova.service",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                ).stdout.strip()
+                == "active"
+            ):
                 log.info("auto-fix: cloudflared-nova.service is active")
                 return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
         time.sleep(0.5)
     log.error(
-        "auto-fix: cloudflared-nova.service did not become active within 10s of restart — "
-        "manual intervention required"
+        "auto-fix: cloudflared-nova.service did not become active within 10s of restart — manual intervention required"
     )
     return False
 
@@ -1109,9 +1486,21 @@ FIX_DISPATCH: dict[str, tuple[Callable[[], bool], str]] = {
         lambda: fix_deerflow_containers(),
         " [pm2 restart nova issued]",
     ),
+    "P2_gateway": (
+        lambda: fix_gateway_container(),
+        " [docker start gateway issued]",
+    ),
     "P9_bridge": (lambda: fix_llama_bridge(), " [llama-bridge healed via pm2]"),
     "P10_litellm": (lambda: fix_litellm(), " [nova-litellm healed via pm2]"),
     "P11_dify": (lambda: fix_dify(), " [nova-dify healed via pm2]"),
+    "P15_jobs_worker": (
+        lambda: fix_jobs_container(),
+        " [deer-flow-jobs restarted]",
+    ),
+    "P16_host_bridge": (
+        lambda: fix_host_bridge(),
+        " [nova-host-bridge healed via pm2]",
+    ),
     "P12_tunnel": (
         lambda: fix_tunnel(),
         " [systemctl reset-failed+restart issued, verified active]",
@@ -1178,6 +1567,8 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
         # Only fix after 2 consecutive REDs (one cycle might be a transient blip)
         if state.consecutive_red[probe.name] < 2:
             continue
+        if not probe.fixable:
+            continue
         fix = FIX_DISPATCH.get(probe.name)
         if fix is not None:
             fix_fn, detail_suffix = fix
@@ -1192,6 +1583,11 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
                 probe.fixed = True
                 probe.detail += detail_suffix
                 _reset_fix_breaker(state, probe.name)
+                # Give the repair time to take effect before judging it. The
+                # probe usually stays RED for a few cycles while the service
+                # boots; repairing again in that window is what stranded the
+                # gateway on 2026-09-13.
+                state.next_fix_cycle[probe.name] = state.cycle_id + FIX_GRACE_CYCLES
             else:
                 _record_fix_failure(state, probe.name)
         else:
@@ -1207,11 +1603,14 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
                 )
 
 
-async def run_cycle(state: WatchdogState) -> CycleReport:
-    state.cycle_id += 1
-    t0 = time.perf_counter()
-    report = CycleReport(cycle_id=state.cycle_id, started_at=t0, duration_ms=0.0)
+def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResult]]]]:
+    """The probe registry, as (name, coroutine factory) pairs.
 
+    Module-level so the probe set can be inspected without running a cycle.
+    Tests previously asserted a hardcoded probe count, so adding one broke
+    three unrelated tests with `assert 14 == 13` -- an error naming neither
+    the probe nor the reason.
+    """
     # (name, coroutine factory) pairs. The coroutine is only created for probes
     # that are enabled, so a disabled probe costs nothing and never emits a
     # "coroutine was never awaited" warning. Naming the probe here also lets us
@@ -1238,6 +1637,10 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
         ),
         ("P7_containers", probe_containers),
         ("P13_drift", probe_drift),
+        (
+            "P14_searxng",
+            lambda: probe_searxng(port=int(os.environ.get("SEARXNG_PORT", "8088"))),
+        ),
         ("P8_binary_attestation", probe_binary_attestation),
         (
             "P9_bridge",
@@ -1260,7 +1663,23 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
             ),
         ),
         ("P12_tunnel", probe_tunnel),
+        (
+            "P15_jobs_worker",
+            lambda: probe_jobs_worker(
+                port=int(os.environ.get("NOVA_NGINX_PORT", "2026"))
+            ),
+        ),
+        ("P16_host_bridge", probe_host_bridge),
     ]
+    return probe_factories
+
+
+async def run_cycle(state: WatchdogState) -> CycleReport:
+    state.cycle_id += 1
+    t0 = time.perf_counter()
+    report = CycleReport(cycle_id=state.cycle_id, started_at=t0, duration_ms=0.0)
+
+    probe_factories = build_probe_factories()
     skip = disabled_probes()
     probes: list[
         tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]
@@ -1318,7 +1737,7 @@ async def main_loop(args: argparse.Namespace) -> int:
             report = await asyncio.wait_for(
                 run_cycle(state), timeout=CYCLE_DEADLINE_SEC
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.error(
                 "cycle exceeded %.0fs deadline — assuming hung; emitting RED report and exiting for PM2 restart",
                 CYCLE_DEADLINE_SEC,
@@ -1359,7 +1778,7 @@ async def main_loop(args: argparse.Namespace) -> int:
         )
         try:
             await asyncio.wait_for(stop.wait(), timeout=wait)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     log.info("shutting down")

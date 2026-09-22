@@ -1,0 +1,10 @@
+backend/app: files=98 loc=27312
+backend/packages: files=396 loc=70801
+backend/tests: files=420 loc=124642
+frontend/src: files=453 loc=57507
+frontend/tests: files=105 loc=16122
+skills: files=102 loc=6676
+docker: files=42 loc=4517
+scripts: files=63 loc=14064
+k8s: files=57 loc=9287
+.github/workflows: files=17 loc=1495

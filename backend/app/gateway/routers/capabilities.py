@@ -10,7 +10,10 @@ single authenticated call:
   - circuit-breaker snapshot (per-thread open/closed state)
   - browser subsystem health (status + last_check_at)
 
-The endpoint is **read-only**, **fast** (no I/O), and **additive**.
+The endpoint is **read-only** and **additive**. It is NOT I/O-free: it probes
+SearXNG over the network on every call (``probe_health()``, 3 s cap), and the UI
+polls it, so a hung instance costs one request per poll. The docstring used to
+claim "fast (no I/O)", which is worth correcting rather than trusting.
 Falls back to empty lists if any optional subsystem isn't loaded so the
 UI can always render something.
 
@@ -70,16 +73,40 @@ class CircuitEntry(BaseModel):
 class IGINOSummary(BaseModel):
     """Recon status for the runtime bar. No TOR fields: it was removed from the
     panel, the config and the capability list, and a payload that still carries
-    it invites the next reader to wire it back up."""
+    it invites the next reader to wire it back up.
+
+    No ``circuit_states`` either, for the same reason. It was declared here and
+    on the frontend's ``IGINOCapabilities``, populated by nothing, and read by
+    nobody -- a permanently empty dict that looked like a feature. The real
+    per-thread circuit snapshot lives on ``/api/browser/health``
+    (``browser_health.py``), which actually fills it."""
 
     enabled: bool = False
     searxng_healthy: bool = False
-    circuit_states: dict[str, str] = Field(default_factory=dict)
     cache_stats: dict[str, Any] = Field(default_factory=dict)
     audit_stats: dict[str, Any] = Field(default_factory=dict)
 
 
+class FeatureFlags(BaseModel):
+    """Server-declared feature switches the UI gates navigation on.
+
+    Each maps to a config section's ``enabled`` (or, for ACP, to whether any
+    agent is configured). New features add a field here and in
+    ``frontend/src/features/types.ts``; a flag the frontend does not know is
+    simply ignored.
+    """
+
+    jobs: bool = False
+    integrations: bool = False
+    email_marketing: bool = False
+    acp_agents: bool = False
+    capabilities: bool = False
+    runtimes: bool = False
+    sandbox: bool = False
+
+
 class CapabilitiesResponse(BaseModel):
+    features: FeatureFlags = Field(default_factory=FeatureFlags)
     skills: list[SkillSummary] = Field(default_factory=list)
     tools: list[ToolSummary] = Field(default_factory=list)
     hooks: list[HookSummary] = Field(default_factory=list)
@@ -134,12 +161,27 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
     roughly a third — and the missing entries were the ones people most want to
     confirm (can it run a shell? can it read my files?).
 
-    ``subagent_enabled=True`` matches the gateway's own runs, where the ``task``
-    tool is bound. MCP tools are excluded: they are reported separately, and
-    resolving them here would make a UI poll wait on remote servers.
+    ``subagent_enabled=True`` matches the gateway's own runs. MCP tools are
+    excluded: they are reported separately, and resolving them here would make a
+    UI poll wait on remote servers.
+
+    **The skill tool-policy is applied here, through the same function the agent
+    uses.** It was not, and the omission was expensive. This docstring already
+    claimed the report "cannot drift from what the model is really given" — but
+    ``get_available_tools()`` returns the *registry*, and the lead agent then
+    filters it through ``filter_tools_by_skill_allowed_tools``. When one public
+    skill's ``allowed-tools`` collapsed the bound set from 42 tools to 6, this
+    panel kept reporting 42 for five days, so the one instrument an operator
+    checks to answer "can it still spawn subagents?" was actively confirming a
+    capability that no longer existed.
+
+    This reports the **default agent's** binding. A custom agent that names
+    ``skills:`` in its config may legitimately bind fewer.
     """
     try:
+        from deerflow.agents.lead_agent.agent import skills_for_tool_policy
         from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
+        from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
         from deerflow.tools.tools import get_available_tools
 
         tools = get_available_tools(
@@ -147,6 +189,11 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
             subagent_enabled=True,
             app_config=config,
         )
+        # ``None`` is the default agent's skill selection -- the same argument
+        # ``_make_lead_agent`` passes for a run with no agent_name. Going through
+        # the shared helper rather than reimplementing the rule is the point:
+        # the two cannot disagree again.
+        tools = filter_tools_by_skill_allowed_tools(tools, skills_for_tool_policy(None, app_config=config))
 
         out: list[ToolSummary] = []
         seen: set[str] = set()
@@ -288,7 +335,6 @@ async def _safe_igino() -> IGINOSummary:
             # fall back to False; don't pretend it's healthy.
             searxng_healthy = False
 
-        circuit_states: dict[str, str] = {}
         try:
             from deerflow.community.searxng.search_cache import get_search_cache
 
@@ -306,13 +352,25 @@ async def _safe_igino() -> IGINOSummary:
         return IGINOSummary(
             enabled=enabled,
             searxng_healthy=searxng_healthy,
-            circuit_states=circuit_states,
             cache_stats=cache_stats,
             audit_stats=audit_stats,
         )
     except Exception as e:
         logger.debug("capabilities: igino snapshot failed: %s", e)
         return IGINOSummary()
+
+
+def _safe_features(config: AppConfig) -> FeatureFlags:
+    """Flags from the one place that computes them (the ``features``
+    capability module); a flag this response model does not declare is
+    dropped, so the two lists are pinned together by test."""
+    from deerflow.capabilities.modules.features import compute_flags
+
+    try:
+        flags = compute_flags(config)
+    except Exception:  # config unreadable mid-reload: everything reads as off
+        flags = {}
+    return FeatureFlags(**{k: v for k, v in flags.items() if k in FeatureFlags.model_fields})
 
 
 # ---------- endpoint ----------
@@ -330,6 +388,7 @@ async def get_runtime_capabilities(
     plus a per-thread circuit-breaker snapshot. Read-only, fast (no I/O).
     """
     return CapabilitiesResponse(
+        features=_safe_features(config),
         skills=_safe_skills(config),
         tools=_safe_tools(config),
         hooks=_safe_hooks(config),

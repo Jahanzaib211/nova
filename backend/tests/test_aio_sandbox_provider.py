@@ -177,7 +177,11 @@ async def test_acquire_async_uses_async_readiness_polling(monkeypatch):
     sandbox_id = await provider._create_sandbox_async("thread-async", "sandbox-async")
 
     assert sandbox_id == "sandbox-async"
-    assert async_readiness_calls == [("http://sandbox", 60)]
+    # The readiness budget is the provider's configured startup timeout
+    # (DEFAULT_STARTUP_TIMEOUT when sandbox.startup_timeout is unset), not a
+    # hardcoded 60 s — 096501af raised it because the image brings up
+    # supervisord, code-server, Jupyter, VNC and a browser before answering.
+    assert async_readiness_calls == [("http://sandbox", provider._startup_timeout())]
     assert provider._backend.destroy.call_count == 0
     assert provider._thread_sandboxes["thread-async"] == "sandbox-async"
 

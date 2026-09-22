@@ -1,6 +1,454 @@
 import type { LucideIcon } from "lucide-react";
 
+export interface JobsFeatureTranslations {
+  title: string;
+  description: string;
+  empty: string;
+  filterAll: string;
+  columns: {
+    type: string;
+    status: string;
+    progress: string;
+    attempts: string;
+    created: string;
+    actions: string;
+  };
+  actions: {
+    cancel: string;
+    retry: string;
+    refresh: string;
+    showEvents: string;
+    hideEvents: string;
+  };
+  events: { title: string; empty: string; live: string };
+  schedules: {
+    title: string;
+    description: string;
+    empty: string;
+    name: string;
+    type: string;
+    cron: string;
+    timezone: string;
+    payload: string;
+    enabled: string;
+    nextRun: string;
+    create: string;
+    delete: string;
+    invalidPayload: string;
+    created: string;
+    deleted: string;
+    updated: string;
+  };
+  settings: { title: string; description: string; openPage: string };
+  toasts: { cancelled: string; retried: string; failed: string };
+}
+
+export interface IntegrationsFeatureTranslations {
+  title: string;
+  description: string;
+  probeAll: string;
+  probe: string;
+  empty: string;
+  disabledHint: string;
+  loadFailed: string;
+  capabilities: string;
+  neverChecked: string;
+  justNow: string;
+  secondsAgo: (n: number) => string;
+  minutesAgo: (n: number) => string;
+  status: {
+    healthy: string;
+    degraded: string;
+    down: string;
+    unknown: string;
+    disabled: string;
+  };
+  groups: {
+    models: string;
+    business: string;
+    web: string;
+    agents: string;
+    extensions: string;
+    other: string;
+  };
+}
+
+export interface VoiceFeatureTranslations {
+  title: string;
+  tagline: string;
+  description: string;
+  testPhrase: string;
+  state: { off: string; ready: string; notLoading: string; fellBack: string };
+  enable: string;
+  enableHint: string;
+  listening: string;
+  model: string;
+  modelHint: string;
+  device: string;
+  language: string;
+  languageHint: string;
+  speaking: string;
+  engine: string;
+  voice: string;
+  turnTaking: string;
+  waitWhileThinking: string;
+  waitWhileThinkingHint: string;
+  confidence: string;
+  confidenceHint: string;
+  devices: {
+    auto: string;
+    autoHint: string;
+    cuda: string;
+    cudaHint: string;
+    cpu: string;
+    cpuHint: string;
+  };
+  checks: {
+    title: string;
+    description: string;
+    testSpeaker: string;
+    testMicrophone: string;
+    autoplayBlocked: string;
+    realTime: (rtf: string) => string;
+    slowerThanPlayback: string;
+    heard: (words: string) => string;
+    nothingRecognised: string;
+  };
+  lab: {
+    title: string;
+    description: string;
+    placeholder: string;
+    defaultText: string;
+    speakIt: string;
+    auditionAll: string;
+    speakToNova: string;
+    stop: string;
+    firstAudio: string;
+    audioLength: string;
+    realTimeFactor: string;
+    autoplayBlocked: string;
+    playIt: string;
+    slowerThanRealTime: string;
+    novaHeard: string;
+    nothingRecognised: (seconds: number) => string;
+    voicesHint: string;
+    failed: string;
+  };
+  overridesNote: string;
+  reset: string;
+  toasts: {
+    saved: string;
+    saveFailed: string;
+    listening: string;
+    reverted: string;
+  };
+}
+
+export interface EmailFeatureTranslations {
+  title: string;
+  description: string;
+  failed: string;
+  tabs: {
+    campaigns: string;
+    lists: string;
+    contacts: string;
+    templates: string;
+    suppressions: string;
+  };
+  campaignStatus: Record<
+    | "draft"
+    | "scheduled"
+    | "sending"
+    | "paused"
+    | "completed"
+    | "cancelled"
+    | "failed",
+    string
+  >;
+  contactStatus: Record<
+    "pending" | "subscribed" | "unsubscribed" | "bounced" | "complained",
+    string
+  >;
+  suppressionReason: Record<
+    "hard_bounce" | "complaint" | "unsubscribe" | "manual" | "invalid",
+    string
+  >;
+  lists: {
+    create: string;
+    namePlaceholder: string;
+    created: string;
+    deleted: string;
+    delete: string;
+    empty: string;
+    members: (n: number) => string;
+  };
+  contacts: {
+    search: string;
+    add: string;
+    added: string;
+    delete: string;
+    deleted: string;
+    emailPlaceholder: string;
+    empty: string;
+    total: (n: number) => string;
+    columns: { email: string; name: string; status: string };
+    importCsv: string;
+    csvPlaceholder: string;
+    fields: { email: string; first_name: string; last_name: string };
+    intoList: string;
+    startImport: string;
+    importStarted: (valid: number, skipped: number) => string;
+  };
+  templates: {
+    hint: string;
+    new: string;
+    editor: string;
+    name: string;
+    subject: string;
+    html: string;
+    save: string;
+    saved: string;
+    preview: string;
+    previewAfterSave: string;
+    noPreview: string;
+    cancel: string;
+    delete: string;
+    deleted: string;
+    empty: string;
+  };
+  campaigns: {
+    hint: string;
+    new: string;
+    create: string;
+    created: string;
+    cancel: string;
+    delete: string;
+    deleted: string;
+    empty: string;
+    name: string;
+    list: string;
+    template: string;
+    fromEmail: string;
+    fromName: string;
+    recipients: (n: number) => string;
+    preflightOk: (recipients: number, suppressed: number) => string;
+    preflightBlocked: string;
+    progress: (pct: number, left: number) => string;
+    stats: {
+      sent: string;
+      opened: string;
+      clicked: string;
+      bounced: string;
+      unsubscribed: string;
+      failed: string;
+    };
+    actions: Record<"send-now" | "pause" | "resume" | "cancel", string>;
+    actionDone: Record<"send-now" | "pause" | "resume" | "cancel", string>;
+    testSend: string;
+    testTo: string;
+    testSent: (to: string) => string;
+  };
+  suppressions: {
+    hint: string;
+    add: string;
+    added: string;
+    remove: string;
+    removed: string;
+    emailPlaceholder: string;
+    empty: string;
+  };
+  settings: {
+    title: string;
+    description: string;
+    openPage: string;
+    bridgesTitle: string;
+    bridgesDescription: string;
+    bridgesUnavailable: string;
+    bridge: { mailcow: string; twenty: string; chatwoot: string };
+    configured: string;
+    notConfigured: string;
+    mailcowTitle: string;
+    mailcowDescription: string;
+    domain: string;
+    mailboxPassword: string;
+    ensureSender: string;
+    senderReady: (mailbox: string, dkim: boolean) => string;
+    twentyTitle: string;
+    twentyDescription: string;
+    list: string;
+    twentySync: string;
+    twentyImport: string;
+    jobStarted: string;
+  };
+}
+
+export interface AgentsRegistryTranslations {
+  title: string;
+  description: string;
+  loadFailed: string;
+  asyncOn: string;
+  asyncOff: string;
+  activeNow: (running: number, queued: number) => string;
+  counts: (running: number, queued: number) => string;
+  kinds: { lead: string; subagent: string; custom: string; acp: string };
+  runner: { gateway: string; jobs: string };
+}
+
+export interface ConsoleFeatureTranslations {
+  gateway: {
+    title: string;
+    description: string;
+    refresh: string;
+    loadFailed: string;
+    ops: string;
+    acpTitle: string;
+    acpDescription: string;
+    acpEmpty: string;
+    colAgent: string;
+    colBinary: string;
+    colModel: string;
+    colPolicy: string;
+    allow: string;
+    deny: string;
+    versionsTitle: string;
+    versionsDescription: string;
+  };
+  devices: {
+    sessionsTitle: string;
+    sessionsDescription: string;
+    signOutEverywhere: string;
+    signedOut: string;
+    loadFailed: string;
+    lastSignIn: string;
+    tokenVersion: string;
+    tokensTitle: string;
+    tokensDescription: string;
+    tokenName: string;
+    tokenNamePlaceholder: string;
+    tokenScopes: string;
+    mint: string;
+    mintedOnce: string;
+    mintedHint: string;
+    tokensEmpty: string;
+    colName: string;
+    colPrefix: string;
+    colScopes: string;
+    colLastUsed: string;
+    colStatus: string;
+    active: string;
+    revoked: string;
+    revoke: string;
+  };
+  workers: {
+    title: string;
+    description: string;
+    unavailable: string;
+    empty: string;
+    colWorker: string;
+    colHost: string;
+    colQueues: string;
+    colRunning: string;
+    colHeartbeat: string;
+    tasksTitle: string;
+    tasksDescription: string;
+    tasksEmpty: string;
+    colStatus: string;
+    colAgent: string;
+    colCreated: string;
+    colJob: string;
+  };
+  agents: {
+    runtimesTitle: string;
+    runtimesDescription: string;
+    loadFailed: string;
+    disabledHint: string;
+    default: string;
+    checkModel: string;
+    checking: string;
+    probeOk: string;
+    probeFailed: string;
+    binaryMissing: string;
+    modes: string;
+    registryElsewhere: string;
+    registryLink: string;
+  };
+  labs: {
+    title: string;
+    description: string;
+    loadFailed: string;
+    on: string;
+    off: string;
+    configuredIn: string;
+    howToToggle: string;
+  };
+  automation: {
+    title: string;
+    description: string;
+    unavailable: string;
+    empty: string;
+    badPayload: string;
+    name: string;
+    type: string;
+    cron: string;
+    payload: string;
+    save: string;
+    nextRun: string;
+    delete: string;
+  };
+  secrets: {
+    title: string;
+    description: string;
+    adminOnly: string;
+    empty: string;
+    name: string;
+    value: string;
+    write: string;
+    source: string;
+    mode: string;
+    modified: string;
+    remove: string;
+    envHint: string;
+  };
+  updates: {
+    title: string;
+    description: string;
+    checkAgain: string;
+    loadFailed: string;
+    labels: {
+      config_version: string;
+      git_sha: string;
+      image: string;
+      claude_cli: string;
+      openclaw: string;
+      node: string;
+      acp_adapter: string;
+    };
+  };
+}
+
+export interface RuntimePickerTranslations {
+  runtime: string;
+  runtimeNative: string;
+  account: string;
+  accountAuto: string;
+  permission: string;
+  modes: { full: string; standard: string; plan: string };
+  reset: string;
+  appliesToThisChat: string;
+  modelOwnedByRuntime: string;
+  disabled: string;
+}
+
 export interface Translations {
+  features: {
+    jobs: JobsFeatureTranslations;
+    integrations: IntegrationsFeatureTranslations;
+    voice: VoiceFeatureTranslations;
+    email: EmailFeatureTranslations;
+    agentsRegistry: AgentsRegistryTranslations;
+    console: ConsoleFeatureTranslations;
+    runtimePicker: RuntimePickerTranslations;
+  };
   // Locale meta
   locale: {
     localName: string;
@@ -127,6 +575,8 @@ export interface Translations {
     chats: string;
     demoChats: string;
     agents: string;
+    jobs: string;
+    email: string;
     channels: string;
   };
 
@@ -191,6 +641,9 @@ export interface Translations {
     logout: string;
     gatewayUnavailable: string;
     gatewayUnavailableRetrying: string;
+    sessionExpiredTitle: string;
+    sessionExpiredDescription: string;
+    sessionExpiredAction: string;
   };
 
   // Conversation
@@ -241,6 +694,16 @@ export interface Translations {
 
   // Tool calls
   toolCalls: {
+    acp: {
+      invoke: (agent: string) => string;
+      waiting: string;
+      runtimeWorking: (agent: string) => string;
+      actions: (count: number) => string;
+      showAll: string;
+      showLess: string;
+      answeredBy: (agent: string) => string;
+      fallback: (agent: string, reason: string) => string;
+    };
     moreSteps: (count: number) => string;
     lessSteps: string;
     executeCommand: string;
@@ -331,6 +794,9 @@ export interface Translations {
     title: string;
     description: string;
     sections: {
+      jobs: string;
+      integrations: string;
+      email: string;
       account: string;
       appearance: string;
       channels: string;
@@ -342,6 +808,22 @@ export interface Translations {
       notification: string;
       voice: string;
       about: string;
+      gateway: string;
+      devices: string;
+      workers: string;
+      agents: string;
+      runtimes: string;
+      labs: string;
+      automation: string;
+      secrets: string;
+      updates: string;
+    };
+    groups: {
+      general: string;
+      connections: string;
+      agents: string;
+      privacy: string;
+      system: string;
     };
     runtime: {
       title: string;
@@ -401,6 +883,10 @@ export interface Translations {
       fieldThinking: string;
       fieldReasoningEffort: string;
       fieldVision: string;
+      fieldShowInChat: string;
+      fieldShowInChatHint: string;
+      fieldMaxInputTokens: string;
+      fieldMaxInputTokensHint: string;
       apiKeyUnchanged: string;
       providerOpenAICompatible: string;
       providerAnthropic: string;
@@ -648,7 +1134,7 @@ export interface Translations {
     thinking: string;
     usingTerminal: string;
     usingBrowser: string;
-    usingEditor: string;
+    usingViewer: string;
     taskProgress: string;
     noLogs: string;
     close: string;
@@ -663,19 +1149,30 @@ export interface Translations {
       failed: (count: number) => string;
       consoleErrors: (count: number) => string;
     };
+    llmError: {
+      prefix: string;
+      generic: string;
+      quota: string;
+      auth: string;
+      busy: string;
+    };
     tabs: {
       files: string;
       terminal: string;
-      editor: string;
+      viewer: string;
       browser: string;
       activity: string;
+      telemetry: string;
       review: string;
       privacy: string;
+      audit: string;
     };
     files: {
       empty: string;
       repository: string;
       running: (count: number) => string;
+      uploadLimits: string;
+      commandsHeader: string;
       uploadLimitsHint: string;
     };
     workspace: {
@@ -705,7 +1202,7 @@ export interface Translations {
     };
     status: {
       writing: (filename: string, lines?: string) => string;
-      usingEditor: string;
+      usingViewer: string;
       editing: (filename: string) => string;
       reading: (filename: string) => string;
       usingTerminal: string;
@@ -717,6 +1214,10 @@ export interface Translations {
       isThinking: string;
       isIdle: string;
     };
+    telemetry: {
+      timeline: string;
+      ledger: string;
+    };
     terminal: {
       tab: string;
       stream: string;
@@ -724,10 +1225,23 @@ export interface Translations {
       interactiveTitle: string;
       noOutput: string;
       noOutputHint: string;
+      streamDown: string;
+      streamDownHint: string;
       running: string;
+      /** Label for the control that re-fetches the ttyd URL after the
+          sandbox was recycled and the embedded shell went dead. */
+      reconnect: string;
+      shellDisconnected: string;
+      showAll: (lines: number) => string;
+      showLess: string;
+      hideDevLogs: string;
+      showDevLogs: string;
+      counts: (total: number, running: number) => string;
     };
-    editor: {
+    viewer: {
       startWriting: string;
+      fileNotWritten: string;
+      emptyFile: string;
       diff: string;
       file: string;
       lines: (count: number) => string;
@@ -746,6 +1260,7 @@ export interface Translations {
       desktop: string;
       mobile: string;
       openNewTab: string;
+      downloadHtml: string;
       testingInBrowser: string;
       selfTestPassed: string;
       selfTestIssues: string;
@@ -764,9 +1279,9 @@ export interface Translations {
         code: string;
       };
       projectLabel: (type: string) => string;
-      switchToEditor: string;
-      switchToEditorPrefix: string;
-      switchToEditorSuffix: string;
+      switchToViewer: string;
+      switchToViewerPrefix: string;
+      switchToViewerSuffix: string;
       startLivePreview: string;
       fileMissing: (name: string) => string;
       fileEmpty: (name: string) => string;
@@ -778,6 +1293,7 @@ export interface Translations {
     };
     review: {
       generating: string;
+      generationFailed: string;
       needsLook: string;
       mostlyFine: string;
       looksClean: string;
@@ -795,6 +1311,8 @@ export interface Translations {
       kernelVerdictSteps: (count: number) => string;
     };
     privacy: {
+      unavailable: string;
+      retry: string;
       title: string;
       sourceHealth: string;
       searxng: string;
@@ -804,6 +1322,13 @@ export interface Translations {
       fetch: string;
       fetchMany: string;
       crawl: string;
+      /** Per-tool display copy, keyed by the tool name `/api/igino/status`
+          reports. Data-driven so a new capability shows up without a frontend
+          change; an unknown key falls back to the raw tool name. */
+      capabilityLabels: Record<string, string>;
+      capabilityHints: Record<string, string>;
+      /** Placeholder for a counter the server did not send. */
+      noData: string;
       fetches: string;
       avgFetch: string;
       capabilities: string;
@@ -847,6 +1372,7 @@ export interface Translations {
     metrics: {
       tools: string;
       toolsDetail: string;
+      toolsEmpty: string;
       subagents: string;
       subagentsDetail: string;
       subagentsConcurrency: (n: number) => string;

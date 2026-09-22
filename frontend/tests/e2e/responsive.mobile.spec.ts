@@ -8,14 +8,37 @@ import { mockLangGraphAPI } from "./utils/mock-api";
  * Desktop Chrome project cannot exercise.
  */
 
-/** Nothing may extend past the right edge of the viewport. */
+/**
+ * Nothing may extend past the right edge of the viewport.
+ *
+ * Polled, not sampled: a section still streaming in its content can be wider
+ * for a frame or two, and under parallel workers a single sample landed in
+ * that window. The steady state is what must fit. On failure the message
+ * names the offending elements, so a flake is diagnosable from the report.
+ */
 async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(() => {
-    const doc = document.documentElement;
-    return doc.scrollWidth - doc.clientWidth;
-  });
-  // Sub-pixel rounding shows up as a 1px diff on some builds.
-  expect(overflow).toBeLessThanOrEqual(1);
+  const measure = () =>
+    page.evaluate(() => {
+      const doc = document.documentElement;
+      const vw = doc.clientWidth;
+      const offenders = Array.from(document.querySelectorAll("body *"))
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 40 && r.right > vw + 1 && !el.closest("nav");
+        })
+        .slice(0, 5)
+        .map(
+          (el) =>
+            `${el.tagName.toLowerCase()} right=${Math.round(el.getBoundingClientRect().right)} .${(el.getAttribute("class") ?? "").slice(0, 80)}`,
+        );
+      return { overflow: doc.scrollWidth - doc.clientWidth, offenders };
+    });
+  await expect
+    .poll(async () => (await measure()).overflow, { timeout: 15_000 })
+    // Sub-pixel rounding shows up as a 1px diff on some builds.
+    .toBeLessThanOrEqual(1);
+  const final = await measure();
+  expect(final.offenders, "elements past the viewport edge").toEqual([]);
 }
 
 test.describe("landing page on mobile", () => {
@@ -56,9 +79,15 @@ test.describe("workspace on mobile", () => {
     await expect(input).toBeVisible({ timeout: 15_000 });
 
     const viewportWidth = page.viewportSize()?.width ?? 412;
-    const box = await input.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth + 1);
+    // The composer remounts once thread state settles; re-query rather than
+    // trusting a handle taken before the remount (boundingBox() came back
+    // null under parallel workers).
+    await expect
+      .poll(async () => {
+        const box = await page.getByRole("textbox").first().boundingBox();
+        return box ? box.x + box.width : Number.POSITIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(viewportWidth + 1);
 
     await expectNoHorizontalOverflow(page);
   });
@@ -153,5 +182,62 @@ test.describe("workspace on mobile", () => {
     await expect(
       page.getByRole("button", { name: /^(Chat|对话)$/ }),
     ).toHaveCount(0);
+  });
+});
+
+test.describe("settings route on mobile", () => {
+  // Regressions caught by the 2026-09-18 visual baseline: the section grid
+  // had no explicit column below md, so any wide content (the Models page's
+  // preset buttons) pushed the whole document to 1297px; and the page had no
+  // sidebar trigger, so a phone had no way back to the chat list.
+  const SECTIONS = ["models", "tools", "account", "memory"] as const;
+
+  for (const section of SECTIONS) {
+    test(`#${section} does not overflow the viewport`, async ({ page }) => {
+      mockLangGraphAPI(page);
+      // The memory section proxies through Next's own /api/memory handler;
+      // answer it here so the section reaches its settled state.
+      await page.route("**/api/memory**", (r) =>
+        r.fulfill({ status: 404, contentType: "application/json", body: "{}" }),
+      );
+      await page.goto(`/workspace/settings#${section}`);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.waitForTimeout(500);
+      await expectNoHorizontalOverflow(page);
+    });
+  }
+
+  test("offers the sidebar trigger", async ({ page }) => {
+    mockLangGraphAPI(page);
+    await page.goto("/workspace/settings#appearance");
+    const trigger = page.getByRole("button", { name: /toggle sidebar/i });
+    await expect(trigger).toBeVisible({ timeout: 15_000 });
+    await trigger.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+});
+
+test.describe("chat header on mobile", () => {
+  test("keeps a long thread title on one line", async ({ page }) => {
+    const threadId = "00000000-0000-0000-0000-0000000031bb";
+    mockLangGraphAPI(page, {
+      threads: [
+        {
+          thread_id: threadId,
+          title:
+            "A deliberately long thread title that used to wrap onto a second line in the header",
+          updated_at: "2026-09-18T12:00:00Z",
+        },
+      ],
+    });
+    await page.goto(`/workspace/chats/${threadId}`);
+    const title = page.locator("header span.truncate").first();
+    await expect(title).toBeVisible({ timeout: 15_000 });
+    const box = await title.boundingBox();
+    expect(box).not.toBeNull();
+    // One line of 14px text is ~20px tall; two lines would be ~40px.
+    expect(box!.height).toBeLessThan(30);
   });
 });
