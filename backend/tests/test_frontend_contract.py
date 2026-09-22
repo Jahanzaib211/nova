@@ -78,6 +78,19 @@ class TestTerminalTypeContract:
         ts = _read(TOOL_SURFACE_TS)
         assert 'TERMINAL_TOOL_PREFIXES: readonly string[] = ["shell_"]' in ts
 
+    def test_acp_runtime_observations_have_a_frontend_rule(self) -> None:
+        """`record_runtime_observation` writes `acp_<kind>` lines for an ACP
+        runtime's own tool calls (the backend writer builds the type from the
+        ACP kind, so the literal-type scan above cannot see it). The frontend
+        must route the whole prefix to the Activity surface."""
+        tools_py = _read(TOOLS_PY)
+        assert 'f"acp_{safe_kind}"' in tools_py, "record_runtime_observation no longer writes acp_<kind> types?"
+        ts = _read(TOOL_SURFACE_TS)
+        assert 'ACP_OBSERVATION_PREFIX = "acp_"' in ts
+        assert "name.startsWith(ACP_OBSERVATION_PREFIX)" in ts
+        # Never a terminal type: these lines carry a title, not command output.
+        assert '"acp_' not in ts.split("const TERMINAL_TOOL_NAMES")[1].split(");")[0]
+
 
 class TestTodoBindingContract:
     def test_backend_emits_todo_indexes(self) -> None:

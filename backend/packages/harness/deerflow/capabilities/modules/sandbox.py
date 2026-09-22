@@ -112,6 +112,20 @@ _TOOL_SYMBOLS = {
 }
 
 
+def _thread_data(thread_id: str, user_id: str | None) -> dict[str, str]:
+    """The thread's data directories, created if absent -- the same three
+    paths ``ThreadDataMiddleware`` computes for the lead agent."""
+    from deerflow.config.paths import get_paths
+
+    paths = get_paths()
+    paths.ensure_thread_dirs(thread_id, user_id=user_id)
+    return {
+        "workspace_path": str(paths.sandbox_work_dir(thread_id, user_id=user_id)),
+        "uploads_path": str(paths.sandbox_uploads_dir(thread_id, user_id=user_id)),
+        "outputs_path": str(paths.sandbox_outputs_dir(thread_id, user_id=user_id)),
+    }
+
+
 class _ToolRuntime:
     """The slice of LangGraph's ``Runtime`` these tools actually read.
 
@@ -133,7 +147,16 @@ class _ToolRuntime:
         # than merely sufficient -- acquisition is keyed by thread_id, so an
         # empty state resolves to that thread's existing sandbox instead of
         # creating a second one.
-        self.state: dict[str, Any] = {}
+        #
+        # `thread_data` is what ThreadDataMiddleware puts in the lead agent's
+        # state before any tool runs: the thread's workspace/uploads/outputs
+        # paths. On the local provider `bash`, `read_file` and friends
+        # validate every path against it and refuse with "Thread data not
+        # available for local sandbox" when it is missing -- so without it
+        # every harness-driven sandbox call failed on a local deployment
+        # while the same call from the lead agent worked (found by
+        # tests/test_acp_runtime_drives_sandbox_e2e.py).
+        self.state: dict[str, Any] = {"thread_data": _thread_data(thread_id, user_id)}
         # These three are genuinely None-guarded at every use site.
         self.config = None
         self.store = None

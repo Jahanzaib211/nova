@@ -332,6 +332,16 @@ def pm2_status() -> dict[str, str]:
         return {}
 
 
+def _local_llm_retired() -> bool:
+    try:
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from inventory import local_llm_retired  # type: ignore[import-not-found]
+
+        return bool(local_llm_retired())
+    except Exception:  # noqa: BLE001 - a probe helper must never fail the gate
+        return False
+
+
 def evaluate_services(pm2: dict[str, str], endpoints: dict[str, int | None], served_build: str | None, image_build: str | None) -> dict:
     problems: list[str] = []
     offline = [a for a in NOVA_PM2_APPS if pm2.get(a) != "online"]
@@ -459,9 +469,12 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
         "gateway /health": http_status(f"{base}/health"),
         "nova-ops :4100": http_status("http://127.0.0.1:4100/"),
         "litellm :4000": http_status("http://172.17.0.1:4000/v1/models"),
-        "llama-server :8086": http_status("http://127.0.0.1:8086/v1/models"),
         "public": http_status("https://nova.alilabsx.com/health", timeout=15),
     }
+    # The local model is optional: retired (unit disabled) ⇒ not an endpoint
+    # this gate expects. See scripts/inventory.py::local_llm_retired.
+    if not _local_llm_retired():
+        endpoints["llama-server :8086"] = http_status("http://127.0.0.1:8086/v1/models")
     # By compose label, not by name: a recreate interrupted mid-way leaves the
     # old container renamed (`<id>_deer-flow-frontend`) but still serving.
     _, cid = run(["docker", "ps", "-q", "--filter", "label=com.docker.compose.project=deer-flow-dev", "--filter", "label=com.docker.compose.service=frontend"], timeout=30)

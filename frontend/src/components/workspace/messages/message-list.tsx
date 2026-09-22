@@ -51,6 +51,7 @@ import {
   parseSubtaskResult,
 } from "@/core/tasks/subtask-result";
 import type { AgentThreadState } from "@/core/threads";
+import { runtimeTranscripts } from "@/core/threads/acp-transcript";
 import { useActiveRunState } from "@/core/threads/hooks";
 import {
   recordRender,
@@ -62,6 +63,8 @@ import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { CopyButton } from "../copy-button";
 import { StreamingIndicator } from "../streaming-indicator";
 
+import { RuntimeTranscriptCard } from "./acp-transcript";
+import { useThread } from "./context";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -260,6 +263,18 @@ export function MessageList({
     prevIsLoading.current = thread.isLoading;
   }, [thread.isLoading]);
   const messages = thread.messages;
+  // A turn running *on* an ACP runtime (Claude Code / OpenClaw) produces no
+  // assistant message until the runtime is done — only acp_update events.
+  // Before this, the chat showed "is thinking" for the whole session while
+  // Claude Code made dozens of tool calls (live 2026-09-22: 30+ calls, ~5
+  // minutes, nothing on screen). Surface that transcript where the
+  // indicator would be.
+  const { acpTranscripts } = useThread();
+  const liveRuntimeTranscripts = useMemo(
+    () =>
+      thread.isLoading ? runtimeTranscripts(acpTranscripts, messages) : [],
+    [acpTranscripts, messages, thread.isLoading],
+  );
   const groupedMessages = getMessageGroups(messages);
   const lastHumanGroupIndex = useMemo(() => {
     for (let i = groupedMessages.length - 1; i >= 0; i--) {
@@ -747,6 +762,15 @@ export function MessageList({
               true,
               thread.isLoading,
             );
+          }
+          if (indicatorVisible && liveRuntimeTranscripts.length > 0) {
+            return liveRuntimeTranscripts.map(([agent, transcript]) => (
+              <RuntimeTranscriptCard
+                key={`runtime-${agent}`}
+                agent={agent}
+                transcript={transcript}
+              />
+            ));
           }
           return indicatorVisible ? (
             <div

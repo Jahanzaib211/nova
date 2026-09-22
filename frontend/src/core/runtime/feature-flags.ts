@@ -17,6 +17,7 @@ const ALL_OFF: FeatureFlags = {
   acp_agents: false,
   capabilities: false,
   runtimes: false,
+  sandbox: false,
 };
 
 /**

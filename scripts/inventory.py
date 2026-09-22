@@ -279,6 +279,36 @@ def _http_item(name: str, kind: str, display: str, url: str, *, ok_codes=(200,),
     return item(name, kind=kind, display_name=display, health="degraded", detail=f"HTTP {status}", endpoint=url, latency_ms=latency)
 
 
+LOCAL_LLM_UNIT = "local-llm.service"
+
+
+def local_llm_retired(unit: str = LOCAL_LLM_UNIT) -> bool:
+    """True when the operator has switched the local model off on purpose.
+
+    The GPU-resident llama-server is a user systemd unit. Stopping it to give
+    the GPU back (2026-09-22: it held 11.6 of 12 GB and every GL client on the
+    box crashed) is a decision, not an outage — but the probe painted it red
+    and kept the inventory gate red for good. Disabled/masked/absent unit ⇒
+    retired ⇒ reported as `disabled` (green), same as the retired Ollama.
+    An *enabled* unit that does not answer is still `down`.
+    """
+    if not shutil.which("systemctl"):
+        return False
+    try:
+        out = subprocess.run(["systemctl", "--user", "is-enabled", unit], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    state = (out.stdout or out.stderr or "").strip().splitlines()
+    return not state or state[0] in {"disabled", "masked", "not-found"}
+
+
+def _local_llm_item() -> dict:
+    url = "http://127.0.0.1:8086/v1/models"
+    if local_llm_retired():
+        return item("llama_server", kind="llm_gateway", display_name="llama-server (:8086)", health="disabled", detail=f"retired ({LOCAL_LLM_UNIT} disabled)", endpoint=url, latency_ms=None)
+    return _http_item("llama_server", "llm_gateway", "llama-server (:8086)", url)
+
+
 def probe_nova_stack() -> list[dict]:
     items = [
         _http_item("nova_nginx", "agent_gateway", "Nova (nginx :2026)", "http://127.0.0.1:2026/health"),
@@ -322,7 +352,7 @@ def probe_llm() -> list[dict]:
             pass
         items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="disabled" if ollama_disabled else "down", detail="retired (enabled: false)" if ollama_disabled else (f"HTTP {status}" if status else body[:120]), endpoint=ollama_url, latency_ms=latency))
     items.append(_http_item("litellm", "llm_gateway", "LiteLLM (pm2 nova-litellm)", f"http://{DOCKER_BRIDGE}:4000/health/liveliness"))
-    items.append(_http_item("llama_server", "llm_gateway", "llama-server (:8086)", "http://127.0.0.1:8086/v1/models"))
+    items.append(_local_llm_item())
     return items
 
 

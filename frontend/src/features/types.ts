@@ -56,7 +56,8 @@ export type FeatureFlagKey =
   | "email_marketing"
   | "acp_agents"
   | "capabilities"
-  | "runtimes";
+  | "runtimes"
+  | "sandbox";
 
 export interface SettingsPageSpec {
   id: SettingsPageId;

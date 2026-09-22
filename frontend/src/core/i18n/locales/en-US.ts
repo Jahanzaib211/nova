@@ -866,6 +866,14 @@ export const enUS: Translations = {
     acp: {
       invoke: (agent: string) => `Working with ${agent}`,
       waiting: "Starting the agent…",
+      runtimeWorking: (agent: string) => `${agent} is working on this turn`,
+      actions: (count: number) =>
+        count === 1 ? "1 action" : `${count} actions`,
+      showAll: "show all",
+      showLess: "show less",
+      answeredBy: (agent: string) => `via ${agent}`,
+      fallback: (agent: string, reason: string) =>
+        `${agent} could not take this turn (${reason}) — answered by the native Nova agent instead.`,
     },
     searchFor: (query: string) => `Search for "${query}"`,
     searchForRelatedInfo: "Search for related information",

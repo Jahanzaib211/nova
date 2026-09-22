@@ -164,11 +164,35 @@ export function isViewerTool(name: string): boolean {
   return typeof name === "string" && EDITOR_FOCUS_TOOLS.has(name);
 }
 
+/**
+ * Observations an ACP runtime (Claude Code, OpenClaw) writes for its *own*
+ * tool calls: `acp_<kind>`, where kind is the ACP tool-call kind (read, edit,
+ * delete, move, search, execute, fetch, think, other) or a permission
+ * decision (`acp_permission_denied`). Written by
+ * `deerflow.sandbox.tools.record_runtime_observation`. Activity surface —
+ * they carry a title, never command output.
+ */
+export const ACP_OBSERVATION_PREFIX = "acp_";
+
+const ACP_KIND_TO_WORK: ReadonlyMap<string, ToolWorkKind> = new Map([
+  ["execute", "terminal"],
+  ["read", "file-read"],
+  ["edit", "file-edit"],
+  ["delete", "file-edit"],
+  ["move", "file-edit"],
+  ["search", "content-search"],
+  ["fetch", "browser"],
+]);
+
 /** Classify a tool's work for labels/dots/icons. Unknown names stay graceful. */
 export function classifyToolWork(name: string): ToolWorkKind {
   if (typeof name !== "string") return "other";
   const known = KIND_BY_NAME.get(name);
   if (known) return known;
+  if (name.startsWith(ACP_OBSERVATION_PREFIX))
+    return (
+      ACP_KIND_TO_WORK.get(name.slice(ACP_OBSERVATION_PREFIX.length)) ?? "other"
+    );
   if (TERMINAL_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix)))
     return "terminal";
   if (

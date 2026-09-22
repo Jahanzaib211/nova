@@ -180,13 +180,74 @@ async def test_dispatch_middleware_passes_through_for_native():
 
 
 @pytest.mark.anyio
-async def test_dispatch_middleware_reports_failures_as_a_message_not_an_exception():
+async def test_dispatch_middleware_falls_back_to_native_when_the_runtime_fails():
+    """Live 2026-09-21: Claude Code answered `You've hit your limit · resets
+    3am (UTC)` five minutes into the turn and the user got that sentence as
+    the reply. The same turn must instead run on the native agent — full
+    tool suite — and say why in the stream and on the message."""
+    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+
+    async def failing(*a, **k):
+        raise RuntimeError("Internal error: You've hit your limit · resets 3am (UTC)")
+
+    events: list[dict] = []
+    mw = RuntimeDispatchMiddleware(registry=RuntimeRegistry(acp_agents=_agents(), default="native"), run_prompt=failing, stream_writer=lambda: events.append, nova_mcp=lambda u, t: (None, lambda: None))
+
+    class Req:
+        messages = [HumanMessage("hi")]
+        state = {"messages": messages}
+
+        class runtime:
+            context = {"runtime": "claude_code", "thread_id": "t1"}
+
+    seen: list = []
+
+    async def handler(req):
+        seen.append(req)
+        return AIMessage("native answer")
+
+    result = await mw.awrap_model_call(Req(), handler)
+    assert seen and isinstance(seen[0], Req)
+    assert result.content == "native answer"
+    assert result.response_metadata["runtime"] == "native"
+    assert result.response_metadata["runtime_fallback_from"] == "claude_code"
+    assert "hit your limit" in result.response_metadata["runtime_fallback_reason"]
+    statuses = [e["delta"] for e in events if e["kind"] == "status"]
+    assert any("unavailable" in s and "native" in s and "hit your limit" in s for s in statuses)
+
+
+@pytest.mark.anyio
+async def test_dispatch_middleware_fallback_covers_the_turn_timeout():
+    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+
+    async def slow(*a, **k):
+        raise TimeoutError()
+
+    mw = RuntimeDispatchMiddleware(registry=RuntimeRegistry(acp_agents=_agents(), default="native"), run_prompt=slow, stream_writer=lambda: None, nova_mcp=lambda u, t: (None, lambda: None))
+
+    class Req:
+        messages = [HumanMessage("hi")]
+        state = {"messages": messages}
+
+        class runtime:
+            context = {"runtime": "openclaw"}
+
+    async def handler(req):
+        return AIMessage("native answer")
+
+    result = await mw.awrap_model_call(Req(), handler)
+    assert result.content == "native answer"
+    assert result.response_metadata["runtime_fallback_reason"].startswith("TimeoutError")
+
+
+@pytest.mark.anyio
+async def test_dispatch_middleware_reports_failures_as_a_message_when_fallback_is_off():
     from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
 
     async def failing(*a, **k):
         raise RuntimeError("adapter exited 1")
 
-    mw = RuntimeDispatchMiddleware(registry=RuntimeRegistry(acp_agents=_agents(), default="native"), run_prompt=failing, stream_writer=lambda: None, nova_mcp=lambda u, t: (None, lambda: None))
+    mw = RuntimeDispatchMiddleware(registry=RuntimeRegistry(acp_agents=_agents(), default="native"), run_prompt=failing, stream_writer=lambda: None, nova_mcp=lambda u, t: (None, lambda: None), fallback_to_native=False)
 
     class Req:
         messages = [HumanMessage("hi")]
@@ -222,3 +283,85 @@ def test_nova_mcp_tool_calls_are_judged_by_operation_kind_not_acp_kind():
     assert nova_tool_decision("mcp__nova__secrets__set", "full", lookup) is False
     assert nova_tool_decision("mcp__nova__nope__x", "full", lookup) is None  # unknown op: fall back to the ACP policy
     assert nova_tool_decision("Bash", "full", lookup) is None  # not a Nova tool
+
+
+# ---------------------------------------------------------------- the runtime's hands
+
+
+def test_runtime_preamble_points_at_novas_sandbox_only_when_nova_is_mounted():
+    from deerflow.runtimes.transcript import SANDBOX_TOOL_NAMES, runtime_preamble
+
+    text = runtime_preamble(["nova", "other"])
+    for name in SANDBOX_TOOL_NAMES:
+        assert f"`{name}`" in text
+    assert "/mnt/user-data/workspace" in text
+    assert "built-in Bash is unavailable" in text
+    assert runtime_preamble(["other"]) == ""
+    assert runtime_preamble([]) == ""
+
+
+@pytest.mark.anyio
+async def test_dispatch_middleware_briefs_the_runtime_and_mirrors_its_actions(tmp_path, monkeypatch):
+    """Live 2026-09-22: Claude Code said "Bash is blocked" and worked in its
+    private scratch dir; the Agent's Computer showed "0 actions". The prompt
+    must open with the sandbox briefing, and each of the runtime's own tool
+    calls must land in the thread's sandbox.log as an `acp_*` observation
+    (narration and Nova-tool echoes excluded)."""
+    import json
+
+    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+
+    monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "_paths", None, raising=False)
+    monkeypatch.setattr(paths_module, "_paths_singleton", None, raising=False)
+
+    thread_id = "thread-mirror-1"
+    seen: dict = {}
+
+    async def fake_run(agent_cfg, prompt, *, cwd, mcp_servers, permission, on_text, on_status, model=None, timeout=None):
+        seen["prompt"] = prompt
+        on_status("s-1", "runtime: claude_code (plan)")
+        on_status("s-1", "thinking: let me look around")
+        on_status("s-1", "read: Read(/app/backend/config.yaml)")
+        on_status("s-1", "other: mcp__nova__sandbox__bash")  # logged by the sandbox tool itself
+        on_status("s-1", "permission denied: execute — rm -rf /")
+        on_text("s-1", "done")
+        return "done"
+
+    mw = RuntimeDispatchMiddleware(
+        registry=RuntimeRegistry(acp_agents=_agents(), default="native"),
+        run_prompt=fake_run,
+        stream_writer=lambda: None,
+        nova_mcp=lambda user_id, thread_id: ({"name": "nova", "type": "http", "url": "http://gw/api/mcp/nova", "headers": []}, lambda: None),
+    )
+
+    class Req:
+        messages = [HumanMessage("drive the sandbox")]
+        state = {"messages": messages}
+
+        class runtime:
+            context = {"runtime": "claude_code", "thread_id": thread_id, "user_id": "u1"}
+
+    async def handler(req):
+        raise AssertionError
+
+    result = await mw.awrap_model_call(Req(), handler)
+    assert result.content == "done"
+    assert seen["prompt"].startswith("You are running as the runtime for a Nova chat")
+    assert "`sandbox__bash`" in seen["prompt"]
+    assert seen["prompt"].endswith("drive the sandbox")
+
+    from deerflow.config.paths import get_paths
+
+    log = get_paths().sandbox_log_file(thread_id, user_id="u1") if hasattr(get_paths(), "sandbox_log_file") else None
+    if log is None:
+        candidates = list(tmp_path.rglob("sandbox.log"))
+        assert len(candidates) == 1, candidates
+        log = candidates[0]
+    lines = [json.loads(line) for line in log.read_text().splitlines() if line.strip()]
+    assert [line["type"] for line in lines] == ["acp_read", "acp_permission_denied"]
+    assert lines[0]["summary"] == "claude_code: Read(/app/backend/config.yaml)"
+    assert lines[1]["summary"] == "claude_code: execute — rm -rf /"
+    assert str(thread_id) in str(log)

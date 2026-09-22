@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 
 import { CopyButton } from "../copy-button";
 
+import { runtimeDisplayName } from "./acp-transcript";
 import { MarkdownContent } from "./markdown-content";
 
 function FeedbackButtons({
@@ -373,8 +374,53 @@ function MessageContent_({
         className="my-3"
         components={components}
       />
+      <RuntimeProvenance message={message} />
     </AIElementMessageContent>
   );
+}
+
+/**
+ * Which runtime answered. `RuntimeDispatchMiddleware` stamps
+ * `response_metadata.runtime` on a turn taken by an ACP runtime, and
+ * `runtime_fallback_from` / `runtime_fallback_reason` when that runtime
+ * failed and the native agent answered instead — a user who chose Claude
+ * Code and got Nova should be told, not left to guess from the tone.
+ */
+function RuntimeProvenance({ message }: { message: Message }) {
+  const { t } = useI18n();
+  const meta = (message as { response_metadata?: Record<string, unknown> })
+    .response_metadata;
+  if (!meta) return null;
+  const runtime = typeof meta.runtime === "string" ? meta.runtime : null;
+  const fallbackFrom =
+    typeof meta.runtime_fallback_from === "string"
+      ? meta.runtime_fallback_from
+      : null;
+  const reason =
+    typeof meta.runtime_fallback_reason === "string"
+      ? meta.runtime_fallback_reason
+      : "";
+  if (fallbackFrom) {
+    return (
+      <p
+        className="text-warning mt-1 text-xs"
+        data-testid="runtime-fallback-notice"
+      >
+        {t.toolCalls.acp.fallback(runtimeDisplayName(fallbackFrom), reason)}
+      </p>
+    );
+  }
+  if (runtime && runtime !== "native") {
+    return (
+      <p
+        className="text-muted-foreground mt-1 text-xs"
+        data-testid="runtime-provenance"
+      >
+        {t.toolCalls.acp.answeredBy(runtimeDisplayName(runtime))}
+      </p>
+    );
+  }
+  return null;
 }
 
 /**

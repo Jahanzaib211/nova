@@ -8,6 +8,14 @@ ACP prompt, runs it through the adapter with Nova's own MCP server mounted
 as ``acp_update`` events, and returns the agent's answer as the
 ``AIMessage`` — threads, checkpoints, titles and memory see an ordinary
 turn.
+
+When the runtime cannot finish the turn — observed live on 2026-09-21 as
+``Internal error: You've hit your limit · resets 3am (UTC)`` from the
+Claude Code adapter, five minutes after the user hit send — the turn is
+handed to the native handler instead of being answered with the error
+(``fallback_to_native``, default on). The native agent has the full tool
+suite (sandbox, subagents, skills), so the user gets an answer from the
+same message rather than a sentence telling them to try again later.
 """
 
 from __future__ import annotations
@@ -20,7 +28,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from deerflow.runtimes.registry import RuntimeRegistry, get_runtime_registry
-from deerflow.runtimes.transcript import transcript_for_prompt
+from deerflow.runtimes.transcript import runtime_preamble, transcript_for_prompt
 from deerflow.runtimes.types import NATIVE, policy_for_mode
 
 logger = logging.getLogger(__name__)
@@ -69,6 +77,7 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
         nova_mcp: NovaMcpFactory = _default_nova_mcp,
         model_runtime: str | None = None,
         turn_timeout: float | None = 1800.0,
+        fallback_to_native: bool = True,
     ) -> None:
         super().__init__()
         self._registry = registry
@@ -77,6 +86,7 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
         self._nova_mcp = nova_mcp
         self._model_runtime = model_runtime
         self._turn_timeout = turn_timeout
+        self._fallback_to_native = fallback_to_native
 
     @property
     def registry(self) -> RuntimeRegistry:
@@ -110,7 +120,11 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
                 user_id = None
 
         def emit(session_id: str, kind: str, delta: str) -> None:
-            if writer is None or not delta:
+            if not delta:
+                return
+            if kind == "status":
+                _mirror_runtime_action(thread_id, selection.runtime, delta)
+            if writer is None:
                 return
             try:
                 writer({"type": "acp_update", "agent": selection.runtime, "session_id": session_id or str(thread_id or ""), "kind": kind, "delta": delta})
@@ -140,13 +154,25 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
 
                 run = run_acp_prompt
             cwd = _work_dir(thread_id)
+            preamble = runtime_preamble([str(m.get("name", "")) for m in mcp_servers])
+            if preamble:
+                prompt = f"{preamble}\n\n---\n\n{prompt}"
             emit("", "status", f"runtime: {selection.runtime} ({permission.label})")
             text = await run(agent_cfg, prompt, cwd=cwd, mcp_servers=mcp_servers, permission=permission, on_text=lambda sid, d: emit(sid, "text", d), on_status=lambda sid, s: emit(sid, "status", s), model=None, timeout=self._turn_timeout)
             return AIMessage(content=text or "(no response)", response_metadata={"runtime": selection.runtime, "account": selection.account, "permission_mode": selection.permission_mode})
         except Exception as exc:
-            logger.error("runtime %s failed: %s", selection.runtime, exc)
-            emit("", "status", f"runtime error: {type(exc).__name__}: {exc}")
-            return AIMessage(content=f"The {selection.runtime} runtime could not complete this turn: {type(exc).__name__}: {exc}", response_metadata={"runtime": selection.runtime, "runtime_error": True})
+            reason = _failure_reason(exc)
+            if not self._fallback_to_native:
+                logger.error("runtime %s failed: %s", selection.runtime, reason)
+                emit("", "status", f"runtime error: {reason}")
+                return AIMessage(content=f"The {selection.runtime} runtime could not complete this turn: {reason}", response_metadata={"runtime": selection.runtime, "runtime_error": True})
+            # Same turn, native agent, full tool suite. The handler sees the
+            # request exactly as every earlier middleware shaped it.
+            logger.warning("runtime %s failed: %s — falling back to the native agent for this turn", selection.runtime, reason)
+            emit("", "status", f"runtime {selection.runtime} unavailable ({reason}) — continuing on the native Nova agent (sandbox + subagents)")
+            result = await handler(request)
+            _mark_fallback(result, selection.runtime, reason)
+            return result
         finally:
             if minted is not None and nova_server and nova_server.get("repo") is not None:
                 try:
@@ -157,6 +183,59 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
                 cleanup()
             except Exception:
                 pass
+
+
+#: Status lines that narrate rather than act — never mirrored into the log.
+_NARRATION_PREFIXES = ("thinking:", "runtime")
+
+
+def _mirror_runtime_action(thread_id: str | None, agent: str, status: str) -> None:
+    """Write one of the runtime's own tool calls / permission decisions into
+    the thread's sandbox.log so the Agent's Computer shows it as an action.
+
+    ``acp_transport`` formats tool calls as ``"<kind>: <title>"`` and
+    permission decisions as ``"permission approved|denied: <kind> — <title>"``.
+    Calls the runtime makes *through* Nova's ``sandbox__*`` tools are logged
+    by those tools already; they surface here only as the ACP-side title
+    (``other: mcp__nova__sandbox__bash``) and are skipped so a single command
+    is not two cards.
+    """
+    if not thread_id or status.startswith(_NARRATION_PREFIXES):
+        return
+    if "mcp__nova__" in status:
+        return
+    head, sep, title = status.partition(": ")
+    if not sep:
+        return
+    kind = head
+    if head.startswith("permission "):
+        # "permission denied: execute — rm -rf" -> kind "permission_denied", title "execute — rm -rf"
+        kind = head.replace(" ", "_")
+    try:
+        from deerflow.sandbox.tools import record_runtime_observation
+
+        record_runtime_observation(thread_id, agent=agent, kind=kind, title=title)
+    except Exception:  # never let the mirror break the turn
+        logger.debug("runtime action mirror failed", exc_info=True)
+
+
+def _failure_reason(exc: BaseException) -> str:
+    """One line for logs, status events and the fallback metadata."""
+    if isinstance(exc, TimeoutError):
+        return "TimeoutError: the runtime did not answer within the turn budget"
+    text = str(exc).strip() or exc.__class__.__name__
+    return f"{type(exc).__name__}: {text}"
+
+
+def _mark_fallback(result: Any, runtime: str, reason: str) -> None:
+    """Record on the native reply which runtime was asked first and why it
+    was skipped, so the transcript and the UI can say so. Best effort: the
+    handler may hand back something other than an AIMessage."""
+    meta = getattr(result, "response_metadata", None)
+    if isinstance(meta, dict):
+        meta.setdefault("runtime", NATIVE)
+        meta["runtime_fallback_from"] = runtime
+        meta["runtime_fallback_reason"] = reason
 
 
 def _work_dir(thread_id: str | None) -> str:

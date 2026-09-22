@@ -12,7 +12,7 @@ from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContex
 
 #: Every flag the platform knows. Frontend ``FeatureFlagKey`` mirrors this list
 #: (pinned by the contract test on both sides).
-FLAG_KEYS: tuple[str, ...] = ("jobs", "integrations", "email_marketing", "acp_agents", "capabilities", "runtimes")
+FLAG_KEYS: tuple[str, ...] = ("jobs", "integrations", "email_marketing", "acp_agents", "capabilities", "runtimes", "sandbox")
 
 
 def compute_flags(config: Any | None = None) -> dict[str, bool]:
@@ -39,6 +39,13 @@ def compute_flags(config: Any | None = None) -> dict[str, bool]:
         "acp_agents": bool(acp),
         "capabilities": True,
         "runtimes": enabled("runtimes"),
+        # The Agent's Computer exists whenever a sandbox provider is
+        # configured (every deployment). Missing here until 2026-09-22, so
+        # `sandbox__*` never reached Nova's MCP server and an ACP runtime
+        # could manage jobs but not touch the sandbox — it fell back to its
+        # own tools in its own workspace. Reaching the lead agent still
+        # needs a `nova:sandbox` tool group, which config.yaml does not add.
+        "sandbox": getattr(cfg, "sandbox", None) is not None,
     }
 
 

@@ -338,7 +338,13 @@ def build_middlewares(
 
         runtime_model_config = resolved_app_config.get_model_config(model_name) if model_name else None
         model_runtime = getattr(runtime_model_config, "runtime", None) if runtime_model_config is not None else None
-        middlewares.append(RuntimeDispatchMiddleware(model_runtime=model_runtime, turn_timeout=getattr(runtimes_config, "turn_timeout_seconds", 1800.0)))
+        middlewares.append(
+            RuntimeDispatchMiddleware(
+                model_runtime=model_runtime,
+                turn_timeout=getattr(runtimes_config, "turn_timeout_seconds", 1800.0),
+                fallback_to_native=getattr(runtimes_config, "fallback_to_native", True),
+            )
+        )
 
     # PreflightQuotaMiddleware — short-circuit the LLM call when the
     # provider's quota is exhausted. Only probes OpenAI-compatible

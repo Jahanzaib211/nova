@@ -42,6 +42,7 @@ import {
   applyAcpUpdate,
 } from "@/core/threads/acp-transcript";
 import {
+  acpTranscriptActivityEvents,
   activeWriteFilePathFromActivity,
   currentToolFromActivity,
   messagesToActivityEvents,
@@ -190,9 +191,16 @@ export default function ChatPage() {
   // from `onLangChainEvent` (on_tool_start/on_tool_end), but the gateway worker
   // doesn't emit LangGraph `events` mode, so that path is dead at runtime. The
   // `messages` mode is supported and carries the same tool_calls + results.
+  // A turn on an ACP runtime has no tool_calls in the stream; its actions
+  // come from the acp_update transcript instead (see activity.ts).
   const activityEvents = useMemo(
-    () => messagesToActivityEvents(thread.messages),
-    [thread.messages],
+    () => [
+      ...messagesToActivityEvents(thread.messages),
+      ...acpTranscriptActivityEvents(acpTranscripts, {
+        running: thread.isLoading,
+      }),
+    ],
+    [thread.messages, acpTranscripts, thread.isLoading],
   );
   const currentTool = useMemo(
     () => currentToolFromActivity(activityEvents),

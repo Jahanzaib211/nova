@@ -205,3 +205,15 @@ describe("partial tool calls", () => {
     expect(isActivityTool(undefined as unknown as string)).toBe(true);
   });
 });
+
+describe("ACP runtime observations", () => {
+  it("routes acp_<kind> to the matching work kind on the Activity surface", () => {
+    expect(classifyToolWork("acp_execute")).toBe("terminal");
+    expect(classifyToolWork("acp_read")).toBe("file-read");
+    expect(classifyToolWork("acp_edit")).toBe("file-edit");
+    expect(classifyToolWork("acp_search")).toBe("content-search");
+    expect(classifyToolWork("acp_fetch")).toBe("browser");
+    expect(classifyToolWork("acp_permission_denied")).toBe("other");
+    expect(isActivityTool("acp_execute")).toBe(true);
+  });
+});

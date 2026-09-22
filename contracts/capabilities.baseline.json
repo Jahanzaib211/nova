@@ -208,9 +208,22 @@
       "input_schema": {
         "properties": {
           "agent": {
-            "description": "Agent name from agents.registry",
+            "description": "Agent from agents.registry: its id (`subagent:bash`, `acp:claude_code`) or bare name (`bash`, `claude_code`).",
             "title": "Agent",
             "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model for a subagent (name from models.list). Default: the deployment's default model.",
+            "title": "Model"
           },
           "task": {
             "description": "What the agent should do; the result lands in outputs/agent-tasks/<job_id>.md",

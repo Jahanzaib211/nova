@@ -404,6 +404,27 @@ def reconcile_terminal_stats(log_path: Path) -> int | None:
         return total
 
 
+def record_runtime_observation(thread_id: str, *, agent: str, kind: str, title: str) -> None:
+    """Log one action an ACP runtime (Claude Code, OpenClaw) took *with its
+    own tools* into the thread's sandbox.log, as ``type="acp_<kind>"``.
+
+    A chat running on an ACP runtime has no tool_calls in the message stream;
+    the Agent's Computer builds its completed-action cards from this log and
+    takes only in-flight spinners from the stream, so without these lines the
+    panel read "0 actions" through a turn in which Claude Code made eighty
+    (live 2026-09-22). Actions the runtime takes *through* Nova's
+    ``sandbox__*`` tools are logged by those tools themselves and must not be
+    mirrored again — callers pass only the runtime's own tool titles.
+
+    Keyed by thread rather than sandbox id because the runtime never
+    acquires a sandbox for its own tools. Never raises.
+    """
+    if not thread_id:
+        return
+    safe_kind = "".join(ch if ch.isalnum() else "_" for ch in (kind or "other").strip().lower()) or "other"
+    _write_sandbox_observation(f"local:{thread_id}", f"acp_{safe_kind}", None, f"{agent}: {title}")
+
+
 def _write_sandbox_observation(
     sandbox_id: str,
     tool: str,

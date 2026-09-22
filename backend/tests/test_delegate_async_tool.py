@@ -93,3 +93,82 @@ async def test_agent_task_job_rejects_unknown_kind_or_agent(repo, monkeypatch):
     ctx = JobContext(repo, await repo.get(job_id), worker_id="t", lease_ttl=timedelta(seconds=60))
     with pytest.raises(RuntimeError, match="unknown ACP agent"):
         await handler.agent_task(ctx)
+
+
+def test_capability_delegate_resolves_registry_ids_to_a_kind():
+    """Live 2026-09-22: Claude Code called `agents__delegate` with
+    `acp:claude_code` (the id agents__registry gave it) and the job died with
+    `unknown subagent 'claude_code'` — the capability enqueued no `kind`."""
+    from deerflow.capabilities.modules.agents import resolve_delegate_target
+
+    config = AppConfig.model_validate({"sandbox": SANDBOX, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
+    assert resolve_delegate_target("acp:claude_code", config) == ("claude_code", "acp")
+    assert resolve_delegate_target("claude_code", config) == ("claude_code", "acp")
+    assert resolve_delegate_target("subagent:bash", config) == ("bash", "subagent")
+    assert resolve_delegate_target("general-purpose", config) == ("general-purpose", "subagent")
+    with pytest.raises(ValueError, match="unknown agent 'ghost'"):
+        resolve_delegate_target("ghost", config)
+
+
+async def test_capability_delegate_enqueues_kind_and_model(repo, monkeypatch):
+    from deerflow.capabilities.modules import agents as mod
+    from deerflow.capabilities.types import OpContext
+
+    config = AppConfig.model_validate({"sandbox": SANDBOX, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
+    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: config)
+    monkeypatch.setattr(mod, "jobs_repo", lambda: repo)
+    ctx = OpContext(user_id="u1", is_admin=False, thread_id="t1", surface="mcp")
+
+    out = await mod._delegate(ctx, mod.DelegateIn(agent="acp:claude_code", task="probe"))
+    assert out.job["payload"] == {"agent": "claude_code", "kind": "acp", "task": "probe"}
+
+    out = await mod._delegate(ctx, mod.DelegateIn(agent="bash", task="uname -a", model="claude-sonnet-4-6"))
+    assert out.job["payload"] == {"agent": "bash", "kind": "subagent", "task": "uname -a", "model": "claude-sonnet-4-6"}
+
+
+async def test_agent_task_job_passes_the_requested_model_to_the_subagent(repo, monkeypatch):
+    from app.jobs.handlers import agents as handler
+
+    captured: dict = {}
+
+    class FakeExecutor:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+        def execute_async(self, task, task_id=None):
+            return task_id
+
+    class Result:
+        status = handler_status = None
+
+    monkeypatch.setattr("deerflow.subagents.SubagentExecutor", FakeExecutor)
+    from deerflow.subagents.executor import SubagentStatus
+
+    done = SimpleNamespace(status=SubagentStatus.COMPLETED, result="ok", error=None, ai_messages=[])
+    monkeypatch.setattr("deerflow.subagents.executor.get_background_task_result", lambda task_id: done)
+    monkeypatch.setattr("deerflow.tools.get_available_tools", lambda **kw: [])
+
+    job_id = await JobQueue(repo).enqueue("agents.task", {"agent": "bash", "kind": "subagent", "task": "id", "model": "claude-sonnet-4-6"})
+    ctx = JobContext(repo, await repo.get(job_id), worker_id="t", lease_ttl=timedelta(seconds=60))
+    out = await handler.agent_task(ctx)
+    assert out["result"] == "ok"
+    assert captured["parent_model"] == "claude-sonnet-4-6"
+
+
+async def test_capability_delegate_from_a_runtime_uses_the_configured_delegate_model(repo, monkeypatch):
+    from deerflow.capabilities.modules import agents as mod
+    from deerflow.capabilities.types import OpContext
+
+    config = AppConfig.model_validate({"sandbox": SANDBOX, "runtimes": {"enabled": True, "delegate_model": "claude-sonnet-4-6"}})
+    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: config)
+    monkeypatch.setattr(mod, "jobs_repo", lambda: repo)
+
+    # Over MCP (an ACP runtime's turn) the pinned model applies…
+    out = await mod._delegate(OpContext(user_id="u1", is_admin=False, thread_id="t1", surface="mcp"), mod.DelegateIn(agent="bash", task="id"))
+    assert out.job["payload"]["model"] == "claude-sonnet-4-6"
+    # …an explicit choice still wins…
+    out = await mod._delegate(OpContext(user_id="u1", is_admin=False, thread_id="t1", surface="mcp"), mod.DelegateIn(agent="bash", task="id", model="minimax-m3"))
+    assert out.job["payload"]["model"] == "minimax-m3"
+    # …and a native/API caller keeps inheriting the deployment default.
+    out = await mod._delegate(OpContext(user_id="u1", is_admin=False, thread_id="t1", surface="api"), mod.DelegateIn(agent="bash", task="id"))
+    assert "model" not in out.job["payload"]

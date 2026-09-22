@@ -102,6 +102,7 @@ class FeatureFlags(BaseModel):
     acp_agents: bool = False
     capabilities: bool = False
     runtimes: bool = False
+    sandbox: bool = False
 
 
 class CapabilitiesResponse(BaseModel):

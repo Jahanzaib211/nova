@@ -34,6 +34,7 @@ from starlette.types import Receive, Scope, Send
 from deerflow.capabilities import CapabilityRegistry, OpContext, Operation, OperationNotFound
 from deerflow.capabilities.modules.features import compute_flags
 from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+from deerflow.runtime.user_context import reset_current_user, set_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,13 @@ class Principal:
 
 
 _principal: ContextVar[Principal | None] = ContextVar("nova_mcp_principal", default=None)
+
+
+@dataclass(frozen=True)
+class _TokenUser:
+    """The harness token's owner, in the shape ``CurrentUser`` expects."""
+
+    id: str
 
 
 def _tool_for(op: Operation) -> types.Tool:
@@ -136,10 +144,20 @@ class NovaMcpServer:
                 surface="mcp",
                 extras={"scopes": sorted(principal.scopes)},
             )
+            # Bind the token owner as the current user for the call. The
+            # sandbox tools (and everything under them: per-user thread
+            # directories, memory, audit) resolve the user through
+            # ``get_effective_user_id()``, not ``ctx.user_id`` — without this
+            # a harness-driven ``sandbox.write_file`` landed in the ``default``
+            # bucket while the chat's thread lives under the real owner, so
+            # Claude Code "wrote the file" and the Files tab never saw it.
+            token = set_current_user(_TokenUser(principal.user_id))
             try:
                 result = await self.registry.invoke(op_name, ctx, arguments or {})
             except Exception as exc:
                 return _error(f"{type(exc).__name__}: {exc}")
+            finally:
+                reset_current_user(token)
             return types.CallToolResult(content=[types.TextContent(type="text", text=json.dumps(result, ensure_ascii=False, default=str))], structuredContent=result, isError=False)
 
     # -- transport --------------------------------------------------------

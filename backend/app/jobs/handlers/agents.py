@@ -43,7 +43,7 @@ def _write_artifact(ctx: JobContext, agent: str, task: str, result: str) -> str 
         return None
 
 
-async def _run_subagent(ctx: JobContext, agent: str, task: str) -> str:
+async def _run_subagent(ctx: JobContext, agent: str, task: str, model: str | None = None) -> str:
     from deerflow.subagents import SubagentExecutor, get_subagent_config
     from deerflow.subagents.executor import SubagentStatus, get_background_task_result
     from deerflow.tools import get_available_tools
@@ -53,7 +53,10 @@ async def _run_subagent(ctx: JobContext, agent: str, task: str) -> str:
     if sub_cfg is None:
         raise RuntimeError(f"unknown subagent {agent!r}")
     tools = get_available_tools(subagent_enabled=False, app_config=config)
-    executor = SubagentExecutor(config=sub_cfg, tools=tools, app_config=config, thread_id=ctx.thread_id, user_id=ctx.owner_user_id)
+    # `parent_model` is what an in-process `task` call inherits from the lead
+    # agent; a job has no parent, so without this every delegated subagent
+    # ran on the deployment default regardless of what the chat was using.
+    executor = SubagentExecutor(config=sub_cfg, tools=tools, app_config=config, thread_id=ctx.thread_id, user_id=ctx.owner_user_id, parent_model=model)
     task_id = executor.execute_async(task, task_id=ctx.job_id)
     seen = 0
     while True:
@@ -97,7 +100,8 @@ async def agent_task(ctx: JobContext) -> dict[str, Any]:
     task = str(ctx.payload.get("task") or "")
     if not agent or not task:
         raise RuntimeError("agents.task needs 'agent' and 'task'")
-    result = await (_run_acp(ctx, agent, task) if kind == "acp" else _run_subagent(ctx, agent, task))
+    model = ctx.payload.get("model")
+    result = await (_run_acp(ctx, agent, task) if kind == "acp" else _run_subagent(ctx, agent, task, model=str(model) if model else None))
     artifact = _write_artifact(ctx, agent, task, result)
     await ctx.progress(100, "done")
     return {"agent": agent, "kind": kind, "result": result[:20000], "artifact": artifact}

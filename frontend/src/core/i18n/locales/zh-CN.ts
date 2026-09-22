@@ -835,6 +835,13 @@ export const zhCN: Translations = {
     acp: {
       invoke: (agent: string) => `正在与 ${agent} 协作`,
       waiting: "正在启动智能体……",
+      runtimeWorking: (agent: string) => `${agent} 正在处理本轮对话`,
+      actions: (count: number) => `${count} 个操作`,
+      showAll: "展开全部",
+      showLess: "收起",
+      answeredBy: (agent: string) => `由 ${agent} 回答`,
+      fallback: (agent: string, reason: string) =>
+        `${agent} 无法完成本轮（${reason}），已改由 Nova 原生智能体回答。`,
     },
     searchFor: (query: string) => `搜索 “${query}”`,
     searchForRelatedInfo: "搜索相关信息",

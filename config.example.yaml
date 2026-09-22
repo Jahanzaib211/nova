@@ -1173,6 +1173,14 @@ runtimes:
   default: native
   nova_mcp_url: http://127.0.0.1:8001/api/mcp/nova
   turn_timeout_seconds: 1800
+  # If the ACP runtime fails the turn (Claude Code usage cap, adapter crash,
+  # timeout), run that same turn on the native Nova agent — sandbox,
+  # subagents and skills included — instead of replying with the error.
+  fallback_to_native: true
+  # Model for Nova subagents that an ACP runtime delegates to via
+  # agents.delegate (a job has no parent model to inherit). Unset = the
+  # deployment's default model, which may be a different provider.
+  # delegate_model: claude-sonnet-4-6
 
 # ============================================================================
 # ACP Agents Configuration

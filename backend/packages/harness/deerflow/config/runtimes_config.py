@@ -12,3 +12,11 @@ class RuntimesConfig(BaseModel):
     claude_login_dir: str | None = Field(default=None, description="Directory holding the mounted Claude login (`.credentials.json`); default ~/.claude in the gateway (/root/.claude with the cli-auth overlay). Presence only — never read.")
     openclaw_token_file: str | None = Field(default=None, description="Path of the OpenClaw gateway token file mounted by docker-compose.acp.yaml; default /run/nova/openclaw_token.")
     turn_timeout_seconds: float = Field(default=1800.0, ge=30.0, description="Wall-clock budget for one chat turn on an ACP runtime.")
+    delegate_model: str | None = Field(
+        default=None,
+        description="Model Nova's subagents run on when an ACP runtime delegates work through agents.delegate without naming one (a job has no parent model to inherit). Default: the deployment's default model — which may be a different provider from the runtime's.",
+    )
+    fallback_to_native: bool = Field(
+        default=True,
+        description="When the selected ACP runtime cannot complete a turn (usage cap hit, adapter crashed, timed out), hand the same turn to the native Nova agent — full tool suite (sandbox, subagents, skills) — instead of returning the failure as the reply.",
+    )

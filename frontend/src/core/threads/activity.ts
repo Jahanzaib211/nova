@@ -156,3 +156,52 @@ export function activeWriteFilePathFromActivity(
   }
   return null;
 }
+
+/**
+ * Activity events for a turn running *on* an ACP runtime (Claude Code,
+ * OpenClaw). That path produces no `tool_calls` in the message stream — the
+ * runtime's actions arrive only as `acp_update` status lines — so the Agent's
+ * Computer sat at "0 actions" while Claude Code made thirty tool calls
+ * (live 2026-09-22). Each status line becomes one card; the last one is
+ * `running` while the turn is live.
+ *
+ * Status lines come from `deerflow.runtimes.acp_transport`:
+ *   `<kind>: <title>`                       — a tool call (kind: read, edit, execute, search, fetch, other…)
+ *   `permission approved|denied: <kind> — <title>`
+ *   `runtime: <agent> (<mode>)` / `thinking: …` — narration, skipped.
+ */
+export function acpTranscriptActivityEvents(
+  transcripts: Record<string, { statuses: string[] }> | undefined,
+  { running }: { running: boolean },
+): AgentActivityEvent[] {
+  if (!transcripts) return [];
+  const events: AgentActivityEvent[] = [];
+  for (const [agent, transcript] of Object.entries(transcripts)) {
+    const lines = transcript.statuses.filter(
+      (line) => !line.startsWith("thinking:") && !line.startsWith("runtime"),
+    );
+    lines.forEach((line, i) => {
+      const denied = line.startsWith("permission denied");
+      const sep = line.indexOf(": ");
+      const kind = sep > 0 ? line.slice(0, sep) : "other";
+      const title = sep > 0 ? line.slice(sep + 2) : line;
+      const isLast = i === lines.length - 1;
+      events.push({
+        id: `acp-${agent}-${i}`,
+        ts: "",
+        type: `acp_${kind.replace(/\s+/g, "_")}`,
+        path: null,
+        summary: `${agentLabel(agent)} · ${title}`,
+        output: "",
+        status: denied ? "error" : running && isLast ? "running" : "done",
+      });
+    });
+  }
+  return events;
+}
+
+function agentLabel(agent: string): string {
+  if (agent === "claude_code") return "Claude Code";
+  if (agent === "openclaw") return "OpenClaw";
+  return agent;
+}

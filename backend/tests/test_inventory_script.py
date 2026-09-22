@@ -192,3 +192,28 @@ def test_main_print_only_does_not_write(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert not (tmp_path / "inv.json").exists()
     assert json.loads(capsys.readouterr().out)["gate"] == "inventory"
+
+
+def test_local_llm_reports_retired_not_down_when_its_unit_is_disabled(monkeypatch):
+    """2026-09-22: the GPU model was switched off on purpose (it held 11.6 GB
+    of VRAM and crashed every GL client); the inventory gate stayed red on
+    `llama_server unreachable` for good. A disabled unit is a decision."""
+    import subprocess as sp
+    from types import SimpleNamespace
+
+    import inventory
+
+    monkeypatch.setattr(inventory.shutil, "which", lambda name: "/usr/bin/systemctl")
+    monkeypatch.setattr(inventory.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="disabled\n", stderr=""))
+    item = inventory._local_llm_item()
+    assert item["health"] == "disabled" and "retired" in item["detail"]
+
+    monkeypatch.setattr(inventory.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout="enabled\n", stderr=""))
+    monkeypatch.setattr(inventory, "http_probe", lambda url, headers=None: (None, None, "connection refused"))
+    assert inventory._local_llm_item()["health"] == "down"
+
+    def boom(*a, **k):
+        raise sp.TimeoutExpired("systemctl", 5)
+
+    monkeypatch.setattr(inventory.subprocess, "run", boom)
+    assert inventory.local_llm_retired() is False

@@ -46,3 +46,34 @@ def transcript_for_prompt(messages: list[AnyMessage], *, max_prior_turns: int = 
     if not body:
         return request
     return f"Earlier in this conversation:\n\n{body}\n\n---\n\n{request}"
+
+
+#: Tools the sandbox capability module exposes over Nova's MCP server.
+SANDBOX_TOOL_NAMES: tuple[str, ...] = ("sandbox__bash", "sandbox__read_file", "sandbox__write_file", "sandbox__str_replace", "sandbox__ls", "sandbox__glob", "sandbox__grep")
+
+
+def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...]) -> str:
+    """Tell an ACP runtime where its hands are.
+
+    Claude Code arrives with its own Bash/Read/Write. Inside Nova's gateway
+    container its Bash cannot run at all (``~/.claude`` is mounted read-only
+    so it cannot create a session directory — deliberately: that shell would
+    execute in the gateway, not in the user's sandbox), and its file tools
+    only see its private ``acp-workspace``. Left to itself it reported
+    "Bash is blocked" and worked in that private directory while the user's
+    Agent's Computer showed nothing (live 2026-09-22). The user's sandbox is
+    the ``nova`` MCP server; say so, once, at the top of every turn.
+
+    Returns "" when Nova's server is not mounted — there is nothing to point at.
+    """
+    if "nova" not in mcp_server_names:
+        return ""
+    tools = ", ".join(f"`{name}`" for name in SANDBOX_TOOL_NAMES)
+    return (
+        "You are running as the runtime for a Nova chat. The user's Agent's Computer — the sandbox they are watching — is the `nova` MCP server. "
+        f"Use its sandbox tools for every shell and file action: {tools}. Files live under /mnt/user-data/workspace (your work), /mnt/user-data/uploads (their files) and /mnt/user-data/outputs (deliverables). "
+        "Everything you do through those tools appears live in the user's Terminal, Files and Activity panes. "
+        "Your own built-in Bash is unavailable in this environment and your built-in file tools only see a private scratch directory the user cannot see — do not use them for the user's work. "
+        "For parallel or delegated work prefer your own subagents (they run on your model and see the same `nova` server); Nova's `agents__delegate` runs a Nova subagent as a background job on Nova's configured model — use it only when a Nova-specific agent is what the task needs. "
+        "The `nova` server also exposes Nova's platform (jobs, integrations, agents, models, skills); use those when the task calls for them."
+    )
