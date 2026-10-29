@@ -154,7 +154,18 @@ class SQLiteUserRepository(UserRepository):
             return await session.scalar(stmt) or 0
 
     async def count_admin_users(self) -> int:
-        stmt = select(func.count()).select_from(UserRow).where(UserRow.system_role == "admin")
+        # Exclude the synthetic "legacy owner" row that the
+        # 2026_08_13_prune_orphans migration inserts to own orphaned runs.
+        # It is created with system_role='admin' but is not a real account
+        # (no password, unaddressable email). Counting it made a *fresh*
+        # database report "an admin already exists", so /setup refused to
+        # create the first real admin and the install was unusable.
+        stmt = (
+            select(func.count())
+            .select_from(UserRow)
+            .where(UserRow.system_role == "admin")
+            .where(UserRow.id != "00000000-0000-0000-0000-000000000001")
+        )
         async with self._sf() as session:
             return await session.scalar(stmt) or 0
 
