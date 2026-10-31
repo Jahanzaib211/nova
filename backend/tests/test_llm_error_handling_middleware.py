@@ -93,7 +93,7 @@ def test_async_model_call_returns_user_message_for_quota_errors() -> None:
     result = asyncio.run(middleware.awrap_model_call(SimpleNamespace(), handler))
 
     assert isinstance(result, AIMessage)
-    assert "out of quota" in str(result.content)
+    assert "temporarily out of capacity" in str(result.content)
     assert result.additional_kwargs["deerflow_error_fallback"] is True
     assert result.additional_kwargs["hide_from_ui"] is True
     assert result.additional_kwargs["error_reason"] == "quota"
@@ -677,7 +677,7 @@ def test_user_message_for_quota_unchanged() -> None:
 
     message = middleware._build_user_message(exc, reason="quota")
 
-    assert "out of quota" in message
+    assert "temporarily out of capacity" in message
     assert "streaming response was interrupted" not in message
 
 

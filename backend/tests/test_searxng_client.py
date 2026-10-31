@@ -164,3 +164,78 @@ class TestSearxngTools:
         mock_client.search.assert_called_once()
         call_kwargs = mock_client.search.call_args.kwargs
         assert call_kwargs["max_results"] == 3
+
+
+@pytest.mark.asyncio
+class TestHealth:
+    """``health()`` is the one SearXNG health check.
+
+    There used to be two: ``probe_health()`` (capabilities bar) and
+    ``health()`` (Privacy panel), which differed in paths, Tor routing and
+    status handling, so the two surfaces could disagree about one instance.
+    """
+
+    async def test_probe_health_is_gone(self):
+        from deerflow.community.searxng.searxng_client import SearxngClient
+
+        assert not hasattr(SearxngClient, "probe_health")
+
+    async def test_redirect_that_does_not_end_in_2xx_is_unhealthy(self):
+        """A 3xx left unresolved (a proxy login page) is not SearXNG answering;
+        redirects are followed and the final status must be 2xx."""
+        client = await self._client()
+        mock = _make_httpx_mock(status_code=302)
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock):
+            assert await client.health() is False
+        assert all(call.kwargs.get("follow_redirects") is True for call in mock.get.await_args_list)
+
+    async def test_goes_through_tor_when_searches_do(self):
+        from deerflow.community.searxng.searxng_client import SearxngClient
+
+        tor = MagicMock()
+        tor.get_async_client = MagicMock(return_value=_make_httpx_mock(status_code=200))
+        with patch("deerflow.community.searxng.searxng_client.get_tor_proxy", return_value=tor):
+            client = SearxngClient(base_url="http://searxng:8080", tor_enabled=True)
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", side_effect=AssertionError("must not bypass Tor")):
+            assert await client.health() is True
+        tor.get_async_client.assert_called_once_with(timeout=SearxngClient.HEALTH_TIMEOUT_S)
+
+    async def _client(self):
+        from deerflow.community.searxng.searxng_client import SearxngClient
+
+        return SearxngClient(base_url="http://searxng:8080")
+
+    async def test_healthz_ok_is_healthy(self):
+        client = await self._client()
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=200)):
+            assert await client.health() is True
+
+    async def test_falls_back_to_root_when_healthz_404s(self):
+        """The behaviour change: 404 on /healthz must not end the probe."""
+        client = await self._client()
+        responses = [MagicMock(status_code=404), MagicMock(status_code=200)]
+
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=responses)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+            assert await client.health() is True
+        assert mock_client.get.await_count == 2, "the root fallback should have been tried"
+
+    async def test_both_paths_failing_is_unhealthy(self):
+        client = await self._client()
+        mock_client = MagicMock()
+        mock_client.get = AsyncMock(side_effect=Exception("connection refused"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+            assert await client.health() is False
+        assert mock_client.get.await_count == 2
+
+    async def test_server_error_on_both_paths_is_unhealthy(self):
+        client = await self._client()
+        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=502)):
+            assert await client.health() is False

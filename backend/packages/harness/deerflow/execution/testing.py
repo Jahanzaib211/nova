@@ -25,10 +25,10 @@ from typing import Any
 from deerflow.execution.audit import AuditEngine
 from deerflow.execution.metrics import ExecutionMetrics
 from deerflow.execution.models import (
-    now_iso,
     ExecutionRequest,
     ExecutionResult,
     ExecutionStatus,
+    now_iso,
 )
 
 Handler = Callable[[ExecutionRequest], "tuple[int, str, str] | ExecutionResult"]

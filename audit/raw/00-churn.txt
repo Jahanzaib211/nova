@@ -1,0 +1,135 @@
+## git log -100
+2feb0fc9 docs: add 'Probe Vibe-Coded Apps' workflow to Security Arsenal section
+9bdfb982 docs: promote Security Arsenal to top-level section, add badge, fix TOC, remove redundancy
+17f6c85a docs: rewrite README — YC-friendly, security arsenal (60+ tools), concise structure
+3d78393b style: format the four files outside frontend/src that CI also checks
+4d6fbc65 fix(chat): keep the reasoning drawer where the user clicked it
+cd57fdaf fix(gates): stop reporting churn for a PM2 app that has not restarted
+8f660178 style: satisfy ruff and prettier on this branch's own new files
+d9ec7d7c docs: sync frontend test count to 681
+3e89e33e refactor(panel): merge Activity and Audit into one Telemetry tab
+b3c6f12e docs(frontend): fix a misattribution and record two invariants
+872ee757 fix(ui): long URLs, an overflowing failure badge, and a no-op position
+7a70d3cb fix(subtasks): stop a guessed failure painting before the socket has spoken
+198d895e docs(config): document run_events.retention_days in the template
+9d3c1a4b fix(db): reclaim 5.6 GB of TOAST bloat and bound the one table that grows
+ffd7d329 fix(terminal): stop dev-server output corrupting the panel and the count
+2f38cd9d docs: count tools the agent can call, not tools that exist
+c5becad5 fix(tools): bind igino_research, and guard the whole defect class
+38fd3f65 fix(terminal): one definition of "a command", on both sides of the wire
+42da760a fix(agent): give the agent a map of its own ports
+6d1567b4 fix(gateway): route the Browser tab fallback through the stripping relay
+92c31716 fix(preview): probe in-sandbox ports from the sandbox, not the gateway
+6f2329a5 test(isolation): stop two files leaking a narrowing ownership stub
+c33b9d67 fix(docs): guard every count-bearing doc, not just the one
+f5147603 fix(tools): bind register_external_dev_server, so the escape hatch exists
+f321448e fix(ui): counts and labels in the runtime bar that were not true
+393f2312 fix(panel): stop the command count rewinding on socket replay
+706b23bd fix(terminal): derive the command count from the log, so it can heal
+50c872e1 fix(terminal): seed the command count from disk, not only the socket
+b636ec38 docs: record the allowed-tools scope rule, and sync test counts
+2cfec434 fix(panel): honest command count, and subtask rows that can settle and explain
+7e08c0e8 fix(skills): stop one installed skill from amputating the agent's tool set
+8b4869be fix(compose): give searxng a static IP so it stops taking nginx's
+dcf4b8b9 docs(CI_CD): sync the canonical test counts
+b1aa6168 fix(search): actually run the SearXNG that config.yaml points at
+b94b29ae fix: unstarve the Agent's Computer, and repair the gates that missed it
+7960ef60 fix: frontend regression sweep — SSE contracts, WS guards, ghost door cleanup, Editor→Viewer, Audit tab, streaming hardening
+39d3f3c5 fix(nginx): add computer-ws location to all four nginx configs
+421e36f8 fix(gateway): preserve caller-supplied channel on observation events
+bacbcdf3 fix(sandbox): unify chain — vendor go-bins/kubectl/helm/terraform, remove orphan vendor-mount
+4b3d2f86 fix(frontend): add import-group blank line in subagent-binding test
+f9f8fe0a fix(sandbox): build arsenal image — port-race retry, Dockerfile fixes, verify-toolchain hardening
+1f62f329 chore(sandbox): pin corepack pnpm/yarn + bypass keyid signature check
+61ac6ed9 fix(panel): subagents always bound, id-scoped supersede, live terminal count, chat todo clip
+6ff261d7 fix(harness): deterministic todo seeding + typed terminal-stats frames
+4bc0e9be feat(prompt): tool-discipline block, and steer-queue flush on the page
+4511ed14 feat(computer): capture raw-bash servers, deterministic command count, todo push — and settle ghost subagents
+53c73760 feat(sandbox): security arsenal + software-house completeness
+f2303fc3 feat(computer): one live socket for the whole panel, and the stale-preview killer
+fafe9fdb fix(frontend): three identity bugs that made the panel remount or mis-state
+a72c10b5 feat(frontend): subagent events over tasks-ws, and todo rows struck by binding
+722ec26c feat(tasks): thread-scoped task-event websocket with todo bindings
+5e72e30a fix(frontend): stop the agent computer lying — real states, guarded payloads, honest signals
+6d4a9230 fix(frontend): keep the agent computer mounted across open/close, and calm the run flow
+2ecedea4 refactor(frontend): one tool-work classifier drives tabs, focus, labels and counts
+31ec3799 fix(sandbox): close every streamed command's frame, even when released under it
+b9a68349 feat(sandbox): bridge websockets for the absproxy fallback
+a9523ae5 fix(frontend): raise the memory ceiling, and make the dev stage non-root
+7cffd7c5 fix(sandbox): grant the framed CSP by framing, and restrict who may frame it
+b8c489ee docs(sandbox): the absproxy CSP rests on a premise that is no longer true
+efc4cd7b fix(frontend): stop re-downloading pnpm on every container start
+68c787ea docs: MiniMax image generation works; the 2049 was the credential, not the wiring
+0b05603f refactor(healthcheck): derive the probe count instead of hardcoding it
+8a6d3b4d docs: record the sandbox streaming contract and the agent-computer invariants
+09d69ffe fix(search): notice a SearXNG outage, and give k3s a SearXNG to notice
+145e16ed fix(sandbox): say what is listening, display UTC, and close the audit ledger
+06b7df0a fix(gates): teach the drift gate that a dev server serves the bind mount
+a8a82b10 fix(dev-server): create the preview log inside the sandbox, not on the gateway
+b9e94319 fix(frontend): 404 missing docs pages, and stop writing state during render
+67176b36 fix(gates): report the real reformat count, and say when ruff itself failed
+eb9e5371 fix(prune): the checkpoint pruner has never worked on Postgres
+62838f6b fix(search): actually start SearXNG, and stop the fallback hiding that it is down
+3213f4d2 fix(agent-computer): fold streamed frames at ingest, and make Recon tell the truth
+11a5b437 fix(gateway): make the sandbox log stream safe, non-blocking and single-source
+dba4c04b feat(sandbox): stream terminal output, and stop losing multi-line commands
+e251be99 style: apply ruff 0.16.3 formatting and sort the execution/ imports
+76ae183f fix: unskip the interactive shell, gate the res.ok class, retire two dead hooks
+d4dad409 fix: close the CI config gap, the duplicated timestamp helper, and my own test gap
+712f65c5 fix(subagents): make the concurrency limit configurable instead of a source literal
+3772198e fix: the one red test, a dead test posing as a skip, and every lint warning
+ff2c164c style(tests): use a named Page type instead of an inline import()
+537b055d fix: close the remaining silent-failure and dead-config findings
+3adef982 fix(subagents): share status authority between writers, and test the real card
+5b7dda35 feat(nova): give the harness its own package identity
+d6a88d92 fix(sandbox): bind to the Docker bridge, not loopback and not every interface
+d34f4c7b test(config): assert every `use:` path in config.yaml actually resolves
+7618b7df feat(subagents): wire the last two signals, and gate the class
+32e8ae79 fix(frontend): stop treating error bodies as data; harden the gateway env
+18784c85 docs: answer the in-sandbox self-probe with what the host actually shows
+2685a628 fix(subagents): consume the lifecycle the backend was already broadcasting
+72117609 fix(workspace): stop an error body from blanking the whole app
+ba0430c9 feat(sandbox): forwardable env, an open-file cap, and the tools the image claimed
+478f9ebb fix(sandbox): heif-convert has no invocation that exits zero
+8fa6abaa docs: sync CLAUDE.md and CI_CD to what the code now does
+f1c78585 build(compose): pin the last four floating image tags
+af21e749 build(sandbox): make the image prove its own toolchain
+0fb60e17 fix(sandbox): stop the test suite from killing live sandboxes
+0c810405 test(sandbox): stop the Docker e2e file failing on a coin flip
+dfbc48d9 fix(capabilities): stop inventing hooks when the chain fails to build
+2b6cfe95 feat(web): a crawler that actually follows links
+45a6f88e feat(recon): real pipeline, per-tool tests, and a third fetch path
+
+## shortlog
+
+## files most changed in last 300 commits
+     32 backend/CLAUDE.md
+     31 frontend/src/core/i18n/locales/zh-CN.ts
+     31 frontend/src/core/i18n/locales/en-US.ts
+     29 frontend/src/core/i18n/locales/types.ts
+     25 frontend/src/components/workspace/agent-computer/agent-computer-panel.tsx
+     22 docker/docker-compose-dev.yaml
+     20 NOVA_CHANGELOG.md
+     18 frontend/src/core/sandbox/hooks.ts
+     18 config.example.yaml
+     18 backend/app/gateway/routers/sandbox.py
+     17 frontend/src/core/threads/hooks.ts
+     17 frontend/src/components/workspace/agent-computer/files-tab.tsx
+     16 docs/CI_CD.md
+     16 README.md
+     15 frontend/src/components/workspace/chats/chat-box.tsx
+     15 frontend/src/components/workspace/agent-computer/terminal-tab.tsx
+     15 frontend/src/components/workspace/agent-computer/activity-tab.tsx
+     15 frontend/CLAUDE.md
+     15 backend/packages/harness/deerflow/sandbox/tools.py
+     13 docs/AUDIT.md
+     13 backend/packages/harness/deerflow/community/aio_sandbox/local_backend.py
+     12 scripts/healthcheck-daemon.py
+     12 backend/packages/harness/deerflow/community/aio_sandbox/aio_sandbox_provider.py
+     11 docker/nginx/nginx.conf
+     11 backend/packages/harness/deerflow/sandbox/dev_server.py
+     10 frontend/src/components/workspace/runtime-capabilities-bar.tsx
+     10 frontend/src/components/workspace/agent-computer/privacy-tab.tsx
+     10 frontend/src/app/workspace/chats/[thread_id]/page.tsx
+     10 docker/sandbox/Dockerfile.tools
+      9 frontend/src/core/tasks/context.tsx

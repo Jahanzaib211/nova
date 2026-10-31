@@ -1,5 +1,6 @@
 import re
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -566,3 +567,263 @@ def test_update_thread_state_inserts_new_checkpoint_each_call() -> None:
     assert all(cid is not None for cid in resp_ids), f"response missing checkpoint_id: {resp_ids}"
     assert set(resp_ids) <= set(ids), f"aput discarded endpoint-assigned id: returned {resp_ids}, stored {ids}"
     assert resp_ids[1] > resp_ids[0], f"endpoint-assigned uuid6 not preserved/ordered through aput: {resp_ids}"
+
+
+# ── /history: the latest checkpoint must carry todos + sandbox ───────────────
+#
+# Regression: ``get_thread_history`` built each entry's ``values`` from an
+# allow-list of checkpoint channel keys — ``title``, ``thread_data`` and
+# ``messages`` — and dropped ``todos`` and ``sandbox``, which live in the
+# same checkpoint. The LangGraph SDK's ``useStream`` hook seeds the
+# frontend's state from this endpoint on reload, so after any reload (or at
+# the end of a run) the todo list came back empty and the sandbox handle
+# came back null. The panel then hid itself (``hasTodos`` false) and the
+# Agent's Computer lost the container id it talks to — both presented as
+# "the todos vanished" rather than "the endpoint did not return them".
+
+
+def _seed_checkpoint_with_values(
+    checkpointer: InMemorySaver,
+    thread_id: str,
+    channel_values: dict[str, Any],
+    *,
+    step: int = 0,
+    created_at: str = "2026-09-20T10:00:00+00:00",
+    parent_checkpoint_id: str | None = None,
+    versions: dict[str, str] | None = None,
+) -> tuple[str, dict[str, str]]:
+    """Persist one checkpoint carrying ``channel_values`` into ``thread_id``.
+
+    ``InMemorySaver`` does **not** keep ``checkpoint["channel_values"]``.
+    ``put`` pops that mapping off the checkpoint and writes one blob per
+    channel named in ``new_versions``, keyed by
+    ``(thread_id, checkpoint_ns, channel, version)``; a read rebuilds
+    ``channel_values`` by looking up ``checkpoint["channel_versions"]``.
+    A checkpoint seeded without matching version maps therefore
+    round-trips with NO channel values at all — the trap this helper
+    exists to avoid.
+
+    Two invariants follow from the blob key:
+
+    * ``checkpoint["channel_versions"]`` and ``new_versions`` must carry the
+      same ``channel -> version`` pairs, or the values are written but never
+      read back.
+    * A given channel's version must strictly increase from one checkpoint
+      to the next. The blob key includes the version, so reusing one would
+      make two checkpoints read the *same* value.
+
+    Returns ``(checkpoint_id, versions)`` — the id the saver assigned and the
+    (mutated) channel-version map to hand to the next call.
+    """
+    import asyncio
+
+    from langgraph.checkpoint.base import empty_checkpoint
+
+    if versions is None:
+        versions = {}
+
+    new_versions: dict[str, str] = {}
+    for channel in channel_values:
+        versions[channel] = checkpointer.get_next_version(versions.get(channel), channel)
+        new_versions[channel] = versions[channel]
+
+    configurable: dict[str, Any] = {"thread_id": thread_id, "checkpoint_ns": ""}
+    if parent_checkpoint_id is not None:
+        # ``put`` records ``config["configurable"]["checkpoint_id"]`` as the
+        # PARENT of the checkpoint it is about to write.
+        configurable["checkpoint_id"] = parent_checkpoint_id
+    config = {"configurable": configurable}
+
+    checkpoint = empty_checkpoint()
+    checkpoint["channel_values"] = dict(channel_values)
+    checkpoint["channel_versions"] = dict(new_versions)
+
+    metadata = {
+        "step": step,
+        "source": "loop" if step > 0 else "input",
+        "writes": None,
+        "parents": {},
+        "created_at": created_at,
+    }
+
+    async def _put() -> dict[str, Any]:
+        return await checkpointer.aput(config, checkpoint, metadata, new_versions)
+
+    new_config = asyncio.run(_put())
+    checkpoint_id = new_config["configurable"]["checkpoint_id"]
+    return checkpoint_id, versions
+
+
+def test_get_thread_history_latest_checkpoint_carries_todos_and_sandbox() -> None:
+    """The latest checkpoint's ``values`` must carry the todo list and the
+    sandbox handle.
+
+    ``/history`` is what ``useStream`` seeds the frontend state from on
+    reload. The allow-list used to cover only ``title`` / ``thread_data`` /
+    ``messages``, so the todo list came back empty and the sandbox handle
+    came back null — the todo panel hid itself and the Agent's Computer
+    lost the container id it talks to.
+    """
+    app, _store, checkpointer = _build_thread_app()
+    thread_id = "history-todos-sandbox"
+
+    todos = [
+        {"content": "Read the spec", "status": "completed"},
+        {"content": "Ship the fix", "status": "in_progress"},
+        {"content": "Write the report", "status": "pending"},
+    ]
+    sandbox = {"sandbox_id": "sb-abc123"}
+
+    older_id, versions = _seed_checkpoint_with_values(
+        checkpointer,
+        thread_id,
+        {
+            "messages": [{"type": "human", "content": "first"}],
+            "todos": [{"content": "Stale todo", "status": "pending"}],
+            "sandbox": {"sandbox_id": "sb-stale"},
+        },
+        step=0,
+        created_at="2026-09-20T10:00:00+00:00",
+    )
+    latest_id, versions = _seed_checkpoint_with_values(
+        checkpointer,
+        thread_id,
+        {
+            "messages": [{"type": "human", "content": "second"}],
+            "todos": todos,
+            "sandbox": sandbox,
+        },
+        step=1,
+        created_at="2026-09-20T10:05:00+00:00",
+        parent_checkpoint_id=older_id,
+        versions=versions,
+    )
+
+    # ``alist`` orders by checkpoint id descending and ``empty_checkpoint()``
+    # mints a time-ordered uuid6, so the later write is the latest one.
+    assert latest_id > older_id, f"checkpoint ids not time-ordered: {older_id} !< {latest_id}"
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/threads/{thread_id}/history", json={"limit": 10})
+
+    assert response.status_code == 200, response.text
+    entries = response.json()
+    assert len(entries) == 2, entries
+
+    latest = entries[0]
+    assert latest["checkpoint_id"] == latest_id, latest
+    assert _ISO_TIMESTAMP_RE.match(latest["created_at"]), latest
+
+    # 1. The todo list survives, in order, with content/status intact.
+    assert latest["values"]["todos"] == todos, latest["values"]
+    assert [todo["content"] for todo in latest["values"]["todos"]] == [todo["content"] for todo in todos]
+    assert [todo["status"] for todo in latest["values"]["todos"]] == [todo["status"] for todo in todos]
+
+    # 2. The sandbox handle survives.
+    assert latest["values"]["sandbox"] == sandbox, latest["values"]
+    assert latest["values"]["sandbox"]["sandbox_id"] == "sb-abc123"
+
+    # The pre-existing ``messages`` behaviour is untouched.
+    assert latest["values"]["messages"], latest["values"]
+
+    # Every entry still carries its checkpoint id and an ISO timestamp.
+    for entry in entries:
+        assert entry["checkpoint_id"], entry
+        assert _ISO_TIMESTAMP_RE.match(entry["created_at"]), entry
+
+
+def test_get_thread_history_does_not_carry_todos_or_sandbox_on_older_checkpoints() -> None:
+    """Only the latest checkpoint carries current state — exactly like
+    ``messages``.
+
+    The older checkpoint here *does* have its own todos and sandbox in its
+    channel values, so this asserts the latest-only rule rather than the
+    mere absence of data. Without the rule every history entry would
+    repeat the todo list, and the frontend would seed itself from a stale
+    step instead of the current one.
+    """
+    app, _store, checkpointer = _build_thread_app()
+    thread_id = "history-latest-only"
+
+    older_id, versions = _seed_checkpoint_with_values(
+        checkpointer,
+        thread_id,
+        {
+            "messages": [{"type": "human", "content": "first"}],
+            "todos": [{"content": "Old todo", "status": "pending"}],
+            "sandbox": {"sandbox_id": "sb-old"},
+        },
+        step=0,
+        created_at="2026-09-20T10:00:00+00:00",
+    )
+    latest_id, versions = _seed_checkpoint_with_values(
+        checkpointer,
+        thread_id,
+        {
+            "messages": [{"type": "human", "content": "second"}],
+            "todos": [{"content": "New todo", "status": "completed"}],
+            "sandbox": {"sandbox_id": "sb-new"},
+        },
+        step=1,
+        created_at="2026-09-20T10:05:00+00:00",
+        parent_checkpoint_id=older_id,
+        versions=versions,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/threads/{thread_id}/history", json={"limit": 10})
+
+    assert response.status_code == 200, response.text
+    entries = response.json()
+    assert len(entries) == 2, entries
+
+    latest, older = entries[0], entries[1]
+    assert latest["checkpoint_id"] == latest_id, latest
+    assert older["checkpoint_id"] == older_id, older
+
+    # The latest entry carries the CURRENT state.
+    assert latest["values"]["todos"] == [{"content": "New todo", "status": "completed"}], latest["values"]
+    assert latest["values"]["sandbox"] == {"sandbox_id": "sb-new"}, latest["values"]
+
+    # The older entry carries neither — same rule as ``messages``.
+    assert "todos" not in older["values"], older["values"]
+    assert "sandbox" not in older["values"], older["values"]
+    assert "messages" not in older["values"], older["values"]
+
+    # Both entries still carry their checkpoint id and an ISO timestamp.
+    for entry in entries:
+        assert entry["checkpoint_id"], entry
+        assert _ISO_TIMESTAMP_RE.match(entry["created_at"]), entry
+
+
+def test_seeded_checkpoint_channel_values_survive_the_in_memory_saver_round_trip() -> None:
+    """Lock the seeding contract the two tests above depend on.
+
+    ``InMemorySaver`` pops ``channel_values`` off the checkpoint and writes
+    one blob per channel named in ``new_versions``; a read rebuilds
+    ``channel_values`` from ``checkpoint["channel_versions"]``. Seeding a
+    checkpoint without matching version maps therefore round-trips with NO
+    channel values — which would make the history assertions above
+    silently vacuous (they would pass against an empty payload).
+    """
+    _app, _store, checkpointer = _build_thread_app()
+    thread_id = "seed-round-trip"
+
+    channel_values = {
+        "messages": [{"type": "human", "content": "hello"}],
+        "todos": [{"content": "Do the thing", "status": "in_progress"}],
+        "sandbox": {"sandbox_id": "sb-round-trip"},
+    }
+    checkpoint_id, versions = _seed_checkpoint_with_values(checkpointer, thread_id, channel_values)
+
+    import asyncio
+
+    async def _read() -> dict[str, Any]:
+        tup = await checkpointer.aget_tuple({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
+        assert tup is not None
+        return tup.checkpoint["channel_values"]
+
+    stored = asyncio.run(_read())
+    assert stored == channel_values, stored
+    assert set(versions) == set(channel_values), versions
+    assert checkpoint_id, "saver did not assign a checkpoint id"

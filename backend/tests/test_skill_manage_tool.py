@@ -7,7 +7,7 @@ import pytest
 skill_manage_module = importlib.import_module("deerflow.tools.skill_manage_tool")
 
 
-def _skill_content(name: str, description: str = "Demo skill") -> str:
+def _skill_content(name: str, description: str = "Example skill") -> str:
     return f"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n"
 
 
@@ -39,8 +39,8 @@ def test_skill_manage_create_and_patch(monkeypatch, tmp_path):
         skill_manage_module.skill_manage_tool.coroutine,
         runtime,
         "create",
-        "demo-skill",
-        _skill_content("demo-skill"),
+        "example-skill",
+        _skill_content("example-skill"),
     )
     assert "Created custom skill" in result
 
@@ -48,15 +48,15 @@ def test_skill_manage_create_and_patch(monkeypatch, tmp_path):
         skill_manage_module.skill_manage_tool.coroutine,
         runtime,
         "patch",
-        "demo-skill",
+        "example-skill",
         None,
         None,
-        "Demo skill",
+        "Example skill",
         "Patched skill",
         1,
     )
     assert "Patched custom skill" in patch_result
-    assert "Patched skill" in (skills_root / "custom" / "demo-skill" / "SKILL.md").read_text(encoding="utf-8")
+    assert "Patched skill" in (skills_root / "custom" / "example-skill" / "SKILL.md").read_text(encoding="utf-8")
     assert refresh_calls == ["refresh", "refresh"]
 
 
@@ -76,24 +76,24 @@ def test_skill_manage_patch_replaces_single_occurrence_by_default(monkeypatch, t
     monkeypatch.setattr(skill_manage_module, "scan_skill_content", lambda *args, **kwargs: _async_result("allow", "ok"))
 
     runtime = SimpleNamespace(context={"thread_id": "thread-1"}, config={"configurable": {"thread_id": "thread-1"}})
-    content = _skill_content("demo-skill", "Demo skill") + "\nRepeated: Demo skill\n"
+    content = _skill_content("example-skill", "Example skill") + "\nRepeated: Example skill\n"
 
-    anyio.run(skill_manage_module.skill_manage_tool.coroutine, runtime, "create", "demo-skill", content)
+    anyio.run(skill_manage_module.skill_manage_tool.coroutine, runtime, "create", "example-skill", content)
     patch_result = anyio.run(
         skill_manage_module.skill_manage_tool.coroutine,
         runtime,
         "patch",
-        "demo-skill",
+        "example-skill",
         None,
         None,
-        "Demo skill",
+        "Example skill",
         "Patched skill",
     )
 
-    skill_text = (skills_root / "custom" / "demo-skill" / "SKILL.md").read_text(encoding="utf-8")
+    skill_text = (skills_root / "custom" / "example-skill" / "SKILL.md").read_text(encoding="utf-8")
     assert "1 replacement(s) applied, 2 match(es) found" in patch_result
     assert skill_text.count("Patched skill") == 1
-    assert skill_text.count("Demo skill") == 1
+    assert skill_text.count("Example skill") == 1
 
 
 def test_skill_manage_rejects_public_skill_patch(monkeypatch, tmp_path):
@@ -117,7 +117,7 @@ def test_skill_manage_rejects_public_skill_patch(monkeypatch, tmp_path):
             "deep-research",
             None,
             None,
-            "Demo skill",
+            "Example skill",
             "Patched",
         )
 
@@ -165,14 +165,14 @@ def test_skill_manage_rejects_support_path_traversal(monkeypatch, tmp_path):
     monkeypatch.setattr(skill_manage_module, "scan_skill_content", lambda *args, **kwargs: _async_result("allow", "ok"))
 
     runtime = SimpleNamespace(context={"thread_id": "thread-1"}, config={"configurable": {"thread_id": "thread-1"}})
-    anyio.run(skill_manage_module.skill_manage_tool.coroutine, runtime, "create", "demo-skill", _skill_content("demo-skill"))
+    anyio.run(skill_manage_module.skill_manage_tool.coroutine, runtime, "create", "example-skill", _skill_content("example-skill"))
 
     with pytest.raises(ValueError, match="parent-directory traversal|selected support directory"):
         anyio.run(
             skill_manage_module.skill_manage_tool.coroutine,
             runtime,
             "write_file",
-            "demo-skill",
+            "example-skill",
             "malicious overwrite",
             "references/../SKILL.md",
         )

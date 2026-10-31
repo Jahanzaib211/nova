@@ -672,3 +672,50 @@ def test_extract_llm_error_fallback_message_updates_mode_no_fallback():
         ]
     }
     assert _extract_llm_error_fallback_message(update_chunk) is None
+
+
+def test_extract_llm_error_fallback_message_ignores_messages_from_earlier_turns():
+    """Live 2026-09-22: a 400 from the provider on one turn left its fallback
+    AIMessage in the checkpoint; every later run on that thread streamed it
+    back in `values` chunks and was marked `error` although it succeeded."""
+    stale = AIMessage(
+        id="old-fallback",
+        content="Unavailable.",
+        additional_kwargs={"deerflow_error_fallback": True, "error_detail": "out of extra usage"},
+    )
+    fresh_ok = AIMessage(id="new-answer", content="Here is the answer.")
+    state = {"messages": [stale, fresh_ok]}
+    assert _extract_llm_error_fallback_message(state, ignore_ids=frozenset({"old-fallback"})) is None
+    # Still found when it is this run's own message.
+    assert _extract_llm_error_fallback_message(state) == "out of extra usage"
+    # And a fresh fallback is still reported even with stale ones ignored.
+    fresh_bad = AIMessage(id="new-fallback", content="Unavailable.", additional_kwargs={"deerflow_error_fallback": True, "error_detail": "quota"})
+    assert _extract_llm_error_fallback_message({"messages": [stale, fresh_bad]}, ignore_ids=frozenset({"old-fallback"})) == "quota"
+
+
+@pytest.mark.anyio
+async def test_run_agent_does_not_inherit_error_status_from_a_previous_turn():
+    run_manager = RunManager()
+    record = await run_manager.create("thread-1")
+    bridge = SimpleNamespace(publish=AsyncMock(), publish_end=AsyncMock(), cleanup=AsyncMock())
+
+    stale = AIMessage(id="old-fallback", content="Unavailable.", additional_kwargs={"deerflow_error_fallback": True, "error_detail": "out of extra usage"})
+
+    class Checkpointer:
+        async def aget_tuple(self, config):
+            return SimpleNamespace(
+                config={"configurable": {"thread_id": "thread-1", "checkpoint_ns": "", "checkpoint_id": "c0"}},
+                checkpoint={"channel_values": {"messages": [stale]}},
+                metadata={},
+                pending_writes=[],
+            )
+
+    class DummyAgent:
+        async def astream(self, graph_input, config=None, stream_mode=None, subgraphs=False):
+            # stream_mode="values" replays the full history plus the new answer.
+            yield {"messages": [stale, AIMessage(id="new-answer", content="done")]}
+
+    await run_agent(bridge, run_manager, record, ctx=RunContext(checkpointer=Checkpointer()), agent_factory=lambda *, config: DummyAgent(), graph_input={}, config={})
+
+    fetched = await run_manager.get(record.run_id)
+    assert fetched is not None and fetched.status == RunStatus.success, fetched.error

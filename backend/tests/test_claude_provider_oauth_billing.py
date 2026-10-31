@@ -121,7 +121,7 @@ def test_sync_create_strips_cache_control_from_oauth_payload(model):
                 "content": [{"type": "text", "text": "hi", "cache_control": {"type": "ephemeral"}}],
             }
         ],
-        "tools": [{"name": "demo", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}}],
+        "tools": [{"name": "sample", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}}],
     }
 
     with mock.patch.object(model._client.messages, "create", return_value=object()) as create:
@@ -142,7 +142,7 @@ def test_async_create_strips_cache_control_from_oauth_payload(model):
                 "content": [{"type": "text", "text": "hi", "cache_control": {"type": "ephemeral"}}],
             }
         ],
-        "tools": [{"name": "demo", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}}],
+        "tools": [{"name": "sample", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}}],
     }
 
     with mock.patch.object(model._async_client.messages, "create", new=mock.AsyncMock(return_value=object())) as create:

@@ -33,6 +33,21 @@ export function buildLoginUrl(returnPath: string): string {
   return `/login?next=${encodeURIComponent(returnPath)}`;
 }
 
+/**
+ * Leave an auth page once the session changed (sign-in, sign-up, setup).
+ *
+ * A full page load, never `router.push`. The client router keeps what it
+ * fetched while signed out: clicking the landing page's link to /workspace
+ * cached "/workspace/chats/new -> /login". After sign-in, a client push to
+ * /workspace followed that stale redirect to /login, whose layout sent the now
+ * signed-in user back to /workspace -- a loop of four requests a second that
+ * left the page on its loading skeleton until the cache expired (~30 s) or a
+ * hard refresh dropped it. A full load starts from an empty cache.
+ */
+export function enterAfterAuthChange(path: string): void {
+  window.location.assign(path);
+}
+
 // ── Backend error response parsing ────────────────────────────────
 
 const AUTH_ERROR_CODES = [

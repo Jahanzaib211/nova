@@ -99,6 +99,10 @@ class SubagentsAppConfig(BaseModel):
             "clamp, which is the component that enforces this."
         ),
     )
+    async_enabled: bool = Field(
+        default=False,
+        description=("Expose the delegate_async / check_delegation tools: a subagent or ACP agent runs as an `agents.task` job in the jobs container (survives gateway reloads); the lead agent polls its result. Requires jobs.enabled."),
+    )
     agents: dict[str, SubagentOverrideConfig] = Field(
         default_factory=dict,
         description="Per-agent configuration overrides keyed by agent name",

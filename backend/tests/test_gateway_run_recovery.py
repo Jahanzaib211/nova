@@ -131,3 +131,89 @@ async def test_sqlite_runtime_does_not_mark_thread_error_when_newer_run_is_succe
     assert len(_FakeRunManager.instances) == 1
     assert _FakeRunManager.instances[0].list_by_thread_calls == [{"thread_id": "thread-1", "user_id": None, "limit": 1}]
     assert thread_store.status_updates == []
+
+
+def _install_runtime_doubles(monkeypatch, thread_store) -> None:
+    async def fake_init_engine_from_config(_database):
+        return None
+
+    async def fake_close_engine():
+        return None
+
+    monkeypatch.setattr(engine_module, "init_engine_from_config", fake_init_engine_from_config)
+    monkeypatch.setattr(engine_module, "get_session_factory", lambda: None)
+    monkeypatch.setattr(engine_module, "close_engine", fake_close_engine)
+    monkeypatch.setattr(runtime_module, "make_stream_bridge", lambda _config: _fake_context(object()))
+    monkeypatch.setattr(checkpointer_module, "make_checkpointer", lambda _config: _fake_context(object()))
+    monkeypatch.setattr(runtime_module, "make_store", lambda _config: _fake_context(object()))
+    monkeypatch.setattr(thread_meta_module, "make_thread_store", lambda _sf, _store: thread_store)
+    monkeypatch.setattr(event_store_module, "make_run_event_store", lambda _config: object())
+    monkeypatch.setattr(gateway_deps, "RunManager", _FakeRunManager)
+
+
+@pytest.mark.anyio
+async def test_postgres_runtime_reconciles_orphaned_runs_on_startup(monkeypatch):
+    """A single gateway on Postgres must recover too.
+
+    The sweep used to be gated on ``database.backend == "sqlite"``, which read
+    "a shared database means several replicas". Those are different things:
+    this deployment is one gateway on Postgres, so the guard switched recovery
+    off entirely and rows left ``running`` by a dead process stayed that way
+    for hours — polling as active, refusing Stop with 409.
+    """
+    app = FastAPI()
+    config = SimpleNamespace(
+        database=SimpleNamespace(backend="postgres"),
+        run_events=SimpleNamespace(backend="memory"),
+    )
+    thread_store = _FakeThreadStore()
+    _FakeRunManager.instances.clear()
+    _FakeRunManager.recovered_runs = [SimpleNamespace(run_id="run-1", thread_id="thread-1")]
+    _FakeRunManager.latest_by_thread = {}
+    _install_runtime_doubles(monkeypatch, thread_store)
+
+    async with gateway_deps.langgraph_runtime(app, config):
+        pass
+
+    assert _FakeRunManager.instances[0].reconcile_calls
+    assert thread_store.status_updates == [("thread-1", "error", None)]
+
+
+@pytest.mark.anyio
+async def test_replicated_runtime_skips_startup_reconciliation(monkeypatch):
+    """With replicas, a peer may still own the row — do not fail it.
+
+    A distributed lock is the actual signal that another process could be
+    running these rows, which is the only thing that makes the blind sweep
+    unsafe.
+    """
+
+    class _FakeRedisLock:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def close(self):
+            return None
+
+    class _FakeRedisCancelSignal(_FakeRedisLock):
+        pass
+
+    app = FastAPI()
+    config = SimpleNamespace(
+        database=SimpleNamespace(backend="postgres"),
+        run_events=SimpleNamespace(backend="memory"),
+        stream_bridge=SimpleNamespace(type="redis", redis_url="redis://cache:6379/0"),
+    )
+    thread_store = _FakeThreadStore()
+    _FakeRunManager.instances.clear()
+    _FakeRunManager.recovered_runs = [SimpleNamespace(run_id="run-1", thread_id="thread-1")]
+    _FakeRunManager.latest_by_thread = {}
+    _install_runtime_doubles(monkeypatch, thread_store)
+    monkeypatch.setattr(gateway_deps, "RedisDistributedLock", _FakeRedisLock)
+    monkeypatch.setattr(gateway_deps, "RedisCancelSignal", _FakeRedisCancelSignal)
+
+    async with gateway_deps.langgraph_runtime(app, config):
+        pass
+
+    assert _FakeRunManager.instances[0].reconcile_calls == []
+    assert thread_store.status_updates == []

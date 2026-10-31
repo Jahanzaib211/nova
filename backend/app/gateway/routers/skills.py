@@ -1,25 +1,24 @@
-import json
 import logging
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.gateway.deps import get_config
+from app.gateway.deps import get_config, require_admin_user
 from app.gateway.path_utils import resolve_thread_virtual_path
 from deerflow.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
 from deerflow.config.app_config import AppConfig
-from deerflow.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
+from deerflow.config.extensions_config import reload_extensions_config, set_skill_enabled
 from deerflow.skills import Skill
 from deerflow.skills.installer import SkillAlreadyExistsError
 from deerflow.skills.security_scanner import scan_skill_content
 from deerflow.skills.storage import get_or_new_skill_storage
 from deerflow.skills.types import SKILL_MD_FILE, SkillCategory
-from deerflow.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["skills"])
+
+_ADMIN_REQUIRED_DETAIL = "Admin privileges required to change which skills are enabled."
 
 
 class SkillResponse(BaseModel):
@@ -308,7 +307,10 @@ async def get_skill(skill_name: str, config: AppConfig = Depends(get_config)) ->
     summary="Update Skill",
     description="Update a skill's enabled status by modifying the extensions_config.json file.",
 )
-async def update_skill(skill_name: str, request: SkillUpdateRequest, config: AppConfig = Depends(get_config)) -> SkillResponse:
+async def update_skill(skill_name: str, body: SkillUpdateRequest, request: Request, config: AppConfig = Depends(get_config)) -> SkillResponse:
+    # extensions_config.json is global: one user's toggle changes every
+    # user's agent, so it is an operator action like PUT /api/mcp/config.
+    await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     try:
         skill_name = skill_name.replace("\r\n", "").replace("\n", "")
         skills = get_or_new_skill_storage(app_config=config).load_skills(enabled_only=False)
@@ -317,24 +319,8 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest, config: App
         if skill is None:
             raise HTTPException(status_code=404, detail=f"Skill '{skill_name}' not found")
 
-        config_path = ExtensionsConfig.resolve_config_path()
-        if config_path is None:
-            config_path = Path.cwd().parent / "extensions_config.json"
-            logger.info("No existing extensions config found. Creating new config at: %s", config_path)
-
-        extensions_config = get_extensions_config()
-        extensions_config.skills[skill_name] = SkillStateConfig(enabled=request.enabled)
-
-        config_data = {
-            "mcpServers": {name: server.model_dump() for name, server in extensions_config.mcp_servers.items()},
-            "skills": {name: {"enabled": skill_config.enabled} for name, skill_config in extensions_config.skills.items()},
-        }
-
-        # Atomic write (temp file + replace) — extensions_config.json is
-        # read on every agent run; a truncating open() left it empty/
-        # corrupt for every subsequent request if the write ever failed
-        # partway (2026-07 audit C4).
-        atomic_write_text(config_path, json.dumps(config_data, indent=2))
+        # Raw merge: $VAR placeholders and keys like mcpInterceptors survive.
+        config_path = set_skill_enabled(skill_name, body.enabled, reload=False)
 
         logger.info("Skills configuration updated and saved to: %s", config_path)
         reload_extensions_config()
@@ -346,7 +332,7 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest, config: App
         if updated_skill is None:
             raise HTTPException(status_code=500, detail=f"Failed to reload skill '{skill_name}' after update")
 
-        logger.info("Skill '%s' enabled status updated to %s", skill_name, request.enabled)
+        logger.info("Skill '%s' enabled status updated to %s", skill_name, body.enabled)
         return _skill_to_response(updated_skill)
 
     except HTTPException:

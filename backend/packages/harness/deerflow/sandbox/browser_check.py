@@ -82,7 +82,7 @@ _HTML_ERROR_MARKERS = [
 class RouteResult:
     route: str
     ok: bool
-    status: str  # ok | console_errors | render_error | unreachable
+    status: str  # ok | console_errors | render_error | blank | hidden_content | unreachable
     console_errors: list[str] = field(default_factory=list)
     notes: str = ""
     screenshot_b64: str | None = None  # populated only when with_screenshot
@@ -239,6 +239,86 @@ def _adaptive_wait(page: Any, budget_ms: int) -> tuple[float, str]:
 # A real blank page screenshots to a tiny PNG; rendered content (even a canvas)
 # produces a larger image. Used to detect "blank" by pixels, not by innerText.
 _BLANK_SCREENSHOT_MAX_BYTES = 2000
+
+# Scroll-driven pages (IntersectionObserver reveals, count-up numbers) render
+# below-the-fold content only once a reader scrolls to it. A capture that never
+# scrolls photographs those sections as empty bands and zeros -- a page that is
+# fine in every real browser. Walk the page the way a reader does first.
+_SCROLL_THROUGH_JS = """
+async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const step = Math.max(200, Math.floor(window.innerHeight * 0.8));
+  const cap = 40000;
+  for (let y = 0; y < Math.min(document.documentElement.scrollHeight, cap); y += step) {
+    window.scrollTo(0, y);
+    await sleep(90);
+  }
+  window.scrollTo(0, document.documentElement.scrollHeight);
+  await sleep(700);
+  window.scrollTo(0, 0);
+  await sleep(300);
+}
+"""
+
+# After a full scroll, the fraction of the page's area still painted fully
+# transparent. Small or decorative elements are ignored (dropdowns, carousel
+# slides, aria-hidden art, fixed overlays) so only content sections count.
+_HIDDEN_AREA_JS = """
+() => {
+  const page = document.documentElement.scrollWidth * document.documentElement.scrollHeight || 1;
+  let hidden = 0;
+  for (const el of document.querySelectorAll('body section, body article, body main > div, body [class*="reveal"]')) {
+    if (el.closest('[aria-hidden="true"]')) continue;
+    const cs = getComputedStyle(el);
+    if (cs.position === 'fixed' || cs.display === 'none') continue;
+    if (parseFloat(cs.opacity) > 0.01 && cs.visibility !== 'hidden') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width * r.height < 20000) continue;
+    if (el.parentElement && el.parentElement.closest('[data-nova-hidden-counted]')) continue;
+    el.setAttribute('data-nova-hidden-counted', '');
+    hidden += r.width * r.height;
+  }
+  document.querySelectorAll('[data-nova-hidden-counted]').forEach((e) => e.removeAttribute('data-nova-hidden-counted'));
+  return hidden / page;
+}
+"""
+_HIDDEN_AREA_FAIL_RATIO = 0.25
+
+
+def _record_console_error(errors: list[str], message: Any) -> None:
+    """Keep console errors, minus the URL-less resource line ``_record_failed_response`` reports better."""
+    if message.type != "error":
+        return
+    text = str(message.text)
+    # Chromium's "Failed to load resource: ... 404 (Not Found)" names no URL,
+    # so the user could not tell which request failed -- and on most dev
+    # servers it was the browser's own automatic /favicon.ico probe.
+    if text.startswith("Failed to load resource"):
+        return
+    errors.append(f"{message.type}: {text}"[:300])
+
+
+def _record_failed_response(errors: list[str], response: Any) -> None:
+    """Record a 4xx/5xx with its URL. A missing favicon is not an app error."""
+    try:
+        status = int(response.status)
+        url = str(response.url)
+    except Exception:
+        return
+    if status < 400 or _is_favicon_url(url):
+        return
+    method = getattr(getattr(response, "request", None), "method", "GET")
+    errors.append(f"{status} {method} {url}"[:300])
+
+
+def scroll_through(page: Any) -> None:
+    """Scroll a Playwright page top to bottom and back, so scroll-revealed content renders."""
+    with contextlib.suppress(Exception):
+        page.evaluate(_SCROLL_THROUGH_JS)
+
+
+def _is_favicon_url(url: str) -> bool:
+    return urlsplit(url).path.rstrip("/").endswith("favicon.ico")
 
 
 # Latest check per thread so the panel can auto-show the most recent self-test
@@ -622,7 +702,8 @@ def _run_targets_via_cdp_once(cdp_url: str, targets: list[tuple[str, str, str]],
                 page = None
                 try:
                     page = ctx.new_page()
-                    page.on("console", lambda m: errors.append(f"{m.type}: {m.text}"[:300]) if m.type == "error" else None)
+                    page.on("console", lambda m, errors=errors: _record_console_error(errors, m))
+                    page.on("response", lambda r, errors=errors: _record_failed_response(errors, r))
                     if kind == "url":
                         page.goto(value, wait_until="load", timeout=20000)
                     else:
@@ -656,6 +737,21 @@ def _run_targets_via_cdp_once(cdp_url: str, targets: list[tuple[str, str, str]],
                             body_text = ""
                         if not body_text and (not shot or len(shot) < _BLANK_SCREENSHOT_MAX_BYTES):
                             rr.ok, rr.status, rr.notes = False, "blank", "page rendered blank (no text, no pixels)"
+
+                    # Content a reader would never see: still transparent after
+                    # scrolling the whole page (a reveal that never fires).
+                    if rr.ok:
+                        scroll_through(page)
+                        hidden_ratio = 0.0
+                        with contextlib.suppress(Exception):
+                            raw = page.evaluate(_HIDDEN_AREA_JS)
+                            # Only a measured number may fail a route; anything
+                            # else means the page could not be measured.
+                            if isinstance(raw, int | float) and not isinstance(raw, bool):
+                                hidden_ratio = float(raw)
+                        if hidden_ratio >= _HIDDEN_AREA_FAIL_RATIO:
+                            rr.ok, rr.status = False, "hidden_content"
+                            rr.notes = f"{hidden_ratio:.0%} of the page is still invisible after scrolling through it"
 
                     rr.console_errors = errors
                     if errors and rr.ok:

@@ -154,7 +154,7 @@ def test_execute_command_does_not_set_msys_env_for_non_msys_posix_shell_on_windo
     monkeypatch.setattr(local_sandbox.LocalSandbox, "_get_shell", staticmethod(lambda: r"C:\tools\busybox\sh.exe"))
     _install_capturing_kernel(calls)
 
-    output = local_sandbox.LocalSandbox("t").execute_command("echo /mnt/skills/demo")
+    output = local_sandbox.LocalSandbox("t").execute_command("echo /mnt/skills/sample")
 
     assert output == "ok"
     assert calls[0][1] is None
