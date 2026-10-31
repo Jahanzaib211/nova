@@ -76,8 +76,53 @@ def test_services_red_on_offline_pm2_yellow_on_stale_frontend():
     ep = {"gateway /health": 200}
     assert gate.evaluate_services(pm2, ep, "b1", "b1")["status"] == "green"
     assert gate.evaluate_services(pm2, ep, "b1", "b2")["status"] == "yellow"
-    assert gate.evaluate_services({**pm2, "tunnel-nova": "errored"}, ep, "b1", "b1")["status"] == "red"
+    assert gate.evaluate_services({**pm2, "nova-gates": "errored"}, ep, "b1", "b1")["status"] == "red"
     assert gate.evaluate_services(pm2, {"public": None}, "b1", "b1")["status"] == "red"
+
+
+def test_services_skip_what_the_watchdog_has_disabled():
+    """2026-10-29: nova-litellm commented out of ecosystem.config.js and
+    P10_litellm disabled — the gate must not stay RED on its absence."""
+    pm2 = {a: "online" for a in gate.NOVA_PM2_APPS if a != "nova-litellm"}
+    ep = {"public": 200, "litellm :4000": None}
+    assert gate.evaluate_services(pm2, ep, "b1", "b1")["status"] == "red"
+    r = gate.evaluate_services(pm2, ep, "b1", "b1", disabled={"P10_litellm"})
+    assert r["status"] == "green", r["detail"]
+    assert "nova-litellm" in r["skipped"] and "litellm :4000" not in r["endpoints"]
+
+
+def test_services_tunnel_is_checked_by_connector_not_pm2_name():
+    pm2 = {a: "online" for a in gate.NOVA_PM2_APPS}
+    ep = {"public": 200}
+    assert "tunnel-nova" not in gate.NOVA_PM2_APPS
+    assert gate.evaluate_services(pm2, ep, "b1", "b1", tunnel=(True, "systemd cloudflared.service active"))["status"] == "green"
+    r = gate.evaluate_services(pm2, ep, "b1", "b1", tunnel=(False, "no connector"))
+    assert r["status"] == "red" and "tunnel connector down" in r["detail"]
+    assert gate.evaluate_services(pm2, ep, "b1", "b1", disabled={"P12_tunnel"}, tunnel=(False, "x"))["status"] == "green"
+
+
+def test_gate_reads_disabled_probes_from_ecosystem_when_env_unset(monkeypatch, tmp_path):
+    eco = tmp_path / "ecosystem.config.js"
+    eco.write_text('module.exports = { apps: [ { name: "w", env: {\n  // HEALTHCHECK_DISABLED_PROBES: "P1_nginx",\n  HEALTHCHECK_DISABLED_PROBES:\n    "P9_bridge,P10_litellm",\n} } ] };\n')
+    monkeypatch.setenv("NOVA_ECOSYSTEM_FILE", str(eco))
+    monkeypatch.delenv("HEALTHCHECK_DISABLED_PROBES", raising=False)
+    assert gate.gate_disabled_probes() == {"P9_bridge", "P10_litellm"}
+    monkeypatch.setenv("HEALTHCHECK_DISABLED_PROBES", "P12_tunnel")
+    assert gate.gate_disabled_probes() == {"P12_tunnel"}
+
+
+def test_tunnel_connector_prefers_cloudflared_ready_endpoint(monkeypatch):
+    monkeypatch.setenv("HEALTHCHECK_TUNNEL_METRICS_URLS", "http://127.0.0.1:20241/ready")
+    calls: list = []
+    monkeypatch.setattr(gate, "http_status", lambda url, timeout=5.0, headers=None: 200)
+    monkeypatch.setattr(gate, "run", lambda cmd, timeout=60: calls.append(cmd) or (3, ""))
+    ok, via = gate.tunnel_connector()
+    assert ok and "ready" in via and calls == []
+    # Metrics unreachable: falls back to the configured systemd units.
+    monkeypatch.setattr(gate, "http_status", lambda url, timeout=5.0, headers=None: None)
+    monkeypatch.setenv("HEALTHCHECK_TUNNEL_UNITS", "my-tunnel.service")
+    monkeypatch.setattr(gate, "run", lambda cmd, timeout=60: (0, "active") if cmd[:2] == ["systemctl", "is-active"] and cmd[2] == "my-tunnel.service" else (1, ""))
+    assert gate.tunnel_connector() == (True, "systemd my-tunnel.service active")
 
 
 def test_counts_never_go_below_baseline():

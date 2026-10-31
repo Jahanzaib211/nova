@@ -339,3 +339,43 @@ class TestTaskEventsCarryBinding:
         types = [(e["type"], e.get("todo_indexes")) for e in captured]
         assert ("task_started", [0]) in types
         assert ("task_completed", [0]) in types
+
+
+class TestCloseQuietly:
+    """Closing an already-closed socket must not raise (it logged an error
+    for every Agent's Computer tab that went away)."""
+
+    @staticmethod
+    def _ws(client: str, app: str, raises: bool = False):
+        from starlette.websockets import WebSocketState
+
+        calls: list[str] = []
+
+        async def close() -> None:
+            calls.append("close")
+            if raises:
+                raise RuntimeError('Cannot call "send" once a close message has been sent.')
+
+        ws = SimpleNamespace(client_state=getattr(WebSocketState, client), application_state=getattr(WebSocketState, app), close=close)
+        return ws, calls
+
+    def test_closes_an_open_socket(self) -> None:
+        from app.gateway.task_events import _close_quietly
+
+        ws, calls = self._ws("CONNECTED", "CONNECTED")
+        asyncio.run(_close_quietly(ws))
+        assert calls == ["close"]
+
+    def test_skips_when_application_side_already_closed(self) -> None:
+        from app.gateway.task_events import _close_quietly
+
+        ws, calls = self._ws("CONNECTED", "DISCONNECTED")
+        asyncio.run(_close_quietly(ws))
+        assert calls == []
+
+    def test_swallows_close_after_close_race(self) -> None:
+        from app.gateway.task_events import _close_quietly
+
+        ws, calls = self._ws("CONNECTED", "CONNECTED", raises=True)
+        asyncio.run(_close_quietly(ws))
+        assert calls == ["close"]

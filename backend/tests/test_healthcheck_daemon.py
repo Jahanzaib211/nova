@@ -27,6 +27,18 @@ sys.modules["healthcheck_daemon"] = healthcheck
 spec.loader.exec_module(healthcheck)
 
 
+_REAL_AUTOHEAL_RUNNING = healthcheck.autoheal_running
+
+
+@pytest.fixture(autouse=True)
+def _no_autoheal_by_default(monkeypatch):
+    """Dispatch tests must not ask the real docker daemon whether the autoheal
+    sidecar runs (it does on the dev host, which would defer every container
+    repair). TestAutohealGrace opts back in explicitly."""
+    monkeypatch.setattr(healthcheck, "autoheal_running", lambda: False)
+    monkeypatch.setattr(healthcheck, "_autoheal_can_act", lambda container: False)
+
+
 # ---------------------------------------------------------------------------
 # Status + ProbeResult dataclass
 # ---------------------------------------------------------------------------
@@ -916,3 +928,246 @@ class TestHostBridgeProbe:
     def test_registered_in_probe_factories(self):
         names = [name for name, _ in healthcheck.build_probe_factories()]
         assert "P16_host_bridge" in names
+
+
+# ---------------------------------------------------------------------------
+# P12 tunnel: configurable connector, metrics /ready preferred, no blind sudo
+# ---------------------------------------------------------------------------
+
+
+class _Resp:
+    def __init__(self, status_code, payload=None):
+        self.status_code = status_code
+        self._payload = payload or {}
+
+    def json(self):
+        return self._payload
+
+
+def _fake_httpx(monkeypatch, routes: dict):
+    """routes: url -> _Resp | Exception. Unlisted URLs raise ConnectError."""
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url):
+            r = routes.get(url)
+            if r is None:
+                raise healthcheck.httpx.ConnectError("refused")
+            if isinstance(r, Exception):
+                raise r
+            return r
+
+    monkeypatch.setattr(healthcheck.httpx, "AsyncClient", _Client)
+
+
+class TestTunnelProbe:
+    READY = "http://127.0.0.1:20241/ready"
+    EDGE = "https://edge.example.invalid/health"
+
+    @pytest.fixture(autouse=True)
+    def _env(self, monkeypatch):
+        monkeypatch.setenv("HEALTHCHECK_TUNNEL_METRICS_URLS", self.READY)
+        monkeypatch.setenv("CLOUDFLARE_TUNNEL_URL", self.EDGE)
+        monkeypatch.delenv("HEALTHCHECK_TUNNEL_UNITS", raising=False)
+        monkeypatch.delenv("HEALTHCHECK_TUNNEL_PM2_APPS", raising=False)
+
+    def test_default_units_include_cloudflared_service(self):
+        units = healthcheck._tunnel_config().tunnel_units()
+        assert "cloudflared.service" in units
+
+    @pytest.mark.asyncio
+    async def test_ready_endpoint_is_the_preferred_signal(self, monkeypatch):
+        _fake_httpx(monkeypatch, {self.READY: _Resp(200, {"readyConnections": 4}), self.EDGE: _Resp(200)})
+        calls = []
+        monkeypatch.setattr(healthcheck.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
+        res = await healthcheck.probe_tunnel()
+        assert res.status == healthcheck.Status.GREEN, res.detail
+        assert "metrics=ready" in res.detail and "4 edge conns" in res.detail
+        assert calls == [], "no systemctl/pm2 spawn needed when /ready answers"
+
+    @pytest.mark.asyncio
+    async def test_ready_503_is_red(self, monkeypatch):
+        _fake_httpx(monkeypatch, {self.READY: _Resp(503), self.EDGE: _Resp(200)})
+        res = await healthcheck.probe_tunnel()
+        assert res.status == healthcheck.Status.RED and "503" in res.detail
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_configured_systemd_unit(self, monkeypatch):
+        monkeypatch.setenv("HEALTHCHECK_TUNNEL_UNITS", "my-tunnel.service")
+        _fake_httpx(monkeypatch, {self.EDGE: _Resp(200)})
+
+        def _run(cmd, **kw):
+            rc = 0 if cmd == ["systemctl", "is-active", "my-tunnel.service"] else 3
+            return subprocess.CompletedProcess(cmd, rc, "", "")
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", _run)
+        res = await healthcheck.probe_tunnel()
+        assert res.status == healthcheck.Status.GREEN, res.detail
+        assert "systemd my-tunnel.service=active" in res.detail
+
+    @pytest.mark.asyncio
+    async def test_red_when_no_connector_anywhere(self, monkeypatch):
+        _fake_httpx(monkeypatch, {self.EDGE: _Resp(200)})
+        monkeypatch.setattr(healthcheck.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 3, "[]", ""))
+        res = await healthcheck.probe_tunnel()
+        assert res.status == healthcheck.Status.RED
+        assert "cloudflared.service" in res.detail
+
+
+class TestFixTunnel:
+    def _fake(self, monkeypatch, *, sudo_ok: bool, loaded: set[str]):
+        calls: list[list[str]] = []
+
+        def _run(cmd, **kw):
+            calls.append(cmd)
+            if cmd == ["sudo", "-n", "true"]:
+                return subprocess.CompletedProcess(cmd, 0 if sudo_ok else 1, "", "a password is required")
+            if cmd[:2] == ["systemctl", "show"]:
+                return subprocess.CompletedProcess(cmd, 0, "loaded\n" if cmd[-1] in loaded else "not-found\n", "")
+            if cmd[:2] == ["systemctl", "is-active"] or cmd[:4] == ["sudo", "-n", "systemctl", "is-active"]:
+                return subprocess.CompletedProcess(cmd, 0, "active\n", "")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr(healthcheck.subprocess, "run", _run)
+        return calls
+
+    def test_no_passwordless_sudo_alerts_and_never_runs_sudo_systemctl(self, monkeypatch, caplog):
+        monkeypatch.delenv("HEALTHCHECK_TUNNEL_UNITS", raising=False)
+        calls = self._fake(monkeypatch, sudo_ok=False, loaded={"cloudflared.service"})
+        with caplog.at_level("ERROR", logger="nova-healthcheck"):
+            assert healthcheck.fix_tunnel() is False
+        assert not any(c[:3] == ["sudo", "-n", "systemctl"] for c in calls), calls
+        assert "ALERT P12_tunnel" in caplog.text and "cloudflared.service" in caplog.text
+
+    def test_restarts_the_first_installed_configured_unit(self, monkeypatch):
+        monkeypatch.setenv("HEALTHCHECK_TUNNEL_UNITS", "missing.service,cloudflared.service")
+        calls = self._fake(monkeypatch, sudo_ok=True, loaded={"cloudflared.service"})
+        assert healthcheck.fix_tunnel() is True
+        assert ["sudo", "-n", "systemctl", "restart", "cloudflared.service"] in calls
+        assert not any("missing.service" in c and c[:2] == ["sudo", "-n"] for c in calls)
+
+    def test_no_installed_unit_is_a_failed_repair_without_sudo(self, monkeypatch):
+        monkeypatch.setenv("HEALTHCHECK_TUNNEL_UNITS", "nope.service")
+        calls = self._fake(monkeypatch, sudo_ok=True, loaded=set())
+        assert healthcheck.fix_tunnel() is False
+        assert not any(c[0] == "sudo" for c in calls)
+
+
+# ---------------------------------------------------------------------------
+# F10: container repairs defer to docker/autoheal within the grace window
+# ---------------------------------------------------------------------------
+
+
+class TestAutohealGrace:
+    def _cycle(self, state, probe):
+        state.cycle_id += 1
+        report = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
+        report.add(healthcheck.ProbeResult(probe, healthcheck.Status.RED, "down", 1.0))
+        healthcheck.dispatch_fixes(report, state)
+        return report
+
+    @pytest.fixture
+    def clock(self, monkeypatch):
+        now = [1000.0]
+        monkeypatch.setattr(healthcheck, "_monotonic", lambda: now[0])
+        monkeypatch.setattr(healthcheck, "CONTAINER_GRACE_SEC", 600.0)
+        return now
+
+    @pytest.mark.parametrize(
+        ("probe", "fixer"),
+        [("P2_gateway", "fix_gateway_container"), ("P15_jobs_worker", "fix_jobs_container")],
+    )
+    def test_alert_only_while_autoheal_runs_and_within_grace(self, monkeypatch, clock, probe, fixer):
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, fixer, lambda: attempts.append(1) or True)
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: True)
+        monkeypatch.setattr(healthcheck, "_autoheal_can_act", lambda container: True)
+        state = healthcheck.WatchdogState()
+        for _ in range(10):
+            report = self._cycle(state, probe)
+            clock[0] += 30
+        assert attempts == []
+        assert "deferred to docker/autoheal" in report.probes[0].detail
+        # Deferral is not a failed repair: the breaker stays closed.
+        assert probe not in state.fix_circuit_open and state.fix_failures.get(probe) is None
+        # Past the grace window the watchdog acts as backstop.
+        clock[0] += 600
+        self._cycle(state, probe)
+        assert attempts == [1]
+
+    def test_missing_containers_are_never_deferred(self, monkeypatch, clock):
+        """P7 fires when containers are missing; autoheal cannot create one."""
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_deerflow_containers", lambda: attempts.append(1) or True)
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: True)
+        monkeypatch.setattr(healthcheck, "_autoheal_can_act", lambda container: True)
+        state = healthcheck.WatchdogState()
+        self._cycle(state, "P7_containers")
+        self._cycle(state, "P7_containers")
+        assert attempts == [1]
+
+    def test_an_exited_gateway_is_repaired_without_waiting(self, monkeypatch, clock):
+        """Autoheal only restarts running+unhealthy containers; an exited one
+        must not sit out the grace window."""
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_gateway_container", lambda: attempts.append(1) or True)
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: True)
+        monkeypatch.setattr(healthcheck, "_autoheal_can_act", lambda container: False)
+        state = healthcheck.WatchdogState()
+        self._cycle(state, "P2_gateway")
+        self._cycle(state, "P2_gateway")
+        assert attempts == [1]
+
+    def test_yellow_does_not_restart_the_grace_window(self, monkeypatch, clock):
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: True)
+        state = healthcheck.WatchdogState()
+        self._cycle(state, "P2_gateway")
+        clock[0] += 30
+        state.cycle_id += 1
+        flap = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
+        flap.add(healthcheck.ProbeResult("P2_gateway", healthcheck.Status.YELLOW, "slow", 1.0))
+        healthcheck.dispatch_fixes(flap, state)
+        assert state.red_since["P2_gateway"] == 1000.0
+
+    def test_repairs_immediately_when_autoheal_is_not_running(self, monkeypatch, clock):
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_deerflow_containers", lambda: attempts.append(1) or True)
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: False)
+        state = healthcheck.WatchdogState()
+        self._cycle(state, "P7_containers")
+        self._cycle(state, "P7_containers")
+        assert attempts == [1]
+
+    def test_recovery_resets_the_unhealthy_clock(self, monkeypatch, clock):
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: True)
+        state = healthcheck.WatchdogState()
+        self._cycle(state, "P2_gateway")
+        assert state.red_since["P2_gateway"] == 1000.0
+        state.cycle_id += 1
+        ok = healthcheck.CycleReport(cycle_id=state.cycle_id, started_at=0.0, duration_ms=0.0)
+        ok.add(healthcheck.ProbeResult("P2_gateway", healthcheck.Status.GREEN, "ok", 1.0))
+        healthcheck.dispatch_fixes(ok, state)
+        assert "P2_gateway" not in state.red_since
+
+    def test_non_container_probes_are_unaffected(self, monkeypatch, clock):
+        attempts: list[int] = []
+        monkeypatch.setattr(healthcheck, "fix_host_bridge", lambda: attempts.append(1) or True)
+        monkeypatch.setattr(healthcheck, "autoheal_running", lambda: True)
+        state = healthcheck.WatchdogState()
+        self._cycle(state, "P16_host_bridge")
+        self._cycle(state, "P16_host_bridge")
+        assert attempts == [1]
+
+    def test_autoheal_running_reads_docker_state(self, monkeypatch):
+        monkeypatch.setattr(healthcheck.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "true\n", ""))
+        assert _REAL_AUTOHEAL_RUNNING() is True
+        monkeypatch.setattr(healthcheck.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "No such object"))
+        assert _REAL_AUTOHEAL_RUNNING() is False

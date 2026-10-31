@@ -54,8 +54,8 @@ def test_glob_tool_returns_virtual_paths_and_ignores_common_dirs(tmp_path, monke
 def test_glob_tool_supports_skills_virtual_paths(tmp_path, monkeypatch) -> None:
     runtime = _make_runtime(tmp_path)
     skills_dir = tmp_path / "skills"
-    (skills_dir / "public" / "demo").mkdir(parents=True)
-    (skills_dir / "public" / "demo" / "SKILL.md").write_text("# Demo\n", encoding="utf-8")
+    (skills_dir / "public" / "sample").mkdir(parents=True)
+    (skills_dir / "public" / "sample" / "SKILL.md").write_text("# Sample\n", encoding="utf-8")
 
     monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox(id="local"))
 
@@ -70,7 +70,7 @@ def test_glob_tool_supports_skills_virtual_paths(tmp_path, monkeypatch) -> None:
             path="/mnt/skills",
         )
 
-    assert "/mnt/skills/public/demo/SKILL.md" in result
+    assert "/mnt/skills/public/sample/SKILL.md" in result
     assert str(skills_dir) not in result
 
 

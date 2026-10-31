@@ -730,3 +730,90 @@ def test_privileged_sandbox_path_is_behaviour_preserving(monkeypatch):
     assert "--privileged" in cmd
     assert "seccomp=unconfined" in joined
     assert "no-new-privileges" not in joined  # meaningless under privileged
+
+
+# ── Container hardening ⇄ Chromium's own sandbox ───────────────────────────
+#
+# These two live in different modules on purpose: the hardening is decided when
+# the container is created (local_backend.py) and the browser's compensation is
+# decided when the sandbox config is resolved (aio_sandbox_provider.py). That
+# separation is exactly why they can drift apart: each half looked correct on
+# its own while Chromium's sandbox could not start, supervisord restarted the
+# browser forever, port 9222 stayed closed and the Browser tab rendered blank.
+#
+# The test below pins them together through the real path — resolved config →
+# backend → docker argv — so hardening the container without compensating the
+# browser (or the reverse) fails here instead of in production.
+
+
+def _provider_backend_for(monkeypatch, **sandbox_overrides):
+    """Resolve the sandbox config the provider would use and build its backend.
+
+    Mirrors what AioSandboxProvider._load_config() + _create_backend() do, so
+    the assertions below run against the same values the running gateway uses.
+    """
+    import importlib
+
+    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+
+    values = {
+        "idle_timeout": 3600,
+        "replicas": 3,
+        "preview_ports": None,
+        "environment": {},
+        "image": "nova-sandbox-android:latest",
+        "port": 8180,
+        "container_prefix": "deer-flow-sandbox",
+        "mounts": [],
+        "privileged": False,
+        "memory_limit": "12g",
+        "pids_limit": 2048,
+        "shm_size": "1g",
+        "nofile_limit": 65535,
+        "cpu_limit": None,
+        "cpu_shares": 512,
+        "max_lifetime": None,
+        "provisioner_url": "",
+        "browser_no_sandbox": True,
+    }
+    values.update(sandbox_overrides)
+
+    monkeypatch.setattr(
+        aio_mod,
+        "get_app_config",
+        lambda: SimpleNamespace(sandbox=SimpleNamespace(**values)),
+    )
+    provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
+    provider._config = provider._load_config()
+    return provider._create_backend()
+
+
+def test_hardened_container_always_pairs_with_a_disabled_chromium_inner_sandbox(monkeypatch):
+    """A container that cannot host Chromium's sandbox must say so to Chromium.
+
+    `--cap-drop ALL` + `no-new-privileges` block the setuid helper, and the
+    default seccomp profile rejects clone(CLONE_NEWUSER) without
+    CAP_SYS_ADMIN, so Chromium's own sandbox cannot start. The image's
+    run.sh prepends $BROWSER_NO_SANDBOX to BROWSER_EXTRA_ARGS, so the
+    compensation is one environment variable on the container.
+    """
+    backend = _provider_backend_for(monkeypatch)
+    cmd = _capture_start_container_command(monkeypatch, backend)
+    joined = " ".join(cmd)
+
+    # The hardening …
+    assert "--cap-drop" in cmd and cmd[cmd.index("--cap-drop") + 1] == "ALL"
+    assert "no-new-privileges" in joined
+    # … and the compensation, on the very same container.
+    assert "BROWSER_NO_SANDBOX=--no-sandbox" in cmd
+
+
+def test_privileged_container_keeps_chromium_inner_sandbox(monkeypatch):
+    """The privileged (dind) path keeps every capability, so Chromium's own
+    sandbox works there and must NOT be disabled."""
+    backend = _provider_backend_for(monkeypatch, privileged=True)
+    cmd = _capture_start_container_command(monkeypatch, backend)
+    joined = " ".join(cmd)
+
+    assert "--privileged" in cmd
+    assert "BROWSER_NO_SANDBOX" not in joined
