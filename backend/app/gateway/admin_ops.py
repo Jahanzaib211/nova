@@ -359,7 +359,7 @@ async def studio_users(
                 failed_agg.c.failed_count,
             )
             .outerjoin(run_agg, run_agg.c.user_id == UserRow.id)
-            .outerjoin(failed_agg, failed_agg.c.actor == UserRow.email)
+            .outerjoin(failed_agg, func.lower(failed_agg.c.actor) == func.lower(UserRow.email))
         )
         if plan and plan in ("free", "plus", "enterprise"):
             stmt = stmt.where(UserRow.plan == plan)
@@ -433,7 +433,12 @@ async def user_auth_history(
     if sf is None:
         return []
     async with sf() as session:
-        stmt = select(AdminAuditRow).where((AdminAuditRow.target_user_id == user_id) | (AdminAuditRow.actor == (select(UserRow.email).where(UserRow.id == user_id).scalar_subquery()))).order_by(AdminAuditRow.created_at.desc()).limit(limit)
+        stmt = (
+            select(AdminAuditRow)
+            .where((AdminAuditRow.target_user_id == user_id) | (func.lower(AdminAuditRow.actor) == (select(func.lower(UserRow.email)).where(UserRow.id == user_id).scalar_subquery())))
+            .order_by(AdminAuditRow.created_at.desc())
+            .limit(limit)
+        )
         result = await session.execute(stmt)
         rows = result.scalars().all()
         return [

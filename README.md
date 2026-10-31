@@ -8,9 +8,9 @@ English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](.
 [![CI](https://github.com/Jahanzaib211/nova/actions/workflows/backend-unit-tests.yml/badge.svg)](https://github.com/Jahanzaib211/nova/actions)
 [![CodeQL](https://github.com/Jahanzaib211/nova/actions/workflows/codeql.yml/badge.svg)](https://github.com/Jahanzaib211/nova/actions/workflows/codeql.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-blue?logo=dependabot)](https://github.com/dependabot)
-[![Security](https://img.shields.io/badge/Security-60%2B%20tools-blueviolet?logo=shield)](#security-arsenal)
+[![Security](https://img.shields.io/badge/Security-40%20verified%20tools-blueviolet?logo=shield)](#security-arsenal)
 
-**Nova** is a full-stack **computer agent** that researches, codes, creates, and defends. It orchestrates **sub-agents**, **memory**, and **per-thread sandboxes** — powered by **extensible skills**, a live streaming view of the agent's own computer, and a built-in **60+ tool security arsenal** (blue team + red team).
+**Nova** is a full-stack **computer agent** that researches, codes, creates, and defends. It orchestrates **sub-agents**, **memory**, and **per-thread sandboxes** — powered by **extensible skills**, a live streaming view of the agent's own computer, and a built-in **security toolkit of 40 verified tools** (blue team + red team).
 
 Built by **[Ali Technologies](https://www.alilabsx.com)** on top of [DeerFlow](https://github.com/bytedance/deer-flow) (MIT). Upstream license and all copyright notices preserved — see [License](#license) and [NOTICE.md](./NOTICE.md).
 
@@ -105,7 +105,7 @@ make down           # stop
 
 ## Security Arsenal
 
-Nova ships a full-stack security capability. **80+ tools and defenses** across application-level blue team, offensive red team, and automated scanning.
+Nova ships a full-stack security capability: **40 security tools in every sandbox**, verified by the regression gate on every image build (`scripts/gates/regression-gate.py`, `SANDBOX_TOOLCHAIN`), plus platform-level defenses and CI scanning.
 
 ### Probe Vibe-Coded Apps
 
@@ -148,36 +148,37 @@ This works on Nova's own builds **or any app you point it at**. Paste a URL or d
 | **Dependency security** | pip-audit, npm audit, Trivy container scanning, CodeQL SAST (Python + JS/TS), Dependabot. |
 | **Visitor security** | Scanner/exploit probe detection, brute-force monitoring, high-4xx IP tracking. Grafana alerting. |
 | **Platform guardrails** | CI enforcement: middleware sprawl detection, duplicate recovery, cross-reference isolation, blocking IO gate. |
-| **IDS/IPS** | Suricata, Snort, Wazuh/OSSEC (host-based), Falco (runtime container security). |
-| **Hardening** | Lynis (system audit), chkrootkit (rootkit detection), OpenVAS (vulnerability scanning). |
+| **IDS** | Suricata, in the sandbox image. |
+| **Hardening** | Lynis (system audit) and chkrootkit (rootkit detection), in the sandbox image. |
 
-### Red Team (Offensive)
+### Sandbox Security Toolkit
 
-All tools are sandboxed at `/mnt/security-toolkit`. The **security skill** (`skills/public/security/SKILL.md`) maps every tool by domain with dependency-ordered attack chains: recon → network map → web app → secrets → exploit → creds → forensics → blue team hardening.
+Every tool below is baked into the sandbox image (`docker/sandbox/Dockerfile.tools`) and checked by the regression gate on each build. The **security skill** (`skills/public/security/SKILL.md`) maps them by domain with dependency-ordered chains: recon → web app → secrets → creds → forensics → hardening. A read-only methodology library (safe flags, scope rules, how to read output) is mounted at `/mnt/security-toolkit`.
 
-| Category | Tools |
+| Domain | Tools (40) |
 |---|---|
-| **Recon** | nmap (7.98), masscan, httpx, subfinder, amass, katana, naabu, gau, waybackurls |
-| **Web App** | nikto, sqlmap, dalfox (XSS), ffuf, gobuster, wafw00f, whatweb, OWASP ZAP |
-| **Secrets** | gitleaks, trufflehog, semgrep, detect-secrets |
-| **Exploitation** | nuclei (template-based), Metasploit (host-only), Empire + Starkiller, Sliver (C2) |
-| **Creds/AD** | hydra, hashcat, john, bloodhound-python, NetExec (nxc), responder, Mimikatz |
-| **Wireless** | aircrack-ng, wifite, bettercap, Wireshark |
-| **Forensics/RE** | Ghidra, Cutter, radare2, Volatility3, Autopsy, Velociraptor, binwalk, foremost, exiftool, yara |
-| **K8s Security** | peirates, kube-hunter |
-| **OSINT** | sherlock, theHarvester, recon-ng, SpiderFoot |
+| **Network** | nmap, masscan, tshark |
+| **Vulnerability scanning** | nuclei, trivy, nikto, wapiti, whatweb |
+| **Web app** | sqlmap, gobuster, ffuf, dirb, dalfox (XSS) |
+| **Secrets** | gitleaks, trufflehog, detect-secrets |
+| **Recon / OSINT** | subfinder, httpx, amass, dnsrecon, sherlock, arjun |
+| **Credentials** | hydra, john, hashcat, smbclient, impacket `secretsdump.py` |
+| **Forensics** | binwalk, foremost, exiftool, yara, sleuthkit (`fls`), sslscan |
+| **Reverse engineering** | ropper |
+| **Wireless** | aircrack-ng, bettercap, wifite |
+| **Blue team** | suricata, lynis, chkrootkit |
 
-### Security Scanning
+**Deliberately not included:** Metasploit and C2 frameworks, Semgrep (can be installed in-sandbox with `pip install semgrep`), theHarvester and enum4linux. The reasons are recorded in `Dockerfile.tools`. All testing must be authorized and in scope; see the methodology library.
 
-| Tool | Type |
+### Security Scanning (CI)
+
+| Tool | Where it runs |
 |---|---|
-| **CodeQL** | Semantic SAST (Python + JS/TS), weekly + every PR |
-| **Trivy** | Container/IaC vulnerability scanning |
-| **Semgrep** | Pattern-based SAST |
-| **Gitleaks** | Git secret detection |
-| **TruffleHog** | Filesystem + git secret scanning |
-| **Grype** | Container image vulnerability scanning |
-| **pip-audit / npm audit** | Dependency vulnerability scanning |
+| **CodeQL** | Semantic SAST (Python + JS/TS), weekly + every PR (`codeql.yml`) |
+| **Trivy** | Container vulnerability scanning on release builds (`container.yaml`) |
+| **SBOM + cosign** | Software bill of materials and signed images on release builds (`container.yaml`) |
+| **pip-audit / npm audit** | Dependency vulnerability scanning (`local-ci.yml`) |
+| **Dependabot** | Automated dependency updates |
 
 ### Running Security Tests
 
@@ -328,10 +329,10 @@ for event in client.stream("hello"):
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 6,928 | `cd backend && make test` |
-| Frontend unit tests | 689 | `cd frontend && pnpm test` |
-| Playwright E2E | 85 | `cd frontend && pnpm test:e2e` |
-| Blocking IO gate | 19 | `cd backend && make test-blocking-io` |
+| Backend unit tests | 7,593 | `cd backend && make test` |
+| Frontend unit tests | 881 | `cd frontend && pnpm test` |
+| Playwright E2E | 183 | `cd frontend && pnpm test:e2e` |
+| Blocking IO gate | 22 | `cd backend && make test-blocking-io` |
 
 ```bash
 make ci          # full local CI
@@ -339,7 +340,7 @@ make ci-fast     # lint + tests only
 make self-audit  # full self-probe
 ```
 
-14 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
+20 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
 
 ## Contributing
 

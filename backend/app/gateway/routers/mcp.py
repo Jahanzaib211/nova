@@ -1,16 +1,13 @@
-import json
 import logging
 import os
-from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import require_admin_user
-from deerflow.config.extensions_config import ExtensionsConfig, get_extensions_config, reload_extensions_config
+from deerflow.config.extensions_config import get_extensions_config, reload_extensions_config, update_extensions_config_file
 from deerflow.mcp.cache import reset_mcp_tools_cache
-from deerflow.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["mcp"])
@@ -323,53 +320,18 @@ async def update_mcp_configuration(request: Request, body: McpConfigUpdateReques
         await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
         _validate_mcp_update_request(body)
 
-        # Get the current config path (or determine where to save it)
-        config_path = ExtensionsConfig.resolve_config_path()
+        def _replace_servers(raw: dict) -> None:
+            # Merge incoming server configs with the raw on-disk ones, so
+            # masked secrets and $VAR placeholders survive; every other
+            # top-level key (skills, mcpInterceptors, …) is left untouched.
+            raw_servers = raw.get("mcpServers") or {}
+            merged: dict[str, McpServerConfigResponse] = {}
+            for name, incoming in body.mcp_servers.items():
+                raw_server = raw_servers.get(name)
+                merged[name] = _merge_preserving_secrets(incoming, McpServerConfigResponse(**raw_server)) if raw_server is not None else incoming
+            raw["mcpServers"] = {name: server.model_dump() for name, server in merged.items()}
 
-        # If no config file exists, create one in the parent directory (project root)
-        if config_path is None:
-            config_path = Path.cwd().parent / "extensions_config.json"
-            logger.info(f"No existing extensions config found. Creating new config at: {config_path}")
-
-        # Load current config to preserve skills
-        current_config = get_extensions_config()
-
-        # Load raw (un-resolved) JSON from disk to use as the merge source.
-        # This preserves $VAR placeholders in env values and top-level keys
-        # like mcpInterceptors that would otherwise be lost.
-        raw_servers: dict[str, dict] = {}
-        raw_other_keys: dict = {}
-        if config_path is not None and config_path.exists():
-            with open(config_path, encoding="utf-8") as f:
-                raw_data = json.load(f)
-            raw_servers = raw_data.get("mcpServers", {})
-            # Preserve any top-level keys beyond mcpServers/skills
-            for key, value in raw_data.items():
-                if key not in ("mcpServers", "skills"):
-                    raw_other_keys[key] = value
-
-        # Merge incoming server configs with raw on-disk secrets
-        merged_servers: dict[str, McpServerConfigResponse] = {}
-        for name, incoming in body.mcp_servers.items():
-            raw_server = raw_servers.get(name)
-            if raw_server is not None:
-                merged_servers[name] = _merge_preserving_secrets(
-                    incoming,
-                    McpServerConfigResponse(**raw_server),
-                )
-            else:
-                merged_servers[name] = incoming
-
-        # Build config data preserving all top-level keys from the original file
-        config_data = dict(raw_other_keys)
-        config_data["mcpServers"] = {name: server.model_dump() for name, server in merged_servers.items()}
-        config_data["skills"] = {name: {"enabled": skill.enabled} for name, skill in current_config.skills.items()}
-
-        # Write the configuration atomically (temp file + replace).
-        # extensions_config.json is read on every agent run (MCP tool
-        # loading); a truncating open() left the file empty/corrupt for
-        # every subsequent request if the write ever failed partway.
-        atomic_write_text(config_path, json.dumps(config_data, indent=2))
+        config_path = update_extensions_config_file(_replace_servers)
 
         logger.info(f"MCP configuration updated and saved to: {config_path}")
 

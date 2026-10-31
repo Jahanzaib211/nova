@@ -6,15 +6,10 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetch } from "@/core/api/fetcher";
+import { isReferral, type Referral } from "@/core/credits";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsSection } from "./settings-section";
-
-interface Referral {
-  code: string;
-  referral_count: number;
-  bonus_daily_tokens: number;
-}
 
 export function ReferralCard() {
   const { t } = useI18n();
@@ -28,7 +23,10 @@ export function ReferralCard() {
       .then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
       )
-      .then((data: Referral) => {
+      .then((data: unknown) => {
+        if (!isReferral(data)) {
+          throw new Error("malformed referral payload");
+        }
         setReferral(data);
         setLink(`${window.location.origin}/signup?ref=${data.code}`);
       })

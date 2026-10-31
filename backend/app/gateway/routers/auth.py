@@ -17,6 +17,7 @@ from app.gateway.auth import (
 from app.gateway.auth.client_meta import get_client_ip
 from app.gateway.auth.config import get_auth_config
 from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
+from app.gateway.auth.models import normalize_email
 from app.gateway.csrf_middleware import is_secure_request
 from app.gateway.deps import get_current_user_from_request, get_local_provider
 
@@ -249,7 +250,9 @@ async def login_local(
         # Audit failed logins so brute-force attempts are visible. We capture
         # only the submitted email (not the supplied password) and the IP.
         await admin_ops.record_audit(
-            actor=form_data.username or "unknown",
+            # Canonical form, so a mixed-case attempt still counts against the
+            # (lowercased) account in the admin user studio's failed-login join.
+            actor=normalize_email(form_data.username) or "unknown",
             action="failed-login",
             target_user_id=None,
             payload={"email": form_data.username, "ip": client_ip},
@@ -408,10 +411,11 @@ async def change_password(request: Request, response: Response, body: ChangePass
 
     # Update email if provided
     if body.new_email is not None:
-        existing = await provider.get_user_by_email(body.new_email)
+        new_email = normalize_email(body.new_email)
+        existing = await provider.get_user_by_email(new_email)
         if existing and str(existing.id) != str(user.id):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already in use").model_dump())
-        user.email = body.new_email
+        user.email = new_email
 
     # Update password + bump version
     user.password_hash = await hash_password_async(body.new_password)
@@ -421,7 +425,10 @@ async def change_password(request: Request, response: Response, body: ChangePass
     if user.needs_setup and body.new_email is not None:
         user.needs_setup = False
 
-    await provider.update_user(user)
+    try:
+        await provider.update_user(user)
+    except ValueError:  # lost a race for the same address (unique index)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already in use").model_dump()) from None
 
     # Re-issue cookie with new token_version
     token = create_access_token(str(user.id), token_version=user.token_version)
@@ -476,16 +483,20 @@ async def update_email(request: Request, response: Response, body: UpdateEmailRe
 
     # No-op guard: changing to the same email still bumps the session for no
     # reason and can trip the uniqueness check against the user's own row.
-    if body.new_email != user.email:
-        existing = await provider.get_user_by_email(body.new_email)
+    new_email = normalize_email(body.new_email)
+    if new_email != normalize_email(user.email):
+        existing = await provider.get_user_by_email(new_email)
         if existing and str(existing.id) != str(user.id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already in use").model_dump(),
             )
-        user.email = body.new_email
+        user.email = new_email
         user.token_version += 1
-        await provider.update_user(user)
+        try:
+            await provider.update_user(user)
+        except ValueError:  # lost a race for the same address (unique index)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=AuthErrorResponse(code=AuthErrorCode.EMAIL_ALREADY_EXISTS, message="Email already in use").model_dump()) from None
 
         token = create_access_token(str(user.id), token_version=user.token_version)
         _set_session_cookie(response, token, request)
@@ -494,7 +505,7 @@ async def update_email(request: Request, response: Response, body: UpdateEmailRe
             actor=user.email,
             action="update-email",
             target_user_id=str(user.id),
-            payload={"new_email": body.new_email},
+            payload={"new_email": new_email},
             request=request,
         )
 

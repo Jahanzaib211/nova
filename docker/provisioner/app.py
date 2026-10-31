@@ -89,6 +89,32 @@ NODE_HOST = os.environ.get("NODE_HOST", "host.docker.internal")
 # caller regardless.
 SANDBOX_URL_MODE = os.environ.get("SANDBOX_URL_MODE", "node-port")
 
+# Chromium's own sandbox inside a sandbox Pod.
+#
+# The image's /opt/gem/run.sh prepends $BROWSER_NO_SANDBOX to
+# BROWSER_EXTRA_ARGS, so setting it to "--no-sandbox" starts Chromium without
+# its inner sandbox.
+#
+# The backend cannot set it for provisioner-created Pods: the Pod spec is
+# built here, and the backend's sandbox.environment never reaches this
+# service (the create request carries only sandbox_id/thread_id/user_id).
+#
+# That asymmetry is deliberate on the Pod side — the security context built in
+# _build_pod() keeps allow_privilege_escalation=True and drops no
+# capabilities, so Chromium's setuid helper still works there and its inner
+# sandbox is a defence-in-depth layer worth keeping. But a cluster that
+# forbids privilege escalation (Pod Security Admission "restricted", or an
+# operator's own Pod template) blocks that helper, and the runtime's default
+# seccomp profile rejects clone(CLONE_NEWUSER) without CAP_SYS_ADMIN — the
+# browser then dies exactly the way it died in the hardened local container:
+# "Failed to move to new namespace ... Operation not permitted", port 9222
+# never opens, the Pod never goes Ready and the Browser tab stays blank.
+#
+# So this is the escape hatch for that case: set BROWSER_NO_SANDBOX on the
+# provisioner (--no-sandbox) and it is passed through to every sandbox Pod.
+# Off by default — where the inner sandbox works, it stays on.
+BROWSER_NO_SANDBOX = os.environ.get("BROWSER_NO_SANDBOX", "").strip()
+
 
 def join_host_path(base: str, *parts: str) -> str:
     """Join host filesystem path segments while preserving native style."""
@@ -403,6 +429,22 @@ def _build_volume_mounts(
     ]
 
 
+def _build_pod_env() -> list[k8s_client.V1EnvVar]:
+    """Environment variables injected into every sandbox Pod.
+
+    Empty by default: the sandbox image already ships BROWSER_NO_SANDBOX
+    (empty) and the Pod spec this provisioner builds leaves Chromium's own
+    sandbox working, so nothing has to be injected unless the cluster
+    forbids privilege escalation. See BROWSER_NO_SANDBOX above.
+    """
+    if not BROWSER_NO_SANDBOX:
+        return []
+    logger.info("Injecting BROWSER_NO_SANDBOX=%s into sandbox pods", BROWSER_NO_SANDBOX)
+    return [
+        k8s_client.V1EnvVar(name="BROWSER_NO_SANDBOX", value=BROWSER_NO_SANDBOX),
+    ]
+
+
 def _build_pod(
     sandbox_id: str, thread_id: str, user_id: str = DEFAULT_USER_ID
 ) -> k8s_client.V1Pod:
@@ -464,6 +506,7 @@ def _build_pod(
                         },
                     ),
                     volume_mounts=_build_volume_mounts(thread_id, user_id=user_id),
+                    env=_build_pod_env(),
                     security_context=k8s_client.V1SecurityContext(
                         privileged=False,
                         allow_privilege_escalation=True,

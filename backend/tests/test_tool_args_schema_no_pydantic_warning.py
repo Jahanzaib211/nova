@@ -58,7 +58,7 @@ _TOOL_CASES = [
     (present_file_tool, {"filepaths": ["/tmp/x"], "tool_call_id": "call-1"}),
     (view_image_tool, {"image_path": "/tmp/img.png", "tool_call_id": "call-1"}),
     (task_tool, {"description": "do", "prompt": "go", "subagent_type": "general-purpose", "tool_call_id": "call-1"}),
-    (skill_manage_tool, {"action": "list", "name": "demo"}),
+    (skill_manage_tool, {"action": "list", "name": "sample"}),
     (setup_agent, {"soul": "s", "description": "d"}),
     (update_agent, {}),
 ]

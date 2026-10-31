@@ -142,6 +142,23 @@ def is_speech_enabled() -> bool:
     return bool(cfg.get("enabled", False))
 
 
+def voice_agent_settings() -> tuple[str | None, bool]:
+    """``(model_name, thinking_enabled)`` for a spoken turn (``speech.agent``).
+
+    A call has a different budget from a chat: what the caller feels is the
+    silence between finishing a sentence and hearing the first word back, and
+    extended thinking spends that silence before a single token is spoken. So
+    voice turns run with thinking **off** unless ``speech.agent.thinking`` says
+    otherwise, and may name a faster model than the deployment default.
+    ``model`` unset means the deployment default.
+    """
+    agent = _merged_config().get("agent") or {}
+    if not isinstance(agent, dict):
+        agent = {}
+    model = agent.get("model")
+    return (str(model) if model else None, bool(agent.get("thinking", False)))
+
+
 def _build(section: str, default_use: str, base: type) -> Any:
     cfg = dict(_merged_config().get(section) or {})
     use = cfg.pop("use", None) or default_use

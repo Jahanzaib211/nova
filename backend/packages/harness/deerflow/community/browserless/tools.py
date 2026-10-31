@@ -4,7 +4,7 @@ import time
 
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
+from deerflow.community._tool_config import tool_config_extras as _get_tool_config
 from deerflow.utils.readability import ReadabilityExtractor
 
 from .browserless_client import BrowserlessClient
@@ -13,15 +13,6 @@ logger = logging.getLogger(__name__)
 
 # readability_extractor runs CPU-bound parsing; always call via asyncio.to_thread
 _readability_extractor = ReadabilityExtractor()
-
-
-def _get_tool_config(tool_name: str) -> dict | None:
-    """Get tool config extras safely, returning None if not configured."""
-    config = get_app_config().get_tool_config(tool_name)
-    if config is None:
-        return None
-    extras = config.model_extra
-    return extras if extras is not None else {}
 
 
 def _get_browserless_client() -> BrowserlessClient:

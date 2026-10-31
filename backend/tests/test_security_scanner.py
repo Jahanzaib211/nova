@@ -21,7 +21,7 @@ def _make_env(monkeypatch, response_content):
     return model
 
 
-SKILL_CONTENT = "---\nname: demo-skill\ndescription: demo\n---\n"
+SKILL_CONTENT = "---\nname: example-skill\ndescription: sample\n---\n"
 
 
 # --- _extract_json_object unit tests ---

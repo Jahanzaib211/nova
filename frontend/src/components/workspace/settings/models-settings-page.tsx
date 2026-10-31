@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { PasswordInput } from "@/components/password-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,11 +46,12 @@ import { useI18n } from "@/core/i18n/hooks";
 import {
   useCreateModel,
   useDeleteModel,
+  useModelVisibility,
   useModels,
   useTestModel,
   useUpdateModel,
 } from "@/core/models/hooks";
-import { getModelLabel } from "@/core/models/types";
+import { formatContextWindow, getModelLabel } from "@/core/models/types";
 import type { Model, ModelWriteRequest } from "@/core/models/types";
 
 import { SettingsSection } from "./settings-section";
@@ -80,6 +82,9 @@ const LLAMA_CPP_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: false,
   amd_compute: "",
+  showInChat: true,
+  // Left blank on purpose: only whoever started llama-server knows its `-c`.
+  max_input_tokens: "",
 };
 
 // Ollama models served through the nova-litellm proxy (docker/litellm/config.yaml).
@@ -88,7 +93,7 @@ const LLAMA_CPP_PRESET: FormState = {
 const OLLAMA_PRESET: FormState = {
   name: "",
   display_name: "",
-  model: "minimax-m3-free",
+  model: "qwen2.5-7b-local",
   providerChoice: OPENAI_COMPATIBLE,
   customUse: "",
   base_url: "http://host.docker.internal:4000/v1",
@@ -97,6 +102,10 @@ const OLLAMA_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: false,
   amd_compute: "",
+  showInChat: true,
+  // Benchmarked for qwen2.5:7b-instruct on this host (docs/LOCAL_MODELS.md).
+  // Change it with the model — it is not a global default.
+  max_input_tokens: "32768",
 };
 
 // Fireworks AI — managed inference served on AMD Instinct MI300X GPUs
@@ -116,6 +125,8 @@ const FIREWORKS_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: true,
   amd_compute: "",
+  showInChat: true,
+  max_input_tokens: "",
 };
 
 // AMD Developer Cloud — Nova's own inference on a bare-metal AMD Instinct GPU via
@@ -133,6 +144,8 @@ const AMD_CLOUD_PRESET: FormState = {
   supports_reasoning_effort: false,
   supports_vision: false,
   amd_compute: "AMD Instinct MI300X (vLLM/ROCm)",
+  showInChat: true,
+  max_input_tokens: "",
 };
 
 interface FormState {
@@ -147,6 +160,10 @@ interface FormState {
   supports_reasoning_effort: boolean;
   supports_vision: boolean;
   amd_compute: string;
+  /** Inverted in the UI: the switch reads "Show in chat", the API field is `hidden`. */
+  showInChat: boolean;
+  /** Kept as a string so the input can be cleared; "" means "no explicit window". */
+  max_input_tokens: string;
 }
 
 function emptyForm(): FormState {
@@ -162,6 +179,8 @@ function emptyForm(): FormState {
     supports_reasoning_effort: false,
     supports_vision: false,
     amd_compute: "",
+    showInChat: true,
+    max_input_tokens: "",
   };
 }
 
@@ -181,6 +200,10 @@ function formFromModel(model: Model): FormState {
     supports_reasoning_effort: model.supports_reasoning_effort ?? false,
     supports_vision: model.supports_vision ?? false,
     amd_compute: model.amd_compute ?? "",
+    showInChat: !(model.hidden ?? false),
+    max_input_tokens: model.max_input_tokens
+      ? String(model.max_input_tokens)
+      : "",
   };
 }
 
@@ -196,7 +219,12 @@ function formToRequest(form: FormState, isEdit: boolean): ModelWriteRequest {
     supports_thinking: form.supports_thinking,
     supports_reasoning_effort: form.supports_reasoning_effort,
     supports_vision: form.supports_vision,
+    hidden: !form.showInChat,
   };
+  const ctx = Number.parseInt(form.max_input_tokens.trim(), 10);
+  if (Number.isFinite(ctx) && ctx > 0) {
+    request.max_input_tokens = ctx;
+  }
   if (form.display_name.trim()) {
     request.display_name = form.display_name.trim();
   }
@@ -210,6 +238,40 @@ function formToRequest(form: FormState, isEdit: boolean): ModelWriteRequest {
   }
   if (form.amd_compute.trim()) {
     request.amd_compute = form.amd_compute.trim();
+  }
+  return request;
+}
+
+/**
+ * Write payload for a one-field toggle (show in chat). Every other field is
+ * carried over verbatim so flipping the switch cannot blank a display name, a
+ * context window, or the provider class. `api_key` is omitted on purpose: the
+ * API keeps the stored key when the field is absent.
+ */
+function modelToWriteRequest(model: Model, hidden: boolean): ModelWriteRequest {
+  const request: ModelWriteRequest = {
+    name: model.name,
+    model: model.model,
+    use: model.use ?? OPENAI_COMPATIBLE,
+    supports_thinking: model.supports_thinking ?? false,
+    supports_reasoning_effort: model.supports_reasoning_effort ?? false,
+    supports_vision: model.supports_vision ?? false,
+    hidden,
+  };
+  if (model.display_name) {
+    request.display_name = model.display_name;
+  }
+  if (model.description) {
+    request.description = model.description;
+  }
+  if (model.base_url) {
+    request.base_url = model.base_url;
+  }
+  if (model.amd_compute) {
+    request.amd_compute = model.amd_compute;
+  }
+  if (model.max_input_tokens) {
+    request.max_input_tokens = model.max_input_tokens;
   }
   return request;
 }
@@ -339,8 +401,7 @@ function ModelFormDialog({
             />
           </FieldRow>
           <FieldRow label={strings.fieldApiKey}>
-            <Input
-              type="password"
+            <PasswordInput
               value={form.api_key}
               placeholder={isEdit ? strings.apiKeyUnchanged : "sk-..."}
               autoComplete="off"
@@ -364,6 +425,32 @@ function ModelFormDialog({
               checked={form.supports_vision}
               onCheckedChange={(v) => set("supports_vision", v)}
             />
+          </FieldRow>
+          <FieldRow label={strings.fieldShowInChat}>
+            <div className="flex flex-col gap-1">
+              <Switch
+                checked={form.showInChat}
+                onCheckedChange={(v) => set("showInChat", v)}
+              />
+              <span className="text-muted-foreground text-xs">
+                {strings.fieldShowInChatHint}
+              </span>
+            </div>
+          </FieldRow>
+          <FieldRow label={strings.fieldMaxInputTokens}>
+            <div className="flex flex-col gap-1">
+              <Input
+                inputMode="numeric"
+                value={form.max_input_tokens}
+                placeholder="32768"
+                onChange={(e) =>
+                  set("max_input_tokens", e.target.value.replace(/[^0-9]/g, ""))
+                }
+              />
+              <span className="text-muted-foreground text-xs">
+                {strings.fieldMaxInputTokensHint}
+              </span>
+            </div>
           </FieldRow>
         </div>
         <DialogFooter>
@@ -391,6 +478,8 @@ function ModelItem({
   const strings = t.settings.models;
   const testModel = useTestModel();
   const deleteModel = useDeleteModel();
+  const updateModel = useUpdateModel();
+  const visibility = useModelVisibility();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isRuntime = model.source === "runtime";
   const isLocal = Boolean(
@@ -398,6 +487,26 @@ function ModelItem({
     (model.base_url.includes("127.0.0.1") ||
       model.base_url.includes("localhost")),
   );
+  const offeredInChat = visibility.isVisible(model);
+  const hasVisibilityOverride =
+    visibility.state.overrides[model.name] !== undefined;
+  const contextWindow = formatContextWindow(model.max_input_tokens);
+
+  const setOfferedInChat = (next: boolean) => {
+    if (!isRuntime) {
+      // config.yaml is hand-maintained and read-only via the API: this is a
+      // per-browser preference, stated as such in the hint below the list.
+      visibility.setVisible(model.name, next);
+      return;
+    }
+    updateModel
+      .mutateAsync({
+        name: model.name,
+        request: modelToWriteRequest(model, !next),
+      })
+      .then(() => toast.success(strings.updated))
+      .catch((error: Error) => toast.error(error.message));
+  };
 
   const handleTest = () => {
     testModel
@@ -445,8 +554,32 @@ function ModelItem({
               </>
             )}
           </Badge>
+          {offeredInChat ? null : (
+            <Badge variant="outline" className="border-dashed">
+              {strings.hiddenBadge}
+            </Badge>
+          )}
+          {contextWindow ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              {contextWindow}
+            </Badge>
+          ) : null}
+          {model.supports_vision ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              {strings.capabilityVision}
+            </Badge>
+          ) : null}
+          {model.supports_thinking ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              {strings.capabilityThinking}
+            </Badge>
+          ) : null}
           {model.amd_compute ? (
-            <Badge variant="default" title={model.amd_compute}>
+            <Badge
+              variant="outline"
+              className="border-warning/40 bg-warning/10 text-warning"
+              title={model.amd_compute}
+            >
               <CpuIcon className="size-3" /> AMD
             </Badge>
           ) : null}
@@ -455,8 +588,34 @@ function ModelItem({
           {model.model}
           {model.base_url ? ` · ${model.base_url}` : ""}
         </ItemDescription>
+        {model.description ? (
+          <ItemDescription>{model.description}</ItemDescription>
+        ) : null}
+        {hasVisibilityOverride ? (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground mt-1 w-fit text-[11px] underline underline-offset-2"
+            onClick={() => visibility.resetVisibility(model.name)}
+          >
+            {strings.resetVisibility}
+          </button>
+        ) : null}
       </ItemContent>
       <ItemActions>
+        <label
+          htmlFor={`model-in-chat-${model.name}`}
+          className="text-muted-foreground flex cursor-pointer items-center gap-2 text-xs"
+        >
+          {strings.fieldShowInChat}
+          <Switch
+            id={`model-in-chat-${model.name}`}
+            checked={offeredInChat}
+            disabled={updateModel.isPending}
+            onCheckedChange={setOfferedInChat}
+            aria-label={`${strings.fieldShowInChat}: ${getModelLabel(model)}`}
+            data-testid={`model-in-chat-${model.name}`}
+          />
+        </label>
         <Button
           variant="outline"
           size="sm"
@@ -466,7 +625,7 @@ function ModelItem({
           {testModel.isPending ? (
             <LoaderCircleIcon className="size-4 animate-spin" />
           ) : testModel.data?.ok === true ? (
-            <CircleCheckIcon className="size-4 text-green-600" />
+            <CircleCheckIcon className="text-success size-4" />
           ) : testModel.data?.ok === false ? (
             <CircleXIcon className="text-destructive size-4" />
           ) : null}
@@ -521,10 +680,13 @@ export function ModelsSettingsPage() {
         <div className="text-destructive text-sm">{strings.loadError}</div>
       ) : (
         <div className="flex w-full flex-col gap-4">
+          <p className="text-muted-foreground text-xs">
+            {strings.visibilityHint}
+          </p>
           {models.map((model) => (
             <ModelItem key={model.name} model={model} onEdit={openEdit} />
           ))}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => openAdd()}>
               <PlusIcon className="size-4" />
               {strings.addButton}

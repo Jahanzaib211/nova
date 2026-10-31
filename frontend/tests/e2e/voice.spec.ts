@@ -64,14 +64,22 @@ async function stubVoiceSocket(page: Page) {
       onerror: (() => void) | null = null;
       onclose: (() => void) | null = null;
 
-      constructor(_url: string) {
+      constructor(url: string) {
         super();
-        w.__voice.opened = true;
-        // Let the caller drive server events from the test.
-        w.__voice.emit = (msg: unknown) =>
-          this.onmessage?.(
-            new MessageEvent("message", { data: JSON.stringify(msg) }),
-          );
+        // The workspace opens other sockets too (the Agent's Computer
+        // `computer-ws`, task events). Only the voice session counts as
+        // "opened", and only it receives the test's emitted server events;
+        // otherwise `waitForSocket` resolved on the first socket the page
+        // created and `ready` went to the task-events handler.
+        const isVoice = url.includes("/api/voice/session/");
+        if (isVoice) {
+          w.__voice.opened = true;
+          // Let the caller drive server events from the test.
+          w.__voice.emit = (msg: unknown) =>
+            this.onmessage?.(
+              new MessageEvent("message", { data: JSON.stringify(msg) }),
+            );
+        }
         setTimeout(() => this.onopen?.(), 0);
       }
 

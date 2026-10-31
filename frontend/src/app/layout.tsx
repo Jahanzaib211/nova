@@ -9,9 +9,9 @@ import { I18nProvider } from "@/core/i18n/context";
 import { detectLocaleServer } from "@/core/i18n/server";
 
 export const metadata: Metadata = {
-  title: "Nova — The Agent's Computer",
+  title: "Nova — The AI developer that runs on your hardware",
   description:
-    "Nova is an enterprise-grade agent platform that spins up fast, does the work, ships the build, and fades. Built on LangGraph + LangChain.",
+    "Nova builds web apps, tests them in a real browser and checks them for security holes before they go live. Runs on your own servers, with 40 security tools in every task.",
 };
 
 export const viewport: Viewport = {

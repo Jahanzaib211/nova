@@ -213,6 +213,29 @@ which loads a page fine and then hangs on screenshot or renderer work rather
 than erroring. The sandbox image ships a browser stack and Playwright, so this
 affects the agent's own browsing.
 
+`browser_no_sandbox` passes `--no-sandbox` to the Chromium running inside the
+sandbox (`BROWSER_NO_SANDBOX`, which the image's own `/opt/gem/run.sh` appends
+to `BROWSER_EXTRA_ARGS`). It is **on by default**, and in practice it is not
+optional: a non-privileged sandbox drops every capability and sets
+`no-new-privileges`, so Chromium's setuid helper cannot run, and Docker's
+default seccomp profile only allows `clone(CLONE_NEWUSER)` when `CAP_SYS_ADMIN`
+is present, so the user-namespace path fails too. Chromium then logs
+
+```
+Failed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted
+```
+
+and dies; supervisord restarts it forever, port 9222 never opens, the
+container reports unhealthy, the CDP URL comes back malformed and the Browser
+tab renders blank.
+
+The container boundary is the sandbox here. Re-adding the capabilities
+Chromium's inner sandbox wants (`CAP_SYS_ADMIN`, or dropping
+`no-new-privileges`) would trade defence-in-depth inside one container for
+near-host-root. The flag is ignored when `privileged: true` — a privileged
+container keeps every capability, so the inner sandbox works and is worth
+keeping — and a value you set in `sandbox.environment` always wins.
+
 `privileged` runs containers with `--privileged`, which is what the nested
 Docker daemon in the `dind` layer needs — with it the agent can build images and
 start real services (Postgres, Redis) for itself. It defaults to **off** and
@@ -231,6 +254,18 @@ sandbox:
 ```
 
 When using Docker development (`make docker-start`), DeerFlow starts the `provisioner` service only when this provisioner mode is configured. In Local/Docker modes, `provisioner` is not started.
+
+**The Kubernetes path does not share the sandbox's environment.** A
+provisioner-created Pod is built by the provisioner, not by the gateway, so
+`sandbox.environment` never reaches it — `browser_no_sandbox` included. That
+is not a gap in the fix but the right outcome: the Pod spec the provisioner
+builds keeps `allow_privilege_escalation: true` and drops no capabilities, so
+Chromium's own sandbox still works there and there is nothing to compensate
+for. If your cluster forbids privilege escalation (Pod Security Admission
+`restricted`, or your own Pod template), the browser fails exactly as
+described above; set `BROWSER_NO_SANDBOX=--no-sandbox` on the **provisioner**
+to pass it through to every sandbox Pod. See
+[`docker/provisioner/README.md`](../../docker/provisioner/README.md).
 
 See the [Sandbox Configuration Guide](#sandbox) to configure your preferred mode.
 

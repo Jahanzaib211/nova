@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/core/auth/AuthProvider";
 import { useI18n } from "@/core/i18n/hooks";
 import { useEnableSkill, useSkills } from "@/core/skills/hooks";
 import type { Skill } from "@/core/skills/type";
@@ -59,6 +60,10 @@ function SkillSettingsList({
 }) {
   const { t } = useI18n();
   const router = useRouter();
+  // extensions_config.json is global, so the toggle is admin-only server-side
+  // (PUT /api/skills/{name} → 403); don't offer a switch that can only fail.
+  const { user } = useAuth();
+  const canToggle = user?.system_role === "admin";
   const [filter, setFilter] = useState<string>("public");
   const [editingSkill, setEditingSkill] = useState<string | null>(null);
   const { mutate: enableSkill } = useEnableSkill();
@@ -116,7 +121,12 @@ function SkillSettingsList({
               )}
               <Switch
                 checked={skill.enabled}
-                disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"}
+                disabled={
+                  env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" || !canToggle
+                }
+                title={
+                  canToggle ? undefined : t.settings.skills.adminOnlyToggle
+                }
                 onCheckedChange={(checked) =>
                   enableSkill(
                     { skillName: skill.name, enabled: checked },

@@ -1,0 +1,54 @@
+# Self-hosted LLM for voice turns — appended by scripts/pm2-deerflow.sh when
+# NOVA_LOCAL_LLM=1 (in .env) and Docker can hand a GPU to a container.
+#
+# Why: a spoken turn is judged by the silence before the first word back, and a
+# hosted provider puts a network round trip, a queue and someone else's quota in
+# that silence. On 2026-10-31 every hosted model configured here failed at once
+# (MiniMax "Token Plan usage limit reached", Fireworks account suspended, the
+# Claude CLI out of usage), which left voice with nothing to answer with.
+#
+# Runtime: Ollama — the most-adopted local LLM runtime, OpenAI-compatible API
+# with tool calling, official GPU image. Model: gemma4:12b-it-qat (~7.2 GB),
+# the most-cited 12 GB-card pick with tool calling; it shares the RTX 3060 with
+# Whisper + Kokoro (~1.5 GB).
+#
+# Hardening: no published port — only services on the compose network (the
+# gateway) can reach it; pinned image; models in a named volume; one GPU
+# reservation; one request at a time (a single-user voice agent, and the
+# predictable latency matters more than throughput).
+services:
+  ollama:
+    image: ollama/ollama:0.40.5
+    container_name: deer-flow-ollama
+    restart: unless-stopped
+    networks:
+      - deer-flow-dev
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      # Keep the model resident: a cold load is seconds of silence on a call.
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      # The agent's prompt (system prompt + tool schemas) is ~20k tokens.
+      - OLLAMA_CONTEXT_LENGTH=32768
+      # Flash attention + an 8-bit KV cache roughly halve context VRAM.
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      - OLLAMA_HOST=0.0.0.0:11434
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  ollama-models:

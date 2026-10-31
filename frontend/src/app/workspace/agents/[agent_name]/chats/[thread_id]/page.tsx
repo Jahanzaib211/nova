@@ -34,6 +34,10 @@ import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
 import {
+  type AcpTranscripts,
+  applyAcpUpdate,
+} from "@/core/threads/acp-transcript";
+import {
   activeWriteFilePathFromActivity,
   currentToolFromActivity,
   messagesToActivityEvents,
@@ -45,6 +49,7 @@ import {
 } from "@/core/threads/hooks";
 import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
+import { useTodoCollapse } from "@/core/todos";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +76,7 @@ export default function AgentChatPage() {
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [llmError, setLlmError] = useState<LlmError | null>(null);
+  const [acpTranscripts, setAcpTranscripts] = useState<AcpTranscripts>({});
   const [settings, setSettings] = useThreadSettings(threadId);
   const [localSettings, setLocalSettings] = useLocalSettings();
   const { tokenUsageEnabled } = useModels();
@@ -85,6 +91,10 @@ export default function AgentChatPage() {
   const backendTokenUsage = threadTokenUsageToTokenUsage(threadTokenUsage.data);
 
   const { showNotification } = useNotification();
+
+  useEffect(() => {
+    setAcpTranscripts({});
+  }, [threadId]);
 
   useEffect(() => {
     setIsWelcomeMode(isNewThread);
@@ -141,6 +151,9 @@ export default function AgentChatPage() {
     onLlmError: (event) => {
       setLlmError(event);
     },
+    onAcpUpdate: (event) => {
+      setAcpTranscripts((prev) => applyAcpUpdate(prev, event));
+    },
   });
 
   const hasThreadMessages = thread.messages.length > 0;
@@ -153,8 +166,8 @@ export default function AgentChatPage() {
     [thread.messages],
   );
   const currentTool = useMemo(
-    () => currentToolFromActivity(activityEvents),
-    [activityEvents],
+    () => currentToolFromActivity(activityEvents, { live: thread.isLoading }),
+    [activityEvents, thread.isLoading],
   );
   const activeWriteFilePath = useMemo(
     () => activeWriteFilePathFromActivity(activityEvents),
@@ -227,7 +240,11 @@ export default function AgentChatPage() {
   const tokenUsageInlineMode = tokenUsageEnabled
     ? localSettings.tokenUsage.inlineMode
     : "off";
-  const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  // A new thread has no run yet; `thread.values` can still hold the previous
+  // thread's state for a render, which painted its to-dos on the empty screen.
+  const hasTodos = !isNewThread && (thread.values.todos?.length ?? 0) > 0;
+  const { collapsed: todosCollapsed, toggle: toggleTodos } =
+    useTodoCollapse(threadId);
 
   return (
     <ThreadContext.Provider
@@ -239,6 +256,7 @@ export default function AgentChatPage() {
         llmError,
         activityEvents,
         activeWriteFilePath,
+        acpTranscripts,
         onAgentMessage: handleAgentMessage,
       }}
     >
@@ -348,7 +366,10 @@ export default function AgentChatPage() {
                       // the clicks on its header -- it renders but cannot be collapsed.
                       // Stays below the z-30 chrome above it.
                       "right-0 left-0 z-10",
-                      isWelcomeMode ? "absolute -top-4" : "relative",
+                      // Lifted by exactly the composer's own welcome-mode
+                      // translate (-translate-y-2 sm:-translate-y-4 below), or
+                      // the composer slides up over the panel's last row.
+                      isWelcomeMode ? "absolute -top-2 sm:-top-4" : "relative",
                     )}
                   >
                     <div
@@ -358,9 +379,13 @@ export default function AgentChatPage() {
                       )}
                     >
                       <TodoList
-                        className="bg-background/5"
+                        // Opaque: `bg-background/5` let the chat/artifacts
+                        // pane behind the panel show through and collide
+                        // with its content.
+                        className="bg-background"
                         todos={thread.values.todos ?? []}
-                        hidden={false}
+                        collapsed={todosCollapsed}
+                        onToggle={toggleTodos}
                       />
                     </div>
                   </div>
@@ -397,7 +422,7 @@ export default function AgentChatPage() {
                 />
                 {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
                   <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
-                    {t.common.notAvailableInDemoMode}
+                    {t.common.notAvailableInPreviewMode}
                   </div>
                 )}
               </div>

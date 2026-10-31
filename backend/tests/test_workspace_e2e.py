@@ -105,7 +105,7 @@ def _create_real_project(user_id: str, thread_id: str = _THREAD_ID) -> None:
         textwrap.dedent(
             """
             [project]
-            name = "e2e-demo"
+            name = "e2e-sample"
             version = "0.1.0"
             """
         )

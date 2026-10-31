@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from collections.abc import Iterable
 
 from langchain_core.tools import BaseTool
 
@@ -77,6 +78,37 @@ async def initialize_mcp_tools() -> list[BaseTool]:
         logger.info(f"MCP tools initialized: {len(_mcp_tools_cache)} tool(s) loaded (config mtime: {_config_mtime})")
 
         return _mcp_tools_cache
+
+
+def mcp_tools_loaded() -> bool:
+    """Whether the tool cache has been loaded (startup or first use)."""
+    return _cache_initialized
+
+
+def server_for_tool(tool_name: str, servers: Iterable[str]) -> str | None:
+    """The server a cached tool came from.
+
+    Tools are loaded with ``tool_name_prefix=True``, so a tool is named
+    ``<server>_<tool>``. The longest matching server wins, so ``git`` does
+    not claim ``github_create_issue`` when both servers are configured.
+    """
+    matches = [s for s in servers if tool_name.startswith(f"{s}_")]
+    return max(matches, key=len) if matches else None
+
+
+def tool_counts_by_server(servers: Iterable[str]) -> dict[str, int]:
+    """Loaded tools per server, from the cache as it stands.
+
+    Never triggers loading: a status read must not connect to every MCP
+    server. Use :func:`mcp_tools_loaded` to tell "0 tools" from "not loaded".
+    """
+    names = list(servers)
+    counts: dict[str, int] = {}
+    for tool in _mcp_tools_cache or []:
+        server = server_for_tool(getattr(tool, "name", ""), names)
+        if server is not None:
+            counts[server] = counts.get(server, 0) + 1
+    return counts
 
 
 def get_cached_mcp_tools() -> list[BaseTool]:

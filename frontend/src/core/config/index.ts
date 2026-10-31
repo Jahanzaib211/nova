@@ -1,6 +1,6 @@
 import { env } from "@/env";
 
-function getBaseOrigin() {
+export function getBaseOrigin() {
   if (typeof window !== "undefined") {
     return window.location.origin;
   }

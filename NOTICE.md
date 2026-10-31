@@ -2,7 +2,12 @@
 
 ## Nova — The Agent's Computer
 
-Copyright (c) 2026 Ali Technologies. All rights reserved.
+Copyright (c) 2026 Jahanzaib Ali. All rights reserved.
+
+All Nova intellectual property is owned by Jahanzaib Ali alone. "Ali Technologies"
+(formerly also "Ali Labs") is a brand name used by Jahanzaib Ali; it does not own the IP.
+
+Nova was designed and engineered by Jahanzaib Ali in Sahiwal, Pakistan.
 
 This repository ("Nova") is a derivative work built on top of the open-source
 **DeerFlow** project by ByteDance and its community
@@ -18,8 +23,9 @@ granted by that license for the upstream code.
 
 ## Proprietary additions
 
-The following Nova-specific additions are proprietary to **Ali Technologies**
-and are NOT licensed under the MIT License unless explicitly stated otherwise:
+The following Nova-specific additions are proprietary to **Jahanzaib Ali**
+personally. They are NOT licensed under the MIT
+License and are governed by [LICENSE-COMMERCIAL.md](./LICENSE-COMMERCIAL.md):
 
 - The **Agent's Computer** user interface (3-panel live terminal, editor,
   browser preview, activity, and task-progress views).
@@ -34,8 +40,8 @@ For the full list of changes on top of stock DeerFlow, see
 ## Trademarks
 
 "DeerFlow" is a name of the upstream ByteDance project; its use in this
-repository is solely for attribution. "Nova" and "Ali Technologies" identify
-this derivative work and its maintainer.
+repository is solely for attribution. "Nova", "Ali Labs" and "Ali Technologies"
+identify this derivative work and its owner.
 
 ## Contact
 

@@ -157,6 +157,34 @@ case "${UV_EXTRAS:-}" in
         ;;
 esac
 
+# ── Schema: create new tables, then apply Alembic head ──────────────────────
+# Until 2026-09 nothing ran the migrations on deploy, so a column added to an
+# existing table never reached a live database (audit PROD-001). Opt out with
+# NOVA_DB_MIGRATE=0. A failure here is fatal on purpose: booting a gateway
+# against a schema it does not expect is worse than not booting.
+if [ "${NOVA_DB_MIGRATE:-1}" = "1" ]; then
+    NOVA_BACKEND_DIR=/app/backend /usr/local/bin/db-migrate.sh
+fi
+
+# ── ACP agents: warm the Claude adapter so the first invoke is not a download ─
+# Best-effort and backgrounded: a slow registry must never delay the gateway.
+# An interrupted install leaves an npx cache entry without its bin link, and
+# npx then fails every launch with "claude-agent-acp: not found" instead of
+# reinstalling — drop such entries first. --prefer-offline matches the
+# config.yaml launcher, so this warms the exact cache entry a turn will use.
+if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
+    (
+        for d in "${HOME:-/root}"/.npm/_npx/*/; do
+            if grep -qs '"@zed-industries/claude-agent-acp"' "$d/package.json" \
+                && [ ! -e "$d/node_modules/.bin/claude-agent-acp" ]; then
+                rm -rf "$d"
+            fi
+        done
+        npx --prefer-offline -y "@zed-industries/claude-agent-acp@${NOVA_CLAUDE_ACP_VERSION:-0.23.1}" --version \
+            >/app/logs/acp-warm.log 2>&1 || echo "acp warm-up failed (see logs/acp-warm.log)" >&2
+    ) &
+fi
+
 # ── Hand off to uvicorn ─────────────────────────────────────────────────────
 
 PYTHONPATH=. exec uv run uvicorn app.gateway.app:app \

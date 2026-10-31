@@ -214,7 +214,7 @@ function RecentChatList_() {
         <SidebarGroupLabel>
           {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true"
             ? t.sidebar.recentChats
-            : t.sidebar.demoChats}
+            : t.sidebar.starterChats}
         </SidebarGroupLabel>
         <SidebarGroupContent className="group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0">
           <SidebarMenu>

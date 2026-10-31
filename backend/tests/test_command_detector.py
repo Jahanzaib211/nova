@@ -17,7 +17,7 @@ from deerflow.workspace.models.project import Project, ProjectKind
 def _python_project(tmp_path, **kw):
     return Project(
         project_id="p1",
-        name="demo",
+        name="sample",
         kind=ProjectKind.PYTHON_PROJECT,
         root_path=str(tmp_path),
         **kw,
@@ -26,12 +26,12 @@ def _python_project(tmp_path, **kw):
 
 class TestNoFabricatedMigrate:
     def test_no_migrate_without_alembic(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n")
         commands = CommandDetector().build_registry([_python_project(tmp_path)])
         assert "migrate" not in {c.name for c in commands}
 
     def test_migrate_with_alembic_ini(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n")
         (tmp_path / "alembic.ini").write_text("[alembic]\n")
         commands = CommandDetector().build_registry([_python_project(tmp_path)])
         migrate = [c for c in commands if c.name == "migrate"]

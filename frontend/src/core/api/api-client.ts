@@ -5,10 +5,10 @@ import { Client as LangGraphClient } from "@langchain/langgraph-sdk/client";
 import { getLangGraphBaseURL } from "../config";
 import { isStaticWebsiteOnly } from "../static-mode";
 import {
-  loadStaticDemoThread,
-  loadStaticDemoThreads,
-  staticDemoThreadState,
-} from "../threads/static-demo";
+  loadStaticThread,
+  loadStaticThreads,
+  staticThreadState,
+} from "../threads/static-threads";
 import type { AgentThreadState } from "../threads/types";
 
 import { isStateChangingMethod, readCsrfCookie } from "./fetcher";
@@ -137,23 +137,23 @@ function createStaticClient(): LangGraphClient {
   const client = new LangGraphClient({ apiUrl });
 
   client.threads.search = (async (query) => {
-    return loadStaticDemoThreads(query);
+    return loadStaticThreads(query);
   }) as typeof client.threads.search;
 
   client.threads.get = (async (threadId) => {
-    return loadStaticDemoThread(threadId);
+    return loadStaticThread(threadId);
   }) as typeof client.threads.get;
 
   client.threads.getState = (async (threadId) => {
-    return staticDemoThreadState(await loadStaticDemoThread(threadId));
+    return staticThreadState(await loadStaticThread(threadId));
   }) as typeof client.threads.getState;
 
   client.threads.getHistory = (async (threadId) => {
-    return [staticDemoThreadState(await loadStaticDemoThread(threadId))];
+    return [staticThreadState(await loadStaticThread(threadId))];
   }) as typeof client.threads.getHistory;
 
   client.threads.update = (async (threadId) => {
-    return loadStaticDemoThread(threadId);
+    return loadStaticThread(threadId);
   }) as typeof client.threads.update;
 
   client.runs.list = (async () => []) as typeof client.runs.list;

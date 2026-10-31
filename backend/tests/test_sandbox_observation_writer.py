@@ -9,134 +9,135 @@ the three paths the function supports — per-thread local sandbox, the legacy
 global ``local`` sandbox (must be skipped), and AIO via the provider's
 ``_thread_sandboxes`` reverse-lookup.
 
-NOTE: importing ``deerflow.sandbox.tools`` triggers a pre-existing circular
-import in ``workspace_tools.py`` that this repo already ships (issue tracked
-elsewhere). The runtime path the writer lives on is unaffected; we sidestep
-the cycle here by exec'ing the function source directly, so the test
-exercises the real implementation without re-triggering the import error.
+**This file used to test a stub.** It ``exec()``d a hand-written
+reimplementation of the writer — one that had no ``obs_id``/``state``/``delta``/
+``replace`` parameters and never touched ``terminal_stats.json`` — on the
+grounds that importing ``deerflow.sandbox.tools`` hit a circular import. So it
+could pass while the shipped writer was broken, and it provided no cover at all
+for the half of the function that maintains the command counter. That is the
+same trap that let a wrong ``is_command_line`` ship green, and the same one that
+hid the skill tool-policy bug.
+
+The cycle is real but is an *ordering* problem, not a wall: importing
+``deerflow.tools.builtins.workspace_tools`` first is the order the application
+itself uses, and several sibling tests already do exactly that. So these tests
+now drive the real function.
 """
 
 from __future__ import annotations
 
 import json
-import sys
-import types
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
-_HERE = Path(__file__).resolve().parent
-_BACKEND = _HERE.parent
-if str(_BACKEND) not in sys.path:
-    sys.path.insert(0, str(_BACKEND))
+# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools` import
+# each other, so importing the former *first* in a fresh interpreter raises
+# ImportError. Entering from the workspace_tools side is the order the
+# application itself uses (same note as tests/test_terminal_stats_concurrency.py).
+import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
 
 
 @pytest.fixture
-def writer(fake_paths):
-    """Return the ``_write_sandbox_observation`` callable extracted from the
-    sandbox-tools module, sidestepping the pre-existing circular import in
-    ``workspace_tools.py`` by loading the file directly with ``exec``.
-    The runtime stubs (``get_paths``, ``get_effective_user_id``,
-    ``get_sandbox_provider``) are passed in as exec globals.
+def thread_log(tmp_path, monkeypatch):
+    """Route the writer at a throwaway thread directory.
+
+    Only the path resolution is faked: the writer, the command predicate and the
+    counter reconciliation are all the shipped code.
     """
-    _paths, _thread_dir, runtime_ns = fake_paths
-    ns: dict = {
-        "datetime": __import__("datetime"),
-        "json": __import__("json"),
-        "get_paths": runtime_ns.get_paths,
-        "get_effective_user_id": runtime_ns.get_effective_user_id,
-        "get_sandbox_provider": runtime_ns.get_sandbox_provider,
-    }
-    exec(
-        "def _thread_id_for_observation(sandbox_id):\n"
-        "    if sandbox_id.startswith('local:'):\n"
-        "        return sandbox_id[len('local:'):] or None\n"
-        "    if not sandbox_id or sandbox_id == 'local':\n"
-        "        return None\n"
-        "    try:\n"
-        "        thread_sandboxes = getattr(get_sandbox_provider(), '_thread_sandboxes', None) or {}\n"
-        "        for thread_id, sid in thread_sandboxes.items():\n"
-        "            if sid == sandbox_id:\n"
-        "                return thread_id\n"
-        "    except Exception:\n"
-        "        pass\n"
-        "    return None\n",
-        ns,
+    log_path = tmp_path / "sandbox.log"
+    resolved: dict[str, str | None] = {"thread_id": "t-obs"}
+
+    monkeypatch.setattr(
+        sandbox_tools,
+        "_thread_id_for_observation",
+        lambda sid: resolved["thread_id"] if sid not in ("", "local", None) else None,
     )
-    exec(
-        "def _write_sandbox_observation(sandbox_id, tool, path, summary, output=''):\n"
-        "    thread_id = _thread_id_for_observation(sandbox_id)\n"
-        "    if not thread_id:\n"
-        "        return\n"
-        "    user_id = get_effective_user_id()\n"
-        "    thread_dir = get_paths().thread_dir(thread_id, user_id=user_id)\n"
-        "    thread_dir.mkdir(parents=True, exist_ok=True)\n"
-        "    ts = datetime.datetime.now().strftime('%H:%M:%S')\n"
-        "    entry = json.dumps({'ts': ts, 'type': tool, 'path': path, 'summary': summary, 'output': output[:2000] if output else ''})\n"
-        "    log_path = thread_dir / 'sandbox.log'\n"
-        "    with open(log_path, 'a', encoding='utf-8') as fh:\n"
-        "        fh.write(entry + '\\n')\n",
-        ns,
-    )
-    return ns["_write_sandbox_observation"], ns["_thread_id_for_observation"]
+    monkeypatch.setattr(sandbox_tools, "_sandbox_log_file", lambda _tid: log_path)
+    return log_path, resolved
 
 
-@pytest.fixture
-def fake_paths(tmp_path, monkeypatch):
-    """Patch ``deerflow.config.paths.get_paths`` so writes go to a temp dir."""
-    paths = MagicMock()
-    thread_dir = tmp_path / "users" / "tester" / "threads" / "t-obs" / "user-data"
-    thread_dir.mkdir(parents=True, exist_ok=True)
-    paths.thread_dir.return_value = thread_dir
-    runtime = sys.modules.setdefault("_inline_runtime", types.ModuleType("_inline_runtime"))
-    runtime.get_paths = lambda: paths
-    runtime.get_effective_user_id = lambda: "tester"
-    # Mutable holder so individual tests can swap the provider without the
-    # ``exec`` namespace capturing a stale closure.
-    provider_holder = {"provider": MagicMock(_thread_sandboxes={})}
-    runtime.provider_holder = provider_holder
-    runtime.get_sandbox_provider = lambda: provider_holder["provider"]
-    return paths, thread_dir, runtime
+def _lines(log_path):
+    if not log_path.exists():
+        return []
+    return [json.loads(ln) for ln in log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
-def test_per_thread_local_sandbox_appends_json_line(writer, fake_paths):
-    write, _ = writer
-    _, thread_dir, ns = fake_paths
-    write("local:abc-xyz", "bash", None, "$ echo hi", "hi\n")
-    log = (thread_dir / "sandbox.log").read_text(encoding="utf-8")
-    lines = [ln for ln in log.splitlines() if ln.strip()]
-    assert len(lines) == 1, f"expected one JSON line, got: {log!r}"
-    parsed = json.loads(lines[0])
-    assert parsed["type"] == "bash"
-    assert parsed["summary"] == "$ echo hi"
-    assert parsed["output"] == "hi\n"
-    assert "ts" in parsed
+def test_per_thread_local_sandbox_appends_json_line(thread_log):
+    log_path, _ = thread_log
+    sandbox_tools._write_sandbox_observation("local:abc-xyz", "bash", None, "$ echo hi", "hi\n")
+    records = _lines(log_path)
+    assert len(records) == 1, f"expected one JSON line, got {records!r}"
+    assert records[0]["type"] == "bash"
+    assert records[0]["summary"] == "$ echo hi"
+    assert records[0]["output"] == "hi\n"
+    assert "ts" in records[0]
 
 
-def test_legacy_global_local_sandbox_is_skipped(writer, fake_paths):
-    write, _ = writer
-    _, thread_dir, _ns = fake_paths
-    write("local", "bash", None, "$ echo hi")
-    assert not (thread_dir / "sandbox.log").exists()
+def test_legacy_global_local_sandbox_is_skipped(thread_log):
+    log_path, resolved = thread_log
+    resolved["thread_id"] = None
+    sandbox_tools._write_sandbox_observation("local", "bash", None, "$ echo hi")
+    assert not log_path.exists()
 
 
-def test_aio_sandbox_resolves_thread_via_provider(writer, fake_paths):
-    write, _ = writer
-    _, thread_dir, runtime = fake_paths
-    runtime.provider_holder["provider"] = MagicMock(_thread_sandboxes={"thread-9": "hash-X"})
-
-    write("hash-X", "write_file", "/foo.txt", "Wrote 12 bytes")
-    log = (thread_dir / "sandbox.log").read_text(encoding="utf-8")
-    lines = [ln for ln in log.splitlines() if ln.strip()]
-    assert len(lines) == 1
-    parsed = json.loads(lines[0])
-    assert parsed["type"] == "write_file"
-    assert parsed["path"] == "/foo.txt"
+def test_unknown_sandbox_id_is_silently_skipped(thread_log):
+    log_path, resolved = thread_log
+    resolved["thread_id"] = None
+    sandbox_tools._write_sandbox_observation("hash-UNKNOWN", "bash", None, "$ whatever")
+    assert not log_path.exists()
 
 
-def test_unknown_aio_sandbox_id_is_silently_skipped(writer, fake_paths):
-    write, _ = writer
-    _, thread_dir, _ns = fake_paths
-    write("hash-UNKNOWN", "bash", None, "$ whatever")
-    assert not (thread_dir / "sandbox.log").exists()
+def test_file_tools_record_their_path(thread_log):
+    log_path, _ = thread_log
+    sandbox_tools._write_sandbox_observation("hash-X", "write_file", "/foo.txt", "Wrote 12 bytes")
+    records = _lines(log_path)
+    assert len(records) == 1
+    assert records[0]["type"] == "write_file"
+    assert records[0]["path"] == "/foo.txt"
+
+
+class TestTheCounterHalfTheStubNeverCovered:
+    """``_write_sandbox_observation`` also maintains ``terminal_stats.json``.
+
+    The replaced stub had no idea this existed, so none of it was under test
+    from this file.
+    """
+
+    def _total(self, log_path):
+        stats = log_path.parent / "terminal_stats.json"
+        return json.loads(stats.read_text())["total"]
+
+    def test_a_command_moves_the_counter(self, thread_log):
+        log_path, _ = thread_log
+        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "$ echo one")
+        assert self._total(log_path) == 1
+
+    def test_file_work_does_not_move_the_counter(self, thread_log):
+        log_path, _ = thread_log
+        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "$ echo one")
+        sandbox_tools._write_sandbox_observation("local:t", "read_file", "/a", "Read 3 chars")
+        sandbox_tools._write_sandbox_observation("local:t", "write_file", "/a", "Wrote 3 bytes")
+        assert self._total(log_path) == 1, "file work is not a command"
+
+    def test_a_streamed_command_counts_once_not_once_per_frame(self, thread_log):
+        log_path, _ = thread_log
+        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "$ npm i", obs_id="x1", state="running")
+        for chunk in ("a\n", "b\n", "c\n"):
+            sandbox_tools._write_sandbox_observation("local:t", "bash", None, "", obs_id="x1", state="running", delta=chunk)
+        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "$ npm i", "all", obs_id="x1", state="done")
+        assert self._total(log_path) == 1
+
+    def test_shell_session_counts_and_its_bookkeeping_does_not(self, thread_log):
+        log_path, _ = thread_log
+        sandbox_tools._write_sandbox_observation("local:t", "shell_session", "/w", "[main] top", obs_id="shell:main", state="running")
+        sandbox_tools._write_sandbox_observation("local:t", "shell_view", None, "[main] view", obs_id="shell:main", state="running", replace="screen")
+        sandbox_tools._write_sandbox_observation("local:t", "shell_kill", None, "[main] killed", obs_id="shell:main", state="done")
+        assert self._total(log_path) == 1
+
+    def test_the_counter_file_is_readable_by_non_root(self, thread_log):
+        """atomic_write_text writes through NamedTemporaryFile, which is 0600."""
+        log_path, _ = thread_log
+        sandbox_tools._write_sandbox_observation("local:t", "bash", None, "$ echo one")
+        mode = (log_path.parent / "terminal_stats.json").stat().st_mode & 0o777
+        assert mode == 0o644, f"counter written {oct(mode)}, unreadable to the gateway's reader"

@@ -1,0 +1,254 @@
+
+ RUN  v4.1.4 /home/jahanzaib/Desktop/nova/frontend
+
+(node:2089979) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+·stderr | tests/unit/core/auth/server.test.ts > getServerSideUser — gateway_unavailable contract (issue #3493) > returns gateway_unavailable when /auth/me fetch rejects (e.g. AbortError)
+[SSR auth] Failed to reach gateway: DOMException [AbortError]: Aborted
+    at new DOMException (node:internal/per_context/domexception:79:18)
+    at /home/jahanzaib/Desktop/nova/frontend/tests/unit/core/auth/server.test.ts:140:22
+    at file:///home/jahanzaib/Desktop/nova/frontend/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///home/jahanzaib/Desktop/nova/frontend/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///home/jahanzaib/Desktop/nova/frontend/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///home/jahanzaib/Desktop/nova/frontend/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///home/jahanzaib/Desktop/nova/frontend/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///home/jahanzaib/Desktop/nova/frontend/node_modules/.pnpm/@vitest+runner@4.1.4/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+
+stderr | tests/unit/core/auth/server.test.ts > getServerSideUser — gateway_unavailable contract (issue #3493) > returns gateway_unavailable when /auth/me responds with a 5xx
+[SSR auth] /api/v1/auth/me responded 503
+
+········{"seq":1,"stage":"hook.start","monotonicMs":153.151073,"wallIso":"2026-09-16T18:08:58.286Z","runId":"run-y","threadId":"thread-x","extra":{"source":"joinStream"}}
+{"seq":2,"stage":"hook.onLangChainEvent","monotonicMs":154.025825,"wallIso":"2026-09-16T18:08:58.287Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e1"}}
+{"seq":3,"stage":"manager.state","monotonicMs":154.099906,"wallIso":"2026-09-16T18:08:58.287Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":4,"stage":"hook.onLangChainEvent","monotonicMs":154.132058,"wallIso":"2026-09-16T18:08:58.287Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e2"}}
+{"seq":5,"stage":"manager.state","monotonicMs":154.163377,"wallIso":"2026-09-16T18:08:58.287Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":1,"stage":"hook.onLangChainEvent","monotonicMs":157.8754,"wallIso":"2026-09-16T18:08:58.291Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_chain_start","eventId":"e1"}}
+{"seq":2,"stage":"hook.onLangChainEvent","monotonicMs":157.934783,"wallIso":"2026-09-16T18:08:58.291Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e2"}}
+{"seq":3,"stage":"hook.onLangChainEvent","monotonicMs":157.957116,"wallIso":"2026-09-16T18:08:58.291Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_end","eventId":"e3"}}
+{"seq":4,"stage":"hook.onLangChainEvent","monotonicMs":157.971614,"wallIso":"2026-09-16T18:08:58.291Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_chain_end","eventId":"e4"}}
+{"seq":1,"stage":"hook.onLangChainEvent","monotonicMs":159.082526,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e0"}}
+{"seq":2,"stage":"manager.state","monotonicMs":159.143543,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":3,"stage":"hook.onLangChainEvent","monotonicMs":159.167749,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e1"}}
+{"seq":4,"stage":"manager.state","monotonicMs":159.185203,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":5,"stage":"hook.onLangChainEvent","monotonicMs":159.198879,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e2"}}
+{"seq":6,"stage":"manager.state","monotonicMs":159.223917,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":7,"stage":"hook.onLangChainEvent","monotonicMs":159.235929,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e3"}}
+{"seq":8,"stage":"manager.state","monotonicMs":159.247912,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":9,"stage":"hook.onLangChainEvent","monotonicMs":159.261939,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e4"}}
+{"seq":10,"stage":"manager.state","monotonicMs":159.2779,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":11,"stage":"hook.onLangChainEvent","monotonicMs":159.296776,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e5"}}
+{"seq":12,"stage":"manager.state","monotonicMs":159.30949,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":13,"stage":"hook.onLangChainEvent","monotonicMs":159.322595,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e6"}}
+{"seq":14,"stage":"manager.state","monotonicMs":159.334047,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":15,"stage":"hook.onLangChainEvent","monotonicMs":159.347783,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e7"}}
+{"seq":16,"stage":"manager.state","monotonicMs":159.357872,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":17,"stage":"hook.onLangChainEvent","monotonicMs":159.370887,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e8"}}
+{"seq":18,"stage":"manager.state","monotonicMs":159.387178,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":19,"stage":"hook.onLangChainEvent","monotonicMs":159.407808,"wallIso":"2026-09-16T18:08:58.292Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e9"}}
+{"seq":20,"stage":"manager.state","monotonicMs":159.426634,"wallIso":"2026-09-16T18:08:58.292Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":21,"stage":"hook.onLangChainEvent","monotonicMs":159.443616,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e10"}}
+{"seq":22,"stage":"manager.state","monotonicMs":159.459998,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":23,"stage":"hook.onLangChainEvent","monotonicMs":159.473343,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e11"}}
+{"seq":24,"stage":"manager.state","monotonicMs":159.485486,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":25,"stage":"hook.onLangChainEvent","monotonicMs":159.49785,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e12"}}
+{"seq":26,"stage":"manager.state","monotonicMs":159.510234,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":27,"stage":"hook.onLangChainEvent","monotonicMs":159.522968,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e13"}}
+{"seq":28,"stage":"manager.state","monotonicMs":159.535111,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":29,"stage":"hook.onLangChainEvent","monotonicMs":159.545301,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e14"}}
+{"seq":30,"stage":"manager.state","monotonicMs":159.553536,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":31,"stage":"hook.onLangChainEvent","monotonicMs":159.561712,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e15"}}
+{"seq":32,"stage":"manager.state","monotonicMs":159.569898,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":33,"stage":"hook.onLangChainEvent","monotonicMs":159.578875,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e16"}}
+{"seq":34,"stage":"manager.state","monotonicMs":159.586529,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":35,"stage":"hook.onLangChainEvent","monotonicMs":159.595076,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e17"}}
+{"seq":36,"stage":"manager.state","monotonicMs":159.603712,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":37,"stage":"hook.onLangChainEvent","monotonicMs":159.611958,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e18"}}
+{"seq":38,"stage":"manager.state","monotonicMs":159.619663,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":39,"stage":"hook.onLangChainEvent","monotonicMs":159.627618,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e19"}}
+{"seq":40,"stage":"manager.state","monotonicMs":159.635633,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":41,"stage":"hook.onLangChainEvent","monotonicMs":159.643699,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e20"}}
+{"seq":42,"stage":"manager.state","monotonicMs":159.651193,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":43,"stage":"hook.onLangChainEvent","monotonicMs":159.658998,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e21"}}
+{"seq":44,"stage":"manager.state","monotonicMs":159.666843,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":45,"stage":"hook.onLangChainEvent","monotonicMs":159.675139,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e22"}}
+{"seq":46,"stage":"manager.state","monotonicMs":159.682954,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":47,"stage":"hook.onLangChainEvent","monotonicMs":159.69137,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e23"}}
+{"seq":48,"stage":"manager.state","monotonicMs":159.698874,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":49,"stage":"hook.onLangChainEvent","monotonicMs":159.707521,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e24"}}
+{"seq":50,"stage":"manager.state","monotonicMs":159.714975,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":51,"stage":"hook.onLangChainEvent","monotonicMs":159.722369,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e25"}}
+{"seq":52,"stage":"manager.state","monotonicMs":159.729963,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":53,"stage":"hook.onLangChainEvent","monotonicMs":159.737949,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e26"}}
+{"seq":54,"stage":"manager.state","monotonicMs":159.746415,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":55,"stage":"hook.onLangChainEvent","monotonicMs":159.7542,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e27"}}
+{"seq":56,"stage":"manager.state","monotonicMs":159.761814,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":57,"stage":"hook.onLangChainEvent","monotonicMs":159.76981,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e28"}}
+{"seq":58,"stage":"manager.state","monotonicMs":159.777564,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":59,"stage":"hook.onLangChainEvent","monotonicMs":159.785179,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e29"}}
+{"seq":60,"stage":"manager.state","monotonicMs":159.792573,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":61,"stage":"hook.onLangChainEvent","monotonicMs":159.800428,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e30"}}
+{"seq":62,"stage":"manager.state","monotonicMs":159.808353,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":63,"stage":"hook.onLangChainEvent","monotonicMs":159.816479,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e31"}}
+{"seq":64,"stage":"manager.state","monotonicMs":159.823823,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":65,"stage":"hook.onLangChainEvent","monotonicMs":159.831507,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e32"}}
+{"seq":66,"stage":"manager.state","monotonicMs":159.839042,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":67,"stage":"hook.onLangChainEvent","monotonicMs":159.846967,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e33"}}
+{"seq":68,"stage":"manager.state","monotonicMs":159.854551,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":69,"stage":"hook.onLangChainEvent","monotonicMs":159.863909,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e34"}}
+{"seq":70,"stage":"manager.state","monotonicMs":159.871754,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":71,"stage":"hook.onLangChainEvent","monotonicMs":159.879539,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e35"}}
+{"seq":72,"stage":"manager.state","monotonicMs":159.887144,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":73,"stage":"hook.onLangChainEvent","monotonicMs":159.894868,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e36"}}
+{"seq":74,"stage":"manager.state","monotonicMs":159.921179,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":75,"stage":"hook.onLangChainEvent","monotonicMs":159.933342,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e37"}}
+{"seq":76,"stage":"manager.state","monotonicMs":159.943451,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":77,"stage":"hook.onLangChainEvent","monotonicMs":159.954292,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e38"}}
+{"seq":78,"stage":"manager.state","monotonicMs":159.964191,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":79,"stage":"hook.onLangChainEvent","monotonicMs":159.975072,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e39"}}
+{"seq":80,"stage":"manager.state","monotonicMs":159.985041,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":81,"stage":"hook.onLangChainEvent","monotonicMs":159.99496,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e40"}}
+{"seq":82,"stage":"manager.state","monotonicMs":160.002905,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":83,"stage":"hook.onLangChainEvent","monotonicMs":160.011221,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e41"}}
+{"seq":84,"stage":"manager.state","monotonicMs":160.019106,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":85,"stage":"hook.onLangChainEvent","monotonicMs":160.026941,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e42"}}
+{"seq":86,"stage":"manager.state","monotonicMs":160.034385,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":87,"stage":"hook.onLangChainEvent","monotonicMs":160.043042,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e43"}}
+{"seq":88,"stage":"manager.state","monotonicMs":160.051077,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":89,"stage":"hook.onLangChainEvent","monotonicMs":160.058681,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e44"}}
+{"seq":90,"stage":"manager.state","monotonicMs":160.066066,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":91,"stage":"hook.onLangChainEvent","monotonicMs":160.07369,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e45"}}
+{"seq":92,"stage":"manager.state","monotonicMs":160.081235,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":93,"stage":"hook.onLangChainEvent","monotonicMs":160.08928,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e46"}}
+{"seq":94,"stage":"manager.state","monotonicMs":160.096744,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":95,"stage":"hook.onLangChainEvent","monotonicMs":160.104749,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e47"}}
+{"seq":96,"stage":"manager.state","monotonicMs":160.112324,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":97,"stage":"hook.onLangChainEvent","monotonicMs":160.120379,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e48"}}
+{"seq":98,"stage":"manager.state","monotonicMs":160.127844,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":99,"stage":"hook.onLangChainEvent","monotonicMs":160.135659,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e49"}}
+{"seq":100,"stage":"manager.state","monotonicMs":160.143343,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":101,"stage":"hook.onLangChainEvent","monotonicMs":160.151048,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e50"}}
+{"seq":102,"stage":"manager.state","monotonicMs":160.158763,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":103,"stage":"hook.onLangChainEvent","monotonicMs":160.166277,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e51"}}
+{"seq":104,"stage":"manager.state","monotonicMs":160.174012,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":105,"stage":"hook.onLangChainEvent","monotonicMs":160.181957,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e52"}}
+{"seq":106,"stage":"manager.state","monotonicMs":160.189732,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":107,"stage":"hook.onLangChainEvent","monotonicMs":160.197607,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e53"}}
+{"seq":108,"stage":"manager.state","monotonicMs":160.205352,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":109,"stage":"hook.onLangChainEvent","monotonicMs":160.213207,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e54"}}
+{"seq":110,"stage":"manager.state","monotonicMs":160.220972,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":111,"stage":"hook.onLangChainEvent","monotonicMs":160.228646,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e55"}}
+{"seq":112,"stage":"manager.state","monotonicMs":160.237142,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":113,"stage":"hook.onLangChainEvent","monotonicMs":160.245448,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e56"}}
+{"seq":114,"stage":"manager.state","monotonicMs":160.255858,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":115,"stage":"hook.onLangChainEvent","monotonicMs":160.26705,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e57"}}
+{"seq":116,"stage":"manager.state","monotonicMs":160.279413,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":117,"stage":"hook.onLangChainEvent","monotonicMs":160.292719,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e58"}}
+{"seq":118,"stage":"manager.state","monotonicMs":160.305082,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":119,"stage":"hook.onLangChainEvent","monotonicMs":160.317967,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e59"}}
+{"seq":120,"stage":"manager.state","monotonicMs":160.329809,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":121,"stage":"hook.onLangChainEvent","monotonicMs":160.341291,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e60"}}
+{"seq":122,"stage":"manager.state","monotonicMs":160.353525,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":123,"stage":"hook.onLangChainEvent","monotonicMs":160.374455,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e61"}}
+{"seq":124,"stage":"manager.state","monotonicMs":160.389904,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":125,"stage":"hook.onLangChainEvent","monotonicMs":160.403961,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e62"}}
+{"seq":126,"stage":"manager.state","monotonicMs":160.416325,"wallIso":"2026-09-16T18:08:58.293Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":127,"stage":"hook.onLangChainEvent","monotonicMs":160.427606,"wallIso":"2026-09-16T18:08:58.293Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e63"}}
+{"seq":128,"stage":"manager.state","monotonicMs":160.438998,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":129,"stage":"hook.onLangChainEvent","monotonicMs":160.45064,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e64"}}
+{"seq":130,"stage":"manager.state","monotonicMs":160.462263,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":131,"stage":"hook.onLangChainEvent","monotonicMs":160.473173,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e65"}}
+{"seq":132,"stage":"manager.state","monotonicMs":160.488813,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":133,"stage":"hook.onLangChainEvent","monotonicMs":160.50276,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e66"}}
+{"seq":134,"stage":"manager.state","monotonicMs":160.514092,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":135,"stage":"hook.onLangChainEvent","monotonicMs":160.521836,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e67"}}
+{"seq":136,"stage":"manager.state","monotonicMs":160.52918,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":137,"stage":"hook.onLangChainEvent","monotonicMs":160.536424,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e68"}}
+{"seq":138,"stage":"manager.state","monotonicMs":160.543518,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":139,"stage":"hook.onLangChainEvent","monotonicMs":160.550411,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e69"}}
+{"seq":140,"stage":"manager.state","monotonicMs":160.558226,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":141,"stage":"hook.onLangChainEvent","monotonicMs":160.565309,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e70"}}
+{"seq":142,"stage":"manager.state","monotonicMs":160.573024,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":143,"stage":"hook.onLangChainEvent","monotonicMs":160.580338,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e71"}}
+{"seq":144,"stage":"manager.state","monotonicMs":160.587352,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":145,"stage":"hook.onLangChainEvent","monotonicMs":160.594225,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e72"}}
+{"seq":146,"stage":"manager.state","monotonicMs":160.601168,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":147,"stage":"hook.onLangChainEvent","monotonicMs":160.607921,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e73"}}
+{"seq":148,"stage":"manager.state","monotonicMs":160.614964,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":149,"stage":"hook.onLangChainEvent","monotonicMs":160.622028,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e74"}}
+{"seq":150,"stage":"manager.state","monotonicMs":160.629071,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":151,"stage":"hook.onLangChainEvent","monotonicMs":160.636195,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e75"}}
+{"seq":152,"stage":"manager.state","monotonicMs":160.643198,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":153,"stage":"hook.onLangChainEvent","monotonicMs":160.650101,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e76"}}
+{"seq":154,"stage":"manager.state","monotonicMs":160.657105,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":155,"stage":"hook.onLangChainEvent","monotonicMs":160.664058,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e77"}}
+{"seq":156,"stage":"manager.state","monotonicMs":160.671082,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":157,"stage":"hook.onLangChainEvent","monotonicMs":160.678005,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e78"}}
+{"seq":158,"stage":"manager.state","monotonicMs":160.684878,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":159,"stage":"hook.onLangChainEvent","monotonicMs":160.692012,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e79"}}
+{"seq":160,"stage":"manager.state","monotonicMs":160.698845,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":161,"stage":"hook.onLangChainEvent","monotonicMs":160.705868,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e80"}}
+{"seq":162,"stage":"manager.state","monotonicMs":160.712711,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":163,"stage":"hook.onLangChainEvent","monotonicMs":160.719745,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e81"}}
+{"seq":164,"stage":"manager.state","monotonicMs":160.726568,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":165,"stage":"hook.onLangChainEvent","monotonicMs":160.734002,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e82"}}
+{"seq":166,"stage":"manager.state","monotonicMs":160.740865,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":167,"stage":"hook.onLangChainEvent","monotonicMs":160.747988,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e83"}}
+{"seq":168,"stage":"manager.state","monotonicMs":160.754962,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":169,"stage":"hook.onLangChainEvent","monotonicMs":160.761845,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e84"}}
+{"seq":170,"stage":"manager.state","monotonicMs":160.768708,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":171,"stage":"hook.onLangChainEvent","monotonicMs":160.775752,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e85"}}
+{"seq":172,"stage":"manager.state","monotonicMs":160.782755,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":173,"stage":"hook.onLangChainEvent","monotonicMs":160.789808,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e86"}}
+{"seq":174,"stage":"manager.state","monotonicMs":160.796682,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":175,"stage":"hook.onLangChainEvent","monotonicMs":160.803575,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e87"}}
+{"seq":176,"stage":"manager.state","monotonicMs":160.810548,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":177,"stage":"hook.onLangChainEvent","monotonicMs":160.817521,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e88"}}
+{"seq":178,"stage":"manager.state","monotonicMs":160.824715,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":179,"stage":"hook.onLangChainEvent","monotonicMs":160.831608,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e89"}}
+{"seq":180,"stage":"manager.state","monotonicMs":160.838441,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":181,"stage":"hook.onLangChainEvent","monotonicMs":160.845735,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e90"}}
+{"seq":182,"stage":"manager.state","monotonicMs":160.852658,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":183,"stage":"hook.onLangChainEvent","monotonicMs":160.859612,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e91"}}
+{"seq":184,"stage":"manager.state","monotonicMs":160.867156,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":185,"stage":"hook.onLangChainEvent","monotonicMs":160.87414,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e92"}}
+{"seq":186,"stage":"manager.state","monotonicMs":160.892334,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":187,"stage":"hook.onLangChainEvent","monotonicMs":160.914988,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e93"}}
+{"seq":188,"stage":"manager.state","monotonicMs":160.927391,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":189,"stage":"hook.onLangChainEvent","monotonicMs":160.939013,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e94"}}
+{"seq":190,"stage":"manager.state","monotonicMs":160.950836,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":191,"stage":"hook.onLangChainEvent","monotonicMs":160.962518,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e95"}}
+{"seq":192,"stage":"manager.state","monotonicMs":160.97405,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":193,"stage":"hook.onLangChainEvent","monotonicMs":160.984861,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e96"}}
+{"seq":194,"stage":"manager.state","monotonicMs":160.995902,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":195,"stage":"hook.onLangChainEvent","monotonicMs":161.006733,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e97"}}
+{"seq":196,"stage":"manager.state","monotonicMs":161.017453,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":197,"stage":"hook.onLangChainEvent","monotonicMs":161.038033,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e98"}}
+{"seq":198,"stage":"manager.state","monotonicMs":161.046389,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":199,"stage":"hook.onLangChainEvent","monotonicMs":161.053753,"wallIso":"2026-09-16T18:08:58.294Z","runId":"run-y","threadId":"thread-x","extra":{"eventName":"on_tool_start","eventId":"e99"}}
+{"seq":200,"stage":"manager.state","monotonicMs":161.080364,"wallIso":"2026-09-16T18:08:58.294Z","threadId":"thread-x","extra":{"isLoading":true,"version":0}}
+{"seq":1,"stage":"rejoin.attempt","monotonicMs":166.770175,"wallIso":"2026-09-16T18:08:58.300Z","runId":"run-y","threadId":"thread-x","extra":{"attempt":0,"reason":"scheduled","outcome":"skipped:isLoading"}}
+{"seq":2,"stage":"rejoin.attempt","monotonicMs":166.836362,"wallIso":"2026-09-16T18:08:58.300Z","runId":"run-y","threadId":"thread-x","extra":{"attempt":0,"reason":"scheduled","outcome":"skipped:isLoading"}}
+{"seq":3,"stage":"rejoin.attempt","monotonicMs":166.862822,"wallIso":"2026-09-16T18:08:58.300Z","runId":"run-y","threadId":"thread-x","extra":{"attempt":0,"reason":"scheduled","outcome":"skipped:isLoading"}}
+{"seq":4,"stage":"rejoin.attempt","monotonicMs":166.880205,"wallIso":"2026-09-16T18:08:58.300Z","runId":"run-y","threadId":"thread-x","extra":{"attempt":0,"reason":"scheduled","outcome":"skipped:isLoading"}}
+{"seq":5,"stage":"rejoin.attempt","monotonicMs":166.895685,"wallIso":"2026-09-16T18:08:58.300Z","runId":"run-y","threadId":"thread-x","extra":{"attempt":0,"reason":"scheduled","outcome":"skipped:isLoading"}}
+{"seq":6,"stage":"manager.state","monotonicMs":167.000385,"wallIso":"2026-09-16T18:08:58.300Z","threadId":"thread-x","extra":{"isLoading":false,"version":0}}
+························································································stdout | tests/unit/core/api/api-client.test.ts > clears stale reconnect metadata when join stream cannot be resumed
+[langgraph-sdk] base URL: http://localhost:2026/mock/api
+
+··············································································································{"seq":1,"stage":"stall.watchdog","monotonicMs":129.646193,"wallIso":"2026-09-16T18:09:02.321Z","runId":"run-b","threadId":"thread-a","extra":{"lastEventAtMs":1000,"nowMs":100000,"idleMs":99000,"action":"force-stop"}}
+·····························································································································································································································································································································stderr | tests/unit/core/api/stream-mode.test.ts > drops unsupported stream modes from array payloads
+[nova] Dropped unsupported LangGraph stream mode(s): tools
+
+·····································································································································································
+
+ Test Files  76 passed (76)
+      Tests  689 passed (689)
+   Start at  23:08:57
+   Duration  9.59s (transform 1.45s, setup 0ms, import 7.32s, tests 2.05s, environment 11ms)
+
+
+real	0m10.936s
+user	0m15.934s
+sys	0m4.504s

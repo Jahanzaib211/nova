@@ -11,12 +11,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAgents } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
+import { AgentsRegistryList } from "@/features/agents-registry/components/agents-registry-list";
 
 import { AgentCard } from "./agent-card";
 
 export function AgentGallery() {
   const { t } = useI18n();
-  const { agents, isLoading, error, isDisabled } = useAgents();
+  const { agents, isLoading, isFetching, error, isDisabled, refetch } =
+    useAgents();
   const router = useRouter();
 
   const handleNewAgent = () => {
@@ -65,7 +67,12 @@ export function AgentGallery() {
           <Button
             variant="outline"
             className="mt-2"
-            onClick={() => router.refresh()}
+            // The list is fetched client-side, so `router.refresh()` would
+            // re-render the server components and leave the failed query
+            // exactly as it is — the button would look like it worked and
+            // nothing would change. Refetch the query instead.
+            onClick={() => void refetch()}
+            disabled={isFetching}
           >
             {t.agents.retry}
           </Button>
@@ -119,7 +126,18 @@ export function AgentGallery() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">{renderContent()}</div>
+      <div className="flex-1 overflow-y-auto p-6">
+        {renderContent()}
+        <section className="mt-8">
+          <h2 className="mb-1 text-base font-semibold">
+            {t.features.agentsRegistry.title}
+          </h2>
+          <p className="text-muted-foreground mb-3 text-sm">
+            {t.features.agentsRegistry.description}
+          </p>
+          <AgentsRegistryList />
+        </section>
+      </div>
     </div>
   );
 }

@@ -59,7 +59,11 @@ function violations(): string[] {
       const parses = body.includes(".json()");
       if (!fetches || !parses) continue;
       // The guard may be `if (!res.ok)`, `res.ok ?`, or a named response var.
-      if (/\bif\s*\(\s*!\s*\w+\.ok\s*\)|\w+\.ok\s*\?|\bif\s*\(\s*\w+\.ok\s*\)/.test(body)) {
+      if (
+        /\bif\s*\(\s*!\s*\w+\.ok\s*\)|\w+\.ok\s*\?|\bif\s*\(\s*\w+\.ok\s*\)/.test(
+          body,
+        )
+      ) {
         continue;
       }
       bad.push(`${path.relative(CORE, file)}:${line}`);
