@@ -124,7 +124,7 @@ test.describe("Landing page — content and navigation", () => {
     page,
   }) => {
     const proof = page.locator("#proof");
-    await expect(proof.getByText("8,657")).toBeVisible();
+    await expect(proof.getByText("8,658")).toBeVisible();
     await expect(proof.getByText("285")).toBeVisible();
     await expect(proof.getByText("Live", { exact: true })).toBeVisible();
 
