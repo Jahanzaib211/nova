@@ -71,7 +71,7 @@ test.describe("Pricing page — plans and positioning", () => {
   });
 
   test("shows the measured proof points", async ({ page }) => {
-    for (const value of ["40", "8,657", "285", "Any model"]) {
+    for (const value of ["40", "8,659", "285", "Any model"]) {
       await expect(page.getByText(value, { exact: true })).toBeVisible();
     }
     await expect(
