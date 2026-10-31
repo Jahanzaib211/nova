@@ -303,7 +303,10 @@ test.describe("Thread history", () => {
       (route) => {
         if (
           route.request().method() === "GET" &&
-          route.request().url().includes(`/api/threads/${STARTER_THREAD_ID}/runs/`)
+          route
+            .request()
+            .url()
+            .includes(`/api/threads/${STARTER_THREAD_ID}/runs/`)
         ) {
           backendRunHistoryUrls.push(route.request().url());
           return route.fulfill({

@@ -89,20 +89,19 @@ describe("chat page todo panel wiring", () => {
       // In welcome mode the composer moves itself up 8px (16px from sm). A
       // panel that did not move with it was overlapped by exactly that much:
       // the composer slid over the panel's last row.
-      expect(src).toContain('isWelcomeMode && "-translate-y-2 sm:-translate-y-4"');
+      expect(src).toContain(
+        'isWelcomeMode && "-translate-y-2 sm:-translate-y-4"',
+      );
       expect(src).toContain('"absolute -top-2 sm:-top-4"');
     },
   );
 
-  test.each(CHAT_PAGES)(
-    "%s shows no to-dos on a brand-new thread",
-    (page) => {
-      const src = readFileSync(page, "utf-8");
-      // thread.values can still hold the previous thread's state for a
-      // render, which painted its to-dos on the empty start screen.
-      expect(src).toMatch(/const hasTodos = !isNewThread && /);
-    },
-  );
+  test.each(CHAT_PAGES)("%s shows no to-dos on a brand-new thread", (page) => {
+    const src = readFileSync(page, "utf-8");
+    // thread.values can still hold the previous thread's state for a
+    // render, which painted its to-dos on the empty start screen.
+    expect(src).toMatch(/const hasTodos = !isNewThread && /);
+  });
 });
 
 describe("collapsed and expanded states", () => {

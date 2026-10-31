@@ -151,7 +151,10 @@ export default function SaasPage() {
         {/* Hero */}
         <section className="mx-auto max-w-6xl px-6 pt-36 pb-16 text-center sm:pt-40">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-1 text-[11px] font-medium tracking-[0.18em] text-slate-300 uppercase backdrop-blur-sm">
-            <SparklesIcon className="size-3.5 text-[#c4b5fd]" aria-hidden="true" />
+            <SparklesIcon
+              className="size-3.5 text-[#c4b5fd]"
+              aria-hidden="true"
+            />
             Plans &amp; pricing
           </span>
           <h1 className="mx-auto mt-6 max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
@@ -239,9 +242,7 @@ export default function SaasPage() {
                     <span
                       className={cn(
                         "text-3xl font-semibold tracking-tight",
-                        plan.highlight
-                          ? "text-brand-gradient"
-                          : "text-white",
+                        plan.highlight ? "text-brand-gradient" : "text-white",
                       )}
                     >
                       {plan.price}
@@ -267,9 +268,7 @@ export default function SaasPage() {
                   <a
                     href={plan.cta.href}
                     target={plan.cta.external ? "_blank" : undefined}
-                    rel={
-                      plan.cta.external ? "noopener noreferrer" : undefined
-                    }
+                    rel={plan.cta.external ? "noopener noreferrer" : undefined}
                     className={cn(
                       "mt-7 inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition focus-visible:ring-2 focus-visible:ring-[#c4b5fd] focus-visible:outline-none",
                       plan.highlight

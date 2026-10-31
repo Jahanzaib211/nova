@@ -91,7 +91,10 @@ export function TodoList({
     if (collapsed || !el) return;
     if (activeIndex >= 0) {
       const rowTop = LIST_PAD_PX + activeIndex * ROW_PX;
-      if (rowTop < el.scrollTop || rowTop + ROW_PX > el.scrollTop + el.clientHeight) {
+      if (
+        rowTop < el.scrollTop ||
+        rowTop + ROW_PX > el.scrollTop + el.clientHeight
+      ) {
         el.scrollTop = Math.max(0, rowTop - ROW_PX);
       }
     }
@@ -189,7 +192,8 @@ export function TodoList({
                   "min-w-0 flex-1 truncate",
                   todo.status === "completed" &&
                     "text-muted-foreground/60 decoration-muted-foreground/40 line-through",
-                  todo.status === "in_progress" && "text-foreground font-medium",
+                  todo.status === "in_progress" &&
+                    "text-foreground font-medium",
                   (todo.status === "pending" || !todo.status) &&
                     "text-muted-foreground",
                 )}

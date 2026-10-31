@@ -117,9 +117,7 @@ test.describe("Landing page — content and navigation", () => {
     await expect(
       security.getByText(/critical or high findings block the handover/i),
     ).toBeVisible();
-    await expect(
-      security.getByText(/deep scans through trivy/i),
-    ).toBeVisible();
+    await expect(security.getByText(/deep scans through trivy/i)).toBeVisible();
   });
 
   test("shows the measured proof numbers and first buyers", async ({
