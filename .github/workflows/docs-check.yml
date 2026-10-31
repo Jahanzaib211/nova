@@ -54,7 +54,7 @@ jobs:
             --ignore ".next/**" \
             --ignore "backend/.venv/**" \
             --ignore "skills/**" \
-            --ignore "frontend/public/demo/**" \
+            --ignore "frontend/public/threads/**" \
             --ignore "frontend/test-results/**" \
             --ignore "frontend/playwright-report/**" \
             --ignore "graphify-out/**" \

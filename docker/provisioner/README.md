@@ -191,7 +191,7 @@ Provisioner-created sandbox Pods use the provisioner's `SANDBOX_IMAGE` environme
 
 For persistent dependencies, build an image that extends the default `all-in-one-sandbox` image and set `SANDBOX_IMAGE` to your published tag. A from-scratch image must remain compatible with the AIO sandbox HTTP API consumed by `agent-sandbox`, keep `/mnt/user-data` writable, and listen on the configured sandbox port.
 
-See [Building a Custom AIO Sandbox Image](../../backend/docs/CONFIGURATION.md#building-a-custom-aio-sandbox-image) for the runtime contract and a minimal Dockerfile example.
+See the [Sandbox configuration](../../backend/docs/CONFIGURATION.md#sandbox) section for the runtime contract and a minimal Dockerfile example.
 
 ### PVC User-Data Upgrade Note
 

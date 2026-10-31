@@ -1,3 +1,7 @@
+<!-- markdownlint-disable MD025 -->
+<!-- The block below is generated and re-added by `next dev`. It carries its own
+     top-level heading, which markdownlint reads as a second H1 in this file. -->
+
 # Agents Architecture
 
 ## Overview
