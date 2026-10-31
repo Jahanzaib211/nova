@@ -97,6 +97,7 @@ async def _drain_inflight_runs(run_manager: RunManager) -> None:
 if TYPE_CHECKING:
     from app.gateway.auth.local_provider import LocalAuthProvider
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+    from deerflow.persistence.job.sql import JobRepository
     from deerflow.persistence.thread_meta.base import ThreadMetaStore
     from deerflow.runtime import RunRecord
 
@@ -192,12 +193,38 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
     from deerflow.persistence.engine import close_engine, get_session_factory, init_engine_from_config
     from deerflow.runtime import make_store, make_stream_bridge
     from deerflow.runtime.checkpointer.async_provider import make_checkpointer
+    from deerflow.runtime.events.retention import start_run_event_pruner, stop_run_event_pruner
     from deerflow.runtime.events.store import make_run_event_store
 
     async with AsyncExitStack() as stack:
         config = startup_config
 
         app.state.stream_bridge = await stack.enter_async_context(make_stream_bridge(config))
+
+        # Mirror subagent task_* custom events into the thread-scoped WS hub
+        # (app.gateway.task_events). The resolver is lazy: the RunManager does
+        # not exist yet at this line, and resolution only happens when a
+        # task_* event actually fires.
+        from app.gateway.task_events import MirroringStreamBridge, TaskEventHub
+
+        app.state.task_event_hub = TaskEventHub()
+        _inner_bridge = app.state.stream_bridge
+
+        async def _resolve_run_thread(run_id: str) -> str | None:
+            manager = getattr(app.state, "run_manager", None)
+            if manager is None:
+                return None
+            try:
+                record = await manager.get(run_id)
+            except Exception:
+                return None
+            return getattr(record, "thread_id", None)
+
+        app.state.stream_bridge = MirroringStreamBridge(
+            inner=_inner_bridge,
+            hub=app.state.task_event_hub,
+            resolve_run_thread=_resolve_run_thread,
+        )
 
         # Initialize persistence engine BEFORE checkpointer so that
         # auto-create-database logic runs first (postgres backend).
@@ -210,10 +237,13 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         sf = get_session_factory()
         if sf is not None:
             from deerflow.persistence.feedback import FeedbackRepository
+            from deerflow.persistence.job.sql import JobRepository
             from deerflow.persistence.run import RunRepository
 
             app.state.run_store = RunRepository(sf)
             app.state.feedback_repo = FeedbackRepository(sf)
+            # Job runner read/enqueue side; the worker process runs the jobs.
+            app.state.jobs_repo = JobRepository(sf)
         else:
             from deerflow.runtime.runs.store.memory import MemoryRunStore
 
@@ -231,6 +261,61 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         run_events_config = getattr(config, "run_events", None)
         app.state.run_events_config = run_events_config
         app.state.run_event_store = make_run_event_store(run_events_config)
+
+        # Retention. run_events is the only unbounded table left after the
+        # checkpoint tables were vacuumed -- 366 MB here, of which 335 MB is
+        # genuine content rather than bloat, so no amount of VACUUM bounds it.
+        # Off unless the operator sets run_events.retention_days.
+        app.state.run_events_pruner = start_run_event_pruner(
+            store=app.state.run_event_store,
+            retention_days=getattr(run_events_config, "retention_days", 0) or 0,
+        )
+
+        # ── Computer panel live feeds (WS-G) ──────────────────────────────
+        # One multiplexed socket (/computer-ws) carries subagent tasks,
+        # dev-server transitions, and workspace observations. The harness
+        # announces facts through plain callbacks; we marshal them onto this
+        # loop. Listeners are removed on lifespan exit so repeated app
+        # construction in tests never stacks duplicates.
+        import asyncio as _asyncio
+
+        from deerflow.sandbox.computer_events import (
+            add_dev_server_listener,
+            add_observation_listener,
+            remove_dev_server_listener,
+            remove_observation_listener,
+        )
+
+        _loop = _asyncio.get_running_loop()
+        app.state.task_event_hub.attach_loop(_loop)
+        computer_event_hub = TaskEventHub(buffer_size=32)
+        computer_event_hub.attach_loop(_loop)
+        app.state.computer_event_hub = computer_event_hub
+
+        def _on_dev_server(payload: dict) -> None:
+            thread_id = payload.get("thread_id")
+            if thread_id:
+                computer_event_hub.publish_threadsafe(
+                    str(thread_id),
+                    {"channel": "browser", "kind": "dev_server", **payload},
+                )
+
+        def _on_observation(payload: dict) -> None:
+            thread_id = payload.get("thread_id")
+            if thread_id:
+                computer_event_hub.publish_threadsafe(
+                    str(thread_id),
+                    {"channel": payload.get("channel") or "workspace", "kind": "observation", **payload},
+                )
+
+        add_dev_server_listener(_on_dev_server)
+        add_observation_listener(_on_observation)
+        stack.callback(remove_dev_server_listener, _on_dev_server)
+        stack.callback(remove_observation_listener, _on_observation)
+        # Same reason the listeners are unregistered: repeated app construction
+        # in tests would otherwise leave a sweep task per app, all sharing a
+        # loop that is about to close.
+        stack.push_async_callback(stop_run_event_pruner, app.state.run_events_pruner)
 
         # Cross-replica cancel signal — see cancel_signal.py. Reuses the same
         # stream_bridge.redis_url config key rather than introducing a
@@ -310,11 +395,27 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             recovery_service=app.state.recovery_service,
             execution_kernel=app.state.execution_kernel,
         )
-        if getattr(config.database, "backend", None) == "sqlite":
+        # Startup-only recovery of runs a previous process left active.
+        #
+        # Gateway runs are process-local: the asyncio task and its abort event
+        # live in memory while the row is durable. A row still ``pending`` or
+        # ``running`` from before this boot therefore has no worker behind it,
+        # and nothing else will ever move it -- the UI polls it as active
+        # forever, Stop answers 409 because there is nothing to cancel, and the
+        # thread stays "running". This used to run only when the database
+        # backend was SQLite, on the assumption that a shared database implies
+        # several replicas. Those are different things. This deployment is one
+        # gateway on Postgres, so the guard did not protect anything and simply
+        # switched recovery off: five runs had been "running" for hours with no
+        # process behind them.
+        #
+        # Replicas are what make the sweep unsafe (a peer may still own a run),
+        # and a distributed lock is exactly the signal for that.
+        if isinstance(distributed_lock, NoopDistributedLock):
             from deerflow.utils.time import now_iso
 
-            # Startup-only recovery: clean shutdowns return no active rows and
-            # the thread-status update below becomes a no-op.
+            # Clean shutdowns return no active rows and the thread-status
+            # update below becomes a no-op.
             recovered_runs = await app.state.run_manager.reconcile_orphaned_inflight_runs(
                 error="Gateway restarted before this run reached a durable final state.",
                 before=now_iso(),
@@ -359,7 +460,40 @@ get_run_service: Callable[[Request], RunService] = _require("run_service", "Run 
 get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "Checkpointer")
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
+
+
+def get_em_repo(request: Request):
+    """Email-marketing repository, built lazily on the app's session factory."""
+    from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+
+    state = request.app.state
+    repo = getattr(state, "em_repo", None)
+    if repo is None:
+        from deerflow.persistence.engine import get_session_factory
+
+        sf = get_session_factory()
+        if sf is None:
+            raise HTTPException(status_code=503, detail="Email marketing not available")
+        repo = EmailMarketingRepository(sf)
+        state.em_repo = repo
+    return repo
+
+
+def get_integrations_registry(request: Request):
+    """The process-wide integrations registry (``deerflow.integrations``),
+    shared with the ``integrations.*`` capability operations so both read one
+    probe cache. A registry a test placed on ``app.state`` is used as-is.
+    """
+    from deerflow.integrations.registry import get_integrations_registry as shared_registry
+
+    override = getattr(request.app.state, "integrations_registry", None)
+    if override is not None:
+        return override
+    return shared_registry(get_config().integrations)
+
+
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
+get_jobs_repo: Callable[[Request], JobRepository] = _require("jobs_repo", "Job runner")
 
 # Typed service getters — gateway routers should use these instead of
 # importing from deerflow.* directly (Phase C6 platform decoupling).
@@ -369,7 +503,6 @@ get_workspace_service: Callable[[Request], WorkspaceService] = _require("workspa
 get_browser_service: Callable[[Request], BrowserService] = _require("browser_service", "Browser service")
 get_terminal_service: Callable[[Request], TerminalService] = _require("terminal_service", "Terminal service")
 get_artifact_service: Callable[[Request], ArtifactService] = _require("artifact_service", "Artifact service")
-get_health_service: Callable[[Request], HealthService] = _require("health_service", "Health service")
 get_recovery_service: Callable[[Request], RecoveryService] = _require("recovery_service", "Recovery service")
 get_execution_kernel: Callable[[Request], Any] = _require("execution_kernel", "Execution kernel")
 
@@ -445,12 +578,13 @@ async def get_current_user_from_request(request: Request):
     """
     state = getattr(request, "state", None)
     state_user = getattr(state, "user", None)
-    from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED, AUTH_SOURCE_INTERNAL, AUTH_SOURCE_SESSION
+    from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED, AUTH_SOURCE_INTERNAL, AUTH_SOURCE_PREVIEW_CAPABILITY, AUTH_SOURCE_SESSION
 
     if state_user is not None and getattr(state, "auth_source", None) in {
         AUTH_SOURCE_SESSION,
         AUTH_SOURCE_AUTH_DISABLED,
         AUTH_SOURCE_INTERNAL,
+        AUTH_SOURCE_PREVIEW_CAPABILITY,
     }:
         return state_user
 
@@ -489,6 +623,24 @@ async def get_current_user_from_request(request: Request):
     return user
 
 
+def authenticated_user_id(request: Request) -> str:
+    """The id of the user ``@require_auth`` stamped on the request; 401 when none.
+
+    For routers that scope rows by owner (``/api/jobs``, email marketing),
+    which each carried an identical private copy of this.
+    """
+    auth = getattr(request.state, "auth", None)
+    if auth is None or auth.user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return str(auth.user.id)
+
+
+def is_admin(user: Any) -> bool:
+    """The one admin predicate. Every route that branches on "is this caller
+    an admin" asks here, so the definition cannot drift between routers."""
+    return getattr(user, "system_role", None) == "admin"
+
+
 async def require_admin_user(request: Request, *, detail: str) -> None:
     """Require the authenticated caller to be an admin user.
 
@@ -507,7 +659,7 @@ async def require_admin_user(request: Request, *, detail: str) -> None:
     if user is None:
         user = await get_current_user_from_request(request)
 
-    if getattr(user, "system_role", None) != "admin":
+    if not is_admin(user):
         raise HTTPException(status_code=403, detail=detail)
 
 

@@ -71,7 +71,8 @@ _TOOL_PURPOSE_OVERRIDES: dict[str, str] = {
     "browser_input": "CDP: type into a focused selector",
     "browser_eval": "CDP: run JS in the browser, return the value",
     "screenshot": "CDP: capture the current viewport as inline PNG (self-observation)",
-    "deploy_expose": "publish a container port through the absproxy gateway",
+    "deploy_expose": "verify a container port is listening, then publish it to the Browser tab",
+    "register_external_dev_server": "wire an already-running server (any port, raw bash/PM2/node) into the Browser tab",
     "agent_notify": "post a progress milestone to the Activity feed",
     "igino_research": "privacy-focused multi-source web research via SearXNG + TOR with deterministic pipeline",
 }
@@ -192,11 +193,22 @@ via Docker-out-of-Docker. PTY (shell_session/view/wait/write/kill).
 Browser-over-CDP (browser_navigate/click/input/eval) against the AIO chromium.
 Self-observation: screenshot captures the current viewport inline for visual verification.
 File ops: file.*, scaffold_project, search_files, grep_files.
-Network: deploy_expose (absproxy publish), agent_notify (activity feed).
-Host access: localhost inside the sandbox is the container itself; services
-running on the host machine are at the sandbox's host alias (Docker:
-http://host.docker.internal:<port>; other deployments differ — prefer
-in-container ports).
+Network / ports (the map — you do not have to rediscover this):
+  - localhost / 127.0.0.1 inside the sandbox is the CONTAINER ITSELF, not the
+    gateway and not the user's machine. Bind 0.0.0.0, never loopback only.
+  - ANY port you bind can be shown in the Browser tab. There is no allowed-port
+    list and the port does not need to be published: register_external_dev_server
+    (or deploy_expose) wires it through the sandbox's own absproxy gateway.
+    Both verify the port is genuinely listening before advertising it.
+  - 4100/4101/4102 are the PUBLISHED preview ports — what start_dev_server uses
+    and the only ones the panel discovers unaided. Smoothest path, not the only one.
+  - 8080 belongs to the sandbox's own services (ttyd terminal, noVNC). Do not bind it.
+  - A server started outside start_dev_server (raw bash, PM2, manual node) is not
+    lost: register it rather than killing and restarting it.
+  - system_probe lists what is listening now; free_port(port) reclaims a stale one.
+Host access: services running on the host machine are NOT on localhost; they are
+at the sandbox's host alias (Docker: http://host.docker.internal:<port>; other
+deployments differ — prefer in-container ports).
 
 {tool_block}
 

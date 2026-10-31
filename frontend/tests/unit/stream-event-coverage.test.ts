@@ -49,7 +49,9 @@ describe("backend task_* stream events", () => {
   });
 
   it("are all consumed by the frontend", () => {
-    const unhandled = emittedTaskEvents().filter((e) => !isHandledInFrontend(e));
+    const unhandled = emittedTaskEvents().filter(
+      (e) => !isHandledInFrontend(e),
+    );
     expect(
       unhandled,
       `Backend emits these with no frontend consumer: ${unhandled.join(", ")}. ` +

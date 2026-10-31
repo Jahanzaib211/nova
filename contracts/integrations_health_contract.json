@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "Cross-language contract for the Nova integrations registry (deerflow.integrations). GET /api/integrations returns items of this shape; scripts/inventory.py writes the same status vocabulary into ~/.nova/gates/inventory.json so the Settings page and the ops console agree. `status` is what a probe concluded; `kind` groups the cards in the UI.",
+  "statuses": ["healthy", "degraded", "down", "unknown", "disabled"],
+  "kinds": [
+    "mcp_server",
+    "skill",
+    "acp_agent",
+    "llm_gateway",
+    "mail",
+    "crm",
+    "helpdesk",
+    "search",
+    "crawler",
+    "browser",
+    "database",
+    "agent_gateway"
+  ],
+  "item_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["id", "kind", "display_name", "status", "checked_at"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "kind": { "type": "string" },
+      "display_name": { "type": "string", "minLength": 1 },
+      "endpoint": { "type": ["string", "null"] },
+      "status": { "type": "string" },
+      "latency_ms": { "type": ["number", "null"], "minimum": 0 },
+      "checked_at": { "type": ["string", "null"], "description": "ISO-8601 UTC timestamp, null when never probed" },
+      "detail": { "type": ["string", "null"] },
+      "capabilities": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

@@ -153,6 +153,44 @@ class TestSnapshot:
         assert snap["tA"] == "open"
         assert snap["tB"] == "closed"
 
+    def test_snapshot_can_be_scoped_to_one_thread(self) -> None:
+        """The runtime bar is per-chat: another thread's breaker must not show."""
+        force_circuit("tA", CircuitState.OPEN)
+        force_circuit("tB", CircuitState.OPEN)
+        assert snapshot("tA") == {"tA": "open"}
+        assert snapshot("tB") == {"tB": "open"}
+        assert snapshot("never-seen") == {}
+
+    def test_snapshot_decays_open_to_half_open_after_cooldown(self) -> None:
+        """An abandoned OPEN breaker must stop reporting degradation.
+
+        Decay otherwise only happens inside _admit, i.e. when something calls.
+        A thread whose Browser tab was closed makes no calls, so its breaker
+        stayed "open" forever and painted every surface degraded even though
+        the next call would have been admitted as a probe.
+        """
+        force_circuit("tA", CircuitState.OPEN)
+        breaker = cb._get_breaker("tA")
+        assert snapshot()["tA"] == "open"
+
+        breaker.opened_at -= cb._COOLDOWN_S + 1
+        assert snapshot()["tA"] == "half_open"
+
+    def test_snapshot_decay_does_not_mutate_the_breaker(self) -> None:
+        force_circuit("tA", CircuitState.OPEN)
+        breaker = cb._get_breaker("tA")
+        breaker.opened_at -= cb._COOLDOWN_S + 1
+        before = (breaker.state, breaker.opened_at)
+        snapshot()
+        assert (breaker.state, breaker.opened_at) == before
+
+    def test_snapshot_keeps_closed_and_half_open_unchanged(self) -> None:
+        force_circuit("closed-thread", CircuitState.CLOSED)
+        force_circuit("probing-thread", CircuitState.HALF_OPEN)
+        snap = snapshot()
+        assert snap["closed-thread"] == "closed"
+        assert snap["probing-thread"] == "half_open"
+
 
 class TestKwargsAndArgs:
     """guard_browser_call must forward args/kwargs to the protected fn."""

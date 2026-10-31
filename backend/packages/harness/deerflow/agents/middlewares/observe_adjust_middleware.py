@@ -266,19 +266,41 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
         logger.debug("auto-verify present_files failed for %s: %s", thread_id, e)
 
 
-def _write_todo_md_file(todos: list, state: Any) -> None:
+def _thread_id_from_config(config: Any) -> str | None:
+    """Pull the thread id out of a RunnableConfig, tolerating any shape."""
+    if not isinstance(config, dict):
+        return None
+    configurable = config.get("configurable")
+    if not isinstance(configurable, dict):
+        return None
+    thread_id = configurable.get("thread_id")
+    return thread_id if isinstance(thread_id, str) and thread_id else None
+
+
+def _write_todo_md_file(todos: list, state: Any, thread_id: str | None = None) -> None:
     """Write todo.md to the sandbox workspace directory.
 
-    Only operates when a sandbox_id is present in state. Silently skips
-    when sandbox is unavailable or not a local per-thread sandbox.
+    ``thread_id`` comes from ``config["configurable"]``. It used to be derived by
+    stripping a ``local:`` prefix off ``state["sandbox"]["sandbox_id"]``, with an
+    early return for any id that lacked it -- which silently disabled this
+    function entirely under ``AioSandboxProvider``, whose ids are hashes. On a
+    container deployment (the default) ``todo.md`` was therefore never written,
+    while ``/api/sandbox/todo`` still advertised the file as its primary source.
+
+    The host workspace is bind-mounted into the container at
+    ``/mnt/user-data/workspace``, so writing the host path is what makes the file
+    visible to the agent under both providers.
+
+    This file is a convenience artifact for the agent and the Files tab. It is
+    *not* the authority for the todo API -- the checkpoint is.
     """
     try:
-        sandbox_state = (state.get("sandbox") if hasattr(state, "get") else None) or {}
-        sandbox_id = sandbox_state.get("sandbox_id") if isinstance(sandbox_state, dict) else None
-        if not sandbox_id or not sandbox_id.startswith("local:"):
-            return
-
-        thread_id = sandbox_id[len("local:") :]
+        if not thread_id:
+            # Legacy fallback for the local provider, whose sandbox id embeds it.
+            sandbox_state = (state.get("sandbox") if hasattr(state, "get") else None) or {}
+            sandbox_id = sandbox_state.get("sandbox_id") if isinstance(sandbox_state, dict) else None
+            if isinstance(sandbox_id, str) and sandbox_id.startswith("local:"):
+                thread_id = sandbox_id[len("local:") :]
         if not thread_id:
             return
 
@@ -353,7 +375,7 @@ class ObserveAdjustMiddleware(AgentMiddleware):
                     )
 
                 # Write todo.md to the sandbox workspace (best-effort)
-                _write_todo_md_file(todos, state)
+                _write_todo_md_file(todos, state, _thread_id_from_config(config))
 
             # Also check the latest messages for completed task tool calls and
             # emit a lightweight task_activity event so the frontend can derive
@@ -431,7 +453,7 @@ class ObserveAdjustMiddleware(AgentMiddleware):
         try:
             todos = (state.get("todos") if hasattr(state, "get") else None) or []
             if todos:
-                _write_todo_md_file(todos, state)
+                _write_todo_md_file(todos, state, _thread_id_from_config(config))
         except Exception:
             logger.debug("ObserveAdjustMiddleware: error in after_tool", exc_info=True)
         return state

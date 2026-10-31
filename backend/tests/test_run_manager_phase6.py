@@ -174,3 +174,83 @@ async def test_reap_orphaned_runs_is_idempotent():
 
     assert first == 1
     assert second == 0  # already interrupted, nothing left to do
+
+
+@pytest.mark.anyio
+async def test_reap_orphaned_runs_reaps_every_active_row():
+    """The store-wide reaper must actually reap.
+
+    It used to be a stub that returned 0 with a comment saying the store could
+    not be enumerated without a thread index — true when written, but the
+    store interface grew ``list_inflight`` since. A public method that
+    silently returns 0 reads as "the reaper ran and found nothing".
+    """
+    store = MemoryRunStore()
+    mgr = RunManager(store=store)
+
+    await store.put(
+        "run-orphan-1",
+        thread_id="thread-x",
+        status=RunStatus.running.value,
+        created_at=_now(),
+    )
+    await store.put(
+        "run-orphan-2",
+        thread_id="thread-y",
+        status=RunStatus.pending.value,
+        created_at=_now(),
+    )
+    await store.put(
+        "run-ok-1",
+        thread_id="thread-z",
+        status=RunStatus.success.value,
+        created_at=_now(),
+    )
+
+    reaped = await mgr.reap_orphaned_runs()
+
+    assert reaped == 2  # only the active rows, across every thread
+    assert (await store.get("run-orphan-1"))["status"] == RunStatus.error.value
+    assert (await store.get("run-orphan-2"))["status"] == RunStatus.error.value
+    assert (await store.get("run-ok-1"))["status"] == RunStatus.success.value  # untouched
+
+
+@pytest.mark.anyio
+async def test_reap_orphaned_runs_store_wide_is_idempotent():
+    """A second sweep finds nothing left to reap."""
+    store = MemoryRunStore()
+    mgr = RunManager(store=store)
+    await store.put(
+        "run-orphan-1",
+        thread_id="thread-x",
+        status=RunStatus.running.value,
+        created_at=_now(),
+    )
+
+    assert await mgr.reap_orphaned_runs() == 1
+    assert await mgr.reap_orphaned_runs() == 0
+
+
+@pytest.mark.anyio
+async def test_reap_orphaned_runs_without_a_store_is_a_no_op():
+    mgr = RunManager(store=None)
+    assert await mgr.reap_orphaned_runs() == 0
+
+
+@pytest.mark.anyio
+async def test_reap_orphaned_runs_skips_a_run_this_process_still_owns():
+    """A run with a live local worker must not be reaped out from under it.
+
+    Delegating to ``reconcile_orphaned_inflight_runs`` buys this: the blind
+    store-wide sweep this replaced would have marked a running run as failed.
+    """
+    store = MemoryRunStore()
+    mgr = RunManager(store=store)
+    record = await mgr.create("thread-live")
+    assert record.status == RunStatus.pending
+
+    reaped = await mgr.reap_orphaned_runs()
+
+    assert reaped == 0
+    live = await mgr.get(record.run_id)
+    assert live.status == RunStatus.pending

@@ -1,80 +1,87 @@
-"use client";
-
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
-import { useI18n } from "@/core/i18n/hooks";
 import { pathOfThread } from "@/core/threads/utils";
 import { cn } from "@/lib/utils";
 
 import { Section } from "../section";
 
+/**
+ * Starter threads that ship with Nova. They are open-source examples, not
+ * customer stories, so the page says exactly that.
+ */
+const STARTERS = [
+  {
+    threadId: "7cfa5f8f-a2f8-47ad-acbd-da7137baf990",
+    title: "Forecast 2026 agent trends and opportunities",
+    description:
+      "A deep research report on agent technology trends, turned into a webpage.",
+  },
+  {
+    threadId: "4f3e55ee-f853-43db-bfb3-7d1a411f03cb",
+    title: "Generate a video from Pride and Prejudice",
+    description:
+      "Find the scene in the novel, then generate a video and a reference image from it.",
+  },
+  {
+    threadId: "21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
+    title: "Doraemon explains MoE",
+    description:
+      "A comic strip that explains mixture-of-experts to a teenager.",
+  },
+  {
+    threadId: "ad76c455-5bf9-4335-8517-fc03834ab828",
+    title: "Titanic data analysis",
+    description:
+      "Exploratory data analysis on the Titanic dataset, with the factors behind survival.",
+  },
+  {
+    threadId: "d3e5adaf-084c-4dd5-9d29-94f1d6bccd98",
+    title: "YC video then deep research",
+    description:
+      "Watch a Y Combinator video, then research the advice in it for founders.",
+  },
+  {
+    threadId: "3823e443-4e2b-4679-b496-a9506eae462b",
+    title: "Fei-Fei Li podcast digest",
+    description:
+      "Collect recent podcast appearances and summarize them into one report.",
+  },
+];
+
 export function CaseStudySection({ className }: { className?: string }) {
-  const { t } = useI18n();
-  const caseStudies = [
-    {
-      threadId: "7cfa5f8f-a2f8-47ad-acbd-da7137baf990",
-      title: "Forecast 2026 Agent Trends and Opportunities",
-      description:
-        "Create a webpage with a Deep Research report forecasting the agent technology trends and opportunities in 2026.",
-    },
-    {
-      threadId: "4f3e55ee-f853-43db-bfb3-7d1a411f03cb",
-      title: 'Generate a Video Based On the Novel "Pride and Prejudice"',
-      description:
-        'Search the specific scene from the novel "Pride and Prejudice", then generate a video as well as a reference image based on the scenes.',
-    },
-    {
-      threadId: "21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
-      title: "Doraemon Explains the MOE Architecture",
-      description:
-        "Generate a Doraemon comic strip explaining the MOE architecture to the teenagers who are interested in AI.",
-    },
-    {
-      threadId: "ad76c455-5bf9-4335-8517-fc03834ab828",
-      title: "An Exploratory Data Analysis of the Titanic Dataset",
-      description:
-        "Explore the Titanic dataset and identify the key factors that influenced survival rates with visualizations and insights.",
-    },
-    {
-      threadId: "d3e5adaf-084c-4dd5-9d29-94f1d6bccd98",
-      title: "Watch Y Combinator's Video then Conduct a Deep Research",
-      description:
-        "Watch the given Y Combinator's YouTube video and conduct a deep research on the YC's tips for technical startup founders.",
-    },
-    {
-      threadId: "3823e443-4e2b-4679-b496-a9506eae462b",
-      title: "Collect and Summarize Dr. Fei Fei Li's Podcasts",
-      description:
-        "Collect all the podcast appearances of Dr. Fei Fei Li in the last 6 months, then summarize them into a comprehensive report.",
-    },
-  ];
   return (
     <Section
+      id="starter-threads"
       className={className}
-      title={t.landing.caseStudy.title}
-      subtitle={t.landing.caseStudy.subtitle}
+      kicker="Starter threads"
+      title="Try Nova on real tasks"
+      subtitle="Built-in starter projects that ship with Nova. Open one in a new tab and watch the loop run."
     >
-      <div className="container-md mt-8 grid grid-cols-1 gap-4 px-4 md:grid-cols-2 md:px-20 lg:grid-cols-3">
-        {caseStudies.map((caseStudy) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {STARTERS.map((starter) => (
           <Link
-            key={caseStudy.title}
-            href={pathOfThread(caseStudy.threadId) + "?mock=true"}
+            key={starter.threadId}
+            href={pathOfThread(starter.threadId) + "?mock=true"}
             target="_blank"
             rel="noopener noreferrer"
+            className="group/starter block focus-visible:outline-none"
           >
-            <Card className="group/card relative h-64 overflow-hidden">
+            <Card className="group/starter relative h-64 overflow-hidden border-white/10 bg-white/[0.03]">
               <div
-                className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-300 group-hover/card:scale-110 group-hover/card:brightness-90"
+                className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat transition-all duration-300 group-hover/starter:scale-110 group-hover/starter:brightness-90"
                 style={{
-                  backgroundImage: `url(/images/${caseStudy.threadId}.jpg)`,
+                  backgroundImage: `url(/images/${starter.threadId}.jpg)`,
                 }}
-              ></div>
+              />
+              <span className="absolute top-4 left-4 z-10 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] font-medium tracking-wide text-slate-300 backdrop-blur-sm">
+                Starter project
+              </span>
               <div
                 className={cn(
-                  "flex h-full w-full translate-y-[calc(100%-60px)] flex-col items-center",
+                  "flex h-full w-full translate-y-[calc(100%-56px)] flex-col items-center",
                   "transition-all duration-300",
-                  "group-hover/card:translate-y-[calc(100%-128px)]",
+                  "group-hover/starter:translate-y-[calc(100%-128px)]",
                   // No :hover on touch — show the description up front instead
                   // of leaving it permanently out of reach.
                   "max-md:translate-y-[calc(100%-128px)]",
@@ -89,10 +96,10 @@ export function CaseStudySection({ className }: { className?: string }) {
                 >
                   <div className="flex flex-col gap-2">
                     <h3 className="flex h-14 items-center text-xl font-bold text-shadow-black">
-                      {caseStudy.title}
+                      {starter.title}
                     </h3>
                     <p className="box-shadow-black overflow-hidden text-sm text-white/85 text-shadow-black">
-                      {caseStudy.description}
+                      {starter.description}
                     </p>
                   </div>
                 </div>

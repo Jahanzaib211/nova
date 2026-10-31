@@ -50,7 +50,7 @@ describe("artifact URL helpers", () => {
     restoreEnv(saved);
   });
 
-  test("maps static demo artifact paths to bundled public files", async () => {
+  test("maps static starter artifact paths to bundled public files", async () => {
     setEnv("NEXT_PUBLIC_STATIC_WEBSITE_ONLY", "true");
 
     const { resolveArtifactURL, urlOfArtifact } =
@@ -61,9 +61,9 @@ describe("artifact URL helpers", () => {
         filepath: "/mnt/user-data/outputs/index.html",
         threadId: "thread-1",
       }),
-    ).toBe("/demo/threads/thread-1/user-data/outputs/index.html");
+    ).toBe("/threads/thread-1/user-data/outputs/index.html");
     expect(
       resolveArtifactURL("/mnt/user-data/outputs/style.css", "thread-1"),
-    ).toBe("/demo/threads/thread-1/user-data/outputs/style.css");
+    ).toBe("/threads/thread-1/user-data/outputs/style.css");
   });
 });

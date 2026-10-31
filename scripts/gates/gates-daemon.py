@@ -188,6 +188,8 @@ class Producer:
         else:
             log.info("%s: exit=%s in %.1fs — %s", self.name, rc, duration, detail)
 
+        self._stamp_interval()
+
         return {
             "gate": self.name,
             "kind": self.kind,
@@ -196,6 +198,35 @@ class Producer:
             "duration_sec": round(duration, 2),
             "detail": detail,
         }
+
+    def _stamp_interval(self) -> None:
+        """Record this producer's real cadence in the gate file it just wrote.
+
+        The console decides staleness as ``3 x interval``, and that interval
+        used to be declared a second time in ``nova-ops/src/lib/gates.ts``.
+        Two declarations drift: on 2026-09-21 the ci producer ran every
+        21,600 s while the console assumed 86,400 s, and lighthouse ran every
+        21,600 s against an assumed 172,800 s — in both cases the console was
+        the *more* tolerant side, so a genuinely dead producer would have
+        stayed invisible for days.
+
+        Writing it here makes the daemon the single source of truth: the
+        console reads this value and falls back to its own only when a gate
+        has no live producer (``healthcheck``, written by another daemon).
+        """
+        if self.kind != "gate":
+            return
+        path = Path.home() / ".nova" / "gates" / f"{self.name}.json"
+        try:
+            payload = json.loads(path.read_text())
+            if not isinstance(payload, dict):
+                return
+            payload["producer_interval_sec"] = self.interval_sec
+            path.write_text(json.dumps(payload, indent=2))
+        except (OSError, json.JSONDecodeError):
+            # A gate that could not write its own file is already reported by
+            # its exit code; never let bookkeeping mask that.
+            return
 
 
 def build_producers() -> list[Producer]:
@@ -223,6 +254,85 @@ def build_producers() -> list[Producer]:
             ["scripts/gates/ci-gate.py", "--tier", "fast"],
             env_float("NOVA_GATE_CI_INTERVAL", 21_600),
             timeout_sec=1800,
+        ),
+        # Lighthouse. Publishes the LAST run's scores -- it does not run
+        # Lighthouse itself, which needs a production build and a real Chrome
+        # and has no business inside a polling daemon (see that script's
+        # docstring). Registering it anyway is the point: without a producer
+        # nothing ever refreshed lighthouse.json, so the console showed four
+        # green budgets measured 9 days earlier against a build that no longer
+        # existed. The gate is now age-aware, so this republish is what makes it
+        # say so. Cheap -- it reads a JSON directory.
+        Producer(
+            "lighthouse",
+            ["scripts/gates/lighthouse-gate.py"],
+            env_float("NOVA_GATE_LIGHTHOUSE_INTERVAL", 21_600),
+            timeout_sec=300,
+        ),
+        # Machine inventory: what Nova can reach on this box (LLM gateways,
+        # Mailcow, Chatwoot, Twenty, OpenClaw, MCP servers, skills, ACP agents,
+        # CLIs, resources). Read-only TCP/HTTP probes with 3 s timeouts; the
+        # only slow parts are `pm2 jlist` and `openclaw --version`, hence the
+        # generous timeout. Ten minutes is plenty -- this is an inventory, not
+        # a watchdog (healthcheck-daemon owns "is Nova up").
+        Producer(
+            "inventory",
+            ["scripts/inventory.py"],
+            env_float("NOVA_GATE_INVENTORY_INTERVAL", 600),
+            timeout_sec=120,
+        ),
+        # Application job runner (deer-flow-jobs): worker liveness, backlog,
+        # dead-letter, via the gateway's admin summary. Two minutes: a dead
+        # worker should show within one reaper interval of the next cycle.
+        Producer(
+            "jobrunner",
+            ["scripts/gates/jobs-gate.py"],
+            env_float("NOVA_GATE_JOBRUNNER_INTERVAL", 120),
+            timeout_sec=30,
+        ),
+        # Capability registry (P11–P12): every module's live status, the
+        # live snapshot against contracts/capabilities.baseline.json (the UI
+        # client and the MCP tool list are generated from it), runtime
+        # readiness (Claude Code / OpenClaw), and the MCP server answering.
+        # Five minutes: config hot-reloads, and a contract break shows up on
+        # the next cycle after a deploy.
+        Producer(
+            "capabilities",
+            ["scripts/gates/capabilities-gate.py"],
+            env_float("NOVA_GATE_CAPABILITIES_INTERVAL", 300),
+            timeout_sec=60,
+        ),
+        # Regression ledger: every inventory Nova has shipped (overlays, sandbox
+        # image + toolchain + security arsenal, harness extras, config
+        # prerequisites, services, e2e toolchain, counts vs the pinned
+        # baseline). Fifteen minutes: it boots the sandbox image to read the
+        # manifest, which is not free.
+        Producer(
+            "regression",
+            ["scripts/gates/regression-gate.py"],
+            env_float("NOVA_GATE_REGRESSION_INTERVAL", 900),
+            timeout_sec=600,
+        ),
+        # Sandbox health: image chain integrity, tool inventory, vendor
+        # integrity, host resources. Catches the class of failure where the
+        # sandbox image disappears and nothing notices. Five minutes —
+        # the image existence check is cheap; the manifest read is the
+        # expensive part (same as regression).
+        Producer(
+            # Hyphen, matching the status file and the console's card id.
+            # As "sandbox_health" this producer could never be addressed:
+            # `gates-daemon.py --only sandbox-health` matched nothing and
+            # exited silently having run no gate at all.
+            "sandbox-health",
+            ["scripts/gates/sandbox-health-gate.py"],
+            env_float("NOVA_GATE_SANDBOX_HEALTH_INTERVAL", 300),
+            timeout_sec=300,
+        ),
+        Producer(
+            "acp",
+            ["scripts/gates/acp-gate.py"],
+            env_float("NOVA_GATE_ACP_INTERVAL", 300),
+            timeout_sec=60,
         ),
         # --- maintenance jobs -------------------------------------------------
         # The checkpoint pruner. This is the one job whose absence recreates the

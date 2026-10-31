@@ -7,17 +7,26 @@ changelogs. You can reproduce every claim yourself (see [Verify it yourself](#ve
 
 ## TL;DR
 
+Measured 2026-10-31 at `3483562f` (2026-10-29), branch `fix/audit-remediation-2026-09-16`.
+Generated files are excluded (145 files, ~1.96M lines): `graphify-out/`, `audit/raw/`,
+`contracts/*.baseline.json`, the vendored Flux `gotk-components.yaml`, lockfiles and images.
+
 | | |
 | --- | --- |
 | Fork base | [`bytedance/deer-flow`](https://github.com/bytedance/deer-flow) `v2.0.0-rc1` (`98127f58`, "Prepare 2.0.0 release") |
 | Upstream files at fork point | 1,338 |
-| Left untouched | 1,153 files (86%) |
-| Modified for Nova | 180 files |
-| **Built new for Nova** | **152 files (~28,700 lines)** |
-| Total delta | 338 files changed, **+35,738 / −1,278 lines** |
-| Backend delta | 107 files, +18,841 lines |
-| Frontend delta | 116 files, +9,813 lines |
-| New tests written | 37 new backend test files (7,803 lines); +8,112 test lines across backend/tests |
+| Left untouched | 856 files (64%) |
+| Modified for Nova | 455 files |
+| Deleted | 20 files |
+| **Built new for Nova** | **994 files (~154,000 lines)** |
+| Total delta | 1,469 files changed, **+182,931 / −12,897 lines** |
+| Backend delta | 725 files, +97,188 / −2,956 lines |
+| Frontend delta | 395 files, +45,957 / −1,413 lines |
+| New tests written | 200 new backend test files (38,341 lines); +41,236 test lines across backend/tests |
+| Commits since the fork | 462 on this branch, ~95% by the founder |
+
+The previous version of this table (2026-08-31) reported +35,738 lines. The code has grown
+since; the method is unchanged.
 
 Nova is a full-stack refactor and extension of DeerFlow — backend and frontend —
 not a UI skin. The sections below say exactly which is which.
@@ -28,8 +37,12 @@ not a UI skin. The sections below say exactly which is which.
 git remote add upstream https://github.com/bytedance/deer-flow.git
 git fetch upstream --tags
 
-# The full delta (matches the TL;DR table)
-git diff --shortstat v2.0.0-rc1 HEAD
+# The full delta, generated files excluded (matches the TL;DR table)
+git diff --shortstat --no-renames v2.0.0-rc1 HEAD -- . \
+  ':!graphify-out' ':!audit/raw' ':!contracts/*.baseline.json' \
+  ':!k8s/flux/*/flux-system/gotk-components.yaml' \
+  ':!*package-lock.json' ':!*pnpm-lock.yaml' ':!*uv.lock' ':!*.snap' \
+  ':!*.png' ':!*.jpg' ':!*.webp' ':!*.svg' ':!*.ico' ':!*.woff*'
 
 # Every file, classified: A = built for Nova, M = modified, D = deleted
 git diff --name-status v2.0.0-rc1 HEAD
@@ -114,7 +127,7 @@ None of the following existed in DeerFlow 2.0.
 - `agents/manifest.py` — spawn-time agent self-knowledge primer with tool
   inventory auto-derived from the builtin registry.
 
-### 3. 32 agent tools (backend)
+### 3. 27 built-in agent tools (backend)
 
 `backend/packages/harness/deerflow/tools/builtins/workspace_tools.py` (1,075 lines)
 
@@ -123,7 +136,14 @@ None of the following existed in DeerFlow 2.0.
 - Build loop: `scaffold_project`, `start/stop_dev_server`, `dev_verify`,
   `code_review`, `free_port`, `system_probe`, `deploy_expose`
 - Workspace: `search_files`, `grep_files`, `save_skill`, `agent_notify`
-- Plus `igino_research_tool.py` for the privacy research pipeline.
+- Preview escape hatch: `register_external_dev_server` — wires a server started
+  outside the pipeline (raw bash, PM2, manual `node`) into the Browser tab.
+- Research: `igino_research` for the privacy pipeline.
+
+The old figure here was **32**, which counted `@tool`-decorated functions in
+the source rather than tools the agent can call — and so silently included
+`igino_research`, which was not bound into `BUILTIN_TOOLS` at all and would
+have failed at call time. It is bound now; the count is of reachable tools.
 
 ### 4. Gateway API surface (backend)
 

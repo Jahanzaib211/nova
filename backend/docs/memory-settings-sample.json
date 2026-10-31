@@ -76,7 +76,7 @@
       "category": "testing",
       "confidence": 0.84,
       "createdAt": "2026-03-28T10:00:00Z",
-      "source": "thread_review_demo"
+      "source": "thread_review_sample"
     },
     {
       "id": "fact_review_007",
@@ -84,7 +84,7 @@
       "category": "testing",
       "confidence": 0.82,
       "createdAt": "2026-03-28T10:02:00Z",
-      "source": "thread_review_demo"
+      "source": "thread_review_sample"
     },
     {
       "id": "fact_review_008",
@@ -92,7 +92,7 @@
       "category": "testing",
       "confidence": 0.81,
       "createdAt": "2026-03-28T10:04:00Z",
-      "source": "thread_review_demo"
+      "source": "thread_review_sample"
     },
     {
       "id": "fact_review_009",
@@ -100,7 +100,7 @@
       "category": "testing",
       "confidence": 0.78,
       "createdAt": "2026-03-28T10:06:00Z",
-      "source": "thread_delete_demo"
+      "source": "thread_delete_sample"
     },
     {
       "id": "fact_review_010",

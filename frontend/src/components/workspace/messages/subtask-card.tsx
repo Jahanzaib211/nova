@@ -23,6 +23,7 @@ import { hasToolCalls } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { streamdownPluginsWithWordAnimation } from "@/core/streamdown";
 import { useSubtask } from "@/core/tasks/context";
+import type { Subtask } from "@/core/tasks/types";
 import { explainLastToolCall } from "@/core/tools/utils";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,35 @@ import { CitationLink } from "../citations/citation-link";
 import { FlipDisplay } from "../flip-display";
 
 import { MarkdownContent } from "./markdown-content";
+
+/**
+ * What the collapsed row says.
+ *
+ * It used to render the bare status enum, so three very different outcomes were
+ * one identical red "Subtask failed": the subagent ran and failed, the run was
+ * cut off before it reported, and -- the one that cost days -- the `task` tool
+ * was never bound at all, so nothing ran. That last case arrives as
+ * "Error: task is not a valid tool, try one of [...]", which names the actual
+ * problem, and the row threw it away. `message-list.tsx` already computes the
+ * distinction and stores it on `task.error`; this just stops discarding it.
+ *
+ * Superseded rows keep their plain label -- they are not a failure and are
+ * deliberately styled neutral elsewhere in this file.
+ */
+function failureSummary(
+  task: Subtask,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  const label = t.subtasks[task.status];
+  if (task.status !== "failed" || !task.error) return label;
+  if (task.error === "superseded by a newer run") return label;
+  // One line, no wrapper noise: the row is truncated at 420px and the full
+  // text is already in the expanded body.
+  const reason = (
+    task.error.replace(/^Error:\s*/i, "").split("\n")[0] ?? ""
+  ).trim();
+  return reason ? `${label} — ${reason}` : label;
+}
 
 export function SubtaskCard({
   className,
@@ -52,7 +82,7 @@ export function SubtaskCard({
     if (task?.status === "completed") {
       return <CheckCircleIcon className="size-3" />;
     } else if (task?.status === "failed") {
-      return <XCircleIcon className="size-3 text-red-500" />;
+      return <XCircleIcon className="text-destructive size-3" />;
     } else if (task?.status === "in_progress") {
       return <Loader2Icon className="size-3 animate-spin" />;
     }
@@ -95,26 +125,42 @@ export function SubtaskCard({
             variant="ghost"
             onClick={() => setCollapsed(!collapsed)}
           >
-            <div className="flex w-full items-center justify-between">
-              <ChainOfThoughtStep
-                className="font-normal"
-                label={
-                  task.status === "in_progress" ? (
-                    <Shimmer duration={3} spread={3}>
-                      {task.description}
-                    </Shimmer>
-                  ) : (
-                    task.description
-                  )
-                }
-                icon={<ClipboardListIcon />}
-              ></ChainOfThoughtStep>
-              <div className="flex items-center gap-1">
+            <div className="flex w-full min-w-0 items-center justify-between gap-2">
+              {/* min-w-0 + flex-1 so the description yields width: it used
+                  to keep its content width and squeeze the status text on the
+                  right to zero, so a collapsed failed card showed nothing but
+                  an icon (2026-09-18, caught by subtask-card.spec). */}
+              <div className="min-w-0 flex-1">
+                <ChainOfThoughtStep
+                  className="font-normal"
+                  label={
+                    task.status === "in_progress" ? (
+                      <Shimmer duration={3} spread={3}>
+                        {task.description}
+                      </Shimmer>
+                    ) : (
+                      task.description
+                    )
+                  }
+                  icon={<ClipboardListIcon />}
+                ></ChainOfThoughtStep>
+              </div>
+              {/* min-w-0 is load-bearing. A flex item's automatic minimum size is
+                  its content, capped by max-width -- so `max-w-[420px]` on the
+                  status text acted as a *floor*, not a ceiling: it could not
+                  shrink below 420px, and in any narrower layout (the panel open,
+                  a small viewport) a long failure string pushed out of the row
+                  and over the chevron. `truncate` cannot help an item that is
+                  never asked to shrink. */}
+              <div className="flex max-w-[60%] min-w-0 shrink-0 items-center gap-1">
                 {collapsed && (
                   <div
                     className={cn(
-                      "text-muted-foreground flex items-center gap-1 text-xs font-normal",
-                      task.status === "failed" ? "text-red-500 opacity-67" : "",
+                      "text-muted-foreground flex min-w-0 items-center gap-1 text-xs font-normal",
+                      task.status === "failed" &&
+                        task.error !== "superseded by a newer run"
+                        ? "text-destructive opacity-67"
+                        : "",
                     )}
                   >
                     {icon}
@@ -126,7 +172,7 @@ export function SubtaskCard({
                       task.latestMessage &&
                       hasToolCalls(task.latestMessage)
                         ? explainLastToolCall(task.latestMessage, t)
-                        : t.subtasks[task.status]}
+                        : failureSummary(task, t)}
                     </FlipDisplay>
                   </div>
                 )}
@@ -172,11 +218,15 @@ export function SubtaskCard({
               <ChainOfThoughtStep
                 label={
                   task.result ? (
-                    <MarkdownContent
-                      content={task.result}
-                      isLoading={false}
-                      rehypePlugins={rehypePlugins}
-                    />
+                    // Clamp: one verbose subagent result used to stretch the
+                    // whole chat column until refresh. Scroll, don't spill.
+                    <div className="max-h-56 overflow-y-auto pr-1">
+                      <MarkdownContent
+                        content={task.result}
+                        isLoading={false}
+                        rehypePlugins={rehypePlugins}
+                      />
+                    </div>
                   ) : null
                 }
               ></ChainOfThoughtStep>
@@ -184,8 +234,27 @@ export function SubtaskCard({
           )}
           {task.status === "failed" && (
             <ChainOfThoughtStep
-              label={<div className="text-red-500">{task.error}</div>}
-              icon={<XCircleIcon className="size-4 text-red-500" />}
+              label={
+                <div
+                  className={cn(
+                    task.error === "superseded by a newer run"
+                      ? "text-muted-foreground/60"
+                      : "text-destructive",
+                  )}
+                >
+                  {task.error}
+                </div>
+              }
+              icon={
+                <XCircleIcon
+                  className={cn(
+                    "size-4",
+                    task.error === "superseded by a newer run"
+                      ? "text-muted-foreground/40"
+                      : "text-destructive",
+                  )}
+                />
+              }
             ></ChainOfThoughtStep>
           )}
         </ChainOfThoughtContent>

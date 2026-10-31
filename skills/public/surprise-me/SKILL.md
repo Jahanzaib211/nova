@@ -15,7 +15,7 @@ Read all the skills listed in the <available_skills>.
 
 ### Step 2: Plan the Surprise
 
-Select **1 to 3** skills and design a creative mashup. The goal is a single cohesive deliverable, not separate demos.
+Select **1 to 3** skills and design a creative mashup. The goal is a single cohesive deliverable, not separate showcases.
 
 **Creative combination principles:**
 - Juxtapose skills in unexpected ways (e.g., a presentation about algorithmic art, a research report turned into a slide deck, a styled doc with canvas-designed illustrations)

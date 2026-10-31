@@ -2,6 +2,7 @@ import type { BaseStream } from "@langchain/langgraph-sdk/react";
 import { createContext, useContext } from "react";
 
 import type { AgentThreadState } from "@/core/threads";
+import type { AcpTranscripts } from "@/core/threads/acp-transcript";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 
 export interface TaskProgress {
@@ -43,6 +44,8 @@ export interface ThreadContextType {
   llmError: LlmError | null;
   activityEvents: AgentActivityEvent[];
   activeWriteFilePath: string | null;
+  /** Streamed output of ACP agents, keyed by agent name (see acp-transcript.ts). */
+  acpTranscripts?: AcpTranscripts;
   onAgentMessage?: (text: string) => void;
 }
 

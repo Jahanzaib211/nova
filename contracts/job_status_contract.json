@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "description": "Cross-language contract for the Nova job runner (deerflow.jobs). The backend JobStatus / JobEventType enums, the `jobs` table status column, the /api/jobs API and the frontend jobs feature all load this file. Terminal statuses are the ones a job never leaves; the reaper and the UI both rely on that set.",
+  "statuses": [
+    "queued",
+    "leased",
+    "running",
+    "retrying",
+    "succeeded",
+    "failed",
+    "dead_letter",
+    "cancelled"
+  ],
+  "terminal_statuses": ["succeeded", "failed", "dead_letter", "cancelled"],
+  "event_types": [
+    "enqueued",
+    "leased",
+    "heartbeat",
+    "progress",
+    "log",
+    "retry_scheduled",
+    "released",
+    "succeeded",
+    "failed",
+    "dead_lettered",
+    "cancel_requested",
+    "cancelled"
+  ],
+  "progress_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["pct"],
+    "additionalProperties": false,
+    "properties": {
+      "pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+      "message": { "type": ["string", "null"], "maxLength": 512 },
+      "data": { "type": ["object", "null"] }
+    }
+  }
+}

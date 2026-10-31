@@ -403,15 +403,15 @@ function ReloadCacheButton({
 }) {
   const { t } = useI18n();
   return (
-    <div className="flex w-full items-center justify-between gap-4 rounded-lg border p-3">
-      <div className="min-w-0 text-sm">
+    <div className="flex w-full flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="min-w-0 flex-1 text-sm">
         <div className="font-medium">{t.settings.tools.reloadCache}</div>
         <p className="text-muted-foreground text-xs">{hint}</p>
       </div>
       <Button
         variant="outline"
         size="sm"
-        className="shrink-0"
+        className="w-full shrink-0 sm:w-auto"
         onClick={onReload}
         disabled={busy}
       >

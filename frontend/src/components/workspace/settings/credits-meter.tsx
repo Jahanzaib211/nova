@@ -5,18 +5,10 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
+import { type Credits, isCredits } from "@/core/credits";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsSection } from "./settings-section";
-
-interface Credits {
-  plan: string;
-  daily_limit: number;
-  used: number;
-  remaining: number;
-  unlimited: boolean;
-  request_status: string | null;
-}
 
 export function CreditsMeter() {
   const { t } = useI18n();
@@ -32,7 +24,10 @@ export function CreditsMeter() {
       .then((r) =>
         r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
       )
-      .then((data: Credits) => {
+      .then((data: unknown) => {
+        if (!isCredits(data)) {
+          throw new Error("malformed credits payload");
+        }
         setCredits(data);
         setStatus(data.request_status);
       })
@@ -120,8 +115,8 @@ export function CreditsMeter() {
             <div
               className={
                 low
-                  ? "h-full rounded-full bg-red-500 transition-all"
-                  : "h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 transition-all"
+                  ? "bg-destructive h-full rounded-full transition-all"
+                  : "bg-brand-gradient h-full rounded-full transition-all"
               }
               style={{ width: `${usedPct}%` }}
             />
@@ -133,7 +128,7 @@ export function CreditsMeter() {
 
           {/* Self-service request path (hybrid wall). */}
           {status === "pending" ? (
-            <p className="text-xs text-amber-600 dark:text-amber-500">
+            <p className="text-warning dark:text-warning text-xs">
               {t.settings.account.creditsRequestPending}
             </p>
           ) : showForm ? (
