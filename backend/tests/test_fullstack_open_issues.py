@@ -120,12 +120,21 @@ def test_acp_gate_tolerates_missing_or_odd_config():
 
 
 def test_acp_gate_matches_the_live_config():
-    """The real config.yaml must yield the agents the runtime registry reports."""
+    """The gate must report exactly the agents the live config declares.
+
+    It used to read the wrong key and report "no runtimes configured" while
+    two agents were configured and working. Asserting that one *specific*
+    agent is present also made the test depend on the deployment: the example
+    config ships ``acp_agents`` commented out, because the adapter needs
+    credentials, so CI — which copies the example into place — declared none.
+    """
     import yaml
 
     config = yaml.safe_load((REPO / "config.yaml").read_text())
+    raw = config.get("acp_agents") or {}
+    declared = set(raw.keys()) if isinstance(raw, dict) else set()
     names = {r["name"] for r in acp_gate.get_runtimes(config)}
-    assert "claude_code" in names, f"live config yielded {names}"
+    assert names == declared, f"live config yielded {names}, config declares {declared}"
 
 
 # ---------------------------------------------------------------------------
