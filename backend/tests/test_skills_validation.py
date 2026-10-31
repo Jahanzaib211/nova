@@ -198,7 +198,7 @@ class TestValidateSkillFrontmatter:
     def test_reads_utf8_on_windows_locale(self, tmp_path, monkeypatch):
         skill_dir = _write_skill(
             tmp_path,
-            '---\nname: demo-skill\ndescription: "Curly quotes: \u201cutf8\u201d"\n---\n\n# Demo Skill\n',
+            '---\nname: example-skill\ndescription: "Curly quotes: \u201cutf8\u201d"\n---\n\n# Example Skill\n',
         )
         original_read_text = Path.read_text
 
@@ -211,4 +211,4 @@ class TestValidateSkillFrontmatter:
         valid, msg, name = _validate_skill_frontmatter(skill_dir)
         assert valid is True
         assert msg == "Skill is valid!"
-        assert name == "demo-skill"
+        assert name == "example-skill"

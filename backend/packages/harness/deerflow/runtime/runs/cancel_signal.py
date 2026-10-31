@@ -22,9 +22,9 @@ import asyncio
 import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from deerflow.utils.redis_import import import_redis_asyncio
 
-REDIS_INSTALL = "redis is required for the redis cancel signal. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
+logger = logging.getLogger(__name__)
 
 
 class CancelSignal(abc.ABC):
@@ -65,14 +65,6 @@ class NoopCancelSignal(CancelSignal):
         await asyncio.Event().wait()  # never set — waits until externally cancelled
 
 
-def _ensure_redis_import():
-    try:
-        import redis.asyncio as redis
-    except ImportError as exc:
-        raise ImportError(REDIS_INSTALL) from exc
-    return redis
-
-
 class RedisCancelSignal(CancelSignal):
     """Redis pub/sub-backed cross-replica cancel signal.
 
@@ -89,7 +81,7 @@ class RedisCancelSignal(CancelSignal):
         else:
             if not redis_url:
                 raise ValueError("RedisCancelSignal requires either redis_url or client")
-            redis = _ensure_redis_import()
+            redis = import_redis_asyncio("cancel signal")
             # socket_timeout=None: see the matching comment in
             # redis_provider.py's RedisStreamBridge — critical here
             # specifically, since wait_for_cancel()'s pubsub.listen() has

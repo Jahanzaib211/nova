@@ -583,7 +583,7 @@ class MemoryUpdater:
                     reinforcement_detected=reinforcement_detected,
                     user_id=user_id,
                 )
-                return future.result()
+                return future.result(timeout=120)
             except Exception:
                 logger.exception("Failed to offload memory update to executor")
                 return False

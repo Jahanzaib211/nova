@@ -14,11 +14,13 @@ import type { CapabilitiesResponse } from "./types";
 
 const POLL_INTERVAL_MS = 30_000;
 
-export function useCapabilities() {
+export function useCapabilities(threadId?: string) {
   const { data, isLoading, error, refetch, isFetching } =
     useQuery<CapabilitiesResponse>({
-      queryKey: ["runtime", "capabilities"],
-      queryFn: () => loadCapabilities(),
+      // threadId is part of the key: the circuit snapshot is scoped to it, so
+      // two chats must not share one cached answer.
+      queryKey: ["runtime", "capabilities", threadId ?? null],
+      queryFn: () => loadCapabilities(threadId),
       staleTime: POLL_INTERVAL_MS / 2,
       refetchInterval: POLL_INTERVAL_MS,
       refetchOnWindowFocus: true,
@@ -33,9 +35,13 @@ export function useCapabilities() {
   };
 }
 
-/** Convenience hook — number of OPEN circuits. Returns 0 on error/loading. */
-export function useOpenCircuitCount(): number {
-  const { capabilities } = useCapabilities();
+/** Convenience hook — number of OPEN circuits. Returns 0 on error/loading.
+ *
+ * Pass ``threadId`` to count only that chat's breaker: the runtime bar is
+ * per-chat, and a breaker opened elsewhere used to paint every chat degraded.
+ */
+export function useOpenCircuitCount(threadId?: string): number {
+  const { capabilities } = useCapabilities(threadId);
   if (!capabilities) return 0;
   // `?? []`, because loadCapabilities bare-casts the response and every list
   // consumer in runtime-capabilities-bar already guards the same way. This hook

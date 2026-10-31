@@ -48,6 +48,211 @@
 
 ---
 
+## v9.20 — The Agent's Computer: Chromium's own sandbox vs. the hardened container (2026-10-31)
+
+- **The symptom**: the Browser tab rendered blank and every `browser_check` failed, permanently, on the container sandbox path. supervisord logged `Failed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted` followed by `FATAL:zygote_host_impl_linux.cc(211)] Check failed: . : Operation not permitted (1)` and restarted the browser forever. Port 9222 never opened → the container reported unhealthy → the CDP URL came back malformed → the circuit breaker opened.
+- **The cause chain**: the sandbox container is created hardened (`--cap-drop ALL` + `--security-opt no-new-privileges`), which blocks Chromium's setuid helper, and Docker's default seccomp profile only permits `clone(CLONE_NEWUSER)` when `CAP_SYS_ADMIN` is present — so *both* of Chromium's own-sandbox paths were closed and the browser could not start at all.
+- **The fix**: `sandbox.browser_no_sandbox` (default on) sets `BROWSER_NO_SANDBOX=--no-sandbox` for non-privileged sandboxes. The image's own `/opt/gem/run.sh` already prepends that variable to `BROWSER_EXTRA_ARGS`, and the image ships it empty, so nothing in the image had to change. A privileged (`dind`) container keeps every capability, so its inner sandbox works and nothing is injected; a value the operator sets in `sandbox.environment` always wins.
+- **The container boundary is the sandbox**: re-adding `CAP_SYS_ADMIN` to satisfy Chromium's inner sandbox would have been near-host-root, so the inner sandbox was given up, not the container's.
+- **The Kubernetes path is different**: provisioner-created Pods are built by the provisioner (no capability drop, `allow_privilege_escalation: true`), so Chromium's inner sandbox still works there — and `sandbox.environment`, `browser_no_sandbox` included, never reaches them, because the Pod spec is built there and not by the gateway. The provisioner now passes `BROWSER_NO_SANDBOX` through to every Pod, for clusters that forbid privilege escalation.
+- **The image deliberately does not bake the flag in**: the same image serves the privileged and the hardened sandbox, and an image-level `ENV` could not tell them apart. Setting it in the Android layer would also have invalidated the cached multi-GB stage of the `base → tools → dind → android` chain.
+- **Drift is now pinned by a test**: the container hardening (`local_backend.py`) and the browser compensation (`aio_sandbox_provider.py`) live in different modules — which is exactly why they could drift apart while each half looked right. A test now resolves the config → builds the backend → asserts the docker argv carries both `--cap-drop ALL` and `BROWSER_NO_SANDBOX=--no-sandbox`, and carries neither for a privileged container.
+- **Verified live**: container healthy, supervisord `browser RUNNING`, `/json/version` → `Chrome/135.0.7049.78`, `/v1/browser/info` returns a proper `cdp_url`, and a `browser_check` rendered a gradient card correctly (2,207 distinct colours, correct pixel values).
+
+---
+
+## v9.24 — Voice as a call: self-hosted, GPU-backed, adoption-backed (2026-10-31)
+
+Voice was configured on but had never worked on this host: the gateway's own readiness probe returned `ready: False` (`voices-v1.0.bin` and `kokoro-v1.0.onnx` absent), the voice overlay was therefore never added, and Docker could not hand the RTX 3060 to a container.
+
+- **Stack decision.** The two most-adopted open-source voice-agent frameworks (Pipecat ~16.9k★, LiveKit Agents ~14.7k★) are both streaming cascades: VAD → STT → fast LLM → streaming TTS, with semantic turn detection and barge-in. Native full-duplex speech models (Moshi, NemotronLabs VoiceChat) remain research-grade and want more GPU than a 3060. Nova's pipeline already uses the components those frameworks ship with — Silero VAD, Pipecat's smart-turn-v3, faster-whisper, Kokoro-82M (Apache-2.0) — so the work was making it live and call-shaped, not a rewrite.
+- **Live.** All weights fetched (`scripts/fetch-voice-models.sh`); `speech.turn.enabled: true` (a pause mid-sentence is not end of turn); `speech.stt.device: auto`.
+- **Call-shaped turns.** New `speech.agent` (`deerflow.speech.registry.voice_agent_settings`): voice turns run `minimax-m3.1-flash` with thinking **off** — extended thinking spends exactly the silence a caller feels. `speakable()` strips markdown, code fences and URLs before TTS so Kokoro never reads formatting aloud; list lines become separate phrases. `tests/test_voice_call_mode.py`.
+- **GPU passthrough.** NVIDIA Container Toolkit 1.20.1 installed and registered with Docker — *not* as the default runtime, so only a service that reserves a device (the gateway, via `docker-compose.voice-gpu.yaml`) sees the GPU; sandboxes do not. `scripts/pm2-deerflow.sh` now appends the GPU overlay only when `nvidia-smi` works **and** the runtime is registered (a broken driver after an update degrades to CPU voice instead of a gateway that cannot start), swapping `voice`→`voice-gpu` while keeping every other extra — the overlay's `UV_EXTRAS` replaces the whole list, and dropping `postgres` would have booted a gateway with no database driver.
+- **First-boot restart loop.** The GPU extra is ~1.6 GB of CUDA wheels installed before the gateway listens; autoheal judged it unhealthy at ~4 min and restarted it mid-download, forever. The GPU overlay sets `healthcheck.start_period: 1200s`; once installed they live in the venv/uv-cache volumes.
+- **Reboot path.** Docker + containerd enabled at boot; `pm2-jahanzaib.service` resurrects `nova`, whose launcher re-derives the voice and GPU overlays from what is actually present at boot.
+
+## v9.23 — The Browser tab's real root cause: an opaque frame has no session (2026-10-31)
+
+v9.22's proxy fixes were real but sat on top of the actual failure, which only shows when signed in. The live gateway log showed it plainly: `GET /api/sandbox/preview/{tid}/ 200`, then **`401` for every stylesheet, script and font**. The Browser tab frames agent-built apps with `sandbox="allow-scripts …"` and deliberately *without* `allow-same-origin` — an app the agent wrote must not run as the user inside Nova's origin — so the frame has an opaque origin, Chromium treats its requests as cross-site, and the `SameSite=Lax` session cookie never goes with them. Firefox still sent it, which is why the preview "rendered beautifully" there. v9.22 was verified without auth, so it never saw the 401s.
+
+- **Signed preview capabilities** (`app/gateway/preview_capability.py`). The thread segment of every preview/absproxy URL the gateway hands out carries `{thread}~{user}~{expiry}~{hmac}`; the proxies' URL rewriting keeps it on every asset, so each request authenticates itself without a cookie. Bound to surface + scope (label or port), thread, user and the user's `token_version` (a password change or ban revokes it); minted on a 12-hour grid so the iframe URL stays stable; valid 12–24 h. The auth middleware honours it only on those proxy paths, and a capability-bearing path never falls back to the cookie (otherwise a forged segment could ride the cookie past the CSRF exemption the preview app's own form posts need). HMR sockets accept it in place of the cookie + same-origin guard (`_ws_admit_preview`). Proxied responses carry `Referrer-Policy: same-origin` so the capability never leaks to a third-party site the preview links to.
+- **Framed CORS** (`app/gateway/preview_cors.py`). From an opaque origin, web fonts and `fetch()` are cross-origin: fonts were silently discarded (styled page, wrong typefaces) and Next's router preflight was answered `400` by the gateway's own `CORSMiddleware`, whose allowlist does not include `null`. An outermost layer, acting only on capability paths, answers those preflights and adds `Access-Control-Allow-Origin: *` (never with credentials).
+- Verified in Chromium against the real auth middleware + real proxy + the real site, framed with the Browser tab's exact `sandbox` attribute, no cookie, production-shaped CORS: every request 200, all four site fonts loaded, in-frame navigation to `/services` under the capability URL, 0 console errors.
+- **Subagent timeouts are measured from dispatch.** "Task polling timed out after 45 minutes … the background task is stuck" was the poller's backstop (timeout + 60 s from dispatch) firing before the executor's own timeout, which only started when one of the 3 scheduler workers picked the task up — a task queued behind a full pool had not started its clock. One deadline now; a task still queued at it ends cleanly as "Never started: waited Ns for a free subagent slot".
+- **The to-do panel, redesigned as a tab on the composer**: inset by the composer's 16 px corner radius with its border token, one continuous outline; header with done/total and a progress bar; collapsed shows the step in progress (no strip for a half row); expanded shows four whole rows with edge fades only when there is more, active row kept in view. Pinned by pixel measurements in `tests/e2e/todo-panel.spec.ts`.
+- **The status line kept "Nova is delegating to subagent · 106 s" ticking over an idle thread** — an interrupted run's last tool call has no result, so it read as running forever. The current tool now exists only while a run is live.
+- The Voice pill's shimmer painted over its own mic icon and looped forever; it now runs twice, under the icon.
+
+## v9.22 — The Browser tab, re-verified: hydration under a proxy prefix, a self-test that scrolls, and three v9.21 claims corrected (2026-10-31)
+
+Driven by four screenshots that contradicted v9.21. Every fix was reproduced first — the proxy fixes in headless Chromium against a real Next.js 14 dev server through the gateway's own `_proxy_dev_server`, before and after.
+
+- **The unstyled Browser tab and the dev overlay's "1 error" were one bug: a hydration mismatch the proxy caused.** The HTML rewrite prefixes `<a href="/">`, but a client component renders `/`, so React reported a mismatch, discarded the whole document and re-rendered it with unprefixed `/_next/...` stylesheet and font URLs that 404 against the app shell. A server-side fix cannot work (client components hardcode their hrefs), so the preview and absproxy now inject a runtime URL shim ahead of every other script: `getAttribute` returns the app's own path (hydration compares equal), while `setAttribute`, the URL property setters, `fetch`/XHR/EventSource and `history` add the prefix. On Next.js pages the location is set to the app's path before the router boots, so `usePathname()` matches the server; Next's own `replaceState` on mount restores the prefix. Verified: 0 hydration errors, in-app navigation, Back and reload all work under the prefix (previously navigation fell out of the preview).
+- **Every font 404'd through the proxy.** Next.js sends `Link: </_next/static/media/….woff2>; rel=preload` headers, passed through unchanged, so the browser preloaded each font from the app shell's root. `_prefix_link_header` rewrites `Link` targets on the preview and absproxy.
+- **Full-page screenshots never scrolled**, so every scroll-reveal section photographed as an empty band and every count-up as `0` on a page that rendered perfectly in Firefox and Chromium. The `screenshot` tool now scrolls through the page first (`browser_check.scroll_through`).
+- **The self-test failed on "Failed to load resource: 404" with no URL** — Chromium's automatic `/favicon.ico` probe. Failed requests are now reported as `404 GET <url>`, a missing favicon is not an app error, and content that is still invisible after a full scroll (≥25% of the page) fails with the new `hidden_content` status instead of passing.
+- **Corrected v9.21 claim — the to-do panel still overlapped the composer.** Collapsed, the panel's strip is the list's bottom padding and `overflow-hidden` clips at the padding box, so the top half of the first row showed as a sliced line. The collapsed list is now `invisible`. And v9.21's removal of `-top-4` was wrong: it compensated the composer's own welcome-mode `-translate-y-2 sm:-translate-y-4`, so the panel is lifted by exactly that again. A brand-new thread no longer shows the previous thread's to-dos.
+- **Corrected v9.21 claim — "Healthy" was not honest either.** Closed circuits only mean the browser is reachable. The badge now reads "Browser healthy", and turns amber ("Self-test issues") when this chat's last self-test failed.
+- **The status line had no subject.** Every status string is a predicate ("is delegating to subagent"); the line now reads "Nova is …".
+- **The generated Northarc site** (thread workspace, not this repo): content no longer depends on scrolling (server-rendered visible; only below-the-fold elements wait to animate), counters render their real values, the hero headline is sized to its column (it ran into the topology card), case studies got readable columns, and the footer's Rotterdam / EST. 2009 contradiction now uses the Chicago HQ data the rest of the site uses.
+
+## v9.21 — Live audit sweep: honest states, real counters, and a panel that stopped overlapping (2026-10-31)
+
+A full-stack live audit of `nova.alilabsx.com` as a real user (headless Chromium, desktop + mobile viewports, 11 pages + 21 settings sections). Every finding turned into a fix with a regression test. 0 page errors, 0 layout overflow, 0 5xx on the final sweep.
+
+- **The Browser "Degraded" badge was a global flag painted onto one thread.** `/api/runtime/capabilities` reported `open_circuits` from the process-wide browser circuit breaker, so a single thread's earlier failure showed a red "Degraded" badge on *every* thread, forever, even after the browser recovered. Now scoped: the breaker's `snapshot(thread_id)` decays OPEN→HALF_OPEN on read, the endpoint takes a `thread_id` query param, and the frontend `RuntimeCapabilitiesBar` passes the current thread. The public `/api/health/browser` stays global (it is a deployment probe, not a per-thread one). Verified live: the bar now reads **"Healthy"**.
+- **Startup reaper only ran on SQLite.** `deps.py` gated orphaned-run reconciliation on `isinstance(store, SqliteRunStore)`, so on the Postgres deployment a gateway restart left `running` rows stuck forever and Stop returned 409. The gate is now `isinstance(distributed_lock, NoopDistributedLock)` — reap on every SQL backend, but skip when a `RedisDistributedLock` is configured (multi-replica must not let one replica reap another's live run). Verified live: 5 stale `running` rows became `error` on the next boot.
+- **`RunManager.reap_orphaned_runs()` was a public stub returning 0** with a comment saying the store could not be enumerated without a thread index. True when written; the store grew `list_inflight` since. It now delegates to `reconcile_orphaned_inflight_runs()` (one implementation of "an orphaned run gets a terminal state", and it skips runs this process still owns — which a blind sweep would not).
+- **`/api/threads/{id}/runs` reported all-zero token counters.** The service layer's `RunSummary`/`RunDetail` never projected the usage columns the `runs` table already stores, so the UI's own run list contradicted the token meter beside it. Added `updated_at`, `total_input/output/total_tokens`, `llm_call_count`, `lead/subagent/middleware_tokens`, `message_count` through `types.py` → `_usage_fields()` → `_service_to_response`. Verified live: **127,194 tokens / 6 LLM calls / 11 messages** where it used to show 0.
+- **Reload lost the todo list and the sandbox id.** `get_thread_history` carried `messages` on the latest checkpoint only; `todos` and `sandbox` were dropped, so a refresh emptied the panel and detached the Agent's Computer. Both are now included on the latest checkpoint, serialized the same way. Verified live against a real thread (3 todos with status + `sandbox_id`). A test also pins the seeding contract this required: this langgraph version shreds `channel_values` into per-channel blobs keyed by `channel_versions` **and** the `new_versions` argument, so a checkpoint seeded with values that does not pass matching versions reads back `{}`.
+- **The Browser tab showed a raw Node stack-trace line while a dev server was still starting.** The sandbox's own port gateway answers `500 connect ECONNREFUSED 0.0.0.0:4100` when nothing is listening — the *normal* state during boot — and the absproxy passed that body straight into the iframe, reading as "the app is broken". It is now translated to the same friendly 503 ("Nothing on that port yet") our own connect failures already produce, matched narrowly (short body, `ECONNREFUSED`/`connection refused`) so an app's own error page passes through untouched.
+- **The todo panel was painted 16 px into the composer.** A `translate-y-4` on the panel plus a compensating `-top-4` on the page, and a `bg-background/5` that let the composer's border show through the near-transparent panel. Measured before/after in a real browser: overlap 16 px → 0, gap −16 → 0, last todo row no longer clipped. Applied to both chat pages (user + agent) that share the wrapper; a geometry test pins the classes.
+- **`/workspace/email` ignored the server feature flag.** It rendered the full campaign UI on a deployment with `email_marketing.enabled: false`. Now a three-way gate (`loading`/`enabled`/`disabled`) matching the Integrations page precedent — the panels are never mounted while disabled, and the sidebar entry was already flag-filtered.
+- **Nine defects on the Agents surfaces** (registry page, agent cards, Settings › Runtimes), each with a test: Settings claimed "runtimes are disabled" before the capabilities request had answered (same off-vs-not-asked-yet bug as the email page); the gallery's "Try again" called `router.refresh()`, which react-query does not treat as a refetch, so the error panel was permanent; an agent with `tool_groups: []` hid its skill badges (`[]?.length` is 0, not "fall through"); a hardcoded English string in the zh-CN UI; two unnamed icon buttons for screen readers; a react-query key collision where a custom agent legitimately named `registry` would share a cache entry with the registry list; the "async delegation is off" hint named only one of the two switches that turn it off; and an unguarded `rt.accounts` cast that would take the section down on a payload without that key.
+- **The drift gate reported RED on a healthy deployment.** It required a host-side `frontend/.next/BUILD_ID` regardless of where the build actually came from; with the prod-frontend overlay the `.next` is baked into the image and never mounted, so a missing host file said "the last build did not finish" while the server was fine — and it fired *before* the source-hash comparison that answers the real question. The requirement now applies only when `.next` is host-mounted.
+- **The jobs worker was running a stale `config.yaml`.** It saw one MiniMax model where the host config had six (a single-file bind mount that had gone stale across edits). Recreated through the correct compose chain; the drift gate's `file_mounts` check now matches.
+- **Deployed**: frontend image rebuilt (`next build` clean, 114 test files / 871 tests green) and the container recreated. The full backend suite: **7,418 passed**, 3 pre-existing failures in `test_invoke_acp_agent_tool.py` from a concurrent session's in-flight ACP change (a new `proc.wait()` path against a test double that still returns a bare `object()`), unrelated to this sweep.
+
+---
+
+## v9.19 — Regression ledger: what Nova shipped, probed from its source of truth (2026-09-20)
+
+- **The finding that prompted it**: `nova-sandbox-android:latest` — the Agent's Computer — was no longer on the Docker daemon, and no self-probe or gate noticed: they check the stack containers, never the sandbox image. The chain is being rebuilt from `docker/sandbox/vendor` (all toolchains incl. the Android SDK were still staged).
+- **`scripts/gates/regression-gate.py` → `~/.nova/gates/regression.json`** (nova-gates, every 900 s; nova-ops card "Regression ledger"; also the first section of `make self-audit`): compose overlays the PM2 chain must run (from `scripts/pm2-deerflow.sh`'s own rules: `.env NOVA_ACP_AGENTS`, `speech.enabled` + weights); the sandbox image exists, boots and exposes `/etc/nova-sandbox.json`; all 58 toolchain + security-arsenal binaries `Dockerfile.tools`/`Dockerfile.android` install are present in it; the Security-Toolkit mount; the harness extras (postgres/voice/trading) import in the gateway venv; prerequisites of every enabled config section; PM2 apps, tunnels, local LLM endpoints, nova-ops, public health, served frontend build == image build; Playwright's pinned Chromium; and inventory counts (skills, tools, ops, modules, MCP servers, sandbox tools, overlays) pinned in `contracts/regression.baseline.json` — they can only fall by editing the baseline on purpose.
+- First live run: one regression (sandbox image), everything else green.
+
+---
+
+## v9.18 — Deployed: console UI live, Claude Code powering chats inside the gateway (2026-09-20)
+
+Phase P15 of the upgrade program — the deploy that makes P11–P13 visible.
+
+- **Frontend image rebuilt and recreated** (`BUILD_ID RZ5fBpaMOV5OL08M1_RSF`): the grouped settings rail, the eight console pages and the runtime picker are what nova.alilabsx.com serves. Build cache (22 GB) pruned first; the image must be built with the `prod-frontend` overlay (or `docker build --target prod`) — the plain `dev` target has no `.next` and crash-loops. BuildKit's bridge network was too slow for the registry (14 KiB/s, timeouts); `--network=host` installs 1,198 packages in 25 s.
+- **ACP overlays activated** (`NOVA_ACP_AGENTS=1` in `.env`; `scripts/pm2-deerflow.sh` now honours the flag from `.env`, PM2 never passed it). Two fixes for Claude Code inside the container: mount `~/.claude.json` beside `~/.claude` (the CLI's account/onboarding state) and drop `CLAUDE_CONFIG_DIR` from the agent env.
+- **Runtime fixes found live**: `runtimes.nova_mcp_url` defaults to the in-container `127.0.0.1:8001` (2026 is the host port); Nova's own MCP tools arrive as ACP kind `other`, so `nova_tool_decision` judges them by the operation's registry kind (reads in every mode, writes/executes in standard and full); the adapter's stderr is drained into the gateway log (the ACP lib piped it and never read it); each session logs its attached MCP servers.
+- **Proof**: `runtimes.probe` → Claude Code answered inside the gateway under the user's login (27 s cold); a chat turn on the Claude Code runtime called `mcp__nova__jobs__list` and `mcp__nova__runtimes__list` through `/api/mcp/nova` with a per-turn token (minted, used, revoked) and answered as the assistant message.
+- **Model menu**: runtime first, model second. Choosing Claude Code / OpenClaw hides Nova's model list (the runtime brings its own model) and shows account + permissions; the model button then reads "Claude Code · Claude login" instead of a model name with a badge painted over it. Themed selects replace the native ones; the dialog's close button no longer overlaps the first row.
+- **Settings de-duplicated**: Gateway no longer repeats Updates' versions; the "Agents" settings page is now **Runtimes** only — the agent registry lives on /workspace/agents and is linked, not copied.
+- Lighthouse CI: the `charset` and `uses-text-compression` audits are skipped — their gatherers call `Network.getResponseBody`, which the landing page's WebGL starfield wedges in headless Chrome (deterministic `PROTOCOL_TIMEOUT` on `/`, both retry attempts); neither feeds an asserted budget. Retry attempts capped at 10 min each.
+- Ops: the drift gate expects the two ACP overlays when opted in; nginx's pinned IP (192.168.200.2) must not be claimed by a per-service recreate while nginx is down (a `pm2 restart nova` loop of "Address already in use" — fixed by removing the squatter and restarting through PM2).
+
+---
+
+## v9.17 — Ops: capabilities gate (2026-09-20)
+
+Phase P14 of the upgrade program.
+
+- **`scripts/gates/capabilities-gate.py` → `~/.nova/gates/capabilities.json`** (nova-gates producer, every 300 s): every capability module's live health; the live registry snapshot against `contracts/capabilities.baseline.json` (a missing or retyped operation is red — the generated UI client and the MCP tool list come from that contract; additions are yellow until the baseline is refreshed); runtime readiness (Claude Code / OpenClaw: adapter on PATH + an available account); `/api/mcp/nova` answering 401. Service POSTs satisfy the CSRF double-submit the way nova-ops does. nova-ops shows it as "Capabilities & runtimes" next to the job-runner card.
+- CI: the capability-client drift check moved into the frontend lint job (it needs the pinned prettier) and now fails loudly when prettier is unavailable instead of comparing unformatted output.
+
+---
+
+## v9.16 — Console parity: grouped settings rail, eight capability-backed pages, per-chat runtime picker (2026-09-20)
+
+Phase P13 of the upgrade program.
+
+- **Grouped settings rail** (General · Connections · Agents & tools · Privacy & security · System): `SettingsPageSpec.group` + `settingsGroups()` in the feature registry; existing pages keep their ids and deep links. `adminOnly` pages are filtered by `system_role`.
+- **New pages, each a view over capability operations** (`src/core/capabilities`: `useCapability`, `useCapabilityMutation`, typed `invoke`): **Gateway** (module health, ACP adapters + policies, versions), **Devices** (browser sessions, sign out everywhere, harness-token mint/revoke with the MCP endpoint), **Cloud workers** (job-runner heartbeats, agent tasks), **Agents** (runtimes × accounts, "Check model", permission modes, agent registry), **Labs** (feature flags ↔ config sections), **Automation** (cron schedule CRUD), **Secrets** (admin; presence-only, write/remove), **Updates** (versions, "Check again").
+- **Runtime picker** in the chat model menu: runtime (Nova / Claude Code / OpenClaw), "Account for this chat", permission chip (Default (Full Access) / Standard / Plan), reset — rides the run context like `model_name`; a badge on the model button shows a non-native runtime.
+- i18n en-US + zh-CN (~160 strings under `t.features.console` / `t.features.runtimePicker`, `settings.groups`); visual baseline +8 screens ×2 projects. Frontend 785 unit tests.
+
+---
+
+## v9.15 — Runtimes: Claude Code and OpenClaw power whole chats (2026-09-20)
+
+Phase P12 of the upgrade program. See `backend/docs/RUNTIMES.md`.
+
+- **Runtime registry** (`deerflow.runtimes`): `native` plus every `acp_agents` entry as a chat runtime; selection is chat (`runtime` / `runtime_account` / `permission_mode` in the run context) > model (`runtime: claude_code` on a `models:` entry) > `runtimes.default` — OpenClaw's `agentRuntime.id`, in Nova.
+- **`RuntimeDispatchMiddleware`**: on an ACP runtime the model call becomes one ACP prompt with Nova's own MCP server mounted under an ephemeral harness token (revoked after the turn), streamed as `acp_update` events, returned as the turn's `AIMessage`. Threads, checkpoints, titles, memory unchanged; failures become a message.
+- **Permission modes** `full` / `standard` / `plan` → ACP policies (`policy_for_mode`); the `invoke_acp_agent` tool now shares the transport (`deerflow.runtimes.acp_transport`) with the runtime.
+- **Accounts** presence-checked (Claude login, Anthropic API key, OpenClaw gateway token); `runtimes.list` / `runtimes.probe` ("Check model") / `runtimes.sessions` operations. Probe verified on the host: Claude Code answered through the adapter under the user's own login in 18.7 s.
+- `runtimes:` config block, `config_version` 27; flag `runtimes`. 12 modules / 36 operations in the capability contract.
+
+---
+
+## v9.14 — Capability registry: declared once, reachable by UI, harness and MCP (2026-09-20)
+
+Phase P11 of the upgrade program. See `backend/docs/CAPABILITIES.md`.
+
+- **`deerflow.capabilities`**: every feature declares its operations once (`CapabilityModule` → `Operation(name, kind, input, output, handler)`); the registry's sorted, JSON-schema snapshot is the contract (`contracts/capabilities.baseline.json`, gate: removals/retypes fail).
+- **Derived surfaces**: `GET/POST /api/capabilities/ops[/{name}]` (validated, owner/admin-checked); lead-agent tools per op, gated by `tool_groups: nova:<module>` exactly like `web`/`bash`; **Nova's own MCP server** at `/api/mcp/nova` (streamable HTTP, stateless) so Claude Code / OpenClaw can drive jobs, integrations, agents, models, skills, MCP from outside; `features` flags computed in one place; a **generated typed frontend client** (`src/core/capabilities/generated.ts`, `invoke("jobs.list", …)`) with a CI drift check.
+- **Harness tokens** (`harness_tokens` table, migration `2026_09_20_harness_tokens`): `nhk_…` bearer credentials shown once, stored hashed, scoped to modules, revocable immediately; minted under Settings › Devices (`sessions.token_create`).
+- Modules: jobs, integrations, agents, acp, models (with a live "Check model" probe), skills, mcp, secrets (presence-only, 0600), features, updates, sessions. 11 modules / 33 operations. `config_version` 26 (`capabilities:` block; `nova:*` tool groups in `config.example.yaml`).
+- CI: `backend-unit-tests.yml` now installs the `postgres` extra (the checkpoint-schema pin test needs it; it also skips cleanly without it); the replay/record gateways use a 32-byte JWT secret the 2026-09 hardening requires.
+
+---
+
+## v9.13 — Agent registry and async delegation (2026-09-19)
+
+Phase P9 of the upgrade program — swarm step 1. See `backend/docs/AGENTS_REGISTRY.md`.
+
+- **`GET /api/agents/registry`**: lead agent, built-in and custom subagents, custom agents and ACP agents with the caller's live queued/running `agents.task` counts. Shown on `/workspace/agents` and as the Agents card on the Jobs page.
+- **`delegate_async` / `check_delegation`** (lead agent only, `subagents.async_enabled`, `config_version` 25): a task runs as an `agents.task` job in the jobs container — survives gateway reloads, visible on the Jobs page, result also written to `outputs/agent-tasks/<job_id>.md`. The acp/cli-auth overlays now mount into the `jobs` service too.
+- Documented limit: the worker has no sandbox, so subagents needing bash/file tools fail there with a clear error; ACP agents are unaffected.
+
+---
+
+## v9.12 — Email marketing UI + Mailcow / Twenty / Chatwoot bridges (2026-09-19)
+
+Phase P8 of the upgrade program.
+
+- **`/workspace/email`** (sidebar "Email", behind the server `email_marketing` flag): Campaigns (create, preflight that names what blocks a send, send-now/pause/resume/cancel, test send, live progress from sends, stat tiles with rates against *sent* — never a rate of nothing, event log), Lists, Contacts (search, add, CSV import with header guessing → mapping → job progress), Templates (editor, sandboxed `<iframe sandbox>` preview), Suppressions. Empty states say so. Both locales (~120 strings).
+- **Settings › Email**: bridge cards (configured / not, with the exact reason), Mailcow "ensure sender" (creates `bounce@<domain>` + `unsubscribe@` alias, reports DKIM), Twenty push/pull as jobs.
+- **Bridges** (`deerflow.email_marketing.bridges`, first principles on each REST API, URLs/keys from `integrations.services`): Mailcow (domain check, mailbox, alias, DKIM), Twenty (people ⇄ contacts, paginated, batch create), Chatwoot (a human reply to `reply+<send>@` becomes a labelled conversation — wired into the IMAP poll). `email_marketing.bridges` config. New contract event `replied` (contract v2, both sides).
+- Corrected the VERP guidance: Postfix's `recipient_delimiter=+` folds `bounce+<send>@` into the `bounce@` mailbox, so no wildcard aliases are needed.
+
+---
+
+## v9.11 — Email marketing backend (2026-09-19)
+
+Phase P7 of the upgrade program. See `backend/docs/EMAIL_MARKETING.md`.
+
+- **Tables + repository** (`em_lists`, `em_contacts`, `em_list_members`, `em_templates`, `em_campaigns`, `em_sends`, `em_events`, `em_suppressions`, `em_bounce_cursor`; migration `2026_09_19_email_marketing`, schema snapshot refreshed). A new gate test proves the migration alone reproduces the ORM column for column on a database that predates the tables.
+- **Templates** render in a Jinja2 sandbox (autoescape, strict undefined, no loaders, allowlisted context); links are rewritten through the click tracker, the open pixel is injected, a text alternative is derived. `jinja2` is now an explicit harness dependency.
+- **Tracking**: HMAC tokens per send/purpose; click redirects verify a URL HMAC (no open redirect); one-click unsubscribe (RFC 8058) works with a bare POST — `/api/em/t/*` and `/api/em/u/*` are public and CSRF-exempt.
+- **Sending**: `em.campaign.start` snapshots recipients minus suppressions; `em.campaign.batch` sends through the `email:` relay with one connection per batch, RSET between messages, reconnect, 4xx/5xx classification, VERP envelopes, `List-Unsubscribe`, a per-domain token bucket that reschedules instead of sleeping, and batch chaining spaced by the campaign throttle. Pause/resume/cancel.
+- **Bounces & complaints**: DSN/ARF parsing, UID-cursor IMAP poll (`em.bounce.poll`), VERP / `X-Nova-Send` matching, suppression; mailto unsubscribes.
+- **API** `/api/em`: lists, contacts (+ CSV import as a job with header guessing), templates (+ sandboxed preview), campaigns (preflight, send-now, schedule, pause, resume, cancel, test-send, stats, events, sends), suppressions. `config_version` 24 (`email_marketing:` block, disabled by default).
+
+---
+
+## v9.10 — Claude inside Nova: ACP agents with live transcripts and permission policy (2026-09-19)
+
+Phase P6 of the upgrade program.
+
+- **Two ACP agents declared** in `config.yaml` (`config_version` 23): `claude_code` (the Claude Code agent via `@zed-industries/claude-agent-acp@0.23.1`, using the user's own `claude` login mounted read-only — Nova never reads it) and `openclaw` (OpenClaw's ACP bridge to the host gateway through `nova-host-bridge`, token from `~/.nova/secrets`, 0600). Opt-in with `NOVA_ACP_AGENTS=1`: `scripts/pm2-deerflow.sh` / `scripts/docker.sh` add `docker-compose.cli-auth.yaml` + the new `docker-compose.acp.yaml`; `scripts/acp-secrets.sh` writes the token file; the entrypoint warms the adapter into a `gateway-npm-cache` volume. See `backend/docs/ACP_AGENTS.md`.
+- **Per-kind permission policy** (`acp_agents.<name>.permission_policy`): `deny_kinds` always deny, `allow_kinds` auto-approve, everything else is denied unless `auto_approve_permissions`. Previously it was all-or-nothing.
+- **Live transcript**: every agent text chunk and every tool-call/permission decision streams to the chat as an `acp_update` custom event (contract-pinned on both sides) and renders under the "Working with <agent>" step, settling on the final answer.
+- Fixed a contract lie: `contracts/README.md` listed a frontend custom-events contract test that did not exist; it exists now and pins all 12 event types the stream handler switches on.
+- `SECURITY.md` gains deployment notes for the host bridge and the ACP mounts.
+
+---
+
+## v9.9 — Integrations registry, host bridge, Settings › Integrations (2026-09-19)
+
+Phase P4 of the upgrade program.
+
+- **Integrations registry** (`deerflow.integrations`): services from `integrations.services` in config.yaml (hot-reloaded, `config_version` 22) plus the MCP servers, skills and ACP agents the gateway already knows, probed concurrently with 3 s timeouts and a 20 s cache. Service-aware probes for Ollama, LiteLLM, Mailcow, Chatwoot, Twenty, OpenClaw, SearXNG, Crawl4AI and Browserless; `api_key_env` names a variable instead of inlining a secret. `GET /api/integrations`, `?refresh=1`, `POST /api/integrations/{id}/probe`. See `backend/docs/INTEGRATIONS.md`.
+- **Host bridge**: `nova-host-bridge` PM2 app (`scripts/host-bridge.sh`) forwards the loopback-only host services (OpenClaw 18789, Mailcow API 8080, Chatwoot 4800, Twenty 3008) from the docker bridge IP to 127.0.0.1, so containers reach them at `host.docker.internal:<port>`; bound to 172.17.0.1 only. Watchdog probe `P16_host_bridge` + pm2 auto-heal.
+- **Settings › Integrations**: cards grouped by kind (model gateways; mail/CRM/helpdesk; search/crawl/browser; agent gateways; MCP & skills) with status dot, endpoint, detail, capability chips, latency, last-checked, per-card Probe and Probe all. Behind the server `integrations` feature flag. `SettingsSection` gained an `action` slot.
+- Visual gate waits for `document.fonts.ready` before every capture (glyph anti-aliasing flake).
+- **Voice is a feature module (P5)**: `src/features/voice/` with its own manifest; the settings page and voice lab are fully translated (en-US / zh-CN, ~60 strings under `t.features.voice`; model names, device ids and measured numbers stay verbatim) and use the semantic tokens instead of raw emerald/amber/sky. The raw-palette ratchet now also covers `src/features`.
+
+---
+
+## v9.8 — Upgrade program: baseline, tokens, migrations, a job runner (2026-09-18/19)
+
+Phases P0–P3 of the upgrade program (`~/.claude/plans/ui-upgrades-from-side-cozy-melody.md`).
+
+- **Baseline & contracts (P0).** `contracts/{job_status,email_marketing_events,integrations_health}_contract.json` pinned by tests on both sides; `contracts/openapi.baseline.json` gate (removed/retyped fields fail, additions pass); `scripts/inventory.py` machine-inventory gate; 25-screen visual-regression baseline (`frontend/tests/e2e/visual`). Fixed what it exposed: Settings › Account/Memory crashes on partial payloads, the create-agent SSR crash, a React #185 loop in the subtask registry (now an external store), mobile overflow, "Looks clean"/"Loading…"/"Healthy" UI lies, e2e builds reaching the live gateway.
+- **Frontend foundation (P1).** Semantic tokens (`success/warning/info`, `panel-*`), visible focus rings, no dark `font-weight:300`, one brand gradient; ~200 raw palette classes converted with a ratchet test; `<SidePanel>` with pointer/touch/keyboard resize; feature-module registry (`src/features`) so settings pages and sidebar entries are declared once; server feature flags via `GET /api/runtime/capabilities` → `features`.
+- **Migrations at boot (P2a).** `scripts/db-migrate.sh` (create_all → `alembic upgrade head`) in the gateway entrypoint and `make db-migrate`; schema snapshot test; fixed Alembic's 32-char `alembic_version.version_num` that rejected this repo's revision ids on Postgres.
+- **Job runner (P2/P3).** `deerflow.jobs` + `deer-flow-jobs` worker container: leases, heartbeats, cooperative cancel, retry/backoff/dead-letter, reaper, cron schedules, graceful shutdown; `/api/jobs` and `/api/v1/admin/jobs`; watchdog probe `P15_jobs_worker` + `jobrunner` gate; Jobs page + settings section + sidebar entry in the UI. See `backend/docs/JOBS.md`.
+- **Fixes found on the way.** `<SidePanel>` clipped the last 8 px of every open panel (content was sized to the column, the seam took 8 px of it); the `/api/memory` route handlers proxied to the live gateway instead of `DEER_FLOW_INTERNAL_GATEWAY_BASE_URL`; the visual gate's "login" screen was a picture of the workspace (auth-disabled servers redirect `/login`) and is gone; the watchdog now honours a probe's `fixable` flag and a repair grace window so a busy docker daemon no longer triggers stack restarts.
+
+---
+
 ## v9.7 — Room to work, and a sandbox that stops moving
 
 Two problems that turned out to be the same problem: nothing bounded what Nova
@@ -212,7 +417,6 @@ tell them apart. Unconfigured is now **501** — an absent optional feature — 
 renders as a neutral note, while a configured-but-unreachable provisioner keeps
 503 and keeps the alarm.
 
-
 ## v9.6 — Agent's Computer: the panel that is Nova's face
 
 **Session pattern:** the agent built a site correctly and the product looked
@@ -328,7 +532,6 @@ swap are swap doing its job, and this box legitimately runs a long tail of them
 freeze was a full swapfile *while pages were moving*. The check now samples
 `pswpin`/`pswpout` over 2 s and separates the two: a quiet full swapfile is the
 warning it is, and only sustained paging is the emergency it is not yet.
-
 
 ## v9.5 — the 59 GB database behind v9.4, and the gates that make it visible
 
@@ -727,7 +930,7 @@ New suites: `test_update_email`, `test_admin_users`, `test_legal_consent`, `test
 
 ### Streaming hardening (Phases 1–6)
 
-- **Phase 1:** Watchdog with 12 probes (P1–P12) covering nginx, gateway, frontend, local LLM stack, containers, binary attestation, and Cloudflare tunnel.
+- **Phase 1:** Watchdog with **14 probes** (P1–P14, registered via `build_probe_factories()`) covering nginx, gateway, frontend, local LLM stack, containers, binary attestation, and Cloudflare tunnel. *(Originally entered as 12 probes — extended to 14 on 2026-09-08.)*
 - **Phase 2:** Bounded Stop + Force Disconnect — stop is a state machine with configurable timeout.
 - **Phase 3:** Active-run polling — never fully disabled while a run exists.
 - **Phase 4:** Convergent teardown — deterministic cleanup on disconnect.
@@ -1017,6 +1220,7 @@ The full backend suite had been hanging at ~47% and carrying 41 pre-existing fai
 
 - `NOVA_VS_DEERFLOW.md` — verified upstream-vs-Nova attribution map (fork base deer-flow v2.0.0-rc1, reproducible diff commands); README "What Nova adds" rewritten to match.
 - Attribution numbers recomputed pre-commit: 338 files, +35,738/−1,278 vs v2.0.0-rc1 (152 new files ~28.7k lines; 37 new backend test files).
+  > **Superseded 2026-09-08.** These figures were already ~2 months stale when published — they describe the tree as of roughly early July 2026, and understate the delta by about 4×. Re-audited: 1,148 files, +145,947/−11,844; 698 new files / 120,533 lines; 152 new backend test files. See `NOVA_VS_DEERFLOW.md`, which now publishes the exclusion pathspec alongside the raw number.
 - README hero: `docs/images/nova-workspace.png` — real capture of a MiniMax M3 (free) session building a tip calculator, previewed live in the Agent's Computer Browser tab (zero console errors at capture).
 
 ---

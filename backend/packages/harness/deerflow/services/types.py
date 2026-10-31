@@ -59,6 +59,7 @@ class RunState:
             assistant_id=getattr(record, "assistant_id", "lead-agent"),
             model_name=getattr(record, "model_name", None),
             created_at=getattr(record, "created_at", None),
+            updated_at=getattr(record, "updated_at", None),
             error=getattr(record, "error", None),
             total_tokens=getattr(record, "total_tokens", 0),
             message_count=getattr(record, "message_count", 0),
@@ -73,7 +74,14 @@ class RunState:
 
 @dataclass(frozen=True)
 class RunSummary:
-    """Lightweight run representation for list operations."""
+    """Lightweight run representation for list operations.
+
+    The token/count fields are not decoration: the wire format
+    (``RunResponse``) carries them, and a summary that omits them made every
+    run on ``GET /api/threads/{id}/runs`` report zero tokens and zero messages
+    no matter what the run actually used. They exist on ``RunRecord`` and in
+    the store already; the service layer was dropping them on the floor.
+    """
 
     run_id: str
     thread_id: str
@@ -81,6 +89,15 @@ class RunSummary:
     correlation_id: str = ""
     model_name: str | None = None
     created_at: str | None = None
+    updated_at: str | None = None
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+    llm_call_count: int = 0
+    lead_agent_tokens: int = 0
+    subagent_tokens: int = 0
+    middleware_tokens: int = 0
+    message_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -94,9 +111,16 @@ class RunDetail:
     correlation_id: str = ""
     model_name: str | None = None
     created_at: str | None = None
+    updated_at: str | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
     total_tokens: int = 0
+    llm_call_count: int = 0
+    lead_agent_tokens: int = 0
+    subagent_tokens: int = 0
+    middleware_tokens: int = 0
     message_count: int = 0
 
 

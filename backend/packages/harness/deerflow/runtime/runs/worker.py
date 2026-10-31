@@ -181,6 +181,14 @@ async def run_agent(
     requested_modes: set[str] = set(stream_modes or ["values"])
     pre_run_checkpoint_id: str | None = None
     pre_run_snapshot: dict[str, Any] | None = None
+    # Ids of every message already in the thread before this run. A
+    # provider-error fallback from an *earlier* turn stays in the checkpoint
+    # for good (StripErrorFallbackMiddleware only hides it from the model),
+    # and stream_mode="values" replays the whole list on every chunk — so
+    # without this filter each later run on the thread was marked `error`
+    # and the UI kept the "Last turn failed: provider error" banner up
+    # while the new turn had actually succeeded (seen live 2026-09-22).
+    pre_run_message_ids: frozenset[str] = frozenset()
     snapshot_capture_failed = False
     llm_error_fallback_message: str | None = None
 
@@ -228,6 +236,7 @@ async def run_agent(
                         "metadata": copy.deepcopy(getattr(ckpt_tuple, "metadata", {})),
                         "pending_writes": copy.deepcopy(getattr(ckpt_tuple, "pending_writes", []) or []),
                     }
+                    pre_run_message_ids = _message_ids(((pre_run_snapshot["checkpoint"] or {}).get("channel_values") or {}).get("messages"))
             except Exception:
                 snapshot_capture_failed = True
                 logger.warning("Could not capture pre-run checkpoint snapshot for run %s", run_id, exc_info=True)
@@ -345,7 +354,7 @@ async def run_agent(
                 if record.abort_event.is_set():
                     logger.info("Run %s abort requested — stopping", run_id)
                     break
-                llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk)
+                llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, ignore_ids=pre_run_message_ids)
                 sse_event = _lg_mode_to_sse_event(single_mode)
                 serialized = serialize(chunk, mode=single_mode)
                 record_worker_publish(
@@ -371,7 +380,7 @@ async def run_agent(
                 if mode is None:
                     continue
 
-                llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk)
+                llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, ignore_ids=pre_run_message_ids)
                 sse_event = _lg_mode_to_sse_event(mode)
                 serialized = serialize(chunk, mode=mode)
                 record_worker_publish(
@@ -638,8 +647,26 @@ def _error_fallback_message_from_metadata(metadata: dict[str, Any], content: Any
     return "LLM provider failed after retries"
 
 
-def _try_extract_from_message(obj: Any) -> str | None:
+def _message_ids(messages: Any) -> frozenset[str]:
+    """Ids of the messages in a checkpoint's ``messages`` channel."""
+    ids: set[str] = set()
+    for msg in messages or []:
+        mid = getattr(msg, "id", None)
+        if mid is None and isinstance(msg, dict):
+            mid = msg.get("id")
+        if isinstance(mid, str) and mid:
+            ids.add(mid)
+    return frozenset(ids)
+
+
+def _try_extract_from_message(obj: Any, ignore_ids: frozenset[str] = frozenset()) -> str | None:
     """Try to extract fallback marker from a single message object or dict."""
+    if ignore_ids:
+        mid = getattr(obj, "id", None)
+        if mid is None and isinstance(obj, dict):
+            mid = obj.get("id")
+        if isinstance(mid, str) and mid in ignore_ids:
+            return None
     additional_kwargs = getattr(obj, "additional_kwargs", None)
     if isinstance(additional_kwargs, dict) and additional_kwargs.get("deerflow_error_fallback"):
         return _error_fallback_message_from_metadata(additional_kwargs, getattr(obj, "content", None))
@@ -651,11 +678,13 @@ def _try_extract_from_message(obj: Any) -> str | None:
     return None
 
 
-def _extract_llm_error_fallback_message(value: Any) -> str | None:
+def _extract_llm_error_fallback_message(value: Any, ignore_ids: frozenset[str] = frozenset()) -> str | None:
     """Find LLM fallback markers in streamed LangGraph chunks.
 
     Error fallback messages returned by model-call middleware are not guaranteed
     to pass through LLM end callbacks, but they do appear in graph state chunks.
+    ``ignore_ids`` are messages that pre-date the run: a fallback from an earlier
+    turn must not fail this one.
     """
     # Fast path: large state chunks produced by stream_mode="values" have a
     # top-level "messages" list. Scanning only that list avoids expensive deep
@@ -664,7 +693,7 @@ def _extract_llm_error_fallback_message(value: Any) -> str | None:
         messages = value.get("messages")
         if isinstance(messages, (list, tuple)):
             for msg in messages:
-                result = _try_extract_from_message(msg)
+                result = _try_extract_from_message(msg, ignore_ids)
                 if result is not None:
                     return result
             # Fallback marker is attached to an AI message in the messages
@@ -684,7 +713,7 @@ def _extract_llm_error_fallback_message(value: Any) -> str | None:
             return None
         seen.add(oid)
 
-        result = _try_extract_from_message(obj)
+        result = _try_extract_from_message(obj, ignore_ids)
         if result is not None:
             return result
 

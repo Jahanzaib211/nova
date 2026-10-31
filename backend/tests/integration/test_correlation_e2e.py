@@ -63,11 +63,7 @@ def _harness():
 @pytest.mark.anyio
 async def test_create_run_assigns_correlation_id(_harness):
     if _harness is None:
-        pytest.skip(
-            "DEAD TEST: the harness import names a module that does not exist "
-            "and this file's `from tests.X` imports do not resolve — see the "
-            "_harness fixture docstring. Has never run."
-        )
+        pytest.skip("DEAD TEST: the harness import names a module that does not exist and this file's `from tests.X` imports do not resolve — see the _harness fixture docstring. Has never run.")
     isolated_app = _harness
     from tests._agent_e2e_helpers import (
         FakeToolCallingModel,  # type: ignore[import-not-found]

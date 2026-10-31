@@ -45,6 +45,15 @@ _QUOTA_PATTERNS = (
     "billing",
     "credit",
     "payment",
+    # Observed live, none of which the patterns above matched:
+    # Claude login past its plan -- 400 "You're out of extra usage";
+    # MiniMax -- 402 insufficient_balance_error; Fireworks -- 412 "Account ...
+    # is suspended ... monthly spending limit".
+    "extra usage",
+    "usage limit",
+    "insufficient_balance",
+    "insufficient balance",
+    "spending limit",
     "余额不足",
     "超出限额",
     "额度不足",
@@ -109,6 +118,7 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
         super().__init__(**kwargs)
 
         self.circuit_failure_threshold = app_config.circuit_breaker.failure_threshold
+        self._app_config = app_config
         self.circuit_recovery_timeout_sec = app_config.circuit_breaker.recovery_timeout_sec
 
         # Circuit Breaker state
@@ -250,10 +260,48 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
             },
         )
 
+    def _failover_request(self, request: ModelRequest, tried: set[str]) -> ModelRequest | None:
+        """The same request on the next ``model_fallbacks`` entry not yet tried.
+
+        ``tried`` holds provider model ids. The first call's model is added on
+        entry, so a fallback list that also names the default never replays the
+        model that just failed. Returns ``None`` when nothing is left.
+        """
+        current = _model_id(getattr(request, "model", None))
+        if current:
+            tried.add(current)
+        for name in getattr(self._app_config, "model_fallbacks", None) or []:
+            model_cfg = self._app_config.get_model_config(name)
+            if model_cfg is None or model_cfg.model in tried:
+                continue
+            tried.add(model_cfg.model)
+            try:
+                from deerflow import models as models_pkg
+
+                model = models_pkg.create_chat_model(name, app_config=self._app_config)
+            except Exception:
+                logger.warning("Failover model %r could not be built; skipping", name, exc_info=True)
+                continue
+            logger.warning("LLM %s is out of quota or credit; handing the turn to %s", current or "model", name)
+            self._emit_failover_event(current, name)
+            return request.override(model=model)
+        return None
+
+    def _emit_failover_event(self, from_model: str | None, to_model: str) -> None:
+        try:
+            from langgraph.config import get_stream_writer
+
+            get_stream_writer()({"type": "llm_failover", "from": from_model, "to": to_model})
+        except Exception:
+            logger.debug("Failed to emit llm_failover event", exc_info=True)
+
     def _build_user_message(self, exc: BaseException, reason: str) -> str:
         detail = _extract_error_detail(exc)
         if reason == "quota":
-            return "The configured LLM provider rejected the request because the account is out of quota, billing is unavailable, or usage is restricted. Please fix the provider account and try again."
+            # Shown to whoever sent the message -- usually a customer, who can
+            # do nothing about the operator's billing. The provider's own text
+            # stays in `error_detail` and the log for the operator.
+            return "Nova is temporarily out of capacity. Please try again in a few minutes."
         if reason == "auth":
             return "The configured LLM provider rejected the request because authentication or access is invalid. Please check the provider credentials and try again."
         if reason == "context_overflow":
@@ -350,6 +398,7 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
             )
 
         attempt = 1
+        tried: set[str] = set()
         while True:
             try:
                 response = handler(request)
@@ -377,6 +426,12 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
                     time.sleep(wait_ms / 1000)
                     attempt += 1
                     continue
+                if reason == "quota":
+                    switched = self._failover_request(request, tried)
+                    if switched is not None:
+                        request = switched
+                        attempt = 1
+                        continue
                 logger.warning(
                     "LLM call failed after %d attempt(s): %s",
                     attempt,
@@ -412,6 +467,7 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
             )
 
         attempt = 1
+        tried: set[str] = set()
         while True:
             try:
                 response = await handler(request)
@@ -439,6 +495,12 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
                     await asyncio.sleep(wait_ms / 1000)
                     attempt += 1
                     continue
+                if reason == "quota":
+                    switched = self._failover_request(request, tried)
+                    if switched is not None:
+                        request = switched
+                        attempt = 1
+                        continue
                 logger.warning(
                     "LLM call failed after %d attempt(s): %s",
                     attempt,
@@ -458,6 +520,15 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
                     code=code,
                 )
                 return fallback
+
+
+def _model_id(model: Any) -> str | None:
+    """The provider model id a chat model instance was built for."""
+    for attr in ("model_name", "model"):
+        value = getattr(model, attr, None)
+        if isinstance(value, str) and value:
+            return value
+    return None
 
 
 def _matches_any(detail: str, patterns: tuple[str, ...]) -> bool:

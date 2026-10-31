@@ -9,28 +9,20 @@ import { useIGINOStatus, useTestIGINOCapability } from "@/core/igino/hooks";
 import { useWorkspaceMetrics } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
-/** The request path, in the order it actually runs. Named for what each step
-    does rather than for its provider: the provider is an implementation detail
-    that changed twice in one day, the job did not.
-
-    The hints are the whole point of this list. The first three read pages
-    somebody already named; only the last one discovers a page you did not
-    know about, and for most of this panel's life the UI called one of the
-    others "Crawler" and described a capability Nova did not have. */
-const PIPELINE: Array<{ tool: string; label: string; hint: string }> = [
-  { tool: "web_search", label: "Search", hint: "finds pages" },
-  { tool: "web_fetch", label: "Fetch", hint: "reads one page" },
-  {
-    tool: "web_fetch_many",
-    label: "Fetch many",
-    hint: "reads several pages you name, at once",
-  },
-  {
-    tool: "web_crawl",
-    label: "Crawl",
-    hint: "starts at one page and follows its links",
-  },
-];
+/** A counter the server did not send is not zero.
+ *
+ * Every metric in this panel was rendered `?? 0`, so "Recon is up but the audit
+ * trail is off", "the status call errored", and "nothing has been fetched yet"
+ * all displayed as a confident `0`. The only one of those that is a real
+ * measurement is the last. `undefined` now renders as an em dash.
+ */
+function metric(
+  value: number | undefined,
+  placeholder: string,
+  format: (n: number) => string = (n) => String(n),
+): string {
+  return value === undefined || value === null ? placeholder : format(value);
+}
 
 export function PrivacyPanel({
   threadId,
@@ -41,7 +33,7 @@ export function PrivacyPanel({
   active?: boolean;
 }) {
   const { t } = useI18n();
-  const { data: status, isLoading } = useIGINOStatus(active);
+  const { data: status, isLoading, isError, refetch } = useIGINOStatus(active);
   const testMutation = useTestIGINOCapability();
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
@@ -82,9 +74,23 @@ export function PrivacyPanel({
   }
 
   if (!status) {
+    // A failed status query used to fall through to "Loading..." forever,
+    // which reads as "still working" when the truth is "the gateway did not
+    // answer". Say so, and offer the retry.
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center p-4 text-sm">
-        {t.common.loading}
+      <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-2 p-4 text-sm">
+        <span>
+          {isError ? t.agentComputer.privacy.unavailable : t.common.loading}
+        </span>
+        {isError && (
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="hover:text-foreground text-xs underline underline-offset-2"
+          >
+            {t.agentComputer.privacy.retry}
+          </button>
+        )}
       </div>
     );
   }
@@ -155,11 +161,7 @@ export function PrivacyPanel({
               <StatusCard
                 key={cap.tool}
                 label={
-                  cap.tool === "web_fetch"
-                    ? t.agentComputer.privacy.fetch
-                    : cap.tool === "web_fetch_many"
-                      ? t.agentComputer.privacy.fetchMany
-                      : t.agentComputer.privacy.crawl
+                  t.agentComputer.privacy.capabilityLabels[cap.tool] ?? cap.tool
                 }
                 status={`${cap.provider} · ${
                   cap.healthy
@@ -180,15 +182,27 @@ export function PrivacyPanel({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <MetricCard
               label={t.agentComputer.privacy.size}
-              value={`${status.cache?.size ?? 0}/${status.cache?.max_size ?? 0}`}
+              value={
+                status.cache
+                  ? `${status.cache.size}/${status.cache.max_size}`
+                  : t.agentComputer.privacy.noData
+              }
             />
             <MetricCard
               label={t.agentComputer.privacy.hitRate}
-              value={`${((status.cache?.hit_rate ?? 0) * 100).toFixed(1)}%`}
+              value={metric(
+                status.cache?.hit_rate,
+                t.agentComputer.privacy.noData,
+                (n) => `${(n * 100).toFixed(1)}%`,
+              )}
             />
             <MetricCard
               label={t.agentComputer.privacy.ttl}
-              value={`${status.cache?.ttl_s ?? 0}s`}
+              value={metric(
+                status.cache?.ttl_s,
+                t.agentComputer.privacy.noData,
+                (n) => `${n}s`,
+              )}
             />
           </div>
         </div>
@@ -201,15 +215,24 @@ export function PrivacyPanel({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <MetricCard
               label={t.agentComputer.privacy.total}
-              value={status.audit?.total_records ?? 0}
+              value={metric(
+                status.audit?.total_records,
+                t.agentComputer.privacy.noData,
+              )}
             />
             <MetricCard
               label={t.agentComputer.privacy.errors}
-              value={status.audit?.errors ?? 0}
+              value={metric(
+                status.audit?.errors,
+                t.agentComputer.privacy.noData,
+              )}
             />
             <MetricCard
               label={t.agentComputer.privacy.fetches}
-              value={status.audit?.fetches ?? 0}
+              value={metric(
+                status.audit?.fetches,
+                t.agentComputer.privacy.noData,
+              )}
             />
           </div>
         </div>
@@ -224,15 +247,25 @@ export function PrivacyPanel({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <MetricCard
               label={t.agentComputer.privacy.fetches}
-              value={status.audit?.fetches ?? 0}
+              value={metric(
+                status.audit?.fetches,
+                t.agentComputer.privacy.noData,
+              )}
             />
             <MetricCard
               label={t.agentComputer.privacy.errors}
-              value={status.audit?.fetch_errors ?? 0}
+              value={metric(
+                status.audit?.fetch_errors,
+                t.agentComputer.privacy.noData,
+              )}
             />
             <MetricCard
               label={t.agentComputer.privacy.avgFetch}
-              value={`${status.audit?.avg_fetch_ms ?? 0}ms`}
+              value={metric(
+                status.audit?.avg_fetch_ms,
+                t.agentComputer.privacy.noData,
+                (n) => `${n}ms`,
+              )}
             />
           </div>
           {/* Pipeline, in the order a request actually flows through it, with
@@ -242,16 +275,18 @@ export function PrivacyPanel({
               A button that performs a real search or fetch answers the question
               the URL was standing in for. */}
           <div className="space-y-1">
-            {PIPELINE.map((step, i) => {
-              const cap = (status.web ?? []).find((c) => c.tool === step.tool);
-              const healthy =
-                step.tool === "web_search"
-                  ? status.searxng_healthy
-                  : (cap?.healthy ?? false);
-              const result = testResults[step.tool];
+            {(status.web ?? []).map((cap, i) => {
+              // The server sends the pipeline in the order a request flows
+              // through it, health included. The panel used to keep its own
+              // four-step copy of this list and special-case `web_search` out
+              // of the array, so a capability could be added server-side and
+              // stay invisible here.
+              const result = testResults[cap.tool];
+              const hint =
+                t.agentComputer.privacy.capabilityHints[cap.tool] ?? cap.detail;
               return (
                 <div
-                  key={step.tool}
+                  key={cap.tool}
                   className="flex items-center gap-2 rounded-md border px-2 py-1.5"
                 >
                   <span className="text-muted-foreground w-4 shrink-0 text-[10px]">
@@ -259,29 +294,30 @@ export function PrivacyPanel({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs font-medium">
-                      {step.label}
+                      {t.agentComputer.privacy.capabilityLabels[cap.tool] ??
+                        cap.tool}
                     </div>
                     <div className="text-muted-foreground truncate text-[10px]">
                       {result
                         ? `${result.ok ? "ok" : "failed"} · ${result.detail} · ${result.duration_ms}ms`
-                        : step.hint}
+                        : hint}
                     </div>
                   </div>
                   <span
                     className={cn(
                       "shrink-0 text-[10px]",
-                      healthy ? "text-emerald-400" : "text-amber-400",
+                      cap.healthy ? "text-success" : "text-warning",
                     )}
                   >
                     ●
                   </span>
                   <button
                     type="button"
-                    onClick={() => runTest(step.tool)}
-                    disabled={testing === step.tool}
+                    onClick={() => runTest(cap.tool)}
+                    disabled={testing === cap.tool}
                     className="hover:bg-muted shrink-0 rounded border px-2 py-0.5 text-[10px] disabled:opacity-50"
                   >
-                    {testing === step.tool
+                    {testing === cap.tool
                       ? t.common.loading
                       : t.agentComputer.privacy.test}
                   </button>
@@ -319,7 +355,7 @@ export function PrivacyPanel({
                   <span
                     className={cn(
                       "shrink-0 text-[10px] font-medium tracking-wide uppercase",
-                      f.enabled ? "text-emerald-400" : "text-muted-foreground",
+                      f.enabled ? "text-success" : "text-muted-foreground",
                     )}
                   >
                     {f.enabled
@@ -376,12 +412,12 @@ function StatusCard({
   healthy: boolean;
 }) {
   return (
-    <div className="border-border/50 rounded-md border p-2">
+    <div className="border-panel-border rounded-md border p-2">
       <div className="text-muted-foreground text-xs">{label}</div>
       <div
         className={cn(
           "mt-1 text-sm font-medium",
-          healthy ? "text-emerald-400" : "text-amber-400",
+          healthy ? "text-success" : "text-warning",
         )}
       >
         {status}
@@ -398,7 +434,7 @@ function MetricCard({
   value: string | number;
 }) {
   return (
-    <div className="border-border/50 rounded-md border p-2">
+    <div className="border-panel-border rounded-md border p-2">
       <div className="text-muted-foreground text-xs">{label}</div>
       <div className="mt-1 text-sm font-medium">{value}</div>
     </div>

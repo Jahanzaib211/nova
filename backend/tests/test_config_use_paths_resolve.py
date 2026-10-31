@@ -81,9 +81,7 @@ def test_use_path_resolves(dotted: str) -> None:
     except ImportError as exc:  # pragma: no cover - failure path is the point
         pytest.fail(f"config.yaml `use: {dotted}` — cannot import {module_name}: {exc}")
     if symbol:
-        assert hasattr(module, symbol), (
-            f"config.yaml `use: {dotted}` — {module_name} has no attribute {symbol!r}"
-        )
+        assert hasattr(module, symbol), f"config.yaml `use: {dotted}` — {module_name} has no attribute {symbol!r}"
 
 
 @pytest.mark.xfail(

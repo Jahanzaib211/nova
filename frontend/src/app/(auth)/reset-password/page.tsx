@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { fetch as apiFetch } from "@/core/api/fetcher";
 import { useI18n } from "@/core/i18n/hooks";
 
@@ -91,9 +91,9 @@ export default function ResetPasswordPage() {
               <label htmlFor="password" className="text-sm font-medium">
                 {t.authPasswordReset.newPassword}
               </label>
-              <Input
+              <PasswordInput
+                autoComplete="new-password"
                 id="password"
-                type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="•••••••"
@@ -105,9 +105,9 @@ export default function ResetPasswordPage() {
               <label htmlFor="confirm-password" className="text-sm font-medium">
                 {t.authPasswordReset.confirmNewPassword}
               </label>
-              <Input
+              <PasswordInput
+                autoComplete="new-password"
                 id="confirm-password"
-                type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="•••••••"

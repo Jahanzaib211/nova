@@ -29,9 +29,9 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
 
   if (availability === "unindexed" || (!snapshot && isIndexing)) {
     return (
-      <div className="border-border/20 bg-muted/10 flex items-center justify-between rounded border p-2">
+      <div className="border-panel-border bg-muted/10 flex items-center justify-between rounded border p-2">
         <span className="text-muted-foreground/70 flex items-center gap-1.5 text-[11px]">
-          <FolderGit2Icon className="h-3 w-3 text-sky-400" />
+          <FolderGit2Icon className="text-info h-3 w-3" />
           {t.agentComputer.workspace.title}
         </span>
         <button
@@ -55,10 +55,10 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
   if (!snapshot) return null;
 
   return (
-    <div className="border-border/20 bg-muted/10 rounded border p-2">
+    <div className="border-panel-border bg-muted/10 rounded border p-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[11px] font-medium">
-          <FolderGit2Icon className="h-3 w-3 text-sky-400" />
+          <FolderGit2Icon className="text-info h-3 w-3" />
           <span className="text-foreground">
             {t.agentComputer.workspace.title}
           </span>
@@ -92,30 +92,32 @@ export function WorkspaceCard({ state }: { state: WorkspaceSnapshotState }) {
       <div className="text-muted-foreground/70 mt-1.5 flex items-center gap-3 text-[10px]">
         <span className="flex items-center gap-1">
           <BoxIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.project_count} {t.agentComputer.workspace.projects}
+          {snapshot.project_count ?? 0} {t.agentComputer.workspace.projects}
         </span>
         <span className="flex items-center gap-1">
           <BracesIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.symbol_count.toLocaleString()}{" "}
+          {/* The payload crosses the network as an unchecked cast; a partial
+              body must degrade to 0, not crash the whole Files tab. */}
+          {(snapshot.symbol_count ?? 0).toLocaleString()}{" "}
           {t.agentComputer.workspace.symbols}
         </span>
         <span className="flex items-center gap-1">
           <SquareTerminalIcon className="h-2.5 w-2.5" aria-hidden />
-          {snapshot.command_count} {t.agentComputer.workspace.commands}
+          {snapshot.command_count ?? 0} {t.agentComputer.workspace.commands}
         </span>
       </div>
-      {snapshot.projects.length > 1 ? (
+      {(snapshot.projects?.length ?? 0) > 1 ? (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {snapshot.projects.slice(0, 6).map((project) => (
             <span
               key={project.project_id}
-              className="border-border/30 text-muted-foreground/80 rounded border px-1 py-0.5 text-[10px]"
+              className="border-panel-border text-muted-foreground/80 rounded border px-1 py-0.5 text-[10px]"
               title={project.root_path}
             >
               {project.name}
             </span>
           ))}
-          {snapshot.projects.length > 6 ? (
+          {(snapshot.projects?.length ?? 0) > 6 ? (
             <span className="text-muted-foreground/50 text-[10px]">
               +{snapshot.projects.length - 6}
             </span>

@@ -1,3 +1,7 @@
+<!-- markdownlint-disable MD025 -->
+<!-- The block below is generated and re-added by `next dev`. It carries its own
+     top-level heading, which markdownlint reads as a second H1 in this file. -->
+
 # Agents Architecture
 
 ## Overview
@@ -43,7 +47,7 @@ src/
 ├── app/                    # Next.js App Router pages
 │   ├── api/                # API routes
 │   ├── workspace/          # Main workspace pages
-│   └── mock/               # Mock/demo pages
+│   └── mock/               # Mock pages
 ├── components/             # React components
 │   ├── ui/                 # Reusable UI components
 │   ├── workspace/          # Workspace-specific components
@@ -84,7 +88,6 @@ src/
 
 - `src/app/workspace/chats/[thread_id]/page.tsx` owns composer busy-state wiring.
 - `src/core/threads/hooks.ts` owns pre-submit upload state and thread submission.
-- `src/hooks/usePoseStream.ts` is a passive store selector; global WebSocket lifecycle stays in `App.tsx`.
 
 ## Resources
 
@@ -107,3 +110,13 @@ When adding new agent features:
 ## License
 
 This agent architecture is part of the Nova project.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

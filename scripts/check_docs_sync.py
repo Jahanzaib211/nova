@@ -40,6 +40,21 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DOC = REPO_ROOT / "docs" / "CI_CD.md"
 
+# Every doc carrying the canonical counts, not just the one that happened to be
+# guarded first. README.md repeats the same table *and* states the totals in
+# prose; because nothing checked it, it sat at 6,430/565 while CI_CD.md was
+# corrected to 6,845/639 two commits earlier -- two files in one repo
+# disagreeing about the same number. A guard that covers one of them teaches
+# people the numbers are checked when they are not.
+GUARDED_DOCS = (
+    DOC,
+    REPO_ROOT / "README.md",
+    # The file that calls itself the single source of truth, and was the
+    # worst offender: it sat at 483 backend / 339 frontend tests, roughly
+    # a fourteenth of reality, because nothing ever checked it.
+    REPO_ROOT / "docs" / "AUDIT.md",
+)
+
 
 def _run(cmd: list[str], cwd: Path, timeout: float = 300) -> tuple[int, str]:
     try:
@@ -58,18 +73,50 @@ def _run(cmd: list[str], cwd: Path, timeout: float = 300) -> tuple[int, str]:
         return 1, ""
 
 
-def documented_counts() -> dict[str, int]:
-    """Parse the canonical table: | Label | 1,234 | `cmd` |."""
+def _counts_in(path: Path) -> dict[str, int]:
+    """Parse one doc: the canonical table plus the prose totals line.
+
+    Table rows look like ``| Label | 1,234 | `cmd` |``. README also states the
+    same totals in prose ("6,858 backend tests · 650 frontend tests"), which is
+    the line a reader actually sees, so it is checked under the same labels.
+    """
     found: dict[str, int] = {}
     try:
-        text = DOC.read_text()
+        text = path.read_text()
     except OSError:
         return found
     for row in re.finditer(r"^\|\s*([^|]+?)\s*\|\s*([\d,]+)\s*\|", text, re.MULTILINE):
         label, value = row.group(1).strip(), row.group(2).replace(",", "")
         if value.isdigit():
             found[label] = int(value)
+    for label, pattern in (
+        ("Backend unit tests", r"([\d,]+)\s+backend tests"),
+        ("Frontend unit tests", r"([\d,]+)\s+frontend tests"),
+    ):
+        m = re.search(pattern, text)
+        if m:
+            found.setdefault(label, int(m.group(1).replace(",", "")))
     return found
+
+
+def documented_counts() -> dict[str, list[tuple[str, int]]]:
+    """Every claim of each count, tagged with the doc that makes it.
+
+    Deliberately NOT merged into one value per label. Merging (with
+    ``setdefault`` or otherwise) lets a correct value in one doc mask a wrong
+    one in another: README claimed 565 frontend tests while CI_CD.md correctly
+    claimed 650, and the merged view reported OK. Every claim is now checked on
+    its own, so any doc being wrong is drift.
+    """
+    claims: dict[str, list[tuple[str, int]]] = {}
+    for doc in GUARDED_DOCS:
+        for label, value in _counts_in(doc).items():
+            claims.setdefault(label, []).append((doc.name, value))
+    return claims
+
+
+def documented_counts_by_doc() -> dict[str, dict[str, int]]:
+    return {doc.name: _counts_in(doc) for doc in GUARDED_DOCS}
 
 
 def documented_workflow_count() -> int | None:
@@ -138,8 +185,8 @@ def build_report() -> dict:
     results = []
 
     for label, collector in COUNTED.items():
-        claimed = documented.get(label)
-        if claimed is None:
+        claims = documented.get(label) or []
+        if not claims:
             results.append(
                 {
                     "name": label,
@@ -155,22 +202,25 @@ def build_report() -> dict:
                     "name": label,
                     "status": "skipped",
                     "detail": "could not collect (toolchain unavailable?)",
-                    "documented": claimed,
+                    "documented": claims[0][1],
                 }
             )
             continue
-        ok = actual == claimed
-        results.append(
-            {
-                "name": label,
-                "status": "ok" if ok else "drift",
-                "documented": claimed,
-                "actual": actual,
-                "detail": (
-                    f"{actual}" if ok else f"doc says {claimed:,}, actual is {actual:,}"
-                ),
-            }
-        )
+        for doc_name, claimed in claims:
+            ok = actual == claimed
+            results.append(
+                {
+                    "name": f"{label} ({doc_name})",
+                    "status": "ok" if ok else "drift",
+                    "documented": claimed,
+                    "actual": actual,
+                    "detail": (
+                        f"{actual}"
+                        if ok
+                        else f"{doc_name} says {claimed:,}, actual is {actual:,}"
+                    ),
+                }
+            )
 
     claimed_wf = documented_workflow_count()
     actual_wf = actual_workflow_count()

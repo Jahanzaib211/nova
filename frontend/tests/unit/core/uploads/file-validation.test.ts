@@ -17,7 +17,7 @@ test("identifies Finder-style .app bundle uploads as unsupported", () => {
 
 test("keeps normal files and reports rejected app bundles", () => {
   const files = [
-    new File(["demo"], "Vibe Island.app", {
+    new File(["data"], "Vibe Island.app", {
       type: "application/octet-stream",
     }),
     new File(["notes"], "notes.txt", { type: "text/plain" }),
@@ -34,7 +34,7 @@ test("keeps normal files and reports rejected app bundles", () => {
 
 test("treats empty MIME .app uploads as unsupported", () => {
   const result = splitUnsupportedUploadFiles([
-    new File(["demo"], "Another.app", { type: "" }),
+    new File(["data"], "Another.app", { type: "" }),
   ]);
 
   expect(result.accepted.length).toBe(0);

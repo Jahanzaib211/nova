@@ -13,16 +13,46 @@ export type HeaderProps = {
   className?: string;
   homeURL?: string;
   locale?: Locale;
+  /** `dark` keeps the outline button legible on the navy marketing pages. */
+  tone?: "light" | "dark";
+  /**
+   * `landing` swaps the docs-oriented nav for the marketing anchors. Docs and
+   * blog keep their original Docs/Blog links.
+   */
+  nav?: "default" | "landing";
 };
 
-export async function Header({ className, homeURL, locale }: HeaderProps) {
+export async function Header({
+  className,
+  homeURL,
+  locale,
+  tone = "light",
+  nav = "default",
+}: HeaderProps) {
   const isExternalHome = !homeURL;
   const { locale: resolvedLocale, t } = await getI18n(locale);
   const lang = resolvedLocale.substring(0, 2);
+  const links =
+    nav === "landing"
+      ? [
+          { href: "/#loop", label: "Product" },
+          { href: "/#security", label: "Security" },
+          { href: "/saas", label: "Pricing" },
+          { href: `/${lang}/docs`, label: t.home.docs },
+        ]
+      : [
+          { href: `/${lang}/docs`, label: t.home.docs },
+          { href: "/blog/posts", label: t.home.blog },
+        ];
+  const linkClass =
+    tone === "dark"
+      ? "text-slate-300 transition-colors hover:text-white"
+      : "text-slate-600 transition-colors hover:text-slate-900";
   return (
     <header
       className={cn(
-        "container-md fixed top-0 right-0 left-0 z-20 mx-auto flex h-16 items-center justify-between backdrop-blur-xs",
+        "container-md fixed top-0 right-0 left-0 z-20 mx-auto flex h-16 items-center justify-between px-4 backdrop-blur-xs",
+        tone === "dark" ? "bg-[#0a0a0a]/75 text-white" : "text-slate-900",
         className,
       )}
     >
@@ -31,31 +61,26 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
           href={homeURL ?? "https://github.com/Jahanzaib211/nova"}
           target={isExternalHome ? "_blank" : "_self"}
           rel={isExternalHome ? "noopener noreferrer" : undefined}
+          className="flex items-center gap-2"
         >
-          <h1 className="font-serif text-xl">Nova</h1>
+          <span
+            className="bg-brand-gradient block size-2.5 rounded-full"
+            aria-hidden="true"
+          />
+          <span className="font-serif text-xl">Nova</span>
         </a>
       </div>
       <nav className="mr-8 ml-auto hidden items-center gap-8 text-sm font-medium md:flex">
-        <Link
-          href={`/${lang}/docs`}
-          className="text-secondary-foreground hover:text-foreground transition-colors"
-        >
-          {t.home.docs}
-        </Link>
-        <Link
-          href="/blog/posts"
-          className="text-secondary-foreground hover:text-foreground transition-colors"
-        >
-          {t.home.blog}
-        </Link>
+        {links.map((link) => (
+          <Link key={link.href} href={link.href} className={linkClass}>
+            {link.label}
+          </Link>
+        ))}
       </nav>
 
       <div className="ml-auto md:hidden">
         <MobileNav
-          links={[
-            { href: `/${lang}/docs`, label: t.home.docs },
-            { href: "/blog/posts", label: t.home.blog },
-          ]}
+          links={links}
           githubURL="https://github.com/Jahanzaib211/nova"
           githubLabel="Star on GitHub"
           menuLabel={t.home.menu}
@@ -66,7 +91,7 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
         <div
           className="pointer-events-none absolute inset-0 z-0 h-full w-full rounded-full opacity-30 blur-2xl"
           style={{
-            background: "linear-gradient(90deg, #ff80b5 0%, #9089fc 100%)",
+            background: "linear-gradient(90deg, #7c3aed 0%, #22d3ee 100%)",
             filter: "blur(16px)",
           }}
         />
@@ -74,7 +99,11 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
           variant="outline"
           size="sm"
           asChild
-          className="group relative z-10"
+          className={cn(
+            "group relative z-10",
+            tone === "dark" &&
+              "border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white",
+          )}
         >
           <a
             href="https://github.com/Jahanzaib211/nova"

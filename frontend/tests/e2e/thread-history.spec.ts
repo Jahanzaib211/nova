@@ -18,7 +18,7 @@ const THREADS = [
     updated_at: "2025-06-02T12:00:00Z",
   },
 ];
-const DEMO_THREAD_ID = "7cfa5f8f-a2f8-47ad-acbd-da7137baf990";
+const STARTER_THREAD_ID = "7cfa5f8f-a2f8-47ad-acbd-da7137baf990";
 const SVG_PROMPT_THREAD_ID = "00000000-0000-0000-0000-000000000777";
 const SVG_PROMPT_MARKER = "LEAK-STRICT-SVG-PROMPT-SHOULD-DISAPPEAR";
 const OPTIMISTIC_PROMPT_MARKER = "LEAK-OPTIMISTIC-SVG-PROMPT-SHOULD-DISAPPEAR";
@@ -257,13 +257,13 @@ test.describe("Thread history", () => {
     mockLangGraphAPI(page, {
       threads: [
         {
-          thread_id: DEMO_THREAD_ID,
+          thread_id: STARTER_THREAD_ID,
           title: "Forecasting 2026 Trends and Opportunities",
           updated_at: "2025-06-01T12:00:00Z",
           messages: [
             {
               type: "human",
-              id: `run-human-${DEMO_THREAD_ID}`,
+              id: `run-human-${STARTER_THREAD_ID}`,
               content: [
                 {
                   type: "text",
@@ -284,7 +284,7 @@ test.describe("Thread history", () => {
           route
             .request()
             .url()
-            .includes(`/api/langgraph/threads/${DEMO_THREAD_ID}/runs`)
+            .includes(`/api/langgraph/threads/${STARTER_THREAD_ID}/runs`)
         ) {
           backendRunHistoryUrls.push(route.request().url());
           return route.fulfill({
@@ -303,7 +303,10 @@ test.describe("Thread history", () => {
       (route) => {
         if (
           route.request().method() === "GET" &&
-          route.request().url().includes(`/api/threads/${DEMO_THREAD_ID}/runs/`)
+          route
+            .request()
+            .url()
+            .includes(`/api/threads/${STARTER_THREAD_ID}/runs/`)
         ) {
           backendRunHistoryUrls.push(route.request().url());
           return route.fulfill({
@@ -318,7 +321,7 @@ test.describe("Thread history", () => {
       },
     );
 
-    await page.goto(`/workspace/chats/${DEMO_THREAD_ID}?mock=true`);
+    await page.goto(`/workspace/chats/${STARTER_THREAD_ID}?mock=true`);
 
     await expect(
       page.getByText("What might be the trends and opportunities in 2026?"),

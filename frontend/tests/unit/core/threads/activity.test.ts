@@ -172,6 +172,16 @@ describe("currentToolFromActivity", () => {
     ]);
     expect(currentToolFromActivity(events)).toBeNull();
   });
+
+  test("an interrupted run's unanswered call is not reported as current", () => {
+    // The run stopped before the task call got a result. Without a live run
+    // the status line must not keep "delegating to subagent" ticking.
+    const events = messagesToActivityEvents([
+      ai([{ id: "k1", name: "task", args: { description: "QA audit" } }]),
+    ]);
+    expect(currentToolFromActivity(events, { live: true })).toBe("task");
+    expect(currentToolFromActivity(events, { live: false })).toBeNull();
+  });
 });
 
 describe("activeWriteFilePathFromActivity", () => {

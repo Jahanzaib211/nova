@@ -44,9 +44,14 @@ export function ThreadTitle({
   if (!thread.values?.title) {
     return null;
   }
+  // One line, ellipsised: the header shares its row with up to five actions
+  // and the title used to wrap onto two lines as soon as the Agent's Computer
+  // column opened (or on any phone).
   return (
-    <FlipDisplay uniqueKey={threadId}>
-      {thread.values.title ?? "Untitled"}
+    <FlipDisplay uniqueKey={threadId} className="max-w-full min-w-0">
+      <span className="block truncate" title={thread.values.title ?? undefined}>
+        {thread.values.title ?? "Untitled"}
+      </span>
     </FlipDisplay>
   );
 }

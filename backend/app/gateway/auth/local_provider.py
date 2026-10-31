@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
-from app.gateway.auth.models import User
+from app.gateway.auth.models import User, normalize_email
 from app.gateway.auth.password import hash_password_async, needs_rehash, verify_password_async
 from app.gateway.auth.providers import AuthProvider
 from app.gateway.auth.repositories.base import UserRepository
@@ -93,6 +93,15 @@ class LocalAuthProvider(AuthProvider):
         Returns:
             Created User instance
         """
+        email = normalize_email(email)
+        # The unique index on ``users.email`` is case-sensitive, so a legacy
+        # mixed-case row (``Alice@x.com``) does not stop an insert of
+        # ``alice@x.com``. That second row would make every case-insensitive
+        # lookup ambiguous and lock *both* accounts out, so check first.
+        # Raising ValueError matches what the repository raises on a unique
+        # violation, which callers already map to "email already registered".
+        if await self._repo.get_user_by_email(email) is not None:
+            raise ValueError(f"Email already registered: {email}")
         password_hash = await hash_password_async(password) if password else None
         user = User(
             email=email,

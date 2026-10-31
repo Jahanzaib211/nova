@@ -179,6 +179,25 @@ class TestCircuitsSnapshot:
         assert snapshot_before == snapshot_after, "endpoint must not mutate circuit state"
         cb.reset_all_circuits()
 
+    def test_thread_id_scopes_the_circuit_snapshot(self) -> None:
+        """A per-chat bar must not be told another thread's breaker is open."""
+        from deerflow.sandbox import browser_circuit_breaker as cb
+
+        cb.reset_all_circuits()
+        cb.force_circuit("thread-a", cb.CircuitState.OPEN)
+        cb.force_circuit("thread-b", cb.CircuitState.OPEN)
+        client = _make_test_client()
+
+        scoped = client.get("/api/runtime/capabilities?thread_id=thread-a").json()
+        assert [c["thread_id"] for c in scoped["circuits"]] == ["thread-a"]
+
+        unscoped = client.get("/api/runtime/capabilities").json()
+        assert {c["thread_id"] for c in unscoped["circuits"]} == {"thread-a", "thread-b"}
+
+        unknown = client.get("/api/runtime/capabilities?thread_id=nope").json()
+        assert unknown["circuits"] == []
+        cb.reset_all_circuits()
+
 
 class TestServerInfo:
     def test_server_dict_has_expected_keys(self) -> None:
@@ -236,3 +255,20 @@ class TestReadOnlyContract:
         # different counts if skills discovery is racy, but the SET must match).
         assert {t["name"] for t in first["tools"]} == {t["name"] for t in second["tools"]}
         assert {h["name"] for h in first["hooks"]} == {h["name"] for h in second["hooks"]}
+
+
+def test_features_reflect_config_sections():
+    """Feature flags come from `<section>.enabled`; unknown/missing reads off."""
+    from app.gateway.routers.capabilities import _safe_features
+    from deerflow.config.app_config import AppConfig
+    from deerflow.config.sandbox_config import SandboxConfig
+
+    off = AppConfig(sandbox=SandboxConfig(use="deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"))
+    # `capabilities` is always on (the registry is not optional); everything
+    # section-gated reads off.
+    # `sandbox` is on whenever a provider is configured — it is what lets an
+    # ACP runtime reach `sandbox__*` over Nova's MCP server.
+    assert _safe_features(off).model_dump() == {"jobs": False, "integrations": False, "email_marketing": False, "acp_agents": False, "capabilities": True, "runtimes": False, "sandbox": True}
+    on = AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}, "jobs": {"enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
+    flags = _safe_features(on)
+    assert flags.jobs is True and flags.acp_agents is True and flags.integrations is False and flags.sandbox is True

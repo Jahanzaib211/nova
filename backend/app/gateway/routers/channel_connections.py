@@ -30,6 +30,11 @@ _MAX_PENDING_CONNECT_CODES_PER_PROVIDER = 5
 _MASKED_CREDENTIAL_VALUE = "********"
 _ADMIN_REQUIRED_DETAIL = "Admin privileges required to manage channel runtime credentials."
 
+# Guards concurrent read-modify-write of request.app.state.channels_config.
+# Without this, two concurrent connect/disconnect requests can interleave:
+# both read the same config, both modify, second clobbers first.
+_channels_config_lock = asyncio.Lock()
+
 
 def _actor(request: Request) -> str:
     """Audit actor: the admin's email, or 'ops-console' for token calls."""
@@ -607,11 +612,11 @@ async def disconnect_channel_provider_runtime(provider: str, request: Request) -
     await asyncio.to_thread(store.set_provider_disconnected, provider)
 
     # Re-read the live cached config and drop only this provider so a concurrent
-    # mutation for a different provider is not clobbered. No await may occur
-    # between this read and the reassignment.
-    live_channels_config = await _get_channels_config(request)
-    live_channels_config.pop(provider, None)
-    request.app.state.channels_config = live_channels_config
+    # mutation for a different provider is not clobbered.
+    async with _channels_config_lock:
+        live_channels_config = await _get_channels_config(request)
+        live_channels_config.pop(provider, None)
+        request.app.state.channels_config = live_channels_config
 
     await admin_ops.record_audit(
         actor=_actor(request),
@@ -702,11 +707,11 @@ async def configure_channel_provider_runtime(
     await asyncio.to_thread(store.set_provider_config, provider, runtime_config)
 
     # Re-read the live cached config and apply only this provider's change so a
-    # concurrent mutation for a different provider is not clobbered. No await
-    # may occur between this read and the reassignment.
-    live_channels_config = await _get_channels_config(request)
-    live_channels_config[provider] = runtime_config
-    request.app.state.channels_config = live_channels_config
+    # concurrent mutation for a different provider is not clobbered.
+    async with _channels_config_lock:
+        live_channels_config = await _get_channels_config(request)
+        live_channels_config[provider] = runtime_config
+        request.app.state.channels_config = live_channels_config
 
     await admin_ops.record_audit(
         actor=_actor(request),

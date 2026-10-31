@@ -9,7 +9,7 @@ export async function POST(
 ) {
   const threadId = (await params).thread_id;
   const jsonString = fs.readFileSync(
-    path.resolve(process.cwd(), `public/demo/threads/${threadId}/thread.json`),
+    path.resolve(process.cwd(), `public/threads/${threadId}/thread.json`),
     "utf8",
   );
   const json = JSON.parse(jsonString);
