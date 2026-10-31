@@ -12,8 +12,10 @@ export interface AcpAgentsOutput {
 }
 
 export interface AgentsDelegateInput {
-  /** Agent name from agents.registry */
+  /** Agent from agents.registry: its id (`subagent:bash`, `acp:claude_code`) or bare name (`bash`, `claude_code`). */
   agent: string;
+  /** Model for a subagent (name from models.list). Default: the deployment's default model. */
+  model?: null | string;
   /** What the agent should do; the result lands in outputs/agent-tasks/<job_id>.md */
   task: string;
 }
@@ -269,6 +271,20 @@ export interface SandboxBashOutput {
   truncated?: boolean;
 }
 
+export interface SandboxExposePortInput {
+  /** Name to register it under; one Browser tab entry per label. */
+  label?: string;
+  /** Port a server inside the sandbox is listening on. Bind the server to 0.0.0.0, not 127.0.0.1. */
+  port: number;
+  /** Thread whose sandbox to act in. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SandboxExposePortOutput {
+  output: string;
+  truncated?: boolean;
+}
+
 export interface SandboxGlobInput {
   max_results?: number;
   /** Directory to search under. */
@@ -382,6 +398,46 @@ export interface SecretsUnsetInput {
 export interface SecretsUnsetOutput {
   detail?: null | string;
   ok?: boolean;
+}
+
+export interface SecureShipPolicyInput {
+  // no fields
+}
+
+export interface SecureShipPolicyOutput {
+  /** The active gate policy: severities, thresholds and which scanners run. */
+  policy: Record<string, unknown>;
+}
+
+export interface SecureShipReportInput {
+  /** Thread to read from. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SecureShipReportOutput {
+  /** The last known gate report for the thread, or null when the gate has never run. */
+  report?: Record<string, unknown> | null;
+}
+
+export interface SecureShipScanInput {
+  /** Run the deeper (slower) scan as well. */
+  deep?: boolean;
+  /** Thread whose build to scan. Defaults to the caller's own thread. */
+  thread_id?: null | string;
+}
+
+export interface SecureShipScanOutput {
+  /** The gate report: verdict, counts, findings and the policy that produced them. */
+  report: Record<string, unknown>;
+}
+
+export interface SecureShipToolkitInput {
+  // no fields
+}
+
+export interface SecureShipToolkitOutput {
+  /** The security tooling available to the gate: scanners and what each one looks for. */
+  toolkit: Record<string, unknown>;
 }
 
 export interface SessionsGetInput {
@@ -515,6 +571,10 @@ export interface CapabilityOps {
     output: RuntimesSessionsOutput;
   };
   "sandbox.bash": { input: SandboxBashInput; output: SandboxBashOutput };
+  "sandbox.expose_port": {
+    input: SandboxExposePortInput;
+    output: SandboxExposePortOutput;
+  };
   "sandbox.glob": { input: SandboxGlobInput; output: SandboxGlobOutput };
   "sandbox.grep": { input: SandboxGrepInput; output: SandboxGrepOutput };
   "sandbox.ls": { input: SandboxLsInput; output: SandboxLsOutput };
@@ -533,6 +593,22 @@ export interface CapabilityOps {
   "secrets.list": { input: SecretsListInput; output: SecretsListOutput };
   "secrets.set": { input: SecretsSetInput; output: SecretsSetOutput };
   "secrets.unset": { input: SecretsUnsetInput; output: SecretsUnsetOutput };
+  "secure_ship.policy": {
+    input: SecureShipPolicyInput;
+    output: SecureShipPolicyOutput;
+  };
+  "secure_ship.report": {
+    input: SecureShipReportInput;
+    output: SecureShipReportOutput;
+  };
+  "secure_ship.scan": {
+    input: SecureShipScanInput;
+    output: SecureShipScanOutput;
+  };
+  "secure_ship.toolkit": {
+    input: SecureShipToolkitInput;
+    output: SecureShipToolkitOutput;
+  };
   "sessions.get": { input: SessionsGetInput; output: SessionsGetOutput };
   "sessions.revoke_all": {
     input: SessionsRevokeAllInput;
@@ -634,7 +710,8 @@ export const OP_META: Record<CapabilityOpName, OpMeta> = {
   "jobs.cancel": {
     module: "jobs",
     kind: "write",
-    description: "Request cooperative cancellation of a job.",
+    description:
+      "Cancel a job: queued/retrying jobs settle at once, running ones get a cooperative cancel request.",
     flag: "jobs",
     admin_only: false,
     harness: true,
@@ -643,7 +720,8 @@ export const OP_META: Record<CapabilityOpName, OpMeta> = {
   "jobs.enqueue": {
     module: "jobs",
     kind: "execute",
-    description: "Enqueue a job of a registered type.",
+    description:
+      "Enqueue a job of a registered type. Non-admins may run: agents.task, em.campaign.start, em.contacts.import, em.twenty.import, em.twenty.sync, jobs.smoke.sleep.",
     flag: "jobs",
     admin_only: false,
     harness: true,
@@ -817,6 +895,16 @@ export const OP_META: Record<CapabilityOpName, OpMeta> = {
     harness: true,
     mcp: true,
   },
+  "sandbox.expose_port": {
+    module: "sandbox",
+    kind: "write",
+    description:
+      "Show a web server running inside the thread's sandbox in the user's Browser tab. Start the server bound to 0.0.0.0 first; the port is checked from inside the sandbox and needs no publishing.",
+    flag: "sandbox",
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
   "sandbox.glob": {
     module: "sandbox",
     kind: "read",
@@ -897,6 +985,46 @@ export const OP_META: Record<CapabilityOpName, OpMeta> = {
     admin_only: true,
     harness: false,
     mcp: false,
+  },
+  "secure_ship.policy": {
+    module: "secure_ship",
+    kind: "read",
+    description:
+      "The active gate policy: severities, thresholds and which scanners run.",
+    flag: null,
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "secure_ship.report": {
+    module: "secure_ship",
+    kind: "read",
+    description:
+      "The last gate report written for a thread, or null when the gate has never run. No scan.",
+    flag: null,
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "secure_ship.scan": {
+    module: "secure_ship",
+    kind: "execute",
+    description:
+      "Run the Secure-Ship gate over a thread's build and return the report (verdict, counts, findings).",
+    flag: null,
+    admin_only: false,
+    harness: true,
+    mcp: true,
+  },
+  "secure_ship.toolkit": {
+    module: "secure_ship",
+    kind: "read",
+    description:
+      "The security tooling the gate has: the scanners it runs and what each one looks for.",
+    flag: null,
+    admin_only: false,
+    harness: true,
+    mcp: true,
   },
   "sessions.get": {
     module: "sessions",
@@ -1067,6 +1195,7 @@ export const CAPABILITY_MODULES = [
     config_key: "sandbox",
     operations: [
       "sandbox.bash",
+      "sandbox.expose_port",
       "sandbox.glob",
       "sandbox.grep",
       "sandbox.ls",
@@ -1083,6 +1212,20 @@ export const CAPABILITY_MODULES = [
     flag: null,
     config_key: null,
     operations: ["secrets.list", "secrets.set", "secrets.unset"],
+  },
+  {
+    id: "secure_ship",
+    title: "Secure-Ship",
+    description:
+      "The shipping gate: scan a thread's build for hard-coded secrets, unsafe dependencies and other release blockers before Nova hands it over.",
+    flag: null,
+    config_key: null,
+    operations: [
+      "secure_ship.policy",
+      "secure_ship.report",
+      "secure_ship.scan",
+      "secure_ship.toolkit",
+    ],
   },
   {
     id: "sessions",

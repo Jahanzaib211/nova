@@ -87,3 +87,7 @@ class OperationNotFound(KeyError):
 
 class OperationDenied(PermissionError):
     pass
+
+
+class OperationConflict(Exception):  # noqa: N818 - surfaces map it to HTTP 409
+    """The operation does not fit the target's current state or owner."""

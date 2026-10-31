@@ -241,3 +241,48 @@ def test_builtin_registry_snapshot_matches_contract():
     assert not removed, f"operations removed from the registry: {removed}"
     changed = sorted(n for n in baseline if baseline[n] != live[n])
     assert not changed, f"operations changed since the baseline (refresh it in this commit): {changed}"
+
+
+# -- one policy for every surface ------------------------------------------
+#
+# Flags and kind rules used to live only in Nova's MCP server (listing) and
+# the harness tool builder; ``/api/capabilities/ops`` and a direct
+# ``registry.invoke`` checked admin_only alone, so a flag-gated op stayed
+# callable with its feature off. The registry now owns the whole policy.
+
+
+@pytest.mark.asyncio
+async def test_invoke_refuses_flag_gated_ops_when_the_flag_is_off():
+    flags = {"email_marketing": False}
+    reg = CapabilityRegistry(flags=lambda: flags)
+    reg.register(_module("gated", flag="email_marketing"))
+    with pytest.raises(OperationDenied, match="feature flag"):
+        await reg.invoke("gated.say", _ctx(is_admin=True), {"text": "x"})
+    flags["email_marketing"] = True
+    assert await reg.invoke("gated.say", _ctx(), {"text": "x"}) == {"text": "x"}
+
+
+@pytest.mark.asyncio
+async def test_invoke_applies_surface_kind_rules():
+    from dataclasses import replace
+
+    async def _h(ctx: OpContext, inp: EchoIn) -> EchoOut:
+        return EchoOut(text=inp.text)
+
+    secret_op = Operation(name="echo.secret", kind="secret", input=EchoIn, output=EchoOut, handler=_h, description="s")
+    admin_kind = Operation(name="echo.adminkind", kind="admin", input=EchoIn, output=EchoOut, handler=_h, description="a")
+    no_mcp = Operation(name="echo.nomcp", kind="read", input=EchoIn, output=EchoOut, handler=_h, description="n", mcp=False)
+    reg = CapabilityRegistry(flags=lambda: {})
+    reg.register(_module(extra_ops=[secret_op, admin_kind, no_mcp]))
+    api, mcp, harness = _ctx(), replace(_ctx(), surface="mcp"), replace(_ctx(), surface="harness")
+    payload = {"text": "x"}
+    assert await reg.invoke("echo.secret", api, payload) == {"text": "x"}
+    for ctx in (mcp, harness):
+        with pytest.raises(OperationDenied):
+            await reg.invoke("echo.secret", ctx, payload)
+    with pytest.raises(OperationDenied):
+        await reg.invoke("echo.adminkind", harness, payload)
+    with pytest.raises(OperationDenied):
+        await reg.invoke("echo.nomcp", mcp, payload)
+    assert {op.name for op in reg.permitted(mcp)} == {"echo.adminkind", "echo.say", "echo.whoami"}
+    assert {op.name for op in reg.permitted(harness)} == {"echo.nomcp", "echo.say", "echo.whoami"}

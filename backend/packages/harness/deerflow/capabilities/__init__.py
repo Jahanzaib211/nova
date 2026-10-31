@@ -5,6 +5,7 @@ from deerflow.capabilities.types import (
     ModuleStatus,
     OpContext,
     Operation,
+    OperationConflict,
     OperationDenied,
     OperationNotFound,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ModuleStatus",
     "OpContext",
     "Operation",
+    "OperationConflict",
     "OperationDenied",
     "OperationNotFound",
     "get_registry",

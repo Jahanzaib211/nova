@@ -58,6 +58,11 @@ class SearchIn(_ThreadScoped):
     max_results: int = Field(default=100, ge=1, le=1000)
 
 
+class ExposeIn(_ThreadScoped):
+    port: int = Field(ge=1, le=65535, description="Port a server inside the sandbox is listening on. Bind the server to 0.0.0.0, not 127.0.0.1.")
+    label: str = Field(default="app", description="Name to register it under; one Browser tab entry per label.")
+
+
 class TextOut(BaseModel):
     output: str
     truncated: bool = False
@@ -109,6 +114,11 @@ _TOOL_SYMBOLS = {
     "read_file": "read_file_tool",
     "write_file": "write_file_tool",
     "str_replace": "str_replace_tool",
+}
+
+#: Ops backed by the lead agent's workspace tools rather than the sandbox ones.
+_WORKSPACE_TOOL_SYMBOLS = {
+    "expose_port": "register_external_dev_server_tool",
 }
 
 
@@ -175,13 +185,20 @@ async def _invoke(tool_name: str, thread_id: str, payload: dict[str, Any]) -> st
 
     from deerflow.runtime.user_context import get_effective_user_id
     from deerflow.sandbox import tools as sandbox_tools
+    from deerflow.tools.builtins import workspace_tools
 
-    symbol = _TOOL_SYMBOLS.get(tool_name)
-    tool = getattr(sandbox_tools, symbol, None) if symbol else None
+    if tool_name in _WORKSPACE_TOOL_SYMBOLS:
+        source, symbol = workspace_tools, _WORKSPACE_TOOL_SYMBOLS[tool_name]
+    else:
+        source, symbol = sandbox_tools, _TOOL_SYMBOLS.get(tool_name)
+    tool = getattr(source, symbol, None) if symbol else None
     if tool is None:
         raise ValueError(f"sandbox tool {tool_name!r} is not available")
 
-    func = getattr(tool, "func", None) or getattr(tool, "coroutine", None)
+    # An async tool's own coroutine first: tool loading may set `func` on it to
+    # a generic sync wrapper whose signature names none of the real
+    # parameters, and the filter below would then drop every argument.
+    func = getattr(tool, "coroutine", None) or getattr(tool, "func", None)
     if func is None:
         raise ValueError(f"sandbox tool {tool_name!r} exposes no callable")
 
@@ -190,8 +207,9 @@ async def _invoke(tool_name: str, thread_id: str, payload: dict[str, Any]) -> st
     # Drop anything this particular tool does not declare, so one shared
     # caller can serve tools with different signatures.
     try:
-        accepted = set(inspect.signature(func).parameters)
-        kwargs = {k: v for k, v in kwargs.items() if k in accepted}
+        params = inspect.signature(func).parameters
+        if not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+            kwargs = {k: v for k, v in kwargs.items() if k in params}
     except (TypeError, ValueError):
         pass
 
@@ -249,6 +267,11 @@ async def _grep(ctx: OpContext, inp: SearchIn) -> Items:
     return Items(items=[{"match": line} for line in lines], total=len(lines))
 
 
+async def _expose(ctx: OpContext, inp: ExposeIn) -> TextOut:
+    out = await _invoke("expose_port", _thread(ctx, inp), {"port": inp.port, "label": inp.label, "description": _describe(ctx, f"show port {inp.port} in the Browser tab")})
+    return TextOut(output=out)
+
+
 async def _status() -> ModuleStatus:
     if not section_enabled("sandbox"):
         return ModuleStatus(configured=False, healthy=False, detail="sandbox section is disabled")
@@ -278,5 +301,13 @@ MODULE = CapabilityModule(
         Operation(name="sandbox.ls", kind="read", input=PathIn, output=Items, handler=_ls, description="List a directory in the thread's sandbox."),
         Operation(name="sandbox.glob", kind="read", input=SearchIn, output=Items, handler=_glob, description="Find files by glob pattern in the thread's sandbox."),
         Operation(name="sandbox.grep", kind="read", input=SearchIn, output=Items, handler=_grep, description="Search file contents by regex in the thread's sandbox."),
+        Operation(
+            name="sandbox.expose_port",
+            kind="write",
+            input=ExposeIn,
+            output=TextOut,
+            handler=_expose,
+            description="Show a web server running inside the thread's sandbox in the user's Browser tab. Start the server bound to 0.0.0.0 first; the port is checked from inside the sandbox and needs no publishing.",
+        ),
     ],
 )

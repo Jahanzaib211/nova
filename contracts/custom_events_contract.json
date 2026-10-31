@@ -4,7 +4,7 @@
   "description": "Shape of the custom-event payloads the gateway emits over the SSE `custom` stream mode. Pinned by backend/tests/test_custom_events_contract.py and frontend/tests/unit/core/threads/custom-event-contract.test.ts so any drift in either side fails the build.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["task_progress", "verify_result", "llm_error", "task_running", "safety_termination", "llm_retry", "task_started", "task_completed", "task_failed", "task_timed_out", "task_activity", "acp_update"],
+  "required": ["task_progress", "verify_result", "llm_error", "task_running", "safety_termination", "llm_retry", "task_started", "task_completed", "task_failed", "task_timed_out", "task_activity", "acp_update", "secure_ship"],
   "properties": {
     "task_progress": {
       "type": "object",
@@ -148,6 +148,19 @@
         "session_id": {"type": "string"},
         "kind": {"enum": ["text", "status"]},
         "delta": {"type": "string"}
+      }
+    },
+    "secure_ship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "verdict"],
+      "properties": {
+        "type": {"const": "secure_ship"},
+        "thread_id": {"type": ["string", "null"]},
+        "verdict": {"enum": ["pass", "warn", "block", "error"]},
+        "counts": {"type": "object"},
+        "duration_ms": {"type": "number", "minimum": 0},
+        "reason": {"type": "string"}
       }
     }
   }

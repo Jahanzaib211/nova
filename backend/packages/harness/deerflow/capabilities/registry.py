@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
 from deerflow.capabilities.types import (
+    HARNESS_TOOL_KINDS,
     CapabilityModule,
     ModuleStatus,
     OpContext,
@@ -22,10 +24,39 @@ logger = logging.getLogger(__name__)
 SNAPSHOT_VERSION = 1
 
 
+def surface_allows(op: Operation, surface: str) -> bool:
+    """Whether ``op`` may be reached from ``surface`` at all.
+
+    ``harness`` (a model's tool call) and ``mcp`` (an external harness on a
+    token) never reach ``secret`` operations, and the harness never reaches
+    ``admin`` ones; each also honours the op's own opt-out. ``api`` is the
+    session-authenticated UI and reaches everything its caller may.
+    """
+    if surface == "harness":
+        return op.harness and op.kind in HARNESS_TOOL_KINDS
+    if surface == "mcp":
+        return op.mcp and op.kind != "secret"
+    return True
+
+
+def _default_flags() -> dict[str, bool]:
+    from deerflow.capabilities.modules.features import compute_flags
+
+    return compute_flags()
+
+
 class CapabilityRegistry:
-    def __init__(self) -> None:
+    """Modules in, snapshot and policy-checked invoke out.
+
+    ``flags`` supplies the live feature flags; it is read on every
+    :meth:`invoke`, so an operation behind a switched-off flag is refused
+    on every surface, not merely left out of one surface's listing.
+    """
+
+    def __init__(self, *, flags: Callable[[], dict[str, bool]] | None = None) -> None:
         self._modules: dict[str, CapabilityModule] = {}
         self._ops: dict[str, Operation] = {}
+        self._flags = flags or _default_flags
 
     # -- registration -----------------------------------------------------
 
@@ -63,6 +94,33 @@ class CapabilityRegistry:
                 continue
             out.append(op)
         return out
+
+    # -- policy -----------------------------------------------------------
+
+    def enabled_flags(self) -> set[str]:
+        return {k for k, v in self._flags().items() if v}
+
+    def denial(self, op: Operation, ctx: OpContext, *, enabled_flags: set[str] | None = None) -> str | None:
+        """Why ``ctx`` may not invoke ``op``, or ``None`` when it may.
+
+        The one policy every surface applies — the ``/api/capabilities/ops``
+        endpoint, lead-agent tools and Nova's MCP server used to each carry
+        their own subset of it.
+        """
+        if op.admin_only and not ctx.is_admin:
+            return f"{op.name} is admin-only"
+        if not surface_allows(op, ctx.surface):
+            return f"{op.name} is not available on the {ctx.surface} surface"
+        if op.flag is not None:
+            flags = self.enabled_flags() if enabled_flags is None else enabled_flags
+            if op.flag not in flags:
+                return f"{op.name} is disabled (feature flag {op.flag!r} is off)"
+        return None
+
+    def permitted(self, ctx: OpContext, *, enabled_flags: set[str] | None = None) -> list[Operation]:
+        """Every operation ``ctx`` may invoke, sorted by name."""
+        flags = self.enabled_flags() if enabled_flags is None else enabled_flags
+        return [op for op in self.operations() if self.denial(op, ctx, enabled_flags=flags) is None]
 
     # -- derivations ------------------------------------------------------
 
@@ -109,10 +167,11 @@ class CapabilityRegistry:
                 out[m.id] = r
         return out
 
-    async def invoke(self, name: str, ctx: OpContext, payload: dict[str, Any] | BaseModel | None) -> dict[str, Any]:
+    async def invoke(self, name: str, ctx: OpContext, payload: dict[str, Any] | BaseModel | None, *, enabled_flags: set[str] | None = None) -> dict[str, Any]:
         op = self.get(name)
-        if op.admin_only and not ctx.is_admin:
-            raise OperationDenied(f"{name} is admin-only")
+        reason = self.denial(op, ctx, enabled_flags=enabled_flags)
+        if reason is not None:
+            raise OperationDenied(reason)
         try:
             inp = payload if isinstance(payload, op.input) else op.input.model_validate(payload or {})
         except ValidationError as exc:

@@ -17,7 +17,8 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_auth
-from deerflow.capabilities import CapabilityRegistry, OpContext, OperationDenied, OperationNotFound, get_registry
+from app.gateway.deps import is_admin
+from deerflow.capabilities import CapabilityRegistry, OpContext, OperationConflict, OperationDenied, OperationNotFound, get_registry
 from deerflow.capabilities.modules.features import compute_flags
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ def registry_for(request: Request) -> CapabilityRegistry:
 
 def context_for(request: Request, *, surface: str = "api") -> OpContext:
     user = request.state.user
-    return OpContext(user_id=str(user.id), is_admin=getattr(user, "system_role", None) == "admin", surface=surface)
+    return OpContext(user_id=str(user.id), is_admin=is_admin(user), surface=surface)
 
 
 class OpsListResponse(BaseModel):
@@ -75,6 +76,8 @@ async def invoke_op(name: str, request: Request) -> InvokeResponse:
         raise HTTPException(status_code=404, detail=f"unknown operation {name!r}") from None
     except OperationDenied as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except OperationConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except LookupError as exc:

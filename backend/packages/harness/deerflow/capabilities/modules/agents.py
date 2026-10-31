@@ -73,27 +73,24 @@ def delegate_model_for_runtime(config: Any) -> str | None:
 
 
 async def _delegate(ctx: OpContext, inp: DelegateIn) -> JobOut:
+    from deerflow.agents_registry.registry import enqueue_agent_task
     from deerflow.config.app_config import get_app_config
-    from deerflow.jobs.queue import JobQueue
 
     repo = jobs_repo()
     if repo is None:
         raise RuntimeError("agents: no database configured")
     config = get_app_config()
     name, kind = resolve_delegate_target(inp.agent, config)
-    payload: dict[str, Any] = {"agent": name, "kind": kind, "task": inp.task}
     model = inp.model or (delegate_model_for_runtime(config) if ctx.surface == "mcp" else None)
-    if model:
-        payload["model"] = model
-    job_id = await JobQueue(repo).enqueue("agents.task", payload, owner_user_id=ctx.user_id, thread_id=ctx.thread_id)
+    job_id = await enqueue_agent_task(repo, agent=name, kind=kind, task=inp.task, owner_user_id=ctx.user_id, thread_id=ctx.thread_id, model=model)
     return JobOut(job=await repo.get(job_id) or {"id": job_id})
 
 
 async def _status() -> ModuleStatus:
+    from deerflow.agents_registry.registry import async_delegation_enabled
     from deerflow.config.app_config import get_app_config
 
-    cfg = get_app_config()
-    async_on = bool(getattr(getattr(cfg, "subagents", None), "async_enabled", False)) and bool(getattr(getattr(cfg, "jobs", None), "enabled", False))
+    async_on = async_delegation_enabled(get_app_config())
     return ModuleStatus(configured=True, healthy=True, detail="async delegation on" if async_on else "async delegation off (subagents.async_enabled)")
 
 

@@ -39,14 +39,12 @@ class ToggleIn(BaseModel):
 
 
 async def _toggle(ctx: OpContext, inp: ToggleIn) -> Ok:
-    from deerflow.config.extensions_config import SkillStateConfig, get_extensions_config, persist_extensions_config
+    from deerflow.config.extensions_config import set_skill_enabled
 
     known = {s.name for s in _storage().load_skills(enabled_only=False)}
     if inp.name not in known:
         raise LookupError(f"skill {inp.name!r} not found")
-    cfg = get_extensions_config()
-    cfg.skills[inp.name] = SkillStateConfig(enabled=inp.enabled)
-    persist_extensions_config(cfg)
+    set_skill_enabled(inp.name, inp.enabled)
     try:
         from deerflow.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
 

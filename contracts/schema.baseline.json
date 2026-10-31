@@ -2316,6 +2316,12 @@
           [
             "stripe_customer_id"
           ]
+        ],
+        [
+          "uq_users_email_lower",
+          [
+            "email"
+          ]
         ]
       ],
       "unique": []

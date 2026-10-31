@@ -88,6 +88,17 @@ class _TokenUser:
     id: str
 
 
+def mcp_server_enabled() -> bool:
+    """``capabilities.mcp_server.enabled`` (default true), read per request so
+    an edit to config.yaml takes effect without a restart. The flag existed
+    and was read by nothing: the server was mounted and answered regardless."""
+    from deerflow.config.app_config import get_app_config
+
+    capabilities = getattr(get_app_config(), "capabilities", None)
+    server = getattr(capabilities, "mcp_server", None)
+    return bool(getattr(server, "enabled", True))
+
+
 def _tool_for(op: Operation) -> types.Tool:
     return types.Tool(
         name=op.tool_name,
@@ -100,10 +111,18 @@ def _tool_for(op: Operation) -> types.Tool:
 
 
 class NovaMcpServer:
-    def __init__(self, registry: CapabilityRegistry, tokens: HarnessTokenRepository | None, *, flags: Callable[[], dict[str, bool]] = compute_flags) -> None:
+    def __init__(
+        self,
+        registry: CapabilityRegistry,
+        tokens: HarnessTokenRepository | None,
+        *,
+        flags: Callable[[], dict[str, bool]] = compute_flags,
+        enabled: Callable[[], bool] = mcp_server_enabled,
+    ) -> None:
         self.registry = registry
         self.tokens = tokens
         self._flags = flags
+        self.enabled = enabled
         self._server: Server = Server("nova")
         self._manager: StreamableHTTPSessionManager | None = None
         self._task: asyncio.Task[None] | None = None
@@ -113,9 +132,25 @@ class NovaMcpServer:
 
     # -- MCP handlers -----------------------------------------------------
 
+    def _enabled_flags(self) -> set[str]:
+        return {k for k, v in self._flags().items() if v}
+
+    @staticmethod
+    def _context(principal: Principal) -> OpContext:
+        return OpContext(
+            user_id=principal.user_id,
+            is_admin=False,
+            thread_id=principal.thread_id,
+            surface="mcp",
+            extras={"scopes": sorted(principal.scopes)},
+        )
+
     def _visible_ops(self, principal: Principal) -> list[Operation]:
-        flags = {k for k, v in self._flags().items() if v}
-        return [op for op in self.registry.operations(enabled_flags=flags) if op.mcp and not op.admin_only and op.kind != "secret" and principal.allows(op.module_id)]
+        # Admin-only, ``secret``, ``mcp=False`` and flag-gated ops are
+        # filtered by the registry's policy (the same one invoke enforces);
+        # the token's module scopes are this surface's own addition.
+        ops = self.registry.permitted(self._context(principal), enabled_flags=self._enabled_flags())
+        return [op for op in ops if principal.allows(op.module_id)]
 
     def _register_handlers(self) -> None:
         @self._server.list_tools()
@@ -137,13 +172,7 @@ class NovaMcpServer:
                 return _error(f"unknown tool {name!r}")
             if op not in self._visible_ops(principal):
                 return _error(f"tool {name!r} is not available to this token")
-            ctx = OpContext(
-                user_id=principal.user_id,
-                is_admin=False,
-                thread_id=principal.thread_id,
-                surface="mcp",
-                extras={"scopes": sorted(principal.scopes)},
-            )
+            ctx = self._context(principal)
             # Bind the token owner as the current user for the call. The
             # sandbox tools (and everything under them: per-user thread
             # directories, memory, audit) resolve the user through
@@ -153,7 +182,7 @@ class NovaMcpServer:
             # Claude Code "wrote the file" and the Files tab never saw it.
             token = set_current_user(_TokenUser(principal.user_id))
             try:
-                result = await self.registry.invoke(op_name, ctx, arguments or {})
+                result = await self.registry.invoke(op_name, ctx, arguments or {}, enabled_flags=self._enabled_flags())
             except Exception as exc:
                 return _error(f"{type(exc).__name__}: {exc}")
             finally:
@@ -228,6 +257,10 @@ class _AuthedASGI:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
+            return
+        if not self.server.enabled():
+            response = JSONResponse({"detail": "Nova's MCP server is disabled (capabilities.mcp_server.enabled)"}, status_code=404)
+            await response(scope, receive, send)
             return
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
         principal = await self.server.authenticate(headers.get("authorization"))

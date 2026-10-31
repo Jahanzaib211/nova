@@ -179,6 +179,25 @@ class TestCircuitsSnapshot:
         assert snapshot_before == snapshot_after, "endpoint must not mutate circuit state"
         cb.reset_all_circuits()
 
+    def test_thread_id_scopes_the_circuit_snapshot(self) -> None:
+        """A per-chat bar must not be told another thread's breaker is open."""
+        from deerflow.sandbox import browser_circuit_breaker as cb
+
+        cb.reset_all_circuits()
+        cb.force_circuit("thread-a", cb.CircuitState.OPEN)
+        cb.force_circuit("thread-b", cb.CircuitState.OPEN)
+        client = _make_test_client()
+
+        scoped = client.get("/api/runtime/capabilities?thread_id=thread-a").json()
+        assert [c["thread_id"] for c in scoped["circuits"]] == ["thread-a"]
+
+        unscoped = client.get("/api/runtime/capabilities").json()
+        assert {c["thread_id"] for c in unscoped["circuits"]} == {"thread-a", "thread-b"}
+
+        unknown = client.get("/api/runtime/capabilities?thread_id=nope").json()
+        assert unknown["circuits"] == []
+        cb.reset_all_circuits()
+
 
 class TestServerInfo:
     def test_server_dict_has_expected_keys(self) -> None:

@@ -52,10 +52,19 @@ export function mergeFeatureFlags(
   return merged;
 }
 
-export function useFeatureFlags(): FeatureFlags {
-  const { capabilities } = useCapabilities();
+/**
+ * Flags plus whether the server has answered yet. Every flag reads as "off"
+ * until /api/runtime/capabilities responds, so a caller that renders a
+ * "this feature is not enabled" state needs to tell "off" from "not asked
+ * yet" — otherwise it shows a message the next tick contradicts.
+ */
+export function useFeatureFlagsState(): {
+  flags: FeatureFlags;
+  isLoading: boolean;
+} {
+  const { capabilities, isLoading } = useCapabilities();
   const server = capabilities?.features;
-  return useMemo(
+  const flags = useMemo(
     () =>
       mergeFeatureFlags(
         parseFeatureFlags(env.NEXT_PUBLIC_NOVA_FEATURES),
@@ -63,4 +72,9 @@ export function useFeatureFlags(): FeatureFlags {
       ),
     [server],
   );
+  return { flags, isLoading };
+}
+
+export function useFeatureFlags(): FeatureFlags {
+  return useFeatureFlagsState().flags;
 }

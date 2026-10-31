@@ -11,7 +11,7 @@ single authenticated call:
   - browser subsystem health (status + last_check_at)
 
 The endpoint is **read-only** and **additive**. It is NOT I/O-free: it probes
-SearXNG over the network on every call (``probe_health()``, 3 s cap), and the UI
+SearXNG over the network on every call (``SearxngClient.health()``, 3 s cap), and the UI
 polls it, so a hung instance costs one request per poll. The docstring used to
 claim "fast (no I/O)", which is worth correcting rather than trusting.
 Falls back to empty lists if any optional subsystem isn't loaded so the
@@ -29,7 +29,7 @@ import os
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_config
@@ -276,12 +276,18 @@ def _safe_subagents(config: AppConfig) -> list[SubagentSummary]:
     return out
 
 
-def _safe_circuits(config: AppConfig) -> list[CircuitEntry]:
-    """Read-only snapshot of per-thread circuit-breaker state."""
+def _safe_circuits(config: AppConfig, thread_id: str | None = None) -> list[CircuitEntry]:
+    """Read-only snapshot of per-thread circuit-breaker state.
+
+    Scoped to ``thread_id`` when the caller supplies one: the runtime bar that
+    renders this lives above one chat's Agent's Computer, so another thread's
+    breaker must not label *this* chat degraded. Unscoped calls (diagnostics,
+    tests) still get the whole process-wide registry.
+    """
     try:
         from deerflow.sandbox import browser_circuit_breaker as cb
 
-        snap = cb.snapshot()
+        snap = cb.snapshot(thread_id)
         return [CircuitEntry(thread_id=tid, state=state) for tid, state in snap.items()]
     except Exception as e:
         logger.debug("capabilities: circuit snapshot failed: %s", e)
@@ -325,11 +331,10 @@ async def _safe_igino() -> IGINOSummary:
             from deerflow.community.searxng.searxng_client import SearxngClient
 
             client = SearxngClient()
-            # Actually probe SearXNG with a short GET to /healthz instead
-            # of always reporting True (Batch 2C audit fix). The probe is
-            # best-effort: timeout, connection refused, and non-2xx all
-            # surface as searxng_healthy=False so the UI reflects reality.
-            searxng_healthy = await client.probe_health()
+            # The same probe the Privacy panel uses, so the two cannot
+            # disagree about one instance. Best-effort: timeout, refused
+            # connection and non-2xx all read as searxng_healthy=False.
+            searxng_healthy = await client.health()
         except Exception:
             # If even constructing the client fails (missing config etc.)
             # fall back to False; don't pretend it's healthy.
@@ -382,10 +387,15 @@ def _safe_features(config: AppConfig) -> FeatureFlags:
     summary="List loaded skills, tools, hooks, subagents, and circuit states",
 )
 async def get_runtime_capabilities(
+    thread_id: str | None = Query(
+        default=None,
+        description=("Restrict the circuit-breaker snapshot to one thread. The runtime bar is rendered above a single chat's Agent's Computer, so without this a breaker opened by an unrelated thread paints that chat as degraded."),
+    ),
     config: AppConfig = Depends(get_config),
 ) -> CapabilitiesResponse:
     """Returns the agent's currently loaded skill/tool/hook/subagent set
-    plus a per-thread circuit-breaker snapshot. Read-only, fast (no I/O).
+    plus a per-thread circuit-breaker snapshot. Read-only; the only I/O is the
+    SearXNG health probe in ``igino``, which is capped at 3 s.
     """
     return CapabilitiesResponse(
         features=_safe_features(config),
@@ -393,7 +403,7 @@ async def get_runtime_capabilities(
         tools=_safe_tools(config),
         hooks=_safe_hooks(config),
         subagents=_safe_subagents(config),
-        circuits=_safe_circuits(config),
+        circuits=_safe_circuits(config, thread_id),
         igino=await _safe_igino(),
         server=_safe_server_info(config),
     )

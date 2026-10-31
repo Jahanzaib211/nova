@@ -7,7 +7,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from deerflow.capabilities.modules._common import Empty, Items, Ok, jobs_repo, section_enabled
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation, OperationConflict
+from deerflow.jobs.service import USER_SCHEDULABLE_JOB_TYPES, JobConflict, JobService
 
 
 class ListJobsIn(BaseModel):
@@ -58,11 +59,14 @@ async def _list(ctx: OpContext, inp: ListJobsIn) -> Items:
     return Items(items=jobs, total=len(jobs))
 
 
+def _service() -> JobService:
+    return JobService(_repo_or_raise())
+
+
 async def _owned(ctx: OpContext, job_id: str) -> dict[str, Any]:
-    job = await _repo_or_raise().get(job_id)
-    if job is None or (not ctx.is_admin and job.get("owner_user_id") not in (None, ctx.user_id)):
-        raise LookupError(f"job {job_id} not found")
-    return job
+    # Same rules as /api/jobs (deerflow.jobs.service): a system job
+    # (owner None) is visible to admins only.
+    return await _service().owned_job(job_id, user_id=ctx.user_id, is_admin=ctx.is_admin)
 
 
 async def _get(ctx: OpContext, inp: JobIdIn) -> JobOut:
@@ -76,15 +80,21 @@ async def _events(ctx: OpContext, inp: JobIdIn) -> Items:
 
 
 async def _cancel(ctx: OpContext, inp: JobIdIn) -> Ok:
-    await _owned(ctx, inp.job_id)
-    ok = await _repo_or_raise().request_cancel(inp.job_id)
-    return Ok(ok=bool(ok), detail=None if ok else "job is not cancellable in its current state")
+    job = await _owned(ctx, inp.job_id)
+    try:
+        status = await _service().cancel(job)
+    except JobConflict as exc:
+        raise OperationConflict(str(exc)) from exc
+    return Ok(ok=True, detail=status)
 
 
 async def _retry(ctx: OpContext, inp: JobIdIn) -> Ok:
-    await _owned(ctx, inp.job_id)
-    ok = await _repo_or_raise().requeue(inp.job_id)
-    return Ok(ok=bool(ok), detail=None if ok else "job is not in a retryable state")
+    job = await _owned(ctx, inp.job_id)
+    try:
+        ok = await _service().retry(job)
+    except JobConflict as exc:
+        raise OperationConflict(str(exc)) from exc
+    return Ok(ok=ok, detail=None if ok else "job is not in a retryable state")
 
 
 async def _enqueue(ctx: OpContext, inp: EnqueueIn) -> JobOut:
@@ -92,6 +102,10 @@ async def _enqueue(ctx: OpContext, inp: EnqueueIn) -> JobOut:
 
     from deerflow.jobs.queue import JobQueue
 
+    # Agents never run as admin, so the schedule allowlist bounds what they
+    # can enqueue (an admin-only enqueue left every agent without the tool).
+    if not ctx.is_admin and inp.type not in USER_SCHEDULABLE_JOB_TYPES:
+        raise PermissionError(f"job type {inp.type!r} can only be enqueued by an admin")
     repo = _repo_or_raise()
     run_after = datetime.now(UTC) + timedelta(seconds=inp.run_after_seconds) if inp.run_after_seconds else None
     job_id = await JobQueue(repo).enqueue(inp.type, inp.payload, queue=inp.queue, run_after=run_after, owner_user_id=ctx.user_id, thread_id=ctx.thread_id)
@@ -104,22 +118,17 @@ async def _schedules(ctx: OpContext, inp: Empty) -> Items:
 
 
 async def _schedule_upsert(ctx: OpContext, inp: ScheduleIn) -> JobOut:
-    from datetime import UTC, datetime
-
-    from deerflow.jobs.scheduler import next_run_at
-
-    repo = _repo_or_raise()
-    first = next_run_at(inp.cron, datetime.now(UTC), timezone=inp.timezone)
-    sid = await repo.upsert_schedule(name=inp.name, job_type=inp.type, cron=inp.cron, payload=inp.payload, queue=inp.queue, enabled=inp.enabled, timezone=inp.timezone, owner_user_id=ctx.user_id, next_run_at=first)
-    return JobOut(job=await repo.get_schedule(sid) or {"id": sid})
+    try:
+        sched = await _service().upsert_schedule(user_id=ctx.user_id, name=inp.name, job_type=inp.type, cron=inp.cron, payload=inp.payload, queue=inp.queue, enabled=inp.enabled, timezone=inp.timezone, is_admin=ctx.is_admin)
+    except JobConflict as exc:
+        raise OperationConflict(str(exc)) from exc
+    return JobOut(job=sched)
 
 
 async def _schedule_delete(ctx: OpContext, inp: ScheduleIdIn) -> Ok:
-    repo = _repo_or_raise()
-    sched = await repo.get_schedule(inp.schedule_id)
-    if sched is None or (not ctx.is_admin and sched.get("owner_user_id") not in (None, ctx.user_id)):
-        raise LookupError(f"schedule {inp.schedule_id} not found")
-    return Ok(ok=await repo.delete_schedule(inp.schedule_id))
+    service = _service()
+    await service.owned_schedule(inp.schedule_id, user_id=ctx.user_id, is_admin=ctx.is_admin)
+    return Ok(ok=await service.repo.delete_schedule(inp.schedule_id))
 
 
 async def _workers(ctx: OpContext, inp: Empty) -> Items:
@@ -152,8 +161,8 @@ MODULE = CapabilityModule(
         Operation(name="jobs.list", kind="read", input=ListJobsIn, output=Items, handler=_list, description="List the caller's jobs (all jobs for admins), newest first."),
         Operation(name="jobs.get", kind="read", input=JobIdIn, output=JobOut, handler=_get, description="One job with its current status, attempts and result."),
         Operation(name="jobs.events", kind="read", input=JobIdIn, output=Items, handler=_events, description="A job's event log (progress, logs, retries)."),
-        Operation(name="jobs.enqueue", kind="execute", input=EnqueueIn, output=JobOut, handler=_enqueue, description="Enqueue a job of a registered type."),
-        Operation(name="jobs.cancel", kind="write", input=JobIdIn, output=Ok, handler=_cancel, description="Request cooperative cancellation of a job."),
+        Operation(name="jobs.enqueue", kind="execute", input=EnqueueIn, output=JobOut, handler=_enqueue, description="Enqueue a job of a registered type. Non-admins may run: " + ", ".join(sorted(USER_SCHEDULABLE_JOB_TYPES)) + "."),
+        Operation(name="jobs.cancel", kind="write", input=JobIdIn, output=Ok, handler=_cancel, description="Cancel a job: queued/retrying jobs settle at once, running ones get a cooperative cancel request."),
         Operation(name="jobs.retry", kind="write", input=JobIdIn, output=Ok, handler=_retry, description="Requeue a failed or dead-letter job."),
         Operation(name="jobs.schedules", kind="read", input=Empty, output=Items, handler=_schedules, description="List cron schedules."),
         Operation(name="jobs.schedule_upsert", kind="write", input=ScheduleIn, output=JobOut, handler=_schedule_upsert, description="Create or update a cron schedule by name."),

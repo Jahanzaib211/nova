@@ -104,6 +104,7 @@
       "id": "sandbox",
       "operations": [
         "sandbox.bash",
+        "sandbox.expose_port",
         "sandbox.glob",
         "sandbox.grep",
         "sandbox.ls",
@@ -124,6 +125,19 @@
         "secrets.unset"
       ],
       "title": "Secrets"
+    },
+    {
+      "config_key": null,
+      "description": "The shipping gate: scan a thread's build for hard-coded secrets, unsafe dependencies and other release blockers before Nova hands it over.",
+      "flag": null,
+      "id": "secure_ship",
+      "operations": [
+        "secure_ship.policy",
+        "secure_ship.report",
+        "secure_ship.scan",
+        "secure_ship.toolkit"
+      ],
+      "title": "Secure-Ship"
     },
     {
       "config_key": null,
@@ -410,7 +424,7 @@
     },
     {
       "admin_only": false,
-      "description": "Request cooperative cancellation of a job.",
+      "description": "Cancel a job: queued/retrying jobs settle at once, running ones get a cooperative cancel request.",
       "flag": "jobs",
       "harness": true,
       "input_schema": {
@@ -456,7 +470,7 @@
     },
     {
       "admin_only": false,
-      "description": "Enqueue a job of a registered type.",
+      "description": "Enqueue a job of a registered type. Non-admins may run: agents.task, em.campaign.start, em.contacts.import, em.twenty.import, em.twenty.sync, jobs.smoke.sleep.",
       "flag": "jobs",
       "harness": true,
       "input_schema": {
@@ -1423,6 +1437,69 @@
     },
     {
       "admin_only": false,
+      "description": "Show a web server running inside the thread's sandbox in the user's Browser tab. Start the server bound to 0.0.0.0 first; the port is checked from inside the sandbox and needs no publishing.",
+      "flag": "sandbox",
+      "harness": true,
+      "input_schema": {
+        "properties": {
+          "label": {
+            "default": "app",
+            "description": "Name to register it under; one Browser tab entry per label.",
+            "title": "Label",
+            "type": "string"
+          },
+          "port": {
+            "description": "Port a server inside the sandbox is listening on. Bind the server to 0.0.0.0, not 127.0.0.1.",
+            "maximum": 65535,
+            "minimum": 1,
+            "title": "Port",
+            "type": "integer"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose sandbox to act in. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "required": [
+          "port"
+        ],
+        "title": "ExposeIn",
+        "type": "object"
+      },
+      "kind": "write",
+      "mcp": true,
+      "module": "sandbox",
+      "name": "sandbox.expose_port",
+      "output_schema": {
+        "properties": {
+          "output": {
+            "title": "Output",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "output"
+        ],
+        "title": "TextOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
       "description": "Find files by glob pattern in the thread's sandbox.",
       "flag": "sandbox",
       "harness": true,
@@ -1947,6 +2024,169 @@
           }
         },
         "title": "Ok",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "The active gate policy: severities, thresholds and which scanners run.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "secure_ship",
+      "name": "secure_ship.policy",
+      "output_schema": {
+        "properties": {
+          "policy": {
+            "additionalProperties": true,
+            "description": "The active gate policy: severities, thresholds and which scanners run.",
+            "title": "Policy",
+            "type": "object"
+          }
+        },
+        "required": [
+          "policy"
+        ],
+        "title": "PolicyOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "The last gate report written for a thread, or null when the gate has never run. No scan.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "Inputs may name a thread explicitly; otherwise the context supplies it.",
+        "properties": {
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread to read from. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "title": "ThreadScoped",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "secure_ship",
+      "name": "secure_ship.report",
+      "output_schema": {
+        "properties": {
+          "report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The last known gate report for the thread, or null when the gate has never run.",
+            "title": "Report"
+          }
+        },
+        "title": "ReportOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "Run the Secure-Ship gate over a thread's build and return the report (verdict, counts, findings).",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "What to scan.",
+        "properties": {
+          "deep": {
+            "default": false,
+            "description": "Run the deeper (slower) scan as well.",
+            "title": "Deep",
+            "type": "boolean"
+          },
+          "thread_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Thread whose build to scan. Defaults to the caller's own thread.",
+            "title": "Thread Id"
+          }
+        },
+        "title": "ScanIn",
+        "type": "object"
+      },
+      "kind": "execute",
+      "mcp": true,
+      "module": "secure_ship",
+      "name": "secure_ship.scan",
+      "output_schema": {
+        "properties": {
+          "report": {
+            "additionalProperties": true,
+            "description": "The gate report: verdict, counts, findings and the policy that produced them.",
+            "title": "Report",
+            "type": "object"
+          }
+        },
+        "required": [
+          "report"
+        ],
+        "title": "ScanOut",
+        "type": "object"
+      }
+    },
+    {
+      "admin_only": false,
+      "description": "The security tooling the gate has: the scanners it runs and what each one looks for.",
+      "flag": null,
+      "harness": true,
+      "input_schema": {
+        "description": "No input.",
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
+      "kind": "read",
+      "mcp": true,
+      "module": "secure_ship",
+      "name": "secure_ship.toolkit",
+      "output_schema": {
+        "properties": {
+          "toolkit": {
+            "additionalProperties": true,
+            "description": "The security tooling available to the gate: scanners and what each one looks for.",
+            "title": "Toolkit",
+            "type": "object"
+          }
+        },
+        "required": [
+          "toolkit"
+        ],
+        "title": "ToolkitOut",
         "type": "object"
       }
     },

@@ -1,8 +1,9 @@
 """Harness-side capability modules. Each file declares one
-:class:`CapabilityModule`; ``register_builtin_modules`` wires them into the
-process registry. Gateway-side modules (auth sessions, channels, infra) are
-registered by ``app.gateway.capabilities_modules`` because they need ``app``
-objects the harness may not import.
+:class:`CapabilityModule` (``_common`` holds shared helpers, not a module);
+``register_builtin_modules`` wires them into the process registry. The one
+gateway-side module — ``sessions`` (browser sessions and harness tokens) —
+is registered by ``app.gateway.capabilities_modules`` because it needs
+``app`` objects the harness may not import.
 """
 
 from __future__ import annotations
@@ -22,9 +23,10 @@ def register_builtin_modules(registry: CapabilityRegistry) -> None:
         runtimes,
         sandbox,
         secrets,
+        secure_ship,
         skills,
         updates,
     )
 
-    for mod in (jobs, integrations, agents, acp, models, skills, mcp, secrets, features, updates, runtimes, sandbox):
+    for mod in (jobs, integrations, agents, acp, models, skills, mcp, secrets, features, updates, runtimes, sandbox, secure_ship):
         registry.register(mod.MODULE)

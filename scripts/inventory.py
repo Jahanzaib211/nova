@@ -9,6 +9,11 @@ already renders (``gate``, ``checked_at_epoch``, ``overall``, ``ok``,
 Integrations page and the console describe the same thing with the same
 words.
 
+Service URLs and enabled flags come from ``config.yaml``
+``integrations.services`` — the same block that page is built from — rather
+than a second, hand-maintained list here. Container-side hostnames are
+translated for the host (see ``host_url``).
+
 Scheduled by ``scripts/gates/gates-daemon.py`` (see ``build_producers``).
 Stdlib only; probes are read-only and bounded by short timeouts. It never
 prints secrets: MCP env/headers are dropped at parse time.
@@ -32,6 +37,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -279,6 +285,178 @@ def _http_item(name: str, kind: str, display: str, url: str, *, ok_codes=(200,),
     return item(name, kind=kind, display_name=display, health="degraded", detail=f"HTTP {status}", endpoint=url, latency_ms=latency)
 
 
+def _yaml_scalar(raw: str):
+    """One YAML scalar or flow list, the subset config.yaml's integrations use."""
+    value = raw.strip()
+    if value.startswith("[") and value.endswith("]"):
+        return [_yaml_scalar(part) for part in value[1:-1].split(",") if part.strip()]
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    low = value.lower()
+    if low in ("true", "yes", "on"):
+        return True
+    if low in ("false", "no", "off"):
+        return False
+    return value
+
+
+def parse_integrations_text(text: str) -> tuple[bool, dict[str, dict]]:
+    """``integrations:`` of config.yaml → (enabled, {service_id: fields}), without PyYAML.
+
+    The same block Settings › Integrations is built from, so this inventory
+    and that page describe the same services. Reads the shape config.yaml
+    uses: ``integrations.enabled`` at two spaces, ``services:`` at two, each
+    service id at four and its scalar/flow-list fields at six. Comments
+    (whole-line and trailing `` #``) are ignored.
+    """
+    enabled = False
+    services: dict[str, dict] = {}
+    in_block = in_services = False
+    current: str | None = None
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        line = raw.split(" #", 1)[0].rstrip()
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.strip()
+        if indent == 0:
+            in_block = stripped == "integrations:"
+            in_services = False
+            current = None
+            continue
+        if not in_block:
+            continue
+        key, _, value = stripped.partition(":")
+        if indent == 2:
+            in_services = key == "services" and not value.strip()
+            current = None
+            if key == "enabled":
+                enabled = _yaml_scalar(value) is True
+        elif in_services and indent == 4 and not value.strip():
+            current = key
+            services[current] = {}
+        elif in_services and indent == 6 and current:
+            services[current][key] = _yaml_scalar(value)
+    return enabled, services
+
+
+def load_integrations(path: Path | None = None) -> tuple[bool, dict[str, dict]]:
+    try:
+        return parse_integrations_text((path or REPO_ROOT / "config.yaml").read_text(encoding="utf-8"))
+    except OSError:
+        return False, {}
+
+
+# Probe path and accepted codes per service id — mirrors
+# backend/packages/harness/deerflow/integrations/clients.py so the inventory
+# asks each service the same question its Settings card does. A config
+# `health_path` overrides, as it does there.
+SERVICE_PROBES: dict[str, tuple[str, tuple[int, ...]]] = {
+    "ollama": ("/api/tags", (200,)),
+    "litellm": ("/health/liveliness", (200,)),
+    "mailcow": ("/api/v1/get/status/version", (200, 401)),
+    "chatwoot": ("/api", (200,)),
+    "twenty": ("/healthz", (200,)),
+    "openclaw": ("/", (200, 401, 403)),
+    "searxng": ("/healthz", (200,)),
+    "crawl4ai": ("/health", (200,)),
+    "browserless": ("/pressure", (200, 401, 403)),
+}
+# Inventory item ids that predate config-driven probing; kept so the console's
+# history of each check does not fork.
+ITEM_IDS = {"mailcow": "mailcow_api"}
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def host_url(url: str) -> str | None:
+    """Translate a container-side integration URL into one reachable from this host.
+
+    ``host.docker.internal`` is the docker bridge from the host's side
+    (NOVA_INVENTORY_DOCKER_HOST, default 172.17.0.1) — the same address the
+    gateway container's request lands on, so a service only reachable through
+    the host bridge is judged the way Nova sees it. Loopback and IP literals
+    are used as-is. Any other hostname is a compose service name that only
+    resolves on the docker network: None, and the caller checks its container.
+    """
+    parts = urllib.parse.urlsplit(url)
+    host = parts.hostname or ""
+    if host == "host.docker.internal":
+        bridge = os.environ.get("NOVA_INVENTORY_DOCKER_HOST", DOCKER_BRIDGE)
+        netloc = bridge + (f":{parts.port}" if parts.port else "")
+        return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    if host in _LOCAL_HOSTS or host.replace(".", "").isdigit():
+        return url
+    return None
+
+
+def compose_container(url: str) -> str:
+    """Container name for a compose-internal service URL (``http://searxng:8080`` → ``deer-flow-searxng``)."""
+    prefix = os.environ.get("NOVA_COMPOSE_CONTAINER_PREFIX", "deer-flow-")
+    return prefix + (urllib.parse.urlsplit(url).hostname or "")
+
+
+def integration_group(svc: dict) -> str:
+    """Which inventory section a configured service is reported under."""
+    if host_url(str(svc.get("url", ""))) is None:
+        return "containers"
+    kind = svc.get("kind")
+    return {"llm_gateway": "llm", "mail": "mail"}.get(kind, "business")
+
+
+def integration_item(sid: str, svc: dict, *, docker_ps: dict[str, dict] | None = None, globally_enabled: bool = True) -> dict:
+    """One configured integration → one inventory item."""
+    url = str(svc.get("url", "")).rstrip("/")
+    kind = svc.get("kind") if svc.get("kind") in KINDS else "agent_gateway"
+    display = str(svc.get("display_name") or sid)
+    caps = [str(c) for c in svc.get("capabilities") or []]
+    reachable = host_url(url)
+    if reachable is None:
+        name = f"nova_{sid}"
+        endpoint = compose_container(url)
+    else:
+        name = ITEM_IDS.get(sid, sid)
+        port = urllib.parse.urlsplit(url).port
+        display = f"{display} (:{port})" if port else display
+        path, _ = SERVICE_PROBES.get(sid, ("/", (200,)))
+        endpoint = reachable.rstrip("/") + str(svc.get("health_path") or path)
+    if not globally_enabled or svc.get("enabled") is False:
+        why = "integrations.enabled is false" if not globally_enabled else "enabled: false"
+        return item(name, kind=kind, display_name=display, health="disabled", detail=f"disabled in config.yaml ({why})", endpoint=endpoint, capabilities=[])
+
+    if reachable is None:
+        state = (docker_ps or {}).get(endpoint)
+        return item(name, kind=kind, display_name=display, health=container_health(state), detail=(state or {}).get("status", "container not found"), endpoint=endpoint, capabilities=[])
+
+    _, ok_codes = SERVICE_PROBES.get(sid, ("/", (200,)))
+    key_env = svc.get("api_key_env")
+    key = os.environ.get(str(key_env), "").strip() if key_env else ""
+    headers = None
+    if sid == "mailcow" and key:
+        headers = {"X-API-Key": key}
+    if sid == "ollama":
+        status, latency, body = http_probe(endpoint)
+        if status == 200:
+            try:
+                models = [m.get("name", "?") for m in json.loads(body).get("models", [])]
+            except (json.JSONDecodeError, AttributeError):
+                models = []
+            return item(name, kind=kind, display_name=display, health="healthy", detail=f"{len(models)} models: {', '.join(models)[:160]}", endpoint=endpoint, latency_ms=latency, capabilities=models)
+        return item(name, kind=kind, display_name=display, health="down" if status is None else "degraded", detail=f"HTTP {status}" if status else f"unreachable: {body[:120]}", endpoint=endpoint, latency_ms=latency)
+    entry = _http_item(name, kind, display, endpoint, ok_codes=ok_codes, headers=headers, capabilities=caps)
+    if sid == "mailcow" and entry["health"] == "healthy" and not key:
+        entry["detail"] += f" ({key_env or 'MAILCOW_API_KEY'} not set)"
+        entry["capabilities"] = []
+    return entry
+
+
+def probe_integrations(group: str) -> list[dict]:
+    """Every config.yaml integration that belongs to ``group``, probed."""
+    globally_enabled, services = load_integrations()
+    wanted = {sid: svc for sid, svc in services.items() if integration_group(svc) == group}
+    docker_ps = parse_docker_ps(run(["docker", "ps", "-a", "--format", "{{json .}}"], timeout=20) or "") if group == "containers" and wanted else {}
+    return [integration_item(sid, svc, docker_ps=docker_ps, globally_enabled=globally_enabled) for sid, svc in wanted.items()]
+
+
 LOCAL_LLM_UNIT = "local-llm.service"
 
 
@@ -320,40 +498,9 @@ def probe_nova_stack() -> list[dict]:
 
 
 def probe_llm() -> list[dict]:
-    items = []
-    ollama_host = os.environ.get("OLLAMA_HOST", "127.0.0.1")
-    ollama_port = os.environ.get("OLLAMA_PORT", "11434")
-    ollama_url = f"http://{ollama_host}:{ollama_port}/api/tags"
-    status, latency, body = http_probe(ollama_url)
-    if status == 200:
-        try:
-            models = [m.get("name", "?") for m in json.loads(body).get("models", [])]
-        except (json.JSONDecodeError, AttributeError):
-            models = []
-        items.append(
-            item("ollama", kind="llm_gateway", display_name="Ollama", health="healthy", detail=f"{len(models)} models: {', '.join(models)[:160]}", endpoint=ollama_url, latency_ms=latency, capabilities=models)
-        )
-    else:
-        # If ollama is unreachable and config disables it, report as disabled
-        ollama_disabled = False
-        try:
-            config_text = (REPO_ROOT / "config.yaml").read_text(encoding="utf-8")
-            # Find ollama section and check for enabled: false within next 10 lines
-            lines = config_text.splitlines()
-            for i, line in enumerate(lines):
-                stripped = line.strip()
-                if stripped.startswith("ollama:") and not stripped.startswith("#"):
-                    for j in range(i + 1, min(len(lines), i + 10)):
-                        if lines[j].strip().startswith("enabled:") and "false" in lines[j]:
-                            ollama_disabled = True
-                            break
-                    break
-        except Exception:
-            pass
-        items.append(item("ollama", kind="llm_gateway", display_name="Ollama", health="disabled" if ollama_disabled else "down", detail="retired (enabled: false)" if ollama_disabled else (f"HTTP {status}" if status else body[:120]), endpoint=ollama_url, latency_ms=latency))
-    items.append(_http_item("litellm", "llm_gateway", "LiteLLM (pm2 nova-litellm)", f"http://{DOCKER_BRIDGE}:4000/health/liveliness"))
-    items.append(_local_llm_item())
-    return items
+    # Ollama, LiteLLM, ...: whatever config.yaml declares as an llm_gateway,
+    # with its enabled flag honoured (a disabled service is `disabled`, green).
+    return [*probe_integrations("llm"), _local_llm_item()]
 
 
 def probe_mail() -> list[dict]:
@@ -384,36 +531,20 @@ def probe_mail() -> list[dict]:
             capabilities=["imap"],
         )
     )
-    key = os.environ.get("MAILCOW_API_KEY", "").strip()
-    headers = {"X-API-Key": key} if key else None
-    api = _http_item("mailcow_api", "mail", "Mailcow admin API (:8080)", "http://127.0.0.1:8080/api/v1/get/status/version", ok_codes=(200, 401), headers=headers, capabilities=["mailbox", "alias", "dkim"] if key else [])
-    if api["health"] == "healthy" and not key:
-        api["detail"] += " (MAILCOW_API_KEY not set; needs host bridge from containers)"
-    items.append(api)
+    items.extend(probe_integrations("mail"))
     return items
 
 
 def probe_business() -> list[dict]:
-    return [
-        _http_item("chatwoot", "helpdesk", "Chatwoot (:4800)", "http://127.0.0.1:4800/api", capabilities=["conversations", "messages"]),
-        _http_item("twenty", "crm", "Twenty CRM (:3008)", "http://127.0.0.1:3008/healthz", capabilities=["people", "companies"]),
-        _http_item("openclaw", "agent_gateway", "OpenClaw gateway (:18789)", "http://127.0.0.1:18789/", capabilities=["acp"]),
-    ]
+    # Chatwoot, Twenty, OpenClaw, ... from config.yaml integrations.services.
+    return probe_integrations("business")
 
 
 def probe_containers() -> list[dict]:
-    parsed = parse_docker_ps(run(["docker", "ps", "-a", "--format", "{{json .}}"], timeout=20) or "")
-    wanted = (
-        ("deer-flow-searxng", "search", "SearXNG"),
-        ("deer-flow-crawl4ai", "crawler", "Crawl4AI"),
-        ("deer-flow-browserless", "browser", "Browserless"),
-    )
-    items = []
-    for name, kind, display in wanted:
-        state = parsed.get(name)
-        health = container_health(state)
-        items.append(item(name.replace("deer-flow-", "nova_"), kind=kind, display_name=display, health=health, detail=(state or {}).get("status", "container not found"), endpoint=name, capabilities=[]))
-    return items
+    # Integrations addressed by compose service name (searxng, crawl4ai,
+    # browserless): only resolvable on the docker network, so their container
+    # state is the host-side signal.
+    return probe_integrations("containers")
 
 
 def probe_extensions() -> list[dict]:
@@ -459,10 +590,26 @@ def probe_cli_tools() -> list[dict]:
     return items
 
 
+def pm2_apps_to_report() -> list[str]:
+    """The apps ecosystem.config.js declares (comments stripped, so an app
+    commented out on purpose is not reported missing), plus apps supervised
+    from other repos (NOVA_INVENTORY_EXTRA_PM2_APPS, default nova-ops)."""
+    extra = [a.strip() for a in os.environ.get("NOVA_INVENTORY_EXTRA_PM2_APPS", "nova-ops").split(",") if a.strip()]
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import stack_config  # type: ignore[import-not-found]
+
+        declared = stack_config.declared_pm2_apps(stack_config.read_ecosystem() or "")
+    except Exception:  # noqa: BLE001 - fall back to the stack's core apps
+        declared = []
+    declared = declared or ["nova", "nova-healthcheck", "nova-gates", "nova-host-bridge"]
+    return declared + [a for a in extra if a not in declared]
+
+
 def probe_pm2() -> list[dict]:
     apps = parse_pm2_jlist(run(["pm2", "jlist"], timeout=20) or "")
     items = []
-    for name in ("nova", "nova-litellm", "nova-healthcheck", "nova-gates", "nova-ops", "nova-host-bridge", "tunnel-nova"):
+    for name in pm2_apps_to_report():
         app = apps.get(name)
         health = "healthy" if app and app["status"] == "online" else ("down" if app else "unknown")
         items.append(item(f"pm2_{name}", kind="agent_gateway", display_name=f"pm2: {name}", health=health, detail=f"{app['status']} · {app['restarts']} restarts" if app else "not registered", capabilities=[]))

@@ -217,3 +217,112 @@ def test_local_llm_reports_retired_not_down_when_its_unit_is_disabled(monkeypatc
 
     monkeypatch.setattr(inventory.subprocess, "run", boom)
     assert inventory.local_llm_retired() is False
+
+
+INTEGRATIONS_YAML = """\
+models: []
+integrations:
+  enabled: true
+  probe_timeout_seconds: 3
+  services:
+    ollama:
+      kind: llm_gateway
+      url: http://host.docker.internal:11434
+      display_name: Ollama
+      enabled: false
+    litellm:
+      kind: llm_gateway
+      url: http://host.docker.internal:4000
+      display_name: LiteLLM
+      # a comment inside a service
+      enabled: false   # trailing comment
+    # Health probe only; UI home is the Runtimes page.
+    openclaw:
+      kind: agent_gateway
+      url: http://host.docker.internal:18789
+      display_name: OpenClaw
+      capabilities: [acp]
+    searxng:
+      kind: search
+      url: http://searxng:8080
+      display_name: SearXNG
+acp_agents:
+  openclaw:
+    command: node
+"""
+
+
+def test_parse_integrations_reads_urls_and_enabled_flags_without_pyyaml():
+    enabled, services = inventory.parse_integrations_text(INTEGRATIONS_YAML)
+    assert enabled is True
+    assert list(services) == ["ollama", "litellm", "openclaw", "searxng"]
+    assert services["litellm"] == {"kind": "llm_gateway", "url": "http://host.docker.internal:4000", "display_name": "LiteLLM", "enabled": False}
+    assert services["openclaw"]["capabilities"] == ["acp"]
+    assert "enabled" not in services["openclaw"]
+    # The acp_agents block's `openclaw:` is not an integration service.
+    assert services["openclaw"]["kind"] == "agent_gateway"
+
+
+def test_parse_integrations_matches_pyyaml_on_the_real_config():
+    yaml = pytest.importorskip("yaml")
+    text = (_REPO_ROOT / "config.yaml").read_text(encoding="utf-8")
+    real = yaml.safe_load(text).get("integrations") or {}
+    enabled, services = inventory.parse_integrations_text(text)
+    assert enabled == bool(real.get("enabled"))
+    expected = real.get("services") or {}
+    assert set(services) == set(expected)
+    for sid, svc in expected.items():
+        assert services[sid].get("url") == svc.get("url"), sid
+        assert services[sid].get("enabled", True) == svc.get("enabled", True), sid
+
+
+def test_host_url_translates_container_side_hosts(monkeypatch):
+    monkeypatch.delenv("NOVA_INVENTORY_DOCKER_HOST", raising=False)
+    assert inventory.host_url("http://host.docker.internal:4000") == f"http://{inventory.DOCKER_BRIDGE}:4000"
+    monkeypatch.setenv("NOVA_INVENTORY_DOCKER_HOST", "10.0.0.1")
+    assert inventory.host_url("http://host.docker.internal:18789/x") == "http://10.0.0.1:18789/x"
+    assert inventory.host_url("http://127.0.0.1:8080") == "http://127.0.0.1:8080"
+    assert inventory.host_url("http://searxng:8080") is None
+    assert inventory.compose_container("http://searxng:8080") == "deer-flow-searxng"
+
+
+def test_disabled_service_is_reported_disabled_without_a_probe(monkeypatch):
+    monkeypatch.setattr(inventory, "http_probe", lambda *a, **k: pytest.fail("disabled service was probed"))
+    _, services = inventory.parse_integrations_text(INTEGRATIONS_YAML)
+    entry = inventory.integration_item("litellm", services["litellm"])
+    assert entry["health"] == "disabled" and entry["status"] == "green"
+    assert "enabled: false" in entry["detail"]
+    off = inventory.integration_item("openclaw", services["openclaw"], globally_enabled=False)
+    assert off["health"] == "disabled"
+
+
+def test_enabled_service_is_probed_at_its_config_url_and_health_path(monkeypatch):
+    seen: list[str] = []
+    monkeypatch.setattr(inventory, "http_probe", lambda url, headers=None, timeout=3.0: seen.append(url) or (401, 2.0, ""))
+    _, services = inventory.parse_integrations_text(INTEGRATIONS_YAML)
+    entry = inventory.integration_item("openclaw", services["openclaw"])
+    assert seen == [f"http://{inventory.DOCKER_BRIDGE}:18789/"]
+    assert entry["name"] == "openclaw" and entry["health"] == "healthy" and entry["capabilities"] == ["acp"]
+
+
+def test_compose_internal_service_uses_container_state():
+    _, services = inventory.parse_integrations_text(INTEGRATIONS_YAML)
+    ps = {"deer-flow-searxng": {"state": "running", "status": "Up 3 days (healthy)", "healthy": True}}
+    entry = inventory.integration_item("searxng", services["searxng"], docker_ps=ps)
+    assert entry["name"] == "nova_searxng" and entry["health"] == "healthy"
+    assert inventory.integration_item("searxng", services["searxng"], docker_ps={})["health"] == "down"
+
+
+def test_groups_follow_kind_and_reachability():
+    _, services = inventory.parse_integrations_text(INTEGRATIONS_YAML)
+    assert inventory.integration_group(services["litellm"]) == "llm"
+    assert inventory.integration_group(services["openclaw"]) == "business"
+    assert inventory.integration_group(services["searxng"]) == "containers"
+
+
+def test_pm2_apps_follow_the_ecosystem_file(monkeypatch, tmp_path):
+    eco = tmp_path / "ecosystem.config.js"
+    eco.write_text('module.exports = { apps: [ { name: "a" }, /* { name: "off" }, */ // { name: "off2" }\n { name: "b" } ] };\n')
+    monkeypatch.setenv("NOVA_ECOSYSTEM_FILE", str(eco))
+    monkeypatch.setenv("NOVA_INVENTORY_EXTRA_PM2_APPS", "ext,a")
+    assert inventory.pm2_apps_to_report() == ["a", "b", "ext"]

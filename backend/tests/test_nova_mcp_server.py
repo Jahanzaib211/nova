@@ -42,13 +42,13 @@ def _registry() -> CapabilityRegistry:
     reg = CapabilityRegistry()
     reg.register(
         CapabilityModule(
-            id="demo",
-            title="Demo",
+            id="sample",
+            title="Sample",
             status=_status,
             operations=[
-                Operation(name="demo.double", kind="read", input=In, output=Out, handler=_double, description="Double n"),
-                Operation(name="demo.hidden", kind="read", input=In, output=Out, handler=_double, description="not on mcp", mcp=False),
-                Operation(name="demo.admin", kind="admin", input=In, output=Out, handler=_double, description="admin", admin_only=True),
+                Operation(name="sample.double", kind="read", input=In, output=Out, handler=_double, description="Double n"),
+                Operation(name="sample.hidden", kind="read", input=In, output=Out, handler=_double, description="not on mcp", mcp=False),
+                Operation(name="sample.admin", kind="admin", input=In, output=Out, handler=_double, description="admin", admin_only=True),
             ],
         )
     )
@@ -120,11 +120,11 @@ async def _app(tmp_path, *, registry=None):
 async def test_lists_only_mcp_ops_within_scope_and_calls_as_the_token_owner(tmp_path):
     app, server, tokens = await _app(tmp_path)
     try:
-        tok = (await tokens.create(owner_user_id="u1", name="cc", scopes=["demo"]))["token"]
+        tok = (await tokens.create(owner_user_id="u1", name="cc", scopes=["sample"]))["token"]
         async with _Session(app, tok) as s:
             names = sorted(t.name for t in (await s.list_tools()).tools)
-            assert names == ["demo__double"]  # hidden (mcp=False), admin-only and out-of-scope `other` are absent
-            res = await s.call_tool("demo__double", {"n": 21})
+            assert names == ["sample__double"]  # hidden (mcp=False), admin-only and out-of-scope `other` are absent
+            res = await s.call_tool("sample__double", {"n": 21})
             assert res.isError is False
             assert res.structuredContent == {"user": "u1", "n": 42}
     finally:
@@ -138,7 +138,7 @@ async def test_wildcard_scope_sees_every_module(tmp_path):
         tok = (await tokens.create(owner_user_id="u1", name="all", scopes=["*"]))["token"]
         async with _Session(app, tok) as s:
             names = sorted(t.name for t in (await s.list_tools()).tools)
-            assert names == ["demo__double", "other__double"]
+            assert names == ["other__double", "sample__double"]
     finally:
         await server.stop()
 
@@ -149,7 +149,7 @@ async def test_tool_errors_are_reported_not_raised(tmp_path):
     try:
         tok = (await tokens.create(owner_user_id="u1", name="cc", scopes=["*"]))["token"]
         async with _Session(app, tok) as s:
-            res = await s.call_tool("demo__double", {"n": "x"})
+            res = await s.call_tool("sample__double", {"n": "x"})
             assert res.isError is True
             assert "validation" in res.content[0].text.lower() or "n" in res.content[0].text
             res = await s.call_tool("nope__nothing", {})
@@ -197,3 +197,74 @@ def test_only_the_server_path_is_public_and_csrf_exempt():
     assert not _is_public("/api/mcp/config") and not _is_public("/api/mcp/cache/reset")
     assert is_csrf_exempt_path("/api/mcp/nova")
     assert not is_csrf_exempt_path("/api/mcp/config")
+
+
+@pytest.mark.anyio
+async def test_disabled_flag_turns_the_server_off(tmp_path):
+    """``capabilities.mcp_server.enabled`` was read by nothing: the server
+    answered whatever the flag said. It is now checked per request."""
+    from app.gateway.mcp_server import NovaMcpServer
+
+    tokens = await _tokens(tmp_path)
+    switch = {"on": False}
+    server = NovaMcpServer(_registry(), tokens, flags=lambda: {}, enabled=lambda: switch["on"])
+    app = FastAPI()
+    server.mount(app)
+    await server.start()
+    try:
+        tok = (await tokens.create(owner_user_id="u1", name="cc", scopes=["*"]))["token"]
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://nova") as c:
+            res = await c.post("/api/mcp/nova", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}, headers={"Authorization": f"Bearer {tok}", "Accept": "application/json, text/event-stream"})
+            assert res.status_code == 404
+        switch["on"] = True
+        async with _Session(app, tok) as s:
+            assert sorted(t.name for t in (await s.list_tools()).tools) == ["other__double", "sample__double"]
+    finally:
+        await server.stop()
+
+
+def test_enabled_flag_reads_config(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.gateway.mcp_server import mcp_server_enabled
+
+    def _cfg(enabled):
+        return SimpleNamespace(capabilities=SimpleNamespace(mcp_server=SimpleNamespace(enabled=enabled)))
+
+    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: _cfg(False))
+    assert mcp_server_enabled() is False
+    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: _cfg(True))
+    assert mcp_server_enabled() is True
+    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: SimpleNamespace())
+    assert mcp_server_enabled() is True, "default is on"
+
+
+@pytest.mark.anyio
+async def test_flag_gated_ops_are_refused_on_call_not_only_hidden(tmp_path):
+    """Listing hid flag-gated ops but a direct call by name used to reach the
+    handler; the registry's policy now refuses it."""
+    from app.gateway.mcp_server import NovaMcpServer
+
+    reg = CapabilityRegistry()
+    reg.register(
+        CapabilityModule(
+            id="gated",
+            title="Gated",
+            flag="email_marketing",
+            status=_status,
+            operations=[Operation(name="gated.double", kind="read", input=In, output=Out, handler=_double, description="d")],
+        )
+    )
+    tokens = await _tokens(tmp_path)
+    server = NovaMcpServer(reg, tokens, flags=lambda: {"email_marketing": False}, enabled=lambda: True)
+    app = FastAPI()
+    server.mount(app)
+    await server.start()
+    try:
+        tok = (await tokens.create(owner_user_id="u1", name="cc", scopes=["*"]))["token"]
+        async with _Session(app, tok) as s:
+            assert (await s.list_tools()).tools == []
+            res = await s.call_tool("gated__double", {"n": 1})
+            assert res.isError is True
+    finally:
+        await server.stop()

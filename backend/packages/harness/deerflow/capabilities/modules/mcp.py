@@ -17,17 +17,12 @@ def _servers() -> dict[str, Any]:
 
 
 def _tool_counts() -> dict[str, int]:
-    try:
-        from deerflow.mcp.cache import get_cached_mcp_tools
+    # Same counter as the integrations registry (by ``<server>_`` name
+    # prefix). This used to read ``metadata["mcp_server"]``, which the MCP
+    # adapter never sets, so every server reported 0 tools.
+    from deerflow.mcp.cache import tool_counts_by_server
 
-        counts: dict[str, int] = {}
-        for t in get_cached_mcp_tools():
-            server = (getattr(t, "metadata", None) or {}).get("mcp_server") or (getattr(t, "metadata", None) or {}).get("server")
-            if server:
-                counts[server] = counts.get(server, 0) + 1
-        return counts
-    except Exception:
-        return {}
+    return tool_counts_by_server(_servers())
 
 
 async def _list(ctx: OpContext, inp: Empty) -> Items:
@@ -48,9 +43,10 @@ async def _list(ctx: OpContext, inp: Empty) -> Items:
 
 
 async def _tools(ctx: OpContext, inp: Empty) -> Items:
-    from deerflow.mcp.cache import get_cached_mcp_tools
+    from deerflow.mcp.cache import get_cached_mcp_tools, server_for_tool
 
-    items = [{"name": t.name, "description": (t.description or "")[:200], "server": (getattr(t, "metadata", None) or {}).get("mcp_server")} for t in get_cached_mcp_tools()]
+    servers = list(_servers())
+    items = [{"name": t.name, "description": (t.description or "")[:200], "server": server_for_tool(t.name, servers)} for t in get_cached_mcp_tools()]
     return Items(items=items, total=len(items))
 
 
@@ -60,13 +56,9 @@ class ToggleIn(BaseModel):
 
 
 async def _toggle(ctx: OpContext, inp: ToggleIn) -> Ok:
-    from deerflow.config.extensions_config import get_extensions_config, persist_extensions_config
+    from deerflow.config.extensions_config import set_mcp_server_enabled
 
-    cfg = get_extensions_config()
-    if inp.name not in cfg.mcp_servers:
-        raise LookupError(f"MCP server {inp.name!r} not found")
-    cfg.mcp_servers[inp.name].enabled = inp.enabled
-    persist_extensions_config(cfg)
+    set_mcp_server_enabled(inp.name, inp.enabled)
     try:
         from deerflow.mcp.cache import reset_mcp_tools_cache
 

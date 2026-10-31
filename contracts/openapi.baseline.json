@@ -2260,6 +2260,11 @@
             "default": false,
             "title": "Runtimes",
             "type": "boolean"
+          },
+          "sandbox": {
+            "default": false,
+            "title": "Sandbox",
+            "type": "boolean"
           }
         },
         "title": "FeatureFlags",
@@ -4813,6 +4818,40 @@
         "title": "RuntimeConfigResponse",
         "type": "object"
       },
+      "SandboxFileWrite": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "expected_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Size"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "path",
+          "content"
+        ],
+        "title": "SandboxFileWrite",
+        "type": "object"
+      },
       "ScheduleCreateRequest": {
         "properties": {
           "cron": {
@@ -6285,19 +6324,6 @@
           "thread_id"
         ],
         "title": "ThreadTokenUsageResponse",
-        "type": "object"
-      },
-      "ToggleRequest": {
-        "properties": {
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "ToggleRequest",
         "type": "object"
       },
       "TokenUsageResponse": {
@@ -9905,50 +9931,6 @@
         ]
       }
     },
-    "/api/igino/toggle": {
-      "post": {
-        "description": "Deprecated. Reports the real state; it never changed anything.\n\nThis endpoint returned ``{\"enabled\": <whatever you sent>}`` and wrote\nnothing -- no env, no config, no store. The UI switch it backed therefore\ndid nothing at all while looking like it worked, which is worse than having\nno switch: it invited an operator to \"turn privacy on\" and then trust it.\n\nEach capability is configured independently by environment\n(DEERFLOW_IGINO_ENABLED, _AUDIT_ENABLED, _TOR_ENABLED, _CACHE_*), so a\nsingle master switch could not have expressed the real state even if it had\npersisted. ``/status`` now reports each one separately.\n\nKept as a 410 rather than deleted so an older frontend gets a clear answer\ninstead of a 404 that reads as an outage.",
-        "operationId": "toggle_privacy_api_igino_toggle_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToggleRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Toggle Privacy Api Igino Toggle Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Toggle Privacy",
-        "tags": [
-          "igino"
-        ]
-      }
-    },
     "/api/integrations": {
       "get": {
         "operationId": "list_integrations_api_integrations_get",
@@ -12800,6 +12782,48 @@
           }
         },
         "summary": "Get Sandbox File",
+        "tags": [
+          "sandbox"
+        ]
+      },
+      "put": {
+        "description": "Write a file in the thread's ``/mnt/user-data/`` tree from the editor.\n\nThe read side of this pair is ``GET /api/sandbox/file``; every guarantee\nthere applies here, in the same order: the caller must own the thread, the\npath must be inside the virtual user-data tree, and ``resolve_virtual_path``\nis what keeps ``..`` from escaping it.\n\nWriting is the reason the Agent's Computer editor can stop being a viewer.\nThe agent writes the same files, so the lost-update case is real rather\nthan theoretical: ``expected_size`` makes a stale save fail loudly (409)\ninstead of overwriting whatever the agent just produced.",
+        "operationId": "put_sandbox_file_api_sandbox_file_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SandboxFileWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Sandbox File Api Sandbox File Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Sandbox File",
         "tags": [
           "sandbox"
         ]

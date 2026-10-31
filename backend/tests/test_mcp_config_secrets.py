@@ -7,6 +7,7 @@ preserves existing secrets when the frontend round-trips masked values.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +27,7 @@ from app.gateway.routers.mcp import (
     reset_mcp_tools_cache_endpoint,
     update_mcp_configuration,
 )
+from deerflow.config.extensions_config import ExtensionsConfig
 
 # ---------------------------------------------------------------------------
 # _mask_server_config
@@ -386,7 +388,7 @@ async def test_update_mcp_configuration_resets_tools_cache(monkeypatch, tmp_path
         nonlocal reset_calls
         reset_calls += 1
 
-    monkeypatch.setattr(mcp_router.ExtensionsConfig, "resolve_config_path", lambda: config_path)
+    monkeypatch.setattr(ExtensionsConfig, "resolve_config_path", lambda: config_path)
     monkeypatch.setattr(mcp_router, "get_extensions_config", lambda: current_config)
     monkeypatch.setattr(mcp_router, "reload_extensions_config", lambda: reloaded_config)
     monkeypatch.setattr(mcp_router, "reset_mcp_tools_cache", fake_reset_mcp_tools_cache)
@@ -431,7 +433,7 @@ async def test_update_mcp_configuration_never_truncates_on_write_failure(monkeyp
     current_config = SimpleNamespace(skills={}, mcp_servers={})
     reloaded_config = SimpleNamespace(mcp_servers={})
 
-    monkeypatch.setattr(mcp_router.ExtensionsConfig, "resolve_config_path", lambda: config_path)
+    monkeypatch.setattr(ExtensionsConfig, "resolve_config_path", lambda: config_path)
     monkeypatch.setattr(mcp_router, "get_extensions_config", lambda: current_config)
     monkeypatch.setattr(mcp_router, "reload_extensions_config", lambda: reloaded_config)
     monkeypatch.setattr(mcp_router, "reset_mcp_tools_cache", lambda: None)
@@ -442,7 +444,7 @@ async def test_update_mcp_configuration_never_truncates_on_write_failure(monkeyp
     def exploding_dumps(*args, **kwargs):
         raise RuntimeError("simulated crash mid-write")
 
-    monkeypatch.setattr(mcp_router.json, "dumps", exploding_dumps)
+    monkeypatch.setattr(json, "dumps", exploding_dumps)
 
     with pytest.raises(HTTPException) as exc_info:
         await update_mcp_configuration(

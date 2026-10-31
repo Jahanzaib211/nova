@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -50,17 +49,12 @@ class ProbeOut(BaseModel):
 
 async def _probe(ctx: OpContext, inp: ProbeIn) -> ProbeOut:
     """One tiny completion — "Check model" — so a misconfigured key or a
-    stopped local server is reported here and not on the user's first message."""
-    from deerflow.models.factory import create_chat_model
+    stopped local server is reported here and not on the user's first message.
+    Same probe (timeout, no tracing) as ``POST /api/models/{name}/test``."""
+    from deerflow.models.probe import probe_model
 
-    started = time.monotonic()
-    try:
-        model = create_chat_model(name=inp.name)
-        reply = await model.ainvoke("Reply with the single word: ok")
-        text = getattr(reply, "content", reply)
-        return ProbeOut(name=inp.name, ok=True, latency_ms=int((time.monotonic() - started) * 1000), detail=str(text)[:80])
-    except Exception as exc:
-        return ProbeOut(name=inp.name, ok=False, latency_ms=int((time.monotonic() - started) * 1000), detail=f"{type(exc).__name__}: {exc}"[:300])
+    result = await probe_model(inp.name)
+    return ProbeOut(name=inp.name, ok=result.ok, latency_ms=result.latency_ms, detail=result.detail[:80] if result.ok else result.detail[:300])
 
 
 async def _status() -> ModuleStatus:

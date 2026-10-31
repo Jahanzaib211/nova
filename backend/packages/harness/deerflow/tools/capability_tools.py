@@ -15,7 +15,7 @@ import logging
 from langchain_core.tools import BaseTool, StructuredTool
 
 from deerflow.capabilities.registry import CapabilityRegistry
-from deerflow.capabilities.types import HARNESS_TOOL_KINDS, OpContext, Operation
+from deerflow.capabilities.types import OpContext, Operation
 from deerflow.runtime.user_context import get_effective_user_id
 
 logger = logging.getLogger(__name__)
@@ -46,9 +46,10 @@ def _make_tool(registry: CapabilityRegistry, op: Operation) -> BaseTool:
 
 def build_capability_tools(registry: CapabilityRegistry, *, enabled_flags: set[str], groups: set[str]) -> list[BaseTool]:
     tools: list[BaseTool] = []
-    for op in registry.operations(enabled_flags=enabled_flags):
-        if not op.harness or op.kind not in HARNESS_TOOL_KINDS or op.admin_only:
-            continue
+    # The registry's policy decides which ops a model may hold (not
+    # admin-only, a harness-safe kind, flag on); invoke re-checks it per call.
+    probe = OpContext(user_id="", is_admin=False, surface="harness")
+    for op in registry.permitted(probe, enabled_flags=enabled_flags):
         if group_for(op) not in groups:
             continue
         tools.append(_make_tool(registry, op))

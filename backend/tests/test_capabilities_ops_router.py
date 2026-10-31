@@ -40,12 +40,12 @@ def _registry() -> CapabilityRegistry:
     reg = CapabilityRegistry()
     reg.register(
         CapabilityModule(
-            id="demo",
-            title="Demo",
+            id="sample",
+            title="Sample",
             status=_status,
             operations=[
-                Operation(name="demo.double", kind="read", input=In, output=Out, handler=_h, description="double"),
-                Operation(name="demo.admin", kind="admin", input=In, output=Out, handler=_admin, description="admin", admin_only=True),
+                Operation(name="sample.double", kind="read", input=In, output=Out, handler=_h, description="double"),
+                Operation(name="sample.admin", kind="admin", input=In, output=Out, handler=_admin, description="admin", admin_only=True),
             ],
         )
     )
@@ -72,24 +72,24 @@ def test_list_returns_snapshot_and_statuses():
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["snapshot"]["version"] == 1
-    assert [op["name"] for op in body["snapshot"]["operations"]] == ["demo.admin", "demo.double"]
-    assert body["status"]["demo"] == {"configured": True, "healthy": False, "detail": "degraded"}
+    assert [op["name"] for op in body["snapshot"]["operations"]] == ["sample.admin", "sample.double"]
+    assert body["status"]["sample"] == {"configured": True, "healthy": False, "detail": "degraded"}
     assert body["flags"]["capabilities"] is True
 
 
 def test_invoke_validates_and_returns_output():
     c = _client()
-    res = c.post("/api/capabilities/ops/demo.double", json={"n": 21})
+    res = c.post("/api/capabilities/ops/sample.double", json={"n": 21})
     assert res.status_code == 200, res.text
     assert res.json()["result"]["n"] == 42
     assert res.json()["result"]["user"]
-    assert c.post("/api/capabilities/ops/demo.double", json={"n": "x"}).status_code == 422
-    assert c.post("/api/capabilities/ops/demo.nope", json={}).status_code == 404
+    assert c.post("/api/capabilities/ops/sample.double", json={"n": "x"}).status_code == 422
+    assert c.post("/api/capabilities/ops/sample.nope", json={}).status_code == 404
 
 
 def test_admin_only_ops_are_403_for_users_and_200_for_admins():
-    assert _client().post("/api/capabilities/ops/demo.admin", json={}).status_code == 403
-    assert _client(admin=True).post("/api/capabilities/ops/demo.admin", json={}).status_code == 200
+    assert _client().post("/api/capabilities/ops/sample.admin", json={}).status_code == 403
+    assert _client(admin=True).post("/api/capabilities/ops/sample.admin", json={}).status_code == 200
 
 
 def test_handler_errors_map_to_statuses():
@@ -125,7 +125,7 @@ def test_handler_errors_map_to_statuses():
     assert res.json()["detail"] == "RuntimeError: service down"
 
 
-@pytest.mark.parametrize("path", ["/api/capabilities/ops", "/api/capabilities/ops/demo.double"])
+@pytest.mark.parametrize("path", ["/api/capabilities/ops", "/api/capabilities/ops/sample.double"])
 def test_unauthenticated_is_401(path):
     from fastapi import FastAPI
 
@@ -137,3 +137,34 @@ def test_unauthenticated_is_401(path):
     c = TestClient(app)
     res = c.get(path) if path.endswith("ops") else c.post(path, json={})
     assert res.status_code == 401
+
+
+def test_conflicts_map_to_409_and_disabled_flags_to_403():
+    from deerflow.capabilities import OperationConflict
+
+    async def _conflict(ctx, inp):
+        raise OperationConflict("job is already cancelled")
+
+    reg = CapabilityRegistry(flags=lambda: {"jobs": False})
+    reg.register(
+        CapabilityModule(
+            id="c",
+            title="C",
+            status=_status,
+            operations=[
+                Operation(name="c.conflict", kind="write", input=In, output=Out, handler=_conflict, description="c"),
+                Operation(name="c.gated", kind="read", input=In, output=Out, handler=_h, description="g", flag="jobs"),
+            ],
+        )
+    )
+    from _router_auth_helpers import make_authed_test_app
+
+    from app.gateway.routers import capabilities_ops
+
+    app = make_authed_test_app()
+    app.state.capability_registry = reg
+    app.include_router(capabilities_ops.router)
+    c = TestClient(app)
+    res = c.post("/api/capabilities/ops/c.conflict", json={})
+    assert res.status_code == 409 and res.json()["detail"] == "job is already cancelled"
+    assert c.post("/api/capabilities/ops/c.gated", json={}).status_code == 403
