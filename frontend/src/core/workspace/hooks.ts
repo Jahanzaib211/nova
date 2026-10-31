@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getBackendBaseURL } from "@/core/config";
+import { useSandboxThreadId } from "@/core/sandbox/live";
 import {
   fetchFileSymbols,
   fetchWorkspaceCommands,
@@ -39,9 +40,10 @@ export interface WorkspaceSnapshotState {
  *   guarded against concurrent triggers client-side too.
  */
 export function useWorkspaceSnapshot(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled = true,
 ): WorkspaceSnapshotState {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const queryClient = useQueryClient();
   const [isIndexing, setIsIndexing] = useState(false);
 
@@ -97,10 +99,11 @@ export function useWorkspaceSnapshot(
  * an empty list so the tree renders identically pre-flag.
  */
 export function useFileSymbols(
-  threadId: string | null,
+  requestedThreadId: string | null,
   filePath: string | null,
   enabled = true,
 ): WorkspaceSymbol[] {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const query = useQuery<WorkspaceSymbol[]>({
     queryKey: ["workspace", "symbols", threadId, filePath],
     queryFn: () => fetchFileSymbols(threadId!, filePath!),
@@ -113,9 +116,10 @@ export function useFileSymbols(
 
 /** Commands detected in the workspace (dev/test/lint...). Empty pre-flag. */
 export function useWorkspaceCommands(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled = true,
 ): WorkspaceCommand[] {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const query = useQuery<WorkspaceCommand[]>({
     queryKey: ["workspace", "commands", threadId],
     queryFn: () => fetchWorkspaceCommands(threadId!),
@@ -128,9 +132,10 @@ export function useWorkspaceCommands(
 
 /** Kernel metrics for the Privacy tab. Null while the flag is off. */
 export function useWorkspaceMetrics(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled = true,
 ): WorkspaceMetrics | null {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const query = useQuery<WorkspaceMetrics | null>({
     queryKey: ["workspace", "metrics", threadId],
     queryFn: () => fetchWorkspaceMetrics(threadId!),
@@ -143,10 +148,11 @@ export function useWorkspaceMetrics(
 
 /** Impact preview for one file (C10 item 9). Null while unavailable. */
 export function useFileImpact(
-  threadId: string | null,
+  requestedThreadId: string | null,
   filePath: string | null,
   enabled = true,
 ): WorkspaceImpact | null {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const query = useQuery<WorkspaceImpact | null>({
     queryKey: ["workspace", "impact", threadId, filePath],
     queryFn: () => fetchWorkspaceImpact(threadId!, [filePath!]),
@@ -229,9 +235,10 @@ const WORKSPACE_EVENT_TYPES: WorkspaceEventType[] = [
 const MAX_WORKSPACE_OPEN_FAILURES = 3;
 
 export function useWorkspaceEvents(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled = true,
 ): WorkspaceLiveEvent[] {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const [events, setEvents] = useState<WorkspaceLiveEvent[]>([]);
   const esRef = useRef<EventSource | null>(null);
   const failuresRef = useRef(0);

@@ -13,10 +13,23 @@ ARG NPM_REGISTRY
 # Configure corepack registry before installing pnpm so the download itself
 # succeeds in restricted networks (COREPACK_NPM_REGISTRY controls where
 # corepack fetches package managers from).
+# Corepack caches the package manager it downloads under COREPACK_HOME, which
+# defaults to the *invoking user's* home. These RUN steps execute as root, so
+# without an explicit path pnpm lands in /root/.cache — and the prod stage runs
+# as `node`, which looks in /home/node/.cache, misses, and re-downloads pnpm
+# from the npm registry on **every fresh container**. Observed live: six failed
+# starts in thirty seconds on a flaky link before one download finally
+# succeeded, which reads as a crash loop and trips the drift gate's
+# restart_storm check.
+#
+# A shared, world-readable COREPACK_HOME makes the baked install the one that is
+# actually found, whichever user runs it.
+ENV COREPACK_HOME=/opt/corepack
 RUN if [ -n "${NPM_REGISTRY}" ]; then \
       export COREPACK_NPM_REGISTRY="${NPM_REGISTRY}"; \
     fi && \
-    corepack enable && corepack install -g pnpm@10.26.2
+    corepack enable && corepack install -g pnpm@10.26.2 && \
+    chmod -R a+rX "${COREPACK_HOME}"
 RUN pnpm config set store-dir ${PNPM_STORE_PATH}
 # Optionally override npm registry for restricted networks (e.g. NPM_REGISTRY=https://registry.npmmirror.com)
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
@@ -26,6 +39,14 @@ COPY frontend ./frontend
 # ── Dev: install only, CMD is overridden by docker-compose ───────────────────
 FROM base AS dev
 RUN cd /app/frontend && pnpm install --frozen-lockfile
+# Run as non-root, matching the prod stage. docker-compose-dev.yaml already
+# claims "the dev target runs as USER node already; no cap_add needed" — that
+# was untrue: this stage had no USER, so the dev image ran as root, and the
+# image in use only ran as `node` because it had been built from the prod stage
+# instead. The chown is required, not cosmetic: `pnpm install` runs as root, and
+# `next dev` has to write `.next/` into this tree.
+RUN chown -R node:node /app/frontend
+USER node
 EXPOSE 3000
 
 # ── Builder: install + compile Next.js ───────────────────────────────────────
@@ -43,10 +64,23 @@ RUN cd /app/frontend && pnpm build
 FROM node:22-alpine AS prod
 ARG PNPM_STORE_PATH
 ARG NPM_REGISTRY
+# Corepack caches the package manager it downloads under COREPACK_HOME, which
+# defaults to the *invoking user's* home. These RUN steps execute as root, so
+# without an explicit path pnpm lands in /root/.cache — and the prod stage runs
+# as `node`, which looks in /home/node/.cache, misses, and re-downloads pnpm
+# from the npm registry on **every fresh container**. Observed live: six failed
+# starts in thirty seconds on a flaky link before one download finally
+# succeeded, which reads as a crash loop and trips the drift gate's
+# restart_storm check.
+#
+# A shared, world-readable COREPACK_HOME makes the baked install the one that is
+# actually found, whichever user runs it.
+ENV COREPACK_HOME=/opt/corepack
 RUN if [ -n "${NPM_REGISTRY}" ]; then \
       export COREPACK_NPM_REGISTRY="${NPM_REGISTRY}"; \
     fi && \
-    corepack enable && corepack install -g pnpm@10.26.2
+    corepack enable && corepack install -g pnpm@10.26.2 && \
+    chmod -R a+rX "${COREPACK_HOME}"
 RUN pnpm config set store-dir ${PNPM_STORE_PATH}
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 WORKDIR /app

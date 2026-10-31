@@ -120,4 +120,4 @@ Settings are stored in `$DEER_FLOW_HOME/voice-settings.yaml` (overrides `config.
 - `backend/app/gateway/routers/voice.py` — Voice WebSocket and REST endpoints
 - `backend/tests/test_voice_session.py` — Voice session unit tests
 - `frontend/src/core/voice/` — Browser-side voice capture and playback
-- `frontend/src/components/workspace/settings/voice-settings-page.tsx` — Voice settings UI
+- `frontend/src/features/voice/pages/voice-settings-page.tsx` — Voice settings UI (feature module; i18n under `t.features.voice`)

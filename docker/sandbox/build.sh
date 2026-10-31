@@ -112,11 +112,20 @@ stage_vendor() {
     keep="$(mktemp -d)"
     [ -d "$WHEELS" ] && mv "$WHEELS" "${keep}/wheels"
     [ -d "${VENDOR}/android" ] && mv "${VENDOR}/android" "${keep}/android"
+    # Preserve vendored go-bins and kubectl/helm/terraform — large binaries
+    # that are expensive to download on this ISP (GitHub CDN throttling).
+    local gobins=(nuclei httpx subfinder gitleaks trufflehog dalfox trivy kubectl helm terraform)
+    for b in "${gobins[@]}"; do
+        [ -f "${VENDOR}/${b}" ] && mv "${VENDOR}/${b}" "${keep}/${b}"
+    done
     rm -rf "$VENDOR"
     mkdir -p "$VENDOR"
     : >"${VENDOR}/.keep"
     [ -d "${keep}/wheels" ] && mv "${keep}/wheels" "$WHEELS"
     [ -d "${keep}/android" ] && mv "${keep}/android" "${VENDOR}/android"
+    for b in "${gobins[@]}"; do
+        [ -f "${keep}/${b}" ] && mv "${keep}/${b}" "${VENDOR}/${b}"
+    done
     rm -rf "$keep"
 
     # Go — statically linked, so the whole GOROOT transplants as-is.

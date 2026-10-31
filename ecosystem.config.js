@@ -18,7 +18,7 @@
 //   nova-dify             — script ~/Desktop/dify/ does not exist
 //   nova-tunnel           — wraps cloudflared-nova.service, which is not
 //                           installed; nova.alilabsx.com is served by the
-//                           `tunnel-nova` pm2 app instead
+//                           systemd `cloudflared.service` connector
 //   nova-monitoring       — Grafana/Prometheus/Loki duplicate the k3s
 //                           monitoring namespace; none were running
 // Anything added back here MUST be startable, or it becomes a repair loop.
@@ -47,8 +47,28 @@ module.exports = {
       max_restarts: 10,
       restart_delay: 5000,
       exp_backoff_restart_delay: 60,
-      kill_timeout: 10000,
+      // 2026-09 hardening: bump kill timeout from 10s → 30s. The compose
+      // stack takes ~90s to cold-boot (uv sync + frontend `pnpm install`
+      // in dev), and the old 10s window meant a rolling restart could
+      // force-kill the old stack before the new one bound its ports,
+      // surfacing as a brief nginx 502. 30s gives clean SIGTERM → cascade
+      // → exit without forcing the issue mid-boot.
+      kill_timeout: 30000,
     },
+    /* TEMPORARILY DISABLED 2026-10-29 — host disk was wiped, so
+     * `~/.nova-litellm` (the dedicated venv scripts/pm2-litellm.sh execs) no
+     * longer exists and this app can only crash-loop: it had already reached
+     * 699 restarts. Because nova-healthcheck re-registers anything missing
+     * from this file, leaving it declared is the same "unstartable entry"
+     * trap described in the header — a repair loop that can freeze the host.
+     * P10_litellm is disabled in nova-healthcheck's env for the same reason.
+     *
+     * Re-enable both once Ollama + the LiteLLM venv are reinstalled: run
+     * `bash scripts/pm2-litellm.sh` once to bootstrap the venv, then
+     * un-comment this block, remove P10_litellm from the
+     * HEALTHCHECK_DISABLED_PROBES list below, and
+     * `pm2 start ecosystem.config.js --only nova-litellm && pm2 save`.
+     *
     {
       // LiteLLM proxy — Nova's unified OpenAI-compatible model gateway.
       // Routes to the Ollama daemon (127.0.0.1:11434) and its free cloud
@@ -66,6 +86,26 @@ module.exports = {
       kill_timeout: 8000,
       out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-litellm-out.log")}`,
       error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-litellm-error.log")}`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+    */
+    {
+      // Forwards loopback-only host services (OpenClaw 18789, Mailcow API 8080,
+      // Chatwoot 4800, Twenty 3008) from the docker bridge IP to 127.0.0.1 so
+      // Nova's containers reach them at host.docker.internal:<port>. Bound to
+      // 172.17.0.1 only — same "never 0.0.0.0" rule as nova-litellm; upstream
+      // auth (API keys/tokens) is untouched. Watchdog probe P16_host_bridge
+      // auto-heals this app. Ports: NOVA_HOST_BRIDGE_PORTS in the script.
+      name: "nova-host-bridge",
+      script: `${require("path").resolve(__dirname, "scripts/host-bridge.sh")}`,
+      interpreter: "none",
+      cwd: __dirname,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 3000,
+      kill_timeout: 5000,
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-host-bridge-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-host-bridge-error.log")}`,
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
@@ -149,20 +189,35 @@ module.exports = {
         //                          Ollama on :11434 via nova-litellm.
         //   P9_bridge            — llama-bridge; ~/Desktop/llama-bridge
         //                          does not exist
+        //   P10_litellm          — 2026-10-29: the disk wipe removed
+        //                          ~/.nova-litellm, so the proxy cannot start
+        //                          (699 restarts). Disabled together with its
+        //                          app entry above so P10's auto-heal cannot
+        //                          re-register an unstartable app in a loop.
         //   P11_dify             — nova-dify; ~/Desktop/dify does not exist
-        //   P12_tunnel           — cloudflared-nova.service is not
-        //                          installed; the public hostname is served
-        //                          by the `tunnel-nova` pm2 app via
-        //                          ~/.cloudflared/nova-config.yml instead
+        // P12_tunnel is ENABLED again: it demanded cloudflared-nova.service,
+        // which was never installed here, so it sat permanently red and got
+        // switched off — leaving P1/P2/P3 all terminating at localhost:2026 and
+        // nothing at all watching the public hostname. It now asks cloudflared's
+        // metrics /ready first (HEALTHCHECK_TUNNEL_METRICS_URLS, default
+        // 127.0.0.1:20241), then the units in HEALTHCHECK_TUNNEL_UNITS (default
+        // cloudflared.service,cloudflared-nova.service), then the pm2 apps in
+        // HEALTHCHECK_TUNNEL_PM2_APPS; this host runs systemd cloudflared.service.
+        // Its auto-fix only alerts when there is no passwordless sudo.
         // Re-enable by removing a name here once the service is back.
         HEALTHCHECK_DISABLED_PROBES:
-          "P4_local_llm_gateway,P5_llama_loopback,P6_llama_vram,P9_bridge,P11_dify,P12_tunnel",
+          "P4_local_llm_gateway,P5_llama_loopback,P6_llama_vram,P9_bridge,P10_litellm,P11_dify",
         // Binary-attestation probe — left unset by default. To enable:
         //   WATCHDOG_ATTESTATION_BINARY_PATH=/path/to/binary
         //   WATCHDOG_ATTESTATION_CONSTITUTION_PATH=/path/to/constitution
         //   WATCHDOG_ATTESTATION_HASH_DIR=/tmp/ali-ram-moat
         //   WATCHDOG_ATTESTATION_RESTART_CMD="sudo systemctl restart my-svc"
         HEALTHCHECK_CYCLE_DEADLINE_SEC: "60",
+        // While the deer-flow-autoheal sidecar runs, container/stack repairs
+        // (P2/P7/P15) only alert until the target has been unhealthy this
+        // long — docker's restart policy + autoheal own container liveness
+        // first, so four supervisors do not race on one container.
+        HEALTHCHECK_CONTAINER_GRACE_SEC: "600",
       },
     },
   ],

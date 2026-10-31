@@ -77,10 +77,20 @@ def upgrade() -> None:
             sa.text(
                 """
                 INSERT INTO users (id, email, system_role, plan, created_at, needs_setup, token_version, is_forbidden, oauth_provider, tos_accepted_at)
-                VALUES (:id, :email, 'admin', 'free', CURRENT_TIMESTAMP, 0, 0, 0, NULL, NULL)
+                VALUES (:id, :email, 'admin', 'free', CURRENT_TIMESTAMP, :needs_setup, 0, :is_forbidden, NULL, NULL)
                 """
             ),
-            {"id": _LEGACY_USER_ID, "email": _LEGACY_EMAIL},
+            {
+                "id": _LEGACY_USER_ID,
+                "email": _LEGACY_EMAIL,
+                # Bind real booleans rather than the integers 0/1: on a fresh
+                # Postgres these columns are BOOLEAN (the ORM maps them as
+                # Boolean), and Postgres rejects an integer expression for a
+                # boolean column ("DatatypeMismatchError"), which aborted boot
+                # with the migration half-applied. SQLite accepts both.
+                "needs_setup": False,
+                "is_forbidden": False,
+            },
         )
         logger.info("Created synthetic legacy user %s", _LEGACY_USER_ID)
     else:

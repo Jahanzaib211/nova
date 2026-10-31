@@ -9,8 +9,16 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type { CapabilitiesResponse } from "./types";
 
-export async function loadCapabilities(): Promise<CapabilitiesResponse> {
-  const res = await fetch(`${getBackendBaseURL()}/api/runtime/capabilities`);
+export async function loadCapabilities(
+  threadId?: string,
+): Promise<CapabilitiesResponse> {
+  // Scoping the circuit snapshot to one thread keeps the runtime bar honest:
+  // it sits above a single chat's Agent's Computer, so a breaker opened by a
+  // different thread must not label this chat degraded.
+  const query = threadId ? `?thread_id=${encodeURIComponent(threadId)}` : "";
+  const res = await fetch(
+    `${getBackendBaseURL()}/api/runtime/capabilities${query}`,
+  );
   if (!res.ok) {
     throw new Error(
       `Failed to load capabilities: HTTP ${res.status} ${res.statusText}`,

@@ -121,11 +121,14 @@ test("capture the live voice panel in each phase", async ({ page }) => {
       onmessage: ((e: { data: string }) => void) | null = null;
       onerror: (() => void) | null = null;
       onclose: (() => void) | null = null;
-      constructor(_u: string) {
+      constructor(u: string) {
         super();
-        w.__voice.opened = true;
-        w.__voice.emit = (m: unknown) =>
-          this.onmessage?.({ data: JSON.stringify(m) });
+        // Same scoping as voice.spec.ts: only the voice session socket.
+        if (u.includes("/api/voice/session/")) {
+          w.__voice.opened = true;
+          w.__voice.emit = (m: unknown) =>
+            this.onmessage?.({ data: JSON.stringify(m) });
+        }
         setTimeout(() => this.onopen?.(), 0);
       }
       send(d: unknown) {

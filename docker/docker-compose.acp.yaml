@@ -1,0 +1,51 @@
+# Nova — ACP agents overlay (OPT-IN: NOVA_ACP_AGENTS=1 in .env)
+#
+# Lets the gateway run the two ACP agents declared under `acp_agents` in
+# config.yaml ("Claude inside Nova"):
+#   - claude_code: `npx -y @zed-industries/claude-agent-acp` — the Claude Code
+#     agent behind the Zed ACP adapter. It reads the SAME login the `claude`
+#     CLI uses (~/.claude, mounted read-only by docker-compose.cli-auth.yaml,
+#     which scripts/pm2-deerflow.sh adds alongside this file). Nova never
+#     reads or forwards that credential itself; only the Claude Code binary
+#     consumes it.
+#   - openclaw: `node /opt/openclaw/openclaw.mjs acp` — the OpenClaw gateway's
+#     own ACP bridge, talking to the host gateway (loopback :18789) through
+#     nova-host-bridge. The 500 MB package is bind-mounted from the host's
+#     global npm install rather than downloaded into the image; its gateway
+#     token is copied by scripts/acp-secrets.sh to ~/.nova/secrets (0600) and
+#     mounted read-only — never in config.yaml or .env.
+#
+# The npm cache volume keeps `npx -y …` from re-downloading the Claude adapter
+# on every gateway restart; docker/dev-entrypoint.sh warms it at boot.
+services:
+  gateway:
+    volumes:
+      - gateway-npm-cache:/root/.npm
+      - type: bind
+        source: ${HOME:?HOME must be set}/.nova/secrets/openclaw_token
+        target: /run/nova/openclaw_token
+        read_only: true
+      - type: bind
+        source: ${NOVA_OPENCLAW_PACKAGE:-${HOME}/.npm-global/lib/node_modules/openclaw}
+        target: /opt/openclaw
+        read_only: true
+    environment:
+      - NOVA_ACP_AGENTS=1
+
+  # The jobs worker runs agents.task (delegate_async) with the same agents.
+  jobs:
+    volumes:
+      - gateway-npm-cache:/root/.npm
+      - type: bind
+        source: ${HOME:?HOME must be set}/.nova/secrets/openclaw_token
+        target: /run/nova/openclaw_token
+        read_only: true
+      - type: bind
+        source: ${NOVA_OPENCLAW_PACKAGE:-${HOME}/.npm-global/lib/node_modules/openclaw}
+        target: /opt/openclaw
+        read_only: true
+    environment:
+      - NOVA_ACP_AGENTS=1
+
+volumes:
+  gateway-npm-cache:

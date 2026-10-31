@@ -154,35 +154,56 @@ async function streamLifecycle(
 }
 
 test.describe("Subtask card — streamed lifecycle", () => {
-  test("task_running keeps the card running, never failed", async ({ page }) => {
+  test("task_running keeps the card running, never failed", async ({
+    page,
+  }) => {
     // The exact live failure: messages stream in while the runs cache is empty,
     // and nothing in the stream asserts in_progress, so the derived guess wins.
     const card = await streamLifecycle(page, [
-      { type: "task_started", task_id: LIVE_TASK_ID, description: LIVE_TASK_DESCRIPTION },
-      { type: "task_running", task_id: LIVE_TASK_ID, message_index: 1, total_messages: 2 },
-      { type: "task_running", task_id: LIVE_TASK_ID, message_index: 2, total_messages: 2 },
+      {
+        type: "task_started",
+        task_id: LIVE_TASK_ID,
+        description: LIVE_TASK_DESCRIPTION,
+      },
+      {
+        type: "task_running",
+        task_id: LIVE_TASK_ID,
+        message_index: 1,
+        total_messages: 2,
+      },
+      {
+        type: "task_running",
+        task_id: LIVE_TASK_ID,
+        message_index: 2,
+        total_messages: 2,
+      },
     ]);
     await expect(card).toHaveAttribute("data-status", "in_progress", {
       timeout: 10_000,
     });
   });
 
-
-// KNOWN FLAKY -- do not read a green run as proof.
-//
-// The store transition is correct and was verified directly by instrumenting
-// the FSM in a real browser: task_started -> in_progress, task_completed ->
-// completed, and the write persists (a following derived pass is rejected).
-// What is unreliable is observing it through the DOM: which of these specs
-// fails varies run to run, so the card is not repainting deterministically
-// from the store change. That is a rendering path worth fixing; until it is,
-// these are marked fixme so they cannot report a false pass.
-//
-// `task_running keeps the card running, never failed` is NOT marked: it covers
-// the original production bug and has passed on every run.
-  test("task_completed flips the card without a ToolMessage", async ({ page }) => {
+  // KNOWN FLAKY -- do not read a green run as proof.
+  //
+  // The store transition is correct and was verified directly by instrumenting
+  // the FSM in a real browser: task_started -> in_progress, task_completed ->
+  // completed, and the write persists (a following derived pass is rejected).
+  // What is unreliable is observing it through the DOM: which of these specs
+  // fails varies run to run, so the card is not repainting deterministically
+  // from the store change. That is a rendering path worth fixing; until it is,
+  // these are marked fixme so they cannot report a false pass.
+  //
+  // `task_running keeps the card running, never failed` is NOT marked: it covers
+  // the original production bug and has passed on every run.
+  test("task_completed flips the card without a ToolMessage", async ({
+    page,
+  }) => {
     const card = await streamLifecycle(page, [
-      { type: "task_started", task_id: LIVE_TASK_ID, description: LIVE_TASK_DESCRIPTION },
+      {
+        type: "task_started",
+        task_id: LIVE_TASK_ID,
+        description: LIVE_TASK_DESCRIPTION,
+      },
       { type: "task_completed", task_id: LIVE_TASK_ID, result: "all done" },
     ]);
     await expect(card).toHaveAttribute("data-status", "completed", {
@@ -192,8 +213,16 @@ test.describe("Subtask card — streamed lifecycle", () => {
 
   test("task_failed surfaces the error", async ({ page }) => {
     const card = await streamLifecycle(page, [
-      { type: "task_started", task_id: LIVE_TASK_ID, description: LIVE_TASK_DESCRIPTION },
-      { type: "task_failed", task_id: LIVE_TASK_ID, error: "subagent exploded" },
+      {
+        type: "task_started",
+        task_id: LIVE_TASK_ID,
+        description: LIVE_TASK_DESCRIPTION,
+      },
+      {
+        type: "task_failed",
+        task_id: LIVE_TASK_ID,
+        error: "subagent exploded",
+      },
     ]);
     await expect(card).toHaveAttribute("data-status", "failed", {
       timeout: 10_000,

@@ -1,0 +1,37 @@
+{
+  "gate": "lighthouse",
+  "checked_at_epoch": 1789748172.0684521,
+  "overall": "green",
+  "ok": true,
+  "checks": [
+    {
+      "name": "performance",
+      "status": "green",
+      "detail": "59 (min 50)",
+      "score": 0.59
+    },
+    {
+      "name": "accessibility",
+      "status": "green",
+      "detail": "91 (min 85)",
+      "score": 0.91
+    },
+    {
+      "name": "best-practices",
+      "status": "green",
+      "detail": "95 (min 80)",
+      "score": 0.95
+    },
+    {
+      "name": "seo",
+      "status": "green",
+      "detail": "100 (min 80)",
+      "score": 1.0
+    },
+    {
+      "name": "last_run",
+      "status": "green",
+      "detail": "18 report(s), newest http://localhost:3210/workspace/chats at 2026-09-18T16:15:29.685Z (0.0d old)"
+    }
+  ]
+}

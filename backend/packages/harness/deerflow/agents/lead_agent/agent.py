@@ -328,6 +328,24 @@ def build_middlewares(
     # UI/REST path. Non-fatal by construction.
     middlewares.append(StripErrorFallbackMiddleware())
 
+    # RuntimeDispatchMiddleware — when the chat (or the model) selects an ACP
+    # runtime (claude_code, openclaw), the model call becomes one ACP prompt
+    # with Nova's MCP server mounted; native runs are untouched. Registered
+    # here so every earlier middleware still shapes the messages it sees.
+    runtimes_config = getattr(resolved_app_config, "runtimes", None)
+    if runtimes_config is not None and getattr(runtimes_config, "enabled", False):
+        from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+
+        runtime_model_config = resolved_app_config.get_model_config(model_name) if model_name else None
+        model_runtime = getattr(runtime_model_config, "runtime", None) if runtime_model_config is not None else None
+        middlewares.append(
+            RuntimeDispatchMiddleware(
+                model_runtime=model_runtime,
+                turn_timeout=getattr(runtimes_config, "turn_timeout_seconds", 1800.0),
+                fallback_to_native=getattr(runtimes_config, "fallback_to_native", True),
+            )
+        )
+
     # PreflightQuotaMiddleware — short-circuit the LLM call when the
     # provider's quota is exhausted. Only probes OpenAI-compatible
     # providers that expose /v1/dashboard/billing/credit. Fail-open
@@ -370,7 +388,34 @@ def _available_skill_names(agent_config, is_bootstrap: bool) -> set[str] | None:
     return None
 
 
-def _load_enabled_skills_for_tool_policy(available_skills: set[str] | None, *, app_config: AppConfig) -> list[Skill]:
+def skills_for_tool_policy(available_skills: set[str] | None, *, app_config: AppConfig) -> list[Skill]:
+    """Skills whose ``allowed-tools`` may constrain this agent's tool binding.
+
+    ``available_skills is None`` means the caller named no skill set -- the
+    default agent. That must mean *no skill restricts the binding*, not "every
+    installed skill restricts it".
+
+    It used to mean the latter, and the consequence was severe. A skill's
+    ``allowed-tools`` is scoped to that skill; but ``allowed_tool_names_for_skills``
+    unions the declarations and, by design, treats any single declaration as
+    switching the whole policy from allow-all to allow-listed. So one public
+    skill declaring six tools amputated the *entire* agent to those six.
+
+    That is exactly what happened. ``skills/public/security/SKILL.md`` declared
+    six tools; it is enabled by default (public skills are, absent an
+    ``extensions_config.json`` entry) so it loaded on every run, security task or
+    not. From 2026-08-25 15:56 the lead agent bound 6 tools instead of 42, and
+    ``task`` was one of the 36 dropped -- subagents were dead for five days while
+    a commit 58 minutes later correctly made ``subagent_enabled`` unconditional
+    and appeared to do nothing.
+
+    Restrictions now apply only where a skill set was chosen deliberately:
+    bootstrap (its narrow set is the point) and custom agents that list
+    ``skills:`` in their config.
+    """
+    if available_skills is None:
+        return []
+
     try:
         from deerflow.agents.lead_agent.prompt import get_enabled_skills_for_config
 
@@ -379,8 +424,6 @@ def _load_enabled_skills_for_tool_policy(available_skills: set[str] | None, *, a
         logger.exception("Failed to load skills for allowed-tools policy")
         raise
 
-    if available_skills is None:
-        return skills
     return [skill for skill in skills if skill.name in available_skills]
 
 
@@ -405,9 +448,7 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
     requested_model_name: str | None = cfg.get("model_name") or cfg.get("model")
     is_plan_mode = cfg.get("is_plan_mode", False)
     subagent_enabled = cfg.get("subagent_enabled", False)
-    max_concurrent_subagents = cfg.get(
-        "max_concurrent_subagents", resolved_app_config.subagents.max_concurrent
-    )
+    max_concurrent_subagents = cfg.get("max_concurrent_subagents", resolved_app_config.subagents.max_concurrent)
     is_bootstrap = cfg.get("is_bootstrap", False)
     agent_name = validate_agent_name(cfg.get("agent_name"))
 
@@ -468,14 +509,14 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
             existing = list(existing)
         config["callbacks"] = [*existing, *tracing_callbacks]
 
-    skills_for_tool_policy = _load_enabled_skills_for_tool_policy(available_skills, app_config=resolved_app_config)
+    restricting_skills = skills_for_tool_policy(available_skills, app_config=resolved_app_config)
 
     if is_bootstrap:
         # Special bootstrap agent with minimal prompt for initial custom agent creation flow
         # Keep the bootstrap skill set intentionally narrow so agent creation
         # remains deterministic before the custom agent's own config exists.
         raw_tools = get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, app_config=resolved_app_config) + [setup_agent]
-        filtered = filter_tools_by_skill_allowed_tools(raw_tools, skills_for_tool_policy)
+        filtered = filter_tools_by_skill_allowed_tools(raw_tools, restricting_skills)
         final_tools, setup = assemble_deferred_tools(filtered, enabled=resolved_app_config.tool_search.enabled)
         return create_agent(
             model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, app_config=resolved_app_config, attach_tracing=False),
@@ -502,7 +543,7 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
     extra_tools = [update_agent] if agent_name else []
     # Default lead agent (unchanged behavior)
     raw_tools = get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled, app_config=resolved_app_config)
-    filtered = filter_tools_by_skill_allowed_tools(raw_tools + extra_tools, skills_for_tool_policy)
+    filtered = filter_tools_by_skill_allowed_tools(raw_tools + extra_tools, restricting_skills)
     final_tools, setup = assemble_deferred_tools(filtered, enabled=resolved_app_config.tool_search.enabled)
     return create_agent(
         model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort, app_config=resolved_app_config, attach_tracing=False),

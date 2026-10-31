@@ -20,6 +20,14 @@ services:
       # `onnxruntime` module, so the extras are alternatives, never additive —
       # scripts/docker.sh substitutes rather than appends.
       - UV_EXTRAS=${DEERFLOW_VOICE_UV_EXTRAS:-trading,voice-gpu}
+    # The GPU extra is ~1.6 GB of CUDA wheels (cudnn, cublas, onnxruntime-gpu)
+    # that dev-entrypoint.sh's `uv sync` downloads before the gateway listens.
+    # Under the base start_period, autoheal judged the first boot unhealthy at
+    # ~4 min and restarted it mid-download -- a loop that never finished
+    # (2026-10-31). Once installed they live in the venv/uv-cache volumes and
+    # later boots are fast; this only buys the first one time to finish.
+    healthcheck:
+      start_period: 1200s
     deploy:
       resources:
         reservations:

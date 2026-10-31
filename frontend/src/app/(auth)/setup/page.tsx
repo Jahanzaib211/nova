@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { Input } from "@/components/ui/input";
 import { getCsrfHeaders } from "@/core/api/fetcher";
 import { useAuth } from "@/core/auth/AuthProvider";
-import { parseAuthError } from "@/core/auth/types";
+import { enterAfterAuthChange, parseAuthError } from "@/core/auth/types";
 import { useI18n } from "@/core/i18n/hooks";
 
 type SetupMode = "loading" | "init_admin" | "change_password";
@@ -91,7 +92,7 @@ export default function SetupPage() {
         return;
       }
 
-      router.push("/workspace");
+      enterAfterAuthChange("/workspace");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -136,7 +137,7 @@ export default function SetupPage() {
         return;
       }
 
-      router.push("/workspace");
+      enterAfterAuthChange("/workspace");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -196,9 +197,9 @@ export default function SetupPage() {
               <label htmlFor="password" className="text-sm font-medium">
                 Password
               </label>
-              <Input
+              <PasswordInput
+                autoComplete="new-password"
                 id="password"
-                type="password"
                 placeholder={t.auth.setup.passwordMin}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
@@ -210,9 +211,9 @@ export default function SetupPage() {
               <label htmlFor="confirmPassword" className="text-sm font-medium">
                 Confirm Password
               </label>
-              <Input
+              <PasswordInput
+                autoComplete="new-password"
                 id="confirmPassword"
-                type="password"
                 placeholder={t.auth.setup.confirmPassword}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -261,23 +262,23 @@ export default function SetupPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="current-password"
             placeholder={t.auth.setup.currentPassword}
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="new-password"
             placeholder={t.auth.setup.newPassword}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
             minLength={8}
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="new-password"
             placeholder={t.auth.setup.confirmNewPassword}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}

@@ -13,11 +13,12 @@ from fastapi.testclient import TestClient
 from app.gateway.deps import get_config
 from app.gateway.routers import skills as skills_router
 from app.gateway.routers import uploads as uploads_router
+from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.skills.storage import get_or_new_skill_storage
 from deerflow.skills.types import Skill
 
 
-def _skill_content(name: str, description: str = "Demo skill") -> str:
+def _skill_content(name: str, description: str = "Example skill") -> str:
     return f"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n"
 
 
@@ -214,9 +215,9 @@ def test_install_skill_archive_security_scan_block_returns_400(monkeypatch, tmp_
 
 def test_custom_skills_router_lifecycle(monkeypatch, tmp_path):
     skills_root = tmp_path / "skills"
-    custom_dir = skills_root / "custom" / "demo-skill"
+    custom_dir = skills_root / "custom" / "example-skill"
     custom_dir.mkdir(parents=True, exist_ok=True)
-    (custom_dir / "SKILL.md").write_text(_skill_content("demo-skill"), encoding="utf-8")
+    (custom_dir / "SKILL.md").write_text(_skill_content("example-skill"), encoding="utf-8")
     config = SimpleNamespace(
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills", use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
@@ -235,44 +236,44 @@ def test_custom_skills_router_lifecycle(monkeypatch, tmp_path):
     with TestClient(app) as client:
         response = client.get("/api/skills/custom")
         assert response.status_code == 200
-        assert response.json()["skills"][0]["name"] == "demo-skill"
+        assert response.json()["skills"][0]["name"] == "example-skill"
 
-        get_response = client.get("/api/skills/custom/demo-skill")
+        get_response = client.get("/api/skills/custom/example-skill")
         assert get_response.status_code == 200
-        assert "# demo-skill" in get_response.json()["content"]
+        assert "# example-skill" in get_response.json()["content"]
 
         update_response = client.put(
-            "/api/skills/custom/demo-skill",
-            json={"content": _skill_content("demo-skill", "Edited skill")},
+            "/api/skills/custom/example-skill",
+            json={"content": _skill_content("example-skill", "Edited skill")},
         )
         assert update_response.status_code == 200
         assert update_response.json()["description"] == "Edited skill"
         assert stat.S_IMODE((custom_dir / "SKILL.md").stat().st_mode) & 0o044 == 0o044
 
-        history_response = client.get("/api/skills/custom/demo-skill/history")
+        history_response = client.get("/api/skills/custom/example-skill/history")
         assert history_response.status_code == 200
         assert history_response.json()["history"][-1]["action"] == "human_edit"
 
-        rollback_response = client.post("/api/skills/custom/demo-skill/rollback", json={"history_index": -1})
+        rollback_response = client.post("/api/skills/custom/example-skill/rollback", json={"history_index": -1})
         assert rollback_response.status_code == 200
-        assert rollback_response.json()["description"] == "Demo skill"
+        assert rollback_response.json()["description"] == "Example skill"
         assert stat.S_IMODE((custom_dir / "SKILL.md").stat().st_mode) & 0o044 == 0o044
         assert refresh_calls == ["refresh", "refresh"]
 
 
 def test_custom_skill_rollback_blocked_by_scanner(monkeypatch, tmp_path):
     skills_root = tmp_path / "skills"
-    custom_dir = skills_root / "custom" / "demo-skill"
+    custom_dir = skills_root / "custom" / "example-skill"
     custom_dir.mkdir(parents=True, exist_ok=True)
-    original_content = _skill_content("demo-skill")
-    edited_content = _skill_content("demo-skill", "Edited skill")
+    original_content = _skill_content("example-skill")
+    edited_content = _skill_content("example-skill", "Edited skill")
     (custom_dir / "SKILL.md").write_text(edited_content, encoding="utf-8")
     config = SimpleNamespace(
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills", use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
     )
     monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
-    history_file = get_or_new_skill_storage(app_config=config).get_skill_history_file("demo-skill")
+    history_file = get_or_new_skill_storage(app_config=config).get_skill_history_file("example-skill")
     history_file.parent.mkdir(parents=True, exist_ok=True)
     history_file.write_text(
         '{"action":"human_edit","prev_content":' + json.dumps(original_content) + ',"new_content":' + json.dumps(edited_content) + "}\n",
@@ -294,20 +295,20 @@ def test_custom_skill_rollback_blocked_by_scanner(monkeypatch, tmp_path):
     app = _make_test_app(config)
 
     with TestClient(app) as client:
-        rollback_response = client.post("/api/skills/custom/demo-skill/rollback", json={"history_index": -1})
+        rollback_response = client.post("/api/skills/custom/example-skill/rollback", json={"history_index": -1})
         assert rollback_response.status_code == 400
         assert "unsafe rollback" in rollback_response.json()["detail"]
 
-        history_response = client.get("/api/skills/custom/demo-skill/history")
+        history_response = client.get("/api/skills/custom/example-skill/history")
         assert history_response.status_code == 200
         assert history_response.json()["history"][-1]["scanner"]["decision"] == "block"
 
 
 def test_custom_skill_delete_preserves_history_and_allows_restore(monkeypatch, tmp_path):
     skills_root = tmp_path / "skills"
-    custom_dir = skills_root / "custom" / "demo-skill"
+    custom_dir = skills_root / "custom" / "example-skill"
     custom_dir.mkdir(parents=True, exist_ok=True)
-    original_content = _skill_content("demo-skill")
+    original_content = _skill_content("example-skill")
     (custom_dir / "SKILL.md").write_text(original_content, encoding="utf-8")
     config = SimpleNamespace(
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills", use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage"),
@@ -325,26 +326,26 @@ def test_custom_skill_delete_preserves_history_and_allows_restore(monkeypatch, t
     app = _make_test_app(config)
 
     with TestClient(app) as client:
-        delete_response = client.delete("/api/skills/custom/demo-skill")
+        delete_response = client.delete("/api/skills/custom/example-skill")
         assert delete_response.status_code == 200
         assert not (custom_dir / "SKILL.md").exists()
 
-        history_response = client.get("/api/skills/custom/demo-skill/history")
+        history_response = client.get("/api/skills/custom/example-skill/history")
         assert history_response.status_code == 200
         assert history_response.json()["history"][-1]["action"] == "human_delete"
 
-        rollback_response = client.post("/api/skills/custom/demo-skill/rollback", json={"history_index": -1})
+        rollback_response = client.post("/api/skills/custom/example-skill/rollback", json={"history_index": -1})
         assert rollback_response.status_code == 200
-        assert rollback_response.json()["description"] == "Demo skill"
+        assert rollback_response.json()["description"] == "Example skill"
         assert (custom_dir / "SKILL.md").read_text(encoding="utf-8") == original_content
         assert refresh_calls == ["refresh", "refresh"]
 
 
 def test_custom_skill_delete_continues_when_history_write_is_readonly(monkeypatch, tmp_path):
     skills_root = tmp_path / "skills"
-    custom_dir = skills_root / "custom" / "demo-skill"
+    custom_dir = skills_root / "custom" / "example-skill"
     custom_dir.mkdir(parents=True, exist_ok=True)
-    (custom_dir / "SKILL.md").write_text(_skill_content("demo-skill"), encoding="utf-8")
+    (custom_dir / "SKILL.md").write_text(_skill_content("example-skill"), encoding="utf-8")
     config = SimpleNamespace(
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills", use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
@@ -364,7 +365,7 @@ def test_custom_skill_delete_continues_when_history_write_is_readonly(monkeypatc
     app = _make_test_app(config)
 
     with TestClient(app) as client:
-        delete_response = client.delete("/api/skills/custom/demo-skill")
+        delete_response = client.delete("/api/skills/custom/example-skill")
 
     assert delete_response.status_code == 200
     assert delete_response.json() == {"success": True}
@@ -374,9 +375,9 @@ def test_custom_skill_delete_continues_when_history_write_is_readonly(monkeypatc
 
 def test_custom_skill_delete_fails_when_skill_dir_removal_fails(monkeypatch, tmp_path):
     skills_root = tmp_path / "skills"
-    custom_dir = skills_root / "custom" / "demo-skill"
+    custom_dir = skills_root / "custom" / "example-skill"
     custom_dir.mkdir(parents=True, exist_ok=True)
-    (custom_dir / "SKILL.md").write_text(_skill_content("demo-skill"), encoding="utf-8")
+    (custom_dir / "SKILL.md").write_text(_skill_content("example-skill"), encoding="utf-8")
     config = SimpleNamespace(
         skills=SimpleNamespace(get_skills_path=lambda: skills_root, container_path="/mnt/skills", use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage"),
         skill_evolution=SimpleNamespace(enabled=True, moderation_model_name=None),
@@ -396,7 +397,7 @@ def test_custom_skill_delete_fails_when_skill_dir_removal_fails(monkeypatch, tmp
     app = _make_test_app(config)
 
     with TestClient(app) as client:
-        delete_response = client.delete("/api/skills/custom/demo-skill")
+        delete_response = client.delete("/api/skills/custom/example-skill")
 
     assert delete_response.status_code == 500
     assert "Failed to delete custom skill" in delete_response.json()["detail"]
@@ -410,7 +411,7 @@ def test_update_skill_refreshes_prompt_cache_before_return(monkeypatch, tmp_path
     refresh_calls = []
 
     def _load_skills(*, enabled_only: bool):
-        skill = _make_skill("demo-skill", enabled=enabled_state["value"])
+        skill = _make_skill("example-skill", enabled=enabled_state["value"])
         if enabled_only and not skill.enabled:
             return []
         return [skill]
@@ -421,17 +422,77 @@ def test_update_skill_refreshes_prompt_cache_before_return(monkeypatch, tmp_path
 
     mock_storage = SimpleNamespace(load_skills=_load_skills)
     monkeypatch.setattr("app.gateway.routers.skills.get_or_new_skill_storage", lambda **kwargs: mock_storage)
-    monkeypatch.setattr("app.gateway.routers.skills.get_extensions_config", lambda: SimpleNamespace(mcp_servers={}, skills={}))
     monkeypatch.setattr("app.gateway.routers.skills.reload_extensions_config", lambda: None)
-    monkeypatch.setattr(skills_router.ExtensionsConfig, "resolve_config_path", staticmethod(lambda: config_path))
+    monkeypatch.setattr(ExtensionsConfig, "resolve_config_path", staticmethod(lambda: config_path))
     monkeypatch.setattr("app.gateway.routers.skills.refresh_skills_system_prompt_cache_async", _refresh)
 
-    app = _make_test_app(SimpleNamespace())
+    app = _make_admin_skill_app(SimpleNamespace())
 
     with TestClient(app) as client:
-        response = client.put("/api/skills/demo-skill", json={"enabled": False})
+        response = client.put("/api/skills/example-skill", json={"enabled": False})
 
     assert response.status_code == 200
     assert response.json()["enabled"] is False
     assert refresh_calls == ["refresh"]
-    assert json.loads(config_path.read_text(encoding="utf-8")) == {"mcpServers": {}, "skills": {"demo-skill": {"enabled": False}}}
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {"mcpServers": {}, "skills": {"example-skill": {"enabled": False}}}
+
+
+def _make_admin_skill_app(config, *, role: str = "admin") -> FastAPI:
+    from uuid import uuid4
+
+    from app.gateway.auth.models import User
+
+    app = make_authed_test_app(user_factory=lambda: User(email="op@example.com", password_hash="x", system_role=role, id=uuid4()))
+    app.state.config = config
+    app.dependency_overrides[get_config] = lambda: config
+    app.include_router(skills_router.router)
+    return app
+
+
+def _patch_one_skill(monkeypatch, config_path):
+    storage = SimpleNamespace(load_skills=lambda *, enabled_only: [_make_skill("example-skill", enabled=True)])
+    monkeypatch.setattr("app.gateway.routers.skills.get_or_new_skill_storage", lambda **kwargs: storage)
+    monkeypatch.setattr("app.gateway.routers.skills.reload_extensions_config", lambda: None)
+    monkeypatch.setattr(ExtensionsConfig, "resolve_config_path", staticmethod(lambda: config_path))
+
+    async def _refresh():
+        return None
+
+    monkeypatch.setattr("app.gateway.routers.skills.refresh_skills_system_prompt_cache_async", _refresh)
+
+
+def test_update_skill_is_admin_only(monkeypatch, tmp_path):
+    """extensions_config.json is global: a plain user's toggle would change
+    every user's agent."""
+    config_path = tmp_path / "extensions_config.json"
+    config_path.write_text('{"mcpServers": {}, "skills": {}}', encoding="utf-8")
+    _patch_one_skill(monkeypatch, config_path)
+
+    with TestClient(_make_admin_skill_app(SimpleNamespace(), role="user")) as client:
+        response = client.put("/api/skills/example-skill", json={"enabled": False})
+
+    assert response.status_code == 403
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {"mcpServers": {}, "skills": {}}
+
+
+def test_update_skill_keeps_placeholders_and_unknown_keys(monkeypatch, tmp_path):
+    """The toggle rewrote the file from the env-resolved config: plaintext
+    secrets on disk, unset ``$VAR``s blanked, ``mcpInterceptors`` dropped."""
+    config_path = tmp_path / "extensions_config.json"
+    original = {
+        "mcpServers": {"github": {"enabled": True, "type": "stdio", "command": "npx", "env": {"GITHUB_TOKEN": "$GITHUB_TOKEN", "UNSET": "$NOVA_TEST_SURELY_UNSET"}}},
+        "skills": {"other": {"enabled": True}},
+        "mcpInterceptors": ["pkg.module:interceptor"],
+    }
+    config_path.write_text(json.dumps(original), encoding="utf-8")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_plaintext_secret")
+    _patch_one_skill(monkeypatch, config_path)
+
+    with TestClient(_make_admin_skill_app(SimpleNamespace())) as client:
+        assert client.put("/api/skills/example-skill", json={"enabled": False}).status_code == 200
+
+    written = json.loads(config_path.read_text(encoding="utf-8"))
+    assert written["mcpServers"] == original["mcpServers"]
+    assert written["mcpInterceptors"] == ["pkg.module:interceptor"]
+    assert written["skills"] == {"other": {"enabled": True}, "example-skill": {"enabled": False}}
+    assert "ghp_plaintext_secret" not in config_path.read_text(encoding="utf-8")

@@ -14,7 +14,7 @@ export function urlOfArtifact({
   isMock?: boolean;
 }) {
   if (isStaticWebsiteOnly()) {
-    return staticDemoArtifactURL({ filepath, threadId, download });
+    return staticArtifactURL({ filepath, threadId, download });
   }
   if (isMock) {
     return `${getBackendBaseURL()}/mock/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`;
@@ -28,12 +28,12 @@ export function extractArtifactsFromThread(thread: AgentThread) {
 
 export function resolveArtifactURL(absolutePath: string, threadId: string) {
   if (isStaticWebsiteOnly()) {
-    return staticDemoArtifactURL({ filepath: absolutePath, threadId });
+    return staticArtifactURL({ filepath: absolutePath, threadId });
   }
   return `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${absolutePath}`;
 }
 
-function staticDemoArtifactURL({
+function staticArtifactURL({
   filepath,
   threadId,
   download = false,
@@ -42,6 +42,6 @@ function staticDemoArtifactURL({
   threadId: string;
   download?: boolean;
 }) {
-  const demoPath = filepath.replace(/^\/mnt\//, "/");
-  return `${getBackendBaseURL()}/demo/threads/${threadId}${demoPath}${download ? "?download=true" : ""}`;
+  const artifactPath = filepath.replace(/^\/mnt\//, "/");
+  return `${getBackendBaseURL()}/threads/${threadId}${artifactPath}${download ? "?download=true" : ""}`;
 }

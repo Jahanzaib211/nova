@@ -20,9 +20,9 @@ import uuid
 from collections import defaultdict, deque
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from deerflow.utils.redis_import import import_redis_asyncio
 
-REDIS_INSTALL = "redis is required for the redis rate limiter. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter(abc.ABC):
@@ -65,14 +65,6 @@ class InMemoryRateLimiter(RateLimiter):
         return None
 
 
-def _ensure_redis_import():
-    try:
-        import redis.asyncio as redis
-    except ImportError as exc:
-        raise ImportError(REDIS_INSTALL) from exc
-    return redis
-
-
 class RedisRateLimiter(RateLimiter):
     """Redis sorted-set sliding-window log.
 
@@ -107,7 +99,7 @@ class RedisRateLimiter(RateLimiter):
         else:
             if not redis_url:
                 raise ValueError("RedisRateLimiter requires either redis_url or client")
-            redis = _ensure_redis_import()
+            redis = import_redis_asyncio("rate limiter")
             self._redis = redis.from_url(redis_url, decode_responses=True)
 
     async def check(self, key: str, *, window_seconds: float, max_attempts: int) -> int | None:

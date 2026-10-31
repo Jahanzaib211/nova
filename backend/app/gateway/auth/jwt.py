@@ -45,7 +45,15 @@ def decode_token(token: str) -> TokenPayload | TokenError:
     """
     config = get_auth_config()
     try:
-        payload = jwt.decode(token, config.jwt_secret, algorithms=["HS256"])
+        payload = jwt.decode(
+            token,
+            config.jwt_secret,
+            algorithms=["HS256"],
+            # Reject tokens minted without an expiry: a token whose payload
+            # omits `exp` would otherwise validate forever. `iat` is likewise
+            # required so token-version / issued-at checks always have a basis.
+            options={"require": ["exp", "iat", "sub"]},
+        )
         return TokenPayload(**payload)
     except jwt.ExpiredSignatureError:
         return TokenError.EXPIRED

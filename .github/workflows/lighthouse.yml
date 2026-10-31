@@ -39,11 +39,11 @@ env:
 jobs:
   lighthouse:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 25
+    timeout-minutes: 32
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM }}
 
@@ -66,15 +66,24 @@ jobs:
           DEER_FLOW_AUTH_DISABLED: "1"
           NODE_OPTIONS: --max-old-space-size=4096
 
+      # One attempt, generous budget: with the two getResponseBody gatherers
+      # skipped (lighthouserc.cjs) runs no longer wedge, but a landing-page
+      # run takes ~3.5 min on a hosted runner (software-rendered WebGL), so
+      # 3 runs x 2 URLs needs ~22 min. A retry would only double that.
       - name: Run Lighthouse CI
-        run: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 24
+          max_attempts: 1
+          retry_on: error
+          command: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
         env:
           SKIP_ENV_VALIDATION: "1"
           DEER_FLOW_AUTH_DISABLED: "1"
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: lighthouse-reports
           path: frontend/.lighthouseci/

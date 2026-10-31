@@ -122,7 +122,7 @@ memory:
 
 技能是最简单的扩展点。在 `skills/custom/your-skill-name/` 下创建一个目录，并在其中添加 `SKILL.md` 文件。技能将在下次 `load_skills()` 调用时自动被发现。
 
-参见[技能](/docs/harness/skills)页面了解完整的目录结构和 `SKILL.md` 格式。
+参见[技能](./skills)页面了解完整的目录结构和 `SKILL.md` 格式。
 
 ## 自定义模型
 
@@ -152,6 +152,6 @@ checkpointer:
 对于自定义后端，实现 LangGraph 的 `BaseCheckpointSaver` 接口，并在初始化 `DeerFlowClient` 时以编程方式配置它。
 
 <Cards num={2}>
-  <Cards.Card title="集成指南" href="/docs/harness/integration-guide" />
-  <Cards.Card title="配置" href="/docs/harness/configuration" />
+  <Cards.Card title="集成指南" href="./integration-guide" />
+  <Cards.Card title="配置" href="./configuration" />
 </Cards>
