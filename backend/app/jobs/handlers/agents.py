@@ -18,13 +18,12 @@ import asyncio
 import logging
 from typing import Any
 
+from deerflow.agents_registry.registry import AGENT_TASK_JOB
 from deerflow.config.app_config import get_app_config
 from deerflow.jobs.context import JobContext
 from deerflow.jobs.registry import JobRegistry
 
 logger = logging.getLogger(__name__)
-
-AGENT_TASK_JOB = "agents.task"
 
 
 def _write_artifact(ctx: JobContext, agent: str, task: str, result: str) -> str | None:

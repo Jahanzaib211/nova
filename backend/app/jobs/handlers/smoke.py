@@ -1,4 +1,4 @@
-"""`jobs.demo.sleep`: the smoke-test job (`make jobs-demo`).
+"""`jobs.smoke.sleep`: the smoke-test job (`make jobs-smoke`).
 
 Sleeps ``seconds`` in one-second steps, reporting progress and honouring
 cancellation — everything a real handler must do, with no side effects.
@@ -22,4 +22,4 @@ async def sleep_job(ctx: JobContext) -> dict:
 
 
 def register(registry: JobRegistry) -> None:
-    registry.register("jobs.demo.sleep", sleep_job)
+    registry.register("jobs.smoke.sleep", sleep_job)

@@ -49,7 +49,7 @@ def _client(repo: JobRepository, user: User) -> TestClient:
 
 
 def _enqueue(repo, **kw) -> str:
-    return asyncio.run(JobQueue(repo).enqueue(kw.pop("type", "demo"), kw.pop("payload", {}), **kw))
+    return asyncio.run(JobQueue(repo).enqueue(kw.pop("type", "sample"), kw.pop("payload", {}), **kw))
 
 
 def test_list_and_get_are_owner_scoped(repo):
@@ -111,9 +111,9 @@ def test_events_poll_and_sse_stream(repo):
 def test_schedules_crud_is_owner_scoped_and_validates_cron(repo):
     alice, bob = _user("a@example.com"), _user("b@example.com")
     c = _client(repo, alice)
-    bad = c.post("/api/jobs/schedules", json={"name": "n", "type": "demo", "cron": "not cron"})
+    bad = c.post("/api/jobs/schedules", json={"name": "n", "type": "jobs.smoke.sleep", "cron": "not cron"})
     assert bad.status_code == 422
-    created = c.post("/api/jobs/schedules", json={"name": "nightly", "type": "demo", "cron": "0 3 * * *", "timezone": "Asia/Karachi", "payload": {"k": 1}})
+    created = c.post("/api/jobs/schedules", json={"name": "nightly", "type": "jobs.smoke.sleep", "cron": "0 3 * * *", "timezone": "Asia/Karachi", "payload": {"k": 1}})
     assert created.status_code == 201
     sid = created.json()["id"]
     assert created.json()["next_run_at"] is not None
@@ -123,7 +123,7 @@ def test_schedules_crud_is_owner_scoped_and_validates_cron(repo):
     assert b.get("/api/jobs/schedules").json()["schedules"] == []
     assert b.patch(f"/api/jobs/schedules/{sid}", json={"enabled": False}).status_code == 404
     assert b.delete(f"/api/jobs/schedules/{sid}").status_code == 404
-    assert b.post("/api/jobs/schedules", json={"name": "nightly", "type": "demo", "cron": "* * * * *"}).status_code == 409
+    assert b.post("/api/jobs/schedules", json={"name": "nightly", "type": "jobs.smoke.sleep", "cron": "* * * * *"}).status_code == 409
     updated = c.patch(f"/api/jobs/schedules/{sid}", json={"enabled": False, "cron": "*/10 * * * *"}).json()
     assert updated["enabled"] is False and updated["cron"] == "*/10 * * * *"
     assert c.delete(f"/api/jobs/schedules/{sid}").json()["ok"] is True

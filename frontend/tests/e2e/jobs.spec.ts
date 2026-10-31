@@ -3,8 +3,10 @@ import { expect, test } from "@playwright/test";
 import { mockLangGraphAPI } from "./utils/mock-api";
 
 /**
- * /workspace/jobs against a mocked /api/jobs: list, filter, cancel/retry
- * affordances follow the status, the events panel opens, schedules CRUD.
+ * Settings › Jobs (/workspace/settings#jobs) against a mocked /api/jobs: list,
+ * filter, cancel/retry affordances follow the status, the events panel opens,
+ * schedules CRUD. Jobs used to have their own sidebar page too; it was the
+ * same list, so Settings is now its only home.
  */
 
 const NOW = "2026-09-19T12:00:00Z";
@@ -14,7 +16,7 @@ const job = (
   extra: Record<string, unknown> = {},
 ) => ({
   id,
-  type: "jobs.demo.sleep",
+  type: "jobs.smoke.sleep",
   queue: "default",
   status,
   priority: 0,
@@ -153,7 +155,7 @@ test.describe("jobs page", () => {
   test("lists jobs with status-appropriate actions and live events", async ({
     page,
   }) => {
-    await page.goto("/workspace/jobs");
+    await page.goto("/workspace/settings#jobs");
     const rows = page.getByTestId("job-row");
     await expect(rows).toHaveCount(3);
     await expect(
@@ -176,12 +178,12 @@ test.describe("jobs page", () => {
       .getByRole("button", { name: "Show events" })
       .click();
     await expect(page.getByTestId("job-events")).toContainText("succeeded");
-    // sidebar entry is present because the server declared jobs=true
-    await expect(page.getByRole("link", { name: "Jobs" })).toBeVisible();
+    // no sidebar entry: Settings › Jobs is the only home for the list
+    await expect(page.getByRole("link", { name: "Jobs" })).toHaveCount(0);
   });
 
   test("cancel and retry round-trip through the API", async ({ page }) => {
-    await page.goto("/workspace/jobs");
+    await page.goto("/workspace/settings#jobs");
     await page
       .getByTestId("job-row")
       .filter({ has: page.locator('[data-status="dead_letter"]') })
@@ -201,11 +203,17 @@ test.describe("jobs page", () => {
     await expect(page.getByText("Cancellation requested")).toBeVisible();
   });
 
-  test("schedules can be created and deleted", async ({ page }) => {
+  test("the old jobs page URL lands on Settings › Jobs", async ({ page }) => {
     await page.goto("/workspace/jobs");
+    await expect(page).toHaveURL(/\/workspace\/settings#jobs$/);
+    await expect(page.getByTestId("job-row")).toHaveCount(3);
+  });
+
+  test("schedules can be created and deleted", async ({ page }) => {
+    await page.goto("/workspace/settings#jobs");
     const form = page.getByRole("form", { name: "Add schedule" });
     await form.getByPlaceholder("Name").fill("nightly");
-    await form.getByPlaceholder("Job type").fill("jobs.demo.sleep");
+    await form.getByPlaceholder("Job type").fill("jobs.smoke.sleep");
     await form.getByPlaceholder("Payload (JSON)").fill("not json");
     await form.getByRole("button", { name: "Add schedule" }).click();
     await expect(

@@ -17,14 +17,4 @@ export const jobsManifest: FeatureManifest = {
       flag: "jobs",
     },
   ],
-  nav: [
-    {
-      id: "jobs",
-      order: 30,
-      icon: ListChecksIcon,
-      label: (t) => t.sidebar.jobs,
-      href: "/workspace/jobs",
-      flag: "jobs",
-    },
-  ],
 };

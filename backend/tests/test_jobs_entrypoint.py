@@ -1,5 +1,5 @@
 """The worker process entrypoint wires config → settings and refuses to start
-when jobs are disabled; the demo handler is registered."""
+when jobs are disabled; the smoke-test handler is registered."""
 
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ def _no_global_logging_side_effects(monkeypatch):
     monkeypatch.setattr(w, "apply_logging_level", lambda _level: None)
 
 
-def test_registry_has_the_demo_handler():
-    assert "jobs.demo.sleep" in build_registry().types()
+def test_registry_has_the_smoke_test_handler():
+    assert "jobs.smoke.sleep" in build_registry().types()
 
 
 def test_settings_follow_config_and_cli_overrides(monkeypatch):

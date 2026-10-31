@@ -44,7 +44,7 @@ def test_next_run_at_rejects_bad_expressions():
 async def test_tick_enqueues_due_schedule_once_and_advances(tmp_path):
     repo = await _repo(tmp_path)
     now = datetime(2026, 9, 19, 12, 0, tzinfo=UTC)
-    sched_id = await repo.upsert_schedule(name="nightly", job_type="demo.sleep", cron="0 * * * *", payload={"n": 1}, queue="default", enabled=True, next_run_at=now - timedelta(minutes=1))
+    sched_id = await repo.upsert_schedule(name="nightly", job_type="jobs.smoke.sleep", cron="0 * * * *", payload={"n": 1}, queue="default", enabled=True, next_run_at=now - timedelta(minutes=1))
     enqueued = await tick_schedules(repo, now=now)
     assert len(enqueued) == 1
     again = await tick_schedules(repo, now=now)

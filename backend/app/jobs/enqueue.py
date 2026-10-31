@@ -1,6 +1,6 @@
-"""Enqueue a job from the command line (smoke tests, `make jobs-demo`).
+"""Enqueue a job from the command line (smoke tests, `make jobs-smoke`).
 
-python -m app.jobs.enqueue jobs.demo.sleep '{"seconds": 3}' [--queue default] [--wait]
+python -m app.jobs.enqueue jobs.smoke.sleep '{"seconds": 3}' [--queue default] [--wait]
 """
 
 from __future__ import annotations

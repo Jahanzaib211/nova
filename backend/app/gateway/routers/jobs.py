@@ -13,16 +13,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.gateway.authz import AuthContext, require_auth
-from app.gateway.deps import get_jobs_repo
-from deerflow.jobs.scheduler import next_run_at
+from app.gateway.authz import require_auth
+from app.gateway.deps import authenticated_user_id as _user_id
+from app.gateway.deps import get_jobs_repo, is_admin
+from deerflow.jobs.service import JobConflict, JobNotFound, JobService, first_run_at
 from deerflow.jobs.status import JOB_STATUSES, JobStatus, is_terminal
 
 logger = logging.getLogger(__name__)
@@ -121,13 +122,6 @@ class ScheduleListResponse(BaseModel):
 # ── helpers ─────────────────────────────────────────────────────────────
 
 
-def _user_id(request: Request) -> str:
-    auth: AuthContext = request.state.auth
-    if auth.user is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return str(auth.user.id)
-
-
 def _to_job(job: dict[str, Any]) -> JobResponse:
     return JobResponse(**{k: job[k] for k in JobResponse.model_fields})
 
@@ -136,22 +130,24 @@ def _to_schedule(s: dict[str, Any]) -> ScheduleResponse:
     return ScheduleResponse(**{k: s[k] for k in ScheduleResponse.model_fields})
 
 
+def _service(request: Request) -> JobService:
+    return JobService(get_jobs_repo(request))
+
+
 async def _owned_job(request: Request, job_id: str) -> dict[str, Any]:
     """The job, or 404 — a job that belongs to someone else is also 404 so
     ids cannot be probed."""
-    repo = get_jobs_repo(request)
-    job = await repo.get(job_id)
-    if job is None or job["owner_user_id"] != _user_id(request):
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    try:
+        return await _service(request).owned_job(job_id, user_id=_user_id(request))
+    except JobNotFound:
+        raise HTTPException(status_code=404, detail="Job not found") from None
 
 
 async def _owned_schedule(request: Request, schedule_id: str) -> dict[str, Any]:
-    repo = get_jobs_repo(request)
-    sched = await repo.get_schedule(schedule_id)
-    if sched is None or sched["owner_user_id"] != _user_id(request):
-        raise HTTPException(status_code=404, detail="Schedule not found")
-    return sched
+    try:
+        return await _service(request).owned_schedule(schedule_id, user_id=_user_id(request))
+    except JobNotFound:
+        raise HTTPException(status_code=404, detail="Schedule not found") from None
 
 
 # ── schedules (declared before /{job_id} so the literal path wins) ───────────────────────────────────────────────────────────
@@ -167,18 +163,24 @@ async def list_schedules(request: Request) -> ScheduleListResponse:
 @router.post("/schedules", response_model=ScheduleResponse, status_code=201)
 @require_auth
 async def create_schedule(body: ScheduleCreateRequest, request: Request) -> ScheduleResponse:
-    repo = get_jobs_repo(request)
-    user_id = _user_id(request)
     try:
-        first = next_run_at(body.cron, datetime.now(UTC), timezone=body.timezone)
-    except (ValueError, KeyError) as exc:
+        sched = await _service(request).upsert_schedule(
+            user_id=_user_id(request),
+            name=body.name,
+            job_type=body.type,
+            cron=body.cron,
+            payload=body.payload,
+            queue=body.queue,
+            enabled=body.enabled,
+            timezone=body.timezone,
+            is_admin=is_admin(getattr(request.state.auth, "user", None)),
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    existing = await repo.get_schedule_by_name(body.name)
-    if existing is not None and existing["owner_user_id"] != user_id:
-        raise HTTPException(status_code=409, detail="schedule name already in use")
-    schedule_id = await repo.upsert_schedule(name=body.name, job_type=body.type, cron=body.cron, payload=body.payload, queue=body.queue, enabled=body.enabled, timezone=body.timezone, owner_user_id=user_id, next_run_at=first)
-    sched = await repo.get_schedule(schedule_id)
-    assert sched is not None
+    except JobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return _to_schedule(sched)
 
 
@@ -190,8 +192,8 @@ async def update_schedule(schedule_id: str, body: ScheduleUpdateRequest, request
     cron = body.cron or sched["cron"]
     timezone = body.timezone or sched["timezone"]
     try:
-        first = next_run_at(cron, datetime.now(UTC), timezone=timezone)
-    except (ValueError, KeyError) as exc:
+        first = first_run_at(cron, timezone)
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await repo.upsert_schedule(
         name=sched["name"],
@@ -283,23 +285,19 @@ async def stream_job_events(job_id: str, request: Request, since_seq: int = Quer
 @require_auth
 async def cancel_job(job_id: str, request: Request) -> ActionResponse:
     job = await _owned_job(request, job_id)
-    if is_terminal(job["status"]):
-        raise HTTPException(status_code=409, detail=f"job is already {job['status']}")
-    repo = get_jobs_repo(request)
-    if job["status"] in (JobStatus.QUEUED.value, JobStatus.RETRYING.value):
-        # Nothing is running it: settle it now rather than waiting for a worker.
-        await repo.request_cancel(job_id)
-        await repo.mark_cancelled(job_id)
-        return ActionResponse(ok=True, status=JobStatus.CANCELLED.value)
-    await repo.request_cancel(job_id)
-    return ActionResponse(ok=True, status=job["status"])
+    try:
+        status = await _service(request).cancel(job)
+    except JobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ActionResponse(ok=True, status=status)
 
 
 @router.post("/{job_id}/retry", response_model=ActionResponse)
 @require_auth
 async def retry_job(job_id: str, request: Request) -> ActionResponse:
     job = await _owned_job(request, job_id)
-    if job["status"] not in (JobStatus.FAILED.value, JobStatus.DEAD_LETTER.value):
-        raise HTTPException(status_code=409, detail=f"only failed or dead-lettered jobs can be retried (job is {job['status']})")
-    ok = await get_jobs_repo(request).requeue(job_id)
+    try:
+        ok = await _service(request).retry(job)
+    except JobConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return ActionResponse(ok=ok, status=JobStatus.QUEUED.value if ok else job["status"])

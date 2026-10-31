@@ -19,7 +19,7 @@ gateway (FastAPI)            deer-flow-jobs (separate container)
   scheduler, worker) + `deerflow/persistence/job/`. Never imports `app.*`.
 - Composition: `backend/app/jobs/` — `handlers/` registers job types,
   `worker.py` is the process entrypoint, `healthcheck.py` the container
-  probe, `enqueue.py` a CLI (`make jobs-demo`).
+  probe, `enqueue.py` a CLI (`make jobs-smoke`).
 - Config: `config.yaml` → `jobs:` (startup-only for the worker; see
   `config.example.yaml`). `jobs.enabled` also drives the UI's feature flag
   through `GET /api/runtime/capabilities` → `features.jobs`.
@@ -75,6 +75,16 @@ User (`@require_auth`, owner-scoped, 404 for someone else's job):
 | GET/POST | `/api/jobs/schedules` | create validates the cron |
 | PATCH/DELETE | `/api/jobs/schedules/{id}` | |
 
+Non-admins may schedule — and, through the `jobs.enqueue` capability, enqueue —
+only `USER_SCHEDULABLE_JOB_TYPES` (`deerflow/jobs/service.py`): job types that
+act on the owner's own data. Maintenance and internal fan-out types are
+admin-only on both paths, so neither can be used to get around the other.
+Agents (lead-agent tools and Nova's MCP server, which is what an ACP runtime
+such as Claude Code reaches) never run as admin, so that list is exactly what
+an agent can run. `jobs.enqueue` / `jobs.workers` were briefly `admin_only`,
+which silently took both tools away from every agent, the operator's own
+included; `jobs.summary` remains admin-only.
+
 Operator (`X-Nova-Ops-Token` or admin session; mutating calls need the CSRF
 pair, which nova-ops self-issues):
 
@@ -96,4 +106,4 @@ pair, which nova-ops self-issues):
   stopped container). Gate: `scripts/gates/jobs-gate.py` →
   `~/.nova/gates/jobrunner.json`, every 2 min, shown in nova-ops.
 - Both read `NOVA_OPS_TOKEN` from the environment or the repo `.env`.
-- Smoke test: `make jobs-demo`.
+- Smoke test: `make jobs-smoke`.

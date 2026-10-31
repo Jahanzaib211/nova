@@ -40,10 +40,10 @@ def _close_engine_after_test():
 async def test_enqueue_records_row_and_event(tmp_path):
     repo = await _repo(tmp_path)
     queue = JobQueue(repo)
-    job_id = await queue.enqueue("demo.sleep", {"seconds": 1}, owner_user_id="u1", thread_id="t1")
+    job_id = await queue.enqueue("jobs.smoke.sleep", {"seconds": 1}, owner_user_id="u1", thread_id="t1")
     job = await repo.get(job_id)
     assert job["status"] == JobStatus.QUEUED.value
-    assert job["type"] == "demo.sleep"
+    assert job["type"] == "jobs.smoke.sleep"
     assert job["payload"] == {"seconds": 1}
     assert job["owner_user_id"] == "u1"
     assert job["attempts"] == 0
@@ -55,11 +55,11 @@ async def test_enqueue_records_row_and_event(tmp_path):
 async def test_dedupe_key_returns_the_live_job(tmp_path):
     repo = await _repo(tmp_path)
     queue = JobQueue(repo)
-    a = await queue.enqueue("demo.sleep", {}, dedupe_key="k1")
-    b = await queue.enqueue("demo.sleep", {}, dedupe_key="k1")
+    a = await queue.enqueue("jobs.smoke.sleep", {}, dedupe_key="k1")
+    b = await queue.enqueue("jobs.smoke.sleep", {}, dedupe_key="k1")
     assert a == b
     await repo.mark_succeeded(a, result={"ok": True})
-    c = await queue.enqueue("demo.sleep", {}, dedupe_key="k1")
+    c = await queue.enqueue("jobs.smoke.sleep", {}, dedupe_key="k1")
     assert c != a, "a terminal job no longer blocks the key"
 
 
