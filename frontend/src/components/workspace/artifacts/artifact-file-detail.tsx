@@ -46,6 +46,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import { findToolCallResult } from "@/core/messages/utils";
 import { installSkill } from "@/core/skills/api";
 import { streamdownPlugins } from "@/core/streamdown";
+import { streamdownComponents } from "@/core/streamdown/components";
 import {
   canBrowserPreviewFile,
   checkCodeFile,
@@ -469,7 +470,7 @@ export function ArtifactFilePreview({
         <ClipboardSafeStreamdown
           className="size-full"
           {...streamdownPlugins}
-          components={{ a: ArtifactLink }}
+          components={streamdownComponents({ a: ArtifactLink })}
         >
           {content ?? ""}
         </ClipboardSafeStreamdown>
