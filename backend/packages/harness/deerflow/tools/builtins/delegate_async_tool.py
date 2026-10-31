@@ -16,10 +16,9 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolArg, StructuredTool
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+from deerflow.agents_registry.registry import AGENT_TASK_JOB, enqueue_agent_task
 
-AGENT_TASK_JOB = "agents.task"
-QUEUE = "agents"
+logger = logging.getLogger(__name__)
 
 
 class _DelegateInput(BaseModel):
@@ -42,7 +41,6 @@ def _known_agents(config: Any) -> dict[str, str]:
 
 def build_delegate_tools(config: Any, repo_factory: Any) -> list[BaseTool]:
     """``repo_factory()`` returns a JobRepository (the gateway's session factory)."""
-    from deerflow.jobs.queue import JobQueue
     from deerflow.runtime.user_context import get_effective_user_id
 
     agents = _known_agents(config)
@@ -59,7 +57,7 @@ def build_delegate_tools(config: Any, repo_factory: Any) -> list[BaseTool]:
             owner = get_effective_user_id()
         except Exception:
             owner = None
-        job_id = await JobQueue(repo).enqueue(AGENT_TASK_JOB, {"agent": agent, "kind": agents[agent], "task": task}, queue=QUEUE, owner_user_id=owner, thread_id=thread_id, max_attempts=1)
+        job_id = await enqueue_agent_task(repo, agent=agent, kind=agents[agent], task=task, owner_user_id=owner, thread_id=thread_id)
         return f"Delegated to {agent} as job {job_id}. Call check_delegation with this id to get the result; the user can follow it on the Jobs page."
 
     async def _check(job_id: str) -> str:

@@ -235,8 +235,26 @@ async def run_tasks_ws_stream(websocket: Any, hub: TaskEventHub, thread_id: str)
         close = getattr(gen, "aclose", None)
         if close is not None:
             await close()
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.close()
+        await _close_quietly(websocket)
+
+
+async def _close_quietly(websocket: Any) -> None:
+    """Close the socket unless either side already has.
+
+    ``client_state`` alone is not enough: after a failed send or a server-side
+    close, Starlette still reports the client as CONNECTED while the
+    application side is closed, and ``close()`` then raises ``RuntimeError:
+    Cannot call "send" once a close message has been sent``. That was logged
+    as an error for every Agent's Computer tab that went away.
+    """
+    from starlette.websockets import WebSocketState
+
+    if websocket.client_state != WebSocketState.CONNECTED or websocket.application_state != WebSocketState.CONNECTED:
+        return
+    try:
+        await websocket.close()
+    except RuntimeError:
+        pass
 
 
 async def run_computer_ws_stream(
@@ -281,5 +299,4 @@ async def run_computer_ws_stream(
     finally:
         for task in pumps:
             task.cancel()
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.close()
+        await _close_quietly(websocket)

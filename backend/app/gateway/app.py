@@ -457,6 +457,13 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
             allow_headers=["*"],
         )
 
+    # Outermost: a framed preview (Origin: null) fetching fonts and router data
+    # from its own capability URLs. Must run before CORSMiddleware, which 400s
+    # a preflight from an origin it does not list. See app/gateway/preview_cors.py.
+    from app.gateway.preview_cors import PreviewCapabilityCORSMiddleware
+
+    app.add_middleware(PreviewCapabilityCORSMiddleware)
+
     # Include routers
     # Models API is mounted at /api/models
     app.include_router(models.router)
@@ -479,7 +486,11 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # Thread cleanup API is mounted at /api/threads/{thread_id}
     app.include_router(threads.router)
 
-    # Agents API is mounted at /api/agents
+    # Agents API is mounted at /api/agents. The registry router goes FIRST:
+    # agents.router declares GET /api/agents/{name}, which would otherwise
+    # capture /api/agents/registry as an agent named "registry" and 404 it
+    # (it did, so the Agents page's registry never loaded).
+    app.include_router(agents_registry.router)
     app.include_router(agents.router)
 
     # Suggestions API is mounted at /api/threads/{thread_id}/suggestions
@@ -560,7 +571,6 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     app.include_router(integrations.router)
     app.include_router(email_marketing.router)
     app.include_router(email_marketing_public.router)
-    app.include_router(agents_registry.router)
     app.include_router(admin_jobs.router)
 
     # Capability registry: one declaration per feature → harness tools, the

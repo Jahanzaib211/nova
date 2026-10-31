@@ -168,6 +168,27 @@ class SandboxConfig(BaseModel):
             "resource error. Set to null to inherit the daemon default."
         ),
     )
+    browser_no_sandbox: bool = Field(
+        default=True,
+        description=(
+            "Pass `--no-sandbox` to the Chromium running inside the sandbox "
+            "(BROWSER_NO_SANDBOX, which the image's own /opt/gem/run.sh appends "
+            "to BROWSER_EXTRA_ARGS). Default on, because the container this repo "
+            "creates is hardened in a way that makes Chromium's own sandbox "
+            "impossible: `--cap-drop ALL` + `--security-opt no-new-privileges` "
+            "block the setuid helper, and Docker's default seccomp profile only "
+            "permits clone(CLONE_NEWUSER) when CAP_SYS_ADMIN is present, so the "
+            "userns path fails too. Supervisord then logs 'Failed to move to new "
+            "namespace ... Operation not permitted' and restarts the browser "
+            "forever, which leaves port 9222 closed, the container unhealthy, "
+            "and every browser_check opening the circuit breaker. The container "
+            "boundary is the sandbox here: weakening it (--privileged or "
+            "CAP_SYS_ADMIN) to satisfy Chromium's inner sandbox would trade "
+            "defence-in-depth inside one container for near-host-root. Ignored "
+            "when privileged=True, where the inner sandbox works normally. Set "
+            "to false only if you re-add the capabilities Chromium needs."
+        ),
+    )
     mounts: list[VolumeMountConfig] = Field(
         default_factory=list,
         description="List of volume mounts to share directories between host and container",

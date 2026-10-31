@@ -265,6 +265,21 @@ class AioSandboxProvider(SandboxProvider):
         if github_token and "GITHUB_TOKEN" not in environment:
             environment["GITHUB_TOKEN"] = github_token
 
+        # Chromium cannot bring up its own sandbox inside the container this
+        # provider creates: `--cap-drop ALL` plus `--security-opt
+        # no-new-privileges` block the setuid helper, and Docker's default
+        # seccomp profile rejects clone(CLONE_NEWUSER) without CAP_SYS_ADMIN.
+        # supervisord then logs "Failed to move to new namespace ... Operation
+        # not permitted", restarts the browser forever, port 9222 never opens,
+        # the container reports unhealthy and every browser_check trips the
+        # circuit breaker. The image already supports the fix (run.sh prepends
+        # BROWSER_NO_SANDBOX to BROWSER_EXTRA_ARGS), so set it whenever we are
+        # the ones who removed the capabilities Chromium needs. A privileged
+        # container keeps full capabilities, so its inner sandbox works and
+        # nothing is injected. An operator-provided value always wins.
+        if getattr(sandbox_config, "browser_no_sandbox", True) and not getattr(sandbox_config, "privileged", False) and "BROWSER_NO_SANDBOX" not in environment:
+            environment["BROWSER_NO_SANDBOX"] = "--no-sandbox"
+
         return {
             "image": sandbox_config.image or DEFAULT_IMAGE,
             "port": sandbox_config.port or DEFAULT_PORT,

@@ -237,10 +237,7 @@ def _upgrade_with_bind(bind) -> None:
                     # Bind booleans, not integers: these columns are BOOLEAN on
                     # Postgres (see AgentConfigRow), which rejects an integer
                     # expression. SQLite accepts both.
-                    sa.text(
-                        "INSERT INTO agent_configs (owner_id, name, is_shared, is_system) "
-                        "VALUES (:owner_id, :name, :is_shared, :is_system)"
-                    ),
+                    sa.text("INSERT INTO agent_configs (owner_id, name, is_shared, is_system) VALUES (:owner_id, :name, :is_shared, :is_system)"),
                     {
                         "owner_id": owner_id,
                         "name": name,

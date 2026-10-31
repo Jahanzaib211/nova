@@ -132,6 +132,7 @@ class AppConfig(BaseModel):
         description="Voice (STT/TTS) configuration. Untyped on purpose: engine kwargs are engine-specific and are passed straight to the constructor by deerflow.speech.registry, the same way sandbox.use works. Absent or enabled=false means voice is off.",
     )
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig, description="LLM circuit breaker configuration")
+    model_fallbacks: list[str] = Field(default_factory=list, description="Models (by name, in order) that take over a turn when the current one is out of quota or credit. Unknown names are skipped.")
     channel_connections: ChannelConnectionsConfig = Field(
         default_factory=ChannelConnectionsConfig,
         description=format_field_description(

@@ -697,25 +697,41 @@ class RunManager:
             pass
 
     async def reap_orphaned_runs(self) -> int:
-        """Phase 6 startup reaper.
+        """Phase 6 startup reaper — every orphaned run in the store, no thread list.
 
         On gateway boot the in-memory ``StreamBridge`` is empty: every run
-        created by a previous process lives only in the store. Any row
-        whose status is still ``pending`` or ``running`` is necessarily
-        orphaned (the bridge that was executing it died with the process).
-        Marking them ``interrupted`` converges the front-end polls to idle
-        and prevents 409-on-Stop forever.
+        created by a previous process lives only in the store. Any row whose
+        status is still ``pending`` or ``running`` is necessarily orphaned (the
+        bridge that was executing it died with the process). Marking them
+        terminal converges the front-end polls to idle and prevents
+        409-on-Stop forever.
+
+        This used to be a stub that returned 0 with a comment saying the store
+        could not be enumerated without a thread index. That was true when it
+        was written; the store interface grew ``list_inflight`` since, which
+        enumerates exactly the active rows across every thread. A public
+        method that silently returns 0 reads as "the reaper ran and found
+        nothing", which is the opposite of the truth.
+
+        It delegates to :meth:`reconcile_orphaned_inflight_runs` rather than
+        reimplementing the sweep, for two reasons: one implementation of "an
+        orphaned run gets a terminal state" instead of two that can drift, and
+        that method skips runs this process still owns locally — strictly
+        safer than a blind store-wide sweep.
+
+        The terminal state is ``error`` with an explanation, matching the
+        gateway's startup recovery (see ``app.gateway.deps``), not
+        ``interrupted``: an orphaned run did not end cleanly, it lost its
+        worker.
 
         Returns the number of rows reaped.
         """
         if self._store is None:
             return 0
-        # We cannot enumerate every thread from here without a thread index,
-        # but ``list_by_thread`` is the only public method on the store
-        # interface. The bootstrap path is expected to call this once
-        # AFTER threads are known, with a thread iterator — see
-        # ``reap_orphaned_runs_for_threads``.
-        return 0
+        recovered = await self.reconcile_orphaned_inflight_runs(
+            error="Gateway restarted before this run reached a durable final state.",
+        )
+        return len(recovered)
 
     async def reap_orphaned_runs_for_threads(self, thread_ids: list[str]) -> int:
         """Phase 6 startup reaper — reaps orphaned runs across the given threads.

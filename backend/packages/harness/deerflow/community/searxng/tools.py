@@ -25,17 +25,9 @@ from typing import Any
 
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
+from deerflow.community._tool_config import tool_config_extras as _get_tool_config
 
 logger = logging.getLogger(__name__)
-
-
-def _get_tool_config(tool_name: str) -> dict[str, Any] | None:
-    config = get_app_config().get_tool_config(tool_name)
-    if config is None:
-        return None
-    extras = config.model_extra
-    return extras if extras is not None else {}
 
 
 def _get_searxng_client(base_url: str, use_tor: bool) -> Any:

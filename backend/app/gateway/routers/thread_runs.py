@@ -159,15 +159,28 @@ def _record_to_response(record: RunRecord) -> RunResponse:
 
 
 def _service_to_response(detail: Any) -> RunResponse:
-    """Convert a service-layer RunDetail/RunSummary to the wire-format RunResponse."""
+    """Convert a service-layer RunDetail/RunSummary to the wire-format RunResponse.
+
+    Every counter is carried across. ``RunResponse`` declares them all, so
+    leaving them off here did not fail loudly — it produced silent zeros on
+    every run the UI listed, which reads as "this run used no tokens" rather
+    than "this field was dropped".
+    """
     return RunResponse(
         run_id=detail.run_id,
         thread_id=detail.thread_id,
         assistant_id=getattr(detail, "assistant_id", None),
         status=detail.status,
-        total_tokens=getattr(detail, "total_tokens", 0),
-        message_count=getattr(detail, "message_count", 0),
         created_at=getattr(detail, "created_at", "") or "",
+        updated_at=getattr(detail, "updated_at", "") or "",
+        total_input_tokens=getattr(detail, "total_input_tokens", 0),
+        total_output_tokens=getattr(detail, "total_output_tokens", 0),
+        total_tokens=getattr(detail, "total_tokens", 0),
+        llm_call_count=getattr(detail, "llm_call_count", 0),
+        lead_agent_tokens=getattr(detail, "lead_agent_tokens", 0),
+        subagent_tokens=getattr(detail, "subagent_tokens", 0),
+        middleware_tokens=getattr(detail, "middleware_tokens", 0),
+        message_count=getattr(detail, "message_count", 0),
     )
 
 

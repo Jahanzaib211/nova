@@ -5,6 +5,7 @@ import atexit
 import logging
 import os
 import threading
+import time
 import uuid
 from collections.abc import Callable, Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -862,13 +863,31 @@ class SubagentExecutor:
             _background_tasks[task_id] = result
 
         parent_context = copy_context()
+        # One deadline, measured from dispatch -- the same clock task_tool's
+        # poller uses. Timing from when a scheduler worker picked the task up
+        # meant a task queued behind a full pool (3 workers, and up to 3
+        # subagents per run, plus other runs) had not even started its own
+        # clock when the poller's backstop fired at timeout+60s: the run saw
+        # "Task polling timed out … the background task is stuck" instead of a
+        # clean timeout, and the stuck task kept its slot.
+        deadline = time.monotonic() + self.config.timeout_seconds
 
         # Submit to scheduler pool
         def run_task():
+            remaining = deadline - time.monotonic()
             with _background_tasks_lock:
-                _background_tasks[task_id].status = SubagentStatus.RUNNING
-                _background_tasks[task_id].started_at = datetime.now(UTC)
                 result_holder = _background_tasks[task_id]
+            if remaining <= 0:
+                waited = self.config.timeout_seconds - remaining
+                logger.error(f"[trace={self.trace_id}] Subagent {self.config.name} never started: queued {waited:.0f}s for a free slot")
+                result_holder.try_set_terminal(
+                    SubagentStatus.TIMED_OUT,
+                    error=f"Never started: waited {waited:.0f}s for a free subagent slot (limit {self.config.timeout_seconds}s)",
+                )
+                return
+            with _background_tasks_lock:
+                result_holder.status = SubagentStatus.RUNNING
+                result_holder.started_at = datetime.now(UTC)
 
             try:
                 # Submit execution directly to the persistent isolated loop so the
@@ -878,8 +897,8 @@ class SubagentExecutor:
                     lambda: self._aexecute(task, result_holder),
                 )
                 try:
-                    # Wait for execution with timeout
-                    execution_future.result(timeout=self.config.timeout_seconds)
+                    # Wait for execution until the dispatch deadline
+                    execution_future.result(timeout=remaining)
                 except FuturesTimeoutError:
                     logger.error(f"[trace={self.trace_id}] Subagent {self.config.name} execution timed out after {self.config.timeout_seconds}s")
                     # Signal cooperative cancellation and cancel the future

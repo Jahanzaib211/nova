@@ -395,11 +395,27 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             recovery_service=app.state.recovery_service,
             execution_kernel=app.state.execution_kernel,
         )
-        if getattr(config.database, "backend", None) == "sqlite":
+        # Startup-only recovery of runs a previous process left active.
+        #
+        # Gateway runs are process-local: the asyncio task and its abort event
+        # live in memory while the row is durable. A row still ``pending`` or
+        # ``running`` from before this boot therefore has no worker behind it,
+        # and nothing else will ever move it -- the UI polls it as active
+        # forever, Stop answers 409 because there is nothing to cancel, and the
+        # thread stays "running". This used to run only when the database
+        # backend was SQLite, on the assumption that a shared database implies
+        # several replicas. Those are different things. This deployment is one
+        # gateway on Postgres, so the guard did not protect anything and simply
+        # switched recovery off: five runs had been "running" for hours with no
+        # process behind them.
+        #
+        # Replicas are what make the sweep unsafe (a peer may still own a run),
+        # and a distributed lock is exactly the signal for that.
+        if isinstance(distributed_lock, NoopDistributedLock):
             from deerflow.utils.time import now_iso
 
-            # Startup-only recovery: clean shutdowns return no active rows and
-            # the thread-status update below becomes a no-op.
+            # Clean shutdowns return no active rows and the thread-status
+            # update below becomes a no-op.
             recovered_runs = await app.state.run_manager.reconcile_orphaned_inflight_runs(
                 error="Gateway restarted before this run reached a durable final state.",
                 before=now_iso(),
@@ -464,23 +480,16 @@ def get_em_repo(request: Request):
 
 
 def get_integrations_registry(request: Request):
-    """The integrations registry for the freshest ``integrations:`` config.
-
-    Rebuilt when that section changes (hot reload); a registry a test placed
-    on ``app.state`` directly (no recorded source) is used as-is.
+    """The process-wide integrations registry (``deerflow.integrations``),
+    shared with the ``integrations.*`` capability operations so both read one
+    probe cache. A registry a test placed on ``app.state`` is used as-is.
     """
-    from deerflow.integrations.registry import build_registry
+    from deerflow.integrations.registry import get_integrations_registry as shared_registry
 
-    state = request.app.state
-    config = get_config().integrations
-    source = config.model_dump_json()
-    registry = getattr(state, "integrations_registry", None)
-    recorded = getattr(state, "integrations_registry_source", None)
-    if registry is None or (recorded is not None and recorded != source):
-        registry = build_registry(config)
-        state.integrations_registry = registry
-        state.integrations_registry_source = source
-    return registry
+    override = getattr(request.app.state, "integrations_registry", None)
+    if override is not None:
+        return override
+    return shared_registry(get_config().integrations)
 
 
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
@@ -569,12 +578,13 @@ async def get_current_user_from_request(request: Request):
     """
     state = getattr(request, "state", None)
     state_user = getattr(state, "user", None)
-    from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED, AUTH_SOURCE_INTERNAL, AUTH_SOURCE_SESSION
+    from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED, AUTH_SOURCE_INTERNAL, AUTH_SOURCE_PREVIEW_CAPABILITY, AUTH_SOURCE_SESSION
 
     if state_user is not None and getattr(state, "auth_source", None) in {
         AUTH_SOURCE_SESSION,
         AUTH_SOURCE_AUTH_DISABLED,
         AUTH_SOURCE_INTERNAL,
+        AUTH_SOURCE_PREVIEW_CAPABILITY,
     }:
         return state_user
 
@@ -613,6 +623,24 @@ async def get_current_user_from_request(request: Request):
     return user
 
 
+def authenticated_user_id(request: Request) -> str:
+    """The id of the user ``@require_auth`` stamped on the request; 401 when none.
+
+    For routers that scope rows by owner (``/api/jobs``, email marketing),
+    which each carried an identical private copy of this.
+    """
+    auth = getattr(request.state, "auth", None)
+    if auth is None or auth.user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return str(auth.user.id)
+
+
+def is_admin(user: Any) -> bool:
+    """The one admin predicate. Every route that branches on "is this caller
+    an admin" asks here, so the definition cannot drift between routers."""
+    return getattr(user, "system_role", None) == "admin"
+
+
 async def require_admin_user(request: Request, *, detail: str) -> None:
     """Require the authenticated caller to be an admin user.
 
@@ -631,7 +659,7 @@ async def require_admin_user(request: Request, *, detail: str) -> None:
     if user is None:
         user = await get_current_user_from_request(request)
 
-    if getattr(user, "system_role", None) != "admin":
+    if not is_admin(user):
         raise HTTPException(status_code=403, detail=detail)
 
 

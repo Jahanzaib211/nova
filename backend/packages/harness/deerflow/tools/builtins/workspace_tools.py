@@ -1126,6 +1126,7 @@ def screenshot_tool(
         # control flow, so transient failures are best surfaced as errors.
         from deerflow.sandbox.browser_check import (
             _cdp_url_for_gateway,
+            scroll_through,
         )
 
         cdp = _cdp_url_for_gateway(client)
@@ -1143,6 +1144,11 @@ def screenshot_tool(
                     # navigated to, and the agent trusted it.
                     page, created = _active_page(ctx)
                     try:
+                        if full_page:
+                            # Without this, scroll-revealed sections and
+                            # count-up numbers photograph as blank bands and
+                            # zeros on a page that renders fine for a reader.
+                            scroll_through(page)
                         png = page.screenshot(full_page=full_page)
                     finally:
                         # Only close a page we opened; closing a borrowed tab

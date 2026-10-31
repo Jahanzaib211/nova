@@ -642,6 +642,20 @@ async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request
                 values["title"] = title
             if thread_data := channel_values.get("thread_data"):
                 values["thread_data"] = thread_data
+            # The todo list and the sandbox handle live in the same checkpoint as
+            # everything else, but this allow-list was dropping them, so a
+            # reload (or a run that ended) seeded the frontend with an empty
+            # todo list and a null sandbox. The panel then hid itself
+            # (``hasTodos`` false) and the Agent's Computer lost the container
+            # id it talks to — both looked like "the todos vanished" rather than
+            # "the history endpoint did not return them". Only the latest
+            # checkpoint carries them, for the same reason as messages: they are
+            # current state, not a per-step log.
+            if is_latest_checkpoint:
+                if todos := channel_values.get("todos"):
+                    values["todos"] = serialize_channel_values_for_api({"todos": todos}).get("todos", [])
+                if sandbox_state := channel_values.get("sandbox"):
+                    values["sandbox"] = serialize_channel_values_for_api({"sandbox": sandbox_state}).get("sandbox")
 
             # Attach messages only to the latest checkpoint entry.
             if is_latest_checkpoint:

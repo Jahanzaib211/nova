@@ -38,7 +38,7 @@ from deerflow.agents.lead_agent.prompt import apply_prompt_template
 from deerflow.agents.thread_state import ThreadState
 from deerflow.config.agents_config import AGENT_NAME_PATTERN
 from deerflow.config.app_config import get_app_config, reload_app_config
-from deerflow.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
+from deerflow.config.extensions_config import ExtensionsConfig, get_extensions_config, reload_extensions_config, set_skill_enabled, update_extensions_config_file
 from deerflow.config.paths import get_paths
 from deerflow.models import create_chat_model
 from deerflow.runtime.user_context import get_effective_user_id
@@ -970,14 +970,11 @@ class DeerFlowClient:
         if config_path is None:
             raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
 
-        current_config = get_extensions_config()
+        def _replace_servers(raw: dict) -> None:
+            raw["mcpServers"] = mcp_servers
 
-        config_data = {
-            "mcpServers": mcp_servers,
-            "skills": {name: {"enabled": skill.enabled} for name, skill in current_config.skills.items()},
-        }
-
-        self._atomic_write_json(config_path, config_data)
+        # Raw merge: skills and keys like mcpInterceptors stay as on disk.
+        update_extensions_config_file(_replace_servers, config_path)
 
         self._agent = None
         self._agent_config_key = None
@@ -1035,15 +1032,9 @@ class DeerFlowClient:
         if config_path is None:
             raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
 
-        extensions_config = get_extensions_config()
-        extensions_config.skills[name] = SkillStateConfig(enabled=enabled)
-
-        config_data = {
-            "mcpServers": {n: s.model_dump() for n, s in extensions_config.mcp_servers.items()},
-            "skills": {n: {"enabled": sc.enabled} for n, sc in extensions_config.skills.items()},
-        }
-
-        self._atomic_write_json(config_path, config_data)
+        # Raw merge: rebuilding from the loaded config wrote resolved
+        # $VAR secrets to disk and dropped keys like mcpInterceptors.
+        set_skill_enabled(name, enabled, config_path, reload=False)
 
         self._agent = None
         self._agent_config_key = None
