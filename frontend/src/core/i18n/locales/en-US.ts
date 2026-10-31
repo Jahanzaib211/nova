@@ -21,12 +21,9 @@ export const enUS: Translations = {
         "No jobs yet. Anything you schedule or delegate will show up here.",
       filterAll: "All statuses",
       columns: {
-        type: "Job",
         status: "Status",
-        progress: "Progress",
         attempts: "Attempts",
         created: "Created",
-        actions: "Actions",
       },
       actions: {
         cancel: "Cancel",
@@ -55,11 +52,6 @@ export const enUS: Translations = {
         deleted: "Schedule deleted",
         updated: "Schedule updated",
       },
-      settings: {
-        title: "Jobs",
-        description: "Background work and cron schedules.",
-        openPage: "Open the jobs page",
-      },
       toasts: {
         cancelled: "Cancellation requested",
         retried: "Job re-queued",
@@ -69,7 +61,7 @@ export const enUS: Translations = {
     integrations: {
       title: "Integrations",
       description:
-        "Everything Nova can reach from this machine — model gateways, mail, CRM, helpdesk, web tools, MCP servers, skills and agents — with what the last probe found.",
+        "Health of the services Nova reaches from this machine — model gateways, mail, CRM, helpdesk and web tools — with what the last probe found. MCP servers, skills and agent runtimes are managed on their own pages.",
       probeAll: "Probe all",
       probe: "Probe",
       empty:
@@ -93,8 +85,6 @@ export const enUS: Translations = {
         models: "Model gateways",
         business: "Mail, CRM & helpdesk",
         web: "Search, crawl & browser",
-        agents: "Agent gateways",
-        extensions: "MCP servers & skills",
         other: "Other",
       },
     },
@@ -190,6 +180,8 @@ export const enUS: Translations = {
       title: "Email",
       description:
         "Lists, contacts, templates and campaigns, sent through your own mail server — with opens, clicks, bounces and unsubscribes tracked back to each send.",
+      disabledHint:
+        "Email marketing is not enabled on this deployment. Set email_marketing.enabled: true in config.yaml.",
       failed: "Request failed",
       tabs: {
         campaigns: "Campaigns",
@@ -352,31 +344,10 @@ export const enUS: Translations = {
         list: "List",
         twentySync: "Push to Twenty",
         twentyImport: "Pull from Twenty",
-        jobStarted: "Job started — follow it on the Jobs page",
+        jobStarted: "Job started — follow it in Settings › Jobs",
       },
     },
     console: {
-      gateway: {
-        title: "Gateway",
-        description:
-          "Every capability module on this gateway and whether it is configured and healthy — the same registry the agent and the MCP server use.",
-        refresh: "Refresh",
-        loadFailed: "Could not load the capability registry.",
-        ops: "ops",
-        acpTitle: "ACP adapters",
-        acpDescription:
-          "External agents reachable over the Agent Client Protocol, their adapter binary, and the permission policy each one runs under.",
-        acpEmpty:
-          "No ACP agents configured — set NOVA_ACP_AGENTS=1 and restart to mount Claude Code and OpenClaw.",
-        colAgent: "Agent",
-        colBinary: "Binary",
-        colModel: "Model",
-        colPolicy: "Policy",
-        allow: "allow",
-        deny: "deny",
-        versionsTitle: "Versions",
-        versionsDescription: "What this deployment is actually running.",
-      },
       devices: {
         sessionsTitle: "Browser sessions",
         sessionsDescription:
@@ -416,14 +387,6 @@ export const enUS: Translations = {
         colQueues: "Queues",
         colRunning: "Running",
         colHeartbeat: "Heartbeat",
-        tasksTitle: "Agent tasks",
-        tasksDescription:
-          "Work delegated to agents as background jobs (delegate_async).",
-        tasksEmpty: "No agent tasks yet.",
-        colStatus: "Status",
-        colAgent: "Agent",
-        colCreated: "Created",
-        colJob: "Job",
       },
       agents: {
         runtimesTitle: "Runtimes",
@@ -453,21 +416,6 @@ export const enUS: Translations = {
         configuredIn: "Set in",
         howToToggle:
           "Flags follow config.yaml (hot-reloaded); edit the section's `enabled` and the change applies on the next request.",
-      },
-      automation: {
-        title: "Automation",
-        description:
-          "Cron schedules on the job runner. A schedule enqueues its job type with the payload on every match.",
-        unavailable: "The job runner is disabled or has no database.",
-        empty: "No schedules yet.",
-        badPayload: "Payload must be a JSON object.",
-        name: "Name",
-        type: "Job type",
-        cron: "Cron",
-        payload: "Payload (JSON)",
-        save: "Save",
-        nextRun: "Next run",
-        delete: "Delete",
       },
       secrets: {
         title: "Secrets",
@@ -528,7 +476,7 @@ export const enUS: Translations = {
       asyncOn:
         "Async delegation is on: delegate_async runs agents as jobs that survive restarts.",
       asyncOff:
-        "Async delegation is off (subagents.async_enabled); subagents run inside the chat request.",
+        "Async delegation is off (subagents.async_enabled and jobs.enabled); subagents run inside the chat request.",
       activeNow: (running, queued) => `${running} running, ${queued} queued`,
       counts: (running, queued) => `${running} running · ${queued} queued`,
       kinds: {
@@ -564,6 +512,7 @@ export const enUS: Translations = {
     openInNewWindow: "Open in new window",
     close: "Close",
     more: "More",
+    showPassword: "Show password",
     search: "Search",
     loadMore: "Load more",
     download: "Download",
@@ -571,7 +520,7 @@ export const enUS: Translations = {
     artifacts: "Artifacts",
     public: "Public",
     custom: "Custom",
-    notAvailableInDemoMode: "Not available in demo mode",
+    notAvailableInPreviewMode: "Not available in preview mode",
     agentBusy:
       "The agent is still working — wait for it to finish, or press Stop.",
     loading: "Loading...",
@@ -646,6 +595,13 @@ export const enUS: Translations = {
     reasoningEffortHighDescription:
       "Full-dimensional Logic Deduction + Multi-path Verification + Backward Check",
     searchModels: "Search models...",
+    noModelsFound: "No models match your search.",
+    visibleModelCount: "{visible} of {total} models",
+    showHiddenModels: "Show hidden models",
+    hiddenBadge: "Hidden",
+    showModelInChat: "Offer in the chat picker",
+    hideModelFromChat: "Keep out of the chat picker",
+    contextWindow: "Context window: {tokens} tokens",
     surpriseMe: "Surprise",
     surpriseMePrompt: "Surprise me",
     followupLoading: "Generating follow-up questions...",
@@ -709,11 +665,9 @@ export const enUS: Translations = {
   sidebar: {
     newChat: "New chat",
     chats: "Chats",
-    channels: "Channels",
     recentChats: "Recent chats",
-    demoChats: "Demo chats",
+    starterChats: "Starter chats",
     agents: "Agents",
-    jobs: "Jobs",
     email: "Email",
   },
 
@@ -723,6 +677,7 @@ export const enUS: Translations = {
     description:
       "Create and manage custom agents with specialized prompts and capabilities.",
     newAgent: "New Agent",
+    skillsUpdated: "Agent skills updated",
     emptyTitle: "No custom agents yet",
     emptyDescription:
       "Create your first custom agent with a specialized system prompt.",
@@ -774,6 +729,7 @@ export const enUS: Translations = {
     backToGallery: "Back to Gallery",
     skillsDialogDescription:
       "Toggle which skills this agent loads. Off skills are never activated for this agent (deterministic). All-on = inherit every enabled skill.",
+    noSkillsEnabled: "No skills enabled — enable some in Settings → Skills.",
   },
 
   // Breadcrumb
@@ -971,21 +927,16 @@ export const enUS: Translations = {
       channels: "Channels",
       models: "Models",
       memory: "Memory",
-      runtime: "Runtime",
       tools: "Tools",
       skills: "Skills",
       notification: "Notification",
       voice: "Voice",
-      about: "About",
-      gateway: "Gateway",
-      devices: "Devices",
+      about: "About & versions",
+      devices: "Sessions & tokens",
       workers: "Cloud workers",
-      agents: "Agents",
       runtimes: "Runtimes",
       labs: "Labs",
-      automation: "Automation",
       secrets: "Secrets",
-      updates: "Updates",
     },
     groups: {
       general: "General",
@@ -995,9 +946,9 @@ export const enUS: Translations = {
       system: "System",
     },
     runtime: {
-      title: "Runtime",
+      title: "Native agent",
       description:
-        "Read-only view of the operator-facing config sections that affect runtime behavior. Edit config.yaml to change these.",
+        "How Nova's own agent summarizes long chats, delegates to subagents and applies guardrails. Read-only — edit config.yaml to change these.",
       unavailable:
         "Could not load runtime config. Check that the gateway is running and you are signed in.",
       editHint:
@@ -1021,7 +972,7 @@ export const enUS: Translations = {
         description: "Delegated task execution by the lead agent.",
         timeout: "Default timeout",
         maxTurns: "Default max turns",
-        customAgents: "Custom agents",
+        customAgents: "Config subagents",
       },
       guardrails: {
         title: "Guardrails",
@@ -1062,6 +1013,12 @@ export const enUS: Translations = {
       fieldShowInChat: "Show in chat",
       fieldShowInChatHint:
         "Offer this model in the chat model picker. Turn off to keep it configured but out of the way.",
+      hiddenBadge: "Hidden",
+      capabilityVision: "Vision",
+      capabilityThinking: "Thinking",
+      resetVisibility: "Follow config again",
+      visibilityHint:
+        "“Show in chat” is per browser. Models from config.yaml cannot be rewritten through the API, so their switch is stored locally — the picker's “Show hidden models” toggle reveals everything either way.",
       fieldMaxInputTokens: "Max context",
       fieldMaxInputTokensHint:
         "Context window in tokens. Must match what the server was actually started with — a larger number here does not buy a larger window.",
@@ -1218,6 +1175,8 @@ export const enUS: Translations = {
       description:
         "Manage the configuration and enabled status of the agent skills.",
       createSkill: "Create skill",
+      adminOnlyToggle:
+        "Skills are shared by everyone on this server, so only an admin can turn them on or off.",
       emptyTitle: "No agent skill yet",
       emptyDescription:
         "Put your agent skill folders under the `/skills/custom` folder under the root folder of Nova.",
@@ -1331,6 +1290,8 @@ export const enUS: Translations = {
 
   agentComputer: {
     header: "Agent's computer",
+    openPanel: "Open Agent's Computer",
+    closePanel: "Close Agent's Computer",
     thinking: "is thinking",
     usingTerminal: "is using Terminal",
     usingBrowser: "is using Browser",
@@ -1369,6 +1330,9 @@ export const enUS: Translations = {
       activity: "Activity",
       telemetry: "Telemetry",
       review: "Review",
+      // The pre-deploy security gate. Kept as the product name so the tab
+      // matches what the landing page and the docs call it.
+      secureShip: "Secure-Ship",
       // Matches the panel header ("Recon — private web access"); the button
       // said "Privacy" and the panel said "Recon", which read as two features.
       privacy: "Recon",
@@ -1528,6 +1492,47 @@ export const enUS: Translations = {
       kernelVerdictSteps: (count: number) =>
         `${count} ${count === 1 ? "step" : "steps"}`,
     },
+    secureShip: {
+      title: "secure-ship gate",
+      runGate: "Run gate",
+      running: "Running\u2026",
+      verdictHint: {
+        pass: "No blocking issues found \u2014 this build is safe to ship.",
+        warn: "Nothing blocks the deploy, but these findings deserve a look.",
+        block: "The gate found blocking issues. Fix them before shipping.",
+        error: "The gate could not decide. Treat this build as unreviewed.",
+      },
+      blocked: "Deploy blocked",
+      deployBlocked:
+        "This build cannot be deployed until the blocking findings above are resolved.",
+      scanners: "Scanners",
+      scannerUnavailable:
+        "Not available in this sandbox \u2014 this check did not run.",
+      findings: "Findings",
+      noFindings: "The gate ran and found nothing to report.",
+      severity: {
+        critical: "Critical",
+        high: "High",
+        medium: "Medium",
+        low: "Low",
+        info: "Info",
+      },
+      toolkitTitle: "Security toolkit",
+      toolkitTotal: (count: number) => `${count} tool${count === 1 ? "" : "s"}`,
+      toolkitUnavailable:
+        "The security toolkit could not be read \u2014 the gateway did not answer.",
+      toolkitLoading: "Loading the security toolkit\u2026",
+      emptyTitle: "No gate run yet",
+      emptyHint:
+        "Run the gate to scan this workspace for secrets, dependencies and header problems before you deploy.",
+      loading: "Loading the gate report\u2026",
+      loadFailed: "Gate report failed to load",
+      loadFailedHint:
+        "The gateway did not answer. The build has not been checked.",
+      runFailed: "The gate run failed",
+      runFailedHint: "The gateway did not answer.",
+      retry: "Try again",
+    },
     privacy: {
       unavailable:
         "Recon status is unavailable \u2014 the gateway did not answer.",
@@ -1584,9 +1589,13 @@ export const enUS: Translations = {
 
   runtimeBar: {
     status: {
-      healthy: "Healthy",
+      healthy: "Browser healthy",
       healthyTitle: "Browser subsystem healthy",
       healthyBody: "All circuit breakers are CLOSED. No active degradation.",
+      selfTestIssues: "Self-test issues",
+      selfTestIssuesTitle: "The browser self-test found problems",
+      selfTestIssuesBody:
+        "The browser itself is reachable, but the last check of this chat's preview reported errors. Open the Browser tab for details.",
       degraded: (count: number) => `Degraded \u00b7 ${count}`,
       degradedTitle: (count: number) =>
         `${count} circuit${count === 1 ? "" : "s"} open`,

@@ -16,39 +16,48 @@ export function Footer({ className }: FooterProps) {
   return (
     <footer
       className={cn(
-        "container-md mx-auto mt-32 flex flex-col items-center justify-center",
+        "mx-auto mt-8 w-full max-w-6xl px-4 pb-12 md:px-6",
         className,
       )}
     >
-      <hr className="from-border/0 to-border/0 m-0 h-px w-full border-none bg-linear-to-r via-white/20" />
-      <div className="text-muted-foreground container flex h-20 flex-col items-center justify-center text-sm">
-        <p className="text-center font-serif text-lg md:text-xl">
+      <hr className="m-0 h-px w-full border-none bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+      <div className="flex flex-col items-center justify-center py-10 text-center">
+        <p className="max-w-xl font-serif text-lg text-balance text-slate-200 md:text-xl">
           &quot;Originated from Open Source, give back to Open Source.&quot;
         </p>
       </div>
-      <div className="text-muted-foreground container mb-8 flex flex-col items-center justify-center gap-2 text-xs">
-        <nav className="flex items-center gap-4">
-          <Link
-            href="/terms"
-            className="hover:text-foreground transition-colors"
-          >
-            Terms
-          </Link>
-          <Link
-            href="/privacy"
-            className="hover:text-foreground transition-colors"
-          >
-            Privacy
-          </Link>
-          <Link
-            href="/saas"
-            className="hover:text-foreground transition-colors"
-          >
+      <div className="flex flex-col items-center justify-center gap-3 text-xs text-slate-500">
+        <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+          <Link href="/saas" className="transition-colors hover:text-white">
             Pricing
           </Link>
+          <Link href="/terms" className="transition-colors hover:text-white">
+            Terms
+          </Link>
+          <Link href="/privacy" className="transition-colors hover:text-white">
+            Privacy
+          </Link>
+          <a
+            href="https://alilabsx.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-white"
+          >
+            AliLabsX
+          </a>
         </nav>
         <p>{t.landing.footer.license}</p>
-        <p>&copy; {year} Nova</p>
+        <p>
+          &copy; {year} Nova &middot; Built by{" "}
+          <a
+            href="https://alilabsx.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-400 transition-colors hover:text-[#5eead4]"
+          >
+            Jahanzaib Ali
+          </a>
+        </p>
       </div>
     </footer>
   );

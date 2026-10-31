@@ -270,6 +270,11 @@
     oklch(0.55 0.25 290),
     oklch(0.7 0.15 210)
   );
+  /* Marketing shimmer palette. The base stops sit close to the body text of
+     the theme, so a shimmering phrase never loses contrast. */
+  --nova-shimmer-base: #0f172a;
+  --nova-shimmer-violet: #7c3aed;
+  --nova-shimmer-cyan: #0e7490;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -318,6 +323,9 @@
     oklch(0.65 0.22 290),
     oklch(0.78 0.14 210)
   );
+  --nova-shimmer-base: #f1f5f9;
+  --nova-shimmer-violet: #ddd6fe;
+  --nova-shimmer-cyan: #a5f3fc;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -449,4 +457,142 @@
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   Marketing shimmer
+   Two restrained effects for the public pages. Both are CSS-only, so they
+   render on the server and cost no JavaScript.
+
+   The rule that matters here: a highlight must never fight the sentence it
+   sits in. The text effect keeps the glyphs legible and drifts a soft
+   violet-to-cyan wash across them; the sweep is a single low-opacity sheen
+   that crosses an element once every eleven seconds. `prefers-reduced-motion`
+   turns both off at the bottom of this block.
+   --------------------------------------------------------------------------- */
+@keyframes nova-shimmer {
+  0% {
+    background-position: 130% center;
+  }
+  50% {
+    background-position: 30% center;
+  }
+  100% {
+    background-position: 130% center;
+  }
+}
+
+@keyframes nova-shimmer-sweep {
+  0%,
+  62% {
+    transform: translateX(-160%) skewX(-12deg);
+    opacity: 0;
+  }
+  72% {
+    opacity: 0.07;
+  }
+  100% {
+    transform: translateX(240%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+
+/* Text with a slow aurora wash across it. The base stops stay close to the
+   surrounding text colour so the phrase is readable at every frame; only the
+   violet and cyan mid-stops move. The palette follows the theme, so the same
+   class works on the dark landing and the light pricing page. */
+@utility text-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--nova-shimmer-base) 0%,
+    var(--nova-shimmer-base) 34%,
+    var(--nova-shimmer-violet) 44%,
+    var(--nova-shimmer-cyan) 50%,
+    var(--nova-shimmer-violet) 56%,
+    var(--nova-shimmer-base) 66%,
+    var(--nova-shimmer-base) 100%
+  );
+  background-size: 240% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: nova-shimmer 14s ease-in-out infinite;
+}
+
+/* The richer variant: the whole phrase carries the brand gradient and the
+   gradient itself drifts. Use on one or two headings, never on body copy. */
+@utility text-aurora {
+  background-image: var(--brand-gradient);
+  background-size: 220% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: nova-shimmer 16s ease-in-out infinite;
+}
+
+/* A light sheen across one element. The pseudo-element sits above the
+   background but below focusable content because it never takes pointer
+   events. Keep it on a primary action at most — on every card it reads as a
+   template. */
+@utility shimmer-sweep {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      transparent 38%,
+      rgb(255 255 255 / 0.06) 48%,
+      rgb(255 255 255 / 0.08) 50%,
+      rgb(255 255 255 / 0.06) 52%,
+      transparent 62%
+    );
+    transform: translateX(-160%) skewX(-12deg);
+    animation: nova-shimmer-sweep 11s ease-in-out infinite;
+    animation-delay: var(--shimmer-delay, 0s);
+  }
+}
+
+/* The hero's rotating word ships with a gold aurora. On the black landing
+   page the brand gradient reads better, so the hero opts into it here. */
+.landing-word-rotate .animate-aurora {
+  background-image: var(--brand-gradient) !important;
+}
+
+/* The landing's bento cards carry longer lines than the component's default
+   one-line title clamp, so the titles are allowed to wrap to three lines. */
+.landing-bento .magic-bento-card__title {
+  --clamp-title: 3;
+}
+
+.landing-bento .magic-bento-card__description {
+  --clamp-desc: 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer,
+  .text-aurora {
+    animation: none;
+    background-image: none;
+    color: inherit;
+    -webkit-text-fill-color: currentColor;
+  }
+
+  .shimmer-sweep::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  /* The aurora word in the headline keeps its gradient, but stops drifting. */
+  .animate-aurora {
+    animation: none;
+  }
 }

@@ -24,7 +24,20 @@ async function expectNoHorizontalOverflow(page: Page) {
       const offenders = Array.from(document.querySelectorAll("body *"))
         .filter((el) => {
           const r = el.getBoundingClientRect();
-          return r.width > 40 && r.right > vw + 1 && !el.closest("nav");
+          if (r.width <= 40 || r.right <= vw + 1 || el.closest("nav")) {
+            return false;
+          }
+          // Decorative glows are deliberately larger than the viewport and
+          // clipped by an ancestor; they cannot create a scrollbar.
+          let parent = el.parentElement;
+          while (parent && parent !== document.body) {
+            const overflowX = getComputedStyle(parent).overflowX;
+            if (overflowX === "hidden" || overflowX === "clip") {
+              return false;
+            }
+            parent = parent.parentElement;
+          }
+          return true;
         })
         .slice(0, 5)
         .map(
@@ -62,6 +75,8 @@ test.describe("landing page on mobile", () => {
     await expect(
       page.getByRole("dialog").getByRole("link", { name: /docs|文档/i }),
     ).toBeVisible();
+    // Let the sheet finish sliding in before measuring the layout.
+    await page.waitForTimeout(400);
 
     await expectNoHorizontalOverflow(page);
   });

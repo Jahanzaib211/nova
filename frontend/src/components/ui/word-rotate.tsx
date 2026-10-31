@@ -36,17 +36,17 @@ export function WordRotate({
   }, [words, duration]);
 
   return (
-    <div className="overflow-hidden py-2">
+    <div className="overflow-hidden py-2" data-vr-mask>
       <AnimatePresence mode="popLayout">
-        <motion.h1
+        <motion.span
           key={words[index]}
-          className={cn(className)}
+          className={cn("block", className)}
           {...motionProps}
         >
           <AuroraText speed={3} colors={["#efefbb", "#e9c665", "#e3a812"]}>
             {words[index]}
           </AuroraText>
-        </motion.h1>
+        </motion.span>
       </AnimatePresence>
     </div>
   );

@@ -1,64 +1,68 @@
 "use client";
 
 import MagicBento, { type BentoCardProps } from "@/components/ui/magic-bento";
-import { useI18n } from "@/core/i18n/hooks";
-import { cn } from "@/lib/utils";
 
 import { Section } from "../section";
 
 const COLOR = "#0a0a0a";
+
 const features: BentoCardProps[] = [
   {
     color: COLOR,
-    label: "Context Engineering",
-    title: "Long/Short-term Memory",
-    description: "Now the agent can better understand you",
+    label: "Secure by default",
+    title: "40 security tools in every sandbox",
+    description: "Recon, vulnerabilities, web apps, secrets and defence.",
   },
   {
     color: COLOR,
-    label: "Long Task Running",
-    title: "Planning and Sub-tasking",
+    label: "Verify loop",
+    title: "Runs the app, checks it in a real browser, reviews the diff",
     description:
-      "Plans ahead, reasons through complexity, then executes sequentially or in parallel",
+      "Console and network errors are read before a result is returned.",
   },
   {
     color: COLOR,
-    label: "Extensible",
-    title: "Skills and Tools",
-    description:
-      "Plug, play, or even swap built-in tools. Build the agent you want.",
-  },
-
-  {
-    color: COLOR,
-    label: "Persistent",
-    title: "Sandbox with File System",
-    description: "Read, write, run — like a real computer",
+    label: "Any model",
+    title:
+      "Claude, OpenAI-compatible APIs, DeepSeek, MiniMax, vLLM, or a local model on one GPU",
+    description: "Your key, your hardware.",
   },
   {
     color: COLOR,
-    label: "Flexible",
-    title: "Multi-Model Support",
-    description: "Doubao, DeepSeek, OpenAI, Gemini, etc.",
+    label: "Open core",
+    title: "MIT-licensed core, self-hosted, full control",
+    description: "Run it yourself, or let a partner deploy it.",
   },
   {
     color: COLOR,
-    label: "Free",
-    title: "Open Source",
-    description: "MIT License, self-hosted, full control",
+    label: "MCP for other agents",
+    title: "Other agents reach Nova through scoped, revocable tokens",
+    description: "Nothing else is exposed.",
+  },
+  {
+    color: COLOR,
+    label: "Isolated tasks",
+    title:
+      "Every chat thread gets its own container with resource limits and a command log",
+    description: "With a tamper-evident audit trail.",
   },
 ];
 
 export function WhatsNewSection({ className }: { className?: string }) {
-  const { t } = useI18n();
   return (
     <Section
-      className={cn("", className)}
-      title={t.landing.whatsNew.title}
-      subtitle={t.landing.whatsNew.subtitle}
+      id="whats-new"
+      className={className}
+      kicker="What ships"
+      title="What's new"
+      subtitle="Six parts of Nova that are in the product today, not on the roadmap."
     >
-      <div className="flex w-full items-center justify-center">
-        <MagicBento data={features} />
+      <div className="landing-bento flex w-full items-center justify-center">
+        <MagicBento
+          data={features}
+          glowColor="146, 109, 255"
+          textAutoHide={false}
+        />
       </div>
     </Section>
   );

@@ -20,12 +20,9 @@ export const zhCN: Translations = {
       empty: "还没有任务。你安排或委派的工作会显示在这里。",
       filterAll: "全部状态",
       columns: {
-        type: "任务",
         status: "状态",
-        progress: "进度",
         attempts: "尝试",
         created: "创建时间",
-        actions: "操作",
       },
       actions: {
         cancel: "取消",
@@ -53,11 +50,6 @@ export const zhCN: Translations = {
         deleted: "计划已删除",
         updated: "计划已更新",
       },
-      settings: {
-        title: "任务",
-        description: "后台工作与定时计划。",
-        openPage: "打开任务页面",
-      },
       toasts: {
         cancelled: "已请求取消",
         retried: "任务已重新入队",
@@ -67,7 +59,7 @@ export const zhCN: Translations = {
     integrations: {
       title: "集成",
       description:
-        "Nova 在这台机器上能连到的一切——模型网关、邮件、CRM、客服、网页工具、MCP 服务器、技能与智能体——以及最近一次探测的结果。",
+        "Nova 在这台机器上连接的服务——模型网关、邮件、CRM、客服与网页工具——的健康状况，以及最近一次探测的结果。MCP 服务器、技能与智能体运行时在各自的页面中管理。",
       probeAll: "全部探测",
       probe: "探测",
       empty:
@@ -81,7 +73,7 @@ export const zhCN: Translations = {
       secondsAgo: (n) => `${n} 秒前`,
       minutesAgo: (n) => `${n} 分钟前`,
       status: {
-        healthy: "正常",
+        healthy: "浏览器正常",
         degraded: "降级",
         down: "不可用",
         unknown: "未知",
@@ -91,8 +83,6 @@ export const zhCN: Translations = {
         models: "模型网关",
         business: "邮件、CRM 与客服",
         web: "搜索、抓取与浏览器",
-        agents: "智能体网关",
-        extensions: "MCP 服务器与技能",
         other: "其他",
       },
     },
@@ -183,6 +173,8 @@ export const zhCN: Translations = {
       title: "邮件",
       description:
         "列表、联系人、模板与营销活动，通过你自己的邮件服务器发送——打开、点击、退信与退订都追溯到每一次发送。",
+      disabledHint:
+        "此部署未启用邮件营销功能。请在 config.yaml 中设置 email_marketing.enabled: true。",
       failed: "请求失败",
       tabs: {
         campaigns: "活动",
@@ -340,31 +332,10 @@ export const zhCN: Translations = {
         list: "列表",
         twentySync: "推送到 Twenty",
         twentyImport: "从 Twenty 拉取",
-        jobStarted: "任务已启动——请在任务页面查看",
+        jobStarted: "任务已启动——请在 设置 › 任务 中查看",
       },
     },
     console: {
-      gateway: {
-        title: "网关",
-        description:
-          "本网关上的每个能力模块及其配置与健康状态——与智能体和 MCP 服务器使用同一个注册表。",
-        refresh: "刷新",
-        loadFailed: "无法加载能力注册表。",
-        ops: "个操作",
-        acpTitle: "ACP 适配器",
-        acpDescription:
-          "可通过 Agent Client Protocol 访问的外部智能体、其适配器二进制文件，以及各自运行的权限策略。",
-        acpEmpty:
-          "未配置 ACP 智能体——设置 NOVA_ACP_AGENTS=1 并重启以挂载 Claude Code 与 OpenClaw。",
-        colAgent: "智能体",
-        colBinary: "二进制",
-        colModel: "模型",
-        colPolicy: "策略",
-        allow: "允许",
-        deny: "拒绝",
-        versionsTitle: "版本",
-        versionsDescription: "本部署实际运行的版本。",
-      },
       devices: {
         sessionsTitle: "浏览器会话",
         sessionsDescription:
@@ -403,14 +374,6 @@ export const zhCN: Translations = {
         colQueues: "队列",
         colRunning: "运行中",
         colHeartbeat: "心跳",
-        tasksTitle: "智能体任务",
-        tasksDescription:
-          "以后台任务方式委派给智能体的工作（delegate_async）。",
-        tasksEmpty: "尚无智能体任务。",
-        colStatus: "状态",
-        colAgent: "智能体",
-        colCreated: "创建时间",
-        colJob: "任务",
       },
       agents: {
         runtimesTitle: "运行时",
@@ -439,21 +402,6 @@ export const zhCN: Translations = {
         configuredIn: "配置于",
         howToToggle:
           "开关跟随 config.yaml（热重载）；修改该段的 `enabled`，下一次请求即生效。",
-      },
-      automation: {
-        title: "自动化",
-        description:
-          "任务运行器上的 cron 计划。每次匹配时，计划会以给定负载入队其任务类型。",
-        unavailable: "任务运行器已禁用或没有数据库。",
-        empty: "尚无计划。",
-        badPayload: "负载必须是 JSON 对象。",
-        name: "名称",
-        type: "任务类型",
-        cron: "Cron",
-        payload: "负载（JSON）",
-        save: "保存",
-        nextRun: "下次运行",
-        delete: "删除",
       },
       secrets: {
         title: "密钥",
@@ -511,7 +459,7 @@ export const zhCN: Translations = {
       asyncOn:
         "异步委派已开启：delegate_async 将智能体作为可在重启后存活的任务运行。",
       asyncOff:
-        "异步委派已关闭（subagents.async_enabled）；子智能体在对话请求内运行。",
+        "异步委派已关闭（subagents.async_enabled 与 jobs.enabled）；子智能体在对话请求内运行。",
       activeNow: (running, queued) => `${running} 个运行中，${queued} 个排队中`,
       counts: (running, queued) => `${running} 运行中 · ${queued} 排队中`,
       kinds: {
@@ -547,6 +495,7 @@ export const zhCN: Translations = {
     openInNewWindow: "在新窗口打开",
     close: "关闭",
     more: "更多",
+    showPassword: "显示密码",
     search: "搜索",
     loadMore: "加载更多",
     download: "下载",
@@ -554,7 +503,7 @@ export const zhCN: Translations = {
     artifacts: "文件",
     public: "公共",
     custom: "自定义",
-    notAvailableInDemoMode: "在演示模式下不可用",
+    notAvailableInPreviewMode: "预览模式下不可用",
     agentBusy: "智能体仍在运行 — 请等待完成，或点击停止。",
     loading: "加载中...",
     version: "版本",
@@ -624,6 +573,13 @@ export const zhCN: Translations = {
     reasoningEffortHigh: "高",
     reasoningEffortHighDescription: "全维度逻辑推演 + 多路径验证 + 反推校验",
     searchModels: "搜索模型...",
+    noModelsFound: "没有匹配的模型。",
+    visibleModelCount: "{visible} / {total} 个模型",
+    showHiddenModels: "显示隐藏模型",
+    hiddenBadge: "已隐藏",
+    showModelInChat: "在聊天选择器中显示",
+    hideModelFromChat: "从聊天选择器中移除",
+    contextWindow: "上下文窗口：{tokens} tokens",
     surpriseMe: "小惊喜",
     surpriseMePrompt: "给我一个小惊喜吧",
     followupLoading: "正在生成可能的后续问题...",
@@ -685,11 +641,9 @@ export const zhCN: Translations = {
   sidebar: {
     newChat: "新对话",
     chats: "对话",
-    channels: "渠道",
     recentChats: "最近的对话",
-    demoChats: "演示对话",
+    starterChats: "入门对话",
     agents: "智能体",
-    jobs: "任务",
     email: "邮件",
   },
 
@@ -698,6 +652,7 @@ export const zhCN: Translations = {
     title: "智能体",
     description: "创建和管理具有专属 Prompt 与能力的自定义智能体。",
     newAgent: "新建智能体",
+    skillsUpdated: "智能体技能已更新",
     emptyTitle: "还没有自定义智能体",
     emptyDescription: "创建你的第一个自定义智能体，设置专属系统提示词。",
     apiDisabledTitle: "智能体管理已关闭",
@@ -743,6 +698,7 @@ export const zhCN: Translations = {
     backToGallery: "返回 Gallery",
     skillsDialogDescription:
       "切换此智能体加载的技能。关闭的技能永远不会为此智能体激活（确定性）。全部开启 = 继承每个已启用的技能。",
+    noSkillsEnabled: "尚未启用任何技能——请在“设置 → 技能”中启用。",
   },
 
   // Breadcrumb
@@ -934,21 +890,16 @@ export const zhCN: Translations = {
       channels: "渠道",
       models: "模型",
       memory: "记忆",
-      runtime: "运行时",
       tools: "工具",
       skills: "技能",
       notification: "通知",
       voice: "语音",
-      about: "关于",
-      gateway: "网关",
-      devices: "设备",
+      about: "关于与版本",
+      devices: "会话与令牌",
       workers: "云端工作进程",
-      agents: "智能体",
       runtimes: "运行时",
       labs: "实验室",
-      automation: "自动化",
       secrets: "密钥",
-      updates: "更新",
     },
     groups: {
       general: "常规",
@@ -958,9 +909,9 @@ export const zhCN: Translations = {
       system: "系统",
     },
     runtime: {
-      title: "运行时",
+      title: "原生智能体",
       description:
-        "运行时行为相关配置区的只读视图。需要修改 config.yaml 来变更这些值。",
+        "Nova 自身智能体如何总结长对话、委派子代理并执行护栏。只读——需要修改 config.yaml 来变更这些值。",
       unavailable: "无法加载运行时配置。请确认网关正在运行且您已登录。",
       editHint:
         "变更这些值需要编辑 config.yaml 并重新加载网关。部分配置区需要重启。",
@@ -982,7 +933,7 @@ export const zhCN: Translations = {
         description: "由主代理委派的任务执行。",
         timeout: "默认超时",
         maxTurns: "默认最大轮次",
-        customAgents: "自定义代理",
+        customAgents: "配置的子代理",
       },
       guardrails: {
         title: "防护栏",
@@ -1022,6 +973,12 @@ export const zhCN: Translations = {
       fieldShowInChat: "在对话中显示",
       fieldShowInChatHint:
         "在对话的模型选择器中提供此模型。关闭后仍保留配置，但不在选择器中显示。",
+      hiddenBadge: "已隐藏",
+      capabilityVision: "视觉",
+      capabilityThinking: "思考",
+      resetVisibility: "恢复跟随配置",
+      visibilityHint:
+        "“在对话中显示”按浏览器保存。config.yaml 中的模型无法通过 API 修改，因此它们的开关保存在本地——选择器里的“显示隐藏模型”开关始终可以临时显示全部模型。",
       fieldMaxInputTokens: "最大上下文",
       fieldMaxInputTokensHint:
         "上下文窗口（tokens）。必须与服务实际启动时的设置一致——在此填写更大的数值并不会真正扩大窗口。",
@@ -1173,6 +1130,8 @@ export const zhCN: Translations = {
       title: "技能",
       description: "管理 Agent Skill 配置和启用状态。",
       createSkill: "新建技能",
+      adminOnlyToggle:
+        "技能由此服务器上的所有人共享，因此只有管理员可以启用或停用。",
       emptyTitle: "还没有技能",
       emptyDescription:
         "将你的 Agent Skill 文件夹放在 Nova 根目录下的 `/skills/custom` 文件夹中。",
@@ -1285,6 +1244,8 @@ export const zhCN: Translations = {
 
   agentComputer: {
     header: "智能体电脑",
+    openPanel: "打开智能体电脑",
+    closePanel: "关闭智能体电脑",
     thinking: "正在思考",
     usingTerminal: "正在使用终端",
     usingBrowser: "正在使用浏览器",
@@ -1319,6 +1280,7 @@ export const zhCN: Translations = {
       activity: "活动",
       telemetry: "遥测",
       review: "审查",
+      secureShip: "安全发布",
       privacy: "Recon",
       audit: "审计",
     },
@@ -1470,6 +1432,42 @@ export const zhCN: Translations = {
       kernelVerdictInvalid: "计划无效",
       kernelVerdictSteps: (count: number) => `${count} 个步骤`,
     },
+    secureShip: {
+      title: "安全发布门禁",
+      runGate: "运行门禁",
+      running: "运行中\u2026",
+      verdictHint: {
+        pass: "未发现阻断性问题 \u2014 此构建可以发布。",
+        warn: "没有阻断发布的问题，但以下发现仍需留意。",
+        block: "门禁发现阻断性问题，发布前必须先修复。",
+        error: "门禁无法给出结论，请将此构建视为未经审查。",
+      },
+      blocked: "发布已阻断",
+      deployBlocked: "在解决上述阻断性发现之前，此构建无法部署。",
+      scanners: "扫描器",
+      scannerUnavailable: "当前沙箱不可用 \u2014 此项检查未执行。",
+      findings: "安全发现",
+      noFindings: "门禁已运行，未发现任何问题。",
+      severity: {
+        critical: "严重",
+        high: "高危",
+        medium: "中危",
+        low: "低危",
+        info: "提示",
+      },
+      toolkitTitle: "安全工具箱",
+      toolkitTotal: (count: number) => `${count} 个工具`,
+      toolkitUnavailable: "无法读取安全工具箱 \u2014 网关未响应。",
+      toolkitLoading: "正在加载安全工具箱\u2026",
+      emptyTitle: "尚未运行门禁",
+      emptyHint: "运行门禁，在部署前扫描此工作区中的密钥、依赖与响应头问题。",
+      loading: "正在加载门禁报告\u2026",
+      loadFailed: "门禁报告加载失败",
+      loadFailedHint: "网关未响应，此次构建尚未接受检查。",
+      runFailed: "门禁运行失败",
+      runFailedHint: "网关未响应。",
+      retry: "重试",
+    },
     privacy: {
       unavailable:
         "\u65e0\u6cd5\u83b7\u53d6 Recon \u72b6\u6001\uff0c\u7f51\u5173\u672a\u54cd\u5e94\u3002",
@@ -1524,6 +1522,10 @@ export const zhCN: Translations = {
       healthy: "正常",
       healthyTitle: "浏览器子系统正常",
       healthyBody: "所有断路器均为关闭状态，无降级。",
+      selfTestIssues: "自检有问题",
+      selfTestIssuesTitle: "浏览器自检发现问题",
+      selfTestIssuesBody:
+        "浏览器本身可用，但本对话预览的最近一次检查报告了错误。请打开“浏览器”标签查看详情。",
       degraded: (count: number) => `降级 \u00b7 ${count}`,
       degradedTitle: (count: number) => `${count} 个断路器已开启`,
       degradedBody: "部分线程已达失败阈值，冷却后将自动恢复。",

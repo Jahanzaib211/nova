@@ -35,6 +35,16 @@ const config = {
   // Opt-in for diagnosing minified production stacks (React #185 etc.):
   //   NOVA_SOURCEMAPS=1 pnpm build
   productionBrowserSourceMaps: process.env.NOVA_SOURCEMAPS === "1",
+  async redirects() {
+    return [
+      // The jobs list moved into Settings › Jobs; keep old bookmarks working.
+      {
+        source: "/workspace/jobs",
+        destination: "/workspace/settings#jobs",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     const rewrites = [];
     const gatewayURL = getInternalServiceURL(

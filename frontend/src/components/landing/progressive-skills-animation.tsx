@@ -22,12 +22,12 @@ type AnimationPhase =
   | "user-input"
   | "scanning"
   | "load-skill"
-  | "load-template"
-  | "researching"
-  | "load-frontend"
-  | "building"
-  | "load-deploy"
-  | "deploying"
+  | "load-playbook"
+  | "scan-repo"
+  | "load-hardening"
+  | "fixing"
+  | "load-ship"
+  | "verifying"
   | "done";
 
 interface FileItem {
@@ -40,33 +40,37 @@ interface FileItem {
   dragging?: boolean;
 }
 
-const searchSteps = [
-  { type: "search", text: "mRNA lipid nanoparticle delivery 2024" },
-  { type: "fetch", text: "nature.com/articles/s41587-024..." },
-  { type: "search", text: "LNP ionizable lipids efficiency" },
-  { type: "fetch", text: "pubs.acs.org/doi/10.1021/..." },
-  { type: "search", text: "targeted mRNA tissue-specific" },
+/** What the security scan looks like while it runs. */
+const scanSteps = [
+  { type: "search", text: "secrets scan: config/*.py" },
+  { type: "fetch", text: "Found a leaked secret in config.py" },
+  { type: "search", text: "dependency audit: 214 packages" },
+  { type: "search", text: "secure-ship gate: 0 critical, 0 high" },
+  { type: "fetch", text: "policy: block on critical or high" },
 ];
+
+/** The files the agent rewrites once the leak is found. */
+const patchedFiles = ["config.py", "config.py (rotated)", "package.json"];
 
 // Animation duration configuration - adjust the duration for each step here
 const ANIMATION_DELAYS = {
   "user-input": 0, // User input phase duration (milliseconds)
   scanning: 2000, // Scanning phase duration
   "load-skill": 1500, // Load skill phase duration
-  "load-template": 1200, // Load template phase duration
-  researching: 800, // Researching phase duration
-  "load-frontend": 800, // Load frontend phase duration
-  building: 1200, // Building phase duration
-  "load-deploy": 2500, // Load deploy phase duration
-  deploying: 1200, // Deploying phase duration
+  "load-playbook": 1200, // Load playbook phase duration
+  "scan-repo": 800, // Running the scans
+  "load-hardening": 800, // Load the hardening skill
+  fixing: 1200, // Fixing what was found
+  "load-ship": 2500, // Load the ship gate
+  verifying: 1200, // Re-checking
   done: 2500, // Done phase duration (final step)
 } as const;
 
 export default function ProgressiveSkillsAnimation() {
   const { t } = useI18n();
   const [phase, setPhase] = useState<AnimationPhase>("idle");
-  const [searchIndex, setSearchIndex] = useState(0);
-  const [buildIndex, setBuildIndex] = useState(0);
+  const [scanIndex, setScanIndex] = useState(0);
+  const [patchIndex, setPatchIndex] = useState(0);
   const [, setChatMessages] = useState<React.ReactNode[]>([]);
   const [, setShowWorkspace] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -93,17 +97,17 @@ export default function ProgressiveSkillsAnimation() {
       { phase: "scanning" as const, delay: ANIMATION_DELAYS.scanning },
       { phase: "load-skill" as const, delay: ANIMATION_DELAYS["load-skill"] },
       {
-        phase: "load-template" as const,
-        delay: ANIMATION_DELAYS["load-template"],
+        phase: "load-playbook" as const,
+        delay: ANIMATION_DELAYS["load-playbook"],
       },
-      { phase: "researching" as const, delay: ANIMATION_DELAYS.researching },
+      { phase: "scan-repo" as const, delay: ANIMATION_DELAYS["scan-repo"] },
       {
-        phase: "load-frontend" as const,
-        delay: ANIMATION_DELAYS["load-frontend"],
+        phase: "load-hardening" as const,
+        delay: ANIMATION_DELAYS["load-hardening"],
       },
-      { phase: "building" as const, delay: ANIMATION_DELAYS.building },
-      { phase: "load-deploy" as const, delay: ANIMATION_DELAYS["load-deploy"] },
-      { phase: "deploying" as const, delay: ANIMATION_DELAYS.deploying },
+      { phase: "fixing" as const, delay: ANIMATION_DELAYS.fixing },
+      { phase: "load-ship" as const, delay: ANIMATION_DELAYS["load-ship"] },
+      { phase: "verifying" as const, delay: ANIMATION_DELAYS.verifying },
       { phase: "done" as const, delay: ANIMATION_DELAYS.done },
     ];
 
@@ -121,8 +125,8 @@ export default function ProgressiveSkillsAnimation() {
       setTimeout(() => {
         setPhase("idle");
         setChatMessages([]);
-        setSearchIndex(0);
-        setBuildIndex(0);
+        setScanIndex(0);
+        setPatchIndex(0);
         setShowWorkspace(false);
         setIsPlaying(false);
       }, totalDelay + FINAL_DISPLAY_DURATION),
@@ -141,8 +145,8 @@ export default function ProgressiveSkillsAnimation() {
     setHasPlayed(true);
     setPhase("idle");
     setChatMessages([]);
-    setSearchIndex(0);
-    setBuildIndex(0);
+    setScanIndex(0);
+    setPatchIndex(0);
     setShowWorkspace(false);
   };
 
@@ -176,8 +180,8 @@ export default function ProgressiveSkillsAnimation() {
               setHasPlayed(true);
               setPhase("idle");
               setChatMessages([]);
-              setSearchIndex(0);
-              setBuildIndex(0);
+              setScanIndex(0);
+              setPatchIndex(0);
               setShowWorkspace(false);
             }, 300);
           }
@@ -198,28 +202,28 @@ export default function ProgressiveSkillsAnimation() {
     };
   }, [hasAutoPlayed, isPlaying]);
 
-  // Handle search animation
+  // Handle the scan animation
   useEffect(() => {
-    if (phase === "researching" && searchIndex < searchSteps.length) {
+    if (phase === "scan-repo" && scanIndex < scanSteps.length) {
       const timer = setTimeout(() => {
-        setSearchIndex((i) => i + 1);
+        setScanIndex((i) => i + 1);
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [phase, searchIndex]);
+  }, [phase, scanIndex]);
 
-  // Handle build animation
+  // Handle the fix animation
   useEffect(() => {
-    if (phase === "building" && buildIndex < 3) {
+    if (phase === "fixing" && patchIndex < patchedFiles.length) {
       const timer = setTimeout(() => {
-        setBuildIndex((i) => i + 1);
+        setPatchIndex((i) => i + 1);
       }, 600);
       return () => clearTimeout(timer);
     }
-    if (phase === "building") {
+    if (phase === "fixing") {
       setShowWorkspace(true);
     }
-  }, [phase, buildIndex]);
+  }, [phase, patchIndex]);
 
   // Auto scroll chat to bottom when messages change
   useEffect(() => {
@@ -229,22 +233,22 @@ export default function ProgressiveSkillsAnimation() {
         behavior: "smooth",
       });
     }
-  }, [phase, searchIndex, buildIndex]);
+  }, [phase, scanIndex, patchIndex]);
 
   const getFileTree = (): FileItem[] => {
     const base: FileItem[] = [
       {
-        name: "deep-search",
+        name: "security-audit",
         type: "folder",
         indent: 0,
         highlight: phase === "scanning",
-        active: ["load-skill", "load-template", "researching"].includes(phase),
+        active: ["load-skill", "load-playbook", "scan-repo"].includes(phase),
         done: [
-          "researching",
-          "load-frontend",
-          "building",
-          "load-deploy",
-          "deploying",
+          "scan-repo",
+          "load-hardening",
+          "fixing",
+          "load-ship",
+          "verifying",
           "done",
         ].includes(phase),
       },
@@ -255,81 +259,100 @@ export default function ProgressiveSkillsAnimation() {
         highlight: phase === "scanning",
         dragging: phase === "load-skill",
         done: [
-          "load-template",
-          "researching",
-          "load-frontend",
-          "building",
-          "load-deploy",
-          "deploying",
+          "load-playbook",
+          "scan-repo",
+          "load-hardening",
+          "fixing",
+          "load-ship",
+          "verifying",
           "done",
         ].includes(phase),
       },
       {
-        name: "biotech.md",
-        type: "file",
-        indent: 1,
-        highlight: phase === "load-template",
-        dragging: phase === "load-template",
+        name: "webapp-testing",
+        type: "folder",
+        indent: 0,
+        highlight: phase === "scanning",
+        active: ["load-playbook", "scan-repo"].includes(phase),
         done: [
-          "researching",
-          "load-frontend",
-          "building",
-          "load-deploy",
-          "deploying",
+          "scan-repo",
+          "load-hardening",
+          "fixing",
+          "load-ship",
+          "verifying",
           "done",
         ].includes(phase),
       },
-      { name: "computer-science.md", type: "file", indent: 1 },
-      { name: "physics.md", type: "file", indent: 1 },
       {
-        name: "frontend-design",
+        name: "SKILL.md",
+        type: "file",
+        indent: 1,
+        highlight: phase === "scanning",
+        dragging: phase === "load-playbook",
+        done: [
+          "scan-repo",
+          "load-hardening",
+          "fixing",
+          "load-ship",
+          "verifying",
+          "done",
+        ].includes(phase),
+      },
+      {
+        name: "secrets-scan",
         type: "folder",
         indent: 0,
         highlight: phase === "scanning",
-        active: ["load-frontend", "building"].includes(phase),
-        done: ["building", "load-deploy", "deploying", "done"].includes(phase),
+        active: ["load-ship", "verifying"].includes(phase),
+        done: ["verifying", "done"].includes(phase),
       },
       {
         name: "SKILL.md",
         type: "file",
         indent: 1,
         highlight: phase === "scanning",
-        dragging: phase === "load-frontend",
-        done: ["building", "load-deploy", "deploying", "done"].includes(phase),
+        dragging: phase === "load-ship",
+        done: ["verifying", "done"].includes(phase),
       },
-      {
-        name: "deploy",
-        type: "folder",
-        indent: 0,
-        highlight: phase === "scanning",
-        active: ["load-deploy", "deploying"].includes(phase),
-        done: ["deploying", "done"].includes(phase),
-      },
-      {
-        name: "SKILL.md",
-        type: "file",
-        indent: 1,
-        highlight: phase === "scanning",
-        dragging: phase === "load-deploy",
-        done: ["deploying", "done"].includes(phase),
-      },
+    ];
+
+    // The hardening skill is pulled in only once the leak is found.
+    if (phase !== "idle" && phase !== "user-input" && phase !== "scanning") {
+      base.push(
+        {
+          name: "hardening",
+          type: "folder",
+          indent: 0,
+          active: ["load-hardening", "fixing"].includes(phase),
+          done: ["fixing", "load-ship", "verifying", "done"].includes(phase),
+        },
+        {
+          name: "SKILL.md",
+          type: "file",
+          indent: 1,
+          dragging: phase === "load-hardening",
+          done: ["fixing", "load-ship", "verifying", "done"].includes(phase),
+        },
+      );
+    }
+
+    base.push(
       {
         name: "scripts",
         type: "folder",
-        indent: 1,
-        done: ["deploying", "done"].includes(phase),
+        indent: 0,
+        done: ["verifying", "done"].includes(phase),
       },
       {
-        name: "deploy.sh",
+        name: "scan.sh",
         type: "file",
-        indent: 2,
-        done: ["deploying", "done"].includes(phase),
+        indent: 1,
+        done: ["verifying", "done"].includes(phase),
       },
-    ];
+    );
+
     return base;
   };
-
-  const workspaceFiles = ["index.html", "index.css", "index.js"];
 
   return (
     <div
@@ -393,7 +416,7 @@ export default function ProgressiveSkillsAnimation() {
         {/* Left: File Tree */}
         <div className="flex flex-1 flex-col">
           <motion.div
-            className="mb-4 font-mono text-sm text-zinc-500"
+            className="mb-4 font-mono text-sm text-slate-500"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -406,14 +429,14 @@ export default function ProgressiveSkillsAnimation() {
                 key={`${item.name}-${index}`}
                 className={`flex items-center gap-3 text-lg font-medium transition-all duration-300 ${
                   item.done
-                    ? "text-green-500"
+                    ? "text-[#34d399]"
                     : item.dragging
-                      ? "translate-x-8 scale-105 text-blue-400"
+                      ? "translate-x-8 scale-105 text-[#22d3ee]"
                       : item.active
                         ? "text-white"
                         : item.highlight
-                          ? "text-purple-400"
-                          : "text-zinc-600"
+                          ? "text-[#a78bfa]"
+                          : "text-slate-600"
                 }`}
                 style={{ paddingLeft: `${item.indent * 24}px` }}
                 animate={
@@ -430,9 +453,9 @@ export default function ProgressiveSkillsAnimation() {
                     size={20}
                     className={
                       item.done
-                        ? "text-green-500"
+                        ? "text-[#34d399]"
                         : item.highlight
-                          ? "text-purple-400"
+                          ? "text-[#a78bfa]"
                           : ""
                     }
                   />
@@ -441,17 +464,17 @@ export default function ProgressiveSkillsAnimation() {
                     size={20}
                     className={
                       item.done
-                        ? "text-green-500"
+                        ? "text-[#34d399]"
                         : item.highlight
-                          ? "text-purple-400"
+                          ? "text-[#a78bfa]"
                           : ""
                     }
                   />
                 )}
                 <span>{item.name}</span>
-                {item.done && <Check size={16} className="text-green-500" />}
+                {item.done && <Check size={16} className="text-[#34d399]" />}
                 {item.highlight && !item.done && (
-                  <Sparkles size={16} className="text-purple-400" />
+                  <Sparkles size={16} className="text-[#a78bfa]" />
                 )}
               </motion.div>
             ))}
@@ -459,12 +482,12 @@ export default function ProgressiveSkillsAnimation() {
         </div>
 
         {/* Right: Chat Interface */}
-        <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+        <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
           {/* Chat Header */}
-          <div className="border-b border-zinc-800 p-4">
+          <div className="border-b border-white/10 p-4">
             <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded-full bg-green-500" />
-              <span className="text-sm text-zinc-400">
+              <div className="h-3 w-3 rounded-full bg-[#34d399]" />
+              <span className="text-sm text-slate-400">
                 {t.landing.skillsAnimation.agentLabel}
               </span>
             </div>
@@ -483,10 +506,10 @@ export default function ProgressiveSkillsAnimation() {
                   animate={{ opacity: 1, y: 0 }}
                   className="flex justify-end"
                 >
-                  <div className="max-w-[90%] rounded-2xl rounded-tr-sm bg-blue-600 px-5 py-3">
+                  <div className="max-w-[90%] rounded-2xl rounded-tr-sm border border-[#926dff]/30 bg-[#926dff]/15 px-5 py-3">
                     <p className="text-base">
-                      Research mRNA delivery, build a landing page, deploy to
-                      Vercel
+                      Audit the customer portal for leaked secrets, fix what you
+                      find and ship a verified build
                     </p>
                   </div>
                 </motion.div>
@@ -505,89 +528,88 @@ export default function ProgressiveSkillsAnimation() {
                   {[
                     "scanning",
                     "load-skill",
-                    "load-template",
-                    "researching",
-                    "load-frontend",
-                    "building",
-                    "load-deploy",
-                    "deploying",
+                    "load-playbook",
+                    "scan-repo",
+                    "load-hardening",
+                    "fixing",
+                    "load-ship",
+                    "verifying",
                     "done",
                   ].includes(phase) && (
-                    <div className="text-base text-zinc-300">
-                      <span className="text-purple-400">✨</span> Found 3 skills
+                    <div className="text-base text-slate-300">
+                      <span className="text-[#a78bfa]">✨</span> Found 3 skills
                     </div>
                   )}
 
-                  {/* Researching Section */}
+                  {/* Scanning */}
                   {[
                     "load-skill",
-                    "load-template",
-                    "researching",
-                    "load-frontend",
-                    "building",
-                    "load-deploy",
-                    "deploying",
+                    "load-playbook",
+                    "scan-repo",
+                    "load-hardening",
+                    "fixing",
+                    "load-ship",
+                    "verifying",
                     "done",
                   ].includes(phase) && (
                     <div className="mt-4">
-                      <hr className="mb-3 border-zinc-700" />
-                      <div className="mb-3 text-zinc-300">
-                        🔬 Researching...
-                      </div>
+                      <hr className="mb-3 border-white/10" />
+                      <div className="mb-3 text-slate-300">🔍 Scanning…</div>
                       <div className="mb-3 space-y-2">
-                        {/* Loading SKILL.md */}
+                        {/* Loading security-audit */}
                         {[
                           "load-skill",
-                          "load-template",
-                          "researching",
-                          "load-frontend",
-                          "building",
-                          "load-deploy",
-                          "deploying",
+                          "load-playbook",
+                          "scan-repo",
+                          "load-hardening",
+                          "fixing",
+                          "load-ship",
+                          "verifying",
                           "done",
                         ].includes(phase) && (
-                          <div className="flex items-center gap-2 pl-4 text-zinc-400">
+                          <div className="flex items-center gap-2 pl-4 text-slate-400">
                             <FileText size={16} />
                             <span>
                               {t.landing.skillsAnimation.loadingSkill(
-                                "deep-search",
+                                "security-audit",
                               )}
                             </span>
                           </div>
                         )}
-                        {/* Loading biotech.md */}
+                        {/* Loading webapp-testing */}
                         {[
-                          "load-template",
-                          "researching",
-                          "load-frontend",
-                          "building",
-                          "load-deploy",
-                          "deploying",
+                          "load-playbook",
+                          "scan-repo",
+                          "load-hardening",
+                          "fixing",
+                          "load-ship",
+                          "verifying",
                           "done",
                         ].includes(phase) && (
-                          <div className="flex items-center gap-2 pl-4 text-zinc-400">
+                          <div className="flex items-center gap-2 pl-4 text-slate-400">
                             <FileText size={16} />
                             <span>
-                              Found biotech related topic, loading
-                              deep-search/biotech.md...
+                              {t.landing.skillsAnimation.loadingSkill(
+                                "webapp-testing",
+                              )}
                             </span>
                           </div>
                         )}
                       </div>
-                      {/* Search steps */}
-                      {phase === "researching" && (
+                      {/* Scan steps */}
+                      {phase === "scan-repo" && (
                         <div className="max-h-[180px] space-y-2 overflow-hidden pl-4">
-                          {searchSteps.slice(0, searchIndex).map((step, i) => (
+                          {scanSteps.slice(0, scanIndex).map((step, i) => (
                             <motion.div
                               key={i}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center gap-2 text-sm text-zinc-500"
+                              className="flex items-center gap-2 text-sm text-slate-500"
                             >
                               {step.type === "search" ? (
-                                <Search size={14} className="text-blue-400" />
+                                <Search size={14} className="text-[#22d3ee]" />
                               ) : (
-                                <Globe size={14} className="text-green-400" />
+                                <Globe size={14} className="text-[#fbbf24]" />
                               )}
                               <span className="truncate">{step.text}</span>
                             </motion.div>
@@ -595,24 +617,24 @@ export default function ProgressiveSkillsAnimation() {
                         </div>
                       )}
                       {[
-                        "load-frontend",
-                        "building",
-                        "load-deploy",
-                        "deploying",
+                        "load-hardening",
+                        "fixing",
+                        "load-ship",
+                        "verifying",
                         "done",
                       ].includes(phase) && (
                         <div className="max-h-[180px] space-y-2 overflow-hidden pl-4">
-                          {searchSteps.map((step, i) => (
+                          {scanSteps.map((step, i) => (
                             <motion.div
                               key={i}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center gap-2 text-sm text-zinc-500"
+                              className="flex items-center gap-2 text-sm text-slate-500"
                             >
                               {step.type === "search" ? (
-                                <Search size={14} className="text-blue-400" />
+                                <Search size={14} className="text-[#22d3ee]" />
                               ) : (
-                                <Globe size={14} className="text-green-400" />
+                                <Globe size={14} className="text-[#fbbf24]" />
                               )}
                               <span className="truncate">{step.text}</span>
                             </motion.div>
@@ -622,8 +644,8 @@ export default function ProgressiveSkillsAnimation() {
                     </div>
                   )}
 
-                  {/* Building */}
-                  {["building", "load-deploy", "deploying", "done"].includes(
+                  {/* Fixing */}
+                  {["fixing", "load-ship", "verifying", "done"].includes(
                     phase,
                   ) && (
                     <motion.div
@@ -631,23 +653,21 @@ export default function ProgressiveSkillsAnimation() {
                       animate={{ opacity: 1 }}
                       className="mt-4"
                     >
-                      <hr className="mb-3 border-zinc-700" />
-                      <div className="mb-3 text-zinc-300">🔨 Building...</div>
-                      <div className="mb-3 flex items-center gap-2 pl-4 text-zinc-400">
+                      <hr className="mb-3 border-white/10" />
+                      <div className="mb-3 text-slate-300">🔧 Fixing…</div>
+                      <div className="mb-3 flex items-center gap-2 pl-4 text-slate-400">
                         <FileText size={16} />
                         <span>
-                          {t.landing.skillsAnimation.loadingSkill(
-                            "frontend-design",
-                          )}
+                          {t.landing.skillsAnimation.loadingSkill("hardening")}
                         </span>
                       </div>
                       <div className="space-y-2 pl-4">
-                        {workspaceFiles.slice(0, buildIndex).map((file) => (
+                        {patchedFiles.slice(0, patchIndex).map((file) => (
                           <motion.div
                             key={file}
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="flex items-center gap-2 text-sm text-green-500"
+                            className="flex items-center gap-2 text-sm text-[#34d399]"
                           >
                             <FileText size={14} />
                             <span>
@@ -660,32 +680,38 @@ export default function ProgressiveSkillsAnimation() {
                     </motion.div>
                   )}
 
-                  {/* Deploying */}
-                  {["load-deploy", "deploying", "done"].includes(phase) && (
+                  {/* Shipping */}
+                  {["load-ship", "verifying", "done"].includes(phase) && (
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="mt-4"
                     >
-                      <hr className="mb-3 border-zinc-700" />
-                      <div className="mb-3 text-zinc-300">🚀 Deploying...</div>
+                      <hr className="mb-3 border-white/10" />
+                      <div className="mb-3 text-slate-300">
+                        {phase === "verifying"
+                          ? "🔁 Re-checking…"
+                          : "📦 Preparing the build…"}
+                      </div>
                       <div className="mb-3 space-y-2">
-                        <div className="flex items-center gap-2 pl-4 text-zinc-400">
+                        <div className="flex items-center gap-2 pl-4 text-slate-400">
                           <FileText size={16} />
                           <span>
-                            {t.landing.skillsAnimation.loadingSkill("deploy")}
+                            {t.landing.skillsAnimation.loadingSkill(
+                              "secrets-scan",
+                            )}
                           </span>
                         </div>
-                        {["deploying", "done"].includes(phase) && (
+                        {["verifying", "done"].includes(phase) && (
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="flex items-center gap-2 pl-4 text-zinc-400"
+                            className="flex items-center gap-2 pl-4 text-slate-400"
                           >
                             <Terminal size={16} />
                             <span>
                               {t.landing.skillsAnimation.executing(
-                                "scripts/deploy.sh",
+                                "scripts/scan.sh",
                               )}
                             </span>
                           </motion.div>
@@ -695,10 +721,10 @@ export default function ProgressiveSkillsAnimation() {
                         <motion.div
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          className="mt-4 rounded-xl border border-green-500/30 bg-green-500/10 p-4"
+                          className="mt-4 rounded-xl border border-[#34d399]/30 bg-[#34d399]/10 p-4"
                         >
-                          <div className="text-lg font-medium text-green-500">
-                            ✅ Live at biotech-startup.vercel.app
+                          <div className="text-lg font-medium text-[#34d399]">
+                            ✅ Ready to ship — 0 critical, 0 high
                           </div>
                         </motion.div>
                       )}
@@ -710,8 +736,8 @@ export default function ProgressiveSkillsAnimation() {
           </div>
 
           {/* Chat Input (decorative) */}
-          <div className="border-t border-zinc-800 p-4">
-            <div className="rounded-xl bg-zinc-800 px-4 py-3 text-sm text-zinc-500">
+          <div className="border-t border-white/10 p-4">
+            <div className="rounded-xl bg-white/[0.04] px-4 py-3 text-sm text-slate-500">
               Ask Nova anything...
             </div>
           </div>

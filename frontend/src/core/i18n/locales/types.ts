@@ -6,12 +6,9 @@ export interface JobsFeatureTranslations {
   empty: string;
   filterAll: string;
   columns: {
-    type: string;
     status: string;
-    progress: string;
     attempts: string;
     created: string;
-    actions: string;
   };
   actions: {
     cancel: string;
@@ -39,7 +36,6 @@ export interface JobsFeatureTranslations {
     deleted: string;
     updated: string;
   };
-  settings: { title: string; description: string; openPage: string };
   toasts: { cancelled: string; retried: string; failed: string };
 }
 
@@ -67,8 +63,6 @@ export interface IntegrationsFeatureTranslations {
     models: string;
     business: string;
     web: string;
-    agents: string;
-    extensions: string;
     other: string;
   };
 }
@@ -147,6 +141,7 @@ export interface VoiceFeatureTranslations {
 export interface EmailFeatureTranslations {
   title: string;
   description: string;
+  disabledHint: string;
   failed: string;
   tabs: {
     campaigns: string;
@@ -295,24 +290,6 @@ export interface AgentsRegistryTranslations {
 }
 
 export interface ConsoleFeatureTranslations {
-  gateway: {
-    title: string;
-    description: string;
-    refresh: string;
-    loadFailed: string;
-    ops: string;
-    acpTitle: string;
-    acpDescription: string;
-    acpEmpty: string;
-    colAgent: string;
-    colBinary: string;
-    colModel: string;
-    colPolicy: string;
-    allow: string;
-    deny: string;
-    versionsTitle: string;
-    versionsDescription: string;
-  };
   devices: {
     sessionsTitle: string;
     sessionsDescription: string;
@@ -349,13 +326,6 @@ export interface ConsoleFeatureTranslations {
     colQueues: string;
     colRunning: string;
     colHeartbeat: string;
-    tasksTitle: string;
-    tasksDescription: string;
-    tasksEmpty: string;
-    colStatus: string;
-    colAgent: string;
-    colCreated: string;
-    colJob: string;
   };
   agents: {
     runtimesTitle: string;
@@ -380,20 +350,6 @@ export interface ConsoleFeatureTranslations {
     off: string;
     configuredIn: string;
     howToToggle: string;
-  };
-  automation: {
-    title: string;
-    description: string;
-    unavailable: string;
-    empty: string;
-    badPayload: string;
-    name: string;
-    type: string;
-    cron: string;
-    payload: string;
-    save: string;
-    nextRun: string;
-    delete: string;
   };
   secrets: {
     title: string;
@@ -473,6 +429,7 @@ export interface Translations {
     openInNewWindow: string;
     close: string;
     more: string;
+    showPassword: string;
     search: string;
     loadMore: string;
     download: string;
@@ -480,7 +437,7 @@ export interface Translations {
     artifacts: string;
     public: string;
     custom: string;
-    notAvailableInDemoMode: string;
+    notAvailableInPreviewMode: string;
     agentBusy: string;
     loading: string;
     version: string;
@@ -544,6 +501,13 @@ export interface Translations {
     reasoningEffortHigh: string;
     reasoningEffortHighDescription: string;
     searchModels: string;
+    noModelsFound: string;
+    visibleModelCount: string;
+    showHiddenModels: string;
+    hiddenBadge: string;
+    showModelInChat: string;
+    hideModelFromChat: string;
+    contextWindow: string;
     surpriseMe: string;
     surpriseMePrompt: string;
     followupLoading: string;
@@ -573,11 +537,9 @@ export interface Translations {
     recentChats: string;
     newChat: string;
     chats: string;
-    demoChats: string;
+    starterChats: string;
     agents: string;
-    jobs: string;
     email: string;
-    channels: string;
   };
 
   // Agents
@@ -585,6 +547,7 @@ export interface Translations {
     title: string;
     description: string;
     newAgent: string;
+    skillsUpdated: string;
     emptyTitle: string;
     emptyDescription: string;
     apiDisabledTitle: string;
@@ -621,6 +584,7 @@ export interface Translations {
     startChatting: string;
     backToGallery: string;
     skillsDialogDescription: string;
+    noSkillsEnabled: string;
   };
 
   // Breadcrumb
@@ -802,21 +766,16 @@ export interface Translations {
       channels: string;
       models: string;
       memory: string;
-      runtime: string;
       tools: string;
       skills: string;
       notification: string;
       voice: string;
       about: string;
-      gateway: string;
       devices: string;
       workers: string;
-      agents: string;
       runtimes: string;
       labs: string;
-      automation: string;
       secrets: string;
-      updates: string;
     };
     groups: {
       general: string;
@@ -885,6 +844,11 @@ export interface Translations {
       fieldVision: string;
       fieldShowInChat: string;
       fieldShowInChatHint: string;
+      hiddenBadge: string;
+      capabilityVision: string;
+      capabilityThinking: string;
+      resetVisibility: string;
+      visibilityHint: string;
       fieldMaxInputTokens: string;
       fieldMaxInputTokensHint: string;
       apiKeyUnchanged: string;
@@ -1027,6 +991,7 @@ export interface Translations {
       title: string;
       description: string;
       createSkill: string;
+      adminOnlyToggle: string;
       emptyTitle: string;
       emptyDescription: string;
       emptyButton: string;
@@ -1131,6 +1096,8 @@ export interface Translations {
 
   agentComputer: {
     header: string;
+    openPanel: string;
+    closePanel: string;
     thinking: string;
     usingTerminal: string;
     usingBrowser: string;
@@ -1164,6 +1131,7 @@ export interface Translations {
       activity: string;
       telemetry: string;
       review: string;
+      secureShip: string;
       privacy: string;
       audit: string;
     };
@@ -1310,6 +1278,65 @@ export interface Translations {
       kernelVerdictInvalid: string;
       kernelVerdictSteps: (count: number) => string;
     };
+    secureShip: {
+      /** Panel title, in the header strip. */
+      title: string;
+      /** Button that runs the gate now. */
+      runGate: string;
+      /** Button label while the gate is running. */
+      running: string;
+      /** One plain-English line per verdict, shown under the banner. */
+      verdictHint: {
+        pass: string;
+        warn: string;
+        block: string;
+        error: string;
+      };
+      /** Extra, louder line shown only when the deploy is blocked. */
+      blocked: string;
+      /** The line that says the deploy cannot go out as-is. */
+      deployBlocked: string;
+      /** Section heading for the per-scanner rows. */
+      scanners: string;
+      /** Shown under a scanner that was skipped (tool unavailable). */
+      scannerUnavailable: string;
+      /** Section heading for the findings list. */
+      findings: string;
+      /** Shown when the gate ran and found nothing. */
+      noFindings: string;
+      /** Severity names, keyed by the wire value. */
+      severity: {
+        critical: string;
+        high: string;
+        medium: string;
+        low: string;
+        info: string;
+      };
+      /** Section heading for the security toolkit. */
+      toolkitTitle: string;
+      /** The toolkit count, e.g. "40 tools". */
+      toolkitTotal: (count: number) => string;
+      /** Shown when the toolkit could not be read. */
+      toolkitUnavailable: string;
+      /** Shown while the toolkit is being fetched. */
+      toolkitLoading: string;
+      /** Empty state: no gate has run for this thread. */
+      emptyTitle: string;
+      /** Empty state: what to do about it. */
+      emptyHint: string;
+      /** Shown while the first report is being fetched. */
+      loading: string;
+      /** The report query failed. */
+      loadFailed: string;
+      /** Why the report query failed / what to do. */
+      loadFailedHint: string;
+      /** The scan itself failed. */
+      runFailed: string;
+      /** Fallback explanation when the failure carried no message. */
+      runFailedHint: string;
+      /** Retry the failed query. */
+      retry: string;
+    };
     privacy: {
       unavailable: string;
       retry: string;
@@ -1357,6 +1384,9 @@ export interface Translations {
       healthy: string;
       healthyTitle: string;
       healthyBody: string;
+      selfTestIssues: string;
+      selfTestIssuesTitle: string;
+      selfTestIssuesBody: string;
       degraded: (count: number) => string;
       degradedTitle: (count: number) => string;
       degradedBody: string;
