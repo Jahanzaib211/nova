@@ -68,6 +68,20 @@ case "$NOVA_STACK" in
         || export DEERFLOW_TTS_MODEL_FILE="kokoro-v1.0.int8.onnx"
       export DEERFLOW_VOICE_MODEL_DIR="$_voice_dir"
       COMPOSE_FILES+=(-f "$DEER_FLOW_ROOT/docker/docker-compose.voice.yaml")
+      # GPU voice, only when Docker can actually hand a GPU to a container: a
+      # working driver is not enough, the nvidia runtime must be registered, or
+      # the device reservation stops the gateway from starting at all.
+      # `voice` and `voice-gpu` are alternatives (both provide onnxruntime), and
+      # the overlay's UV_EXTRAS replaces the whole list, so every other extra
+      # (postgres!) is carried over from DEERFLOW_VOICE_UV_EXTRAS.
+      if nvidia-smi -L >/dev/null 2>&1 \
+         && /usr/bin/docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
+        _extras="${DEERFLOW_VOICE_UV_EXTRAS:-$(sed -n 's/^DEERFLOW_VOICE_UV_EXTRAS=//p' "$DEER_FLOW_ROOT/.env" | tail -1)}"
+        _extras="$(printf '%s' "${_extras:-trading,voice,postgres}" | tr ',' '\n' | grep -vxE 'voice|voice-gpu' | paste -sd, -)"
+        export DEERFLOW_VOICE_UV_EXTRAS="${_extras:+$_extras,}voice-gpu"
+        COMPOSE_FILES+=(-f "$DEER_FLOW_ROOT/docker/docker-compose.voice-gpu.yaml")
+        echo "[pm2-deerflow] GPU voice: extras=$DEERFLOW_VOICE_UV_EXTRAS" >&2
+      fi
     else
       echo "[pm2-deerflow] voice overlay skipped (speech disabled or weights missing in $_voice_dir)" >&2
     fi
@@ -78,6 +92,16 @@ case "$NOVA_STACK" in
     # a value already in the process environment wins.
     if [ -z "${NOVA_ACP_AGENTS:-}" ] && grep -qsE '^NOVA_ACP_AGENTS=("1"|1)[[:space:]]*$' "$DEER_FLOW_ROOT/.env"; then
       NOVA_ACP_AGENTS=1
+    fi
+    # Self-hosted LLM (Ollama on the GPU) for voice turns: opt-in like ACP, and
+    # only when Docker can hand a GPU to a container — a device reservation
+    # without the nvidia runtime would stop the whole stack from starting.
+    if [ -z "${NOVA_LOCAL_LLM:-}" ] && grep -qsE '^NOVA_LOCAL_LLM=("1"|1)[[:space:]]*$' "$DEER_FLOW_ROOT/.env"; then
+      NOVA_LOCAL_LLM=1
+    fi
+    if [ "${NOVA_LOCAL_LLM:-0}" = "1" ] && nvidia-smi -L >/dev/null 2>&1 \
+       && /usr/bin/docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
+      COMPOSE_FILES+=(-f "$DEER_FLOW_ROOT/docker/docker-compose.local-llm.yaml")
     fi
     if [ "${NOVA_ACP_AGENTS:-0}" = "1" ]; then
       "$DEER_FLOW_ROOT/scripts/acp-secrets.sh" || true

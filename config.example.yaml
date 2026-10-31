@@ -15,7 +15,7 @@
 # ============================================================================
 # Bump this number when the config schema changes.
 # Run `make config-upgrade` to merge new fields into your local config.yaml.
-config_version: 27
+config_version: 28
 
 # ============================================================================
 # Logging
@@ -1047,6 +1047,19 @@ sandbox:
 #   # rule and both are holes in a deadline. null disables it.
 #   # max_lifetime: 14400
 #
+#   # Pass --no-sandbox to the Chromium inside the sandbox. On by default, and
+#   # it is not optional in practice: a non-privileged sandbox drops all
+#   # capabilities and sets no-new-privileges, so Chromium's setuid helper cannot
+#   # run, and Docker's default seccomp profile only allows clone(CLONE_NEWUSER)
+#   # with CAP_SYS_ADMIN, so its user-namespace path fails too. The browser then
+#   # logs "Failed to move to new namespace ... Operation not permitted" and
+#   # restarts forever, leaving the CDP port closed, the container unhealthy and
+#   # the Browser tab blank. The container is the isolation boundary here;
+#   # re-adding capabilities to satisfy Chromium's inner sandbox means near
+#   # host root. Ignored when privileged is true. Only set false if you have
+#   # re-added the capabilities Chromium needs.
+#   # browser_no_sandbox: true
+#
 #   # Optional: Additional mount directories from host to container
 #   # NOTE: Skills directory is automatically mounted from skills.path to skills.container_path
 #   # mounts:
@@ -1074,6 +1087,14 @@ sandbox:
 #   provisioner_url: http://provisioner:8002
 #   # Note: provisioner-created Pods use the provisioner's SANDBOX_IMAGE
 #   # environment variable, not sandbox.image from this config file.
+#   #
+#   # Note: provisioner-created Pods also do not receive sandbox.environment
+#   # from this file -- the Pod spec is built by the provisioner, not by the
+#   # gateway. That includes browser_no_sandbox, and it does not need to:
+#   # the Pods the provisioner creates keep Chromium's own sandbox working
+#   # (no capability drop, allow_privilege_escalation: true). If your cluster
+#   # forbids privilege escalation, set BROWSER_NO_SANDBOX=--no-sandbox on the
+#   # provisioner service instead -- see docker/provisioner/README.md.
 
 # ============================================================================
 # Subagents Configuration
@@ -1200,7 +1221,7 @@ runtimes:
 #     # DeerFlow expects an ACP adapter here. The standard `claude` CLI does not
 #     # speak ACP directly; the Zed adapter wraps the Claude Agent SDK.
 #     command: npx
-#     args: ["-y", "@zed-industries/claude-agent-acp@0.23.1"]
+#     args: ["--prefer-offline", "-y", "@zed-industries/claude-agent-acp@0.23.1"]
 #     description: Claude Code for implementation, refactoring, and debugging
 #     model: null
 #     env:
@@ -1269,6 +1290,14 @@ skills:
 # ============================================================================
 # Automatic conversation title generation settings
 
+# Models that take over a turn when the current one runs out of quota or credit
+# (HTTP 402, "insufficient balance", a spent subscription, a suspended account).
+# Tried in order, skipping the model that just failed; unknown names are skipped.
+# Empty = no failover.
+model_fallbacks: []
+# model_fallbacks:
+#   - my-primary-model
+#   - my-backup-model
 title:
   enabled: true
   max_words: 6

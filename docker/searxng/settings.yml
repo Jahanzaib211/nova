@@ -59,6 +59,9 @@ engines:
     shortcut: gh
     disabled: false
   - name: stackoverflow
-    engine: stackoverflow
+    # The image dropped the stackoverflow module; stackexchange serves the
+    # same site via api_site ("Cannot load engine stackoverflow" otherwise).
+    engine: stackexchange
+    api_site: stackoverflow
     shortcut: so
     disabled: false

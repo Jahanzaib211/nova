@@ -91,7 +91,7 @@ services:
     # `docker ps` shows red before users see a dead site.
     mem_limit: 256m
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2026/api/v1/auth/setup-status || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2026/nginx-health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

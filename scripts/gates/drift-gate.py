@@ -207,6 +207,18 @@ def check_frontend_build_freshness() -> dict:
     )
     src_is_mounted = rc_m == 0 and f"{src}=>/app/frontend/src" in mounts
 
+    # Is the *build* (.next) served from the host, or baked into the image?
+    #
+    # This decides whether a host-side `frontend/.next/BUILD_ID` matters at
+    # all. The prod-frontend overlay bind-mounts src, public and
+    # next.config.js — NOT .next — so the running server reads a build baked
+    # into the image, and a host `.next` is irrelevant to what is served.
+    # Requiring it anyway reported RED ("the last next build did not finish")
+    # on a perfectly healthy deployment, and it fired *before* the check that
+    # actually answers the question (source hash vs the image's baked source),
+    # so the real drift never got reported.
+    next_is_host_mounted = rc_m == 0 and f"{REPO_ROOT / 'frontend' / '.next'}=>/app/frontend/.next" in mounts
+
     if is_dev_server:
         if src_is_mounted:
             return check(
@@ -230,8 +242,12 @@ def check_frontend_build_freshness() -> dict:
     # every HTTP probe stays green. That is not a heuristic; the file is either
     # there or the container cannot come back. Checked before the image-hash
     # comparison below because it holds regardless of how source is delivered.
+    #
+    # Only when the build comes from the HOST: with the build baked into the
+    # image, the image's own BUILD_ID is what the server reads at boot, and a
+    # missing host BUILD_ID says nothing about it.
     build_id_path = REPO_ROOT / "frontend" / ".next" / "BUILD_ID"
-    if not build_id_path.is_file():
+    if next_is_host_mounted and not build_id_path.is_file():
         return check(
             "frontend_build",
             RED,
@@ -456,13 +472,25 @@ def check_services_running() -> dict:
     )
 
 
+def _stack_config():
+    """scripts/stack_config.py — shared, comment-aware ecosystem reader."""
+    scripts_dir = str(REPO_ROOT / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import stack_config  # type: ignore[import-not-found]
+
+    return stack_config
+
+
 def check_pm2_apps() -> dict:
     """PM2's running set vs what ecosystem.config.js declares."""
-    eco = REPO_ROOT / "ecosystem.config.js"
-    try:
-        declared = set(re.findall(r'name:\s*["\']([^"\']+)["\']', eco.read_text()))
-    except OSError:
+    # Comments are stripped first: an app commented out of the file on
+    # purpose (2026-10-29: nova-litellm, whose venv the disk wipe removed) is
+    # not declared, and reporting it "not registered" is a false red.
+    src = _stack_config().read_ecosystem(REPO_ROOT / "ecosystem.config.js")
+    if src is None:
         return check("pm2_apps", YELLOW, "ecosystem.config.js unreadable")
+    declared = set(_stack_config().declared_pm2_apps(src))
 
     rc, out, _ = _run(["pm2", "jlist"], timeout=45)
     if rc != 0:
@@ -705,11 +733,66 @@ def check_gateway_freshness() -> dict:
     )
 
 
+# Containers whose single-file bind mounts are compared against the host.
+FILE_MOUNT_CONTAINERS = ("deer-flow-gateway", "deer-flow-jobs", "deer-flow-nginx", "deer-flow-searxng")
+
+
+def check_file_mounts() -> dict:
+    """Does each container still see the current content of its file mounts?
+
+    A bind mount of a single *file* pins the inode that existed when the
+    container started. An editor or tool that saves by write-then-rename gives
+    the path a new inode, and the container keeps reading the old one — with no
+    error anywhere. Found 2026-10-30: the gateway and jobs worker had been on a
+    stale ``config.yaml`` for hours, so every config edit (including the
+    hot-reloaded ones CLAUDE.md promises) was silently ignored. Only content is
+    compared (sha256); nothing is printed from the files.
+    """
+    import hashlib
+    import json
+
+    stale: list[str] = []
+    compared = 0
+    for name in FILE_MOUNT_CONTAINERS:
+        rc, out, _ = _run(["docker", "inspect", name, "--format", "{{json .Mounts}}"], timeout=30)
+        if rc != 0 or not out:
+            continue
+        try:
+            mounts = json.loads(out)
+        except ValueError:
+            continue
+        for m in mounts:
+            src, dest = m.get("Source", ""), m.get("Destination", "")
+            if m.get("Type") != "bind" or not src or not os.path.isfile(src):
+                continue
+            try:
+                host = hashlib.sha256(Path(src).read_bytes()).hexdigest()
+                p = subprocess.run(["docker", "exec", name, "cat", dest], capture_output=True, timeout=30)
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if p.returncode != 0:
+                continue
+            compared += 1
+            if hashlib.sha256(p.stdout).hexdigest() != host:
+                stale.append(f"{name}:{dest}")
+    if stale:
+        return check(
+            "file_mounts",
+            RED,
+            f"{len(stale)} file mount(s) stale in the container (host file was replaced, container still reads the old inode): {', '.join(stale)} — recreate those containers",
+            stale=stale,
+        )
+    if compared == 0:
+        return check("file_mounts", YELLOW, "no single-file bind mounts could be compared (containers down?)")
+    return check("file_mounts", GREEN, f"{compared} single-file bind mount(s) match the host")
+
+
 CHECKS = (
     check_git_clean,
     check_config_version,
     check_frontend_build_freshness,
     check_gateway_freshness,
+    check_file_mounts,
     check_compose_chain,
     check_services_running,
     check_pm2_apps,

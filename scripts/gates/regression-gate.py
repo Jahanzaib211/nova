@@ -25,7 +25,7 @@ Sections (each a check; red/yellow/green):
                     the gateway container — `uv sync` silently strips them.
 - ``config_prereqs`` every enabled config.yaml section has what it needs
                     (speech weights, ACP mounts, jobs worker, runtimes adapters).
-- ``services``      PM2 apps online, tunnels online, local LLM endpoints,
+- ``services``      PM2 apps online, tunnel connector up, local LLM endpoints,
                     nova-ops, Postgres, frontend served build == image build.
 - ``e2e_toolchain`` Playwright's Chromium build for the pinned playwright-core.
 - ``inventory_counts`` skills / config tools / builtin tools / capability ops /
@@ -100,7 +100,23 @@ HARNESS_EXTRAS = {
     "trading": ["ccxt", "yfinance"],
 }
 
-NOVA_PM2_APPS = ["nova", "nova-litellm", "nova-healthcheck", "nova-gates", "nova-ops", "nova-host-bridge", "tunnel-nova"]
+NOVA_PM2_APPS = ["nova", "nova-litellm", "nova-healthcheck", "nova-gates", "nova-ops", "nova-host-bridge"]
+
+# Services that have a nova-healthcheck probe. When the operator switches that
+# probe off (HEALTHCHECK_DISABLED_PROBES — env, else nova-healthcheck's env in
+# ecosystem.config.js), the service is off on purpose and this gate must not
+# call its absence a regression. 2026-10-29: the disk wipe removed the LiteLLM
+# venv, nova-litellm was commented out and P10 disabled, and this gate stayed
+# RED on "nova-litellm=absent" and "litellm :4000 unreachable" regardless.
+SERVICE_PROBES = {
+    "nova-litellm": "P10_litellm",
+    "litellm :4000": "P10_litellm",
+    "tunnel": "P12_tunnel",
+}
+
+# The Cloudflare Tunnel connector is checked by what it is, not by one pm2
+# app name: this host runs it as systemd `cloudflared.service`, and requiring
+# a `tunnel-nova` pm2 app kept this check red while the tunnel served traffic.
 
 
 def check(name: str, status: str, detail: str, **extra) -> dict:
@@ -342,21 +358,89 @@ def _local_llm_retired() -> bool:
         return False
 
 
-def evaluate_services(pm2: dict[str, str], endpoints: dict[str, int | None], served_build: str | None, image_build: str | None) -> dict:
+def _stack_config():
+    """scripts/stack_config.py — shared, comment-aware ecosystem reader."""
+    scripts_dir = str(REPO_ROOT / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import stack_config  # type: ignore[import-not-found]
+
+    return stack_config
+
+
+def gate_disabled_probes() -> set[str]:
+    """The watchdog's disabled-probe switch, as nova-healthcheck sees it."""
+    try:
+        return _stack_config().disabled_probes()
+    except Exception:  # noqa: BLE001 - a probe helper must never fail the gate
+        return set()
+
+
+def is_disabled(service: str, disabled: set[str] | frozenset[str]) -> bool:
+    probe = SERVICE_PROBES.get(service)
+    return probe is not None and probe in disabled
+
+
+def tunnel_connector() -> tuple[bool, str]:
+    """Is a Cloudflare Tunnel connector up? (ok, how we know).
+
+    cloudflared's metrics /ready first (200 only with a live edge connection),
+    then any configured systemd unit, then any configured pm2 app — the same
+    env-overridable lists the watchdog's P12 uses.
+    """
+    sc = _stack_config()
+    for url in sc.tunnel_metrics_urls():
+        st = http_status(url, timeout=3.0)
+        if st == 200:
+            return True, f"metrics {url} ready"
+        if st is not None:
+            return False, f"metrics {url} HTTP {st} (connector has no edge connection)"
+    for unit in sc.tunnel_units():
+        if run(["systemctl", "is-active", unit], timeout=10)[0] == 0:
+            return True, f"systemd {unit} active"
+    apps = sc.tunnel_pm2_apps()
+    if apps:
+        pm2 = pm2_status()
+        for app in apps:
+            if pm2.get(app) == "online":
+                return True, f"pm2 {app} online"
+    return False, "no connector: metrics unreachable, units " + ",".join(sc.tunnel_units()) + " inactive, pm2 " + ",".join(apps) + " not online"
+
+
+def evaluate_services(
+    pm2: dict[str, str],
+    endpoints: dict[str, int | None],
+    served_build: str | None,
+    image_build: str | None,
+    disabled: set[str] | frozenset[str] = frozenset(),
+    tunnel: tuple[bool, str] | None = None,
+) -> dict:
     problems: list[str] = []
-    offline = [a for a in NOVA_PM2_APPS if pm2.get(a) != "online"]
+    apps = [a for a in NOVA_PM2_APPS if not is_disabled(a, disabled)]
+    endpoints = {n: st for n, st in endpoints.items() if not is_disabled(n, disabled)}
+    skipped = sorted(n for n in SERVICE_PROBES if is_disabled(n, disabled))
+    offline = [a for a in apps if pm2.get(a) != "online"]
     if offline:
         problems.append("PM2 not online: " + ", ".join(f"{a}={pm2.get(a, 'absent')}" for a in offline))
     down = [name for name, st in endpoints.items() if st is None or st >= 500]
     if down:
         problems.append("unreachable: " + ", ".join(f"{n} ({endpoints[n]})" for n in down))
+    tunnel_down = tunnel is not None and not is_disabled("tunnel", disabled) and not tunnel[0]
+    if tunnel_down:
+        problems.append(f"tunnel connector down: {tunnel[1]}")
     if served_build and image_build and served_build != image_build:
         problems.append(f"frontend serves build {served_build} but the image has {image_build} (recreate the container)")
     if not served_build:
         problems.append("frontend container not found or its BUILD_ID unreadable")
+    extra = {"skipped": skipped} if skipped else {}
+    if tunnel is not None:
+        extra["tunnel"] = tunnel[1]
     if problems:
-        return check("services", RED if offline or down else YELLOW, "; ".join(problems), pm2=pm2, endpoints=endpoints)
-    return check("services", GREEN, f"{len(NOVA_PM2_APPS)} PM2 apps online, {len(endpoints)} endpoints answering, frontend build {served_build}", pm2={a: pm2.get(a) for a in NOVA_PM2_APPS}, endpoints=endpoints)
+        return check("services", RED if offline or down or tunnel_down else YELLOW, "; ".join(problems), pm2=pm2, endpoints=endpoints, **extra)
+    detail = f"{len(apps)} PM2 apps online, {len(endpoints)} endpoints answering, frontend build {served_build}"
+    if skipped:
+        detail += f" (disabled via HEALTHCHECK_DISABLED_PROBES: {', '.join(skipped)})"
+    return check("services", GREEN, detail, pm2={a: pm2.get(a) for a in apps}, endpoints=endpoints, **extra)
 
 
 # ---------------------------------------------------------------- e2e toolchain
@@ -465,12 +549,15 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
     voice_ok = (voice_dir / "voices-v1.0.bin").is_file() and ((voice_dir / "kokoro-v1.0.onnx").is_file() or (voice_dir / "kokoro-v1.0.int8.onnx").is_file())
     checks.append(evaluate_config_prereqs(text, {"voice_weights": voice_ok, "jobs_worker": bool(workers.get("items")), "acp_mounts": acp_mounts, "acp_ready": acp_ready}))
 
+    disabled = gate_disabled_probes()
     endpoints = {
         "gateway /health": http_status(f"{base}/health"),
         "nova-ops :4100": http_status("http://127.0.0.1:4100/"),
-        "litellm :4000": http_status("http://172.17.0.1:4000/v1/models"),
         "public": http_status("https://nova.alilabsx.com/health", timeout=15),
     }
+    # Not even probed when P10 is switched off: the service is off on purpose.
+    if not is_disabled("litellm :4000", disabled):
+        endpoints["litellm :4000"] = http_status("http://172.17.0.1:4000/v1/models")
     # The local model is optional: retired (unit disabled) ⇒ not an endpoint
     # this gate expects. See scripts/inventory.py::local_llm_retired.
     if not _local_llm_retired():
@@ -483,7 +570,8 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
     if "Error" in served or "No such" in served:
         served = ""
     _, image_build = run(["docker", "run", "--rm", "--entrypoint", "cat", "deer-flow-dev-frontend:latest", "/app/frontend/.next/BUILD_ID"], timeout=60)
-    checks.append(evaluate_services(pm2_status(), endpoints, served.strip() or None, image_build.strip() or None))
+    tunnel = None if is_disabled("tunnel", disabled) else tunnel_connector()
+    checks.append(evaluate_services(pm2_status(), endpoints, served.strip() or None, image_build.strip() or None, disabled=disabled, tunnel=tunnel))
 
     checks.append(evaluate_e2e_toolchain(playwright_expected_revision(), Path.home() / ".cache" / "ms-playwright"))
 

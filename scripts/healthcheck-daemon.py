@@ -25,12 +25,15 @@ Probes:
        is bound to it) — the silent DDG fallback hides an outage otherwise
   P11. Dify stack health (127.0.0.1:8088/console/api/setup → step=finished;
       pm2 app nova-dify running the compose stack)
-  P12. Cloudflare Tunnel — systemd unit active + public URL reachable.
-      Two layers: (a) cloudflared-nova.service is active, (b) the URL in
+  P12. Cloudflare Tunnel — connector up + public URL reachable.
+      Two layers: (a) the connector is up — cloudflared's metrics /ready
+      (HEALTHCHECK_TUNNEL_METRICS_URLS) when reachable, else any systemd unit
+      in HEALTHCHECK_TUNNEL_UNITS active, else any pm2 app in
+      HEALTHCHECK_TUNNEL_PM2_APPS online; (b) the URL in
       CLOUDFLARE_TUNNEL_URL (default https://nova.alilabsx.com/health)
-      returns HTTP 200 from the public edge. Auto-fix: sudo systemctl
-      restart cloudflared-nova.service. Requires sudoers NOPASSWD for
-      systemctl on this unit (set up by the boot script).
+      returns HTTP 200 from the public edge. Auto-fix: sudo -n systemctl
+      restart <first installed unit> — only when passwordless sudo works;
+      otherwise it alerts and leaves the restart to the operator.
 
 Auto-fixes (only safe, reversible ones):
   - Attestation drift → clear the hash dir (and run WATCHDOG_ATTESTATION_RESTART_CMD
@@ -41,7 +44,11 @@ Auto-fixes (only safe, reversible ones):
   - P10 nova-litellm dead → pm2 restart (start from ecosystem.config.js if missing)
   - P11 Dify dead → pm2 restart nova-dify (start from ecosystem.config.js if missing)
   - P2 gateway dead + container exists but stopped → docker start deer-flow-gateway
-  - P12 tunnel dead → sudo systemctl restart cloudflared-nova.service
+  - P7/P2/P15 container repairs are deferred (alert only) while the autoheal
+    sidecar is running and the target has been unhealthy for less than
+    HEALTHCHECK_CONTAINER_GRACE_SEC (default 600s) — docker's restart policy
+    and autoheal own container liveness in that window
+  - P12 tunnel dead → sudo -n systemctl restart <unit> (alert only without sudo)
   - P16 host bridge dead → pm2 restart nova-host-bridge (start from ecosystem.config.js if missing)
 
 Status:
@@ -108,18 +115,26 @@ FIX_BACKOFF_MAX_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_BACKOFF_MAX_CYCLES"
 # stack takes to come up), and refuse to restart the `nova` stack at all if
 # it was restarted — by anyone — less than STACK_RESTART_MIN_AGE_SEC ago.
 FIX_GRACE_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_GRACE_CYCLES", "8"))
-STACK_RESTART_MIN_AGE_SEC = int(
-    os.environ.get("HEALTHCHECK_STACK_RESTART_MIN_AGE_SEC", "240")
-)
+STACK_RESTART_MIN_AGE_SEC = int(os.environ.get("HEALTHCHECK_STACK_RESTART_MIN_AGE_SEC", "240"))
 GATEWAY_CONTAINER = os.environ.get("NOVA_GATEWAY_CONTAINER", "deer-flow-gateway")
+# Container liveness has four supervisors on this stack: docker's
+# `restart: unless-stopped`, the autoheal sidecar (restarts containers whose
+# healthcheck fails), the pm2 `nova` app (foreground `docker compose up`), and
+# this daemon. Four layers reacting to the same unhealthy container is the
+# feedback loop ecosystem.config.js's header describes (host freeze). So while
+# the autoheal sidecar is running, the container-level repairs below only
+# alert until the target has been unhealthy for HEALTHCHECK_CONTAINER_GRACE_SEC
+# — docker and autoheal get the first ten minutes; this daemon is the backstop
+# for what they cannot fix (a container that stays down), not a fourth racer.
+CONTAINER_GRACE_SEC = float(os.environ.get("HEALTHCHECK_CONTAINER_GRACE_SEC", "600"))
+AUTOHEAL_CONTAINER = os.environ.get("NOVA_AUTOHEAL_CONTAINER", "deer-flow-autoheal")
+# Probes whose repair restarts or starts containers (or the whole stack).
+CONTAINER_LIVENESS_PROBES = frozenset({"P2_gateway", "P7_containers", "P15_jobs_worker"})
 JOBS_CONTAINER = os.environ.get("NOVA_JOBS_CONTAINER", "deer-flow-jobs")
 # A worker that has not written its heartbeat row in this long is gone.
 JOBS_WORKER_MAX_AGE_S = float(os.environ.get("NOVA_JOBS_WORKER_MAX_AGE_S", "90"))
 HOST_BRIDGE_BIND = os.environ.get("NOVA_HOST_BRIDGE_BIND", "172.17.0.1")
-HOST_BRIDGE_PORTS = tuple(
-    int(p)
-    for p in os.environ.get("NOVA_HOST_BRIDGE_PORTS", "18789 8080 4800 3008").split()
-)
+HOST_BRIDGE_PORTS = tuple(int(p) for p in os.environ.get("NOVA_HOST_BRIDGE_PORTS", "18789 8080 4800 3008").split())
 
 
 def disabled_probes() -> set[str]:
@@ -233,9 +248,7 @@ async def probe_drift() -> ProbeResult:
     try:
         payload = json.loads(target.read_text())
     except FileNotFoundError:
-        return ProbeResult(
-            name, Status.YELLOW, "no drift gate status file yet", latency
-        )
+        return ProbeResult(name, Status.YELLOW, "no drift gate status file yet", latency)
     except (OSError, json.JSONDecodeError) as exc:
         return ProbeResult(name, Status.YELLOW, f"unreadable: {exc}", latency)
 
@@ -249,9 +262,7 @@ async def probe_drift() -> ProbeResult:
         )
 
     overall = payload.get("overall")
-    failing = [
-        c.get("name") for c in payload.get("checks", []) if c.get("status") == "red"
-    ]
+    failing = [c.get("name") for c in payload.get("checks", []) if c.get("status") == "red"]
     if overall == "red":
         return ProbeResult(
             name,
@@ -260,14 +271,8 @@ async def probe_drift() -> ProbeResult:
             latency,
         )
     if overall == "yellow":
-        warn = [
-            c.get("name")
-            for c in payload.get("checks", [])
-            if c.get("status") == "yellow"
-        ]
-        return ProbeResult(
-            name, Status.YELLOW, f"{', '.join(warn) or 'see drift.json'}", latency
-        )
+        warn = [c.get("name") for c in payload.get("checks", []) if c.get("status") == "yellow"]
+        return ProbeResult(name, Status.YELLOW, f"{', '.join(warn) or 'see drift.json'}", latency)
     return ProbeResult(name, Status.GREEN, "no drift", latency)
 
 
@@ -357,9 +362,7 @@ def _http_probe(
                 except Exception:
                     return ProbeResult(name, Status.RED, "non-JSON body", latency)
                 if not body_validator(payload):
-                    return ProbeResult(
-                        name, Status.RED, "body validator failed", latency
-                    )
+                    return ProbeResult(name, Status.RED, "body validator failed", latency)
             return ProbeResult(name, Status.GREEN, f"HTTP {res.status_code}", latency)
         except (
             httpx.ConnectError,
@@ -411,9 +414,7 @@ async def probe_searxng(port: int = 8088) -> ProbeResult:
     service teaches people to ignore the whole daemon.
     """
     if not _searxng_is_configured():
-        return ProbeResult(
-            "P14_searxng", Status.GREEN, "skipped (no tool bound to searxng)", 0.0
-        )
+        return ProbeResult("P14_searxng", Status.GREEN, "skipped (no tool bound to searxng)", 0.0)
     return await _http_probe("P14_searxng", f"http://localhost:{port}/healthz")
 
 
@@ -451,9 +452,7 @@ async def probe_gateway(port: int = 2026) -> ProbeResult:
                 )
             if res.status_code == 200:
                 return ProbeResult("P2_gateway", Status.GREEN, "HTTP 200", latency)
-            return ProbeResult(
-                "P2_gateway", Status.RED, f"unexpected HTTP {res.status_code}", latency
-            )
+            return ProbeResult("P2_gateway", Status.RED, f"unexpected HTTP {res.status_code}", latency)
         except Exception as e:
             return ProbeResult(
                 "P2_gateway",
@@ -472,10 +471,7 @@ async def probe_frontend(port: int = 2026) -> ProbeResult:
             async with httpx.AsyncClient(timeout=3.0) as client:
                 res = await client.get(f"http://localhost:{port}/")
             latency = (time.perf_counter() - t0) * 1000
-            if (
-                res.status_code == 200
-                and "html" in res.headers.get("content-type", "").lower()
-            ):
+            if res.status_code == 200 and "html" in res.headers.get("content-type", "").lower():
                 return ProbeResult(
                     "P3_frontend",
                     Status.GREEN,
@@ -516,9 +512,7 @@ async def probe_local_llm_gateway(port: int = 9000) -> ProbeResult:
             payload = res.json()
             backend = payload.get("backend", "?")
             if backend == "healthy":
-                return ProbeResult(
-                    "P4_local_llm_gateway", Status.GREEN, f"backend={backend}", latency
-                )
+                return ProbeResult("P4_local_llm_gateway", Status.GREEN, f"backend={backend}", latency)
             if backend == "unreachable":
                 # llama-server cold or down — mask as yellow for 2 cycles
                 return ProbeResult(
@@ -527,9 +521,7 @@ async def probe_local_llm_gateway(port: int = 9000) -> ProbeResult:
                     f"backend={backend} (llama cold?)",
                     latency,
                 )
-            return ProbeResult(
-                "P4_local_llm_gateway", Status.RED, f"backend={backend}", latency
-            )
+            return ProbeResult("P4_local_llm_gateway", Status.RED, f"backend={backend}", latency)
         except (httpx.ConnectError, httpx.ConnectTimeout):
             return ProbeResult(
                 "P4_local_llm_gateway",
@@ -548,15 +540,11 @@ async def probe_local_llm_gateway(port: int = 9000) -> ProbeResult:
     return await _do()
 
 
-async def probe_llama_loopback(
-    host: str = "127.0.0.1", port: int = 8081
-) -> ProbeResult:
+async def probe_llama_loopback(host: str = "127.0.0.1", port: int = 8081) -> ProbeResult:
     return await _http_probe(
         "P5_llama_loopback",
         f"http://{host}:{port}/v1/models",
-        body_validator=lambda d: (
-            isinstance(d.get("data"), list) and len(d["data"]) >= 1
-        ),
+        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
     )
 
 
@@ -572,9 +560,7 @@ async def probe_llama_bridge(host: str = "172.17.0.1", port: int = 8081) -> Prob
     return await _http_probe(
         "P9_bridge",
         f"http://{host}:{port}/v1/models",
-        body_validator=lambda d: (
-            isinstance(d.get("data"), list) and len(d["data"]) >= 1
-        ),
+        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
     )
 
 
@@ -586,15 +572,11 @@ async def probe_litellm(host: str = "172.17.0.1", port: int = 4000) -> ProbeResu
     return await _http_probe(
         "P10_litellm",
         f"http://{host}:{port}/v1/models",
-        body_validator=lambda d: (
-            isinstance(d.get("data"), list) and len(d["data"]) >= 1
-        ),
+        body_validator=lambda d: isinstance(d.get("data"), list) and len(d["data"]) >= 1,
     )
 
 
-async def probe_host_bridge(
-    host: str = HOST_BRIDGE_BIND, ports: tuple[int, ...] = HOST_BRIDGE_PORTS
-) -> ProbeResult:
+async def probe_host_bridge(host: str = HOST_BRIDGE_BIND, ports: tuple[int, ...] = HOST_BRIDGE_PORTS) -> ProbeResult:
     """Probe the nova-host-bridge socat forwarders on the docker bridge IP.
 
     Mailcow's admin API, Chatwoot, Twenty and OpenClaw bind 127.0.0.1 only,
@@ -622,13 +604,10 @@ async def probe_host_bridge(
         return ProbeResult(
             name,
             Status.RED,
-            f"{host} not listening on {', '.join(str(p) for p in refused)} "
-            f"({len(ports) - len(refused)}/{len(ports)} up)",
+            f"{host} not listening on {', '.join(str(p) for p in refused)} ({len(ports) - len(refused)}/{len(ports)} up)",
             latency,
         )
-    return ProbeResult(
-        name, Status.GREEN, f"{len(ports)}/{len(ports)} ports forwarded", latency
-    )
+    return ProbeResult(name, Status.GREEN, f"{len(ports)}/{len(ports)} ports forwarded", latency)
 
 
 def _ops_token() -> str:
@@ -668,9 +647,7 @@ async def probe_jobs_worker(port: int = 2026) -> ProbeResult:
     name = "P15_jobs_worker"
     token = _ops_token()
     if not token:
-        return ProbeResult(
-            name, Status.GREEN, "skipped (NOVA_OPS_TOKEN unset)", 0.0, fixable=False
-        )
+        return ProbeResult(name, Status.GREEN, "skipped (NOVA_OPS_TOKEN unset)", 0.0, fixable=False)
     t0 = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -680,9 +657,7 @@ async def probe_jobs_worker(port: int = 2026) -> ProbeResult:
             )
         latency = (time.perf_counter() - t0) * 1000
         if res.status_code != 200:
-            return ProbeResult(
-                name, Status.RED, f"summary HTTP {res.status_code}", latency
-            )
+            return ProbeResult(name, Status.RED, f"summary HTTP {res.status_code}", latency)
         data = res.json()
     except Exception as e:  # noqa: BLE001 - any transport failure is the finding
         return ProbeResult(
@@ -691,11 +666,7 @@ async def probe_jobs_worker(port: int = 2026) -> ProbeResult:
             f"summary unreachable: {e}",
             (time.perf_counter() - t0) * 1000,
         )
-    workers = [
-        w
-        for w in data.get("workers", [])
-        if float(w.get("last_seen_age_s", 1e9)) <= JOBS_WORKER_MAX_AGE_S
-    ]
+    workers = [w for w in data.get("workers", []) if float(w.get("last_seen_age_s", 1e9)) <= JOBS_WORKER_MAX_AGE_S]
     queued = int(data.get("queued", 0))
     running = int(data.get("running", 0))
     dead = int(data.get("dead_letter", 0))
@@ -710,9 +681,7 @@ async def probe_jobs_worker(port: int = 2026) -> ProbeResult:
     _jobs_dead_letter_seen = dead
     summary = f"{len(workers)} worker(s), {running} running, {queued} queued, {dead} dead-letter"
     if grew:
-        return ProbeResult(
-            name, Status.YELLOW, f"dead-letter grew: {summary}", latency, fixable=False
-        )
+        return ProbeResult(name, Status.YELLOW, f"dead-letter grew: {summary}", latency, fixable=False)
     return ProbeResult(name, Status.GREEN, summary, latency)
 
 
@@ -728,9 +697,7 @@ async def probe_dify(host: str = "127.0.0.1", port: int = 8088) -> ProbeResult:
     )
 
 
-async def probe_llama_vram(
-    host: str = "127.0.0.1", port: int = 8081, model: str = ""
-) -> ProbeResult:
+async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str = "") -> ProbeResult:
     """Issue a 1-token chat completion to confirm VRAM is loaded.
 
     During the ~30s cold-load window after a restart, llama-server answers
@@ -743,14 +710,10 @@ async def probe_llama_vram(
                 res = await client.get(f"http://{host}:{port}/v1/models")
                 models = res.json().get("data", [])
                 if not models:
-                    return ProbeResult(
-                        "P6_llama_vram", Status.YELLOW, "no model advertised"
-                    )
+                    return ProbeResult("P6_llama_vram", Status.YELLOW, "no model advertised")
                 model = models[0]["id"]
             except Exception as e:
-                return ProbeResult(
-                    "P6_llama_vram", Status.RED, f"models probe failed: {e}"
-                )
+                return ProbeResult("P6_llama_vram", Status.RED, f"models probe failed: {e}")
 
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
@@ -779,9 +742,7 @@ async def probe_llama_vram(
                     f"VRAM cold HTTP {res.status_code}",
                     latency,
                 )
-            return ProbeResult(
-                "P6_llama_vram", Status.RED, f"HTTP {res.status_code}", latency
-            )
+            return ProbeResult("P6_llama_vram", Status.RED, f"HTTP {res.status_code}", latency)
         except (httpx.ReadTimeout, httpx.ConnectTimeout):
             return ProbeResult(
                 "P6_llama_vram",
@@ -800,9 +761,7 @@ async def probe_llama_vram(
     return await _do()
 
 
-async def probe_containers(
-    project: str = "deer-flow-dev", min_count: int = 3
-) -> ProbeResult:
+async def probe_containers(project: str = "deer-flow-dev", min_count: int = 3) -> ProbeResult:
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
         try:
@@ -889,11 +848,7 @@ async def probe_binary_attestation() -> ProbeResult:
 
     binary_basename = Path(binary_path).name
     binary_hash_file = Path(hash_dir) / f"{binary_basename}.hash"
-    constitution_hash_file = (
-        Path(hash_dir) / f"{binary_basename}.constitution-hash"
-        if constitution_path
-        else None
-    )
+    constitution_hash_file = Path(hash_dir) / f"{binary_basename}.constitution-hash" if constitution_path else None
 
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
@@ -916,20 +871,12 @@ async def probe_binary_attestation() -> ProbeResult:
             else:
                 mismatches.append(f"missing reference: {binary_hash_file.name}")
 
-            if (
-                constitution_path
-                and constitution_hash_file
-                and constitution_hash_file.exists()
-            ):
+            if constitution_path and constitution_hash_file and constitution_hash_file.exists():
                 expected_s = constitution_hash_file.read_text().strip()
                 if Path(constitution_path).exists():
-                    actual_s = hashlib.sha256(
-                        Path(constitution_path).read_bytes()
-                    ).hexdigest()
+                    actual_s = hashlib.sha256(Path(constitution_path).read_bytes()).hexdigest()
                     if expected_s and actual_s != expected_s:
-                        mismatches.append(
-                            f"constitution {actual_s[:8]}…≠{expected_s[:8]}…"
-                        )
+                        mismatches.append(f"constitution {actual_s[:8]}…≠{expected_s[:8]}…")
                 else:
                     mismatches.append(f"missing file: {constitution_path}")
 
@@ -957,70 +904,119 @@ async def probe_binary_attestation() -> ProbeResult:
     return await _do()
 
 
+def _tunnel_config():
+    """scripts/stack_config.py: the env-overridable tunnel connector defaults,
+    shared with the regression gate so both look for the same connector."""
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import stack_config
+
+    return stack_config
+
+
+async def _tunnel_metrics_ready(urls: list[str]) -> tuple[bool | None, str]:
+    """Ask cloudflared's metrics server whether it holds an edge connection.
+
+    Returns (True, how) on 200, (False, how) when the server answered anything
+    else (/ready is 503 while no edge connection is up), and (None, "") when no
+    metrics endpoint was reachable — then the caller falls back to asking the
+    supervisor (systemd / pm2) instead.
+    """
+    for url in urls:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                res = await client.get(url)
+        except Exception:
+            continue
+        if res.status_code == 200:
+            ready = ""
+            try:
+                n = res.json().get("readyConnections")
+                ready = f", {n} edge conns" if n is not None else ""
+            except Exception:
+                pass
+            return True, f"metrics=ready{ready}"
+        return False, f"metrics {url} HTTP {res.status_code} (no edge connection)"
+    return None, ""
+
+
+def _tunnel_systemd_active(units: list[str]) -> str | None:
+    """First configured unit that systemd reports active, else None."""
+    for unit in units:
+        try:
+            proc = subprocess.run(
+                ["systemctl", "is-active", unit],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        if proc.returncode == 0:
+            return unit
+    return None
+
+
+def _tunnel_pm2_online(apps: list[str]) -> str | None:
+    if not apps:
+        return None
+    try:
+        proc = subprocess.run(["pm2", "jlist"], capture_output=True, text=True, timeout=15)
+        if proc.returncode != 0:
+            return None
+        for app in json.loads(proc.stdout or "[]"):
+            if app.get("name") in apps and app.get("pm2_env", {}).get("status") == "online":
+                return app["name"]
+    except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+        pass
+    return None
+
+
 async def probe_tunnel(
     public_url: str = "https://nova.alilabsx.com/health",
 ) -> ProbeResult:
-    """Probe the Cloudflare Tunnel public-domain reachability.
+    """Probe the Cloudflare Tunnel: local connector, then public reachability.
 
-    Two layers, two checks (both must be GREEN for an overall GREEN):
-      1. systemd cloudflared-nova.service is active — proves the local
-         connector is up and registered with Cloudflare's edge.
-      2. The public URL (e.g. https://nova.alilabsx.com/health) returns
-         HTTP 200 from the external Cloudflare edge → proves the route
-         + DNS + proxy are wired end-to-end from a real client's
-         perspective.
+    Layer 1 — the local connector is up. In order of preference:
+      a. cloudflared's metrics ``/ready`` (HEALTHCHECK_TUNNEL_METRICS_URLS,
+         default http://127.0.0.1:20241/ready) answers 200 — the connector
+         itself says it holds an edge connection, whatever supervises it.
+      b. any systemd unit in HEALTHCHECK_TUNNEL_UNITS is active
+         (default cloudflared.service, cloudflared-nova.service).
+      c. any pm2 app in HEALTHCHECK_TUNNEL_PM2_APPS is online.
+    Layer 2 — CLOUDFLARE_TUNNEL_URL returns HTTP 200 from the public edge
+    (skipped when set to an empty string, for deployments with no public
+    hostname).
 
-    Operators can override PUBLIC_URL via env (CLOUDFLARE_TUNNEL_URL) to
-    point at any hostname they tunnel; the default is the hackathon demo
-    domain nova.alilabsx.com → Nova gateway. If the public URL is empty
-    or unset, only the systemd probe runs (useful for behind-the-firewall
-    deployments that don't expose a public hostname).
+    History: this probe demanded one hard-coded unit, ``cloudflared-nova``,
+    which was never installed here — the tunnel runs as systemd
+    ``cloudflared.service``. P12 was permanently red, and its repair (a sudo
+    restart of the missing unit) failed every cycle. A check that only
+    recognises one deployment shape gets disabled rather than fixed, and takes
+    its layer-2 coverage down with it.
     """
     public_url = os.environ.get("CLOUDFLARE_TUNNEL_URL", public_url).strip()
     t0 = time.perf_counter()
+    cfg = _tunnel_config()
 
-    # Layer 1: the local connector must be running — under systemd *or* PM2.
-    #
-    # This probe used to demand `cloudflared-nova.service`, but that unit was
-    # never installed on this host: the tunnel runs as the PM2 app `tunnel-nova`
-    # (see ecosystem.config.js). Layer 1 was therefore permanently red, so the
-    # whole probe got switched off — and with P1/P2/P3 all terminating at
-    # localhost:2026, nothing was left watching the public hostname at all. A
-    # check that only recognises one deployment shape gets disabled rather than
-    # fixed, and takes its layer-2 coverage down with it.
-    connector = ""
-    try:
-        proc = subprocess.run(
-            ["systemctl", "is-active", "cloudflared-nova.service"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if proc.returncode == 0:
-            connector = "systemd=active"
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-
-    if not connector:
-        try:
-            proc = subprocess.run(
-                ["pm2", "jlist"], capture_output=True, text=True, timeout=15
-            )
-            if proc.returncode == 0:
-                for app in json.loads(proc.stdout or "[]"):
-                    if app.get("name") == "tunnel-nova" and (
-                        app.get("pm2_env", {}).get("status") == "online"
-                    ):
-                        connector = "pm2=online"
-                        break
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-            pass
+    ready, connector = await _tunnel_metrics_ready(cfg.tunnel_metrics_urls())
+    if ready is False:
+        return ProbeResult("P12_tunnel", Status.RED, connector, (time.perf_counter() - t0) * 1000)
+    if ready is None:
+        unit = _tunnel_systemd_active(cfg.tunnel_units())
+        if unit:
+            connector = f"systemd {unit}=active"
+        else:
+            app = _tunnel_pm2_online(cfg.tunnel_pm2_apps())
+            if app:
+                connector = f"pm2 {app}=online"
 
     if not connector:
         return ProbeResult(
             "P12_tunnel",
             Status.RED,
-            "no cloudflared connector (systemd inactive and tunnel-nova not online)",
+            "no cloudflared connector (metrics unreachable, units " + ",".join(cfg.tunnel_units()) + " inactive, pm2 " + (",".join(cfg.tunnel_pm2_apps()) or "-") + " not online)",
             (time.perf_counter() - t0) * 1000,
         )
 
@@ -1082,9 +1078,7 @@ def fix_binary_attestation() -> bool:
     restart_cmd = os.environ.get("WATCHDOG_ATTESTATION_RESTART_CMD")
     if restart_cmd:
         try:
-            subprocess.run(
-                restart_cmd, shell=True, check=True, timeout=10, capture_output=True
-            )
+            subprocess.run(restart_cmd, shell=True, check=True, timeout=10, capture_output=True)
             log.warning(f"auto-fix: restart command succeeded: {restart_cmd}")
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -1128,9 +1122,7 @@ def _heal_pm2_app(app: str, timeout: int = 30, check_drift: bool = False) -> boo
     """
     ecosystem = _ecosystem_file()
     try:
-        described = subprocess.run(
-            ["pm2", "describe", app], timeout=15, capture_output=True, text=True
-        )
+        described = subprocess.run(["pm2", "describe", app], timeout=15, capture_output=True, text=True)
         drifted = False
         if check_drift and described.returncode == 0:
             script_path = _pm2_script_path(described.stdout)
@@ -1199,9 +1191,7 @@ def fix_deerflow_containers() -> bool:
 def _pm2_app_age_sec(app: str) -> float | None:
     """Seconds since pm2 last (re)started ``app``; None if unknown."""
     try:
-        out = subprocess.run(
-            ["pm2", "jlist"], timeout=15, capture_output=True, text=True, check=True
-        ).stdout
+        out = subprocess.run(["pm2", "jlist"], timeout=15, capture_output=True, text=True, check=True).stdout
         for proc in json.loads(out):
             if proc.get("name") == app:
                 uptime_ms = proc.get("pm2_env", {}).get("pm_uptime")
@@ -1343,62 +1333,92 @@ def fix_dify() -> bool:
     return _heal_pm2_app("nova-dify", timeout=60)
 
 
-def fix_tunnel() -> bool:
-    """Heal cloudflared-nova.service for a RED P12_tunnel.
-
-    Failure modes observed in production (2026-07-12):
-      1. systemd unit crashed/inactive — `systemctl restart` brings it back.
-      2. systemd in ``start-limit-hit`` state — `restart` does NOT clear
-         this; you must run ``systemctl reset-failed`` first or the
-         restart will be rejected. Without this, the auto-fix silently
-         fails and the tunnel stays down (Error 1033 to end users).
-      3. cloudflared up locally but public URL not reachable — DNS or
-         Cloudflare-side route broke; we restart anyway because it's
-         cheap and often works (e.g. QUIC reconnect after edge-IP
-         rotation), and surface the detail to the operator.
-
-    The reset-failed call requires ``sudo -n systemctl reset-failed
-    cloudflared-nova.service`` — see sudoers block in
-    ``install-cloudflared-nova.sh``. If the operator has not yet
-    applied that sudoers entry, we surface a clear alarm here so
-    Error 1033 doesn't recur silently.
-    """
-    # Step 0 — one-time check that the sudoers entry covers reset-failed.
-    # Without it, the watchdog cannot clear start-limit-hit and Error 1033
-    # recurs every time cloudflared quits cleanly. We don't block on this
-    # (we still try restart — it works for fresh failures) but we WARN so
-    # the operator sees it on every cycle.
+def _passwordless_sudo() -> bool:
+    """Can this process run `sudo -n` without a password prompt?"""
     try:
-        sudo_l = subprocess.run(
-            ["sudo", "-n", "-l"],
-            capture_output=True,
-            text=True,
-            timeout=5,
+        return subprocess.run(["sudo", "-n", "true"], capture_output=True, text=True, timeout=5).returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def _tunnel_unit_to_heal(units: list[str]) -> str | None:
+    """The first configured unit systemd actually knows about (LoadState=loaded)."""
+    for unit in units:
+        try:
+            proc = subprocess.run(
+                ["systemctl", "show", "-p", "LoadState", "--value", unit],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        if proc.returncode == 0 and proc.stdout.strip() == "loaded":
+            return unit
+    return None
+
+
+def fix_tunnel() -> bool:
+    """Heal the tunnel connector's systemd unit for a RED P12_tunnel.
+
+    The unit is the first entry of HEALTHCHECK_TUNNEL_UNITS that systemd has
+    loaded — never a hard-coded name: this used to restart
+    ``cloudflared-nova.service``, a unit that was never installed, so the
+    repair failed every cycle.
+
+    Restarting a system unit needs root. Without passwordless sudo the
+    repair can never succeed, so it is not attempted: the operator is
+    alerted (logged at ERROR with the exact command) and False is returned,
+    letting the circuit breaker back off and then stop. Spawning a sudo that
+    can only fail, every cycle, is the pattern that froze this host on
+    2026-08-12.
+
+    With sudo: ``reset-failed`` first (``restart`` alone is rejected while
+    the unit is in start-limit-hit — observed 2026-07-12, Error 1033 for end
+    users), then ``restart``, then wait up to 10s for ``is-active``.
+    """
+    units = _tunnel_config().tunnel_units()
+    unit = _tunnel_unit_to_heal(units)
+    if unit is None:
+        log.error(
+            "ALERT P12_tunnel: none of the tunnel units (%s) is installed — nothing to restart. If the connector runs under a different name, set HEALTHCHECK_TUNNEL_UNITS.",
+            ",".join(units) or "-",
         )
-        if (
-            sudo_l.returncode == 0
-            and "reset-failed cloudflared-nova" not in sudo_l.stdout
-        ):
+        return False
+    if not _passwordless_sudo():
+        log.error(
+            "ALERT P12_tunnel: tunnel connector down and this daemon has no passwordless sudo, so it will not try to restart %s. Run manually: sudo systemctl reset-failed %s; sudo systemctl restart %s",
+            unit,
+            unit,
+            unit,
+        )
+        return False
+
+    # A NOPASSWD rule for restart but not reset-failed still lets a fresh
+    # failure recover, but not a start-limit-hit one, so warn every cycle.
+    try:
+        sudo_l = subprocess.run(["sudo", "-n", "-l"], capture_output=True, text=True, timeout=5)
+        if sudo_l.returncode == 0 and f"reset-failed {unit}" not in sudo_l.stdout:
             log.warning(
-                "auto-fix: sudoers is missing 'reset-failed cloudflared-nova' — next start-limit-hit outage WILL NOT auto-recover. Re-run scripts/install-cloudflared-nova.sh as a sudo-capable user."
+                "auto-fix: sudoers is missing 'reset-failed %s' — next start-limit-hit outage WILL NOT auto-recover. Grant NOPASSWD for 'systemctl reset-failed %s'.",
+                unit,
+                unit,
             )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
 
-    # Step 1 — clear any start-limit-hit state. restart() alone will not.
-    log.warning("auto-fix: clearing start-limit-hit (if any) for cloudflared-nova")
+    log.warning("auto-fix: clearing start-limit-hit (if any) for %s", unit)
     try:
         reset_proc = subprocess.run(
-            ["sudo", "-n", "systemctl", "reset-failed", "cloudflared-nova.service"],
+            ["sudo", "-n", "systemctl", "reset-failed", unit],
             capture_output=True,
             text=True,
             timeout=10,
         )
         if reset_proc.returncode != 0:
-            # Not fatal — the unit may simply not be in failed state, OR
-            # sudoers may not permit reset-failed (Step 0 warning).
+            # Not fatal — the unit may simply not be in failed state.
             log.info(
-                "auto-fix: reset-failed returned %d (stderr=%s) — likely already clean or sudoers missing",
+                "auto-fix: reset-failed returned %d (stderr=%s) — likely already clean",
                 reset_proc.returncode,
                 reset_proc.stderr.strip()[:200],
             )
@@ -1406,54 +1426,43 @@ def fix_tunnel() -> bool:
         log.error("auto-fix: reset-failed preflight failed: %s", e)
         return False
 
-    # Step 2 — restart (or start, depending on current state).
-    log.warning("auto-fix: restarting cloudflared-nova.service")
+    log.warning("auto-fix: restarting %s", unit)
     try:
         subprocess.run(
-            ["sudo", "-n", "systemctl", "restart", "cloudflared-nova.service"],
+            ["sudo", "-n", "systemctl", "restart", unit],
             check=True,
             timeout=30,
             capture_output=True,
         )
-    except subprocess.CalledProcessError as e:
-        log.error(
-            "auto-fix: systemctl restart failed (%s). If sudo requires a password, run: sudo systemctl restart cloudflared-nova.service manually.",
-            e,
-        )
-        return False
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        log.error("auto-fix: failed to restart tunnel: %s", e)
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
+        log.error("auto-fix: systemctl restart %s failed: %s", unit, e)
         return False
 
-    # Step 3 — verify the systemd unit actually came up. restart() exits
-    # 0 even if the unit subsequently crashes; we wait up to 10s for
-    # the service to be active before claiming success.
-    log.info("auto-fix: waiting for cloudflared-nova.service to become active")
+    # restart exits 0 even if the unit crashes right after; wait for active.
     deadline = time.monotonic() + 10.0
     while time.monotonic() < deadline:
         try:
             if (
                 subprocess.run(
-                    [
-                        "sudo",
-                        "-n",
-                        "systemctl",
-                        "is-active",
-                        "cloudflared-nova.service",
-                    ],
+                    ["sudo", "-n", "systemctl", "is-active", unit],
                     capture_output=True,
                     text=True,
                     timeout=3,
                 ).stdout.strip()
                 == "active"
             ):
-                log.info("auto-fix: cloudflared-nova.service is active")
+                log.info("auto-fix: %s is active", unit)
                 return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
         time.sleep(0.5)
     log.error(
-        "auto-fix: cloudflared-nova.service did not become active within 10s of restart — manual intervention required"
+        "auto-fix: %s did not become active within 10s of restart — manual intervention required",
+        unit,
     )
     return False
 
@@ -1472,6 +1481,9 @@ class WatchdogState:
     fix_failures: dict[str, int] = field(default_factory=dict)
     next_fix_cycle: dict[str, int] = field(default_factory=dict)
     fix_circuit_open: set[str] = field(default_factory=set)
+    # Monotonic time each probe went RED (cleared when it leaves RED), so a
+    # repair can be held back until the target has been unhealthy long enough.
+    red_since: dict[str, float] = field(default_factory=dict)
 
 
 # probe name -> (fix callable, suffix appended to probe.detail on success).
@@ -1503,9 +1515,87 @@ FIX_DISPATCH: dict[str, tuple[Callable[[], bool], str]] = {
     ),
     "P12_tunnel": (
         lambda: fix_tunnel(),
-        " [systemctl reset-failed+restart issued, verified active]",
+        " [tunnel unit reset-failed+restart issued, verified active]",
     ),
 }
+
+
+def _monotonic() -> float:
+    """Indirection so tests can move the clock without patching `time`."""
+    return time.monotonic()
+
+
+def autoheal_running() -> bool:
+    """Is the autoheal sidecar (AUTOHEAL_CONTAINER) running? False when unknown:
+    if this daemon cannot tell, it must not assume someone else is healing."""
+    try:
+        proc = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Running}}", AUTOHEAL_CONTAINER],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
+
+
+#: The container each deferrable probe's repair acts on. P7_containers is
+#: absent on purpose: it fires when containers are *missing*, and autoheal
+#: only restarts containers that exist, run, and report unhealthy.
+_AUTOHEAL_TARGETS = {"P2_gateway": GATEWAY_CONTAINER, "P15_jobs_worker": JOBS_CONTAINER}
+
+
+def _autoheal_can_act(container: str) -> bool:
+    """Would autoheal restart ``container`` on its own? Only a running
+    container whose docker health is unhealthy (or still starting) — an exited
+    or missing one is never touched by autoheal, so deferring it only delays
+    the repair this daemon exists to make."""
+    try:
+        proc = subprocess.run(
+            ["docker", "inspect", "--format", "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}", container],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+    if proc.returncode != 0:
+        return False
+    parts = proc.stdout.split()
+    return len(parts) == 2 and parts[0] == "running" and parts[1] in ("unhealthy", "starting")
+
+
+def _defer_to_autoheal(probe: ProbeResult, state: WatchdogState) -> bool:
+    """True when a container-level repair must wait for docker/autoheal.
+
+    Applies only to CONTAINER_LIVENESS_PROBES, only while the autoheal sidecar
+    is running, and only until the target has been RED for
+    CONTAINER_GRACE_SEC. In that window the daemon alerts (rate-limited) and
+    annotates the probe, but does not restart anything, and the deferral does
+    not count as a failed repair for the circuit breaker.
+    """
+    if probe.name not in CONTAINER_LIVENESS_PROBES or CONTAINER_GRACE_SEC <= 0:
+        return False
+    target = _AUTOHEAL_TARGETS.get(probe.name)
+    if target is None:
+        return False
+    unhealthy_for = _monotonic() - state.red_since.get(probe.name, _monotonic())
+    if unhealthy_for >= CONTAINER_GRACE_SEC:
+        return False
+    if not autoheal_running() or not _autoheal_can_act(target):
+        return False
+    probe.detail += f" [repair deferred to docker/autoheal: unhealthy {unhealthy_for:.0f}s < {CONTAINER_GRACE_SEC:.0f}s grace]"
+    streak = state.consecutive_red.get(probe.name, 0)
+    if streak == 2 or streak % 20 == 0:
+        log.warning(
+            "ALERT %s: RED for %.0fs — %s is running, so container liveness is left to docker/autoheal for %.0fs before this daemon restarts anything",
+            probe.name,
+            unhealthy_for,
+            AUTOHEAL_CONTAINER,
+            CONTAINER_GRACE_SEC,
+        )
+    return True
 
 
 def _reset_fix_breaker(state: WatchdogState, name: str) -> None:
@@ -1546,15 +1636,18 @@ def _record_fix_failure(state: WatchdogState, name: str) -> None:
 def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
     """Apply safe auto-fixes based on RED probes. YELLOW probes are masked
     (logged but no fix)."""
+    now = _monotonic()
     for probe in report.probes:
+        # Cleared only on GREEN: a probe flapping RED/YELLOW must not restart
+        # its grace window every other cycle and so never get repaired.
         if probe.status == Status.RED:
-            state.consecutive_red[probe.name] = (
-                state.consecutive_red.get(probe.name, 0) + 1
-            )
+            state.red_since.setdefault(probe.name, now)
+        elif probe.status == Status.GREEN:
+            state.red_since.pop(probe.name, None)
+        if probe.status == Status.RED:
+            state.consecutive_red[probe.name] = state.consecutive_red.get(probe.name, 0) + 1
         elif probe.status == Status.YELLOW:
-            state.consecutive_yellow[probe.name] = (
-                state.consecutive_yellow.get(probe.name, 0) + 1
-            )
+            state.consecutive_yellow[probe.name] = state.consecutive_yellow.get(probe.name, 0) + 1
             state.consecutive_red[probe.name] = 0
         else:
             state.consecutive_red[probe.name] = 0
@@ -1578,6 +1671,8 @@ def dispatch_fixes(report: CycleReport, state: WatchdogState) -> None:
             if probe.name in state.fix_circuit_open:
                 continue
             if state.cycle_id < state.next_fix_cycle.get(probe.name, 0):
+                continue
+            if _defer_to_autoheal(probe, state):
                 continue
             if fix_fn():
                 probe.fixed = True
@@ -1621,15 +1716,11 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
         ("P3_frontend", probe_frontend),
         (
             "P4_local_llm_gateway",
-            lambda: probe_local_llm_gateway(
-                port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000"))
-            ),
+            lambda: probe_local_llm_gateway(port=int(os.environ.get("LOCAL_LLM_GATEWAY_PORT", "9000"))),
         ),
         (
             "P5_llama_loopback",
-            lambda: probe_llama_loopback(
-                host=os.environ.get("LLAMA_HOST", "127.0.0.1")
-            ),
+            lambda: probe_llama_loopback(host=os.environ.get("LLAMA_HOST", "127.0.0.1")),
         ),
         (
             "P6_llama_vram",
@@ -1644,9 +1735,7 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
         ("P8_binary_attestation", probe_binary_attestation),
         (
             "P9_bridge",
-            lambda: probe_llama_bridge(
-                host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1")
-            ),
+            lambda: probe_llama_bridge(host=os.environ.get("LLAMA_BRIDGE_HOST", "172.17.0.1")),
         ),
         (
             "P10_litellm",
@@ -1665,9 +1754,7 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
         ("P12_tunnel", probe_tunnel),
         (
             "P15_jobs_worker",
-            lambda: probe_jobs_worker(
-                port=int(os.environ.get("NOVA_NGINX_PORT", "2026"))
-            ),
+            lambda: probe_jobs_worker(port=int(os.environ.get("NOVA_NGINX_PORT", "2026"))),
         ),
         ("P16_host_bridge", probe_host_bridge),
     ]
@@ -1681,13 +1768,7 @@ async def run_cycle(state: WatchdogState) -> CycleReport:
 
     probe_factories = build_probe_factories()
     skip = disabled_probes()
-    probes: list[
-        tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]
-    ] = [
-        (name, asyncio.ensure_future(factory()))
-        for name, factory in probe_factories
-        if name not in skip
-    ]
+    probes: list[tuple[str, asyncio.Task[ProbeResult] | asyncio.Future[ProbeResult]]] = [(name, asyncio.ensure_future(factory())) for name, factory in probe_factories if name not in skip]
     results = await asyncio.gather(*(c for _, c in probes), return_exceptions=True)
     for (name, _), result in zip(probes, results):
         if isinstance(result, BaseException):
@@ -1734,9 +1815,7 @@ async def main_loop(args: argparse.Namespace) -> int:
             # be able to stall the watchdog beyond CYCLE_DEADLINE_SEC. If we
             # exceed it, treat the cycle as RED and force a restart via exit 1
             # so PM2 reaps us and comes back fresh.
-            report = await asyncio.wait_for(
-                run_cycle(state), timeout=CYCLE_DEADLINE_SEC
-            )
+            report = await asyncio.wait_for(run_cycle(state), timeout=CYCLE_DEADLINE_SEC)
         except TimeoutError:
             log.error(
                 "cycle exceeded %.0fs deadline — assuming hung; emitting RED report and exiting for PM2 restart",
@@ -1771,11 +1850,7 @@ async def main_loop(args: argparse.Namespace) -> int:
             return report.exit_code
 
         # If a fix was applied, re-probe next cycle without waiting the full interval
-        wait = (
-            min(args.interval, 5)
-            if any(p.fixed for p in report.probes)
-            else args.interval
-        )
+        wait = min(args.interval, 5) if any(p.fixed for p in report.probes) else args.interval
         try:
             await asyncio.wait_for(stop.wait(), timeout=wait)
         except TimeoutError:
@@ -1786,26 +1861,16 @@ async def main_loop(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Nova local-dev-stack watchdog (generic)"
-    )
-    parser.add_argument(
-        "--interval", type=int, default=30, help="seconds between cycles"
-    )
-    parser.add_argument(
-        "--once", action="store_true", help="run a single cycle and exit"
-    )
+    parser = argparse.ArgumentParser(description="Nova local-dev-stack watchdog (generic)")
+    parser.add_argument("--interval", type=int, default=30, help="seconds between cycles")
+    parser.add_argument("--once", action="store_true", help="run a single cycle and exit")
     args = parser.parse_args()
     if args.interval < 1:
-        parser.error(
-            f"--interval must be >= 1 (got {args.interval}); tighter loops would saturate the probe targets"
-        )
+        parser.error(f"--interval must be >= 1 (got {args.interval}); tighter loops would saturate the probe targets")
     if CYCLE_DEADLINE_SEC < args.interval:
         # The deadline must always exceed the cycle interval, otherwise the
         # watchdog would self-abort on every normal cycle.
-        parser.error(
-            f"HEALTHCHECK_CYCLE_DEADLINE_SEC ({CYCLE_DEADLINE_SEC}) must be >= --interval ({args.interval})"
-        )
+        parser.error(f"HEALTHCHECK_CYCLE_DEADLINE_SEC ({CYCLE_DEADLINE_SEC}) must be >= --interval ({args.interval})")
     try:
         return asyncio.run(main_loop(args))
     except KeyboardInterrupt:

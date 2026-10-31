@@ -163,9 +163,16 @@ RUN ln -sf /usr/local/bin/python3.12 /usr/local/bin/python
 # the full browser, and an agent that hits the second path should not discover
 # a half-install. `playwright` is symlinked onto PATH because it installs into
 # /opt/python3.12/bin, which is on root's PATH and not on the `gem` user's.
+# The CDN download times out at Playwright's default 30s on slow links (it
+# killed a full rebuild on 2026-10-30), so allow 3 minutes and three attempts.
 RUN set -eux; \
     ln -sf /opt/python3.12/bin/playwright /usr/local/bin/playwright; \
-    playwright install --with-deps chromium; \
+    export PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=180000; \
+    for attempt in 1 2 3; do \
+        playwright install --with-deps chromium && break; \
+        [ "$attempt" = 3 ] && exit 1; \
+        echo "playwright install attempt $attempt failed, retrying"; sleep 20; \
+    done; \
     chmod -R a+rX /opt/ms-playwright
 
 # --- The rest of the toolchain an agent reaches for --------------------------
@@ -398,9 +405,20 @@ RUN set -eux; \
         network-manager net-tools php-cli ruby-full maven gradle; \
     rm -rf /var/lib/apt/lists/*; \
     curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer --quiet
-# Stage .NET SDK from host (avoids CDN throttle on dot.net)
-COPY vendor/dotnet-sdk /usr/share/dotnet
-RUN ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
+# .NET SDK: copied from vendor/dotnet-sdk when staged (avoids the dot.net CDN
+# throttle), else installed by the pinned dotnet-install script. This was a
+# bare COPY, so an empty vendor/ (a clean checkout, or this host after its disk
+# was wiped on 2026-10-29) failed the whole tools layer instead of falling back
+# like every other step here.
+RUN --mount=type=bind,source=vendor,target=/vendor set -eux; \
+    if [ -x /vendor/dotnet-sdk/dotnet ]; then \
+        mkdir -p /usr/share/dotnet && cp -a /vendor/dotnet-sdk/. /usr/share/dotnet/ && echo "dotnet: vendored"; \
+    else \
+        curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh; \
+        bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet --no-path; \
+        rm -f /tmp/dotnet-install.sh; echo "dotnet: downloaded"; \
+    fi; \
+    ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
 
 RUN python3.12 -m pip install --no-cache-dir pre-commit && \
     ln -sf /opt/python3.12/bin/pre-commit /usr/local/bin/pre-commit
