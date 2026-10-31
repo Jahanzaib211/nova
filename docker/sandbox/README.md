@@ -158,6 +158,50 @@ that breaks, not just test tooling.
 place: the alternative is remembering `--disable-dev-shm-usage` in every script
 that ever launches a browser.
 
+## Chromium's own sandbox
+
+The image ships a Chromium that wants to sandbox *itself*, and the container
+Nova creates is built in a way that stops it.
+
+Sandbox containers are hardened: `--cap-drop ALL` with only a minimal set of
+capabilities re-added, plus `--security-opt no-new-privileges`. That blocks
+Chromium's setuid helper, and Docker's default seccomp profile only permits
+`clone(CLONE_NEWUSER)` when `CAP_SYS_ADMIN` is present, so the user-namespace
+path fails too. Chromium's zygote logs
+
+```
+Failed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted
+```
+
+and dies. Supervisord restarts it, it dies again, port 9222 never opens — and
+the gateway reads that as a malformed CDP URL while the Browser tab renders a
+blank pane.
+
+The image already supports the fix. `/opt/gem/run.sh` (upstream, not ours)
+prepends `$BROWSER_NO_SANDBOX` to `BROWSER_EXTRA_ARGS`, and the image ships
+that variable **empty**. Nova sets it per container, at creation time, for
+exactly the containers it hardens:
+
+| Container | `BROWSER_NO_SANDBOX` | Why |
+|---|---|---|
+| default (non-privileged) | `--no-sandbox` | the hardening above makes Chromium's own sandbox impossible to start |
+| `sandbox.privileged: true` | unset | every capability is intact, so the inner sandbox works and is worth keeping |
+
+**The image deliberately does not bake the flag in.** The same image serves
+both rows. An image-level `ENV` cannot tell a privileged container from a
+hardened one and would silently disable Chromium's inner sandbox everywhere,
+including where it works. The decision belongs to the code that applies the
+hardening, because that is where the information is.
+
+The container boundary is the isolation boundary here. Re-adding
+`CAP_SYS_ADMIN` (or dropping `no-new-privileges`) to satisfy Chromium's inner
+sandbox would trade defence-in-depth inside one container for near-host-root.
+
+`sandbox.browser_no_sandbox: false` turns the compensation off; a
+`BROWSER_NO_SANDBOX` entry in `sandbox.environment` overrides the value
+entirely. The provisioner (Kubernetes) path builds its Pods elsewhere and has
+its own knob — see [`docker/provisioner/README.md`](../provisioner/README.md).
+
 ## Resource caps and deadlines
 
 Sandbox containers ran with no memory limit, no pids limit and no deadline until

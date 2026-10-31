@@ -158,6 +158,32 @@ The provisioner is configured via environment variables (set in [docker-compose-
 | `KUBECONFIG_PATH` | `/root/.kube/config` | Path to kubeconfig **inside** the provisioner container |
 | `NODE_HOST` | `host.docker.internal` | Hostname that backend containers use to reach host NodePorts |
 | `K8S_API_SERVER` | (from kubeconfig) | Override K8s API server URL (e.g., `https://host.docker.internal:26443`) |
+| `BROWSER_NO_SANDBOX` | empty (off) | Passed through to every sandbox Pod as `BROWSER_NO_SANDBOX`. Set it to `--no-sandbox` when the cluster forbids privilege escalation and Chromium's own sandbox cannot start — see below |
+
+### Chromium inside sandbox Pods
+
+The sandbox image's `/opt/gem/run.sh` prepends `$BROWSER_NO_SANDBOX` to
+`BROWSER_EXTRA_ARGS`, so a Pod with `BROWSER_NO_SANDBOX=--no-sandbox` starts
+Chromium without its inner sandbox.
+
+By default the Pods this provisioner builds keep Chromium's inner sandbox
+working: the security context sets `allow_privilege_escalation: true` and
+drops no capabilities, so the browser's setuid helper can still run. The
+backend's `browser_no_sandbox` setting does **not** apply here — the gateway
+never hands `sandbox.environment` to this service, because the Pod spec is
+built here.
+
+That becomes a problem on a cluster that forbids privilege escalation (Pod
+Security Admission `restricted`, or your own Pod template): the setuid helper
+is blocked, the runtime's default seccomp profile rejects
+`clone(CLONE_NEWUSER)` without `CAP_SYS_ADMIN`, and the browser dies with
+`Failed to move to new namespace ... Operation not permitted`. Supervisord
+restarts it forever, port 9222 never opens, the Pod never goes Ready and the
+Browser tab stays blank.
+
+Set `BROWSER_NO_SANDBOX=--no-sandbox` on the provisioner service (the
+compose `environment:` block, or the `.env` the provisioner already reads via
+`env_file`) to pass it through to every sandbox Pod.
 
 ### Custom sandbox image
 

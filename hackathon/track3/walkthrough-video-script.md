@@ -1,8 +1,8 @@
-# Track 3 — Demo Video Script (Nova on AMD)
+# Track 3 — Walkthrough Video Script (Nova on AMD)
 
 Target: 2–3 minutes. The automated pre-screen does **not** watch the video; it is
 for the human judges. Show, don't tell — every claim on screen is something a
-judge can also verify in the repo or live demo.
+judge can also verify in the repo or live deployment.
 
 ## Shot list
 
@@ -39,7 +39,7 @@ judge can also verify in the repo or live demo.
 - Screen: `make hackathon-track1` smoke passing; the deck's "all three tracks"
   slide.
 - VO: "The same platform delivers the general-purpose agent track, is Gemma
-  side-prize ready, and is our Unicorn: agents, on AMD. Repo and live demo in the
+  side-prize ready, and is our Unicorn: agents, on AMD. Repo and live deployment in the
   description."
 
 ## Capture checklist

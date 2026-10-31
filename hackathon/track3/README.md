@@ -8,8 +8,8 @@
 |---|---|---|
 | Yes | GitHub repository URL | this repo (make public before submitting) |
 | Yes | Slide deck (PDF) | [`deck.pdf`](./deck.pdf) — source [`deck.html`](./deck.html), rebuild with `make hackathon-track3-deck` |
-| Yes | Demo video | record from [`demo-video-script.md`](./demo-video-script.md) |
-| Recommended | Live demo / hosted URL | deploy Nova; set `NOVA_LIVE_URL` and run the pre-screen |
+| Yes | Walkthrough video | record from [`walkthrough-video-script.md`](./walkthrough-video-script.md) |
+| Recommended | Live deployment / hosted URL | deploy Nova; set `NOVA_LIVE_URL` and run the pre-screen |
 
 > The automated pre-screen inspects the **repo, the PDF deck, and the live URL** —
 > not the video. Run `make hackathon-track3-prescreen` to self-audit those.
@@ -28,6 +28,6 @@ Verify at any time: `curl <live-url>/api/models/amd-usage` → `"amd_backed": tr
 
 ```bash
 make hackathon-track3-deck                        # (re)build the PDF
-NOVA_LIVE_URL=https://<your-demo> \
+NOVA_LIVE_URL=https://<your-host> \
   make hackathon-track3-prescreen                 # all checks green
 ```

@@ -98,7 +98,7 @@ src/
 ├── app/                    # Next.js App Router pages
 │   ├── api/                # API routes
 │   ├── workspace/          # Main workspace pages
-│   └── mock/               # Mock/demo pages
+│   └── mock/               # Mock pages
 ├── components/             # React components
 │   ├── ui/                 # Reusable UI components
 │   ├── workspace/          # Workspace-specific components

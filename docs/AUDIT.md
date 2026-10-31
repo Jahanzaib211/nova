@@ -523,8 +523,8 @@ src/app/
 │       ├── route.ts                            (proxy GET, DELETE)
 │       └── [...path]/route.ts                  (proxy GET, POST, PATCH, DELETE)
 ├── mock/api/threads/[thread_id]/
-│   ├── history/route.ts                        (static demo thread.json)
-│   └── artifacts/[[...artifact_path]]/route.ts (serves /public/demo/threads/<id>/)
+│   ├── history/route.ts                        (static starter thread.json)
+│   └── artifacts/[[...artifact_path]]/route.ts (serves /public/threads/<id>/)
 └── workspace/
     ├── layout.tsx                              (server: getServerSideUser → AuthProvider,
     │                                            GatewayOfflineFallback, QueryClient)
@@ -783,8 +783,8 @@ Steps 1-7 verified working. Steps 8-9 are the gaps this sprint addresses.
 | Backend LOC | ~70k (harness) |
 | Frontend files | 372 (src) |
 | Frontend LOC | ~57k (src, excl. node_modules) |
-| Backend unit tests | 7,303 |
-| Frontend unit tests | 799 |
+| Backend unit tests | 7,592 |
+| Frontend unit tests | 881 |
 | Tags on origin | 14 v7 + fork-v7 |
 | Live services | 8 containers (gateway, frontend, nginx, postgres, searxng, crawl4ai, browserless, autoheal) |
 | Browser tool actions | 5 (navigate, click, input, eval, screenshot) |

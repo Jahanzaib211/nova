@@ -9,12 +9,12 @@
 | Layer | License | Copyright Holder |
 |---|---|---|
 | **Upstream DeerFlow** (base agent harness) | MIT | ByteDance Ltd. / DeerFlow Authors |
-| **Nova OSS Contributions** (this repo's additions to DeerFlow) | MIT | Ali Technologies |
-| **Nova Proprietary Additions** (Agent's Computer UI, per-thread isolation, watchdogs, receipts, branding) | **Proprietary / Commercial** | Ali Technologies |
+| **Nova OSS Contributions** (this repo's additions to DeerFlow) | MIT | Jahanzaib Ali |
+| **Nova Proprietary Additions** (Agent's Computer UI, per-thread isolation, watchdogs, receipts, branding) | **Proprietary / Commercial** — see `LICENSE-COMMERCIAL.md` | Jahanzaib Ali |
 
 The `LICENSE` file at the repository root contains the **unmodified MIT license** from the upstream DeerFlow project. All upstream copyright notices are preserved per MIT §3.
 
-The `NOTICE.md` file carves out the proprietary additions (see below).
+The `NOTICE.md` file carves out the proprietary additions, and `LICENSE-COMMERCIAL.md` sets their license terms (see below).
 
 ---
 
@@ -56,7 +56,7 @@ Everything that originated from or is a direct contribution to the upstream Deer
 
 ## What is Proprietary (Commercial Tier)
 
-The following Nova-specific additions are **NOT licensed under MIT**. They are proprietary to Ali Technologies and require a commercial license for production use beyond evaluation:
+The following Nova-specific additions are **NOT licensed under MIT**. They are proprietary to Jahanzaib Ali personally, are governed by `LICENSE-COMMERCIAL.md`, and require a commercial license for production use beyond evaluation:
 
 | Component | Description | Location |
 |---|---|---|
@@ -74,7 +74,7 @@ The following Nova-specific additions are **NOT licensed under MIT**. They are p
 - The proprietary UI components are in a dedicated frontend subtree (`agent-computer/`) and are not required for the core agent to function — the upstream DeerFlow chat UI works without them.
 - The per-thread isolation logic lives in the sandbox provider layer; the LocalSandboxProvider (MIT) provides file-tools without container isolation.
 - The watchdog runs as a separate PM2 process (`nova-monitoring`, `nova-healthcheck`) and is not imported by the core agent runtime.
-- All proprietary code is clearly marked in `NOTICE.md` with copyright attribution to Ali Technologies.
+- All proprietary code is clearly marked in `NOTICE.md` with copyright attribution to Jahanzaib Ali, and licensed under `LICENSE-COMMERCIAL.md`.
 
 ---
 
