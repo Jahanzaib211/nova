@@ -329,7 +329,7 @@ for event in client.stream("hello"):
 
 | Suite | Count | Command |
 |---|---|---|
-| Backend unit tests | 7,592 | `cd backend && make test` |
+| Backend unit tests | 7,593 | `cd backend && make test` |
 | Frontend unit tests | 881 | `cd frontend && pnpm test` |
 | Playwright E2E | 183 | `cd frontend && pnpm test:e2e` |
 | Blocking IO gate | 22 | `cd backend && make test-blocking-io` |

@@ -50,12 +50,12 @@ export function ProblemSection({ className }: { className?: string }) {
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
               {item.body}
             </p>
-            <p className="mt-5 text-xs text-slate-500">{item.source}</p>
+            <p className="mt-5 text-xs text-slate-400">{item.source}</p>
           </div>
         ))}
       </div>
 
-      <p className="mt-8 text-xs leading-relaxed text-slate-500">
+      <p className="mt-8 text-xs leading-relaxed text-slate-400">
         Sources: Veracode 2025; Stack Overflow Developer Survey 2025; IBM Cost
         of a Data Breach 2025; CVE-2025-48757.
       </p>

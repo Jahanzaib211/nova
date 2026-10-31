@@ -397,6 +397,11 @@ export default function ProgressiveSkillsAnimation() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             onClick={handleTogglePlayPause}
+            aria-label={
+              isPlaying
+                ? "Pause the skills animation"
+                : "Play the skills animation"
+            }
             className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 backdrop-blur-md transition-all hover:scale-110 hover:bg-white/20 active:scale-95"
           >
             {isPlaying ? (
@@ -416,7 +421,7 @@ export default function ProgressiveSkillsAnimation() {
         {/* Left: File Tree */}
         <div className="flex flex-1 flex-col">
           <motion.div
-            className="mb-4 font-mono text-sm text-slate-500"
+            className="mb-4 font-mono text-sm text-slate-400"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -436,7 +441,7 @@ export default function ProgressiveSkillsAnimation() {
                         ? "text-white"
                         : item.highlight
                           ? "text-[#a78bfa]"
-                          : "text-slate-600"
+                          : "text-slate-400"
                 }`}
                 style={{ paddingLeft: `${item.indent * 24}px` }}
                 animate={
@@ -604,7 +609,7 @@ export default function ProgressiveSkillsAnimation() {
                               key={i}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center gap-2 text-sm text-slate-500"
+                              className="flex items-center gap-2 text-sm text-slate-400"
                             >
                               {step.type === "search" ? (
                                 <Search size={14} className="text-[#22d3ee]" />
@@ -629,7 +634,7 @@ export default function ProgressiveSkillsAnimation() {
                               key={i}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center gap-2 text-sm text-slate-500"
+                              className="flex items-center gap-2 text-sm text-slate-400"
                             >
                               {step.type === "search" ? (
                                 <Search size={14} className="text-[#22d3ee]" />
@@ -737,7 +742,7 @@ export default function ProgressiveSkillsAnimation() {
 
           {/* Chat Input (decorative) */}
           <div className="border-t border-white/10 p-4">
-            <div className="rounded-xl bg-white/[0.04] px-4 py-3 text-sm text-slate-500">
+            <div className="rounded-xl bg-white/[0.04] px-4 py-3 text-sm text-slate-400">
               Ask Nova anything...
             </div>
           </div>

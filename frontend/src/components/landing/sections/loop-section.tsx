@@ -47,7 +47,7 @@ export function LoopSection({ className }: { className?: string }) {
               className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-[#926dff]/70 to-transparent"
               aria-hidden="true"
             />
-            <span className="font-mono text-xs font-semibold tracking-[0.16em] text-slate-500">
+            <span className="font-mono text-xs font-semibold tracking-[0.16em] text-slate-400">
               {step.number}
             </span>
             <h3 className="mt-4 text-xl font-semibold text-white">

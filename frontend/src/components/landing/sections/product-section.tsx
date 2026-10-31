@@ -37,7 +37,7 @@ export function ProductSection({ className }: { className?: string }) {
               className="h-auto w-full rounded-xl border border-white/5"
             />
           </div>
-          <figcaption className="mt-4 text-xs text-slate-500">
+          <figcaption className="mt-4 text-xs text-slate-400">
             Live product: Nova built this tip calculator from a single prompt
             and is testing it in its own browser.
           </figcaption>

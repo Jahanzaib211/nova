@@ -36,7 +36,7 @@ export function WordRotate({
   }, [words, duration]);
 
   return (
-    <div className="overflow-hidden py-2" data-vr-mask>
+    <div className="overflow-hidden py-2">
       <AnimatePresence mode="popLayout">
         <motion.span
           key={words[index]}

@@ -102,7 +102,7 @@ const plans = [
 
 const proof = [
   ["40", "verified security tools in every sandbox"],
-  ["8,656", "automated tests across backend, frontend and E2E"],
+  ["8,657", "automated tests across backend, frontend and E2E"],
   ["285", "API operations, with 40 tools over MCP"],
   ["Any model", "cloud APIs or a local model on one GPU"],
 ];

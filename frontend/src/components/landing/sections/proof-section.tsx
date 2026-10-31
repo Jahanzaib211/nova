@@ -7,7 +7,7 @@ const STATS = [
       "Running in production today. Pre-revenue: this round pays for the first paid pilots.",
   },
   {
-    value: "8,656",
+    value: "8,657",
     label: "automated tests across backend, frontend and end-to-end suites.",
   },
   {
@@ -87,13 +87,13 @@ export function ProofSection({ className }: { className?: string }) {
               </p>
               <dl className="mt-4 space-y-2 border-t border-white/10 pt-4 text-sm">
                 <div>
-                  <dt className="font-mono text-[11px] tracking-wide text-slate-500 uppercase">
+                  <dt className="font-mono text-[11px] tracking-wide text-slate-400 uppercase">
                     Pain
                   </dt>
                   <dd className="mt-1 text-slate-400">{buyer.pain}</dd>
                 </div>
                 <div>
-                  <dt className="font-mono text-[11px] tracking-wide text-slate-500 uppercase">
+                  <dt className="font-mono text-[11px] tracking-wide text-slate-400 uppercase">
                     Trigger
                   </dt>
                   <dd className="mt-1 text-slate-400">{buyer.trigger}</dd>

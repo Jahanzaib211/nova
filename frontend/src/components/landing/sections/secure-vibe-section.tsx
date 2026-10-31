@@ -66,7 +66,7 @@ export function SecureVibeSection({ className }: { className?: string }) {
         </div>
       </div>
 
-      <p className="mt-8 text-xs text-slate-500">
+      <p className="mt-8 text-xs text-slate-400">
         Beta features are available to pilot customers. Scope may change.
       </p>
     </Section>

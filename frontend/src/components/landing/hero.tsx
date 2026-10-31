@@ -114,9 +114,10 @@ export function Hero({ className }: { className?: string }) {
               under the promise as a capability line, not above it. */}
           <div
             className="landing-word-rotate mt-6 flex items-baseline gap-3 text-left"
+            data-vr-mask
             aria-hidden="true"
           >
-            <span className="font-mono text-xs tracking-[0.16em] text-slate-500 uppercase">
+            <span className="font-mono text-xs tracking-[0.16em] text-slate-400 uppercase">
               It can
             </span>
             <WordRotate
@@ -178,7 +179,7 @@ export function Hero({ className }: { className?: string }) {
             className="shimmer-sweep overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a]/80 shadow-2xl shadow-black/50 backdrop-blur-md"
             data-shimmer="sweep"
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 font-mono text-[11px] text-slate-500">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 font-mono text-[11px] text-slate-400">
               <span>nova / production loop</span>
               <span className="flex items-center gap-1.5 text-[#5eead4]">
                 <span className="size-1.5 rounded-full bg-[#34d399] motion-safe:animate-pulse" />
@@ -201,20 +202,20 @@ export function Hero({ className }: { className?: string }) {
                 >
                   <span className="flex items-baseline gap-3">
                     <span className="text-brand-gradient">{row.step}</span>
-                    <span className="text-slate-600">|</span>
+                    <span className="text-slate-400">|</span>
                     {row.line}
                   </span>
                 </AnimatedSpan>
               ))}
             </Terminal>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-3 font-mono text-[11px] text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-3 font-mono text-[11px] text-slate-400">
               <span>40 security tools in every sandbox</span>
               <span>secure-ship gate: ready</span>
               <span>every command logged</span>
             </div>
           </div>
-          <figcaption className="mt-4 text-xs text-slate-500">
+          <figcaption className="mt-4 text-xs text-slate-400">
             A build only ships after the browser verify and the security gate
             pass.
           </figcaption>

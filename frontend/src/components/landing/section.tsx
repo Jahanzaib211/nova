@@ -39,7 +39,7 @@ export function Section({
       )}
       <header className="max-w-3xl">
         {kicker && (
-          <p className="mb-4 flex items-center gap-3 text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">
+          <p className="mb-4 flex items-center gap-3 text-xs font-semibold tracking-[0.2em] text-slate-400 uppercase">
             <span
               className="h-px w-8 bg-gradient-to-r from-[#926dff] to-transparent"
               aria-hidden="true"

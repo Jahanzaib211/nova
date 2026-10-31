@@ -81,7 +81,7 @@ export function PricingTeaserSection({ className }: { className?: string }) {
             <p className="mt-3 font-mono text-2xl font-semibold text-white">
               {tier.price}
             </p>
-            <p className="mt-1 text-xs text-slate-500">{tier.note}</p>
+            <p className="mt-1 text-xs text-slate-400">{tier.note}</p>
             <ul className="mt-5 space-y-2 border-t border-white/10 pt-4">
               {tier.features.map((feature) => (
                 <li
@@ -104,7 +104,7 @@ export function PricingTeaserSection({ className }: { className?: string }) {
           See full pricing and features
           <ArrowRightIcon className="size-4" aria-hidden="true" />
         </Link>
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-slate-400">
           Prices are proposals we test in pilots.
         </span>
       </div>

@@ -26,7 +26,7 @@ export function Footer({ className }: FooterProps) {
           &quot;Originated from Open Source, give back to Open Source.&quot;
         </p>
       </div>
-      <div className="flex flex-col items-center justify-center gap-3 text-xs text-slate-500">
+      <div className="flex flex-col items-center justify-center gap-3 text-xs text-slate-400">
         <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
           <Link href="/saas" className="transition-colors hover:text-white">
             Pricing
@@ -53,7 +53,7 @@ export function Footer({ className }: FooterProps) {
             href="https://alilabsx.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-slate-400 transition-colors hover:text-[#5eead4]"
+            className="text-slate-400 underline underline-offset-2 transition-colors hover:text-[#5eead4]"
           >
             Jahanzaib Ali
           </a>

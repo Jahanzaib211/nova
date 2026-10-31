@@ -651,9 +651,6 @@ const MASK_SELECTORS = [
   "time",
   "[data-vr-mask]",
   "[data-testid='token-usage']",
-  // The whole hero headline: the rotating word changes width, which reflows
-  // the "with Nova" beside it, so masking the word alone was not enough.
-  "h1:has(> .overflow-hidden.py-2)",
 ];
 
 async function snap(page: Page, name: string) {
