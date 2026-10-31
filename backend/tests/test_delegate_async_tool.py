@@ -38,7 +38,37 @@ def repo():
     asyncio.run(engine.dispose())
 
 
-async def test_delegate_enqueues_and_check_reports(repo):
+@pytest.fixture()
+def agents_queue(monkeypatch):
+    """Pin the process-wide config so the delegated queue is deterministic.
+
+    ``agent_task_queue()`` reads the global app config, not the config the
+    tool was built with: it returns ``agents`` only when the deployment lists
+    that queue, and the first configured queue otherwise. Asserting a fixed
+    queue name without pinning the config made this test depend on whichever
+    ``config.yaml`` happened to be on disk -- it passed against the production
+    config (which lists ``agents``) and failed in CI, where the example config
+    is copied into place.
+    """
+    cfg = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True, "queues": ["default", "agents"]}})
+    monkeypatch.setattr("deerflow.config.get_app_config", lambda: cfg)
+    return cfg
+
+
+def test_agent_task_queue_follows_the_configured_queues(monkeypatch):
+    """``agents`` when the worker claims it, the first configured queue otherwise."""
+    from deerflow.agents_registry.registry import agent_task_queue
+
+    listed = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True, "queues": ["default", "email", "agents"]}})
+    monkeypatch.setattr("deerflow.config.get_app_config", lambda: listed)
+    assert agent_task_queue() == "agents"
+
+    unlisted = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True, "queues": ["default", "email"]}})
+    monkeypatch.setattr("deerflow.config.get_app_config", lambda: unlisted)
+    assert agent_task_queue() == "default"
+
+
+async def test_delegate_enqueues_and_check_reports(repo, agents_queue):
     cfg = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True}, "subagents": {"async_enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "cc"}}})
     delegate, check = build_delegate_tools(cfg, lambda: repo)
     assert "claude_code (acp)" in delegate.description and "general-purpose (subagent)" in delegate.description
@@ -174,7 +204,7 @@ async def test_capability_delegate_from_a_runtime_uses_the_configured_delegate_m
     assert "model" not in out.job["payload"]
 
 
-async def test_both_delegation_paths_enqueue_one_attempt_on_the_agents_queue(repo, monkeypatch):
+async def test_both_delegation_paths_enqueue_one_attempt_on_the_agents_queue(repo, monkeypatch, agents_queue):
     """``agents.delegate`` used the default queue and the runner's default
     retry budget (5), so a side-effectful agent run could replay up to five
     times; ``delegate_async`` used one attempt on ``agents``. Both now go
