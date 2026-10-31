@@ -18,7 +18,9 @@ from app.gateway.rate_limiter import InMemoryRateLimiter, RateLimiter, RedisRate
 from app.gateway.routers import (
     admin,
     admin_infra,
+    admin_jobs,
     agents,
+    agents_registry,
     artifacts,
     assistants_compat,
     auth,
@@ -29,8 +31,12 @@ from app.gateway.routers import (
     channel_connections,
     channels,
     credits,
+    email_marketing,
+    email_marketing_public,
     feedback,
     igino,
+    integrations,
+    jobs,
     legal,
     mcp,
     memory,
@@ -270,7 +276,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         else:
             logger.info("Channel service disabled on this replica (DEER_FLOW_RUN_CHANNELS=0)")
 
+        # Nova's MCP server: bind the harness-token repository now that the
+        # database is up, then run its session manager for the app's lifetime.
+        mcp_server = getattr(app.state, "nova_mcp_server", None)
+        if mcp_server is not None:
+            try:
+                from deerflow.persistence.engine import get_session_factory
+                from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+
+                sf = get_session_factory()
+                mcp_server.tokens = HarnessTokenRepository(sf) if sf is not None else None
+                await mcp_server.start()
+            except Exception:
+                logger.exception("Nova MCP server failed to start; /api/mcp/nova will answer 503")
+
         yield
+
+        if mcp_server is not None:
+            try:
+                await asyncio.wait_for(mcp_server.stop(), timeout=_SHUTDOWN_HOOK_TIMEOUT_SECONDS)
+            except Exception:
+                logger.exception("Nova MCP server shutdown failed")
 
         # Stop channel service on shutdown (bounded to prevent worker hang)
         try:
@@ -431,6 +457,13 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
             allow_headers=["*"],
         )
 
+    # Outermost: a framed preview (Origin: null) fetching fonts and router data
+    # from its own capability URLs. Must run before CORSMiddleware, which 400s
+    # a preflight from an origin it does not list. See app/gateway/preview_cors.py.
+    from app.gateway.preview_cors import PreviewCapabilityCORSMiddleware
+
+    app.add_middleware(PreviewCapabilityCORSMiddleware)
+
     # Include routers
     # Models API is mounted at /api/models
     app.include_router(models.router)
@@ -453,7 +486,11 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # Thread cleanup API is mounted at /api/threads/{thread_id}
     app.include_router(threads.router)
 
-    # Agents API is mounted at /api/agents
+    # Agents API is mounted at /api/agents. The registry router goes FIRST:
+    # agents.router declares GET /api/agents/{name}, which would otherwise
+    # capture /api/agents/registry as an agent named "registry" and 404 it
+    # (it did, so the Agents page's registry never loaded).
+    app.include_router(agents_registry.router)
     app.include_router(agents.router)
 
     # Suggestions API is mounted at /api/threads/{thread_id}/suggestions
@@ -526,6 +563,29 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     # Voice: full-duplex speech session + capability probe. Self-hosted engines,
     # opt-in via config.yaml `speech.enabled`; the WS refuses cleanly when off.
     app.include_router(voice_router.router)
+
+    # Job runner: user-facing /api/jobs and the operator /api/v1/admin/jobs.
+    # The worker is a separate process (app.jobs.worker); these only read,
+    # enqueue and steer. 503 when no SQL backend (jobs_repo unset).
+    app.include_router(jobs.router)
+    app.include_router(integrations.router)
+    app.include_router(email_marketing.router)
+    app.include_router(email_marketing_public.router)
+    app.include_router(admin_jobs.router)
+
+    # Capability registry: one declaration per feature → harness tools, the
+    # generic /api/capabilities/ops surface, and Nova's own MCP server at
+    # /api/mcp/nova for external harnesses (Claude Code, OpenClaw).
+    from app.gateway.capabilities_modules import register_gateway_modules
+    from app.gateway.mcp_server import NovaMcpServer
+    from app.gateway.routers import capabilities_ops
+    from deerflow.capabilities import get_registry
+
+    registry = get_registry()
+    register_gateway_modules(registry)
+    app.state.capability_registry = registry
+    app.include_router(capabilities_ops.router)
+    NovaMcpServer(registry, tokens=None).mount(app)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:

@@ -7,6 +7,7 @@ import {
   CameraIcon,
   CandlestickChartIcon,
   ChevronUp,
+  BotIcon,
   CoinsIcon,
   FlaskConicalIcon,
   FolderOpenIcon,
@@ -19,7 +20,14 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   ChainOfThought,
@@ -29,6 +37,7 @@ import {
   ChainOfThoughtStep,
 } from "@/components/ai-elements/chain-of-thought";
 import { Button } from "@/components/ui/button";
+import { applyScrollAnchor } from "@/core/dom/scroll-anchor";
 import { useI18n } from "@/core/i18n/hooks";
 import { formatTokenCount } from "@/core/messages/usage";
 import type { TokenDebugStep } from "@/core/messages/usage-model";
@@ -46,6 +55,8 @@ import { useArtifacts } from "../artifacts";
 import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
 
+import { AcpTranscriptView } from "./acp-transcript";
+import { useThread } from "./context";
 import { MarkdownContent } from "./markdown-content";
 
 export function MessageGroup({
@@ -68,6 +79,34 @@ export function MessageGroup({
   const [showLastThinking, setShowLastThinking] = useState(
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
   );
+  // Expanding the reasoning drawer inserts content into the middle of a
+  // transcript that `use-stick-to-bottom` is holding pinned to its bottom
+  // edge, which slides the lines above the trigger out of view. Measure the
+  // trigger before the toggle and put it back afterwards -- see
+  // core/dom/scroll-anchor.
+  const thinkingTriggerRef = useRef<HTMLButtonElement>(null);
+  const thinkingAnchorRef = useRef<number | null>(null);
+
+  const toggleLastThinking = useCallback(() => {
+    thinkingAnchorRef.current =
+      thinkingTriggerRef.current?.getBoundingClientRect().top ?? null;
+    setShowLastThinking((shown) => !shown);
+  }, []);
+
+  // Layout effect, not effect: this has to run in the same frame the drawer
+  // resizes in, or the jump is painted before it is corrected.
+  useLayoutEffect(() => {
+    const previousTop = thinkingAnchorRef.current;
+    thinkingAnchorRef.current = null;
+    const trigger = thinkingTriggerRef.current;
+    if (previousTop === null || !trigger) return;
+    applyScrollAnchor(
+      trigger,
+      previousTop,
+      trigger.getBoundingClientRect().top,
+      (node) => window.getComputedStyle(node as unknown as Element).overflowY,
+    );
+  }, [showLastThinking]);
   const steps = useMemo(() => convertToSteps(messages), [messages]);
   const debugStepByMessageId = useMemo(
     () =>
@@ -307,9 +346,10 @@ export function MessageGroup({
           )}
           <Button
             key={lastReasoningStep.id}
+            ref={thinkingTriggerRef}
             className="w-full items-start justify-start text-left"
             variant="ghost"
-            onClick={() => setShowLastThinking(!showLastThinking)}
+            onClick={toggleLastThinking}
           >
             <div className="flex w-full items-center justify-between">
               <ChainOfThoughtStep
@@ -438,6 +478,7 @@ function ToolCall({
   const { t } = useI18n();
   const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
     useArtifacts();
+  const { acpTranscripts } = useThread();
   const tokenLabel = tokenDebugStep
     ? formatDebugToken(tokenDebugStep, t)
     : null;
@@ -683,6 +724,23 @@ function ToolCall({
         icon={SquareTerminalIcon}
       />
     );
+  } else if (name === "invoke_acp_agent") {
+    const agent =
+      typeof args.agent === "string" && args.agent ? args.agent : "agent";
+    const running = isLoading && isLast && !result;
+    return (
+      <ChainOfThoughtStep
+        key={id}
+        label={resolveLabel(t.toolCalls.acp.invoke(agent))}
+        icon={BotIcon}
+      >
+        <AcpTranscriptView
+          transcript={acpTranscripts?.[agent]}
+          result={typeof result === "string" ? result : undefined}
+          running={running}
+        />
+      </ChainOfThoughtStep>
+    );
   } else if (name === "ask_clarification") {
     return (
       <ChainOfThoughtStep
@@ -721,7 +779,7 @@ function ToolCall({
           <img
             src={src}
             alt="agent screenshot"
-            className="border-border/40 mt-2 max-w-full rounded-md border"
+            className="border-panel-border mt-2 max-w-full rounded-md border"
             data-testid="screenshot-output"
           />
         ) : (
@@ -785,7 +843,7 @@ function ToolCall({
                 <span
                   className={cn(
                     "font-mono tabular-nums",
-                    stat.tone === "positive" && "text-emerald-600",
+                    stat.tone === "positive" && "text-success",
                     stat.tone === "negative" && "text-destructive",
                   )}
                 >

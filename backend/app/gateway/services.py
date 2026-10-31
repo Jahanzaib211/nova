@@ -56,6 +56,17 @@ logger = logging.getLogger(__name__)
 # SSE formatting
 # ---------------------------------------------------------------------------
 
+# The response headers every SSE endpoint needs. Kept here rather than in a
+# router so the streaming endpoints cannot drift apart: `X-Accel-Buffering: no`
+# stops nginx buffering the stream into uselessness, and `Connection: keep-alive`
+# was present on the chat stream but missing from /api/sandbox/logs, which had
+# its own hand-rolled copy of two of the three.
+SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+
 
 def format_sse(event: str, data: Any, *, event_id: str | None = None) -> str:
     """Format a single SSE frame.
@@ -168,6 +179,12 @@ _CONTEXT_CONFIGURABLE_KEYS: frozenset[str] = frozenset(
         "max_concurrent_subagents",
         "agent_name",
         "is_bootstrap",
+        # Runtime registry (P12): which runtime runs this chat, under which
+        # account, with which permission preset. Read by
+        # deerflow.runtimes.middleware.RuntimeDispatchMiddleware.
+        "runtime",
+        "runtime_account",
+        "permission_mode",
     }
 )
 

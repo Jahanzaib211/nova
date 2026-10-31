@@ -110,11 +110,3 @@ export interface IGINOAuditRecord {
   error: string | null;
   compliance_tags: string[];
 }
-
-export interface IGINOCapabilities {
-  enabled: boolean;
-  searxng_healthy: boolean;
-  circuit_states: Record<string, string>;
-  cache_stats: IGINOCacheStats;
-  audit_stats: IGINOAuditStats;
-}

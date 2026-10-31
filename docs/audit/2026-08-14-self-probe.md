@@ -15,9 +15,11 @@ Sandbox: `/mnt/user-data/workspace` | Probe agent: read-only diagnostic | Date: 
 | Runnable | ✅ |
 
 ### Risk flags
+
 - 🔴 **HIGH — Destructive delete (`rm -rf`)**: detected in audit trail (`set -x; mkdir -p /mnt/user-data/workspace/probe-app; cp -r /mnt/user-data/workspace/package.json …`). Originated from prior session that scaffolded `probe-app/`.
 
 ### Files touched (all uncommitted additions)
+
 | File | +/- |
 |---|---|
 | `REVIEW.md` | +44 / −0 |
@@ -59,6 +61,7 @@ The browser_check screenshot at `/` showed a 404 JSON body, implying the dev ser
 **`append=True`**: works correctly — preserved the 68,909 B that had landed and appended the new 242 B to a total of 69,151 B with the marker at the EOF.
 
 ### Implications for parent agent
+
 - Do not rely on `write_file` rounds-tripping large payloads. Either (a) chunk manually under the safe threshold observed here (~65 KB), or (b) use `bash` with `cat <<EOF` / `tee` for large content.
 - `append=True` is safe and additive; good for incremental growth.
 - The "OK" success indicator is not a content-integrity guarantee.

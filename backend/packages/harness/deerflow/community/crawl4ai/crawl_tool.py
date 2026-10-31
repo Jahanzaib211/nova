@@ -34,7 +34,7 @@ from urllib.robotparser import RobotFileParser
 import httpx
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
+from deerflow.community._tool_config import tool_config_extras as _get_tool_config
 
 from .crawl4ai_client import DEFAULT_BASE_URL, Crawl4aiClient
 
@@ -113,14 +113,6 @@ class _LinkExtractor(HTMLParser):
     def error(self, message: str) -> None:  # pragma: no cover - stdlib hook
         """HTMLParser's abstract error hook. Malformed markup is expected here
         and must not raise: a crawl that dies on one bad page is not a crawl."""
-
-
-def _get_tool_config(tool_name: str) -> dict | None:
-    config = get_app_config().get_tool_config(tool_name)
-    if config is None:
-        return None
-    extras = config.model_extra
-    return extras if extras is not None else {}
 
 
 def _get_client() -> Crawl4aiClient:

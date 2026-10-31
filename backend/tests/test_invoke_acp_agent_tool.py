@@ -1,5 +1,6 @@
 """Tests for the built-in ACP invocation tool."""
 
+import asyncio
 import sys
 from types import SimpleNamespace
 
@@ -9,7 +10,6 @@ from deerflow.config.acp_config import ACPAgentConfig
 from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig, set_extensions_config
 from deerflow.tools.builtins.invoke_acp_agent_tool import (
     _build_acp_mcp_servers,
-    _build_mcp_servers,
     _build_permission_response,
     _get_work_dir,
     build_invoke_acp_agent_tool,
@@ -17,30 +17,24 @@ from deerflow.tools.builtins.invoke_acp_agent_tool import (
 from deerflow.tools.tools import get_available_tools
 
 
-def test_build_mcp_servers_filters_disabled_and_maps_transports():
-    set_extensions_config(ExtensionsConfig(mcp_servers={"stale": McpServerConfig(enabled=True, type="stdio", command="echo")}, skills={}))
-    fresh_config = ExtensionsConfig(
-        mcp_servers={
-            "stdio": McpServerConfig(enabled=True, type="stdio", command="npx", args=["srv"]),
-            "http": McpServerConfig(enabled=True, type="http", url="https://example.com/mcp"),
-            "disabled": McpServerConfig(enabled=False, type="stdio", command="echo"),
-        },
-        skills={},
-    )
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
-        classmethod(lambda cls: fresh_config),
-    )
+class _FakeACPProcess:
+    """The adapter process handle the transport monitors.
 
-    try:
-        assert _build_mcp_servers() == {
-            "stdio": {"transport": "stdio", "command": "npx", "args": ["srv"]},
-            "http": {"transport": "http", "url": "https://example.com/mcp"},
-        }
-    finally:
-        monkeypatch.undo()
-        set_extensions_config(ExtensionsConfig(mcp_servers={}, skills={}))
+    ``run_acp_prompt`` races each ACP request against ``proc.wait()`` so a
+    crashed adapter fails fast. The stub stays alive until the request wins,
+    and uses a PID that cannot exist in ``/proc`` so cleanup finds no children.
+    """
+
+    pid = 999_999
+    returncode = 0
+    stderr = None
+
+    async def wait(self) -> int:
+        await asyncio.Event().wait()
+        return 0
+
+    def kill(self) -> None:
+        pass
 
 
 def test_build_acp_mcp_servers_formats_list_payload():
@@ -229,7 +223,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
             captured["spawn"] = {"cmd": cmd, "args": list(args), "cwd": cwd}
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -246,7 +240,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -354,7 +348,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
             captured["cwd"] = cwd
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -371,7 +365,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -446,7 +440,7 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
             captured["env"] = env
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -463,7 +457,7 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -539,7 +533,7 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
             captured["spawn"] = {"cmd": cmd, "args": list(args), "env": env, "cwd": cwd}
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -556,7 +550,7 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -626,7 +620,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
             captured["env"] = env
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -643,7 +637,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
             RequestError=DummyRequestError,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -739,7 +733,7 @@ def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(mo
             captured["cwd"] = cwd
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -750,7 +744,7 @@ def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(mo
         SimpleNamespace(
             PROTOCOL_VERSION="2026-03-24",
             Client=DummyClient,
-            spawn_agent_process=lambda client, cmd, *args, env=None, cwd: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, env=env, cwd=cwd),
             text_block=lambda text: {"type": "text", "text": text},
         ),
     )
@@ -813,3 +807,108 @@ def test_get_available_tools_uses_explicit_app_config_for_acp_agents(monkeypatch
 
     assert captured["agents"] is explicit_agents
     assert "invoke_acp_agent" in [tool.name for tool in tools]
+
+
+# ---------------------------------------------------------------------------
+# P6: permission policy + streamed acp_update events
+# ---------------------------------------------------------------------------
+
+
+def test_build_permission_response_honours_policy_kind():
+    """A read is approved by policy even with auto_approve off; an execute is not."""
+    from deerflow.config.acp_config import ACPPermissionPolicy
+
+    policy = ACPPermissionPolicy(allow_kinds=["read"])
+    options = [SimpleNamespace(kind="allow_once", optionId="once")]
+    ok = _build_permission_response(options, auto_approve=False, policy=policy, kind="read")
+    assert ok.outcome.outcome == "selected"
+    denied = _build_permission_response(options, auto_approve=False, policy=policy, kind="execute")
+    assert denied.outcome.outcome == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_streams_acp_update_events(monkeypatch, tmp_path):
+    """Every agent text chunk is mirrored to the run's custom stream as an
+    ``acp_update`` (contract-pinned) so the UI can show a live transcript
+    instead of a spinner until the final answer."""
+    from deerflow.config import paths as paths_module
+    from deerflow.tools.builtins import invoke_acp_agent_tool as mod
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    events: list[dict] = []
+    monkeypatch.setattr(mod, "_stream_writer", lambda: events.append)
+
+    captured: dict[str, object] = {}
+
+    class DummyClient:
+        pass
+
+    class DummyConn:
+        async def initialize(self, **kwargs):
+            pass
+
+        async def new_session(self, **kwargs):
+            return SimpleNamespace(session_id="s-9")
+
+        async def prompt(self, **kwargs):
+            client = captured["client"]
+            for piece in ("Hello", " world"):
+                await client.session_update("s-9", SimpleNamespace(content=text_content_block(piece)))
+            # A permission request for an execute → denied by the default policy.
+            await client.request_permission(
+                [SimpleNamespace(kind="allow_once", optionId="once")],
+                "s-9",
+                SimpleNamespace(tool_call_id="tc-1", kind="execute", title="rm -rf"),
+            )
+
+    class DummyProcessContext:
+        def __init__(self, client, cmd, *args, cwd):
+            captured["client"] = client
+
+        async def __aenter__(self):
+            return DummyConn(), _FakeACPProcess()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setitem(
+        sys.modules,
+        "acp",
+        SimpleNamespace(
+            PROTOCOL_VERSION="2026-03-24",
+            Client=DummyClient,
+            RequestPermissionResponse=lambda outcome: SimpleNamespace(outcome=outcome),
+            spawn_agent_process=lambda client, cmd, *args, env=None, cwd, transport_kwargs=None: DummyProcessContext(client, cmd, *args, cwd=cwd),
+            text_block=lambda text: {"type": "text", "text": text},
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "acp.schema",
+        SimpleNamespace(
+            ClientCapabilities=lambda: {},
+            Implementation=lambda **kwargs: kwargs,
+            AllowedOutcome=lambda **kw: SimpleNamespace(outcome="selected", option_id=kw.get("optionId")),
+            DeniedOutcome=lambda **kw: SimpleNamespace(outcome="cancelled"),
+            TextContentBlock=type("TextContentBlock", (), {"__init__": lambda self, text: setattr(self, "text", text)}),
+        ),
+    )
+    text_content_block = sys.modules["acp.schema"].TextContentBlock
+
+    tool = build_invoke_acp_agent_tool({"claude_code": ACPAgentConfig(command="npx", description="Claude Code")})
+    try:
+        result = await tool.coroutine(agent="claude_code", prompt="hi")
+    finally:
+        sys.modules.pop("acp", None)
+        sys.modules.pop("acp.schema", None)
+
+    assert result == "Hello world"
+    assert [e["delta"] for e in events if e["kind"] == "text"] == ["Hello", " world"]
+    status = [e for e in events if e["kind"] == "status"]
+    assert status and "denied" in status[0]["delta"] and "execute" in status[0]["delta"]
+    for e in events:
+        assert e["type"] == "acp_update" and e["agent"] == "claude_code" and e["session_id"] == "s-9"

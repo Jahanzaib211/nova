@@ -15,6 +15,8 @@ AUTH_DISABLED_USER_EMAIL = "default@test.local"
 AUTH_SOURCE_SESSION = "session"
 AUTH_SOURCE_INTERNAL = "internal"
 AUTH_SOURCE_AUTH_DISABLED = "auth_disabled"
+# A signed, path-scoped capability on a sandbox proxy URL (app/gateway/preview_capability.py).
+AUTH_SOURCE_PREVIEW_CAPABILITY = "preview_capability"
 
 _PRODUCTION_ENV_VARS: tuple[str, ...] = ("DEER_FLOW_ENV", "ENVIRONMENT")
 _PRODUCTION_ENV_VALUES: frozenset[str] = frozenset({"prod", "production"})

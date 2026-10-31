@@ -22,23 +22,15 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from deerflow.utils.redis_import import import_redis_asyncio
+
 from .base import END_SENTINEL, HEARTBEAT_SENTINEL, StreamBridge, StreamEvent
 
 logger = logging.getLogger(__name__)
 
-REDIS_INSTALL = "redis is required for the redis stream bridge. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
 
 _END_EVENT_NAME = "__end__"
 _READ_COUNT = 100
-
-
-def _ensure_redis_import():
-    """Import and return the redis.asyncio module, raising ImportError on failure."""
-    try:
-        import redis.asyncio as redis
-    except ImportError as exc:
-        raise ImportError(REDIS_INSTALL) from exc
-    return redis
 
 
 class RedisStreamBridge(StreamBridge):
@@ -66,7 +58,7 @@ class RedisStreamBridge(StreamBridge):
         else:
             if not redis_url:
                 raise ValueError("RedisStreamBridge requires either redis_url or client")
-            redis = _ensure_redis_import()
+            redis = import_redis_asyncio("stream bridge")
             # Caught live: redis-py's client-side socket_timeout applies to
             # EVERY command, including XREAD BLOCK — a genuinely-blocking
             # read that legitimately takes the full `block` duration raises

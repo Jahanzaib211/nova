@@ -235,6 +235,7 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 ### Tier 0 — Foundations (unlock everything downstream)
 
 #### G1. GPU runtime not installed → *unlocks G4, G8, and voice P1/P2*
+
 - **Evidence:** `onnxruntime` 1.20.1 reports only
   `['AzureExecutionProvider', 'CPUExecutionProvider']`. ctranslate2 wants
   `libcublas.so.12`; host has CUDA 13.2.
@@ -246,6 +247,7 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 - **Unlocks:** Kokoro GPU (2.0 s → <100 ms), Whisper GPU, GPU embeddings, GPU OCR.
 
 #### G2. SQLite backend blocks pgvector → *unlocks G4, G5*
+
 - **Evidence:** `config.yaml:251` → `backend: sqlite`.
 - **Fix:** add a Postgres profile pointing at the **already-running**
   `apex-seo-postgres` (`127.0.0.1:5438`, role `apex_seo`) — or a dedicated
@@ -257,24 +259,29 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 ### Tier 1 — Zero-dependency quick wins (do these first; nothing blocks them)
 
 #### G3. `web_fetch` is on Jina, which 401s without a key
+
 - **Evidence:** `config.yaml:85` → `deerflow.community.jina_ai.tools:web_fetch_tool`.
   This is the failure Nova reported in its **own self-audit** this session.
   A keyless fallback was added, but the primary is still a keyed cloud service.
 - **Fix:** point search/fetch at the running SearXNG. Nova already ships
   `deerflow/community/searxng/` — this is config only.
+
   ```yaml
   # config.yaml:81-85
   - use: deerflow.community.searxng.tools:web_search_tool
     # SEARXNG_BASE_URL=http://127.0.0.1:8090  (set in .env)
   ```
+
 - **Value:** deletes a paid dependency and an entire class of runtime failure.
 
 #### G4. Every memory extraction + title burns cloud tokens
+
 - **Evidence:** `config.yaml:239` `memory.model_name: null`, `config.yaml:210`
   `title.model_name: null` → both fall through to the main model
   (`minimax-m3`, `config.yaml:218`).
 - **Fix:** register the **already-running** llama.cpp as an OpenAI-compatible
   model and point the background tasks at it:
+
   ```yaml
   models:
     - name: local-llama
@@ -285,10 +292,12 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
   memory:  { model_name: local-llama }
   title:   { model_name: local-llama }
   ```
+
 - **Caveat:** the local model's quality for *structured fact extraction* is unverified.
   Gate on a comparison run before switching permanently.
 
 #### G5. Redis support exists but is unconfigured → single worker, volatile runs
+
 - **Evidence:** `packages/harness/pyproject.toml:75` declares a `redis` extra;
   `runtime/stream_bridge/redis_provider.py`, `runs/distributed_lock.py` and
   `runs/cancel_signal.py` all implement it — but `stream_bridge` **does not
@@ -300,10 +309,13 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 ### Tier 2 — Retrieval (requires G1 for speed, **G2 for storage**)
 
 #### G6. Memory recall is ranked by confidence, never by relevance ⚠️ **biggest win**
+
 - **Evidence:** `agents/memory/prompt.py:380`
+
   ```python
   ranked_facts = sorted(..., key=lambda fact: _coerce_confidence(...), reverse=True)
   ```
+
   There is no query parameter anywhere in the injection path. Combined with
   `max_facts: 100` (`config.yaml:240`) and `max_injection_tokens: 2000`
   (`config.yaml:243`), Nova **forgets by design** and injects its most-confident
@@ -316,6 +328,7 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 - **Requires:** G2. **Unlocks:** G7, G8.
 
 #### G7. No document/workspace RAG
+
 - Nova can read files it is told about, but cannot answer "where did we handle
   X" across a large workspace semantically. `workspace/` provides AST/symbol
   search — lexical, not semantic.
@@ -323,12 +336,14 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 - **Requires:** G6.
 
 #### G8. No reranker → retrieval quality plateaus
+
 - **Fix:** a small ONNX cross-encoder over the top ~50 candidates. Cheap on GPU.
 - **Requires:** G6 (nothing to rerank before that).
 
 ### Tier 3 — Independent capability gaps
 
 #### G9. No OCR — scanned documents are invisible
+
 - **Evidence:** 0 hits for ocr/docling/tesseract/paddleocr. `markitdown` handles
   digital PDFs only; a photographed invoice yields nothing.
 - **Fix:** `rapidocr-onnxruntime` (ONNX, reuses the existing runtime) or IBM
@@ -337,6 +352,7 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 - **Feeds:** G7 (RAG over scanned documents).
 
 #### G10. 6430 tests, none testing whether Nova is *good*
+
 - `tests/test_replay_golden.py` is deterministic replay — it catches
   serialization drift, not answer quality. A prompt change can silently degrade
   the agent with every test still green.
@@ -344,10 +360,12 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
   scoring. Largely wiring, not a new dependency. `promptfoo` if you want it in CI.
 
 #### G11. Artifacts on local disk only
+
 - MinIO (S3-compatible) is running on 9010/9020, unused. Matters for durability
   and multi-node; not urgent single-node.
 
 #### G12. Frontend observability + long-thread performance
+
 - **Evidence:** 0 hits for react-virtual/react-window/virtuoso, sentry,
   web-vitals, PWA. Error boundaries exist (5 files).
 - **Fix:** virtualize the message list before very long threads become janky;

@@ -2,6 +2,7 @@
 
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
@@ -223,6 +224,71 @@ class ExtensionsConfig(BaseModel):
             # Default to enable for public & custom skill
             return skill_category in ("public", "custom")
         return skill_config.enabled
+
+
+def extensions_config_write_path(config_path: str | Path | None = None) -> Path:
+    """Where ``extensions_config.json`` is (or, when absent, will be) written."""
+    path = Path(config_path) if config_path else ExtensionsConfig.resolve_config_path()
+    return path if path is not None else Path.cwd().parent / "extensions_config.json"
+
+
+def update_extensions_config_file(mutate: Callable[[dict[str, Any]], None], config_path: str | Path | None = None) -> Path:
+    """The one writer of ``extensions_config.json``: read the **raw** JSON,
+    let ``mutate`` edit it in place, write it back atomically.
+
+    Every writer must start from the on-disk text, never from the loaded
+    :class:`ExtensionsConfig`: loading resolves ``$VAR`` placeholders (and
+    blanks unset ones) and drops keys the model does not know, such as
+    ``mcpInterceptors``. Rebuilding the file from that object — which the
+    skill toggle and the ``skills.toggle`` / ``mcp.toggle`` operations did —
+    wrote plaintext secrets to disk, erased unset variables and lost the
+    interceptors. The write is temp-file + replace because the file is read
+    on every agent run (2026-07 audit C4). Callers reload the cache.
+    """
+    from deerflow.utils.atomic_write import atomic_write_text
+
+    path = extensions_config_write_path(config_path)
+    raw: dict[str, Any] = {}
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            raw = loaded
+    raw.setdefault("mcpServers", {})
+    raw.setdefault("skills", {})
+    mutate(raw)
+    atomic_write_text(path, json.dumps(raw, indent=2))
+    return path
+
+
+def set_skill_enabled(name: str, enabled: bool, config_path: str | Path | None = None, *, reload: bool = True) -> Path:
+    """Flip one skill's ``enabled`` in the file (raw merge); reload the cache unless told not to."""
+
+    def _mutate(raw: dict[str, Any]) -> None:
+        entry = raw["skills"].get(name)
+        raw["skills"][name] = {**(entry if isinstance(entry, dict) else {}), "enabled": enabled}
+
+    path = update_extensions_config_file(_mutate, config_path)
+    if reload:
+        reload_extensions_config(str(path))
+    return path
+
+
+def set_mcp_server_enabled(name: str, enabled: bool, config_path: str | Path | None = None) -> Path:
+    """Flip one MCP server's ``enabled`` in the file (raw merge) and reload the cache.
+
+    ``LookupError`` when the file has no such server.
+    """
+
+    def _mutate(raw: dict[str, Any]) -> None:
+        server = raw["mcpServers"].get(name)
+        if not isinstance(server, dict):
+            raise LookupError(f"MCP server {name!r} not found")
+        server["enabled"] = enabled
+
+    path = update_extensions_config_file(_mutate, config_path)
+    reload_extensions_config(str(path))
+    return path
 
 
 _extensions_config: ExtensionsConfig | None = None

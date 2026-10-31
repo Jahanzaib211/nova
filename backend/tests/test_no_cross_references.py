@@ -47,7 +47,7 @@ SKIP_FILES = {
 # forbidden names only because it quotes the guard that forbids them. This rule
 # exists to stop nova *coupling* to those projects, and a generated index of our
 # own documentation is not a coupling.
-SKIP_PREFIXES = ("graphify-out/",)
+SKIP_PREFIXES = ("graphify-out/", "audit/")
 
 # Forbidden strings (case-insensitive matching)
 FORBIDDEN = [

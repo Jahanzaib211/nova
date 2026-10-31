@@ -244,3 +244,28 @@ def _auto_user_context(request):
         yield
     finally:
         reset_current_user(token)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dev_server_registry():
+    """Restore ``dev_server._servers`` around every test.
+
+    ``register_external_dev_server`` / ``start_dev_server`` write into a module
+    global keyed by ``(thread_id, label)``. Tests that register a handle used to
+    leave it there for the rest of the session, so a later test asking
+    ``get_dev_server``/``discover_live_preview`` about an unrelated thread could
+    be answered by another test's fixture. Snapshot-and-restore rather than
+    clear-on-entry, so a module that legitimately pre-registers still works.
+    """
+    try:
+        import deerflow.sandbox.dev_server as ds
+    except ImportError:
+        yield
+        return
+
+    saved = dict(ds._servers)
+    try:
+        yield
+    finally:
+        ds._servers.clear()
+        ds._servers.update(saved)

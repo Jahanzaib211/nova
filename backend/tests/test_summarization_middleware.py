@@ -488,8 +488,8 @@ def test_skill_rescue_uses_injected_skills_container_path() -> None:
     middleware._skills_container_path = "/custom/skills"
     messages = [
         HumanMessage(content="u1"),
-        AIMessage(content="", tool_calls=[{"name": "read_file", "id": "t1", "args": {"path": "/custom/skills/demo/SKILL.md"}}]),
-        ToolMessage(content="demo skill body", tool_call_id="t1"),
+        AIMessage(content="", tool_calls=[{"name": "read_file", "id": "t1", "args": {"path": "/custom/skills/sample/SKILL.md"}}]),
+        ToolMessage(content="example skill body", tool_call_id="t1"),
         HumanMessage(content="u2"),
         AIMessage(content="final"),
     ]
@@ -497,7 +497,7 @@ def test_skill_rescue_uses_injected_skills_container_path() -> None:
     middleware.before_model({"messages": messages}, _runtime())
 
     preserved = captured[0].preserved_messages
-    assert any(isinstance(m, ToolMessage) and m.content == "demo skill body" for m in preserved)
+    assert any(isinstance(m, ToolMessage) and m.content == "example skill body" for m in preserved)
 
 
 def test_skill_rescue_uses_configured_skill_read_tool_names() -> None:
@@ -514,8 +514,8 @@ def test_skill_rescue_uses_configured_skill_read_tool_names() -> None:
     middleware._skills_container_path = "/custom/skills"
     messages = [
         HumanMessage(content="u1"),
-        AIMessage(content="", tool_calls=[{"name": "custom_read", "id": "t1", "args": {"path": "/custom/skills/demo/SKILL.md"}}]),
-        ToolMessage(content="demo skill body", tool_call_id="t1"),
+        AIMessage(content="", tool_calls=[{"name": "custom_read", "id": "t1", "args": {"path": "/custom/skills/sample/SKILL.md"}}]),
+        ToolMessage(content="example skill body", tool_call_id="t1"),
         HumanMessage(content="u2"),
         AIMessage(content="final"),
     ]
@@ -523,7 +523,7 @@ def test_skill_rescue_uses_configured_skill_read_tool_names() -> None:
     middleware.before_model({"messages": messages}, _runtime())
 
     preserved = captured[0].preserved_messages
-    assert any(isinstance(m, ToolMessage) and m.content == "demo skill body" for m in preserved)
+    assert any(isinstance(m, ToolMessage) and m.content == "example skill body" for m in preserved)
 
 
 def test_skill_rescue_respects_per_skill_token_cap() -> None:

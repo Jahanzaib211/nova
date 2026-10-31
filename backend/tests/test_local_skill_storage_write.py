@@ -18,7 +18,7 @@ def storage(tmp_path):
 @pytest.fixture()
 def skill_dir(tmp_path, storage):
     """Pre-create the skill directory so symlink tests can plant files inside."""
-    d = tmp_path / "custom" / "demo-skill"
+    d = tmp_path / "custom" / "example-skill"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -29,27 +29,27 @@ def skill_dir(tmp_path, storage):
 
 
 def test_write_creates_file(tmp_path, storage):
-    storage.write_custom_skill("demo-skill", "SKILL.md", "# hello")
-    assert (tmp_path / "custom" / "demo-skill" / "SKILL.md").read_text() == "# hello"
+    storage.write_custom_skill("example-skill", "SKILL.md", "# hello")
+    assert (tmp_path / "custom" / "example-skill" / "SKILL.md").read_text() == "# hello"
 
 
 def test_write_creates_subdirectory(tmp_path, storage):
-    storage.write_custom_skill("demo-skill", "references/ref.md", "# ref")
-    assert (tmp_path / "custom" / "demo-skill" / "references" / "ref.md").exists()
+    storage.write_custom_skill("example-skill", "references/ref.md", "# ref")
+    assert (tmp_path / "custom" / "example-skill" / "references" / "ref.md").exists()
 
 
 def test_write_is_atomic_overwrite(tmp_path, storage):
-    storage.write_custom_skill("demo-skill", "SKILL.md", "first")
-    storage.write_custom_skill("demo-skill", "SKILL.md", "second")
-    assert (tmp_path / "custom" / "demo-skill" / "SKILL.md").read_text() == "second"
+    storage.write_custom_skill("example-skill", "SKILL.md", "first")
+    storage.write_custom_skill("example-skill", "SKILL.md", "second")
+    assert (tmp_path / "custom" / "example-skill" / "SKILL.md").read_text() == "second"
 
 
 def test_write_makes_written_path_sandbox_readable(tmp_path, storage):
-    skill_dir = tmp_path / "custom" / "demo-skill"
+    skill_dir = tmp_path / "custom" / "example-skill"
     skill_dir.mkdir(parents=True)
     skill_dir.chmod(0o700)
 
-    storage.write_custom_skill("demo-skill", "references/ref.md", "# ref")
+    storage.write_custom_skill("example-skill", "references/ref.md", "# ref")
 
     ref_dir = skill_dir / "references"
     ref_file = ref_dir / "ref.md"
@@ -65,7 +65,7 @@ def test_write_makes_written_path_sandbox_readable(tmp_path, storage):
 
 def test_rejects_empty_string(storage):
     with pytest.raises(ValueError, match="empty"):
-        storage.write_custom_skill("demo-skill", "", "x")
+        storage.write_custom_skill("example-skill", "", "x")
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ def test_rejects_empty_string(storage):
 
 def test_rejects_absolute_unix_path(storage):
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "/etc/passwd", "x")
+        storage.write_custom_skill("example-skill", "/etc/passwd", "x")
 
 
 def test_rejects_absolute_path_with_skill_prefix(tmp_path, storage):
@@ -85,10 +85,10 @@ def test_rejects_absolute_path_with_skill_prefix(tmp_path, storage):
     If that absolute path resolves within skill_dir, the write succeeds.
     This is not an escape — the file lands in the correct location.
     """
-    absolute = str(tmp_path / "custom" / "demo-skill" / "SKILL.md")
+    absolute = str(tmp_path / "custom" / "example-skill" / "SKILL.md")
     # Does not raise; the write goes to the expected place
-    storage.write_custom_skill("demo-skill", absolute, "# ok")
-    assert (tmp_path / "custom" / "demo-skill" / "SKILL.md").read_text() == "# ok"
+    storage.write_custom_skill("example-skill", absolute, "# ok")
+    assert (tmp_path / "custom" / "example-skill" / "SKILL.md").read_text() == "# ok"
 
 
 # ---------------------------------------------------------------------------
@@ -98,22 +98,22 @@ def test_rejects_absolute_path_with_skill_prefix(tmp_path, storage):
 
 def test_rejects_dotdot_escape(storage):
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "../../escaped.txt", "x")
+        storage.write_custom_skill("example-skill", "../../escaped.txt", "x")
 
 
 def test_rejects_dotdot_sibling(storage):
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "../sibling/x.txt", "x")
+        storage.write_custom_skill("example-skill", "../sibling/x.txt", "x")
 
 
 def test_rejects_dotdot_in_subpath(storage):
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "sub/../../escape.txt", "x")
+        storage.write_custom_skill("example-skill", "sub/../../escape.txt", "x")
 
 
 def test_rejects_dotdot_only(storage):
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "..", "x")
+        storage.write_custom_skill("example-skill", "..", "x")
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ def test_rejects_symlink_pointing_outside(tmp_path, storage, skill_dir):
     link = skill_dir / "escape_link.txt"
     os.symlink(outside, link)
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "escape_link.txt", "x")
+        storage.write_custom_skill("example-skill", "escape_link.txt", "x")
 
 
 def test_rejects_symlink_dir_pointing_outside(tmp_path, storage, skill_dir):
@@ -135,7 +135,7 @@ def test_rejects_symlink_dir_pointing_outside(tmp_path, storage, skill_dir):
     link_dir = skill_dir / "linked_dir"
     os.symlink(outside_dir, link_dir)
     with pytest.raises(ValueError, match="skill directory"):
-        storage.write_custom_skill("demo-skill", "linked_dir/file.txt", "x")
+        storage.write_custom_skill("example-skill", "linked_dir/file.txt", "x")
 
 
 def test_allows_symlink_within_skill_dir(tmp_path, storage, skill_dir):
@@ -150,7 +150,7 @@ def test_allows_symlink_within_skill_dir(tmp_path, storage, skill_dir):
     link = skill_dir / "alias.md"
     os.symlink(real_file, link)
     # Should not raise
-    storage.write_custom_skill("demo-skill", "alias.md", "updated")
+    storage.write_custom_skill("example-skill", "alias.md", "updated")
     # resolve() writes through to the real target file
     assert real_file.read_text() == "updated"
     assert (skill_dir / "alias.md").read_text() == "updated"

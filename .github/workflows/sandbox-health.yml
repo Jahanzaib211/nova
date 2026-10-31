@@ -1,0 +1,105 @@
+name: Sandbox Health Gate
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "*" ]
+  schedule:
+    # Every 6 hours — catches silent image loss between deploys
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sandbox-health:
+    name: Sandbox image chain + tool inventory
+    runs-on: ubuntu-latest
+    # Only run on schedule/dispatch when Docker is available
+    # PR/push jobs skip the Docker checks (no daemon in CI)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Run sandbox health gate
+        run: python3 scripts/gates/sandbox-health-gate.py --json
+
+      - name: Run regression gate
+        run: python3 scripts/gates/regression-gate.py --json
+
+  manifest-check:
+    name: Verify toolchain matches gate inventory
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compare verify-toolchain.sh with regression gate
+        run: |
+          # Extract tool names from verify-toolchain.sh CHECKS array
+          TOOLS=$(grep -oP '"\K[a-zA-Z0-9_.-]+(?=:)' docker/sandbox/verify-toolchain.sh | sort -u)
+          TOOL_COUNT=$(echo "$TOOLS" | wc -l)
+          echo "verify-toolchain.sh checks $TOOL_COUNT tools"
+          echo "$TOOLS" > /tmp/verify-tools.txt
+
+          # Count tools in regression gate's SANDBOX_TOOLCHAIN
+          GATE_COUNT=$(python3 -c "
+          import ast, re
+          with open('scripts/gates/regression-gate.py') as f:
+              content = f.read()
+          m = re.search(r'SANDBOX_TOOLCHAIN\s*=\s*\{([^}]+)\}', content, re.DOTALL)
+          if m:
+              tools = re.findall(r'\"([a-z_0-9.]+)\"', m.group(1))
+              # Filter out group names (keys)
+              all_tools = set()
+              for line in m.group(1).split('\n'):
+                  if ':' in line and '\"' in line.split(':', 1)[1]:
+                      for t in re.findall(r'\"([a-z_0-9.]+)\"', line.split(':', 1)[1]):
+                          all_tools.add(t)
+              print(len(all_tools))
+          else:
+              print(0)
+          ")
+          echo "regression gate tracks $GATE_COUNT tools"
+
+          # Check for mismatches
+          GATE_TOOLS=$(python3 -c "
+          import re
+          with open('scripts/gates/regression-gate.py') as f:
+              content = f.read()
+          m = re.search(r'SANDBOX_TOOLCHAIN\s*=\s*\{([^}]+)\}', content, re.DOTALL)
+          if m:
+              all_tools = set()
+              for line in m.group(1).split('\n'):
+                  if ':' in line and '\"' in line.split(':', 1)[1]:
+                      for t in re.findall(r'\"([a-z_0-9.]+)\"', line.split(':', 1)[1]):
+                          all_tools.add(t)
+              for t in sorted(all_tools):
+                  print(t)
+          ")
+          echo "$GATE_TOOLS" > /tmp/gate-tools.txt
+
+          # Find tools in verify but not in gate
+          MISSING=$(comm -23 /tmp/verify-tools.txt /tmp/gate-tools.txt)
+          if [ -n "$MISSING" ]; then
+            echo "WARNING: tools in verify-toolchain.sh but missing from regression gate:"
+            echo "$MISSING"
+          fi
+
+          # Find tools in gate but not in verify
+          EXTRA=$(comm -13 /tmp/verify-tools.txt /tmp/gate-tools.txt)
+          if [ -n "$EXTRA" ]; then
+            echo "WARNING: tools in regression gate but not in verify-toolchain.sh:"
+            echo "$EXTRA"
+          fi
+
+          if [ -z "$MISSING" ] && [ -z "$EXTRA" ]; then
+            echo "PASS: gate inventory matches verify-toolchain.sh"
+          fi

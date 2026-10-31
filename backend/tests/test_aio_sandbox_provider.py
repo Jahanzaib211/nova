@@ -87,17 +87,17 @@ def test_get_thread_mounts_includes_user_data_dirs(tmp_path, monkeypatch):
 
 
 def test_join_host_path_preserves_windows_drive_letter_style():
-    base = r"C:\Users\demo\deer-flow\backend\.deer-flow"
+    base = r"C:\Users\sample\deer-flow\backend\.deer-flow"
 
     joined = join_host_path(base, "threads", "thread-9", "user-data", "outputs")
 
-    assert joined == r"C:\Users\demo\deer-flow\backend\.deer-flow\threads\thread-9\user-data\outputs"
+    assert joined == r"C:\Users\sample\deer-flow\backend\.deer-flow\threads\thread-9\user-data\outputs"
 
 
 def test_get_thread_mounts_preserves_windows_host_path_style(tmp_path, monkeypatch):
     """Docker bind mount sources must keep Windows-style paths intact."""
     aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
-    monkeypatch.setenv("DEER_FLOW_HOST_BASE_DIR", r"C:\Users\demo\deer-flow\backend\.deer-flow")
+    monkeypatch.setenv("DEER_FLOW_HOST_BASE_DIR", r"C:\Users\sample\deer-flow\backend\.deer-flow")
     monkeypatch.setattr(aio_mod, "get_paths", lambda: Paths(base_dir=tmp_path))
     monkeypatch.setattr(aio_mod, "get_effective_user_id", lambda: None)
 
@@ -105,10 +105,10 @@ def test_get_thread_mounts_preserves_windows_host_path_style(tmp_path, monkeypat
 
     container_paths = {container_path: host_path for host_path, container_path, _ in mounts}
 
-    assert container_paths["/mnt/user-data/workspace"] == r"C:\Users\demo\deer-flow\backend\.deer-flow\threads\thread-10\user-data\workspace"
-    assert container_paths["/mnt/user-data/uploads"] == r"C:\Users\demo\deer-flow\backend\.deer-flow\threads\thread-10\user-data\uploads"
-    assert container_paths["/mnt/user-data/outputs"] == r"C:\Users\demo\deer-flow\backend\.deer-flow\threads\thread-10\user-data\outputs"
-    assert container_paths["/mnt/acp-workspace"] == r"C:\Users\demo\deer-flow\backend\.deer-flow\threads\thread-10\acp-workspace"
+    assert container_paths["/mnt/user-data/workspace"] == r"C:\Users\sample\deer-flow\backend\.deer-flow\threads\thread-10\user-data\workspace"
+    assert container_paths["/mnt/user-data/uploads"] == r"C:\Users\sample\deer-flow\backend\.deer-flow\threads\thread-10\user-data\uploads"
+    assert container_paths["/mnt/user-data/outputs"] == r"C:\Users\sample\deer-flow\backend\.deer-flow\threads\thread-10\user-data\outputs"
+    assert container_paths["/mnt/acp-workspace"] == r"C:\Users\sample\deer-flow\backend\.deer-flow\threads\thread-10\acp-workspace"
 
 
 def test_discover_or_create_only_unlocks_when_lock_succeeds(tmp_path, monkeypatch):
@@ -177,7 +177,11 @@ async def test_acquire_async_uses_async_readiness_polling(monkeypatch):
     sandbox_id = await provider._create_sandbox_async("thread-async", "sandbox-async")
 
     assert sandbox_id == "sandbox-async"
-    assert async_readiness_calls == [("http://sandbox", 60)]
+    # The readiness budget is the provider's configured startup timeout
+    # (DEFAULT_STARTUP_TIMEOUT when sandbox.startup_timeout is unset), not a
+    # hardcoded 60 s — 096501af raised it because the image brings up
+    # supervisord, code-server, Jupyter, VNC and a browser before answering.
+    assert async_readiness_calls == [("http://sandbox", provider._startup_timeout())]
     assert provider._backend.destroy.call_count == 0
     assert provider._thread_sandboxes["thread-async"] == "sandbox-async"
 
@@ -844,3 +848,75 @@ def test_reaper_destroys_it_once_the_command_finishes():
 
     provider._cleanup_idle_sandboxes(600)
     assert destroyed == ["sandbox-1"]
+
+
+# ── browser sandbox flag ─────────────────────────────────────────────────────
+#
+# Chromium's own sandbox cannot start inside the container this provider
+# creates: `--cap-drop ALL` + `--security-opt no-new-privileges` block the
+# setuid helper, and Docker's default seccomp profile rejects
+# clone(CLONE_NEWUSER) without CAP_SYS_ADMIN. supervisord then loops on
+# "Failed to move to new namespace ... Operation not permitted", port 9222
+# never opens, the container reports unhealthy and every browser_check trips
+# the circuit breaker — which is what the Browser tab renders as a blank pane.
+
+
+def _sandbox_config_stub(**overrides):
+    """Minimal stand-in for ``config.sandbox`` as ``_load_config`` reads it."""
+    values = {
+        "idle_timeout": 3600,
+        "replicas": 3,
+        "preview_ports": None,
+        "environment": {},
+        "image": "nova-sandbox-android:latest",
+        "port": 8180,
+        "container_prefix": "deer-flow-sandbox",
+        "mounts": [],
+        "privileged": False,
+        "memory_limit": "12g",
+        "pids_limit": 2048,
+        "shm_size": "1g",
+        "nofile_limit": 65535,
+        "cpu_limit": None,
+        "cpu_shares": 512,
+        "max_lifetime": None,
+        "provisioner_url": "",
+        "browser_no_sandbox": True,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def _load_config_with(monkeypatch, sandbox_config):
+    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
+    monkeypatch.setattr(
+        aio_mod,
+        "get_app_config",
+        lambda: SimpleNamespace(sandbox=sandbox_config),
+    )
+    return provider._load_config()
+
+
+def test_hardened_sandbox_disables_chromium_inner_sandbox(monkeypatch):
+    cfg = _load_config_with(monkeypatch, _sandbox_config_stub())
+    assert cfg["environment"]["BROWSER_NO_SANDBOX"] == "--no-sandbox"
+
+
+def test_privileged_sandbox_keeps_chromium_inner_sandbox(monkeypatch):
+    """A privileged container keeps every capability, so Chromium's sandbox works."""
+    cfg = _load_config_with(monkeypatch, _sandbox_config_stub(privileged=True))
+    assert "BROWSER_NO_SANDBOX" not in cfg["environment"]
+
+
+def test_browser_no_sandbox_can_be_switched_off(monkeypatch):
+    cfg = _load_config_with(monkeypatch, _sandbox_config_stub(browser_no_sandbox=False))
+    assert "BROWSER_NO_SANDBOX" not in cfg["environment"]
+
+
+def test_operator_env_value_wins_over_the_default(monkeypatch):
+    cfg = _load_config_with(
+        monkeypatch,
+        _sandbox_config_stub(environment={"BROWSER_NO_SANDBOX": ""}),
+    )
+    assert cfg["environment"]["BROWSER_NO_SANDBOX"] == ""

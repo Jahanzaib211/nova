@@ -94,3 +94,95 @@ class TestAbsproxyAppliesTheRewrite:
         assert "_prefix_html_urls" in source, "absproxy must rewrite asset URLs"
         assert "<base " in source, "absproxy must inject a <base> for relative URLs"
         assert "text/html" in source, "the rewrite must be gated on HTML responses"
+
+
+# ── Gaps found while chasing "renders fine in Chrome, wrong inside Nova" ──────
+#
+# None of these was the cause of that particular report, but each is a real hole
+# in the rewriter that would silently corrupt some other build.
+
+import re  # noqa: E402
+
+from app.gateway.routers.sandbox import _prefix_css_urls  # noqa: E402
+
+
+class TestSrcsetIsRewrittenInFull:
+    """Only the FIRST srcset entry sits behind a quote; the rest follow a comma.
+
+    A responsive image then 404s on exactly the descriptors the browser picks for
+    other device-pixel-ratios and viewports — "fine on my screen, broken on
+    yours", which is close to undiagnosable from a bug report.
+    """
+
+    def test_every_entry_is_prefixed(self):
+        html = '<img srcset="/_next/image?url=a&w=640 640w, /_next/image?url=a&w=1080 1080w, /x.png 2x">'
+        out = _prefix_html_urls(html, PREFIX)
+        entries = re.search(r'srcset="([^"]*)"', out).group(1).split(",")
+        assert len(entries) == 3
+        for entry in entries:
+            assert entry.strip().startswith(f"{PREFIX}/"), f"unprefixed entry: {entry!r}"
+
+    def test_single_quoted_srcset(self):
+        html = "<img srcset='/a.png 1x, /b.png 2x'>"
+        out = _prefix_html_urls(html, PREFIX)
+        assert out.count(f"{PREFIX}/") == 2
+
+    def test_imagesrcset_preload_is_covered(self):
+        html = '<link rel="preload" imagesrcset="/a.png 1x, /b.png 2x">'
+        out = _prefix_html_urls(html, PREFIX)
+        assert out.count(f"{PREFIX}/") == 2
+
+    def test_already_prefixed_srcset_is_not_doubled(self):
+        html = f'<img srcset="{PREFIX}/a.png 1x, {PREFIX}/b.png 2x">'
+        assert _prefix_html_urls(html, PREFIX) == html
+
+
+class TestSingleQuotedAttributes:
+    """The rewriter was pure double-quote string replacement."""
+
+    def test_href_src_action(self):
+        html = "<a href='/about'></a><img src='/x.png'><form action='/submit'></form>"
+        out = _prefix_html_urls(html, PREFIX)
+        assert out.count(f"{PREFIX}/") == 3
+        assert "href='/about'" not in out
+
+    def test_next_asset_base_single_quoted(self):
+        html = "<script>a='/_next/static/chunks/main.js'</script>"
+        out = _prefix_html_urls(html, PREFIX)
+        assert f"'{PREFIX}/_next/" in out
+
+
+class TestStylesheetUrls:
+    """CSS was never rewritten: the call sites gate on ``text/html``.
+
+    A ``url(/_next/static/media/…)`` — a web font or a background image — then
+    resolved against the app origin and 404'd, leaving the page styled just
+    enough to look almost right.
+    """
+
+    def test_bare_quoted_and_single_quoted_urls(self):
+        css = "a{background:url(/bg.png)}b{background:url(\"/x.png\")}c{src:url('/y.woff2')}"
+        out = _prefix_css_urls(css, PREFIX)
+        assert out.count(f"{PREFIX}/") == 3
+        assert "url(/bg.png)" not in out
+
+    def test_whitespace_inside_url(self):
+        assert f"{PREFIX}/x.png" in _prefix_css_urls("a{background:url( /x.png )}", PREFIX)
+
+    def test_absolute_and_relative_urls_are_left_alone(self):
+        css = "a{background:url(https://cdn.example.com/x.png)}b{background:url(./rel.png)}"
+        assert _prefix_css_urls(css, PREFIX) == css
+
+    def test_idempotent(self):
+        css = "a{background:url(/bg.png)}"
+        once = _prefix_css_urls(css, PREFIX)
+        assert _prefix_css_urls(once, PREFIX) == once
+
+    def test_inline_style_block_in_html_is_covered(self):
+        html = "<style>body{background:url(/bg.png)}</style>"
+        out = _prefix_html_urls(html, PREFIX)
+        assert f"url({PREFIX}/bg.png)" in out
+
+    def test_empty_inputs(self):
+        assert _prefix_css_urls("", PREFIX) == ""
+        assert _prefix_css_urls("a{}", "") == "a{}"

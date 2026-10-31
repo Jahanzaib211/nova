@@ -1,0 +1,3 @@
+ERROR    deerflow.config.runtime_models:runtime_models.py:52 Failed to read runtime models file at /home/jahanzaib/Desktop/nova/backend/.deer-flow/runtime_models.yaml — ignoring it
+FAILED tests/test_task_events_ws.py::TestTaskEventsCarryBinding::test_started_and_completed_carry_todo_indexes
+1 failed, 6901 passed, 21 skipped, 1 xfailed, 153 warnings in 412.06s (0:06:52)

@@ -76,18 +76,18 @@ export function VoiceButton({
           style={
             live
               ? undefined
-              : // Idle glow: enough motion to catch the eye once, not enough to
-                // nag. Disabled entirely for reduced-motion users below.
-                { animation: "nova-voice-glow 3.4s ease-in-out infinite" }
+              : // Idle glow: enough motion to catch the eye, then it stops --
+                // it ran forever, which is exactly the nagging this meant to avoid.
+                { animation: "nova-voice-glow 3.4s ease-in-out 2" }
           }
         >
           {/* Shimmer sweep — the "this is new, look here" cue. */}
           {!live && (
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/25 to-transparent motion-reduce:hidden"
+              className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 skew-x-[-20deg] bg-gradient-to-r from-transparent via-white/15 to-transparent motion-reduce:hidden"
               style={{
-                animation: "nova-voice-shimmer 3.4s ease-in-out infinite",
+                animation: "nova-voice-shimmer 3.4s ease-in-out 2 both",
               }}
             />
           )}
@@ -95,7 +95,7 @@ export function VoiceButton({
           {live ? (
             <VoiceOrb phase={state.phase} size={16} />
           ) : (
-            <MicIcon className="size-3.5" />
+            <MicIcon className="relative size-3.5" />
           )}
           <span className="relative">{live ? phaseLabel(state) : "Voice"}</span>
           {!live && <SparklesIcon className="relative size-2.5 opacity-70" />}
@@ -113,7 +113,7 @@ function VoiceSetupHint({ onClose }: { onClose: () => void }) {
       role="status"
       className="absolute bottom-full left-0 z-20 mb-2 w-full px-1"
     >
-      <div className="border-border/50 bg-background/95 rounded-xl border px-3 py-2.5 text-[11px] shadow-xl backdrop-blur">
+      <div className="border-panel-border bg-background/95 rounded-xl border px-3 py-2.5 text-[11px] shadow-xl backdrop-blur">
         <div className="flex items-start gap-2">
           <MicIcon className="mt-0.5 size-3.5 shrink-0 text-sky-400" />
           <div className="min-w-0 flex-1">
@@ -176,7 +176,7 @@ function VoicePanel({
       aria-live="polite"
       className="absolute bottom-full left-0 z-20 mb-2 w-full px-1"
     >
-      <div className="border-border/50 bg-background/95 flex items-center gap-3 rounded-xl border px-3 py-2.5 shadow-xl backdrop-blur">
+      <div className="border-panel-border bg-background/95 flex items-center gap-3 rounded-xl border px-3 py-2.5 shadow-xl backdrop-blur">
         <VoiceOrb phase={phase} size={40} />
 
         <div className="min-w-0 flex-1">

@@ -19,7 +19,7 @@ export async function GET(
   if (artifactPath.startsWith("mnt/")) {
     artifactPath = path.resolve(
       process.cwd(),
-      artifactPath.replace("mnt/", `public/demo/threads/${threadId}/`),
+      artifactPath.replace("mnt/", `public/threads/${threadId}/`),
     );
     if (fs.existsSync(artifactPath)) {
       if (request.nextUrl.searchParams.get("download") === "true") {

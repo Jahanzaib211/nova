@@ -40,6 +40,17 @@ class RemoteSandboxBackend(SandboxBackend):
         sandbox:
           use: deerflow.community.aio_sandbox:AioSandboxProvider
           provisioner_url: http://provisioner:8002
+
+    Note on the sandbox environment: this backend forwards **no**
+    environment variables to the Pods it creates.  ``sandbox.environment``
+    (and therefore ``browser_no_sandbox``) applies to the local-container
+    path only — the Pod spec, its image and its security context are built
+    by the provisioner, not here.  That is not a defect for the browser:
+    the Pods the provisioner builds keep ``allow_privilege_escalation=True``
+    and drop no capabilities, so Chromium's own sandbox still works there.
+    A cluster that forbids privilege escalation needs
+    ``BROWSER_NO_SANDBOX=--no-sandbox`` set on the *provisioner* service,
+    which passes it through to every Pod.
     """
 
     def __init__(self, provisioner_url: str):
