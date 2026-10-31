@@ -116,3 +116,30 @@ def build_registry(
 ) -> IntegrationRegistry:
     clients: list[IntegrationClient] = [CLIENTS.get(id, HttpIntegration)(id, svc) for id, svc in config.services.items()]
     return IntegrationRegistry(config, clients=clients, adapters=default_adapters() if include_extensions else [], transport=transport)
+
+
+_shared: tuple[str, IntegrationRegistry] | None = None
+
+
+def get_integrations_registry(config: IntegrationsConfig | None = None) -> IntegrationRegistry:
+    """The process-wide registry for the freshest ``integrations:`` config.
+
+    Rebuilt only when that section changes (hot reload), so the probe cache
+    is shared: ``/api/integrations`` and the ``integrations.*`` capability
+    operations used to hold separate instances, and one surface's fresh
+    probe left the other serving its own stale cache (or probing again).
+    """
+    global _shared
+    if config is None:
+        from deerflow.config.app_config import get_app_config
+
+        config = get_app_config().integrations
+    source = config.model_dump_json()
+    if _shared is None or _shared[0] != source:
+        _shared = (source, build_registry(config))
+    return _shared[1]
+
+
+def reset_integrations_registry() -> None:
+    global _shared
+    _shared = None

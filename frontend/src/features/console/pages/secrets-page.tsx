@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SettingsSection } from "@/components/workspace/settings/settings-section";
@@ -43,8 +44,7 @@ export function SecretsPage() {
         </label>
         <label className="flex min-w-64 flex-1 flex-col gap-1 text-xs">
           {s.value}
-          <Input
-            type="password"
+          <PasswordInput
             autoComplete="off"
             value={value}
             onChange={(e) => setValue(e.target.value)}

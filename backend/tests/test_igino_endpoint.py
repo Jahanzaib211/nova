@@ -63,18 +63,48 @@ class TestIGINOEndpoints(unittest.TestCase):
         # in the network tab is exposed just as surely as one on screen.
         self.assertNotIn("base_url", result)
 
-    def test_toggle_response_shape(self):
+    def test_toggle_endpoint_is_removed(self):
+        """``POST /toggle`` only ever answered 410 and the frontend no longer calls it."""
         from app.gateway.routers import igino as igino_router
 
-        request = MagicMock()
-        request.enabled = True
+        paths = {getattr(r, "path", "") for r in igino_router.router.routes}
+        self.assertNotIn("/api/igino/toggle", paths)
+        self.assertFalse(hasattr(igino_router, "igino_toggle"))
 
-        async def fake_toggle(req) -> dict:
-            return {"enabled": True, "message": "iGIN0 enabled"}
+    def test_status_probes_each_service_once(self):
+        """One ``/status`` used to probe Browserless twice (``fetch`` and the
+        ``web_fetch`` row) and Crawl4AI twice (``web_fetch_many`` and
+        ``web_crawl``)."""
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
 
-        with patch.object(igino_router, "igino_toggle", new=fake_toggle):
-            result = _run(igino_router.igino_toggle(request))
-        self.assertTrue(result["enabled"])
+        from app.gateway.routers import igino as igino_router
+
+        tools = {
+            "web_search": SimpleNamespace(use="deerflow.community.searxng.tools:web_search_tool", model_extra={}),
+            "web_fetch": SimpleNamespace(use="deerflow.community.browserless.tools:web_fetch_tool", model_extra={"base_url": "http://browserless:3000"}),
+            "web_fetch_many": SimpleNamespace(use="deerflow.community.crawl4ai.tools:web_fetch_many_tool", model_extra={"base_url": "http://crawl4ai:11235"}),
+            "web_crawl": SimpleNamespace(use="deerflow.community.crawl4ai.crawl_tool:web_crawl_tool", model_extra={"base_url": "http://crawl4ai:11235"}),
+        }
+        config = SimpleNamespace(get_tool_config=tools.get)
+        http = MagicMock()
+        http.get = AsyncMock(return_value=MagicMock(status_code=200))
+        http.__aenter__ = AsyncMock(return_value=http)
+        http.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch.dict(os.environ, {"DEERFLOW_IGINO_ENABLED": "true"}, clear=False),
+            patch.object(igino_router, "get_app_config", return_value=config),
+            patch.object(igino_router.httpx, "AsyncClient", return_value=http),
+            patch("deerflow.community.searxng.searxng_client.SearxngClient.health", new=AsyncMock(return_value=True)),
+        ):
+            result = _run(igino_router.get_status())
+
+        urls = sorted(call.args[0] for call in http.get.await_args_list)
+        self.assertEqual(urls, ["http://browserless:3000/pressure", "http://crawl4ai:11235/health"])
+        self.assertEqual(result["fetch"], {"provider": "browserless", "healthy": True, "detail": "reachable"})
+        rows = {row["tool"]: row for row in result["web"]}
+        self.assertTrue(rows["web_fetch_many"]["healthy"] and rows["web_crawl"]["healthy"])
 
 
 class TestCapabilitiesIginoField(unittest.TestCase):
@@ -102,7 +132,7 @@ class TestAuthMiddleware(unittest.TestCase):
 
     - ``/api/igino/status`` and ``/api/igino/cache`` are readable without
       auth (they return ``{enabled: false}`` when the feature is off).
-    - ``/api/igino/toggle``, ``/api/igino/research``, and
+    - ``/api/igino/research`` and
       ``/api/igino/audit`` require a session (otherwise the gateway would
       expose an LLM/SearXNG research pipeline and audit trail to the
       open internet).

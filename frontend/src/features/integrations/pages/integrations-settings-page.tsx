@@ -9,7 +9,13 @@ import { cn } from "@/lib/utils";
 
 import { IntegrationCard } from "../components/integration-card";
 import { useIntegrations, useProbeIntegrations } from "../hooks";
-import { DOT_CLASS, groupIntegrations, summarize, toneFor } from "../status";
+import {
+  DOT_CLASS,
+  groupIntegrations,
+  summarize,
+  toneFor,
+  visibleIntegrations,
+} from "../status";
 import type { IntegrationStatus } from "../types";
 
 const SUMMARY_ORDER: IntegrationStatus[] = [
@@ -25,7 +31,7 @@ export function IntegrationsSettingsPage() {
   const s = t.features.integrations;
   const query = useIntegrations();
   const probe = useProbeIntegrations();
-  const items = query.data?.integrations ?? [];
+  const items = visibleIntegrations(query.data?.integrations ?? []);
   const counts = summarize(items);
   const groups = groupIntegrations(items);
   const probingId = probe.one.isPending ? probe.one.variables : null;

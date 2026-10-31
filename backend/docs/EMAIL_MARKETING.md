@@ -49,7 +49,7 @@ compile, zero recipients after suppressions.
 ```bash
 # from the API (session cookie): list + 2 own addresses + template + campaign
 curl -s -X POST $NOVA/api/em/campaigns/$ID/send-now
-# then watch /workspace/jobs (em.campaign.start → em.campaign.batch) and
+# then watch Settings › Jobs (em.campaign.start → em.campaign.batch) and
 # GET /api/em/campaigns/$ID/stats — sent, opened, clicked fill in as you open
 # the mail; send one to a non-existent address on a real domain and the
 # bounce poll marks it bounced_hard + suppressed within 5 minutes.

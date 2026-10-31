@@ -1,8 +1,7 @@
-"""iGIN0 REST API endpoints — status, toggle, research, cache, audit.
+"""iGIN0 REST API endpoints — status, self-test, research, cache, audit.
 
 Provides:
   - GET  /api/igino/status    — always 200; reports `enabled: false` when feature is off
-  - POST /api/igino/toggle    — toggle privacy mode (per-thread)
   - POST /api/igino/research  — run research pipeline via REST (auth required)
   - GET  /api/igino/cache     — cache stats
   - GET  /api/igino/audit     — audit trail records (auth required, owner-scoped)
@@ -43,10 +42,6 @@ def _require_enabled_and_user(user: Any | None) -> None:
         raise HTTPException(status_code=401, detail="Authentication required")
 
 
-class ToggleRequest(BaseModel):
-    enabled: bool
-
-
 class ResearchRequest(BaseModel):
     query: str
     max_results: int = 10
@@ -55,131 +50,89 @@ class ResearchRequest(BaseModel):
     timeout_s: float = 30.0
 
 
-def _provider_for(tool_name: str) -> str:
-    """The package behind a tool's configured ``use:`` string.
+def _provider_from_use(use: str) -> str:
+    """The package behind a ``use:`` string.
 
     ``deerflow.community.searxng.tools:web_search_tool`` -> ``searxng``. The
     last module segment is almost always ``tools``, so the provider is the
-    package containing it. Read from config rather than hardcoded: the provider
-    for these tools changed twice in one day, and a panel that names the wrong
-    one is worse than a panel that names none.
+    package containing it.
     """
+    parts = [p for p in str(use).split(":")[0].split(".") if p]
+    if not parts:
+        return "unknown"
+    return parts[-2] if len(parts) >= 2 and parts[-1] == "tools" else parts[-1]
+
+
+def _tool_endpoint(tool_name: str) -> tuple[str, str] | None:
+    """``(provider, base_url)`` for a configured tool, ``None`` when it is not configured.
+
+    Read from config rather than hardcoded: the provider for these tools
+    changed twice in one day, and a panel that names the wrong one is worse
+    than a panel that names none. Raises when the config cannot be read.
+    """
+    entry = get_app_config().get_tool_config(tool_name)
+    if entry is None:
+        return None
+    return _provider_from_use(getattr(entry, "use", "") or ""), str((entry.model_extra or {}).get("base_url", "") or "")
+
+
+def _provider_for(tool_name: str) -> str:
     try:
-        entry = get_app_config().get_tool_config(tool_name)
-        if entry is None:
-            return "unconfigured"
-        module = str(getattr(entry, "use", "") or "").split(":")[0]
-        parts = [p for p in module.split(".") if p]
-        if not parts:
-            return "unknown"
-        return parts[-2] if len(parts) >= 2 and parts[-1] == "tools" else parts[-1]
+        endpoint = _tool_endpoint(tool_name)
     except Exception as exc:  # noqa: BLE001 - the panel must render regardless
         logger.debug("provider lookup for %s failed: %s", tool_name, exc)
         return "unknown"
+    return endpoint[0] if endpoint is not None else "unconfigured"
 
 
-async def _web_capability(tool_name: str, health_path: str) -> dict[str, Any]:
+#: One ``/status`` call's probe results, keyed by URL. ``web_fetch_many`` and
+#: ``web_crawl`` both sit on the Crawl4AI service, and the old ``fetch`` block
+#: re-probed Browserless after ``web_fetch`` already had — so one status poll
+#: hit each local service twice.
+ProbeMemo = dict[str, tuple[bool, str]]
+
+
+async def _probe_endpoint(url: str, memo: ProbeMemo) -> tuple[bool, str]:
+    if url not in memo:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as http:
+                resp = await http.get(url)
+            healthy = resp.status_code < 400
+            memo[url] = (healthy, "reachable" if healthy else f"refused (HTTP {resp.status_code})")
+        except Exception as exc:  # noqa: BLE001
+            memo[url] = (False, type(exc).__name__)
+    return memo[url]
+
+
+async def _web_capability(tool_name: str, health_path: str, memo: ProbeMemo | None = None) -> dict[str, Any]:
     """Health of one web capability, named by the job it does.
 
-    The three are genuinely different jobs and fail independently:
+    The jobs are genuinely different and fail independently:
 
       web_search  SearXNG      finds pages
       web_fetch   Browserless  reads one page the agent already named
       web_fetch_many Crawl4AI  reads many named pages at once
 
-    Reporting them as one "crawler" hid which of the three was down. Reads the
-    configured `use:` string rather than assuming a provider, so swapping any
-    of them cannot leave this panel describing something Nova no longer runs.
-    """
-    provider, base_url, healthy, detail = "unconfigured", "", False, ""
-
-    try:
-        config = get_app_config()
-        entry = config.get_tool_config(tool_name)
-        if entry is None:
-            return {"tool": tool_name, "provider": "unconfigured", "healthy": False, "detail": "not in config.yaml"}
-        use = getattr(entry, "use", "") or ""
-        module = str(use).split(":")[0]
-        parts = [p for p in module.split(".") if p]
-        provider = (parts[-2] if len(parts) >= 2 and parts[-1] == "tools" else parts[-1]) if parts else "unknown"
-        base_url = str((entry.model_extra or {}).get("base_url", "") or "")
-    except Exception as exc:  # noqa: BLE001 - the panel must render regardless
-        logger.debug("web capability %s: config read failed: %s", tool_name, exc)
-        return {"tool": tool_name, "provider": provider, "healthy": False, "detail": "config unavailable"}
-
-    if base_url:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as http:
-                resp = await http.get(f"{base_url.rstrip('/')}{health_path}")
-            healthy = resp.status_code < 400
-            detail = "reachable" if healthy else f"refused (HTTP {resp.status_code})"
-        except Exception as exc:  # noqa: BLE001
-            detail = type(exc).__name__
-    else:
-        # Hosted providers have no local endpoint to probe. Jina answered every
-        # request while returning 401, so "reachable" was never "working" --
-        # report unverified rather than healthy.
-        detail = "hosted provider — not probed"
-
-    return {"tool": tool_name, "provider": provider, "healthy": healthy, "detail": detail}
-
-
-async def _fetch_status() -> dict[str, Any]:
-    """Health of whichever provider `web_fetch` is configured to use.
-
-    Named for the tool, not for a job it does not do. This was `_crawler_status`
-    while `web_fetch` pointed at Browserless, which renders a single URL and
-    follows nothing -- so the panel said "Crawler: browserless - healthy" and
-    described a capability Nova did not have.
-
-    Deliberately provider-agnostic: it reads the configured `use:` string
-    rather than assuming Browserless, so swapping the fetch backend does not
-    silently leave this panel reporting on something Nova no longer uses.
+    Reporting them as one "crawler" hid which was down. Reads the configured
+    ``use:`` string rather than assuming a provider, so swapping any of them
+    cannot leave this panel describing something Nova no longer runs.
 
     A reachable provider is not the same as a working one -- Jina answered
-    every request while returning 401, and `web_fetch` degraded to a plain GET
-    without telling anyone for 118 calls. So a provider that needs credentials
-    is probed for *authorisation*, not just for a TCP connection.
+    every request while returning 401 -- so a hosted provider with no local
+    endpoint is reported unverified, never healthy.
     """
-    provider = "unknown"
-    base_url = ""
-    healthy = False
-    detail = ""
-
     try:
-        config = get_app_config()
-        for entry in getattr(config, "tools", None) or []:
-            name = entry.get("name") if isinstance(entry, dict) else getattr(entry, "name", None)
-            if name != "web_fetch":
-                continue
-            use = entry.get("use") if isinstance(entry, dict) else getattr(entry, "use", "")
-            # "deerflow.community.browserless.tools:web_fetch_tool" -> "browserless".
-            # The last segment is the module file (almost always "tools"), so the
-            # provider is the package that contains it.
-            module = str(use).split(":")[0]
-            parts = [p for p in module.split(".") if p]
-            provider = (parts[-2] if len(parts) >= 2 and parts[-1] == "tools" else parts[-1]) if parts else "unknown"
-            cfg_extra = entry if isinstance(entry, dict) else getattr(entry, "model_extra", {}) or {}
-            base_url = str(cfg_extra.get("base_url", "") or "")
-            break
+        endpoint = _tool_endpoint(tool_name)
     except Exception as exc:  # noqa: BLE001 - the panel must render regardless
-        logger.debug("crawler status: config read failed: %s", exc)
-        return {"provider": provider, "healthy": False, "detail": "config unavailable"}
-
-    if base_url:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as http:
-                resp = await http.get(f"{base_url.rstrip('/')}/pressure")
-            healthy = resp.status_code < 400
-            detail = "reachable" if healthy else f"refused (HTTP {resp.status_code})"
-        except Exception as exc:  # noqa: BLE001
-            detail = type(exc).__name__
-    else:
-        # Hosted providers (jina_ai, tavily, exa) have no local endpoint to
-        # probe; report them as configured-but-unverified rather than healthy.
-        detail = "hosted provider — not probed"
-
-    return {"provider": provider, "healthy": healthy, "detail": detail}
+        logger.debug("web capability %s: config read failed: %s", tool_name, exc)
+        return {"tool": tool_name, "provider": "unconfigured", "healthy": False, "detail": "config unavailable"}
+    if endpoint is None:
+        return {"tool": tool_name, "provider": "unconfigured", "healthy": False, "detail": "not in config.yaml"}
+    provider, base_url = endpoint
+    if not base_url:
+        return {"tool": tool_name, "provider": provider, "healthy": False, "detail": "hosted provider — not probed"}
+    healthy, detail = await _probe_endpoint(f"{base_url.rstrip('/')}{health_path}", memo if memo is not None else {})
+    return {"tool": tool_name, "provider": provider, "healthy": healthy, "detail": detail}
 
 
 def _feature_states(*, audit: Any, cache: Any) -> list[dict[str, Any]]:
@@ -243,12 +196,17 @@ async def get_status() -> dict[str, Any]:
         # never report an outage -- a light that cannot turn red.
         searxng_healthy = await client.health()
 
+        memo: ProbeMemo = {}
+        web_fetch = await _web_capability("web_fetch", "/pressure", memo)
+
         return {
             "enabled": True,
             "searxng_healthy": searxng_healthy,
             "cache": cache.stats,
             "audit": audit.get_stats(),
-            "fetch": await _fetch_status(),
+            # The web_fetch provider's health, named for the tool -- the same
+            # probe as the web_fetch row below, not a second one.
+            "fetch": {k: web_fetch[k] for k in ("provider", "healthy", "detail")},
             # The pipeline, in the order a request actually flows through it.
             # web_search is a member like any other: the frontend used to carry
             # its own hardcoded four-step list and special-case search out of
@@ -263,13 +221,14 @@ async def get_status() -> dict[str, Any]:
                     "healthy": searxng_healthy,
                     "detail": "reachable" if searxng_healthy else "unreachable",
                 },
-                await _web_capability("web_fetch", "/pressure"),
-                await _web_capability("web_fetch_many", "/health"),
+                web_fetch,
+                await _web_capability("web_fetch_many", "/health", memo),
                 # web_crawl runs Nova's own BFS over the crawl4ai service, so
                 # its health is that service's health -- but it is reported
                 # separately because the two fail for different reasons: the
                 # service being down, versus a crawl that robots.txt refused.
-                await _web_capability("web_crawl", "/health"),
+                # Same service and path as web_fetch_many: probed once.
+                await _web_capability("web_crawl", "/health", memo),
             ],
             "features": _feature_states(audit=audit, cache=cache),
         }
@@ -350,29 +309,6 @@ async def test_capability(tool: str, user: Any | None = Depends(get_optional_use
         }
 
 
-@router.post("/toggle")
-async def toggle_privacy(req: ToggleRequest, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
-    """Deprecated. Reports the real state; it never changed anything.
-
-    This endpoint returned ``{"enabled": <whatever you sent>}`` and wrote
-    nothing -- no env, no config, no store. The UI switch it backed therefore
-    did nothing at all while looking like it worked, which is worse than having
-    no switch: it invited an operator to "turn privacy on" and then trust it.
-
-    Each capability is configured independently by environment
-    (DEERFLOW_IGINO_ENABLED, _AUDIT_ENABLED, _TOR_ENABLED, _CACHE_*), so a
-    single master switch could not have expressed the real state even if it had
-    persisted. ``/status`` now reports each one separately.
-
-    Kept as a 410 rather than deleted so an older frontend gets a clear answer
-    instead of a 404 that reads as an outage.
-    """
-    raise HTTPException(
-        status_code=410,
-        detail=("Toggling was never implemented and has been removed. Configure each capability via DEERFLOW_IGINO_* environment variables; /status reports their live state."),
-    )
-
-
 @router.post("/research")
 async def run_research(req: ResearchRequest, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
     _require_enabled_and_user(user)
@@ -421,12 +357,7 @@ async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_opt
         return {"error": "Failed to fetch audit records", "records": [], "stats": {}}
 
 
-# v7.3 (Nova rebrand): backward-compat aliases for tests that imported the
-# pre-rename function names. The functions were renamed to `get_status` /
-# `toggle_privacy` during security hardening (fd2eb27); tests still expect
-# the original module-level names. Aliases keep both call sites working
-# without renaming the routes or rewriting the tests.
+# v7.3 (Nova rebrand): backward-compat alias for tests that imported the
+# pre-rename function name (renamed to `get_status` in fd2eb27).
 # CodeQL: unused-global-variable false positive
 igino_status = get_status
-# CodeQL: unused-global-variable false positive
-igino_toggle = toggle_privacy

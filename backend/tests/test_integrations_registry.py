@@ -207,7 +207,7 @@ async def test_extension_adapters_list_mcp_servers_skills_and_acp_agents(monkeyp
     from deerflow.integrations import adapters
 
     monkeypatch.setattr(adapters, "_mcp_servers", lambda: {"github": {"enabled": True}, "old": {"enabled": False}})
-    monkeypatch.setattr(adapters, "_mcp_tool_counts", lambda: ({"github": 12}, True))
+    monkeypatch.setattr(adapters, "_mcp_tool_counts", lambda servers: ({"github": 12}, True))
     monkeypatch.setattr(adapters, "_skills", lambda: [("pdf", True), ("docx", False)])
     monkeypatch.setattr(
         adapters,

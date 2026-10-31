@@ -7,7 +7,6 @@ process; that belongs to the cache loader, not a health card).
 
 from __future__ import annotations
 
-import shutil
 from collections.abc import Callable, Iterable
 
 from deerflow.integrations.base import now_iso
@@ -23,19 +22,11 @@ def _mcp_servers() -> dict[str, dict]:
     return {name: {"enabled": bool(server.enabled), "type": server.type} for name, server in cfg.mcp_servers.items()}
 
 
-def _mcp_tool_counts() -> tuple[dict[str, int], bool]:
+def _mcp_tool_counts(servers: dict[str, dict]) -> tuple[dict[str, int], bool]:
     """Tools per server from the cache; ``initialised`` False until startup loaded it."""
-    from deerflow.mcp import cache
+    from deerflow.mcp.cache import mcp_tools_loaded, tool_counts_by_server
 
-    tools = getattr(cache, "_mcp_tools_cache", None)
-    initialised = bool(getattr(cache, "_cache_initialized", False))
-    counts: dict[str, int] = {}
-    for tool in tools or []:
-        name = getattr(tool, "name", "")
-        for server in _mcp_servers():
-            if name.startswith(f"{server}_"):
-                counts[server] = counts.get(server, 0) + 1
-    return counts, initialised
+    return tool_counts_by_server(servers), mcp_tools_loaded()
 
 
 def _skills() -> list[tuple[str, bool]]:
@@ -58,7 +49,7 @@ def _item(id: str, kind: IntegrationKind, display: str, status: IntegrationStatu
 
 def mcp_adapter() -> list[HealthResult]:
     servers = _mcp_servers()
-    counts, initialised = _mcp_tool_counts()
+    counts, initialised = _mcp_tool_counts(servers)
     out: list[HealthResult] = []
     for name, meta in sorted(servers.items()):
         if not meta.get("enabled"):
@@ -77,10 +68,12 @@ def skills_adapter() -> list[HealthResult]:
 
 
 def acp_adapter() -> list[HealthResult]:
+    from deerflow.runtimes.registry import acp_binary_available
+
     out: list[HealthResult] = []
     for name, agent in sorted(_acp_agents().items()):
-        binary = (agent.command or "").split()[0] if agent.command else ""
-        found = bool(binary) and shutil.which(binary) is not None
+        binary = agent.command or ""
+        found = acp_binary_available(agent)
         out.append(
             _item(
                 f"acp:{name}",

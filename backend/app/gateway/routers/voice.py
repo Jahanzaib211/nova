@@ -593,6 +593,36 @@ class VoiceSession:
 _SENTENCE_END = re.compile(r"[.!?]['\")\]]?\s")
 
 
+# Markup a model writes for a screen, which a voice must not read aloud.
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_MD_CODE_FENCE = re.compile(r"```.*?(```|$)", re.DOTALL)
+# Emphasis only at word edges, so snake_case_names and 2 * 3 survive.
+_MD_INLINE = re.compile(r"(?<!\w)(\*\*|__|\*|_|`|~~)(?=\S)(.+?)(?<=\S)\1(?!\w)")
+_MD_LINE_PREFIX = re.compile(r"^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)", re.MULTILINE)
+_URL = re.compile(r"https?://\S+")
+
+
+def speakable(text: str) -> str:
+    """Turn a model's screen text into words Kokoro should actually say.
+
+    Without this a spoken answer reads its own formatting -- "asterisk asterisk
+    important asterisk asterisk", a code fence character by character, a URL
+    letter by letter -- which is the fastest way to make a call feel broken.
+    """
+    text = _MD_CODE_FENCE.sub(" ", text)
+    text = _MD_LINK.sub(r"\1", text)
+    text = _URL.sub("the link", text)
+    text = _MD_LINE_PREFIX.sub("", text)
+    for _ in range(2):  # nested emphasis: **_x_**
+        text = _MD_INLINE.sub(r"\2", text)
+    text = text.replace("|", ", ").replace("#", "")
+    # One spoken phrase per line: a list read as one breathless run-on is
+    # unintelligible, so a line without its own ending punctuation gets one.
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    text = " ".join(ln if ln[-1] in ".!?,:;" or i == len(lines) - 1 else f"{ln}." for i, ln in enumerate(lines))
+    return re.sub(r"\s+", " ", text).strip()
+
+
 async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]]:
     """Bridge a transcript to the normal agent run path, streaming sentences out.
 
@@ -603,8 +633,10 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
 
     def _drain(queue: queue_mod.Queue[str | None], text: str, cancel: threading.Event) -> None:
         from deerflow.client import DeerFlowClient
+        from deerflow.speech.registry import voice_agent_settings
 
-        client = DeerFlowClient()
+        model_name, thinking_enabled = voice_agent_settings()
+        client = DeerFlowClient(model_name=model_name, thinking_enabled=thinking_enabled)
         buffer = ""
         seen: dict[str, str] = {}
         stream = client.stream(text, thread_id=thread_id)
@@ -633,11 +665,11 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
                 # Emit every complete sentence sitting in the buffer.
                 while (m := _SENTENCE_END.search(buffer)) is not None:
                     cut = m.end()
-                    sentence = buffer[:cut].strip()
+                    sentence = speakable(buffer[:cut])
                     buffer = buffer[cut:]
                     if sentence:
                         queue.put(sentence)
-            tail = buffer.strip()
+            tail = speakable(buffer)
             if tail and not cancel.is_set():
                 queue.put(tail)
         except Exception as e:

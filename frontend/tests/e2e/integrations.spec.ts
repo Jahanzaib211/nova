@@ -4,7 +4,7 @@ import { mockLangGraphAPI } from "./utils/mock-api";
 
 /**
  * Settings › Integrations against a mocked /api/integrations: grouped cards,
- * honest states (degraded with its reason, never-checked), probe-all and
+ * honest states (degraded with its reason), probe-all and
  * per-card probe round-trips, and the page hidden while the flag is off.
  */
 
@@ -123,9 +123,14 @@ test.describe("settings › integrations", () => {
 
     await page.goto("/workspace/settings#integrations");
     const cards = page.getByTestId("integration-card");
-    await expect(cards).toHaveCount(4);
+    // The MCP server (Settings › Tools) and the ACP agent (Settings ›
+    // Runtimes) have their own pages, so they are not listed here again and
+    // do not count toward the summary.
+    await expect(cards).toHaveCount(2);
+    await expect(cards.filter({ hasText: "github" })).toHaveCount(0);
+    await expect(cards.filter({ hasText: "claude_code" })).toHaveCount(0);
     await expect(page.getByTestId("integrations-summary")).toContainText(
-      "2 healthy",
+      "1 healthy",
     );
     await expect(page.getByTestId("integrations-summary")).toContainText(
       "1 degraded",
@@ -136,21 +141,12 @@ test.describe("settings › integrations", () => {
       "Integrations",
       "Model gateways",
       "Mail, CRM & helpdesk",
-      "Agent gateways",
-      "MCP servers & skills",
     ]);
     // Honest states: the degraded card carries its reason; a never-probed
     // adapter says so instead of showing a timestamp.
     const mailcow = cards.filter({ hasText: "Mailcow" });
     await expect(mailcow).toHaveAttribute("data-status", "degraded");
     await expect(mailcow).toContainText("MAILCOW_API_KEY not set");
-    await expect(cards.filter({ hasText: "claude_code" })).toContainText(
-      "never checked",
-    );
-    // Adapters have no endpoint, so no Probe button.
-    await expect(
-      cards.filter({ hasText: "github" }).getByRole("button"),
-    ).toHaveCount(0);
 
     await mailcow.getByRole("button", { name: "Probe Mailcow" }).click();
     await expect(mailcow).toHaveAttribute("data-status", "healthy");

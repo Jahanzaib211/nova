@@ -13,8 +13,9 @@ the job runner — no table of its own:
 | `acp` | `acp_agents` | jobs when `subagents.async_enabled`, else gateway |
 
 Each entry carries `queued` / `running` counts of the caller's own
-`agents.task` jobs for that agent. Rendered on `/workspace/agents` and as the
-Agents card on `/workspace/jobs` (`src/features/agents-registry`).
+`agents.task` jobs for that agent. Rendered on `/workspace/agents`
+(`src/features/agents-registry`); the jobs themselves are listed under
+Settings › Jobs.
 
 ## Async delegation (`subagents.async_enabled: true`, config_version 25)
 

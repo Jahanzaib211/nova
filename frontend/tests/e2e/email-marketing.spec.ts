@@ -287,5 +287,12 @@ test.describe("email marketing", () => {
     await page.goto("/workspace/settings#account");
     await expect(page.getByRole("link", { name: "Email" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Email" })).toHaveCount(0);
+
+    // The page itself is gated too: /api/em is not mounted on a deployment
+    // with email_marketing off, so the panels would only ever be errors.
+    await page.goto("/workspace/email");
+    await expect(page.getByTestId("email-disabled")).toBeVisible();
+    await expect(page.getByTestId("em-campaigns")).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Campaigns" })).toHaveCount(0);
   });
 });

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request
 
 from app.gateway.authz import AuthContext, require_auth
 from app.gateway.deps import get_config
-from deerflow.agents_registry.registry import build_registry, live_counts
+from deerflow.agents_registry.registry import async_delegation_enabled, build_registry, live_counts
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,6 @@ async def agents_registry(request: Request) -> dict[str, Any]:
     repo = getattr(request.app.state, "jobs_repo", None)
     counts = await live_counts(repo, owner)
     return {
-        "async_enabled": bool(getattr(config.subagents, "async_enabled", False)) and bool(getattr(config.jobs, "enabled", False)),
+        "async_enabled": async_delegation_enabled(config),
         "agents": build_registry(config, custom_agents=custom, counts=counts),
     }

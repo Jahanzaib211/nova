@@ -11,20 +11,12 @@ from pydantic import BaseModel, Field
 from deerflow.capabilities.modules._common import Items, section_enabled
 from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
-_registry_cache: tuple[str, Any] | None = None
-
 
 def _registry():
-    """Registry for the freshest ``integrations:`` config (rebuilt on change)."""
-    global _registry_cache
-    from deerflow.config.app_config import get_app_config
-    from deerflow.integrations.registry import build_registry
+    """The shared registry (same instance and probe cache as ``/api/integrations``)."""
+    from deerflow.integrations.registry import get_integrations_registry
 
-    config = get_app_config().integrations
-    source = config.model_dump_json()
-    if _registry_cache is None or _registry_cache[0] != source:
-        _registry_cache = (source, build_registry(config))
-    return _registry_cache[1]
+    return get_integrations_registry()
 
 
 def _dump(result: Any) -> dict[str, Any]:

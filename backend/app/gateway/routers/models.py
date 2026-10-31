@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_auth
-from app.gateway.deps import get_config, get_current_user_from_request
+from app.gateway.deps import get_config, get_current_user_from_request, is_admin
 from app.gateway.repositories.model_repository import get_model_repo
 from deerflow.config.app_config import AppConfig, reload_app_config
 from deerflow.config.model_config import ModelConfig
@@ -15,12 +15,13 @@ from deerflow.config.runtime_models import (
     runtime_model_names,
     save_runtime_model_dicts,
 )
+from deerflow.models.probe import PROBE_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["models"])
 
-MODEL_TEST_TIMEOUT_SEC = 20.0
+MODEL_TEST_TIMEOUT_SEC = PROBE_TIMEOUT_SECONDS
 
 
 class ModelResponse(BaseModel):
@@ -236,7 +237,7 @@ async def get_model(model_name: str, config: AppConfig = Depends(get_config)) ->
 async def _resolve_writer(request: Request) -> tuple[str, bool]:
     """Resolve the authenticated writer: (user_id, is_admin)."""
     user = await get_current_user_from_request(request)
-    return str(user.id), getattr(user, "system_role", None) == "admin"
+    return str(user.id), is_admin(user)
 
 
 def _get_repo_or_none():
@@ -442,17 +443,12 @@ async def discover_local_models() -> DiscoverResponse:
     description="Send a minimal completion request to the model and report whether it responds.",
 )
 async def test_model(model_name: str, config: AppConfig = Depends(get_config)) -> ModelTestResponse:
-    if config.get_model_config(model_name) is None:
-        raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found")
-
-    from deerflow.models.factory import create_chat_model
+    from deerflow.models.probe import probe_model
 
     try:
-        model = create_chat_model(model_name, app_config=config, attach_tracing=False)
-        result = await asyncio.wait_for(model.ainvoke("Reply with the single word: ok"), timeout=MODEL_TEST_TIMEOUT_SEC)
-        preview = str(getattr(result, "content", result))[:80]
-        return ModelTestResponse(ok=True, message=f"Model responded: {preview}")
-    except TimeoutError:
-        return ModelTestResponse(ok=False, message=f"Timed out after {MODEL_TEST_TIMEOUT_SEC:.0f}s — is the endpoint running?")
-    except Exception as e:
-        return ModelTestResponse(ok=False, message=f"{type(e).__name__}: {e}")
+        result = await probe_model(model_name, app_config=config, timeout=MODEL_TEST_TIMEOUT_SEC)
+    except LookupError:
+        raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found") from None
+    if result.ok:
+        return ModelTestResponse(ok=True, message=f"Model responded: {result.detail[:80]}")
+    return ModelTestResponse(ok=False, message=result.detail)

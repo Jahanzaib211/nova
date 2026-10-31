@@ -15,7 +15,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.gateway.authz import AuthContext, require_auth
+from app.gateway.authz import require_auth
+from app.gateway.deps import authenticated_user_id as _user_id
 from app.gateway.deps import get_config, get_em_repo, get_jobs_repo
 from deerflow.email_marketing.bridge_factory import bridge_status, mailcow_bridge
 from deerflow.email_marketing.contacts_import import guess_mapping, parse_contacts_csv
@@ -33,13 +34,6 @@ MAX_CSV_BYTES = 5 * 1024 * 1024
 
 
 # ---------------------------------------------------------------- helpers
-
-
-def _user_id(request: Request) -> str:
-    auth: AuthContext = request.state.auth
-    if auth.user is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return str(auth.user.id)
 
 
 def _enabled() -> None:

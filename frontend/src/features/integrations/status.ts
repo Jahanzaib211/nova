@@ -35,14 +35,7 @@ export const TEXT_CLASS: Record<HealthTone, string> = {
   muted: "text-muted-foreground",
 };
 
-export const GROUP_IDS = [
-  "models",
-  "business",
-  "web",
-  "agents",
-  "extensions",
-  "other",
-] as const;
+export const GROUP_IDS = ["models", "business", "web", "other"] as const;
 export type GroupId = (typeof GROUP_IDS)[number];
 
 /** Card groups, in display order. Kinds not listed fall into the last group. */
@@ -53,10 +46,27 @@ export const KIND_GROUPS: ReadonlyArray<{
   { id: "models", kinds: ["llm_gateway"] },
   { id: "business", kinds: ["mail", "crm", "helpdesk"] },
   { id: "web", kinds: ["search", "crawler", "browser"] },
-  { id: "agents", kinds: ["agent_gateway", "acp_agent"] },
-  { id: "extensions", kinds: ["mcp_server", "skill"] },
   { id: "other", kinds: ["database"] },
 ];
+
+/**
+ * Kinds with their own settings page (Tools for MCP servers, Skills for
+ * skills, Runtimes for agent gateways and ACP agents). Listing them here too
+ * made Integrations a second, read-only copy of those pages, so they are left
+ * out of the health view entirely.
+ */
+export const MANAGED_ELSEWHERE: readonly IntegrationKind[] = [
+  "mcp_server",
+  "skill",
+  "agent_gateway",
+  "acp_agent",
+];
+
+export function visibleIntegrations(
+  items: IntegrationHealthItem[],
+): IntegrationHealthItem[] {
+  return items.filter((item) => !MANAGED_ELSEWHERE.includes(item.kind));
+}
 
 export function groupIntegrations(
   items: IntegrationHealthItem[],
@@ -66,7 +76,7 @@ export function groupIntegrations(
     items: [] as IntegrationHealthItem[],
   }));
   const fallback = out[out.length - 1]!;
-  for (const item of items) {
+  for (const item of visibleIntegrations(items)) {
     const group = KIND_GROUPS.findIndex((g) => g.kinds.includes(item.kind));
     (group >= 0 ? out[group]! : fallback).items.push(item);
   }

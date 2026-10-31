@@ -9,9 +9,11 @@ import {
 } from "@/features/integrations/components/integration-card";
 import {
   KIND_GROUPS,
+  MANAGED_ELSEWHERE,
   groupIntegrations,
   summarize,
   toneFor,
+  visibleIntegrations,
 } from "@/features/integrations/status";
 import {
   INTEGRATION_KINDS,
@@ -44,10 +46,10 @@ describe("integration status presentation", () => {
     expect(toneFor("disabled")).toBe("muted");
   });
 
-  it("places every contract kind in exactly one group", () => {
+  it("places every contract kind in exactly one group, or none if managed elsewhere", () => {
     for (const kind of INTEGRATION_KINDS) {
       const hits = KIND_GROUPS.filter((g) => g.kinds.includes(kind));
-      expect(hits, kind).toHaveLength(1);
+      expect(hits, kind).toHaveLength(MANAGED_ELSEWHERE.includes(kind) ? 0 : 1);
     }
   });
 
@@ -57,11 +59,17 @@ describe("integration status presentation", () => {
       item("ollama"),
       item("mailcow", { kind: "mail" }),
     ]);
-    expect(groups.map((g) => g.id)).toEqual([
-      "models",
-      "business",
-      "extensions",
-    ]);
+    expect(groups.map((g) => g.id)).toEqual(["models", "business"]);
+  });
+
+  it("leaves out kinds that have their own settings page", () => {
+    const items = [
+      item("mcp:x", { kind: "mcp_server" }),
+      item("skill:y", { kind: "skill" }),
+      item("ollama"),
+    ];
+    expect(visibleIntegrations(items).map((i) => i.id)).toEqual(["ollama"]);
+    expect(groupIntegrations(items).flatMap((g) => g.items)).toHaveLength(1);
   });
 
   it("summarises counts per status", () => {
