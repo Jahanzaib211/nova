@@ -16,7 +16,9 @@ Nova est construit par **[Ali Technologies](https://www.alilabsx.com)** sur la b
 
 ## Ce que Nova ajoute à DeerFlow
 
-Nova est un refactoring full-stack de DeerFlow 2.0 — **+35 738 lignes sur 338 fichiers** (vérifié : `git diff --shortstat v2.0.0-rc1 HEAD`). Les ajouts principaux, tous construits pour Nova :
+Nova est un refactoring full-stack de DeerFlow 2.0 — **120 533 lignes de code inédit réparties sur 698 nouveaux fichiers**, pour un delta total de **+145 947 / −11 844 sur 1 148 fichiers**. Sur les 1 338 fichiers amont au point de fork, 884 (66 %) sont intacts. Audit du 2026-09-08 ; chaque chiffre est reproductible, et les commandes exactes — y compris les artefacts générés exclus et pourquoi — figurent dans **[NOVA_VS_DEERFLOW.md](./NOVA_VS_DEERFLOW.md)**.
+
+Les ajouts principaux, tous construits pour Nova :
 
 - **Agent's Computer** — panneau 6 onglets en direct (Terminal, Éditeur avec diff rouge/vert, Aperçu navigateur, Chronologie d'activité, Fichiers, Revue) diffusant en temps réel ce que l'agent fait.
 - **Boucle de vérification** — l'agent teste ses propres builds : Chromium headless auto-vérifie le serveur de dev en cours (erreurs console, détection de rendu vide, captures d'écran), déclenché automatiquement sur le serveur de dev prêt et sur les livrables HTML, avec un chemin visuel pour que le modèle *voie* son build.

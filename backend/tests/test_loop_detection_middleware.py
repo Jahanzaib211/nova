@@ -128,11 +128,11 @@ class TestHashToolCalls:
     def test_stringified_dict_args_match_dict_args(self):
         dict_call = {
             "name": "read_file",
-            "args": {"path": "/tmp/demo.py", "start_line": "1", "end_line": "150"},
+            "args": {"path": "/tmp/sample.py", "start_line": "1", "end_line": "150"},
         }
         string_call = {
             "name": "read_file",
-            "args": '{"path":"/tmp/demo.py","start_line":"1","end_line":"150"}',
+            "args": '{"path":"/tmp/sample.py","start_line":"1","end_line":"150"}',
         }
 
         assert _hash_tool_calls([dict_call]) == _hash_tool_calls([string_call])
@@ -140,11 +140,11 @@ class TestHashToolCalls:
     def test_reversed_read_file_range_matches_forward_range(self):
         forward_call = {
             "name": "read_file",
-            "args": {"path": "/tmp/demo.py", "start_line": 10, "end_line": 300},
+            "args": {"path": "/tmp/sample.py", "start_line": 10, "end_line": 300},
         }
         reversed_call = {
             "name": "read_file",
-            "args": {"path": "/tmp/demo.py", "start_line": 300, "end_line": 10},
+            "args": {"path": "/tmp/sample.py", "start_line": 300, "end_line": 10},
         }
 
         assert _hash_tool_calls([forward_call]) == _hash_tool_calls([reversed_call])

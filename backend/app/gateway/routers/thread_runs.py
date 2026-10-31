@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from app.gateway.authz import require_permission
 from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_service, get_run_store, get_stream_bridge, require_admin_user
 from app.gateway.pagination import trim_run_message_page
-from app.gateway.services import format_sse, sse_consumer, start_run, wait_for_run_completion
+from app.gateway.services import SSE_HEADERS, format_sse, sse_consumer, start_run, wait_for_run_completion
 from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
 
 logger = logging.getLogger(__name__)
@@ -30,11 +30,8 @@ router = APIRouter(prefix="/api/threads", tags=["runs"])
 
 _TERMINAL_RUN_STATUSES = frozenset({RunStatus.success, RunStatus.error, RunStatus.timeout, RunStatus.interrupted})
 
-_SSE_HEADERS = {
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
-    "X-Accel-Buffering": "no",
-}
+# Canonical set lives in app.gateway.services so every SSE endpoint shares it.
+_SSE_HEADERS = SSE_HEADERS
 
 
 async def _terminal_end_response(record: RunRecord, bridge) -> StreamingResponse | None:
@@ -162,15 +159,28 @@ def _record_to_response(record: RunRecord) -> RunResponse:
 
 
 def _service_to_response(detail: Any) -> RunResponse:
-    """Convert a service-layer RunDetail/RunSummary to the wire-format RunResponse."""
+    """Convert a service-layer RunDetail/RunSummary to the wire-format RunResponse.
+
+    Every counter is carried across. ``RunResponse`` declares them all, so
+    leaving them off here did not fail loudly — it produced silent zeros on
+    every run the UI listed, which reads as "this run used no tokens" rather
+    than "this field was dropped".
+    """
     return RunResponse(
         run_id=detail.run_id,
         thread_id=detail.thread_id,
         assistant_id=getattr(detail, "assistant_id", None),
         status=detail.status,
-        total_tokens=getattr(detail, "total_tokens", 0),
-        message_count=getattr(detail, "message_count", 0),
         created_at=getattr(detail, "created_at", "") or "",
+        updated_at=getattr(detail, "updated_at", "") or "",
+        total_input_tokens=getattr(detail, "total_input_tokens", 0),
+        total_output_tokens=getattr(detail, "total_output_tokens", 0),
+        total_tokens=getattr(detail, "total_tokens", 0),
+        llm_call_count=getattr(detail, "llm_call_count", 0),
+        lead_agent_tokens=getattr(detail, "lead_agent_tokens", 0),
+        subagent_tokens=getattr(detail, "subagent_tokens", 0),
+        middleware_tokens=getattr(detail, "middleware_tokens", 0),
+        message_count=getattr(detail, "message_count", 0),
     )
 
 

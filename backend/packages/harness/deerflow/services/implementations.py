@@ -46,6 +46,28 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _usage_fields(record: Any) -> dict[str, Any]:
+    """Token/count fields shared by every service-layer run projection.
+
+    These all exist on ``RunRecord`` and are persisted by the run store, but the
+    service layer used to drop them, so every run returned by
+    ``GET /api/threads/{id}/runs`` reported zero tokens and zero messages while
+    the numbers sat in the database. One helper, used by every projection, so a
+    field cannot be remembered in one and forgotten in the next.
+    """
+    return {
+        "updated_at": getattr(record, "updated_at", None) or None,
+        "total_input_tokens": getattr(record, "total_input_tokens", 0),
+        "total_output_tokens": getattr(record, "total_output_tokens", 0),
+        "total_tokens": getattr(record, "total_tokens", 0),
+        "llm_call_count": getattr(record, "llm_call_count", 0),
+        "lead_agent_tokens": getattr(record, "lead_agent_tokens", 0),
+        "subagent_tokens": getattr(record, "subagent_tokens", 0),
+        "middleware_tokens": getattr(record, "middleware_tokens", 0),
+        "message_count": getattr(record, "message_count", 0),
+    }
+
+
 class RunServiceImpl:
     """Thin wrapper around RunManager implementing RunService protocol.
 
@@ -103,8 +125,7 @@ class RunServiceImpl:
             model_name=record.model_name,
             created_at=record.created_at,
             error=record.error,
-            total_tokens=record.total_tokens,
-            message_count=record.message_count,
+            **_usage_fields(record),
         )
 
     async def get(
@@ -125,8 +146,7 @@ class RunServiceImpl:
             model_name=record.model_name,
             created_at=record.created_at,
             error=record.error,
-            total_tokens=record.total_tokens,
-            message_count=record.message_count,
+            **_usage_fields(record),
         )
 
     async def list_by_thread(
@@ -145,6 +165,7 @@ class RunServiceImpl:
                 correlation_id=r.correlation_id,
                 model_name=r.model_name,
                 created_at=r.created_at,
+                **_usage_fields(r),
             )
             for r in records
         ]
@@ -195,8 +216,7 @@ class RunServiceImpl:
             model_name=record.model_name,
             created_at=record.created_at,
             error=record.error,
-            total_tokens=record.total_tokens,
-            message_count=record.message_count,
+            **_usage_fields(record),
         )
 
     async def cancel(

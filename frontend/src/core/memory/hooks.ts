@@ -8,6 +8,7 @@ import {
   loadMemory,
   updateMemoryFact,
 } from "./api";
+import { MalformedMemoryError } from "./guards";
 import type {
   MemoryFactInput,
   MemoryFactPatchInput,
@@ -18,6 +19,11 @@ export function useMemory() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["memory"],
     queryFn: () => loadMemory(),
+    // A payload that failed validation will fail again; retrying it three
+    // times only kept the page on "Loading..." for ~7 s before the error
+    // showed. Network failures keep the default retry budget.
+    retry: (failureCount, err) =>
+      !(err instanceof MalformedMemoryError) && failureCount < 3,
   });
   return { memory: data ?? null, isLoading, error };
 }

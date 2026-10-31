@@ -5,13 +5,14 @@ import atexit
 import logging
 import os
 import threading
+import time
 import uuid
 from collections.abc import Callable, Coroutine
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from contextvars import Context, copy_context
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -130,7 +131,7 @@ class SubagentResult:
                 self.ai_messages = ai_messages
             if token_usage_records is not None:
                 self.token_usage_records = token_usage_records
-            self.completed_at = completed_at or datetime.now()
+            self.completed_at = completed_at or datetime.now(UTC)
             self.status = status
             return True
 
@@ -138,6 +139,42 @@ class SubagentResult:
 # Global storage for background task results
 _background_tasks: dict[str, SubagentResult] = {}
 _background_tasks_lock = threading.Lock()
+
+# TTL for completed background tasks — prevents unbounded memory growth
+# when a parent run crashes before polling completes.
+_BACKGROUND_TASK_TTL_SEC = 3600  # 1 hour
+
+
+def _sweep_background_tasks() -> None:
+    """Evict terminal tasks older than TTL to prevent unbounded memory growth.
+
+    Runs on every async launch, so it must never be the thing that fails one.
+    ``completed_at`` is tz-aware everywhere it is set today, but a naive value
+    would make ``now - completed_at`` raise TypeError and take down all async
+    subagent execution — and naive datetimes in this exact file are a known
+    finding (BUG-001). Bookkeeping degrades instead: a skipped sweep costs
+    memory, a raised one costs the feature.
+    """
+    now = datetime.now(UTC)
+
+    def _expired(r) -> bool:
+        if r.status not in (SubagentStatus.COMPLETED, SubagentStatus.FAILED, SubagentStatus.TIMED_OUT):
+            return False
+        completed = r.completed_at
+        if completed is None:
+            return False
+        if completed.tzinfo is None:  # defensive: treat a naive stamp as UTC
+            completed = completed.replace(tzinfo=UTC)
+        return (now - completed).total_seconds() > _BACKGROUND_TASK_TTL_SEC
+
+    try:
+        with _background_tasks_lock:
+            expired = [tid for tid, r in _background_tasks.items() if _expired(r)]
+            for tid in expired:
+                del _background_tasks[tid]
+    except Exception:
+        logger.debug("background task sweep failed", exc_info=True)
+
 
 # Thread pool for background task scheduling and orchestration
 _scheduler_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="subagent-scheduler-")
@@ -506,7 +543,7 @@ class SubagentExecutor:
                 task_id=task_id,
                 trace_id=self.trace_id,
                 status=SubagentStatus.RUNNING,
-                started_at=datetime.now(),
+                started_at=datetime.now(UTC),
             )
         ai_messages = result.ai_messages
         if ai_messages is None:
@@ -731,8 +768,14 @@ class SubagentExecutor:
         except FuturesTimeoutError:
             if result_holder is not None:
                 result_holder.cancel_event.set()
+                result_holder.try_set_terminal(
+                    SubagentStatus.TIMED_OUT,
+                    error=f"Execution timed out after {self.config.timeout_seconds} seconds",
+                )
             if future is not None:
                 future.cancel()
+            if result_holder is not None:
+                return result_holder
             raise
         except Exception:
             if future is None:
@@ -814,17 +857,37 @@ class SubagentExecutor:
 
         logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} starting async execution, task_id={task_id}, timeout={self.config.timeout_seconds}s")
 
+        _sweep_background_tasks()
+
         with _background_tasks_lock:
             _background_tasks[task_id] = result
 
         parent_context = copy_context()
+        # One deadline, measured from dispatch -- the same clock task_tool's
+        # poller uses. Timing from when a scheduler worker picked the task up
+        # meant a task queued behind a full pool (3 workers, and up to 3
+        # subagents per run, plus other runs) had not even started its own
+        # clock when the poller's backstop fired at timeout+60s: the run saw
+        # "Task polling timed out … the background task is stuck" instead of a
+        # clean timeout, and the stuck task kept its slot.
+        deadline = time.monotonic() + self.config.timeout_seconds
 
         # Submit to scheduler pool
         def run_task():
+            remaining = deadline - time.monotonic()
             with _background_tasks_lock:
-                _background_tasks[task_id].status = SubagentStatus.RUNNING
-                _background_tasks[task_id].started_at = datetime.now()
                 result_holder = _background_tasks[task_id]
+            if remaining <= 0:
+                waited = self.config.timeout_seconds - remaining
+                logger.error(f"[trace={self.trace_id}] Subagent {self.config.name} never started: queued {waited:.0f}s for a free slot")
+                result_holder.try_set_terminal(
+                    SubagentStatus.TIMED_OUT,
+                    error=f"Never started: waited {waited:.0f}s for a free subagent slot (limit {self.config.timeout_seconds}s)",
+                )
+                return
+            with _background_tasks_lock:
+                result_holder.status = SubagentStatus.RUNNING
+                result_holder.started_at = datetime.now(UTC)
 
             try:
                 # Submit execution directly to the persistent isolated loop so the
@@ -834,8 +897,8 @@ class SubagentExecutor:
                     lambda: self._aexecute(task, result_holder),
                 )
                 try:
-                    # Wait for execution with timeout
-                    execution_future.result(timeout=self.config.timeout_seconds)
+                    # Wait for execution until the dispatch deadline
+                    execution_future.result(timeout=remaining)
                 except FuturesTimeoutError:
                     logger.error(f"[trace={self.trace_id}] Subagent {self.config.name} execution timed out after {self.config.timeout_seconds}s")
                     # Signal cooperative cancellation and cancel the future

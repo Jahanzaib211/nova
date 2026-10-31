@@ -18,6 +18,12 @@ dependencies = [
     "websockets>=15.0.1,<16",
     "agent-client-protocol>=0.4.0",
     "agent-sandbox>=0.0.19",
+    # Job runner schedules (deerflow.jobs.scheduler). Was only transitive via
+    # langgraph-runtime-inmem; a floor pin so it cannot vanish underneath us.
+    "croniter>=6",
+    # Email-marketing templates (deerflow.email_marketing.templates): sandboxed
+    # rendering of user-authored HTML with an allowlisted context.
+    "jinja2>=3.1",
     "dotenv>=0.9.9",
     "exa-py>=1.0.0",
     "httpx>=0.28.0",
@@ -67,20 +73,28 @@ voice = [
 # `onnxruntime-gpu` both provide the `onnxruntime` module and having both
 # installed is unpredictable.
 #
-# The nvidia-*-cu12 wheels are for CTranslate2, not onnxruntime: it links
-# `libcublas.so.12` while a modern host may ship CUDA 13, so these supply the
-# CUDA 12 runtime it expects. `deerflow.speech.devices.preload_cuda_libraries()`
-# makes them loadable without `LD_LIBRARY_PATH`.
+# One CUDA 12 runtime for both engines, supplied as nvidia-*-cu12 wheels so the
+# image needs no system CUDA. CTranslate2 (Whisper) links `libcublas.so.12`;
+# onnxruntime-gpu is pinned below 1.27 because 1.27 is where its PyPI builds
+# switched to CUDA 13 (onnxruntime.ai CUDA EP docs) -- 1.28 loaded
+# `libcublas.so.13`/`libcudart.so.13`, found none, and silently put Kokoro on
+# the CPU at RTF ~1.0 (4 s before the first word of a reply). 1.21-1.26 are the
+# CUDA 12.8 builds, which also need cudart, cufft and curand from the same line.
+# `onnxruntime.preload_dlls()` / `deerflow.speech.devices.preload_cuda_libraries()`
+# make the wheels loadable without `LD_LIBRARY_PATH`.
 #
 # Measured on an RTX 3060: Whisper RTF 0.632 -> 0.021, Kokoro first-audio
 # 510 ms -> 200 ms (with fp32 weights; the int8 build is slower on both devices).
 voice-gpu = [
     "faster-whisper>=1.1.0",
     "kokoro-onnx>=0.4.0",
-    "onnxruntime-gpu>=1.21.0", # >=1.21 is where preload_dlls() appears
+    "onnxruntime-gpu>=1.21.0,<1.27", # >=1.21: preload_dlls(); <1.27: CUDA 12 builds
     "numpy>=1.26.0",
     "nvidia-cublas-cu12",
     "nvidia-cudnn-cu12",
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cufft-cu12",
+    "nvidia-curand-cu12",
 ]
 
 ollama = ["langchain-ollama>=0.3.0"]

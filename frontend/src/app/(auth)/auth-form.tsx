@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/core/auth/AuthProvider";
-import { parseAuthError } from "@/core/auth/types";
+import { enterAfterAuthChange, parseAuthError } from "@/core/auth/types";
 
 /**
  * Validate next parameter
@@ -160,7 +161,7 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
       // the success toast on arrival; the inline message covers the gap.
       sessionStorage.setItem("nova:auth-success", isLogin ? "login" : "signup");
       setSuccess(true);
-      router.push(redirectPath);
+      enterAfterAuthChange(redirectPath);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -208,9 +209,9 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
             <label htmlFor="password" className="text-sm font-medium">
               Password
             </label>
-            <Input
+            <PasswordInput
+              autoComplete={isLogin ? "current-password" : "new-password"}
               id="password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="•••••••"
@@ -228,9 +229,9 @@ export function AuthForm({ initialMode }: { initialMode: AuthMode }) {
               <label htmlFor="confirm-password" className="text-sm font-medium">
                 Confirm password
               </label>
-              <Input
+              <PasswordInput
+                autoComplete="new-password"
                 id="confirm-password"
-                type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="•••••••"

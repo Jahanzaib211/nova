@@ -3,6 +3,7 @@
 import { LogOutIcon } from "lucide-react";
 import { useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
@@ -164,16 +165,18 @@ export function AccountSettingsPage() {
             onChange={(e) => setNewEmail(e.target.value)}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="current-password"
             placeholder={t.settings.account.currentPassword}
             value={emailPassword}
             onChange={(e) => setEmailPassword(e.target.value)}
             required
           />
-          {emailError && <p className="text-sm text-red-500">{emailError}</p>}
+          {emailError && (
+            <p className="text-destructive text-sm">{emailError}</p>
+          )}
           {emailMessage && (
-            <p className="text-sm text-green-500">{emailMessage}</p>
+            <p className="text-success text-sm">{emailMessage}</p>
           )}
           <Button
             type="submit"
@@ -193,31 +196,31 @@ export function AccountSettingsPage() {
         description={t.settings.account.changePasswordDescription}
       >
         <form onSubmit={handleChangePassword} className="max-w-sm space-y-3">
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="current-password"
             placeholder={t.settings.account.currentPassword}
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="new-password"
             placeholder={t.settings.account.newPassword}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
             minLength={8}
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="new-password"
             placeholder={t.settings.account.confirmNewPassword}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
             minLength={8}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          {message && <p className="text-sm text-green-500">{message}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
+          {message && <p className="text-success text-sm">{message}</p>}
           <Button type="submit" variant="outline" size="sm" disabled={loading}>
             {loading
               ? t.settings.account.updating

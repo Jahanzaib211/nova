@@ -1,0 +1,17 @@
+# `config.yaml` binds web_search to http://searxng:8080, so the Service name is
+# part of the contract — renaming it silently drops search back to DuckDuckGo.
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+    {{- include "nova.selectorLabels" (dict "component" "searxng") | nindent 4 }}
+spec:
+  selector:
+    {{- include "nova.selectorLabels" (dict "component" "searxng") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

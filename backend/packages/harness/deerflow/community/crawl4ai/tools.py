@@ -32,7 +32,7 @@ from typing import Any
 
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
+from deerflow.community._tool_config import tool_config_extras as _get_tool_config
 
 from .crawl4ai_client import DEFAULT_BASE_URL, Crawl4aiClient
 
@@ -42,14 +42,6 @@ logger = logging.getLogger(__name__)
 _MAX_PAGES_CEILING = 25
 _PER_PAGE_CHARS = 4096
 _TOTAL_CHARS = 20000
-
-
-def _get_tool_config(tool_name: str) -> dict | None:
-    config = get_app_config().get_tool_config(tool_name)
-    if config is None:
-        return None
-    extras = config.model_extra
-    return extras if extras is not None else {}
 
 
 def _get_client() -> Crawl4aiClient:

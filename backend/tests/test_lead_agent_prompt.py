@@ -416,3 +416,25 @@ def test_system_prompt_template_preserves_placeholders():
         "{subagent_reminder}",
     ):
         assert ph in template, f"placeholder {ph} accidentally removed"
+
+
+def test_prompt_carries_tool_discipline_block():
+    """The discipline rules exist because breaking them produced real
+    failures (invisible raw-bash servers, stale file:// screenshots, missing
+    todo lists). If the block is dropped, those regress silently."""
+    from deerflow.agents.lead_agent.prompt import apply_prompt_template
+
+    text = apply_prompt_template()
+    for needle in (
+        "<tool_discipline>",
+        # Was "Dev servers ONLY via `start_dev_server`". Softened deliberately:
+        # the rule used to end "stop it (fuser -k <port>/tcp) and re-start via
+        # the tool", which told the agent to kill a working server rather than
+        # register it — and register_external_dev_server was unreachable anyway,
+        # so there was no alternative to offer. Now there is.
+        "Prefer `start_dev_server` for dev servers",
+        "register_external_dev_server(port=<port>)",
+        "Never navigate the browser to `file://`",
+        "Multi-step work starts with `write_todos`",
+    ):
+        assert needle in text, f"missing discipline rule: {needle}"

@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 
 import { CopyButton } from "../copy-button";
 
+import { runtimeDisplayName } from "./acp-transcript";
 import { MarkdownContent } from "./markdown-content";
 
 function FeedbackButtons({
@@ -373,8 +374,53 @@ function MessageContent_({
         className="my-3"
         components={components}
       />
+      <RuntimeProvenance message={message} />
     </AIElementMessageContent>
   );
+}
+
+/**
+ * Which runtime answered. `RuntimeDispatchMiddleware` stamps
+ * `response_metadata.runtime` on a turn taken by an ACP runtime, and
+ * `runtime_fallback_from` / `runtime_fallback_reason` when that runtime
+ * failed and the native agent answered instead — a user who chose Claude
+ * Code and got Nova should be told, not left to guess from the tone.
+ */
+function RuntimeProvenance({ message }: { message: Message }) {
+  const { t } = useI18n();
+  const meta = (message as { response_metadata?: Record<string, unknown> })
+    .response_metadata;
+  if (!meta) return null;
+  const runtime = typeof meta.runtime === "string" ? meta.runtime : null;
+  const fallbackFrom =
+    typeof meta.runtime_fallback_from === "string"
+      ? meta.runtime_fallback_from
+      : null;
+  const reason =
+    typeof meta.runtime_fallback_reason === "string"
+      ? meta.runtime_fallback_reason
+      : "";
+  if (fallbackFrom) {
+    return (
+      <p
+        className="text-warning mt-1 text-xs"
+        data-testid="runtime-fallback-notice"
+      >
+        {t.toolCalls.acp.fallback(runtimeDisplayName(fallbackFrom), reason)}
+      </p>
+    );
+  }
+  if (runtime && runtime !== "native") {
+    return (
+      <p
+        className="text-muted-foreground mt-1 text-xs"
+        data-testid="runtime-provenance"
+      >
+        {t.toolCalls.acp.answeredBy(runtimeDisplayName(runtime))}
+      </p>
+    );
+  }
+  return null;
 }
 
 /**
@@ -470,7 +516,7 @@ function RichFileCard({
 
   if (isUploading) {
     return (
-      <div className="bg-background border-border/40 flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 opacity-60 shadow-sm">
+      <div className="bg-background border-panel-border flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 opacity-60 shadow-sm">
         <div className="flex items-start gap-2">
           <Loader2Icon className="text-muted-foreground mt-0.5 size-4 shrink-0 animate-spin" />
           <span
@@ -505,7 +551,7 @@ function RichFileCard({
         href={fileUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="group border-border/40 relative block overflow-hidden rounded-lg border"
+        className="group border-panel-border relative block overflow-hidden rounded-lg border"
       >
         <img
           src={fileUrl}
@@ -517,7 +563,7 @@ function RichFileCard({
   }
 
   return (
-    <div className="bg-background border-border/40 flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 shadow-sm">
+    <div className="bg-background border-panel-border flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 shadow-sm">
       <div className="flex items-start gap-2">
         <FileIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
         <span

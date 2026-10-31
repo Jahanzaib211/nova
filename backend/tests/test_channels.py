@@ -754,7 +754,7 @@ class TestChannelManager:
                 channel_name="test",
                 chat_id="chat1",
                 user_id="user1",
-                text="with /mnt/user-data/uploads/demo.png",
+                text="with /mnt/user-data/uploads/sample.png",
                 files=[{"image_key": "img_1"}],
             )
             mock_channel = MagicMock()
@@ -788,7 +788,7 @@ class TestChannelManager:
 
             mock_client.runs.wait.assert_called_once()
             run_call_args = mock_client.runs.wait.call_args
-            assert run_call_args[1]["input"]["messages"][0]["content"] == "with /mnt/user-data/uploads/demo.png"
+            assert run_call_args[1]["input"]["messages"][0]["content"] == "with /mnt/user-data/uploads/sample.png"
 
         _run(go())
 

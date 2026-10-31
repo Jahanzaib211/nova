@@ -178,7 +178,13 @@ def _build_runtime_middlewares(
         middlewares.append(GuardrailMiddleware(provider, fail_closed=guardrails_config.fail_closed, passport=guardrails_config.passport))
 
     from deerflow.agents.middlewares.sandbox_audit_middleware import SandboxAuditMiddleware
+    from deerflow.agents.middlewares.secure_ship_middleware import SecureShipMiddleware
 
+    # Secure-Ship is the OUTERMOST of the security middlewares: `wrap_tool_call`
+    # dispatch is "first in list = outermost", so it sees a delivery call before
+    # the bash audit does -- the gate must be able to stop a deploy before any
+    # of it runs.
+    middlewares.append(SecureShipMiddleware())
     middlewares.append(SandboxAuditMiddleware())
     middlewares.append(ToolErrorHandlingMiddleware())
     return middlewares

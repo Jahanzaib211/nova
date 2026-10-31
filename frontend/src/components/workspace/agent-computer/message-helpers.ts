@@ -27,8 +27,14 @@ export function getActiveFilePath(messages: Message[]): string | null {
 // The most recent file edit, sourced from tool-call args already in state — used
 // by the Editor's live-diff view (str_replace carries old/new; write_file is all-add).
 export type ActiveEdit =
-  | { path: string; kind: "str_replace"; oldStr: string; newStr: string }
-  | { path: string; kind: "write_file"; content: string };
+  | {
+      callId: string;
+      path: string;
+      kind: "str_replace";
+      oldStr: string;
+      newStr: string;
+    }
+  | { callId: string; path: string; kind: "write_file"; content: string };
 
 export function getActiveEdit(messages: Message[]): ActiveEdit | null {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -47,6 +53,11 @@ export function getActiveEdit(messages: Message[]): ActiveEdit | null {
         typeof args.new_str === "string"
       ) {
         return {
+          // Tool-call identity, not just path+kind: two consecutive edits to
+          // the SAME file must each reset the Editor to Diff view, and
+          // path+kind alone cannot tell them apart.
+          callId:
+            typeof call.id === "string" ? call.id : `${call.name}-${i}-${j}`,
           path,
           kind: "str_replace",
           oldStr: args.old_str,
@@ -54,7 +65,13 @@ export function getActiveEdit(messages: Message[]): ActiveEdit | null {
         };
       }
       if (call.name === "write_file" && typeof args.content === "string") {
-        return { path, kind: "write_file", content: args.content };
+        return {
+          callId:
+            typeof call.id === "string" ? call.id : `${call.name}-${i}-${j}`,
+          path,
+          kind: "write_file",
+          content: args.content,
+        };
       }
     }
   }

@@ -237,7 +237,7 @@ class TestSnapshotSerialization:
         from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
 
         (tmp_path / "a.py").write_text("def f():\n    return 1\n\nclass C:\n    pass\n")
-        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1'\n")
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sample'\nversion = '0.1'\n")
 
         snap = WorkspaceIntelligenceServiceImpl().scan(str(tmp_path))
         from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot

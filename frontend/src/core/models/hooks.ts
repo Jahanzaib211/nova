@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useSyncExternalStore } from "react";
 
 import {
   createModel,
@@ -7,7 +8,16 @@ import {
   testModel,
   updateModel,
 } from "./api";
-import type { ModelWriteRequest } from "./types";
+import type { Model, ModelWriteRequest } from "./types";
+import {
+  clearModelVisibility,
+  getModelVisibilityServerSnapshot,
+  getModelVisibilitySnapshot,
+  isModelVisible,
+  setModelVisible,
+  setShowHiddenModels,
+  subscribeModelVisibility,
+} from "./visibility";
 
 export const modelsQueryKey = ["models"] as const;
 
@@ -65,4 +75,32 @@ export function useTestModel() {
   return useMutation({
     mutationFn: (name: string) => testModel(name),
   });
+}
+
+/**
+ * The user's per-browser model visibility (see `core/models/visibility.ts`).
+ * Config models cannot be written through the models API, so "show in chat" for
+ * them is a local preference; runtime models keep their server-side `hidden`
+ * flag and only need this to read it uniformly.
+ */
+export function useModelVisibility() {
+  const state = useSyncExternalStore(
+    subscribeModelVisibility,
+    getModelVisibilitySnapshot,
+    getModelVisibilityServerSnapshot,
+  );
+
+  const isVisible = useCallback(
+    (model: Pick<Model, "name" | "hidden">) => isModelVisible(model, state),
+    [state],
+  );
+
+  return {
+    state,
+    isVisible,
+    setVisible: setModelVisible,
+    resetVisibility: clearModelVisibility,
+    showHidden: state.showHidden,
+    setShowHidden: setShowHiddenModels,
+  };
 }

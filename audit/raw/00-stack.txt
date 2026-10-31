@@ -1,0 +1,138 @@
+## backend/pyproject.toml
+[project]
+name = "nova"
+version = "2.1.0"
+description = "LangGraph-based AI agent system with sandbox execution capabilities"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "deerflow-harness",
+    "fastapi>=0.115.0",
+    "orjson>=3.10.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.31",
+    "sse-starlette>=2.1.0",
+    "uvicorn[standard]>=0.34.0",
+    "lark-oapi>=1.4.0",
+    "slack-sdk>=3.33.0",
+    "python-telegram-bot>=21.0",
+    "langgraph-sdk>=0.1.51",
+    "markdown-to-mrkdwn>=0.3.1",
+    "wecom-aibot-python-sdk>=0.1.6",
+    "dingtalk-stream>=0.24.3",
+    "bcrypt>=4.0.0",
+    "pyjwt>=2.13.0",
+    "email-validator>=2.0.0",
+    "stripe>=15.3.0",
+]
+
+[project.optional-dependencies]
+postgres = ["deerflow-harness[postgres]"]
+discord = ["discord.py>=2.7.0"]
+trading = ["deerflow-harness[trading]"]
+# Self-hosted voice (STT/TTS). Forwarded from the harness, same as trading.
+voice = ["deerflow-harness[voice]"]
+# Forwarded like `voice` — an extra declared only on the harness is not
+# reachable as `uv sync --extra voice-gpu` from the root workspace.
+voice-gpu = ["deerflow-harness[voice-gpu]"]
+
+[dependency-groups]
+dev = [
+    # uv builds venvs without pip, which is normally fine -- uv installs things
+    # itself. It stops being fine inside the gateway container, where trying a
+    # package to see if it helps dies on "No module named pip" and the only
+    # route left is an image rebuild. Cheap to carry, and it keeps the running
+    # container debuggable.
+    "pip>=25.0",
+    "blockbuster>=1.5.26,<1.6",
+    "fakeredis>=2.26.0",
+    "prompt-toolkit>=3.0.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.14.11",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "no_auto_user: disable the conftest autouse contextvar fixture for this test",
+    "allow_blocking_io: opt out of the strict Blockbuster gate in tests/blocking_io/",
+]
+
+
+## harness pyproject deps
+6:dependencies = [
+7-    # Declared explicitly, not left transitive. The gateway's WebSocket bridges
+8-    # (app/gateway/routers/sandbox.py, routers/voice.py) run on it, and an
+9-    # unconstrained langchain-family lock resolution silently pulled it
+10-    # *backwards* with nothing to notice. A floor pin turns any future
+11-    # regression into a resolver error instead of a surprise.
+12-    #
+13-    # The ceiling is upstream, not a preference: langchain 1.3.9 — the release
+14-    # that fixes PYSEC-2026-2192 — requires websockets<16, so ">=16" and a
+15-    # vulnerability-free langchain are mutually unsatisfiable today. We take the
+16-    # security fix; 15.0.1 carries every API these bridges use (verified:
+17-    # connect(open_timeout=, max_size=, ping_interval=)).
+18-    "websockets>=15.0.1,<16",
+19-    "agent-client-protocol>=0.4.0",
+20-    "agent-sandbox>=0.0.19",
+21-    "dotenv>=0.9.9",
+22-    "exa-py>=1.0.0",
+23-    "httpx>=0.28.0",
+24-    "kubernetes>=30.0.0",
+25-    "langchain>=1.2.15",
+26-    "langchain-anthropic>=1.4.1",
+27-    "langchain-deepseek>=1.0.1",
+28-    "langchain-mcp-adapters>=0.2.2",
+29-    "langchain-openai>=1.2.1",
+30-    "langfuse>=3.4.1",
+31-    "langgraph>=1.1.9",
+32-    "langgraph-api>=0.8.1",
+33-    "langgraph-cli>=0.4.24",
+34-    "langgraph-runtime-inmem>=0.28.0",
+35-    "markdownify>=1.2.2",
+36-    "markitdown[all,xlsx]>=0.0.1a2",
+37-    "pydantic>=2.12.5",
+38-    "pyyaml>=6.0.3",
+39-    "readabilipy>=0.3.0",
+40-    "tavily-python>=0.7.17",
+41-    "firecrawl-py>=1.15.0",
+42-    "tiktoken>=0.8.0",
+43-    "ddgs>=9.10.0",
+44-    "duckdb>=1.4.4",
+45-    "langchain-google-genai>=4.2.1",
+46-    "langgraph-checkpoint-sqlite>=3.0.3",
+47-    "langgraph-sdk>=0.1.51",
+48-    "sqlalchemy[asyncio]>=2.0,<3.0",
+49-    "aiosqlite>=0.19",
+50-    "alembic>=1.13",
+51-    "cryptography>=43.0.0",
+52-    "playwright>=1.40.0",
+53-    "httpx-socks>=0.11.0",
+54-]
+55-
+56-[project.optional-dependencies]
+57-# Self-hosted voice. Everything here runs on onnxruntime — deliberately no
+58-# PyTorch, which is what keeps the gateway image and its memory footprint small.
+59-# Weights are fetched separately by scripts/fetch-voice-models.sh.
+60-voice = [
+61-    "faster-whisper>=1.1.0",   # Whisper on CTranslate2 — ~4x faster, far leaner
+62-    "kokoro-onnx>=0.4.0",      # Kokoro-82M TTS, Apache-2.0, ONNX (no torch)
+63-    "onnxruntime>=1.20.0",     # shared by Kokoro and Silero VAD
+64-    "numpy>=1.26.0",
+65-]
+66-# GPU voice. Install *instead of* `voice`, not alongside it: `onnxruntime` and
+
+## frontend key deps
+name nova-frontend node? None
+next ^16.2.12
+react ^19.0.0
+react-dom ^19.0.0
+typescript ^5.8.2
+vitest ^4.1.4
+@playwright/test ^1.59.1
+eslint ^9.23.0
+@tanstack/react-query ^5.90.17
+swr None
+zustand None
+zod ^3.24.2
