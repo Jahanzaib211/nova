@@ -323,74 +323,86 @@ async def run_acp_prompt(
         # logged so a slow launch reads as one, not as a hung turn.
         started = time.monotonic()
         try:
-            async with spawn_agent_process(
-                _Client(),
-                agent_cfg.command,
-                *(agent_cfg.args or []),
-                env=resolve_env(agent_cfg),
-                cwd=cwd,
-                transport_kwargs={"limit": ACP_STREAM_LIMIT},
-            ) as (conn, proc):
-                proc_ref = proc
-                drain = asyncio.create_task(_drain_stderr(proc))
+            try:
+                async with spawn_agent_process(
+                    _Client(),
+                    agent_cfg.command,
+                    *(agent_cfg.args or []),
+                    env=resolve_env(agent_cfg),
+                    cwd=cwd,
+                    transport_kwargs={"limit": ACP_STREAM_LIMIT},
+                ) as (conn, proc):
+                    proc_ref = proc
+                    drain = asyncio.create_task(_drain_stderr(proc))
 
-                async def _died(exited: asyncio.Future, detail: str = "") -> ACPAdapterExited:
-                    """The adapter is gone: report its exit code and last words."""
-                    # The pipe error can beat the exit code by a tick, so wait
-                    # for the process to be reaped before reading its status.
-                    with contextlib.suppress(Exception):
-                        await asyncio.wait_for(asyncio.shield(exited), timeout=5)
-                    # Give the drain a beat to read the adapter's last words.
-                    with contextlib.suppress(Exception):
-                        await asyncio.wait_for(asyncio.shield(drain), timeout=0.5)
-                    tail = " | ".join(stderr_tail) or "no stderr"
-                    prefix = f"{detail} " if detail else ""
-                    return ACPAdapterExited(f"{agent_cfg.command} exited with code {proc.returncode} before answering: {prefix}{tail}")
+                    async def _died(exited: asyncio.Future, detail: str = "") -> ACPAdapterExited:
+                        """The adapter is gone: report its exit code and last words."""
+                        # The pipe error can beat the exit code by a tick, so wait
+                        # for the process to be reaped before reading its status.
+                        with contextlib.suppress(Exception):
+                            await asyncio.wait_for(asyncio.shield(exited), timeout=5)
+                        # Give the drain a beat to read the adapter's last words.
+                        with contextlib.suppress(Exception):
+                            await asyncio.wait_for(asyncio.shield(drain), timeout=0.5)
+                        tail = " | ".join(stderr_tail) or "no stderr"
+                        prefix = f"{detail} " if detail else ""
+                        return ACPAdapterExited(f"{agent_cfg.command} exited with code {proc.returncode} before answering: {prefix}{tail}")
 
-                async def _until_exit(call: Any) -> Any:
-                    """Await one ACP request, failing fast if the adapter dies."""
-                    request = asyncio.ensure_future(call)
-                    exited = asyncio.ensure_future(proc.wait())
+                    async def _until_exit(call: Any) -> Any:
+                        """Await one ACP request, failing fast if the adapter dies."""
+                        request = asyncio.ensure_future(call)
+                        exited = asyncio.ensure_future(proc.wait())
+                        try:
+                            done, _ = await asyncio.wait({request, exited}, return_when=asyncio.FIRST_COMPLETED)
+                            if request in done:
+                                try:
+                                    return request.result()
+                                except OSError as exc:
+                                    # The adapter died mid-request: its stdin pipe is
+                                    # gone, so the write fails with ECONNRESET or
+                                    # EPIPE. That is an exit, not a transport error
+                                    # -- report it the way the operator needs it, with
+                                    # the exit code and the stderr, or the turn just
+                                    # fails with "Connection lost" and no cause.
+                                    err = await _died(exited, "the connection to the adapter was lost")
+                                    raise err from exc
+                            request.cancel()
+                            err = await _died(exited)
+                            raise err
+                        finally:
+                            if not exited.done():
+                                exited.cancel()
+
                     try:
-                        done, _ = await asyncio.wait({request, exited}, return_when=asyncio.FIRST_COMPLETED)
-                        if request in done:
-                            try:
-                                return request.result()
-                            except OSError as exc:
-                                # The adapter died mid-request: its stdin pipe is
-                                # gone, so the write fails with ECONNRESET or
-                                # EPIPE. That is an exit, not a transport error
-                                # -- report it the way the operator needs it, with
-                                # the exit code and the stderr, or the turn just
-                                # fails with "Connection lost" and no cause.
-                                err = await _died(exited, "the connection to the adapter was lost")
-                                raise err from exc
-                        request.cancel()
-                        err = await _died(exited)
-                        raise err
+                        await _until_exit(conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0")))
+                        kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
+                        logger.info("acp session for %s: cwd=%s mcp_servers=%s (initialized in %.1fs)", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers], time.monotonic() - started)
+                        if model or agent_cfg.model:
+                            kwargs["model"] = model or agent_cfg.model
+                        session = await _until_exit(conn.new_session(**kwargs))
+                        logger.info("acp session %s ready after %.1fs", session.session_id, time.monotonic() - started)
+                        await _until_exit(conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)]))
                     finally:
-                        if not exited.done():
-                            exited.cancel()
-
-                try:
-                    await _until_exit(conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0")))
-                    kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
-                    logger.info("acp session for %s: cwd=%s mcp_servers=%s (initialized in %.1fs)", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers], time.monotonic() - started)
-                    if model or agent_cfg.model:
-                        kwargs["model"] = model or agent_cfg.model
-                    session = await _until_exit(conn.new_session(**kwargs))
-                    logger.info("acp session %s ready after %.1fs", session.session_id, time.monotonic() - started)
-                    await _until_exit(conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)]))
-                finally:
-                    # Was only cancelled on the success path, so a failed
-                    # initialize/prompt leaked the drain task too.
-                    drain.cancel()
-                    # Snapshot the tree *here*, while the launcher is still
-                    # alive. Once the transport's teardown kills it the
-                    # children reparent to PID 1 and are no longer findable
-                    # from this process.
-                    with contextlib.suppress(Exception):
-                        kids = _descendants(proc.pid)
+                        # Was only cancelled on the success path, so a failed
+                        # initialize/prompt leaked the drain task too.
+                        drain.cancel()
+                        # Snapshot the tree *here*, while the launcher is still
+                        # alive. Once the transport's teardown kills it the
+                        # children reparent to PID 1 and are no longer findable
+                        # from this process.
+                        with contextlib.suppress(Exception):
+                            kids = _descendants(proc.pid)
+            except OSError as exc:
+                # A dead adapter breaks its pipe, and the ACP library's own
+                # cleanup (closing the connection) then raises — which would
+                # mask the diagnosis the transport already produced. Keep the
+                # real error: it names the exit code and the adapter's stderr.
+                cause: BaseException | None = exc
+                while cause is not None:
+                    if isinstance(cause, ACPAdapterExited):
+                        raise cause from exc
+                    cause = cause.__cause__ or cause.__context__
+                raise
         finally:
             _reap_adapter(proc_ref, kids)
         return "".join(chunks)

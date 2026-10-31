@@ -7,7 +7,7 @@ const STATS = [
       "Running in production today. Pre-revenue: this round pays for the first paid pilots.",
   },
   {
-    value: "8,658",
+    value: "8,659",
     label: "automated tests across backend, frontend and end-to-end suites.",
   },
   {

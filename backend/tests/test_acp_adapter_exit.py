@@ -45,16 +45,12 @@ def test_adapter_that_exits_immediately_fails_fast_with_its_stderr(tmp_path):
     assert "not found" in str(exc.value)
 
 
-def test_a_broken_pipe_reports_the_exit_not_a_connection_error(monkeypatch, tmp_path):
-    """The adapter's pipe breaks *before* the exit is noticed.
+def _fake_adapter(monkeypatch, *, cleanup_raises: bool) -> None:
+    """Install a fake ACP adapter that dies on the first request.
 
-    The request then fails with ECONNRESET/EPIPE, and that error used to win
-    the race against the process exit: the turn failed with "Connection lost"
-    — no exit code, no stderr, nothing for the operator to act on. It must be
-    reported as the adapter exiting, with its code and its last words.
-
-    The race is timing-dependent, so it is reproduced deterministically here:
-    the request fails first, the process reaps a tick later.
+    ``cleanup_raises`` reproduces what the ACP library does when the adapter
+    is already gone: closing its connection raises the same broken-pipe
+    error, and that error used to replace the real diagnosis.
     """
     import acp
 
@@ -74,11 +70,46 @@ def test_a_broken_pipe_reports_the_exit_not_a_connection_error(monkeypatch, tmp_
         async def initialize(self, **kwargs):
             raise ConnectionResetError("Connection lost")
 
-    @contextlib.asynccontextmanager
-    async def _spawn(*args, **kwargs):
-        yield _FakeConn(), _FakeProc()
+    class _Spawn:
+        async def __aenter__(self):
+            return _FakeConn(), _FakeProc()
 
-    monkeypatch.setattr(acp, "spawn_agent_process", _spawn)
+        async def __aexit__(self, exc_type, exc, tb):
+            if cleanup_raises:
+                raise ConnectionResetError("Connection lost")
+            return False
+
+    monkeypatch.setattr(acp, "spawn_agent_process", lambda *a, **k: _Spawn())
+
+
+def test_a_broken_pipe_reports_the_exit_not_a_connection_error(monkeypatch, tmp_path):
+    """The adapter's pipe breaks *before* the exit is noticed.
+
+    The request then fails with ECONNRESET/EPIPE, and that error used to win
+    the race against the process exit: the turn failed with "Connection lost"
+    — no exit code, no stderr, nothing for the operator to act on. It must be
+    reported as the adapter exiting, with its code and its last words.
+
+    The race is timing-dependent, so it is reproduced deterministically here:
+    the request fails first, the process reaps a tick later.
+    """
+    _fake_adapter(monkeypatch, cleanup_raises=False)
+    cfg = ACPAgentConfig(command="claude-agent-acp", description="dead")
+    with pytest.raises(ACPAdapterExited) as exc:
+        _run(cfg, tmp_path)
+    assert "127" in str(exc.value)
+
+
+def test_the_adapters_cleanup_does_not_mask_the_exit(monkeypatch, tmp_path):
+    """A dead adapter breaks the library's own cleanup, and that must not win.
+
+    Closing the connection to a process that is already gone raises the same
+    broken-pipe error. Python lets an exception raised while leaving a
+    ``with`` block replace the one the block raised — so the transport's
+    diagnosis (exit code, stderr) was being thrown away for "Connection
+    lost", and the operator was left with nothing.
+    """
+    _fake_adapter(monkeypatch, cleanup_raises=True)
     cfg = ACPAgentConfig(command="claude-agent-acp", description="dead")
     with pytest.raises(ACPAdapterExited) as exc:
         _run(cfg, tmp_path)
