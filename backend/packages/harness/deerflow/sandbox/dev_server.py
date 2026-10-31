@@ -171,8 +171,14 @@ def allocate_container_port(thread_id: str, label: str = DEFAULT_LABEL) -> int:
 
 
 # Ports the sandbox container owns for its own services, never an app's preview.
-# 8080 is the AIO sandbox API itself (ttyd / noVNC / the /absproxy gateway).
-_SANDBOX_INFRA_PORTS = frozenset({8080})
+# 8080 is the AIO sandbox API itself (ttyd / noVNC / the /absproxy gateway); the
+# rest is what the image starts on its own, measured with `ss -ltnp` in a live
+# sandbox with nothing of the user's running: 5900 Xvnc, 6080 websocat (noVNC's
+# socket bridge), 8088 gem-server, 8091 python-server, 8100/8200 node services,
+# 8888 jupyter-lab, 9222 Chrome DevTools. Skipping only 8080 let discovery
+# adopt websocat as the "app" preview, so the Browser tab rendered "Only
+# WebSocket connections are welcome here" instead of the user's server.
+_SANDBOX_INFRA_PORTS = frozenset({5900, 6080, 8080, 8088, 8091, 8100, 8200, 8888, 9222})
 
 
 def _sandbox_for_thread(thread_id: str):
@@ -456,8 +462,25 @@ async def run_preview_pipeline(thread_id: str, sandbox: object, label: str = DEF
     )
     pkg = next((ln.strip() for ln in (found or "").splitlines() if ln.strip().endswith("package.json")), "")
     if not pkg:
-        _append_devlog_to_sandbox_log(thread_id, "[preview] no runnable project (package.json) found")
-        return {"started": False, "reason": "no_project"}
+        # A plain HTML/JS app has nothing to install or build: serve its folder.
+        # Without this the Browser tab stayed in its file viewer (no address
+        # bar, refresh or open-in-new-tab) unless an agent happened to have a
+        # server running -- and a gateway reload stops that with the sandbox.
+        html = await asyncio.to_thread(
+            _exec,
+            f"find {ws} -maxdepth 3 -name index.html -not -path '*/node_modules/*' 2>/dev/null | head -1",
+        )
+        index = next((ln.strip() for ln in (html or "").splitlines() if ln.strip().endswith("index.html")), "")
+        if not index:
+            _append_devlog_to_sandbox_log(thread_id, "[preview] no runnable project (package.json or index.html) found")
+            return {"started": False, "reason": "no_project"}
+        sitedir = index.rsplit("/", 1)[0] or ws
+        container_port = allocate_container_port(thread_id, label)
+        await asyncio.to_thread(_exec, f"fuser -k {container_port}/tcp 2>/dev/null || kill $(lsof -ti tcp:{container_port}) 2>/dev/null || true")
+        handle = await start_dev_server(thread_id, sitedir, f"python3 -m http.server {container_port} --bind 0.0.0.0", sandbox=sandbox, label=label, container_port=container_port)
+        if handle.status != "error":
+            asyncio.create_task(_auto_verify_preview(thread_id, sandbox, label))
+        return {"started": handle.status != "error", "label": label, "status": handle.status, "project": sitedir}
     projdir = pkg.rsplit("/", 1)[0] or ws
 
     # 2) Install deps only if missing (deterministic, idempotent).

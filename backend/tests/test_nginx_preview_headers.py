@@ -155,7 +155,7 @@ class TestComputerWsLocation:
     attempt to open ``/api/threads/{id}/computer-ws`` returns 400 (logged
     as 404 on the gateway) — subagent cards never receive status updates,
     the Browser tab stays blank, and the Activity timeline never gets
-    fresh events. ``make dev`` (no nginx) and the static-demo mode hide
+    fresh events. ``make dev`` (no nginx) and the static-starter mode hide
     this entirely. Same asymmetry that hid tasks-ws initially.
     """
 

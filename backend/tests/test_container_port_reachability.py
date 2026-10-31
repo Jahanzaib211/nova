@@ -177,6 +177,35 @@ class TestDiscoveryReachesBeyondThePublishedPorts:
         monkeypatch.setattr(dev_server, "probe_container_port", _alive)
         assert await dev_server.discover_live_preview("t1") is None
 
+    @pytest.mark.asyncio
+    async def test_it_skips_every_service_the_sandbox_image_runs(self, sandbox, monkeypatch) -> None:
+        """Measured `ss -ltnp` of a live sandbox with nothing of the user's running.
+
+        Only 8080 was skipped, so the Browser tab adopted websocat on 6080 as
+        the "app" preview and rendered "Only WebSocket connections are welcome
+        here" -- and kept it after the user's real server came up on 3333.
+        """
+
+        class _Provider:
+            def get_preview_endpoint(self, *a, **k):
+                return None
+
+        import deerflow.sandbox as sandbox_pkg
+
+        monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: _Provider())
+        image_services = {5900, 6080, 8080, 8088, 8091, 8100, 8200, 8888, 9222}
+        monkeypatch.setattr(dev_server, "_sandbox_for_thread", lambda _tid: _FakeSandbox(listening=image_services))
+
+        async def _alive(thread_id, port):
+            return True
+
+        monkeypatch.setattr(dev_server, "probe_container_port", _alive)
+        assert await dev_server.discover_live_preview("t1") is None
+
+        monkeypatch.setattr(dev_server, "_sandbox_for_thread", lambda _tid: _FakeSandbox(listening=image_services | {3333}))
+        found = await dev_server.discover_live_preview("t1")
+        assert found is not None and found[0] == 3333
+
 
 class TestRegistrationRecordsTheContainerPort:
     def test_container_port_defaults_to_the_registered_port(self) -> None:

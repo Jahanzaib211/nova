@@ -43,7 +43,8 @@ class TestAbsproxyWsRoute:
 
 def _fake_ws(origin: str = "https://nova.example", host: str = "nova.example", query: str = ""):
     headers = {"origin": origin, "host": host}
-    url = SimpleNamespace(query=query)
+    # A cookie-authenticated socket: the path carries no preview capability.
+    url = SimpleNamespace(query=query, path="/api/sandbox/absproxy-ws/thread-abc/4321/hmr")
     return SimpleNamespace(headers=headers, url=url, query=query)
 
 
@@ -157,7 +158,7 @@ async def test_absproxy_ws_bridges_to_the_container_relay(wired) -> None:
 @pytest.mark.asyncio
 async def test_absproxy_ws_forwards_query_string(wired) -> None:
     ws = wired.ws
-    ws.url = SimpleNamespace(query="token=x")
+    ws.url = SimpleNamespace(query="token=x", path="/api/sandbox/absproxy-ws/thread-abc/4321/hmr")
     await sandbox_router.proxy_absproxy_ws(ws, "thread-abc", 4321, "hmr")
     assert wired.bridged["url"] == "ws://localhost:39123/proxy/4321/hmr?token=x"
 

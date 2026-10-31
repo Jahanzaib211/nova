@@ -11,6 +11,7 @@ poll as a runtime-spawned one.
 
 from __future__ import annotations
 
+import re
 import socket
 import sys
 from contextlib import contextmanager
@@ -125,7 +126,8 @@ def test_dev_external_endpoint_registers_and_returns_handles(monkeypatch):
         assert body["status"] == "ready"
         assert body["port"] == port
         assert body["host"] == host
-        assert body["absproxy_url"].endswith(f"/api/sandbox/absproxy/t-http-ok/{port}/")
+        # The thread segment carries a preview capability for the framed iframe.
+        assert re.search(rf"/api/sandbox/absproxy/t-http-ok~[^/]+/{port}/$", body["absproxy_url"])
     finally:
         ds._servers.pop(ds._server_key("t-http-ok", ds.DEFAULT_LABEL), None)
 

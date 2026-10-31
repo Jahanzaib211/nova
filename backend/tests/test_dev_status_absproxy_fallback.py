@@ -10,6 +10,7 @@ guessing the host:port.
 
 from __future__ import annotations
 
+import re
 import socket
 import sys
 from contextlib import contextmanager
@@ -74,8 +75,10 @@ def test_dev_status_includes_host_and_absproxy_when_running(monkeypatch):
             assert body["host"] == host
             assert body["port"] == port
             # The two URL shapes the Browser tab needs to choose between.
-            assert body["url"].endswith("/api/sandbox/preview/t-status/")
-            assert body["absproxy_url"].endswith(f"/api/sandbox/absproxy/t-status/{port}/")
+            # The thread segment carries a preview capability for the framed
+            # iframe (app/gateway/preview_capability.py).
+            assert re.search(r"/api/sandbox/preview/t-status~[^/]+/$", body["url"])
+            assert re.search(rf"/api/sandbox/absproxy/t-status~[^/]+/{port}/$", body["absproxy_url"])
         finally:
             ds._servers.pop(ds._server_key("t-status", ds.DEFAULT_LABEL), None)
 

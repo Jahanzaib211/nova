@@ -27,10 +27,11 @@ from pydantic import BaseModel
 
 from app.gateway.csrf_middleware import get_configured_cors_origins
 from app.gateway.deps import get_checkpointer
+from app.gateway.preview_capability import absproxy_segment, preview_segment, thread_of
 from app.gateway.services import SSE_HEADERS
 from app.gateway.utils import sanitize_log_param
 from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_effective_user_id, reset_current_user, set_current_user
+from deerflow.runtime.user_context import get_current_user, get_effective_user_id, reset_current_user, set_current_user
 from deerflow.sandbox.dev_server import (
     DEFAULT_LABEL,
     adopt_handle,
@@ -128,6 +129,35 @@ def _sandbox_csp(*, framed: bool) -> str:
     """The sandbox CSP for one response, plus the frame-ancestors restriction."""
     base = _FRAMED_SANDBOX_CSP if framed else _OPAQUE_SANDBOX_CSP
     return f"{base}; frame-ancestors {_frame_ancestors()}"
+
+
+# Shown in the Browser tab when the app's port has nothing behind it yet.
+_NOTHING_ON_PORT_HTML = "<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>"
+
+
+def _is_upstream_refused(upstream: Any) -> bool:
+    """Does the sandbox's port gateway say "connection refused"?
+
+    The gateway answers 500 with a plain-text Node error
+    (``connect ECONNREFUSED 0.0.0.0:4100``) when the port has no listener.
+    That is the normal state while a dev server boots, and the raw string in
+    the Browser tab reads as a broken app instead of a server that is not up
+    yet -- so it is translated into the same 503 page our own connect errors
+    produce.
+
+    Matched on the two shapes the gateway actually emits (Node's
+    ``ECONNREFUSED`` and Go-style ``connection refused``), and only on small
+    bodies: a large response that merely mentions the word is an app's own
+    error page and must be passed through untouched.
+    """
+    try:
+        body = upstream.content or b""
+    except Exception:
+        return False
+    if len(body) > 512:
+        return False
+    text = body.decode("utf-8", errors="replace").lower()
+    return "econnrefused" in text or "connection refused" in text
 
 
 def _is_framed_request(request: Request) -> bool:
@@ -732,10 +762,34 @@ async def download_sandbox_zip(
 def _preview_prefix(thread_id: str, label: str) -> str:
     """Proxy URL prefix for a (thread, label). The default ``app`` label keeps the
     original label-less path so the single-server UX is byte-identical; extra
-    labels get a distinct, unambiguous base (avoids the `{path:path}` catch-all)."""
+    labels get a distinct, unambiguous base (avoids the `{path:path}` catch-all).
+
+    ``thread_id`` is the path *segment*: a bare id, or an id carrying a preview
+    capability (see ``app/gateway/preview_capability.py``). The proxies pass the
+    segment they were reached through, so the capability rides on every URL
+    they rewrite."""
     if label == DEFAULT_LABEL:
         return f"/api/sandbox/preview/{thread_id}"
     return f"/api/sandbox/lpreview/{thread_id}/{label}"
+
+
+def _capability_user():
+    """The caller a minted preview URL should authenticate as (None when auth is disabled)."""
+    from app.gateway.auth_disabled import is_auth_disabled
+
+    return None if is_auth_disabled() else get_current_user()
+
+
+def _preview_url(thread_id: str, label: str) -> str:
+    """The Browser tab's iframe URL for a dev server, carrying a capability.
+
+    The iframe is an opaque-origin sandbox, so its asset requests carry no
+    session cookie; the capability in the path authenticates them instead."""
+    return f"{_preview_prefix(preview_segment(thread_id, label, _capability_user()), label)}/"
+
+
+def _absproxy_url(thread_id: str, port: int) -> str:
+    return f"/api/sandbox/absproxy/{absproxy_segment(thread_id, port, _capability_user())}/{port}/"
 
 
 # Liveness authority for dev servers: `port_alive` (imported from dev_server).
@@ -857,7 +911,7 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
         "port": handle.port,
         "label": handle.label,
         "compiles": handle.compiles,
-        "url": f"{_preview_prefix(thread_id, handle.label)}/" if running else None,
+        "url": _preview_url(thread_id, handle.label) if running else None,
         # Generic absproxy URL is the safety net the Browser tab can fall back
         # to when the canonical preview proxy fails (e.g. a dev server started
         # outside ``start_dev_server`` whose host:port the gateway cannot
@@ -867,7 +921,7 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
         # handing it the published *host* port only worked because this host maps
         # 4100-4102 identically, and broke silently wherever the backend picked a
         # free host port instead.
-        "absproxy_url": (f"/api/sandbox/absproxy/{thread_id}/{_absproxy_port(handle)}/" if running and _absproxy_port(handle) else None),
+        "absproxy_url": (_absproxy_url(thread_id, _absproxy_port(handle)) if running and _absproxy_port(handle) else None),
     }
 
 
@@ -939,8 +993,8 @@ async def dev_external(
         "host": handle.host,
         "port": handle.port,
         "status": handle.status,
-        "url": f"{_preview_prefix(thread_id, handle.label)}/",
-        "absproxy_url": f"/api/sandbox/absproxy/{thread_id}/{handle.port}/",
+        "url": _preview_url(thread_id, handle.label),
+        "absproxy_url": _absproxy_url(thread_id, handle.port),
     }
 
 
@@ -955,7 +1009,7 @@ async def dev_servers(thread_id: str) -> dict:
             "status": h.status,
             "running": h.status in ("starting", "ready"),
             "port": h.port,
-            "url": f"{_preview_prefix(thread_id, h.label)}/" if h.status in ("starting", "ready") else None,
+            "url": _preview_url(thread_id, h.label) if h.status in ("starting", "ready") else None,
         }
         for h in list_dev_servers(thread_id)
     ]
@@ -1168,6 +1222,7 @@ _PROXY_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
 
 async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request) -> Response:
     """Shared implementation for the absproxy route — called once per HTTP method."""
+    segment, thread_id = thread_id, thread_of(thread_id)
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -1208,25 +1263,38 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     target = f"{base_url.rstrip('/')}/proxy/{port}/{path}"
     if request.url.query:
         target = f"{target}?{request.url.query}"
-    prefix = f"/api/sandbox/absproxy/{thread_id}/{port}"
-    _STRIP = _HOP_BY_HOP | {"host", "cookie", "authorization", "proxy-authorization", "x-api-key", "x-csrf-token"}
-    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in _STRIP}
+    prefix = f"/api/sandbox/absproxy/{segment}/{port}"
+    fwd_headers = _forward_headers(request)
     body = await request.body()
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             upstream = await client.request(request.method, target, headers=fwd_headers, content=body)
     except httpx.ConnectError:
-        return Response(content="<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>", media_type="text/html", status_code=503)
+        return Response(content=_NOTHING_ON_PORT_HTML, media_type="text/html", status_code=503)
     except Exception as e:
         logger.warning("absproxy request failed for thread %s port %d: %s", thread_id, port, e)
         return Response(content="Proxy error", status_code=502)
+
+    # The sandbox's own port gateway answers 500 with a raw Node error string
+    # ("connect ECONNREFUSED 0.0.0.0:4100") when nothing is listening on the
+    # port yet -- which is the normal state while a dev server is still
+    # starting. Passing that body through puts a stack-trace-looking line of
+    # text in the Browser tab's iframe, which reads as a broken app rather than
+    # "the server has not come up yet". Our own ConnectError branch above
+    # already says this in words; the upstream one needs the same treatment.
+    if upstream.status_code >= 500 and _is_upstream_refused(upstream):
+        logger.info("absproxy: nothing listening on port %d for thread %s yet", port, thread_id)
+        return Response(content=_NOTHING_ON_PORT_HTML, media_type="text/html", status_code=503)
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
     location = resp_headers.get("location") or resp_headers.get("Location")
     if location and location.startswith("/") and not location.startswith(prefix):
         resp_headers["location"] = f"{prefix}{location}"
+    for name in [k for k in resp_headers if k.lower() == "link"]:
+        resp_headers[name] = _prefix_link_header(resp_headers[name], prefix)
     resp_headers.pop("set-cookie", None)
     resp_headers["Content-Security-Policy"] = _sandbox_csp(framed=_is_framed_request(request))
+    resp_headers["Referrer-Policy"] = "same-origin"
 
     content = upstream.content
     # Rewrite root-absolute asset URLs, exactly as _proxy_dev_server does.
@@ -1252,7 +1320,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
             # surface for raw-bash dev servers, so its pages need the shim
             # aimed at the absproxy-ws mount or their sockets reconnect-loop.
             if "<head>" in html:
-                html = _inject_ws_shim(html, f"/api/sandbox/absproxy-ws/{thread_id}/{port}", prefix)
+                html = _inject_ws_shim(html, f"/api/sandbox/absproxy-ws/{segment}/{port}", prefix)
             content = html.encode("utf-8")
             resp_headers.pop("content-length", None)
             resp_headers.pop("Content-Length", None)
@@ -1317,6 +1385,62 @@ W.prototype=Orig.prototype;W.CONNECTING=0;W.OPEN=1;W.CLOSING=2;W.CLOSED=3;
 window.WebSocket=W})();</script>"""
 
 
+# Keeps a proxied app's own URLs under the proxy prefix at runtime.
+#
+# The server rewrite prefixes every root-absolute URL in the HTML, which is what
+# makes the first paint load at all. But a hydrating framework (Next.js, Remix,
+# Nuxt…) then compares that HTML with what its client code renders, and a client
+# component's `<Link href="/">` renders `/`, not `/api/sandbox/preview/…/`. React
+# called that a mismatch, discarded the whole document and re-rendered it from
+# scratch -- with unprefixed stylesheet and font URLs that 404 against the app
+# shell. That was the unstyled Browser tab and the dev overlay's "1 error".
+#
+# A Next.js router also reads its starting route from window.location, so on
+# those pages (``app_location``) the location is set to the app's own path
+# before the router boots -- otherwise usePathname() is the proxy path and any
+# active-link markup differs from the server's. Next re-attaches its history
+# state on mount through the patched replaceState below, which puts the prefix
+# back. Other apps keep their prefixed URL, so a full reload still lands here.
+#
+# So URL attributes are virtualized: getAttribute() hands the app back its own
+# path (hydration compares equal), while setAttribute(), the URL property
+# setters, fetch/XHR/EventSource and history all add the prefix (everything
+# the app creates later still loads through the proxy).
+_URL_SHIM = """<script>(function(){
+var B=%(base_prefix)s,R=%(app_location)s,S="/api/sandbox/",L=window.location;
+if(R){var lp=L.pathname===B?"/":L.pathname.indexOf(B+"/")===0?L.pathname.slice(B.length):null;
+if(lp!==null)history.replaceState(history.state,"",lp+L.search+L.hash)}
+function under(p){return p===B||p.indexOf(B+"/")===0||p.indexOf(S)===0}
+function net(v){if(typeof v!=="string"||!v)return v;
+if(v.charAt(0)==="/"){return v.charAt(1)==="/"||under(v)?v:B+v}
+if(/^https?:/i.test(v)){try{var x=new URL(v);if(x.origin===L.origin&&!under(x.pathname)){x.pathname=B+x.pathname;return x.href}}catch(e){}}
+return v}
+function app(v){return typeof v==="string"&&v.indexOf(B+"/")===0?v.slice(B.length):v}
+function set(v,f){return String(v).split(",").map(function(p){var m=/^(\\s*)(\\S+)(.*)$/.exec(p);return m?m[1]+f(m[2])+m[3]:p}).join(",")}
+var U={href:1,src:1,action:1,formaction:1,poster:1},SS={srcset:1,imagesrcset:1};
+var E=Element.prototype,sa=E.setAttribute,ga=E.getAttribute;
+E.setAttribute=function(n,v){var k=String(n).toLowerCase();if(U[k])v=net(String(v));else if(SS[k])v=set(v,net);return sa.call(this,n,v)};
+E.getAttribute=function(n){var v=ga.call(this,n),k=String(n).toLowerCase();if(v==null)return v;if(U[k])return app(v);if(SS[k])return set(v,app);return v};
+[["HTMLImageElement","src"],["HTMLImageElement","srcset"],["HTMLScriptElement","src"],["HTMLLinkElement","href"],["HTMLAnchorElement","href"],["HTMLSourceElement","src"],["HTMLSourceElement","srcset"],["HTMLIFrameElement","src"],["HTMLMediaElement","src"],["HTMLFormElement","action"]].forEach(function(t){
+var C=window[t[0]];if(!C)return;var d=Object.getOwnPropertyDescriptor(C.prototype,t[1]);if(!d||!d.set)return;
+var f=t[1]==="srcset"?function(v){return set(v,net)}:net;
+Object.defineProperty(C.prototype,t[1],{configurable:true,enumerable:d.enumerable,get:d.get,set:function(v){d.set.call(this,f(String(v)))}})});
+var F=window.fetch;if(F)window.fetch=function(i,o){if(typeof i==="string")i=net(i);else if(i instanceof URL)i=net(i.href);else if(i&&i.url){var n=net(i.url);if(n!==i.url)i=new Request(n,i)}return F.call(this,i,o)};
+var X=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){arguments[1]=net(String(u));return X.apply(this,arguments)};
+var ES=window.EventSource;if(ES){var W=function(u,c){return new ES(net(String(u)),c)};W.prototype=ES.prototype;W.CONNECTING=0;W.OPEN=1;W.CLOSED=2;window.EventSource=W}
+["pushState","replaceState"].forEach(function(k){var o=history[k];history[k]=function(s,t,u){return u==null?o.call(this,s,t):o.call(this,s,t,net(String(u)))}});
+})();</script>"""
+
+
+#: Inline markers of a Next.js page whose router reads its route from the location.
+_NEXT_ROUTER_MARKERS = ("self.__next_f", "__NEXT_DATA__")
+
+
+def _url_shim(base_prefix: str, *, app_location: bool = False) -> str:
+    """Render the runtime URL shim for one prefixed surface (see ``_URL_SHIM``)."""
+    return _URL_SHIM % {"base_prefix": json.dumps(base_prefix), "app_location": json.dumps(app_location)}
+
+
 def _ws_shim(ws_prefix: str, base_prefix: str = "") -> str:
     """Render the WebSocket-constructor shim for one proxied surface.
 
@@ -1341,6 +1465,11 @@ def _inject_ws_shim(html: str, ws_prefix: str, base_prefix: str = "") -> str:
     if "<head>" not in html or "window.WebSocket=W" in html:
         return html
     shim = _ws_shim(ws_prefix, base_prefix)
+    if base_prefix:
+        # First, ahead of every other script: the framework's own code must
+        # never run against the unpatched DOM and network APIs.
+        app_location = any(marker in html for marker in _NEXT_ROUTER_MARKERS)
+        shim = _url_shim(base_prefix, app_location=app_location) + shim
     needs_base = bool(base_prefix) and "<base " not in html
     injected = f'<head><base href="{base_prefix}/">{shim}' if needs_base else f"<head>{shim}"
     return html.replace("<head>", injected, 1)
@@ -1419,6 +1548,28 @@ def _prefix_html_urls(html: str, prefix: str) -> str:
     return rewritten.replace(_PREFIX_HIDDEN, f"{prefix}/")
 
 
+# One target of an HTTP ``Link`` header: ``</path>; rel=preload; as=font``.
+_LINK_HEADER_TARGET_RE = re.compile(r"<(/(?!/)[^>]*)>")
+
+
+def _prefix_link_header(value: str, prefix: str) -> str:
+    """Prefix the root-absolute targets of an HTTP ``Link`` header.
+
+    Next.js answers every page with ``Link: </_next/static/media/….woff2>;
+    rel=preload`` for its fonts. Passed through as-is, the browser preloaded
+    each one from the app shell's root and got a 404 per font -- console errors
+    on every preview, and a self-test that failed on a page with nothing wrong.
+    """
+    if not value or not prefix:
+        return value
+
+    def _one(match: re.Match[str]) -> str:
+        target = match.group(1)
+        return match.group(0) if target.startswith(f"{prefix}/") else f"<{prefix}{target}>"
+
+    return _LINK_HEADER_TARGET_RE.sub(_one, value)
+
+
 def _prefix_css_urls(css: str, prefix: str) -> str:
     """Rewrite root-absolute ``url(/…)`` references inside a stylesheet.
 
@@ -1451,8 +1602,7 @@ async def _proxy_appview(thread_id: str, path: str, request: Request) -> Respons
     if request.url.query:
         target = f"{target}?{request.url.query}"
 
-    _STRIP = _HOP_BY_HOP | {"host", "cookie", "authorization", "proxy-authorization", "x-api-key", "x-csrf-token"}
-    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in _STRIP}
+    fwd_headers = _forward_headers(request)
     body = await request.body()
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
@@ -1590,6 +1740,26 @@ _HOP_BY_HOP = {
 }
 
 
+#: Request headers that never cross to the sandbox: our own credentials and
+#: hop-by-hop framing.
+_NOT_FORWARDED = _HOP_BY_HOP | {"host", "cookie", "authorization", "proxy-authorization", "x-api-key", "x-csrf-token"}
+
+#: What the proxies ask upstream for. Each one reads ``upstream.content``
+#: (decoded by httpx) and drops ``Content-Encoding`` before answering, so it
+#: may only accept encodings httpx can decode here. Forwarding the browser's
+#: own ``Accept-Encoding`` got ``br`` back from the sandbox; with no brotli
+#: decoder installed the compressed body went out as ``text/html`` and the
+#: Browser tab rendered it as garbage.
+_UPSTREAM_ACCEPT_ENCODING = "gzip, deflate"
+
+
+def _forward_headers(request: Request) -> dict[str, str]:
+    """The browser's request headers as the sandbox should see them."""
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in _NOT_FORWARDED and k.lower() != "accept-encoding"}
+    headers["accept-encoding"] = _UPSTREAM_ACCEPT_ENCODING
+    return headers
+
+
 def _make_preview_default_wrapper(method: str):
     """Per-method wrapper around _proxy_dev_server for /preview/<id>/<path>.
 
@@ -1634,6 +1804,7 @@ for _method in _PROXY_METHODS:
 
 
 async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Request):
+    segment, thread_id = thread_id, thread_of(thread_id)
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     _mark_sandbox_active(thread_id)
@@ -1657,7 +1828,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
     # to the dev server root. The dev server runs WITHOUT basePath, so this avoids
     # the trailing-slash redirect loop. We rewrite asset URLs in the HTML response
     # and any redirect Location so everything stays under the proxy prefix.
-    prefix = _preview_prefix(thread_id, label)
+    prefix = _preview_prefix(segment, label)
     # Local sandbox: handle.host is 127.0.0.1. Container (AIO) sandbox: the dev
     # server runs inside the per-thread container, reached via its published
     # preview port on host.docker.internal.
@@ -1666,8 +1837,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
         target = f"{target}?{request.url.query}"
 
     # Never forward the parent app's auth/session to the untrusted dev server.
-    _STRIP = _HOP_BY_HOP | {"host", "cookie", "authorization", "proxy-authorization", "x-api-key", "x-csrf-token"}
-    fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in _STRIP}
+    fwd_headers = _forward_headers(request)
     body = await request.body()
 
     try:
@@ -1694,6 +1864,8 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
     location = resp_headers.get("location") or resp_headers.get("Location")
     if location and location.startswith("/") and not location.startswith(prefix):
         resp_headers["location"] = f"{prefix}{location}"
+    for name in [k for k in resp_headers if k.lower() == "link"]:
+        resp_headers[name] = _prefix_link_header(resp_headers[name], prefix)
 
     content = upstream.content
     content_type = upstream.headers.get("content-type", "")
@@ -1713,7 +1885,7 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
             # surface's -ws mount. Without it the page loads but hot reload
             # silently reconnect-loops forever.
             if "<head>" in html:
-                ws_prefix = f"/api/sandbox/lpreview-ws/{thread_id}/{label}" if label != DEFAULT_LABEL else f"/api/sandbox/preview-ws/{thread_id}"
+                ws_prefix = f"/api/sandbox/lpreview-ws/{segment}/{label}" if label != DEFAULT_LABEL else f"/api/sandbox/preview-ws/{segment}"
                 html = _inject_ws_shim(html, ws_prefix, prefix)
             content = html.encode("utf-8")
         except Exception:
@@ -1736,6 +1908,8 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
     # gets the framed (non-opaque) sandbox CSP — see _FRAMED_SANDBOX_CSP.
     resp_headers.pop("set-cookie", None)
     resp_headers["Content-Security-Policy"] = _sandbox_csp(framed=True)
+    # The URL carries a preview capability; never hand it to a third party.
+    resp_headers["Referrer-Policy"] = "same-origin"
     return Response(
         content=content,
         status_code=upstream.status_code,
@@ -1747,6 +1921,27 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
 # ──────────────────────────────────────────────────────────
 # WebSocket proxy for HMR / hot reload (Next.js webpack-hmr, Vite @vite/client)
 # ──────────────────────────────────────────────────────────
+
+
+async def _ws_admit_preview(websocket: WebSocket):
+    """Authenticate a preview/absproxy socket; ``None`` means refuse it.
+
+    A framed preview is an opaque-origin sandbox, so its HMR socket arrives with
+    ``Origin: null`` and no cookie. When the path carries a capability, that is
+    the credential -- and the same-origin guard does not apply, because it
+    exists to stop a cross-site page riding the *cookie*, which plays no part
+    here. Without a capability (a preview opened in its own tab) the cookie and
+    the origin guard decide, as before.
+    """
+    from app.gateway.preview_capability import capability_in_path, resolve_capability
+    from app.gateway.ws_guards import ws_same_origin, ws_user
+
+    capability = capability_in_path(websocket.url.path)
+    if capability is not None:
+        return await resolve_capability(capability)
+    if not ws_same_origin(websocket):
+        return None
+    return await ws_user(websocket)
 
 
 @router.websocket("/preview-ws/{thread_id}/{path:path}")
@@ -1811,12 +2006,10 @@ async def proxy_absproxy_ws(websocket: WebSocket, thread_id: str, port: int, pat
     cannot drift between the two. If the in-container relay refuses an upgrade
     for some port, the socket closes here and the page degrades to what it did
     before this route existed (no hot reload), never to broken content."""
-    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
+    from app.gateway.ws_guards import ws_caller_owns_thread
 
-    if not ws_same_origin(websocket):
-        await websocket.close(code=1008)
-        return
-    user = await ws_user(websocket)
+    thread_id = thread_of(thread_id)
+    user = await _ws_admit_preview(websocket)
     if user is None:
         await websocket.close(code=1008)
         return
@@ -1917,15 +2110,12 @@ async def _bridge_ws(websocket: WebSocket, upstream_url: str) -> None:
 async def _proxy_dev_server_ws(websocket: WebSocket, thread_id: str, label: str, path: str):
     """Bridge the browser's HMR WebSocket to the dev server's WS so the live
     preview hot-reloads when the agent edits files."""
-    from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
+    from app.gateway.ws_guards import ws_caller_owns_thread
 
-    if not ws_same_origin(websocket):
-        await websocket.close(code=1008)
-        return
-
+    thread_id = thread_of(thread_id)
     # Authenticate (the auth middleware never runs for ws scope) and stamp the
     # contextvar so the ownership check below sees the real caller.
-    user = await ws_user(websocket)
+    user = await _ws_admit_preview(websocket)
     if user is None:
         await websocket.close(code=1008)
         return
