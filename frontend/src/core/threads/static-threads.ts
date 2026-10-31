@@ -3,7 +3,7 @@ import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 
 import type { AgentThread, AgentThreadState } from "./types";
 
-export const DEMO_THREAD_IDS = [
+export const STARTER_THREAD_IDS = [
   "21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
   "3823e443-4e2b-4679-b496-a9506eae462b",
   "4f3e55ee-f853-43db-bfb3-7d1a411f03cb",
@@ -23,11 +23,11 @@ export type ThreadSearchParams = NonNullable<
   Parameters<ThreadsClient["search"]>[0]
 >;
 
-export async function loadStaticDemoThreads(
+export async function loadStaticThreads(
   params: ThreadSearchParams = {},
 ): Promise<AgentThread[]> {
   const threads = await Promise.all(
-    DEMO_THREAD_IDS.map((threadId) => loadStaticDemoThread(threadId)),
+    STARTER_THREAD_IDS.map((threadId) => loadStaticThread(threadId)),
   );
 
   const sortBy = params.sortBy ?? "updated_at";
@@ -50,14 +50,12 @@ export async function loadStaticDemoThreads(
   return sortedThreads.slice(offset, offset + limit);
 }
 
-export async function loadStaticDemoThread(
-  threadId: string,
-): Promise<AgentThread> {
+export async function loadStaticThread(threadId: string): Promise<AgentThread> {
   const response = await globalThis.fetch(
-    `/demo/threads/${encodeURIComponent(threadId)}/thread.json`,
+    `/threads/${encodeURIComponent(threadId)}/thread.json`,
   );
   if (!response.ok) {
-    throw new Error(`Failed to load demo thread ${threadId}`);
+    throw new Error(`Failed to load bundled thread ${threadId}`);
   }
   const thread = (await response.json()) as AgentThread;
   return {
@@ -67,7 +65,7 @@ export async function loadStaticDemoThread(
   };
 }
 
-export function staticDemoThreadState(
+export function staticThreadState(
   thread: AgentThread,
 ): ThreadState<AgentThreadState> {
   return {

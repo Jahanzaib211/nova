@@ -28,12 +28,12 @@ export async function main() {
 
   const title = data.values.title;
 
-  const rootPath = path.resolve(process.cwd(), "public/demo/threads", threadId);
+  const rootPath = path.resolve(process.cwd(), "public/threads", threadId);
   if (fs.existsSync(rootPath)) {
     fs.rmSync(rootPath, { recursive: true });
   }
   fs.mkdirSync(rootPath, { recursive: true });
-  // CodeQL[js/http-to-file-access]: intentional — saving demo thread data to local filesystem
+  // CodeQL[js/http-to-file-access]: intentional — saving thread data to local filesystem
   fs.writeFileSync(
     path.resolve(rootPath, "thread.json"),
     JSON.stringify(data, null, 2),
@@ -45,7 +45,7 @@ export async function main() {
   );
   copyFolder("user-data/outputs", rootPath, backendRootPath);
   copyFolder("user-data/uploads", rootPath, backendRootPath);
-  console.info(`Saved demo "${title}" to ${rootPath}`);
+  console.info(`Saved thread "${title}" to ${rootPath}`);
 }
 
 function copyFolder(relPath, rootPath, backendRootPath) {
