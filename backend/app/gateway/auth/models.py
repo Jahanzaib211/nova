@@ -7,6 +7,16 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+def normalize_email(email: str | None) -> str:
+    """Canonical form of an email address: trimmed and lowercased.
+
+    Email is a login identifier, so ``Alice@X.com`` and ``alice@x.com`` must be
+    one account. Every write and lookup goes through this so the stored form
+    and the compared form can never disagree.
+    """
+    return (email or "").strip().lower()
+
+
 def _utc_now() -> datetime:
     """Return current UTC time (timezone-aware)."""
     return datetime.now(UTC)

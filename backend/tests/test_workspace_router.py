@@ -28,7 +28,7 @@ def _make_app(monkeypatch, tmp_path, *, enabled=True, owner_check_passes=True, c
     workspace_dir = tmp_path / "threads" / THREAD_ID / "user-data" / "workspace"
     if create_dir:
         workspace_dir.mkdir(parents=True)
-        (workspace_dir / "pyproject.toml").write_text("[project]\nname = 'demo'\nversion = '0.1'\n")
+        (workspace_dir / "pyproject.toml").write_text("[project]\nname = 'sample'\nversion = '0.1'\n")
         (workspace_dir / "main.py").write_text("def hello():\n    return 'hi'\n\nclass App:\n    pass\n")
 
     monkeypatch.setattr(

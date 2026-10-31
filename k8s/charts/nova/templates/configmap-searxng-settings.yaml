@@ -1,0 +1,13 @@
+# The same settings.yml the Compose stack bind-mounts, carried into the chart so
+# both deployments run an identically-configured instance. Sourced from
+# docker/searxng/settings.yml via files/ — keep them in step.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: searxng-settings
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "nova.labels" . | nindent 4 }}
+data:
+  settings.yml: |
+{{ .Files.Get "files/searxng-settings.yml" | indent 4 }}

@@ -55,6 +55,12 @@ export type MockAPIOptions = {
   threads?: MockThread[];
   agents?: MockAgent[];
   skills?: MockSkill[];
+  /**
+   * Custom SSE frames (`event: custom`) emitted by the run stream, in order,
+   * after `values` and before `end`. Used to exercise the custom-event
+   * handlers (e.g. `secure_ship`) without a live backend.
+   */
+  custom?: MockCustomEvent[];
 };
 
 const DEFAULT_SKILLS: MockSkill[] = [
@@ -430,7 +436,7 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       updated_at: new Date().toISOString(),
       messages: mockStreamMessages(),
     });
-    return handleRunStream(route);
+    return handleRunStream(route, { custom: options?.custom });
   };
 
   void page.route("**/api/langgraph/runs/stream", handleMockRunStream);
@@ -833,5 +839,93 @@ export function mockSandboxAPI(
 
   void page.route("**/api/sandbox/logs*", (route) =>
     route.fulfill({ status: 200, contentType: "text/event-stream", body: "" }),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// mockSecureShipAPI — the Secure-Ship pre-deploy security gate
+// ---------------------------------------------------------------------------
+
+/**
+ * A Secure-Ship gate report, in the shape the `secure_ship.report` /
+ * `secure_ship.scan` capability ops return.
+ */
+export type MockSecureShipReport = {
+  thread_id: string;
+  verdict: "pass" | "warn" | "block" | "error";
+  policy: Record<string, unknown>;
+  scanners: Array<{
+    scanner: string;
+    status: "pass" | "fail" | "skipped" | "error";
+    summary: string;
+    findings: Array<{
+      scanner: string;
+      severity: "critical" | "high" | "medium" | "low" | "info";
+      title: string;
+      path: string;
+      line: number | null;
+      detail: string;
+      rule: string;
+    }>;
+    duration_ms: number;
+  }>;
+  findings: Array<{
+    scanner: string;
+    severity: "critical" | "high" | "medium" | "low" | "info";
+    title: string;
+    path: string;
+    line: number | null;
+    detail: string;
+    rule: string;
+  }>;
+  counts: Record<string, number>;
+  duration_ms: number;
+  generated_at: string;
+  reason: string;
+};
+
+/** The security tools every sandbox ships (40), grouped by domain. */
+export const MOCK_SECURE_SHIP_TOOLKIT = {
+  total: 40,
+  groups: {
+    recon: ["subfinder", "httpx", "nuclei", "katana"],
+    secrets: ["trufflehog", "gitleaks", "detect-secrets"],
+    supply_chain: ["osv-scanner", "syft", "grype"],
+    web: ["zap", "nikto", "wpscan"],
+  },
+  version: "1.0.0",
+};
+
+/**
+ * Mocks the three Secure-Ship capability ops so the Agent's Computer panel
+ * can render its verdict, scanners, findings and toolkit without a live
+ * backend. Registers its own routes (like `mockWorkspaceAPI`) so a spec can
+ * call it alongside the other mock helpers.
+ */
+export function mockSecureShipAPI(page: Page, report?: MockSecureShipReport) {
+  const resolved = report ?? null;
+
+  void page.route("**/api/capabilities/ops/secure_ship.report", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ result: { report: resolved } }),
+    }),
+  );
+
+  void page.route("**/api/capabilities/ops/secure_ship.toolkit", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ result: { toolkit: MOCK_SECURE_SHIP_TOOLKIT } }),
+    }),
+  );
+
+  void page.route("**/api/capabilities/ops/secure_ship.scan", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ result: { report: resolved } }),
+    }),
   );
 }

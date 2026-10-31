@@ -124,3 +124,32 @@ def test_update_email_requires_auth(client):
 
     resp = _post_update_email(client, _PASSWORD, "nobody@example.com")
     assert resp.status_code == 401
+
+
+def test_update_email_stores_canonical_lowercase(client):
+    """A mixed-case new email is stored lowercase, so it cannot later be
+    registered again in a different casing as a second account."""
+    _register(client, "case@example.com")
+
+    resp = _post_update_email(client, _PASSWORD, "  New.Case@Example.COM ")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["email"] == "new.case@example.com"
+
+
+def test_update_email_duplicate_detected_across_casing(client):
+    """Taking another account's email in different casing is still a duplicate."""
+    _register(client, "owner@example.com")
+    _register(client, "other@example.com")
+
+    resp = _post_update_email(client, _PASSWORD, "OWNER@Example.com")
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "email_already_exists"
+
+
+def test_register_rejects_same_email_in_other_casing(client):
+    """Registering the other casing of an existing address must not create a
+    second row: two rows matching one case-insensitive lookup lock both out."""
+    _register(client, "Dup.User@Example.com")
+    resp = client.post("/api/v1/auth/register", json={"email": "dup.user@example.com", "password": _PASSWORD})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "email_already_exists"

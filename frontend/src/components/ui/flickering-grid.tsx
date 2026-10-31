@@ -56,7 +56,7 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
 
   const setupCanvas = useCallback(
     (canvas: HTMLCanvasElement, width: number, height: number) => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       canvas.style.width = `${width}px`;
@@ -138,7 +138,11 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
     let lastTime = 0;
     const animate = (time: number) => {
       if (!isInView) return;
+      animationFrameId = requestAnimationFrame(animate);
 
+      // The grid flickers subtly; 12 fps reads the same and leaves the main
+      // thread free for the hero copy and terminal animation.
+      if (time - lastTime < 80) return;
       const deltaTime = (time - lastTime) / 1000;
       lastTime = time;
 
@@ -152,7 +156,6 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
         gridParams.squares,
         gridParams.dpr,
       );
-      animationFrameId = requestAnimationFrame(animate);
     };
 
     const resizeObserver = new ResizeObserver(() => {

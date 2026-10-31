@@ -8,7 +8,7 @@ def _mode(path):
 
 
 def test_skill_tree_readability_includes_hidden_paths_and_removes_sandbox_write(tmp_path):
-    root = tmp_path / "demo-skill"
+    root = tmp_path / "example-skill"
     hidden_dir = root / ".hidden"
     scripts_dir = root / "scripts"
     hidden_dir.mkdir(parents=True)
@@ -38,7 +38,7 @@ def test_skill_tree_readability_includes_hidden_paths_and_removes_sandbox_write(
 
 
 def test_written_path_readability_is_limited_to_written_path(tmp_path):
-    root = tmp_path / "demo-skill"
+    root = tmp_path / "example-skill"
     ref_dir = root / "references"
     sibling_dir = root / "templates"
     ref_dir.mkdir(parents=True)

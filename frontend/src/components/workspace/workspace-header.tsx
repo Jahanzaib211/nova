@@ -29,22 +29,22 @@ export function WorkspaceHeader({ className }: { className?: string }) {
       >
         {state === "collapsed" ? (
           <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full cursor-pointer items-center justify-center">
-            <div className="block bg-gradient-to-r from-violet-600 to-cyan-600 bg-clip-text pt-1 font-serif font-semibold text-transparent group-hover/workspace-header:hidden dark:from-violet-400 dark:to-cyan-300">
+            <div className="text-brand-gradient block pt-1 font-serif font-semibold group-hover/workspace-header:hidden [@media(hover:none)]:hidden">
               N
             </div>
-            <SidebarTrigger className="hidden pl-2 group-hover/workspace-header:block" />
+            <SidebarTrigger className="hidden pl-2 group-hover/workspace-header:block [@media(hover:none)]:block" />
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2">
             {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? (
               <Link
                 href="/"
-                className="ml-2 bg-gradient-to-r from-violet-600 to-cyan-600 bg-clip-text font-serif font-semibold tracking-wide text-transparent dark:from-violet-400 dark:to-cyan-300"
+                className="text-brand-gradient ml-2 font-serif font-semibold tracking-wide"
               >
                 Nova
               </Link>
             ) : (
-              <div className="ml-2 cursor-default bg-gradient-to-r from-violet-600 to-cyan-600 bg-clip-text font-serif font-semibold tracking-wide text-transparent dark:from-violet-400 dark:to-cyan-300">
+              <div className="text-brand-gradient ml-2 cursor-default font-serif font-semibold tracking-wide">
                 Nova
               </div>
             )}

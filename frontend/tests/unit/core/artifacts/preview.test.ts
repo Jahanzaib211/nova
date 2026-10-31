@@ -264,20 +264,20 @@ test("preserves existing head elements when injecting scroll restoration", () =>
   const result = appendHtmlPreviewScrollRestoration(
     appendHtmlPreviewBaseHref(
       html,
-      "/demo/threads/thread-1/user-data/outputs/report.html?download=true",
+      "/threads/thread-1/user-data/outputs/report.html?download=true",
       "http://localhost/workspace/chats/thread-1",
     ),
     ARTIFACT_PATH,
   );
 
   expect(result).toContain(
-    '<base href="http://localhost/demo/threads/thread-1/user-data/outputs/">',
+    '<base href="http://localhost/threads/thread-1/user-data/outputs/">',
   );
   expect(
     result.indexOf("data-deerflow-artifact-scroll-restoration"),
   ).toBeLessThan(
     result.indexOf(
-      '<base href="http://localhost/demo/threads/thread-1/user-data/outputs/">',
+      '<base href="http://localhost/threads/thread-1/user-data/outputs/">',
     ),
   );
 });

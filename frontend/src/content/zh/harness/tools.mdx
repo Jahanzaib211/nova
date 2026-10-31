@@ -33,7 +33,7 @@ DeerFlow 将工具分为四类：
 task(agent="general-purpose", task="...", context="...")
 ```
 
-参见[子 Agent](/docs/harness/subagents)页面了解子 Agent 的配置方式。
+参见[子 Agent](./subagents)页面了解子 Agent 的配置方式。
 
 ---
 
@@ -69,7 +69,7 @@ task(agent="general-purpose", task="...", context="...")
 
 ### invoke_acp_agent
 
-使用 [Agent Connect Protocol (ACP)](https://agentconnectprotocol.org/) 调用外部 Agent。需要在 `config.yaml` 中配置 `acp_agents:`。参见[子 Agent](/docs/harness/subagents)页面了解 ACP 配置。
+使用 [Agent Connect Protocol (ACP)](https://agentconnectprotocol.org/) 调用外部 Agent。需要在 `config.yaml` 中配置 `acp_agents:`。参见[子 Agent](./subagents)页面了解 ACP 配置。
 
 ---
 
@@ -148,7 +148,7 @@ cd backend && uv sync --extra trading   # yfinance + ccxt
 使用 `PAXG/USDT` / `XAUT/USDT` 获取贴近现货的序列。Yahoo 外汇代码需要 `=X` 后缀
 （`EURUSD=X`，而非 `EURUSD`）。
 
-另见内置的 [`pine-script` 技能](/harness/skills)，可将验证过的策略转换为 TradingView Pine Script。
+另见内置的 [`pine-script` 技能](./skills)，可将验证过的策略转换为 TradingView Pine Script。
 
 ## 社区工具
 
@@ -300,6 +300,6 @@ tool_search:
 当 MCP 服务器暴露数十个工具时特别有用。
 
 <Cards num={2}>
-  <Cards.Card title="MCP 集成" href="/docs/harness/mcp" />
-  <Cards.Card title="技能" href="/docs/harness/skills" />
+  <Cards.Card title="MCP 集成" href="./mcp" />
+  <Cards.Card title="技能" href="./skills" />
 </Cards>

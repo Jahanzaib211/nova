@@ -18,5 +18,5 @@ Nova's existing agent, provider system, and token telemetry.
 make hackathon-track1            # build (linux/amd64) + smoke test
 make hackathon-track1-submit REGISTRY=ghcr.io/<org>   # smoke → push → verify <10GB
 make hackathon-track3-deck       # render the slide deck to PDF
-make hackathon-track3-prescreen  # self-audit repo (+ live demo if NOVA_LIVE_URL set)
+make hackathon-track3-prescreen  # self-audit repo (+ live deployment if NOVA_LIVE_URL set)
 ```

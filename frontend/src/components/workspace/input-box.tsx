@@ -3,6 +3,8 @@
 import type { ChatStatus } from "ai";
 import {
   CheckIcon,
+  EyeIcon,
+  EyeOffIcon,
   GraduationCapIcon,
   LightbulbIcon,
   PaperclipIcon,
@@ -60,18 +62,30 @@ import {
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
-import { useModels } from "@/core/models/hooks";
-import { getModelLabel } from "@/core/models/types";
+import { useModelVisibility, useModels } from "@/core/models/hooks";
+import {
+  formatContextWindow,
+  getModelLabel,
+  resolveSelectableModel,
+  type Model,
+} from "@/core/models/types";
+import { offeredModels } from "@/core/models/visibility";
 import type { Skill } from "@/core/skills";
 import { useSkills } from "@/core/skills/hooks";
 import { useSuggestionsConfig } from "@/core/suggestions/hooks";
-import type { AgentThreadContext } from "@/core/threads";
+import type { AgentThreadContext, RuntimeContextFields } from "@/core/threads";
 import { textOfMessage } from "@/core/threads/utils";
+import {
+  RuntimePicker,
+  runtimeTriggerLabel,
+  useRuntimeOptions,
+} from "@/features/console/components/runtime-picker";
 import { cn } from "@/lib/utils";
 
 import {
   ModelSelector,
   ModelSelectorContent,
+  ModelSelectorEmpty,
   ModelSelectorInput,
   ModelSelectorItem,
   ModelSelectorList,
@@ -85,6 +99,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { Switch } from "../ui/switch";
 
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
@@ -175,7 +190,7 @@ export function InputBox({
   > & {
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
-  };
+  } & RuntimeContextFields;
   extraHeader?: React.ReactNode;
   /**
    * Whether to render the input in welcome layout (vertically centered,
@@ -192,7 +207,7 @@ export function InputBox({
     > & {
       mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
       reasoning_effort?: "minimal" | "low" | "medium" | "high";
-    },
+    } & RuntimeContextFields,
   ) => void;
   onFollowupsVisibilityChange?: (visible: boolean) => void;
   onSubmit?: (message: PromptInputMessage) => void | Promise<void>;
@@ -204,6 +219,13 @@ export function InputBox({
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models } = useModels();
+  const modelVisibility = useModelVisibility();
+  const {
+    isVisible: isModelOfferedByUser,
+    showHidden,
+    setVisible,
+    setShowHidden,
+  } = modelVisibility;
   const { thread, isMock } = useThread();
   const { textInput } = usePromptInputController();
   const { skills } = useSkills();
@@ -227,12 +249,30 @@ export function InputBox({
     null,
   );
 
+  // A model can be offered in the picker either by the server (`hidden: false`)
+  // or by the user's per-browser choice / the "show hidden" toggle. Both the
+  // default resolution and the visible list follow the same rule, otherwise a
+  // model surfaced by the toggle would be selectable but immediately replaced.
+  const isModelPickable = useCallback(
+    (model: Pick<Model, "name" | "hidden">) =>
+      showHidden || isModelOfferedByUser(model),
+    [showHidden, isModelOfferedByUser],
+  );
+
+  const modelChoices = useMemo(
+    () => offeredModels(models, modelVisibility.state, context.model_name),
+    [context.model_name, modelVisibility.state, models],
+  );
+
   useEffect(() => {
     if (models.length === 0) {
       return;
     }
-    const currentModel = models.find((m) => m.name === context.model_name);
-    const fallbackModel = currentModel ?? models[0]!;
+    const fallbackModel = resolveSelectableModel(
+      models,
+      context.model_name,
+      isModelPickable,
+    )!;
     const supportsThinking = fallbackModel.supports_thinking ?? false;
     const nextModelName = fallbackModel.name;
     const nextMode = getResolvedMode(context.mode, supportsThinking);
@@ -246,16 +286,28 @@ export function InputBox({
       model_name: nextModelName,
       mode: nextMode,
     });
-  }, [context, models, onContextChange]);
+  }, [context, models, onContextChange, isModelPickable]);
 
   const selectedModel = useMemo(() => {
     if (models.length === 0) {
       return undefined;
     }
-    return models.find((m) => m.name === context.model_name) ?? models[0];
-  }, [context.model_name, models]);
+    return resolveSelectableModel(models, context.model_name, isModelPickable);
+  }, [context.model_name, isModelPickable, models]);
 
   const resolvedModelName = selectedModel?.name;
+
+  const { runtimes: runtimeOptions } = useRuntimeOptions();
+  const runtimeLabel = runtimeTriggerLabel(
+    context.runtime,
+    runtimeOptions,
+    {
+      runtime: context.runtime,
+      runtime_account: context.runtime_account,
+      permission_mode: context.permission_mode,
+    },
+    t.features.runtimePicker.accountAuto,
+  );
 
   const supportThinking = useMemo(
     () => selectedModel?.supports_thinking ?? false,
@@ -611,7 +663,7 @@ export function InputBox({
     <div
       ref={promptRootRef}
       className={cn(
-        "relative flex min-w-0 flex-col",
+        "relative flex min-w-0 flex-col pb-[env(safe-area-inset-bottom)]",
         isWelcomeMode ? "gap-4" : "gap-2",
       )}
     >
@@ -710,7 +762,15 @@ export function InputBox({
         <PromptInputAttachments>
           {(attachment) => <PromptInputAttachment data={attachment} />}
         </PromptInputAttachments>
-        <PromptInputBody className="absolute top-0 right-0 left-0 z-3">
+        {/* No positioning here: PromptInputBody renders `display: contents`, which
+            suppresses its own box, so `absolute`/`top`/`z-*` on it were silently
+            ignored -- the textarea has always been in normal flow. The classes
+            were removed rather than made to work: newly applying absolute
+            positioning to the main composer would change a layout that has
+            shipped this way, and the layering it was reaching for (textarea at
+            z-3 under the z-10 <Welcome> overlay) needs a visual check first.
+            The Welcome banner is still an unreserved overlay above this. */}
+        <PromptInputBody>
           <PromptInputTextarea
             className={cn("size-full")}
             disabled={disabled}
@@ -1031,15 +1091,29 @@ export function InputBox({
             >
               <ModelSelectorTrigger asChild>
                 <PromptInputButton className="max-w-40 min-w-0 sm:max-w-56">
-                  <div className="flex min-w-0 flex-col items-start text-left">
-                    <ModelSelectorName className="text-xs font-normal">
-                      {selectedModel ? getModelLabel(selectedModel) : ""}
-                    </ModelSelectorName>
-                  </div>
-                  {selectedModel?.amd_compute ? (
+                  {runtimeLabel ? (
+                    <div
+                      className="flex min-w-0 flex-col items-start text-left"
+                      data-testid="runtime-trigger"
+                    >
+                      <ModelSelectorName className="w-full text-xs font-normal">
+                        {runtimeLabel.title}
+                      </ModelSelectorName>
+                      <span className="text-muted-foreground w-full truncate text-[10px]">
+                        {runtimeLabel.subtitle}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 flex-col items-start text-left">
+                      <ModelSelectorName className="w-full text-xs font-normal">
+                        {selectedModel ? getModelLabel(selectedModel) : ""}
+                      </ModelSelectorName>
+                    </div>
+                  )}
+                  {!runtimeLabel && selectedModel?.amd_compute ? (
                     <Badge
                       variant="outline"
-                      className="ml-1 hidden shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 sm:inline-flex dark:text-red-400"
+                      className="border-warning/40 bg-warning/10 text-warning ml-1 hidden shrink-0 text-[9px] font-medium sm:inline-flex"
                     >
                       AMD
                     </Badge>
@@ -1047,40 +1121,146 @@ export function InputBox({
                 </PromptInputButton>
               </ModelSelectorTrigger>
               <ModelSelectorContent>
-                <ModelSelectorInput placeholder={t.inputBox.searchModels} />
-                <ModelSelectorList>
-                  {models
-                    .filter((m) => !m.hidden || m.name === context.model_name)
-                    .map((m) => (
-                      <ModelSelectorItem
-                        key={m.name}
-                        value={m.name}
-                        onSelect={() => handleModelSelect(m.name)}
-                      >
-                        <div className="flex min-w-0 flex-1 flex-col">
-                          <ModelSelectorName>
-                            {getModelLabel(m)}
-                          </ModelSelectorName>
-                          <span className="text-muted-foreground truncate text-[10px]">
-                            {m.model}
-                          </span>
-                        </div>
-                        {m.amd_compute ? (
-                          <Badge
-                            variant="outline"
-                            className="ml-2 shrink-0 border-red-500/30 bg-red-500/10 text-[9px] font-medium text-red-600 dark:text-red-400"
+                <RuntimePicker
+                  className="border-b"
+                  value={{
+                    runtime: context.runtime,
+                    runtime_account: context.runtime_account,
+                    permission_mode: context.permission_mode,
+                  }}
+                  onChange={(next) =>
+                    onContextChange?.({
+                      ...context,
+                      runtime: next.runtime,
+                      runtime_account: next.runtime_account,
+                      permission_mode: next.permission_mode,
+                    })
+                  }
+                />
+                {runtimeLabel ? null : (
+                  <>
+                    <ModelSelectorInput placeholder={t.inputBox.searchModels} />
+                    <ModelSelectorList>
+                      <ModelSelectorEmpty>
+                        {t.inputBox.noModelsFound}
+                      </ModelSelectorEmpty>
+                      {modelChoices.map((m) => {
+                        const offeredByUser = isModelOfferedByUser(m);
+                        const contextWindow = formatContextWindow(
+                          m.max_input_tokens,
+                        );
+                        return (
+                          <ModelSelectorItem
+                            key={m.name}
+                            value={m.name}
+                            onSelect={() => handleModelSelect(m.name)}
                           >
-                            {m.amd_compute}
-                          </Badge>
-                        ) : null}
-                        {m.name === context.model_name ? (
-                          <CheckIcon className="ml-auto size-4" />
-                        ) : (
-                          <div className="ml-auto size-4" />
-                        )}
-                      </ModelSelectorItem>
-                    ))}
-                </ModelSelectorList>
+                            <div className="flex min-w-0 flex-1 flex-col">
+                              <ModelSelectorName>
+                                {getModelLabel(m)}
+                              </ModelSelectorName>
+                              <span className="text-muted-foreground truncate text-[10px]">
+                                {m.model}
+                              </span>
+                            </div>
+                            <div className="ml-2 flex shrink-0 items-center gap-1">
+                              {contextWindow ? (
+                                <Badge
+                                  variant="outline"
+                                  className="text-muted-foreground px-1.5 text-[9px] font-normal"
+                                  title={t.inputBox.contextWindow.replace(
+                                    "{tokens}",
+                                    m.max_input_tokens?.toLocaleString() ?? "",
+                                  )}
+                                >
+                                  {contextWindow}
+                                </Badge>
+                              ) : null}
+                              {offeredByUser ? null : (
+                                <Badge
+                                  variant="outline"
+                                  className="text-muted-foreground border-dashed px-1.5 text-[9px] font-normal"
+                                >
+                                  {t.inputBox.hiddenBadge}
+                                </Badge>
+                              )}
+                              {m.amd_compute ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-warning/40 bg-warning/10 text-warning px-1.5 text-[9px] font-medium"
+                                >
+                                  {m.amd_compute}
+                                </Badge>
+                              ) : null}
+                              {showHidden ? (
+                                <button
+                                  type="button"
+                                  aria-label={
+                                    offeredByUser
+                                      ? t.inputBox.hideModelFromChat
+                                      : t.inputBox.showModelInChat
+                                  }
+                                  title={
+                                    offeredByUser
+                                      ? t.inputBox.hideModelFromChat
+                                      : t.inputBox.showModelInChat
+                                  }
+                                  className="text-muted-foreground hover:text-foreground rounded-sm p-0.5"
+                                  onClick={(event) => {
+                                    // cmdk selects on click; toggling visibility
+                                    // must not also pick the model.
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setVisible(m.name, !offeredByUser);
+                                  }}
+                                >
+                                  {offeredByUser ? (
+                                    <EyeIcon className="size-3.5" />
+                                  ) : (
+                                    <EyeOffIcon className="size-3.5" />
+                                  )}
+                                </button>
+                              ) : null}
+                              {m.name === context.model_name ? (
+                                <CheckIcon className="size-4" />
+                              ) : (
+                                <div className="size-4" />
+                              )}
+                            </div>
+                          </ModelSelectorItem>
+                        );
+                      })}
+                    </ModelSelectorList>
+                    <div className="flex items-center justify-between gap-3 border-t px-3 py-2">
+                      <span className="text-muted-foreground text-[10px]">
+                        {t.inputBox.visibleModelCount
+                          .replace(
+                            "{visible}",
+                            // Matches the rows above: reveal-all widens the
+                            // list, so counting only the curated set would
+                            // read "2 of 12" beside 12 visible rows.
+                            String(
+                              models.filter((m) => isModelPickable(m)).length,
+                            ),
+                          )
+                          .replace("{total}", String(models.length))}
+                      </span>
+                      <label
+                        htmlFor="model-picker-show-hidden"
+                        className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-2 text-[11px]"
+                      >
+                        {t.inputBox.showHiddenModels}
+                        <Switch
+                          id="model-picker-show-hidden"
+                          checked={showHidden}
+                          onCheckedChange={setShowHidden}
+                          aria-label={t.inputBox.showHiddenModels}
+                          data-testid="model-picker-show-hidden"
+                        />
+                      </label>
+                    </div>
+                  </>
+                )}
               </ModelSelectorContent>
             </ModelSelector>
             <PromptInputSubmit

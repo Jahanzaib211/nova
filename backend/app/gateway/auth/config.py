@@ -75,12 +75,7 @@ def get_auth_config() -> AuthConfig:
             # weakly-signed sessions with nothing in the logs that an operator
             # would notice. The auto-generated path already uses
             # token_urlsafe(32); this holds a hand-set one to the same bar.
-            raise RuntimeError(
-                f"AUTH_JWT_SECRET is {len(jwt_secret.encode())} bytes; "
-                f"RFC 7518 §3.2 requires at least {_MIN_SECRET_BYTES} for "
-                'HS256. Generate one with: python -c "import secrets; '
-                'print(secrets.token_urlsafe(32))"'
-            )
+            raise RuntimeError(f'AUTH_JWT_SECRET is {len(jwt_secret.encode())} bytes; RFC 7518 §3.2 requires at least {_MIN_SECRET_BYTES} for HS256. Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"')
         if not jwt_secret:
             jwt_secret = _load_or_create_secret()
             os.environ["AUTH_JWT_SECRET"] = jwt_secret

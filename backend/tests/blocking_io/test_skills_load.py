@@ -34,10 +34,10 @@ _EXECUTOR_IMPORT_MOCKS = (
 
 
 def _seed_skill(skills_root: Path) -> None:
-    skill = skills_root / "public" / "demo"
+    skill = skills_root / "public" / "sample"
     skill.mkdir(parents=True, exist_ok=True)
     (skill / "SKILL.md").write_text(
-        "---\nname: demo\ndescription: regression-test skill\n---\n# demo\n",
+        "---\nname: sample\ndescription: regression-test skill\n---\n# sample\n",
         encoding="utf-8",
     )
 
@@ -88,7 +88,7 @@ async def test_load_skills_via_to_thread_does_not_block_event_loop(tmp_path: Pat
     with _real_subagent_executor() as SubagentExecutor:
         executor = SubagentExecutor(
             config=SubagentConfig(
-                name="demo",
+                name="sample",
                 description="Loads skills through the production async path.",
             ),
             tools=[],
@@ -99,4 +99,4 @@ async def test_load_skills_via_to_thread_does_not_block_event_loop(tmp_path: Pat
         skills = await executor._load_skills()
 
     assert isinstance(skills, list)
-    assert any(s.name == "demo" for s in skills)
+    assert any(s.name == "sample" for s in skills)

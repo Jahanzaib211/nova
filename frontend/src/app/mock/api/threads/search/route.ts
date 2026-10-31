@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const sortOrder = body.sortOrder ?? "desc";
 
   const threadsDir = fs.readdirSync(
-    path.resolve(process.cwd(), "public/demo/threads"),
+    path.resolve(process.cwd(), "public/threads"),
     {
       withFileTypes: true,
     },
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       if (threadId.isDirectory() && !threadId.name.startsWith(".")) {
         const threadData = JSON.parse(
           fs.readFileSync(
-            path.resolve(`public/demo/threads/${threadId.name}/thread.json`),
+            path.resolve(`public/threads/${threadId.name}/thread.json`),
             "utf8",
           ),
         ) as Record<string, unknown>;

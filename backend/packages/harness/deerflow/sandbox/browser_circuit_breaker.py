@@ -306,6 +306,39 @@ def reset_all_circuits() -> None:
         _breakers.clear()
 
 
-def snapshot() -> dict[str, str]:
-    """Return {thread_id: state_value} for all known breakers."""
-    return {tid: br.state.value for tid, br in _breakers.items()}
+def snapshot(thread_id: str | None = None) -> dict[str, str]:
+    """Return ``{thread_id: state_value}``, optionally for a single thread.
+
+    Read-through cooldown
+    ---------------------
+    The breaker only advances OPEN → HALF_OPEN inside ``_admit``, i.e. when
+    something actually makes a call. A thread whose callers stopped calling
+    therefore stayed reported as ``open`` forever: the Browser tab was closed,
+    no probe ran, and every surface that reads this snapshot (the runtime bar's
+    "Degraded · N" badge, ``/api/health/browser``, the watchdog) kept showing a
+    degradation that no longer existed. Cooldown had already elapsed, so the
+    very next call would have been admitted as a probe.
+
+    This reports that state instead: once ``_COOLDOWN_S`` has passed since the
+    breaker opened, an OPEN entry is reported as ``half_open`` — the state the
+    next caller would find — without mutating anything. Keeping the read free of
+    side effects matters because this snapshot is served from a GET, and
+    ``/api/health/browser`` is a public path: a read must not be the thing that
+    drives a state machine or emits transition metrics.
+
+    ``thread_id`` narrows the result to one sandbox. The runtime bar is rendered
+    per chat, so a circuit opened by a *different* thread must not paint this
+    chat's Browser tab as degraded.
+    """
+    now = time.monotonic()
+    with _breakers_meta:
+        items = list(_breakers.items())
+    out: dict[str, str] = {}
+    for tid, br in items:
+        if thread_id is not None and tid != thread_id:
+            continue
+        state = br.state
+        if state == CircuitState.OPEN and (now - br.opened_at) >= _COOLDOWN_S:
+            state = CircuitState.HALF_OPEN
+        out[tid] = state.value
+    return out

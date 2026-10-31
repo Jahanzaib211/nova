@@ -2,6 +2,14 @@ import { Renderer, Program, Mesh, Color, Triangle } from "ogl";
 import { useEffect, useRef } from "react";
 import "./galaxy.css";
 
+/**
+ * The galaxy is a soft, low-frequency field. Rendering it below the display
+ * resolution and at 30 fps is visually identical, but leaves the main thread
+ * free for the rest of the hero (notably the command terminal).
+ */
+const MAX_RENDER_EDGE = 600;
+const FRAME_INTERVAL_MS = 1000 / 15;
+
 const vertexShader = `
 attribute vec2 uv;
 attribute vec2 position;
@@ -233,8 +241,21 @@ export default function Galaxy({
     let program;
 
     function resize() {
-      const scale = 1;
-      renderer.setSize(ctn.offsetWidth * scale, ctn.offsetHeight * scale);
+      const width = Math.max(1, ctn.offsetWidth);
+      const height = Math.max(1, ctn.offsetHeight);
+      const scale = Math.min(1, MAX_RENDER_EDGE / Math.max(width, height));
+
+      renderer.setSize(
+        Math.max(1, Math.floor(width * scale)),
+        Math.max(1, Math.floor(height * scale)),
+      );
+      // `setSize` writes the buffer size into the canvas style, which would
+      // shrink the visible canvas. Stretch it back to fill the container.
+      Object.assign(gl.canvas.style, {
+        width: "100%",
+        height: "100%",
+      });
+
       if (program) {
         program.uniforms.uResolution.value = new Color(
           gl.canvas.width,
@@ -285,9 +306,15 @@ export default function Galaxy({
 
     const mesh = new Mesh(gl, { geometry, program });
     let animateId;
+    let lastRender = 0;
 
     function update(t) {
       animateId = requestAnimationFrame(update);
+
+      // The field drifts slowly; 30 fps is indistinguishable and much cheaper.
+      if (t - lastRender < FRAME_INTERVAL_MS) return;
+      lastRender = t;
+
       if (!disableAnimation) {
         program.uniforms.uTime.value = t * 0.001;
         program.uniforms.uStarSpeed.value = (t * 0.001 * starSpeed) / 10.0;

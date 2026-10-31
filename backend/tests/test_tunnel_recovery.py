@@ -33,6 +33,16 @@ sys.modules["healthcheck_daemon"] = hd
 _spec.loader.exec_module(hd)
 
 
+@pytest.fixture(autouse=True)
+def _tunnel_unit_installed_and_sudo(monkeypatch):
+    """These tests cover the sudo-capable repair path, so pin the two
+    preconditions fix_tunnel now checks first: an installed unit (it no
+    longer assumes cloudflared-nova.service) and passwordless sudo. The
+    no-unit and no-sudo paths are covered in test_healthcheck_daemon.py."""
+    monkeypatch.setattr(hd, "_tunnel_unit_to_heal", lambda units: "cloudflared-nova.service")
+    monkeypatch.setattr(hd, "_passwordless_sudo", lambda: True)
+
+
 def _completed_proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> MagicMock:
     p = MagicMock()
     p.returncode = returncode

@@ -34,7 +34,7 @@ Delegates a subtask to a subagent. The Lead Agent uses this tool when a task is 
 task(agent="general-purpose", task="...", context="...")
 ```
 
-See the [Subagents](/docs/harness/subagents) page for how subagents are configured.
+See the [Subagents](./subagents) page for how subagents are configured.
 
 ---
 
@@ -72,7 +72,7 @@ Persists updates to the current custom agent's `SOUL.md` and `config.yaml`. Boun
 
 ### invoke_acp_agent
 
-Invokes an external agent using the [Agent Connect Protocol (ACP)](https://agentconnectprotocol.org/). Requires `acp_agents:` configuration in `config.yaml`. See the [Subagents](/docs/harness/subagents) page for ACP configuration.
+Invokes an external agent using the [Agent Connect Protocol (ACP)](https://agentconnectprotocol.org/). Requires `acp_agents:` configuration in `config.yaml`. See the [Subagents](./subagents) page for ACP configuration.
 
 ---
 
@@ -152,7 +152,7 @@ frame from Yahoo. Use `GC=F` / `MGC=F` (COMEX futures, ~1% above spot from carry
 `PAXG/USDT` / `XAUT/USDT` via `source: ccxt` for a spot-tracking series. Yahoo FX pairs need
 the `=X` suffix (`EURUSD=X`, not `EURUSD`).
 
-See also the bundled [`pine-script` skill](/harness/skills) for turning a validated strategy
+See also the bundled [`pine-script` skill](./skills) for turning a validated strategy
 into TradingView Pine Script.
 
 ## Community tools
@@ -323,6 +323,6 @@ When enabled, tools are not listed in the model's context directly. Instead, the
 This is particularly useful when MCP servers expose dozens of tools.
 
 <Cards num={2}>
-  <Cards.Card title="MCP Integration" href="/docs/harness/mcp" />
-  <Cards.Card title="Skills" href="/docs/harness/skills" />
+  <Cards.Card title="MCP Integration" href="./mcp" />
+  <Cards.Card title="Skills" href="./skills" />
 </Cards>

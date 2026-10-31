@@ -14,7 +14,6 @@ import type {
   IGINOResearchItem,
   IGINOResearchMetadata,
   IGINOAuditRecord,
-  IGINOCapabilities,
 } from "@/core/igino/types";
 
 describe("iGIN0 types compile", () => {
@@ -149,30 +148,5 @@ describe("iGIN0 types compile", () => {
     };
     expect(record.audit_id).toBe("aud_123");
     expect(record.compliance_tags).toContain("no-pii");
-  });
-
-  test("IGINOCapabilities conforms to shape", () => {
-    const caps: IGINOCapabilities = {
-      enabled: true,
-      searxng_healthy: true,
-      circuit_states: { default: "closed" },
-      cache_stats: {
-        size: 0,
-        max_size: 100,
-        hits: 0,
-        misses: 0,
-        hit_rate: 0,
-        ttl_s: 3600,
-      },
-      audit_stats: {
-        total_records: 0,
-        errors: 0,
-        tor_usage: 0,
-        enabled: true,
-        redacted: false,
-      },
-    };
-    expect(caps.enabled).toBe(true);
-    expect(caps.circuit_states.default).toBe("closed");
   });
 });

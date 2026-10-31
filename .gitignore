@@ -117,3 +117,10 @@ frontend/tests/_diag/
 # Incident captures — local forensic snapshots, not source
 .nova/incident-*/
 docker/sandbox/vendor/
+
+# Sibling projects checked out inside the repo for reference (never committed)
+/modular-main/
+/nova-engine/
+# Config backups
+config.yaml.bak-*
+docker/litellm/*.bak*

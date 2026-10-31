@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
@@ -77,7 +78,7 @@ export function ByokSettings() {
       description={t.settings.account.byokDescription}
     >
       {status.has_key && (
-        <p className="mb-3 text-sm text-green-600 dark:text-green-500">
+        <p className="text-success dark:text-success mb-3 text-sm">
           {t.settings.account.byokActive}
           {status.provider ? ` (${status.provider})` : ""}
         </p>
@@ -88,15 +89,14 @@ export function ByokSettings() {
           onChange={(e) => setProvider(e.target.value)}
           placeholder={t.settings.account.byokProvider}
         />
-        <Input
-          type="password"
+        <PasswordInput
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder={t.settings.account.byokApiKey}
           required
           minLength={8}
         />
-        {message && <p className="text-sm text-green-500">{message}</p>}
+        {message && <p className="text-success text-sm">{message}</p>}
         <div className="flex gap-2">
           <Button type="submit" variant="outline" size="sm" disabled={busy}>
             {t.settings.account.byokSave}

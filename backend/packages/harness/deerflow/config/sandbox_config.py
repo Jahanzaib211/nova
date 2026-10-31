@@ -77,6 +77,18 @@ class SandboxConfig(BaseModel):
         default=None,
         description="Idle timeout in seconds before sandbox is released (default: 600 = 10 minutes). Set to 0 to disable.",
     )
+    startup_timeout: int | None = Field(
+        default=None,
+        description=(
+            "Seconds to wait for a newly created sandbox to answer on its port "
+            "(default: 180). This was hardcoded to 60, which is enough for a warm "
+            "host and not enough for a cold one: the image boots supervisord, "
+            "code-server, Jupyter, a VNC server and a browser, so under memory or "
+            "IO pressure it routinely needs longer. A container that misses the "
+            "deadline is destroyed and the turn fails with 'failed to become "
+            "ready', even though the image is healthy and would have answered."
+        ),
+    )
     privileged: bool = Field(
         default=False,
         description=(
@@ -156,6 +168,27 @@ class SandboxConfig(BaseModel):
             "resource error. Set to null to inherit the daemon default."
         ),
     )
+    browser_no_sandbox: bool = Field(
+        default=True,
+        description=(
+            "Pass `--no-sandbox` to the Chromium running inside the sandbox "
+            "(BROWSER_NO_SANDBOX, which the image's own /opt/gem/run.sh appends "
+            "to BROWSER_EXTRA_ARGS). Default on, because the container this repo "
+            "creates is hardened in a way that makes Chromium's own sandbox "
+            "impossible: `--cap-drop ALL` + `--security-opt no-new-privileges` "
+            "block the setuid helper, and Docker's default seccomp profile only "
+            "permits clone(CLONE_NEWUSER) when CAP_SYS_ADMIN is present, so the "
+            "userns path fails too. Supervisord then logs 'Failed to move to new "
+            "namespace ... Operation not permitted' and restarts the browser "
+            "forever, which leaves port 9222 closed, the container unhealthy, "
+            "and every browser_check opening the circuit breaker. The container "
+            "boundary is the sandbox here: weakening it (--privileged or "
+            "CAP_SYS_ADMIN) to satisfy Chromium's inner sandbox would trade "
+            "defence-in-depth inside one container for near-host-root. Ignored "
+            "when privileged=True, where the inner sandbox works normally. Set "
+            "to false only if you re-add the capabilities Chromium needs."
+        ),
+    )
     mounts: list[VolumeMountConfig] = Field(
         default_factory=list,
         description="List of volume mounts to share directories between host and container",
@@ -169,6 +202,31 @@ class SandboxConfig(BaseModel):
         default=20000,
         ge=0,
         description="Maximum characters to keep from bash tool output. Output exceeding this limit is middle-truncated (head + tail), preserving the first and last half. Set to 0 to disable truncation.",
+    )
+    stream_terminal_output: bool = Field(
+        default=False,
+        description=(
+            "Stream bash output into sandbox.log as it is produced, instead of "
+            "one line at completion. Emits extra `delta`/`replace` frames that "
+            "only a frontend built after this feature understands. Default OFF "
+            "because the backend hot-reloads while the frontend serves a "
+            "prebuilt bundle: turning it on before the matching frontend is "
+            "deployed makes every intermediate frame render as a blank row and "
+            "evict real events from the 200-entry display window. Turn on only "
+            "once the frontend serving this deployment understands the "
+            "`sandbox_delta` SSE event."
+        ),
+    )
+    observation_max_chars: int = Field(
+        default=20000,
+        ge=0,
+        description=(
+            "Maximum characters of tool output kept in one sandbox.log observation "
+            "line -- what the Agent's Computer Terminal renders. Was a hardcoded "
+            "2000 with no truncation marker, so the panel showed silently less "
+            "than the model received for the same command. Middle-truncated with "
+            "an explicit marker, like bash_output_max_chars. Set to 0 to disable."
+        ),
     )
     read_file_output_max_chars: int = Field(
         default=50000,

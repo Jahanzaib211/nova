@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  EyeIcon,
-  FolderOpenIcon,
   KeyboardIcon,
   MessageSquarePlusIcon,
   SettingsIcon,
@@ -103,7 +101,9 @@ export function CommandPalette() {
             </CommandItem>
           </CommandGroup>
 
-          <CommandGroup heading="Agent's Computer">
+          {/* One toggle. Two more items used to say "Preview tab" / "Files
+              tab" but only opened the panel, exactly like this one. */}
+          <CommandGroup heading={t.agentComputer.header}>
             <CommandItem
               onSelect={() => {
                 setAgentComputerOpen(!agentComputerOpen);
@@ -111,25 +111,9 @@ export function CommandPalette() {
               }}
             >
               <TerminalIcon className="mr-2 h-4 w-4" />
-              {agentComputerOpen ? "Close" : "Open"} Agent&apos;s Computer
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setAgentComputerOpen(true);
-                setOpen(false);
-              }}
-            >
-              <EyeIcon className="mr-2 h-4 w-4" />
-              Preview built file — open right panel → Preview tab
-            </CommandItem>
-            <CommandItem
-              onSelect={() => {
-                setAgentComputerOpen(true);
-                setOpen(false);
-              }}
-            >
-              <FolderOpenIcon className="mr-2 h-4 w-4" />
-              Browse workspace files — open right panel → Files tab
+              {agentComputerOpen
+                ? t.agentComputer.closePanel
+                : t.agentComputer.openPanel}
             </CommandItem>
           </CommandGroup>
         </CommandList>
