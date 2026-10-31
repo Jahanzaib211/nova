@@ -1,5 +1,6 @@
 """Tests for the built-in ACP invocation tool."""
 
+import asyncio
 import sys
 from types import SimpleNamespace
 
@@ -9,7 +10,6 @@ from deerflow.config.acp_config import ACPAgentConfig
 from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig, set_extensions_config
 from deerflow.tools.builtins.invoke_acp_agent_tool import (
     _build_acp_mcp_servers,
-    _build_mcp_servers,
     _build_permission_response,
     _get_work_dir,
     build_invoke_acp_agent_tool,
@@ -17,30 +17,24 @@ from deerflow.tools.builtins.invoke_acp_agent_tool import (
 from deerflow.tools.tools import get_available_tools
 
 
-def test_build_mcp_servers_filters_disabled_and_maps_transports():
-    set_extensions_config(ExtensionsConfig(mcp_servers={"stale": McpServerConfig(enabled=True, type="stdio", command="echo")}, skills={}))
-    fresh_config = ExtensionsConfig(
-        mcp_servers={
-            "stdio": McpServerConfig(enabled=True, type="stdio", command="npx", args=["srv"]),
-            "http": McpServerConfig(enabled=True, type="http", url="https://example.com/mcp"),
-            "disabled": McpServerConfig(enabled=False, type="stdio", command="echo"),
-        },
-        skills={},
-    )
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
-        classmethod(lambda cls: fresh_config),
-    )
+class _FakeACPProcess:
+    """The adapter process handle the transport monitors.
 
-    try:
-        assert _build_mcp_servers() == {
-            "stdio": {"transport": "stdio", "command": "npx", "args": ["srv"]},
-            "http": {"transport": "http", "url": "https://example.com/mcp"},
-        }
-    finally:
-        monkeypatch.undo()
-        set_extensions_config(ExtensionsConfig(mcp_servers={}, skills={}))
+    ``run_acp_prompt`` races each ACP request against ``proc.wait()`` so a
+    crashed adapter fails fast. The stub stays alive until the request wins,
+    and uses a PID that cannot exist in ``/proc`` so cleanup finds no children.
+    """
+
+    pid = 999_999
+    returncode = 0
+    stderr = None
+
+    async def wait(self) -> int:
+        await asyncio.Event().wait()
+        return 0
+
+    def kill(self) -> None:
+        pass
 
 
 def test_build_acp_mcp_servers_formats_list_payload():
@@ -229,7 +223,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
             captured["spawn"] = {"cmd": cmd, "args": list(args), "cwd": cwd}
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -354,7 +348,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
             captured["cwd"] = cwd
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -446,7 +440,7 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
             captured["env"] = env
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -539,7 +533,7 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
             captured["spawn"] = {"cmd": cmd, "args": list(args), "env": env, "cwd": cwd}
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -626,7 +620,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
             captured["env"] = env
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -739,7 +733,7 @@ def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(mo
             captured["cwd"] = cwd
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -876,7 +870,7 @@ async def test_invoke_acp_agent_streams_acp_update_events(monkeypatch, tmp_path)
             captured["client"] = client
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _FakeACPProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False

@@ -49,7 +49,7 @@ def transcript_for_prompt(messages: list[AnyMessage], *, max_prior_turns: int = 
 
 
 #: Tools the sandbox capability module exposes over Nova's MCP server.
-SANDBOX_TOOL_NAMES: tuple[str, ...] = ("sandbox__bash", "sandbox__read_file", "sandbox__write_file", "sandbox__str_replace", "sandbox__ls", "sandbox__glob", "sandbox__grep")
+SANDBOX_TOOL_NAMES: tuple[str, ...] = ("sandbox__bash", "sandbox__read_file", "sandbox__write_file", "sandbox__str_replace", "sandbox__ls", "sandbox__glob", "sandbox__grep", "sandbox__expose_port")
 
 
 def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...]) -> str:
@@ -73,6 +73,7 @@ def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...]) -> str:
         "You are running as the runtime for a Nova chat. The user's Agent's Computer — the sandbox they are watching — is the `nova` MCP server. "
         f"Use its sandbox tools for every shell and file action: {tools}. Files live under /mnt/user-data/workspace (your work), /mnt/user-data/uploads (their files) and /mnt/user-data/outputs (deliverables). "
         "Everything you do through those tools appears live in the user's Terminal, Files and Activity panes. "
+        "To show a web app in the user's Browser tab, start its server in the sandbox bound to 0.0.0.0 (for static files, `python3 -m http.server <port> --bind 0.0.0.0` in the project directory), then call `sandbox__expose_port` with that port. Nova's HTTP API is not reachable from inside the sandbox; do not try to call it there. "
         "Your own built-in Bash is unavailable in this environment and your built-in file tools only see a private scratch directory the user cannot see — do not use them for the user's work. "
         "For parallel or delegated work prefer your own subagents (they run on your model and see the same `nova` server); Nova's `agents__delegate` runs a Nova subagent as a background job on Nova's configured model — use it only when a Nova-specific agent is what the task needs. "
         "The `nova` server also exposes Nova's platform (jobs, integrations, agents, models, skills); use those when the task calls for them."

@@ -198,7 +198,14 @@ export function StatusLine({
             transition={{ duration: 0.12 }}
             className="text-muted-foreground flex items-center gap-1 truncate text-xs"
           >
-            <span className="truncate">{displayedLabel}</span>
+            {/* Every status string is a predicate ("is using Terminal"); without
+                the subject the line read "● is delegating to subagent". */}
+            <span className="truncate">
+              <span className="text-foreground/80 font-medium">
+                {t.pages.appName}
+              </span>{" "}
+              {displayedLabel}
+            </span>
             {elapsed > 0 && (
               <span className="text-muted-foreground/60 shrink-0 text-[10px]">
                 · {elapsed}s

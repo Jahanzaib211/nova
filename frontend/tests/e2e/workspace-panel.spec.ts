@@ -11,16 +11,32 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { mockLangGraphAPI, mockWorkspaceAPI } from "./utils/mock-api";
+import {
+  MOCK_THREAD_ID,
+  mockLangGraphAPI,
+  mockSandboxAPI,
+  mockWorkspaceAPI,
+} from "./utils/mock-api";
 
 test.describe("Workspace-aware panel tabs", () => {
   test.beforeEach(async ({ page }) => {
-    mockLangGraphAPI(page);
+    mockLangGraphAPI(page, {
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Workspace panel fixture",
+          updated_at: "2026-08-05T12:00:00Z",
+        },
+      ],
+    });
+    mockSandboxAPI(page);
     mockWorkspaceAPI(page);
   });
 
   async function openPanel(page: Page) {
-    await page.goto("/workspace/chats/new");
+    // A saved thread: a new chat's id exists only in the browser, so the
+    // panel deliberately makes no workspace calls for it.
+    await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
     const trigger = page.getByRole("button", { name: /agent's computer/i });
     if ((await trigger.count()) === 0) {
       test.skip(

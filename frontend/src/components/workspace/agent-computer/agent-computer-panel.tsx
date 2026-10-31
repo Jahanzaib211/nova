@@ -10,8 +10,9 @@ import {
   GithubIcon,
   GlobeIcon,
   PencilIcon,
-  SquareTerminalIcon,
+  ShieldCheckIcon,
   ShieldIcon,
+  SquareTerminalIcon,
   XIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -45,6 +46,7 @@ import { FilesPanel } from "./files-tab";
 import { getActiveEdit, getActiveFilePath } from "./message-helpers";
 import { PrivacyPanel } from "./privacy-tab";
 import { ReviewPanel } from "./review-tab";
+import { SecureShipPanel } from "./secure-ship-tab";
 import { SkillLauncher } from "./skill-launcher";
 import { StatusLine } from "./status-line";
 import { TelemetryPanel } from "./telemetry-tab";
@@ -58,6 +60,7 @@ type PanelTab =
   | "browser"
   | "telemetry"
   | "review"
+  | "secureShip"
   | "privacy";
 
 function TabBtn({
@@ -581,6 +584,13 @@ export function AgentComputerPanel({
           {t.agentComputer.tabs.review}
         </TabBtn>
         <TabBtn
+          active={activeTab === "secureShip"}
+          onClick={() => selectTabManually("secureShip")}
+        >
+          <ShieldCheckIcon className="h-3 w-3" />
+          {t.agentComputer.tabs.secureShip}
+        </TabBtn>
+        <TabBtn
           active={activeTab === "privacy"}
           onClick={() => selectTabManually("privacy")}
         >
@@ -682,6 +692,21 @@ export function AgentComputerPanel({
               isError={Boolean(reviewQuery.isError)}
               onRegenerate={() => void reviewQuery.refetch()}
               active={activeTab === "review"}
+            />
+          </div>
+        </AgentComputerErrorBoundary>
+
+        <AgentComputerErrorBoundary
+          tabName="Secure-Ship"
+          resetKeys={[threadId]}
+        >
+          <div
+            data-tab="secure-ship"
+            className={cn("h-full", activeTab !== "secureShip" && "hidden")}
+          >
+            <SecureShipPanel
+              threadId={threadId}
+              active={activeTab === "secureShip"}
             />
           </div>
         </AgentComputerErrorBoundary>

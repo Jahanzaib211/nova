@@ -172,3 +172,34 @@ async def test_capability_delegate_from_a_runtime_uses_the_configured_delegate_m
     # …and a native/API caller keeps inheriting the deployment default.
     out = await mod._delegate(OpContext(user_id="u1", is_admin=False, thread_id="t1", surface="api"), mod.DelegateIn(agent="bash", task="id"))
     assert "model" not in out.job["payload"]
+
+
+async def test_both_delegation_paths_enqueue_one_attempt_on_the_agents_queue(repo, monkeypatch):
+    """``agents.delegate`` used the default queue and the runner's default
+    retry budget (5), so a side-effectful agent run could replay up to five
+    times; ``delegate_async`` used one attempt on ``agents``. Both now go
+    through ``enqueue_agent_task``."""
+    from deerflow.capabilities.modules import agents as mod
+    from deerflow.capabilities.types import OpContext
+
+    config = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True}, "subagents": {"async_enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
+    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: config)
+    monkeypatch.setattr(mod, "jobs_repo", lambda: repo)
+    via_capability = (await mod._delegate(OpContext(user_id="u1"), mod.DelegateIn(agent="claude_code", task="a"))).job
+    delegate, _ = build_delegate_tools(config, lambda: repo)
+    msg = await delegate.coroutine(agent="claude_code", task="b")
+    via_tool = await repo.get(msg.split("job ")[1].split(".")[0])
+    for job in (via_capability, via_tool):
+        assert (job["queue"], job["max_attempts"]) == ("agents", 1)
+
+
+def test_async_delegation_enabled_needs_both_switches():
+    from deerflow.agents_registry.registry import async_delegation_enabled
+
+    def cfg(async_enabled: bool, jobs: bool) -> SimpleNamespace:
+        return SimpleNamespace(subagents=SimpleNamespace(async_enabled=async_enabled), jobs=SimpleNamespace(enabled=jobs))
+
+    assert async_delegation_enabled(cfg(True, True)) is True
+    assert async_delegation_enabled(cfg(True, False)) is False
+    assert async_delegation_enabled(cfg(False, True)) is False
+    assert async_delegation_enabled(SimpleNamespace()) is False

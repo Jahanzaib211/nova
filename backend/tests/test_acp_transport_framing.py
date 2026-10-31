@@ -75,6 +75,11 @@ class _Proc:
     def kill(self):
         self.killed = True
 
+    async def wait(self):
+        # A live adapter: the transport races each request against exit, so
+        # the stand-in must never "exit" while a request is in flight.
+        await asyncio.Event().wait()
+
 
 def test_reap_kills_an_adapter_that_outlived_its_turn():
     proc = _Proc(returncode=None)

@@ -29,6 +29,20 @@ logger = logging.getLogger(__name__)
 _LABELS = {"claude_code": "Claude Code", "openclaw": "OpenClaw"}
 
 
+def acp_binary_available(cfg: Any) -> bool:
+    """Whether an ACP agent's launcher resolves on ``PATH``.
+
+    The one availability check: the runtimes registry, the ``acp.*``
+    capability and the integrations adapter each had their own, and the
+    adapter's took ``command.split()[0]`` — so ``"npx -y pkg"`` (a common
+    misconfiguration of ``command`` + ``args``) read as available there and
+    missing everywhere else. ``command`` is the executable; arguments belong
+    in ``args``.
+    """
+    command = getattr(cfg, "command", None)
+    return bool(command) and shutil.which(command) is not None
+
+
 class RuntimeRegistry:
     def __init__(
         self,
@@ -90,7 +104,7 @@ class RuntimeRegistry:
             label=_LABELS.get(runtime_id, runtime_id),
             description=cfg.description,
             command=[cfg.command, *(cfg.args or [])],
-            binary_on_path=bool(shutil.which(cfg.command)),
+            binary_on_path=acp_binary_available(cfg),
             accounts=self.accounts_for(runtime_id),
         )
 
@@ -131,14 +145,15 @@ class RuntimeRegistry:
         cfg = self._agents.get(runtime_id)
         if cfg is None:
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=False, detail="unknown runtime", checked_at=now)
-        if not shutil.which(cfg.command):
+        if not acp_binary_available(cfg):
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=False, detail=f"{cfg.command} not on PATH", checked_at=now)
         if not account.available:
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=False, detail=account.detail, checked_at=now)
+        from deerflow.models.probe import PROBE_PROMPT
         from deerflow.runtimes.acp_transport import run_acp_prompt
 
         try:
-            text = await run_acp_prompt(cfg, "Reply with the single word: ok", cwd=cwd or os.getcwd(), mcp_servers=[], permission=policy_for_mode("plan"), on_text=lambda _sid, _t: None, on_status=lambda _sid, _s: None, timeout=timeout)
+            text = await run_acp_prompt(cfg, PROBE_PROMPT, cwd=cwd or os.getcwd(), mcp_servers=[], permission=policy_for_mode("plan"), on_text=lambda _sid, _t: None, on_status=lambda _sid, _s: None, timeout=timeout)
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=True, latency_ms=int((time.monotonic() - started) * 1000), detail=(text or "").strip()[:80], checked_at=now)
         except Exception as exc:
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=False, latency_ms=int((time.monotonic() - started) * 1000), detail=f"{type(exc).__name__}: {exc}"[:300], checked_at=now)

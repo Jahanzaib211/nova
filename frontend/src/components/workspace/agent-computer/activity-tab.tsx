@@ -27,6 +27,7 @@ import type {
 } from "@/components/workspace/messages/context";
 import { useI18n } from "@/core/i18n/hooks";
 import { sandboxAuditDownloadUrl } from "@/core/sandbox/hooks";
+import { useSandboxThreadId } from "@/core/sandbox/live";
 import { useCompletedTodoBindings } from "@/core/tasks/context";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import { classifyToolWork, isActivityTool } from "@/core/threads/tool-surface";
@@ -247,6 +248,9 @@ export function ActivityPanel({
   active?: boolean;
 }) {
   const { t } = useI18n();
+  // An unsaved chat has nothing to download, and its id is minted separately
+  // on the server and the client -- rendering it into an href mismatched hydration.
+  const downloadThreadId = useSandboxThreadId(threadId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const timeline = useMemo(
     () => events.filter((e) => isActivityTool(e.type)),
@@ -284,14 +288,16 @@ export function ActivityPanel({
         <span className="text-muted-foreground/70 font-mono text-xs">
           {t.agentComputer.activity.title(timeline.length)}
         </span>
-        <a
-          href={sandboxAuditDownloadUrl(threadId)}
-          download
-          className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors"
-          title={t.agentComputer.activity.exportAuditLog}
-        >
-          <DownloadIcon className="h-3 w-3" />
-        </a>
+        {downloadThreadId && (
+          <a
+            href={sandboxAuditDownloadUrl(downloadThreadId)}
+            download
+            className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors"
+            title={t.agentComputer.activity.exportAuditLog}
+          >
+            <DownloadIcon className="h-3 w-3" />
+          </a>
+        )}
       </div>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-1 p-2">

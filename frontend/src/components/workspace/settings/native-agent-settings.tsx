@@ -7,7 +7,10 @@ import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsSection } from "./settings-section";
 
-export function RuntimeSettingsPage() {
+/** Native agent config (summarization, subagents, guardrails), read-only.
+ * Rendered as part of Settings › Runtimes: these settings only apply when a
+ * chat runs on Nova's own agent rather than an ACP runtime. */
+export function NativeAgentSettings() {
   const { t } = useI18n();
   const { data, isLoading, error } = useRuntimeConfig();
 

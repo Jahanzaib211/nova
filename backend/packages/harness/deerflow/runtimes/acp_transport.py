@@ -8,10 +8,12 @@ the runtime dispatch middleware (a whole chat turn run by the agent).
 from __future__ import annotations
 
 import asyncio
+import collections
 import contextlib
 import logging
 import os
 import signal
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -60,6 +62,17 @@ def _stream_limit() -> int:
 
 
 ACP_STREAM_LIMIT = _stream_limit()
+
+
+class ACPAdapterExited(RuntimeError):
+    """The adapter process exited before answering a request.
+
+    The ``acp`` library's receive loop just stops on EOF and never fails the
+    pending request, so without this a dead adapter (missing binary, auth exit,
+    crash) left the turn waiting out its whole budget — 30 minutes on
+    2026-10-29, for an adapter that died 8 seconds in. Raising this lets the
+    runtime middleware fall back to the native agent at once.
+    """
 
 
 class ACPFrameTooLarge(RuntimeError):
@@ -280,6 +293,8 @@ async def run_acp_prompt(
             on_status(session_id, f"permission {verdict}: {kind or 'tool'} — {title}")
             return response
 
+    stderr_tail: collections.deque[str] = collections.deque(maxlen=5)
+
     async def _drain_stderr(proc: Any) -> None:
         """The ACP lib pipes the adapter's stderr and never reads it: a chatty
         adapter would block on a full pipe, and its errors would vanish. Log
@@ -293,8 +308,10 @@ async def run_acp_prompt(
                 line = await stream.readline()
                 if not line:
                     break
+                text = line.decode(errors="replace").rstrip()[:400]
+                stderr_tail.append(text)
                 if kept < 200:
-                    logger.info("acp[%s] %s", agent_cfg.command, line.decode(errors="replace").rstrip()[:400])
+                    logger.info("acp[%s] %s", agent_cfg.command, text)
                     kept += 1
         except Exception:
             pass
@@ -302,6 +319,9 @@ async def run_acp_prompt(
     async def _run() -> str:
         proc_ref: Any = None
         kids: set[int] = set()
+        # Spawn → initialize covers the launcher (npx resolving the adapter);
+        # logged so a slow launch reads as one, not as a hung turn.
+        started = time.monotonic()
         try:
             async with spawn_agent_process(
                 _Client(),
@@ -313,14 +333,34 @@ async def run_acp_prompt(
             ) as (conn, proc):
                 proc_ref = proc
                 drain = asyncio.create_task(_drain_stderr(proc))
+
+                async def _until_exit(call: Any) -> Any:
+                    """Await one ACP request, failing fast if the adapter dies."""
+                    request = asyncio.ensure_future(call)
+                    exited = asyncio.ensure_future(proc.wait())
+                    try:
+                        done, _ = await asyncio.wait({request, exited}, return_when=asyncio.FIRST_COMPLETED)
+                        if request in done:
+                            return request.result()
+                        request.cancel()
+                        # Give the drain a beat to read the adapter's last words.
+                        with contextlib.suppress(Exception):
+                            await asyncio.wait_for(asyncio.shield(drain), timeout=0.5)
+                        tail = " | ".join(stderr_tail) or "no stderr"
+                        raise ACPAdapterExited(f"{agent_cfg.command} exited with code {proc.returncode} before answering: {tail}")
+                    finally:
+                        if not exited.done():
+                            exited.cancel()
+
                 try:
-                    await conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0"))
+                    await _until_exit(conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0")))
                     kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
-                    logger.info("acp session for %s: cwd=%s mcp_servers=%s", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers])
+                    logger.info("acp session for %s: cwd=%s mcp_servers=%s (initialized in %.1fs)", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers], time.monotonic() - started)
                     if model or agent_cfg.model:
                         kwargs["model"] = model or agent_cfg.model
-                    session = await conn.new_session(**kwargs)
-                    await conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)])
+                    session = await _until_exit(conn.new_session(**kwargs))
+                    logger.info("acp session %s ready after %.1fs", session.session_id, time.monotonic() - started)
+                    await _until_exit(conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)]))
                 finally:
                     # Was only cancelled on the success path, so a failed
                     # initialize/prompt leaked the drain task too.

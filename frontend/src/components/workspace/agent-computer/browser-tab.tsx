@@ -756,6 +756,18 @@ export function Browser({
           {filename}
         </span>
         <div className="flex shrink-0 items-center gap-1">
+          {/* This view is the file itself, with no server behind it: no
+              address bar, refresh or open-in-new-tab. One click serves the
+              project (plain HTML too) and the full browser takes over. */}
+          {onStartPreview && (
+            <button
+              onClick={() => void onStartPreview(selectedLabel)}
+              className="border-panel-border text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors"
+            >
+              <GlobeIcon className="h-3 w-3" />
+              {t.agentComputer.browser.startLivePreview}
+            </button>
+          )}
           <button
             onClick={() => setViewMode("desktop")}
             className={cn(

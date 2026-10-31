@@ -51,14 +51,6 @@ def _get_work_dir(thread_id: str | None) -> str:
     return str(work_dir)
 
 
-def _build_mcp_servers() -> dict[str, dict[str, Any]]:
-    """Build ACP ``mcpServers`` config from DeerFlow's enabled MCP servers."""
-    from deerflow.config.extensions_config import ExtensionsConfig
-    from deerflow.mcp.client import build_servers_config
-
-    return build_servers_config(ExtensionsConfig.from_file())
-
-
 def _build_acp_mcp_servers() -> list[dict[str, Any]]:
     """ACP ``mcpServers`` payload for ``new_session`` (shared with the runtime dispatch)."""
     from deerflow.runtimes.acp_transport import build_acp_mcp_servers

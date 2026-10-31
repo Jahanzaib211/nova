@@ -288,15 +288,15 @@ class TestAgentConstruction:
         SubagentExecutor = classes["SubagentExecutor"]
 
         app_config = SimpleNamespace(models=[SimpleNamespace(name="default-model")])
-        skill_dir = tmp_path / "demo-skill"
+        skill_dir = tmp_path / "example-skill"
         skill_dir.mkdir()
         skill_file = skill_dir / "SKILL.md"
-        skill_file.write_text("Use demo skill", encoding="utf-8")
+        skill_file.write_text("Use example skill", encoding="utf-8")
         captured: dict[str, object] = {}
 
         def fake_get_or_new_skill_storage(*, app_config=None):
             captured["app_config"] = app_config
-            return SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="demo-skill", skill_file=skill_file)])
+            return SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="example-skill", skill_file=skill_file)])
 
         monkeypatch.setattr(sys.modules["deerflow.skills.storage"], "get_or_new_skill_storage", fake_get_or_new_skill_storage)
 
@@ -312,7 +312,7 @@ class TestAgentConstruction:
 
         assert captured["app_config"] is app_config
         assert len(messages) == 1
-        assert "Use demo skill" in messages[0].content
+        assert "Use example skill" in messages[0].content
 
     @pytest.mark.anyio
     async def test_build_initial_state_consolidates_system_prompt_and_skills(
@@ -2202,3 +2202,60 @@ class TestSubagentTracingWiring:
         from langchain_core.messages import HumanMessage
 
         return ({"messages": [HumanMessage(content=task)]}, [], None)
+
+
+class TestDispatchDeadline:
+    """The subagent timeout is measured from dispatch, not from when a worker frees up (2026-10-31).
+
+    The scheduler pool has 3 workers and a run may fan out 3 subagents, so a
+    task can queue behind other work. Its own clock used to start only when a
+    worker picked it up, so task_tool's poller backstop (timeout + 60 s, timed
+    from dispatch) fired first: the run reported "Task polling timed out … the
+    background task is stuck" instead of a clean timeout.
+    """
+
+    def _run_queued(self, monkeypatch, classes, base_config, queued_for: float):
+        from deerflow.subagents import executor as executor_module
+
+        clock = {"t": 1000.0}
+        monkeypatch.setattr(executor_module.time, "monotonic", lambda: clock["t"])
+        submitted = []
+
+        class _QueuedPool:
+            def submit(self, fn):
+                submitted.append(fn)
+
+        monkeypatch.setattr(executor_module, "_scheduler_pool", _QueuedPool())
+        executor = classes["SubagentExecutor"](config=base_config, tools=[], thread_id="test-thread")
+        task_id = executor.execute_async("do work", task_id="queued-1")
+        clock["t"] += queued_for
+        return executor_module, task_id, submitted
+
+    def test_a_task_queued_past_its_deadline_times_out_cleanly(self, monkeypatch, classes, base_config):
+        executor_module, task_id, submitted = self._run_queued(monkeypatch, classes, base_config, queued_for=base_config.timeout_seconds + 5)
+        submit_calls = []
+        monkeypatch.setattr(executor_module, "_submit_to_isolated_loop_in_context", lambda *a, **k: submit_calls.append(a))
+
+        submitted[0]()
+
+        result = executor_module.get_background_task_result(task_id)
+        assert result.status == classes["SubagentStatus"].TIMED_OUT
+        assert "Never started" in result.error
+        assert submit_calls == [], "a task past its deadline must not start work"
+
+    def test_a_task_that_waited_gets_only_the_time_it_has_left(self, monkeypatch, classes, base_config):
+        executor_module, task_id, submitted = self._run_queued(monkeypatch, classes, base_config, queued_for=20)
+        waits = []
+
+        class _Future:
+            def result(self, timeout=None):
+                waits.append(timeout)
+
+            def cancel(self):
+                pass
+
+        monkeypatch.setattr(executor_module, "_submit_to_isolated_loop_in_context", lambda *a, **k: _Future())
+
+        submitted[0]()
+
+        assert waits == [pytest.approx(base_config.timeout_seconds - 20)]

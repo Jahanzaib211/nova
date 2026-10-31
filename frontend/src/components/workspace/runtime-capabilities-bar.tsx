@@ -49,6 +49,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import { useIGINOStatus } from "@/core/igino/hooks";
 import { useCapabilities, useOpenCircuitCount } from "@/core/runtime/hooks";
 import type { CapabilitiesResponse } from "@/core/runtime/types";
+import { useLastBrowserCheck } from "@/core/sandbox/hooks";
 import type { AgentActivityEvent } from "@/core/threads/hooks";
 import { cn } from "@/lib/utils";
 
@@ -59,12 +60,18 @@ const ROW_HEIGHT = "h-9";
 
 function StatusDot({
   openCircuits,
+  selfTestFailing,
   t,
 }: {
   openCircuits: number;
+  selfTestFailing: boolean;
   t: ReturnType<typeof useI18n>["t"];
 }) {
-  const { tone, label, Icon } = deriveStatusVisuals(openCircuits, t);
+  const { tone, label, Icon } = deriveStatusVisuals(
+    openCircuits,
+    selfTestFailing,
+    t,
+  );
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
@@ -111,19 +118,39 @@ function StatusDot({
   );
 }
 
-function deriveStatusVisuals(
+export function deriveStatusVisuals(
   openCircuits: number,
+  selfTestFailing: boolean,
   t: ReturnType<typeof useI18n>["t"],
 ): {
   tone: { bg: string; dot: string; icon: string };
   label: {
     text: string;
-    state: "healthy" | "degraded" | "critical";
+    state: "healthy" | "degraded" | "critical" | "self-test-issues";
     tooltipTitle: string;
     tooltipBody: string;
   };
   Icon: typeof CheckCircle2Icon;
 } {
+  // Closed circuits only mean the browser is reachable. A green "healthy"
+  // beside a self-test that just failed on this chat's preview contradicted
+  // the Browser tab one panel below it.
+  if (openCircuits === 0 && selfTestFailing) {
+    return {
+      tone: {
+        bg: "bg-warning/10",
+        dot: "bg-warning",
+        icon: "text-warning dark:text-warning",
+      },
+      label: {
+        text: t.runtimeBar.status.selfTestIssues,
+        state: "self-test-issues",
+        tooltipTitle: t.runtimeBar.status.selfTestIssuesTitle,
+        tooltipBody: t.runtimeBar.status.selfTestIssuesBody,
+      },
+      Icon: TriangleAlertIcon,
+    };
+  }
   if (openCircuits === 0) {
     return {
       tone: {
@@ -413,13 +440,20 @@ const INSTALLER_LABELS: Record<string, string> = {
 export function RuntimeCapabilitiesBar({
   className,
   sandboxEvents,
+  threadId,
 }: {
   className?: string;
   sandboxEvents?: AgentActivityEvent[];
+  /** Scopes the circuit snapshot (and therefore the status badge) to one chat. */
+  threadId?: string;
 }) {
   const { t } = useI18n();
-  const { capabilities, isFetching, error } = useCapabilities();
-  const openCircuits = useOpenCircuitCount();
+  const { capabilities, isFetching, error } = useCapabilities(threadId);
+  const openCircuits = useOpenCircuitCount(threadId);
+  const lastCheck = useLastBrowserCheck(threadId ?? null, Boolean(threadId));
+  const selfTestFailing = Boolean(
+    lastCheck && !lastCheck.ok && (lastCheck.routes?.length ?? 0) > 0,
+  );
 
   const installState = useMemo<{
     label: string;
@@ -502,7 +536,11 @@ export function RuntimeCapabilitiesBar({
         role="status"
         aria-label={t.a11y.runtimeCapabilities}
       >
-        <StatusDot openCircuits={openCircuits} t={t} />
+        <StatusDot
+          openCircuits={openCircuits}
+          selfTestFailing={selfTestFailing}
+          t={t}
+        />
 
         <SectionDivider />
 

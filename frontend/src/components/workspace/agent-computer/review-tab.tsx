@@ -9,6 +9,7 @@ import {
   sandboxReviewDownloadUrl,
   type SandboxReview,
 } from "@/core/sandbox/hooks";
+import { useSandboxThreadId } from "@/core/sandbox/live";
 import { useWorkspaceEvents } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,9 @@ export function ReviewPanel({
   active?: boolean;
 }) {
   const { t } = useI18n();
+  // An unsaved chat has nothing to download, and its id is minted separately
+  // on the server and the client -- rendering it into an href mismatched hydration.
+  const downloadThreadId = useSandboxThreadId(threadId);
   // The review payload crosses the network as an unchecked cast; every field
   // access below must survive a partial/missing body without taking this tab
   // into its error boundary.
@@ -125,14 +129,16 @@ export function ReviewPanel({
               <span className="text-[11px]">⟳</span>
             )}
           </button>
-          <a
-            href={sandboxReviewDownloadUrl(threadId)}
-            download
-            className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors"
-            title={t.agentComputer.review.download}
-          >
-            <DownloadIcon className="h-3 w-3" />
-          </a>
+          {downloadThreadId && (
+            <a
+              href={sandboxReviewDownloadUrl(downloadThreadId)}
+              download
+              className="text-muted-foreground/60 hover:text-foreground rounded p-1 transition-colors"
+              title={t.agentComputer.review.download}
+            >
+              <DownloadIcon className="h-3 w-3" />
+            </a>
+          )}
         </div>
       </div>
       <ScrollArea className="h-full">

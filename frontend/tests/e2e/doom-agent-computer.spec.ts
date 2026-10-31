@@ -53,7 +53,7 @@ test.describe("Agent Computer doom tests", () => {
     // Navigate away
     await page.goto("/");
     await expect(
-      page.getByRole("link", { name: /get started/i }).first(),
+      page.getByRole("link", { name: "Start building" }).first(),
     ).toBeVisible({ timeout: 15_000 });
 
     // Navigate back
@@ -82,8 +82,9 @@ test.describe("Agent Computer doom tests", () => {
     const editorTab = page.getByRole("tab", { name: /editor/i });
     if ((await editorTab.count()) > 0) {
       await editorTab.first().click();
-      // Should show "start writing" hint or empty state
-      await expect(page.locator('[data-tab="editor"]')).toBeVisible({
+      // Should show "start writing" hint or empty state. The Editor tab's
+      // container is keyed "viewer" (agent-computer-panel.tsx).
+      await expect(page.locator('[data-tab="viewer"]')).toBeVisible({
         timeout: 3_000,
       });
     }

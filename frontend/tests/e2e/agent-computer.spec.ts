@@ -20,12 +20,12 @@ test.describe("Agent Computer panel", () => {
     mockLangGraphAPI(page);
   });
 
-  test("landing page renders with Get Started CTA", async ({ page }) => {
+  test("landing page renders with the Start building CTA", async ({ page }) => {
     await page.goto("/");
-    // Both the nav-bar and hero CTA share the accessible name — assert the
+    // The hero and the closing CTA share the accessible name — assert the
     // first is visible rather than an ambiguous strict-mode match.
     await expect(
-      page.getByRole("link", { name: /get started/i }).first(),
+      page.getByRole("link", { name: "Start building" }).first(),
     ).toBeVisible({
       timeout: 15_000,
     });

@@ -1,4 +1,4 @@
-"""End-to-end demo: SafetyFinishReasonMiddleware on the real DeerFlow lead-agent.
+"""End-to-end check: SafetyFinishReasonMiddleware on the real DeerFlow lead-agent.
 
 What it proves
 --------------
@@ -12,7 +12,7 @@ What it proves
   final AIMessage carries the observability stamp.
 
 Run from backend/ directory:
-    PYTHONPATH=. uv run python scripts/e2e_safety_termination_demo.py
+    PYTHONPATH=. uv run python scripts/e2e_safety_termination_check.py
 """
 
 from __future__ import annotations

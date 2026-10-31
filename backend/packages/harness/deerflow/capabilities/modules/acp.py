@@ -17,7 +17,7 @@ def _agents() -> dict[str, Any]:
 
 
 def _describe(name: str, cfg: Any) -> dict[str, Any]:
-    import shutil
+    from deerflow.runtimes.registry import acp_binary_available
 
     binary = getattr(cfg, "command", None)
     command = [binary, *(getattr(cfg, "args", []) or [])] if binary else []
@@ -25,7 +25,7 @@ def _describe(name: str, cfg: Any) -> dict[str, Any]:
     return {
         "name": name,
         "command": command,
-        "binary_on_path": bool(binary and shutil.which(binary)),
+        "binary_on_path": acp_binary_available(cfg),
         "auto_approve_permissions": bool(getattr(cfg, "auto_approve_permissions", False)),
         "permission_policy": {
             "allow_kinds": list(getattr(policy, "allow_kinds", []) or []),

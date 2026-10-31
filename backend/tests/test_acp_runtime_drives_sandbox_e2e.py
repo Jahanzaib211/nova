@@ -264,3 +264,44 @@ async def test_runtime_turn_mints_token_and_the_runtime_edits_the_sandbox(home: 
         assert remaining and all(t.get("revoked_at") for t in remaining), remaining
     finally:
         await server.stop()
+
+
+@pytest.mark.anyio
+async def test_runtime_can_show_a_sandbox_server_in_the_browser_tab(home: Path, tmp_path: Path):
+    """``sandbox__expose_port`` is the runtime's way into the Browser tab.
+
+    Without it Claude Code started ``python -m http.server`` in the sandbox and
+    then spent four minutes curling Nova's HTTP API from inside the container
+    (``localhost:8001``, ``172.17.0.1``, ``host.docker.internal:3000``...) to
+    register it -- unreachable by design, and probing the host on the way.
+    """
+    import socket
+
+    from deerflow.sandbox.dev_server import get_dev_server
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    port = listener.getsockname()[1]
+    dead = socket.socket()
+    dead.bind(("127.0.0.1", 0))
+    dead_port = dead.getsockname()[1]
+    dead.close()
+
+    app, server, tokens = await _gateway(tmp_path)
+    try:
+        tok = (await tokens.create(owner_user_id=USER, name=f"runtime:{THREAD}", scopes=["*"]))["token"]
+        async with _Mcp(app, "http://nova/api/mcp/nova", [{"name": "Authorization", "value": f"Bearer {tok}"}]) as s:
+            assert "sandbox__expose_port" in {t.name for t in (await s.list_tools()).tools}
+
+            refused = _text(await s.call_tool("sandbox__expose_port", {"port": dead_port}))
+            assert "not reachable" in refused["output"]
+            assert get_dev_server(THREAD) is None
+
+            shown = _text(await s.call_tool("sandbox__expose_port", {"port": port}))
+            assert "Registered" in shown["output"], shown
+        handle = get_dev_server(THREAD)
+        assert handle is not None and handle.port == port and handle.status == "ready"
+    finally:
+        listener.close()
+        await server.stop()
