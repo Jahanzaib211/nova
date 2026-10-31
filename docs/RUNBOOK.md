@@ -119,6 +119,60 @@ curl -s https://nova.alilabsx.com/health | python3 -m json.tool
 # expect: {"status":"healthy","service":"nova-gateway"}
 ```
 
+### When the token file itself is gone (no root)
+
+On 2026-10-31 `/etc/cloudflared/` was empty: the systemd units could not read
+their token, so they restarted every 5 s (880+ attempts) and the public
+hostname answered Cloudflare error 1033. A unit that cannot start is a
+*different* failure from a unit that crashes — check the journal for
+`Failed to read token file` before you restart anything:
+
+```bash
+journalctl -u cloudflared-nova -n 20 --no-pager | grep -i token
+systemctl show cloudflared-nova -p NRestarts --value
+```
+
+**The token is also recoverable without root.** Every connector invocation is
+recorded in the system journal, and `journalctl` is readable by the `adm`
+group:
+
+```bash
+journalctl --no-pager | grep -aoE "cloudflared[^\"]*eyJ[A-Za-z0-9._-]{100,}" \
+  | grep -oE "eyJ[A-Za-z0-9._-]{100,}" | sort -u
+# each token decodes to {"a": <account>, "t": <tunnel uuid>, "s": <secret>}
+```
+
+Write the token to a file the PM2 user owns and run the connector under PM2
+— no root, no systemd, and the hostname is back within seconds:
+
+```bash
+install -d -m 700 ~/.nova/cloudflared
+printf '%s' '<token>' > ~/.nova/cloudflared/token-site
+chmod 600 ~/.nova/cloudflared/token-site
+
+# ~/.pm2/logs/nova-tunnel-site-*.log shows the tunnel's dashboard ingress
+pm2 start ecosystem.config.js --only nova-tunnel-site
+```
+
+`nova-tunnel-site` and `nova-tunnel-ops` are the root-free fallbacks
+(`scripts/pm2-cloudflared-token.sh`). systemd remains the primary owner of
+the tunnel lifecycle on a healthy host; the PM2 connectors exist so a lost
+`/etc/cloudflared/` costs a hostname outage of seconds, not hours.
+
+Once root access is available, move the token back to where systemd expects
+it and let systemd own the connector again:
+
+```bash
+sudo install -d -m 700 /etc/cloudflared
+sudo install -m 600 ~/.nova/cloudflared/token-site /tmp/cf-token
+printf 'TUNNEL_TOKEN=%s\n' "$(cat /tmp/cf-token)" | sudo tee /etc/cloudflared/env >/dev/null
+sudo chmod 600 /etc/cloudflared/env
+sudo rm -f /tmp/cf-token
+sudo install -m 644 config/cloudflared-nova.yml /etc/cloudflared/config.yml
+sudo install -m 644 config/cloudflared-nova.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now cloudflared-nova.service
+```
+
 ### Tunnel token rotation
 
 ```bash
