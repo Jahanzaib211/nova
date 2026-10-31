@@ -136,10 +136,19 @@ export function messagesToActivityEvents(
   return events.length > limit ? events.slice(events.length - limit) : events;
 }
 
-/** The tool currently executing (last running event), or null when idle. */
+/**
+ * The tool currently executing (last running event), or null when idle.
+ *
+ * `live` is whether a run is actually in flight. A run that was interrupted
+ * leaves its last tool call without a result, which the event list can only
+ * call "running" -- so without this the status line read "Nova is delegating
+ * to subagent · 106s", ticking, over a thread with nothing running.
+ */
 export function currentToolFromActivity(
   events: AgentActivityEvent[],
+  { live = true }: { live?: boolean } = {},
 ): string | null {
+  if (!live) return null;
   for (let i = events.length - 1; i >= 0; i--) {
     if (events[i]?.status === "running") return events[i]!.type;
   }

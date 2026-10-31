@@ -90,6 +90,22 @@ export type LlmErrorEvent = {
   code: string | null;
 };
 
+/**
+ * The Secure-Ship gate finished (contract: `secure_ship`).
+ *
+ * Emitted by the backend when a pre-deploy security gate runs, whether the
+ * agent triggered it or the user pressed "Run gate" in the Agent's Computer.
+ * It carries the verdict and the finding counts, not the whole report — the
+ * report itself is read through the `secure_ship.report` capability.
+ */
+export type SecureShipEvent = {
+  thread_id: string;
+  verdict: "pass" | "warn" | "block" | "error";
+  counts: Record<string, number>;
+  duration_ms: number;
+  reason: string;
+};
+
 // Queued steering messages per thread (H2). A message sent while a run is
 // active used to bounce off the 409 with a toast and was LOST. Now it parks
 // here and flushes automatically when that run finishes.
@@ -137,6 +153,7 @@ export type ThreadStreamOptions = {
   onVerifyResult?: (event: VerifyResultEvent) => void;
   onLlmError?: (event: LlmErrorEvent) => void;
   onAcpUpdate?: (event: AcpUpdateEvent) => void;
+  onSecureShip?: (event: SecureShipEvent) => void;
 };
 
 type SendMessageOptions = {
@@ -562,6 +579,7 @@ export function useThreadStream({
   onToolActivity,
   onToolActivityDone,
   onAcpUpdate,
+  onSecureShip,
 }: ThreadStreamOptions) {
   const { t } = useI18n();
   const currentViewThreadId = displayThreadId ?? threadId ?? null;
@@ -604,6 +622,7 @@ export function useThreadStream({
     onToolActivity,
     onToolActivityDone,
     onAcpUpdate,
+    onSecureShip,
   });
 
   const {
@@ -627,6 +646,7 @@ export function useThreadStream({
       onToolActivity,
       onToolActivityDone,
       onAcpUpdate,
+      onSecureShip,
     };
   }, [
     onSend,
@@ -639,6 +659,7 @@ export function useThreadStream({
     onToolActivity,
     onToolActivityDone,
     onAcpUpdate,
+    onSecureShip,
   ]);
 
   useEffect(() => {
@@ -1076,6 +1097,33 @@ export function useThreadStream({
       // deploy independently.
       if (isAcpUpdateEvent(event)) {
         listeners.current.onAcpUpdate?.(event);
+      }
+
+      // The Secure-Ship gate finished (contract: secure_ship). The event
+      // carries the verdict and the counts, not the report itself — the
+      // report is read through the `secure_ship.report` capability, so the
+      // panel refreshes that query when this arrives.
+      if (
+        typeof event === "object" &&
+        event !== null &&
+        "type" in event &&
+        event.type === "secure_ship"
+      ) {
+        const e = event as {
+          type: "secure_ship";
+          thread_id?: string;
+          verdict?: SecureShipEvent["verdict"];
+          counts?: Record<string, number>;
+          duration_ms?: number;
+          reason?: string;
+        };
+        listeners.current.onSecureShip?.({
+          thread_id: e.thread_id ?? "",
+          verdict: e.verdict ?? "error",
+          counts: e.counts ?? {},
+          duration_ms: typeof e.duration_ms === "number" ? e.duration_ms : 0,
+          reason: e.reason ?? "",
+        });
       }
     },
     onError(error) {

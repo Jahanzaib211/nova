@@ -48,6 +48,7 @@ const HANDLED = [
   "verify_result",
   "llm_error",
   "acp_update",
+  "secure_ship",
 ];
 
 describe("custom events contract (frontend)", () => {

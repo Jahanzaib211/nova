@@ -3,6 +3,7 @@
 import { LogOutIcon } from "lucide-react";
 import { useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
@@ -164,8 +165,8 @@ export function AccountSettingsPage() {
             onChange={(e) => setNewEmail(e.target.value)}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="current-password"
             placeholder={t.settings.account.currentPassword}
             value={emailPassword}
             onChange={(e) => setEmailPassword(e.target.value)}
@@ -195,23 +196,23 @@ export function AccountSettingsPage() {
         description={t.settings.account.changePasswordDescription}
       >
         <form onSubmit={handleChangePassword} className="max-w-sm space-y-3">
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="current-password"
             placeholder={t.settings.account.currentPassword}
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="new-password"
             placeholder={t.settings.account.newPassword}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
             minLength={8}
           />
-          <Input
-            type="password"
+          <PasswordInput
+            autoComplete="new-password"
             placeholder={t.settings.account.confirmNewPassword}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}

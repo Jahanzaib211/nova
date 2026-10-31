@@ -203,8 +203,8 @@ export default function ChatPage() {
     [thread.messages, acpTranscripts, thread.isLoading],
   );
   const currentTool = useMemo(
-    () => currentToolFromActivity(activityEvents),
-    [activityEvents],
+    () => currentToolFromActivity(activityEvents, { live: thread.isLoading }),
+    [activityEvents, thread.isLoading],
   );
   const activeWriteFilePath = useMemo(
     () => activeWriteFilePathFromActivity(activityEvents),
@@ -288,7 +288,9 @@ export default function ChatPage() {
   const tokenUsageInlineMode = tokenUsageEnabled
     ? localSettings.tokenUsage.inlineMode
     : "off";
-  const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  // A new thread has no run yet; `thread.values` can still hold the previous
+  // thread's state for a render, which painted its to-dos on the empty screen.
+  const hasTodos = !isNewThread && (thread.values.todos?.length ?? 0) > 0;
   const { collapsed: todosCollapsed, toggle: toggleTodos } =
     useTodoCollapse(threadId);
 
@@ -392,7 +394,12 @@ export default function ChatPage() {
                         // the clicks on its header -- it renders but cannot be collapsed.
                         // Stays below the z-30 chrome above it.
                         "right-0 left-0 z-10",
-                        isWelcomeMode ? "absolute -top-4" : "relative",
+                        // Lifted by exactly the composer's own welcome-mode
+                        // translate (-translate-y-2 sm:-translate-y-4 below), or
+                        // the composer slides up over the panel's last row.
+                        isWelcomeMode
+                          ? "absolute -top-2 sm:-top-4"
+                          : "relative",
                       )}
                     >
                       <div
@@ -402,7 +409,10 @@ export default function ChatPage() {
                         )}
                       >
                         <TodoList
-                          className="bg-background/5"
+                          // Opaque: `bg-background/5` let the chat/artifacts
+                          // pane behind the panel show through and collide
+                          // with its content.
+                          className="bg-background"
                           todos={thread.values.todos ?? []}
                           collapsed={todosCollapsed}
                           onToggle={toggleTodos}
@@ -467,7 +477,7 @@ export default function ChatPage() {
                   )}
                   {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
                     <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
-                      {t.common.notAvailableInDemoMode}
+                      {t.common.notAvailableInPreviewMode}
                     </div>
                   )}
                 </div>

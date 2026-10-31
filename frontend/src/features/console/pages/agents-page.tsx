@@ -4,18 +4,58 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { NativeAgentSettings } from "@/components/workspace/settings/native-agent-settings";
 import { SettingsSection } from "@/components/workspace/settings/settings-section";
 import { useCapability, useCapabilityMutation } from "@/core/capabilities";
 import { useI18n } from "@/core/i18n/hooks";
+import { useFeatureFlags } from "@/core/runtime/feature-flags";
+import { useCapabilities } from "@/core/runtime/hooks";
 
 import { StatusDot } from "../components/op-table";
+import { runtimesGate } from "../gate";
 
-/** Runtimes: who can run a chat turn, under which account, and a live check.
- * The agent registry itself lives on /workspace/agents — not repeated here. */
+export interface RuntimeAccountView {
+  id: string;
+  label: string;
+  available: boolean;
+  detail: string;
+}
+
+/**
+ * The accounts of one runtime entry, read defensively.
+ *
+ * The capability contract types a runtime as `Record<string, unknown>`, so
+ * the entry is cast before it is read — a runtime that carried no
+ * `accounts` key would take the whole settings section down on `.map`.
+ */
+export function runtimeAccounts(entry: {
+  accounts?: unknown;
+}): RuntimeAccountView[] {
+  return Array.isArray(entry.accounts)
+    ? (entry.accounts as RuntimeAccountView[])
+    : [];
+}
+
+/** Runtimes: who can run a chat turn, under which account, and a live check,
+ * followed by the native agent's own config. The agent registry itself lives
+ * on /workspace/agents — not repeated here. */
 export function AgentsPage() {
   const { t } = useI18n();
   const s = t.features.console.agents;
-  const runtimes = useCapability("runtimes.list", {});
+  // Every feature flag reads as off until /api/runtime/capabilities answers,
+  // so the gate has to tell "off" from "not asked yet" — otherwise the page
+  // claims runtimes are disabled while the request is still in flight.
+  const flags = useFeatureFlags();
+  const { isLoading: capabilitiesLoading } = useCapabilities();
+  const gate = runtimesGate(flags, capabilitiesLoading);
+  // runtimes.list sits behind the `runtimes` flag (off by default), and the
+  // capability API now enforces flags — so ask only when it is on, and show
+  // the disabled hint instead of a load error when it is not.
+  const runtimes = useCapability(
+    "runtimes.list",
+    {},
+    { enabled: gate === "enabled" },
+  );
   const probe = useCapabilityMutation("runtimes.probe");
   const [probing, setProbing] = useState<string | null>(null);
   const [results, setResults] = useState<
@@ -50,7 +90,11 @@ export function AgentsPage() {
         title={s.runtimesTitle}
         description={s.runtimesDescription}
       >
-        {runtimes.isLoading ? (
+        {gate === "loading" ? (
+          <p className="text-muted-foreground text-sm">{t.common.loading}</p>
+        ) : gate === "disabled" ? (
+          <p className="text-muted-foreground text-sm">{s.disabledHint}</p>
+        ) : runtimes.isLoading ? (
           <p className="text-muted-foreground text-sm">{t.common.loading}</p>
         ) : runtimes.isError ? (
           <p role="alert" className="text-destructive text-sm">
@@ -79,9 +123,10 @@ export function AgentsPage() {
                   }>;
                 };
                 const res = results[rt.id];
+                const accounts = runtimeAccounts(rt);
                 const ready =
                   rt.kind === "native" ||
-                  (rt.binary_on_path && rt.accounts.some((a) => a.available));
+                  (rt.binary_on_path && accounts.some((a) => a.available));
                 return (
                   <li key={rt.id} className="rounded-md border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -114,7 +159,7 @@ export function AgentsPage() {
                       {rt.description}
                     </p>
                     <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                      {rt.accounts.map((a) => (
+                      {accounts.map((a) => (
                         <li
                           key={a.id}
                           className="inline-flex items-center gap-1.5"
@@ -165,6 +210,7 @@ export function AgentsPage() {
           {s.registryLink}
         </Link>
       </p>
+      <NativeAgentSettings />
     </div>
   );
 }

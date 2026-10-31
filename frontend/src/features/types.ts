@@ -11,7 +11,6 @@ export const SETTINGS_PAGE_IDS = [
   "account",
   "appearance",
   "memory",
-  "runtime",
   "tools",
   "skills",
   "notification",
@@ -23,14 +22,11 @@ export const SETTINGS_PAGE_IDS = [
   "models",
   "about",
   // Console parity (P13): every page is a view over capability operations.
-  "gateway",
   "devices",
   "workers",
-  "agents",
+  "runtimes",
   "labs",
-  "automation",
   "secrets",
-  "updates",
 ] as const;
 export type SettingsPageId = (typeof SETTINGS_PAGE_IDS)[number];
 

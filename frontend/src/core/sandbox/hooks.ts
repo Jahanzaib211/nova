@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
+import { useSandboxThreadId } from "./live";
+
 /**
  * Poll and freshness intervals, named rather than scattered as literals.
  *
@@ -172,9 +174,10 @@ export type SandboxLogStream = {
 };
 
 export function useSandboxLogs(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled = true,
 ): SandboxLogStream {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const [events, setEvents] = useState<SandboxEvent[]>([]);
   const [status, setStatus] = useState<SandboxLogStatus>("connecting");
   const esRef = useRef<EventSource | null>(null);
@@ -316,9 +319,10 @@ export type AuditEvent = {
 };
 
 export function useSandboxAudit(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled = true,
 ): AuditEvent[] {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<{ events: AuditEvent[] }>({
     queryKey: ["sandbox", "audit", threadId],
     queryFn: async () => {
@@ -361,7 +365,11 @@ export type SandboxReview = {
   markdown: string;
 };
 
-export function useSandboxReview(threadId: string | null, enabled = true) {
+export function useSandboxReview(
+  requestedThreadId: string | null,
+  enabled = true,
+) {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const query = useQuery<SandboxReview | null>({
     queryKey: ["sandbox", "review", threadId],
     queryFn: async () => {
@@ -414,9 +422,10 @@ export type SandboxTerminalUrlsResult = SandboxTerminalUrls & {
 };
 
 export function useSandboxTerminalUrl(
-  threadId: string | null,
+  requestedThreadId: string | null,
   enabled: boolean,
 ): SandboxTerminalUrlsResult {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data, refetch, isFetching } = useQuery<SandboxTerminalUrls>({
     queryKey: ["sandbox", "terminal-url", threadId],
     queryFn: async () => {
@@ -474,7 +483,11 @@ export type BrowserCheckResult = {
 
 // Polls the latest self-test (auto-run on every preview, or a manual run) so the
 // Browser tab shows results without anyone clicking. Enable only when a server is up.
-export function useLastBrowserCheck(threadId: string | null, enabled: boolean) {
+export function useLastBrowserCheck(
+  requestedThreadId: string | null,
+  enabled: boolean,
+) {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<BrowserCheckResult | null>({
     queryKey: ["sandbox", "browser-check-last", threadId],
     queryFn: async () => {
@@ -494,7 +507,8 @@ export function useLastBrowserCheck(threadId: string | null, enabled: boolean) {
   return data ?? null;
 }
 
-export function useBrowserCheck(threadId: string | null) {
+export function useBrowserCheck(requestedThreadId: string | null) {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const [result, setResult] = useState<BrowserCheckResult | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -572,9 +586,10 @@ const STOPPED_DEV_SERVER: DevServerStatus = {
 };
 
 export function useDevServerStatus(
-  threadId: string | null,
+  requestedThreadId: string | null,
   label = "app",
 ): DevServerStatus {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<DevServerStatus>({
     queryKey: ["sandbox", "dev-status", threadId, label],
     queryFn: async () => {
@@ -645,7 +660,8 @@ export type DevServerEntry = {
 // Deterministically brings up the live preview (find project → install → start)
 // via POST /dev-start — no LLM nudge. Used by the Browser tab button + auto-trigger.
 
-export function useStartPreview(threadId: string | null) {
+export function useStartPreview(requestedThreadId: string | null) {
+  const threadId = useSandboxThreadId(requestedThreadId);
   return useCallback(
     async (label = "app") => {
       if (!threadId) return;
@@ -662,7 +678,10 @@ export function useStartPreview(threadId: string | null) {
   );
 }
 
-export function useDevServers(threadId: string | null): DevServerEntry[] {
+export function useDevServers(
+  requestedThreadId: string | null,
+): DevServerEntry[] {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<{ servers: DevServerEntry[] }>({
     queryKey: ["sandbox", "dev-servers", threadId],
     queryFn: async () => {
@@ -681,7 +700,10 @@ export function useDevServers(threadId: string | null): DevServerEntry[] {
   return data?.servers ?? [];
 }
 
-export function useSandboxFiles(threadId: string | null): SandboxFile[] {
+export function useSandboxFiles(
+  requestedThreadId: string | null,
+): SandboxFile[] {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<{ files: SandboxFile[] }>({
     queryKey: ["sandbox", "files", threadId],
     queryFn: async () => {
@@ -705,10 +727,11 @@ export function useSandboxFiles(threadId: string | null): SandboxFile[] {
 // Polls /api/sandbox/file every 1 s — used by Editor tab for live code view.
 
 export function useLiveFileContent(
-  threadId: string | null,
+  requestedThreadId: string | null,
   path: string | null,
   enabled: boolean,
 ): { content: string; exists: boolean; lineCount: number; isLoading: boolean } {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data, isPending } = useQuery<{
     content: string;
     exists: boolean;
@@ -762,10 +785,11 @@ export function useLiveFileContent(
 const warnedFilePaths = new Set<string>();
 
 export function useSandboxFile(
-  threadId: string | null,
+  requestedThreadId: string | null,
   path: string | null,
   enabled = true,
 ): { content: string; exists: boolean; size: number; isLoading: boolean } {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data, isPending } = useQuery<{
     content: string;
     exists: boolean;
@@ -863,8 +887,9 @@ export function normalizeTodoResult(body: unknown): SandboxTodoResult {
  * count rather than printing a confident "0 cmds".
  */
 export function useSandboxTerminalStats(
-  threadId: string | null,
+  requestedThreadId: string | null,
 ): number | null {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<number | null>({
     queryKey: ["sandbox", "terminal-stats", threadId],
     queryFn: async () => {
@@ -891,7 +916,10 @@ export function useSandboxTerminalStats(
   return data ?? null;
 }
 
-export function useSandboxTodo(threadId: string | null): SandboxTodoResult {
+export function useSandboxTodo(
+  requestedThreadId: string | null,
+): SandboxTodoResult {
+  const threadId = useSandboxThreadId(requestedThreadId);
   const { data } = useQuery<SandboxTodoResult>({
     queryKey: ["sandbox", "todo", threadId],
     queryFn: async () => {

@@ -44,10 +44,10 @@ describe("feature registry", () => {
     expect(order).toEqual(SETTINGS_GROUPS.filter((g) => order.includes(g)));
     expect(
       groups.find((g) => g.group === "connections")?.pages.map((p) => p.id),
-    ).toContain("gateway");
+    ).toContain("integrations");
     expect(
       groups.find((g) => g.group === "privacy")?.pages.map((p) => p.id),
-    ).toEqual(["secrets"]);
+    ).toEqual(["secrets", "devices"]);
     for (const g of SETTINGS_GROUPS) {
       expect(enUS.settings.groups[g], g).toBeTruthy();
       expect(zhCN.settings.groups[g], g).toBeTruthy();
@@ -58,7 +58,9 @@ describe("feature registry", () => {
     const admin = settingsPages()
       .filter((p) => p.adminOnly)
       .map((p) => p.id);
-    expect(admin).toEqual(["secrets"]);
+    // Workers lists hostnames, pids and every user's job ids, and its
+    // backing op (jobs.workers) is admin-only server-side as well.
+    expect(admin).toEqual(["secrets", "workers"]);
   });
 
   it("has a label in both locales and a page component for each entry", () => {

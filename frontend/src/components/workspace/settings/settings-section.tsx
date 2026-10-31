@@ -16,7 +16,7 @@ export function SettingsSection({
 }) {
   return (
     <section className={cn(className)}>
-      <header className="flex items-start justify-between gap-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 space-y-2">
           <div className="text-lg font-semibold">{title}</div>
           {description && (

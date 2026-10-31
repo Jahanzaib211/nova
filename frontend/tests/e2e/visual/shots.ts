@@ -25,7 +25,6 @@ const SETTINGS_SECTIONS = [
   "account",
   "appearance",
   "memory",
-  "runtime",
   "tools",
   "skills",
   "notification",
@@ -37,14 +36,11 @@ const SETTINGS_SECTIONS = [
   "models",
   "about",
   // Console parity (P13): views over capability operations.
-  "gateway",
   "devices",
   "workers",
-  "agents",
+  "runtimes",
   "labs",
-  "automation",
   "secrets",
-  "updates",
 ] as const;
 
 /** Deterministic capability registry: what every console page renders from. */
@@ -700,7 +696,7 @@ export function defineVisualTests() {
   });
 
   test.beforeEach(async ({ page }) => {
-    // Viewport-driven autoplay (the landing skills demo) and reveal-on-scroll
+    // Viewport-driven autoplay (the landing skills animation) and reveal-on-scroll
     // effects keep repainting; a screenshot can never stabilise while they
     // run. Stub the observer so nothing "enters the viewport".
     await page.addInitScript(() => {
@@ -729,6 +725,11 @@ export function defineVisualTests() {
   test("landing", async ({ page }) => {
     await page.goto("/");
     await page.waitForLoadState("networkidle");
+    // The hero console types the command and reveals the loop rows in
+    // sequence. Wait for the last row so the capture is not taken mid-typing.
+    await expect(
+      page.getByText("build attached with the full audit trail"),
+    ).toBeVisible({ timeout: 20_000 });
     await snap(page, "landing");
   });
 
@@ -761,6 +762,7 @@ export function defineVisualTests() {
     "viewer",
     "browser",
     "review",
+    "secure-ship",
     "telemetry",
     "privacy",
   ] as const;
@@ -784,8 +786,10 @@ export function defineVisualTests() {
     }).toPass({ timeout: 20_000 });
     for (const tab of COMPUTER_TABS) {
       const panel = page.locator(`[data-tab="${tab}"]`);
-      // Tab labels follow t.agentComputer.tabs; "privacy" is labelled Recon.
-      const label = tab === "privacy" ? "recon" : tab;
+      // Tab labels follow t.agentComputer.tabs; "viewer" is labelled Editor
+      // and "privacy" is labelled Recon.
+      const label =
+        tab === "privacy" ? "recon" : tab === "viewer" ? "editor" : tab;
       await page
         .getByRole("tab", { name: new RegExp(`^${label}`, "i") })
         .first()
@@ -805,12 +809,6 @@ export function defineVisualTests() {
     await page.goto("/workspace/email");
     await page.waitForLoadState("networkidle");
     await snap(page, "email");
-  });
-
-  test("jobs page", async ({ page }) => {
-    await page.goto("/workspace/jobs");
-    await page.waitForLoadState("networkidle");
-    await snap(page, "jobs");
   });
 
   test("create agent", async ({ page }) => {

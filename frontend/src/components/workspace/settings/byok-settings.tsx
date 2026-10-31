@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetch, getCsrfHeaders } from "@/core/api/fetcher";
@@ -88,8 +89,7 @@ export function ByokSettings() {
           onChange={(e) => setProvider(e.target.value)}
           placeholder={t.settings.account.byokProvider}
         />
-        <Input
-          type="password"
+        <PasswordInput
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder={t.settings.account.byokApiKey}

@@ -17,7 +17,8 @@ import { AgentCard } from "./agent-card";
 
 export function AgentGallery() {
   const { t } = useI18n();
-  const { agents, isLoading, error, isDisabled } = useAgents();
+  const { agents, isLoading, isFetching, error, isDisabled, refetch } =
+    useAgents();
   const router = useRouter();
 
   const handleNewAgent = () => {
@@ -66,7 +67,12 @@ export function AgentGallery() {
           <Button
             variant="outline"
             className="mt-2"
-            onClick={() => router.refresh()}
+            // The list is fetched client-side, so `router.refresh()` would
+            // re-render the server components and leave the failed query
+            // exactly as it is — the button would look like it worked and
+            // nothing would change. Refetch the query instead.
+            onClick={() => void refetch()}
+            disabled={isFetching}
           >
             {t.agents.retry}
           </Button>

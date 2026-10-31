@@ -42,9 +42,7 @@ const registry = {
   ],
 };
 
-test("agents page and jobs page show the registry with live counts", async ({
-  page,
-}) => {
+test("agents page shows the registry with live counts", async ({ page }) => {
   mockLangGraphAPI(page);
   await page.route("**/api/runtime/capabilities", (r) =>
     r.fulfill({
@@ -91,9 +89,4 @@ test("agents page and jobs page show the registry with live counts", async ({
     "1 running · 2 queued",
   );
   await expect(list).toContainText("1 running, 2 queued");
-
-  await page.goto("/workspace/jobs");
-  await expect(
-    page.getByTestId("jobs-agents").getByTestId("registry-agent"),
-  ).toHaveCount(3);
 });

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { enUS } from "@/core/i18n";
 import { I18nProvider } from "@/core/i18n/context";
 import type { RegistryAgent } from "@/features/agents-registry/api";
 import {
@@ -44,6 +45,15 @@ describe("agents registry", () => {
       a({ id: "s:g", kind: "subagent" }),
     ]);
     expect(groups.map((g) => g.kind)).toEqual(["lead", "subagent", "acp"]);
+  });
+
+  it("names both switches that turn async delegation off", () => {
+    // The backend ORs two flags: async delegation needs subagents.async_enabled
+    // AND jobs.enabled. A hint that named only the first sent the operator to
+    // the wrong config key.
+    const off = enUS.features.agentsRegistry.asyncOff;
+    expect(off).toContain("subagents.async_enabled");
+    expect(off).toContain("jobs.enabled");
   });
 
   it("renders honest states: loading, error, and counts only when active", () => {

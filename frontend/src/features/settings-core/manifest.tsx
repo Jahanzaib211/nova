@@ -5,7 +5,6 @@ import {
   CpuIcon,
   InfoIcon,
   PaletteIcon,
-  ServerIcon,
   SparklesIcon,
   UserIcon,
   WrenchIcon,
@@ -18,7 +17,6 @@ import { ChannelsSettingsPage } from "@/components/workspace/settings/channels-s
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelsSettingsPage } from "@/components/workspace/settings/models-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
-import { RuntimeSettingsPage } from "@/components/workspace/settings/runtime-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
 
@@ -55,14 +53,6 @@ export const settingsCoreManifest: FeatureManifest = {
       icon: BrainIcon,
       label: (t) => t.settings.sections.memory,
       Page: MemorySettingsPage,
-    },
-    {
-      id: "runtime",
-      order: 40,
-      group: "system",
-      icon: ServerIcon,
-      label: (t) => t.settings.sections.runtime,
-      Page: RuntimeSettingsPage,
     },
     {
       id: "tools",

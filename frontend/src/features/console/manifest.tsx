@@ -1,23 +1,17 @@
 import {
   BotIcon,
-  CalendarClockIcon,
   FlaskConicalIcon,
   KeyRoundIcon,
   MonitorSmartphoneIcon,
-  RadioTowerIcon,
-  RefreshCwIcon,
   ServerCogIcon,
 } from "lucide-react";
 
 import type { FeatureManifest } from "../types";
 
 import { AgentsPage } from "./pages/agents-page";
-import { AutomationPage } from "./pages/automation-page";
 import { DevicesPage } from "./pages/devices-page";
-import { GatewayPage } from "./pages/gateway-page";
 import { LabsPage } from "./pages/labs-page";
 import { SecretsPage } from "./pages/secrets-page";
-import { UpdatesPage } from "./pages/updates-page";
 import { WorkersPage } from "./pages/workers-page";
 
 /**
@@ -30,18 +24,11 @@ export const consoleManifest: FeatureManifest = {
   id: "console",
   settings: [
     {
-      id: "gateway",
-      order: 81,
-      group: "connections",
-      icon: RadioTowerIcon,
-      label: (t) => t.settings.sections.gateway,
-      Page: GatewayPage,
-      flag: "capabilities",
-    },
-    {
       id: "devices",
-      order: 95,
-      group: "connections",
+      // Browser sessions and harness tokens: credentials, so it sits with
+      // Secrets rather than under Connections.
+      order: 20,
+      group: "privacy",
       icon: MonitorSmartphoneIcon,
       label: (t) => t.settings.sections.devices,
       Page: DevicesPage,
@@ -49,15 +36,17 @@ export const consoleManifest: FeatureManifest = {
     },
     {
       id: "workers",
-      order: 96,
-      group: "connections",
+      order: 86,
+      group: "system",
       icon: ServerCogIcon,
       label: (t) => t.settings.sections.workers,
       Page: WorkersPage,
       flag: "jobs",
+      // Lists hostnames, pids and every user's running job ids.
+      adminOnly: true,
     },
     {
-      id: "agents",
+      id: "runtimes",
       order: 5,
       group: "agents",
       icon: BotIcon,
@@ -67,21 +56,13 @@ export const consoleManifest: FeatureManifest = {
     },
     {
       id: "labs",
-      order: 15,
-      group: "agents",
+      // Read-only server feature flags: system info, not an agent tool.
+      order: 95,
+      group: "system",
       icon: FlaskConicalIcon,
       label: (t) => t.settings.sections.labs,
       Page: LabsPage,
       flag: "capabilities",
-    },
-    {
-      id: "automation",
-      order: 120,
-      group: "agents",
-      icon: CalendarClockIcon,
-      label: (t) => t.settings.sections.automation,
-      Page: AutomationPage,
-      flag: "jobs",
     },
     {
       id: "secrets",
@@ -92,15 +73,6 @@ export const consoleManifest: FeatureManifest = {
       Page: SecretsPage,
       flag: "capabilities",
       adminOnly: true,
-    },
-    {
-      id: "updates",
-      order: 100,
-      group: "system",
-      icon: RefreshCwIcon,
-      label: (t) => t.settings.sections.updates,
-      Page: UpdatesPage,
-      flag: "capabilities",
     },
   ],
 };

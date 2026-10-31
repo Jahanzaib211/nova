@@ -11,7 +11,7 @@ import {
 import type { CreateAgentRequest, UpdateAgentRequest } from "./types";
 
 export function useAgents() {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["agents"],
     queryFn: () => listAgents(),
     // A disabled agents API is a deterministic config state, not a transient
@@ -23,8 +23,14 @@ export function useAgents() {
   return {
     agents: data ?? [],
     isLoading,
+    isFetching,
     error,
     isDisabled: error instanceof AgentsApiDisabledError,
+    // The list is fetched in the browser, so the only way to retry a failed
+    // load is to refetch this query — a router refresh re-renders the
+    // server components but leaves the client cache (and its error state)
+    // exactly as it was.
+    refetch,
   };
 }
 

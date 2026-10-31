@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { PasswordInput } from "@/components/password-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,11 +46,12 @@ import { useI18n } from "@/core/i18n/hooks";
 import {
   useCreateModel,
   useDeleteModel,
+  useModelVisibility,
   useModels,
   useTestModel,
   useUpdateModel,
 } from "@/core/models/hooks";
-import { getModelLabel } from "@/core/models/types";
+import { formatContextWindow, getModelLabel } from "@/core/models/types";
 import type { Model, ModelWriteRequest } from "@/core/models/types";
 
 import { SettingsSection } from "./settings-section";
@@ -240,6 +242,40 @@ function formToRequest(form: FormState, isEdit: boolean): ModelWriteRequest {
   return request;
 }
 
+/**
+ * Write payload for a one-field toggle (show in chat). Every other field is
+ * carried over verbatim so flipping the switch cannot blank a display name, a
+ * context window, or the provider class. `api_key` is omitted on purpose: the
+ * API keeps the stored key when the field is absent.
+ */
+function modelToWriteRequest(model: Model, hidden: boolean): ModelWriteRequest {
+  const request: ModelWriteRequest = {
+    name: model.name,
+    model: model.model,
+    use: model.use ?? OPENAI_COMPATIBLE,
+    supports_thinking: model.supports_thinking ?? false,
+    supports_reasoning_effort: model.supports_reasoning_effort ?? false,
+    supports_vision: model.supports_vision ?? false,
+    hidden,
+  };
+  if (model.display_name) {
+    request.display_name = model.display_name;
+  }
+  if (model.description) {
+    request.description = model.description;
+  }
+  if (model.base_url) {
+    request.base_url = model.base_url;
+  }
+  if (model.amd_compute) {
+    request.amd_compute = model.amd_compute;
+  }
+  if (model.max_input_tokens) {
+    request.max_input_tokens = model.max_input_tokens;
+  }
+  return request;
+}
+
 function FieldRow({
   label,
   children,
@@ -365,8 +401,7 @@ function ModelFormDialog({
             />
           </FieldRow>
           <FieldRow label={strings.fieldApiKey}>
-            <Input
-              type="password"
+            <PasswordInput
               value={form.api_key}
               placeholder={isEdit ? strings.apiKeyUnchanged : "sk-..."}
               autoComplete="off"
@@ -443,6 +478,8 @@ function ModelItem({
   const strings = t.settings.models;
   const testModel = useTestModel();
   const deleteModel = useDeleteModel();
+  const updateModel = useUpdateModel();
+  const visibility = useModelVisibility();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const isRuntime = model.source === "runtime";
   const isLocal = Boolean(
@@ -450,6 +487,26 @@ function ModelItem({
     (model.base_url.includes("127.0.0.1") ||
       model.base_url.includes("localhost")),
   );
+  const offeredInChat = visibility.isVisible(model);
+  const hasVisibilityOverride =
+    visibility.state.overrides[model.name] !== undefined;
+  const contextWindow = formatContextWindow(model.max_input_tokens);
+
+  const setOfferedInChat = (next: boolean) => {
+    if (!isRuntime) {
+      // config.yaml is hand-maintained and read-only via the API: this is a
+      // per-browser preference, stated as such in the hint below the list.
+      visibility.setVisible(model.name, next);
+      return;
+    }
+    updateModel
+      .mutateAsync({
+        name: model.name,
+        request: modelToWriteRequest(model, !next),
+      })
+      .then(() => toast.success(strings.updated))
+      .catch((error: Error) => toast.error(error.message));
+  };
 
   const handleTest = () => {
     testModel
@@ -497,8 +554,32 @@ function ModelItem({
               </>
             )}
           </Badge>
+          {offeredInChat ? null : (
+            <Badge variant="outline" className="border-dashed">
+              {strings.hiddenBadge}
+            </Badge>
+          )}
+          {contextWindow ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              {contextWindow}
+            </Badge>
+          ) : null}
+          {model.supports_vision ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              {strings.capabilityVision}
+            </Badge>
+          ) : null}
+          {model.supports_thinking ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              {strings.capabilityThinking}
+            </Badge>
+          ) : null}
           {model.amd_compute ? (
-            <Badge variant="default" title={model.amd_compute}>
+            <Badge
+              variant="outline"
+              className="border-warning/40 bg-warning/10 text-warning"
+              title={model.amd_compute}
+            >
               <CpuIcon className="size-3" /> AMD
             </Badge>
           ) : null}
@@ -507,8 +588,34 @@ function ModelItem({
           {model.model}
           {model.base_url ? ` · ${model.base_url}` : ""}
         </ItemDescription>
+        {model.description ? (
+          <ItemDescription>{model.description}</ItemDescription>
+        ) : null}
+        {hasVisibilityOverride ? (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground mt-1 w-fit text-[11px] underline underline-offset-2"
+            onClick={() => visibility.resetVisibility(model.name)}
+          >
+            {strings.resetVisibility}
+          </button>
+        ) : null}
       </ItemContent>
       <ItemActions>
+        <label
+          htmlFor={`model-in-chat-${model.name}`}
+          className="text-muted-foreground flex cursor-pointer items-center gap-2 text-xs"
+        >
+          {strings.fieldShowInChat}
+          <Switch
+            id={`model-in-chat-${model.name}`}
+            checked={offeredInChat}
+            disabled={updateModel.isPending}
+            onCheckedChange={setOfferedInChat}
+            aria-label={`${strings.fieldShowInChat}: ${getModelLabel(model)}`}
+            data-testid={`model-in-chat-${model.name}`}
+          />
+        </label>
         <Button
           variant="outline"
           size="sm"
@@ -573,6 +680,9 @@ export function ModelsSettingsPage() {
         <div className="text-destructive text-sm">{strings.loadError}</div>
       ) : (
         <div className="flex w-full flex-col gap-4">
+          <p className="text-muted-foreground text-xs">
+            {strings.visibilityHint}
+          </p>
           {models.map((model) => (
             <ModelItem key={model.name} model={model} onEdit={openEdit} />
           ))}

@@ -148,7 +148,7 @@ export function AgentCard({ agent }: AgentCardProps) {
         name: agent.name,
         request: { skills: skillsValue },
       });
-      toast.success("Agent skills updated");
+      toast.success(t.agents.skillsUpdated);
       setSkillsOpen(false);
       setSelected(null);
     } catch (err) {
@@ -204,7 +204,8 @@ export function AgentCard({ agent }: AgentCardProps) {
           )}
         </CardHeader>
 
-        {(agent.tool_groups?.length ?? agent.skills?.length ?? 0) > 0 && (
+        {((agent.tool_groups?.length ?? 0) > 0 ||
+          (agent.skills?.length ?? 0) > 0) && (
           <CardContent className="pt-0 pb-3">
             <div className="flex flex-wrap gap-1">
               {agent.tool_groups?.map((group) => (
@@ -249,6 +250,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
               onClick={() => setDeleteOpen(true)}
               title={t.agents.delete}
+              aria-label={t.agents.delete}
             >
               <Trash2Icon className="h-3.5 w-3.5" />
             </Button>
@@ -275,18 +277,28 @@ export function AgentCard({ agent }: AgentCardProps) {
             <div className="flex flex-col gap-1 pr-3">
               {allSkillNames.length === 0 ? (
                 <p className="text-muted-foreground py-6 text-center text-sm">
-                  No skills enabled — enable some in Settings → Skills.
+                  {t.agents.noSkillsEnabled}
                 </p>
               ) : (
                 allSkillNames.map((name) => {
                   const on = effectiveSelected.has(name);
+                  // The switch is a <button role="switch">: without a label
+                  // pointing at it, screen readers announced an unnamed
+                  // toggle. <button> is labelable, so htmlFor/id names it.
+                  const switchId = `agent-skill-${agent.name}-${name}`.replace(
+                    /[^A-Za-z0-9_-]/g,
+                    "-",
+                  );
                   return (
                     <div
                       key={name}
                       className="hover:bg-muted/30 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5"
                     >
-                      <span className="font-mono text-sm">/{name}</span>
+                      <label htmlFor={switchId} className="font-mono text-sm">
+                        /{name}
+                      </label>
                       <Switch
+                        id={switchId}
                         checked={on}
                         onCheckedChange={(checked) => {
                           const next = new Set(effectiveSelected);

@@ -21,6 +21,7 @@ import { RuntimeCapabilitiesBar } from "@/components/workspace/runtime-capabilit
 import { useI18n } from "@/core/i18n/hooks";
 import { foldCommandCount } from "@/core/sandbox/command-count";
 import { useSandboxTerminalStats } from "@/core/sandbox/hooks";
+import { SandboxLiveProvider } from "@/core/sandbox/live";
 import {
   useSupersedeStaleSubtasks,
   useUpdateSubtask,
@@ -91,6 +92,11 @@ const ChatBox: React.FC<{
   } = useThread();
   const threadIdRef = useRef(threadId);
   const layoutRef = useRef<GroupImperativeHandle>(null);
+  // An unsaved thread's id is a client-generated uuid the gateway has never
+  // seen: every sandbox poll for it 404s and computer-ws is refused, once a
+  // second, from the moment a new chat opens. Nothing exists to watch until
+  // the first message creates the thread, so the live legs wait for that.
+  const liveThreadId = isNewThread ? null : threadId;
 
   // Subagent task events over the thread-scoped WebSocket (WS-G). Additive to
   // the SSE custom stream: the subtask FSM treats duplicate application as a
@@ -114,7 +120,7 @@ const ChatBox: React.FC<{
     supersedeStaleSubtasks(liveToolCallIds);
   }, [liveToolCallIds, supersedeStaleSubtasks]);
   const queryClient = useQueryClient();
-  useComputerEvents(threadId, {
+  useComputerEvents(liveThreadId, {
     updateSubtask: updateSubtaskForWs,
     // The panel's live socket carries subagent status, todo bindings, dev-server
     // pushes and terminal counts. When the session dies it cannot reconnect, and
@@ -166,6 +172,14 @@ const ChatBox: React.FC<{
       ) {
         void queryClient.invalidateQueries({
           queryKey: ["sandbox", "review", threadId],
+        });
+      }
+      // The Secure-Ship gate ran over the workspace. Its report is read
+      // through a capability op, so the panel's copy has to be refetched —
+      // nothing else invalidates it.
+      if (tool === "secure_ship") {
+        void queryClient.invalidateQueries({
+          queryKey: ["sandbox", "secure-ship", threadId],
         });
       }
     },
@@ -296,7 +310,7 @@ const ChatBox: React.FC<{
   // live updates -- this only fills the window where no `terminal_stats` frame
   // has arrived yet, which is the common case after a reload or once a burst of
   // commands has rolled the frame out of the hub's shared replay buffer.
-  const seededCommandCount = useSandboxTerminalStats(threadId);
+  const seededCommandCount = useSandboxTerminalStats(liveThreadId);
   useEffect(() => {
     setTerminalCommandCount((current) =>
       foldCommandCount(current, seededCommandCount),
@@ -367,10 +381,11 @@ const ChatBox: React.FC<{
   // fills the remaining height below so its internal scroll areas and footer
   // are not clipped.
   const computerBody = (
-    <>
+    <SandboxLiveProvider value={liveThreadId !== null}>
       <RuntimeCapabilitiesBar
         className="shrink-0"
         sandboxEvents={activityEvents}
+        threadId={threadId}
       />
       <div className="min-h-0 flex-1">
         <WorkspaceStateProvider
@@ -397,7 +412,7 @@ const ChatBox: React.FC<{
           />
         </WorkspaceStateProvider>
       </div>
-    </>
+    </SandboxLiveProvider>
   );
 
   if (isMobile) {
