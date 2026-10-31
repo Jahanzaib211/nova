@@ -109,6 +109,67 @@ module.exports = {
       log_date_format: "YYYY-MM-DD HH:mm:ss Z",
     },
     {
+      // The Cloudflare connector for the NovaOps tunnel, run as the PM2 user.
+      //
+      // The systemd unit (cloudflared.service) is the primary setup, but it
+      // reads its token from a root-owned file under /etc/cloudflared/. When
+      // that file is lost the unit cannot start and the hostname goes down
+      // with nothing but a flapping restart loop to show for it — which is
+      // exactly what happened on 2026-10-31, when /etc/cloudflared/ was empty
+      // and the public site returned Cloudflare error 1033.
+      //
+      // This app is the fallback: the token lives in a 0600 file the PM2 user
+      // owns, so the connector can be brought back without root. It is NOT
+      // started when the systemd unit is healthy — see the note in the
+      // ecosystem header: anything added here must be startable, or it
+      // becomes a repair loop.
+      //
+      // The token is never in the repo: TOKEN_FILE points outside it.
+      name: "nova-tunnel-ops",
+      script: `${require("path").resolve(__dirname, "scripts/pm2-cloudflared-token.sh")}`,
+      args: "ops",
+      interpreter: "none",
+      cwd: __dirname,
+      env: {
+        TOKEN_FILE: `${require("path").join(require("os").homedir(), ".nova/cloudflared/token")}`,
+      },
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      kill_timeout: 10000,
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-tunnel-ops-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-tunnel-ops-error.log")}`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+    {
+      // The Cloudflare connector for the public site (nova.alilabsx.com).
+      //
+      // Same fallback pattern as nova-tunnel-ops: the systemd unit reads its
+      // token from a root-owned file under /etc/cloudflared/, and when that
+      // file is lost the public hostname goes down with nothing but a
+      // flapping restart loop to show for it (2026-10-31: /etc/cloudflared/
+      // was empty and the site returned Cloudflare error 1033).
+      //
+      // The token lives in a 0600 file the PM2 user owns — never in the repo.
+      // The dashboard owns the ingress: this tunnel routes nova.alilabsx.com
+      // to http://localhost:2026 (nginx), which serves the gateway.
+      name: "nova-tunnel-site",
+      script: `${require("path").resolve(__dirname, "scripts/pm2-cloudflared-token.sh")}`,
+      args: "site",
+      interpreter: "none",
+      cwd: __dirname,
+      env: {
+        TOKEN_FILE: `${require("path").join(require("os").homedir(), ".nova/cloudflared/token-site")}`,
+      },
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      kill_timeout: 10000,
+      out_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-tunnel-site-out.log")}`,
+      error_file: `${require("path").join(require("os").homedir(), ".pm2/logs/nova-tunnel-site-error.log")}`,
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+    {
       // Keeps the Nova Ops gate status files fresh.
       //
       // The gate producers write JSON that the operator console reads. Without

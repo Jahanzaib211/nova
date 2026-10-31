@@ -334,6 +334,19 @@ async def run_acp_prompt(
                 proc_ref = proc
                 drain = asyncio.create_task(_drain_stderr(proc))
 
+                async def _died(exited: asyncio.Future, detail: str = "") -> ACPAdapterExited:
+                    """The adapter is gone: report its exit code and last words."""
+                    # The pipe error can beat the exit code by a tick, so wait
+                    # for the process to be reaped before reading its status.
+                    with contextlib.suppress(Exception):
+                        await asyncio.wait_for(asyncio.shield(exited), timeout=5)
+                    # Give the drain a beat to read the adapter's last words.
+                    with contextlib.suppress(Exception):
+                        await asyncio.wait_for(asyncio.shield(drain), timeout=0.5)
+                    tail = " | ".join(stderr_tail) or "no stderr"
+                    prefix = f"{detail} " if detail else ""
+                    return ACPAdapterExited(f"{agent_cfg.command} exited with code {proc.returncode} before answering: {prefix}{tail}")
+
                 async def _until_exit(call: Any) -> Any:
                     """Await one ACP request, failing fast if the adapter dies."""
                     request = asyncio.ensure_future(call)
@@ -341,13 +354,20 @@ async def run_acp_prompt(
                     try:
                         done, _ = await asyncio.wait({request, exited}, return_when=asyncio.FIRST_COMPLETED)
                         if request in done:
-                            return request.result()
+                            try:
+                                return request.result()
+                            except OSError as exc:
+                                # The adapter died mid-request: its stdin pipe is
+                                # gone, so the write fails with ECONNRESET or
+                                # EPIPE. That is an exit, not a transport error
+                                # -- report it the way the operator needs it, with
+                                # the exit code and the stderr, or the turn just
+                                # fails with "Connection lost" and no cause.
+                                err = await _died(exited, "the connection to the adapter was lost")
+                                raise err from exc
                         request.cancel()
-                        # Give the drain a beat to read the adapter's last words.
-                        with contextlib.suppress(Exception):
-                            await asyncio.wait_for(asyncio.shield(drain), timeout=0.5)
-                        tail = " | ".join(stderr_tail) or "no stderr"
-                        raise ACPAdapterExited(f"{agent_cfg.command} exited with code {proc.returncode} before answering: {tail}")
+                        err = await _died(exited)
+                        raise err
                     finally:
                         if not exited.done():
                             exited.cancel()

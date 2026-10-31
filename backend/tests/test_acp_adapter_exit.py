@@ -10,6 +10,7 @@ the process exiting.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 
 import pytest
@@ -42,3 +43,43 @@ def test_adapter_that_exits_immediately_fails_fast_with_its_stderr(tmp_path):
     assert time.monotonic() - started < 10, "must not wait for the turn budget"
     assert "127" in str(exc.value)
     assert "not found" in str(exc.value)
+
+
+def test_a_broken_pipe_reports_the_exit_not_a_connection_error(monkeypatch, tmp_path):
+    """The adapter's pipe breaks *before* the exit is noticed.
+
+    The request then fails with ECONNRESET/EPIPE, and that error used to win
+    the race against the process exit: the turn failed with "Connection lost"
+    — no exit code, no stderr, nothing for the operator to act on. It must be
+    reported as the adapter exiting, with its code and its last words.
+
+    The race is timing-dependent, so it is reproduced deterministically here:
+    the request fails first, the process reaps a tick later.
+    """
+    import acp
+
+    class _FakeProc:
+        pid = 999_999
+        returncode = 127
+        stderr = None
+
+        async def wait(self):
+            await asyncio.sleep(0.05)
+            return 127
+
+        def kill(self):
+            pass
+
+    class _FakeConn:
+        async def initialize(self, **kwargs):
+            raise ConnectionResetError("Connection lost")
+
+    @contextlib.asynccontextmanager
+    async def _spawn(*args, **kwargs):
+        yield _FakeConn(), _FakeProc()
+
+    monkeypatch.setattr(acp, "spawn_agent_process", _spawn)
+    cfg = ACPAgentConfig(command="claude-agent-acp", description="dead")
+    with pytest.raises(ACPAdapterExited) as exc:
+        _run(cfg, tmp_path)
+    assert "127" in str(exc.value)
