@@ -71,7 +71,14 @@ _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = ("/api/em/u/", "/api/mcp/nova")
 
 
 def is_csrf_exempt_path(path: str) -> bool:
-    return any(path.startswith(prefix) for prefix in _CSRF_EXEMPT_PREFIXES)
+    if any(path.startswith(prefix) for prefix in _CSRF_EXEMPT_PREFIXES):
+        return True
+    # A framed preview's own form posts: authenticated by the capability in the
+    # path, never by the cookie (the auth middleware refuses the fallback), so
+    # there is no ambient credential for a forged request to ride.
+    from app.gateway.preview_capability import capability_in_path
+
+    return capability_in_path(path) is not None
 
 
 def is_auth_endpoint(request: Request) -> bool:

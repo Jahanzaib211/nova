@@ -19,7 +19,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.gateway.auth.models import User
+from app.gateway.auth.models import User, normalize_email
 from app.gateway.auth.repositories.base import UserNotFoundError, UserRepository
 from deerflow.persistence.user.model import UserRow
 
@@ -108,7 +108,15 @@ class SQLiteUserRepository(UserRepository):
             return self._row_to_user(row) if row is not None else None
 
     async def get_user_by_email(self, email: str) -> User | None:
-        stmt = select(UserRow).where(UserRow.email == email)
+        # Email is a login identifier, and string equality is case-sensitive
+        # on Postgres: a row stored as ``Alice@Example.com`` never matched a
+        # lowercase login attempt, so a *correct* password came back as a 401
+        # with no way for the user to tell why. Match case-insensitively so
+        # the casing a user types never has to mirror the stored casing.
+        normalized = normalize_email(email)
+        if not normalized:
+            return None
+        stmt = select(UserRow).where(func.lower(UserRow.email) == normalized)
         async with self._sf() as session:
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -145,7 +153,14 @@ class SQLiteUserRepository(UserRepository):
             row.credit_usage_reset_at = user.credit_usage_reset_at
             row.last_sign_in_at = user.last_sign_in_at
             row.is_forbidden = user.is_forbidden
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError as exc:
+                # Two accounts changing to the same address at once: the
+                # loser hits the unique index. Same ValueError contract as
+                # create_user, so callers answer "already in use", not 500.
+                await session.rollback()
+                raise ValueError(f"Email already in use: {user.email}") from exc
         return user
 
     async def count_users(self) -> int:
@@ -160,12 +175,7 @@ class SQLiteUserRepository(UserRepository):
         # (no password, unaddressable email). Counting it made a *fresh*
         # database report "an admin already exists", so /setup refused to
         # create the first real admin and the install was unusable.
-        stmt = (
-            select(func.count())
-            .select_from(UserRow)
-            .where(UserRow.system_role == "admin")
-            .where(UserRow.id != "00000000-0000-0000-0000-000000000001")
-        )
+        stmt = select(func.count()).select_from(UserRow).where(UserRow.system_role == "admin").where(UserRow.id != "00000000-0000-0000-0000-000000000001")
         async with self._sf() as session:
             return await session.scalar(stmt) or 0
 

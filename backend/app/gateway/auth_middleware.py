@@ -21,6 +21,7 @@ from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
 from app.gateway.auth_disabled import (
     AUTH_SOURCE_AUTH_DISABLED,
     AUTH_SOURCE_INTERNAL,
+    AUTH_SOURCE_PREVIEW_CAPABILITY,
     AUTH_SOURCE_SESSION,
     get_auth_disabled_user,
     is_auth_disabled,
@@ -28,6 +29,7 @@ from app.gateway.auth_disabled import (
 from app.gateway.authz import _ALL_PERMISSIONS, AuthContext
 from app.gateway.internal_auth import INTERNAL_AUTH_HEADER_NAME, get_internal_user, is_valid_internal_auth_token
 from app.gateway.ops_auth import OPS_AUTH_HEADER_NAME, get_ops_user, is_valid_ops_token
+from app.gateway.preview_capability import capability_in_path, resolve_capability
 from deerflow.runtime.user_context import reset_current_user, set_current_user
 
 # Paths that never require authentication.
@@ -123,9 +125,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         auth_source = AUTH_SOURCE_SESSION
         access_token = request.cookies.get("access_token")
+        capability = capability_in_path(request.url.path) if internal_user is None and ops_user is None else None
 
         # Non-public path: require session cookie
-        if internal_user is not None:
+        if capability is not None:
+            # A framed preview's assets arrive cookie-less from an opaque origin;
+            # the signed segment in their path is the credential. No cookie
+            # fallback when it fails -- see preview_capability's module doc.
+            user = await resolve_capability(capability)
+            auth_source = AUTH_SOURCE_PREVIEW_CAPABILITY
+            if user is None and is_auth_disabled():
+                user = get_auth_disabled_user()
+                auth_source = AUTH_SOURCE_AUTH_DISABLED
+            if user is None:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": AuthErrorResponse(code=AuthErrorCode.TOKEN_INVALID, message="Preview link expired or invalid").model_dump()},
+                )
+        elif internal_user is not None:
             user = internal_user
             auth_source = AUTH_SOURCE_INTERNAL
         elif ops_user is not None:

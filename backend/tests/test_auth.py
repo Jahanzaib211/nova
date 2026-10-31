@@ -425,6 +425,79 @@ def test_sqlite_round_trip_new_fields():
     asyncio.run(_run())
 
 
+def test_sqlite_email_lookup_is_case_insensitive():
+    """A correct password must not 401 because of the email's casing.
+
+    Regression: the row was written as ``Alijatt2323@gmail.com`` during setup
+    while people type lowercase, and Postgres string equality is
+    case-sensitive — so ``get_user_by_email`` returned ``None`` and the login
+    route reported "Incorrect email or password" for a password that was
+    right. Stored casing must not be load-bearing.
+    """
+    import asyncio
+    import tempfile
+
+    from app.gateway.auth.local_provider import LocalAuthProvider
+    from app.gateway.auth.password import hash_password_async
+    from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+
+    async def _run() -> None:
+        from deerflow.persistence.engine import (
+            close_engine,
+            get_session_factory,
+            init_engine,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            url = f"sqlite+aiosqlite:///{tmpdir}/scratch.db"
+            await init_engine("sqlite", url=url, sqlite_dir=tmpdir)
+            try:
+                repo = SQLiteUserRepository(get_session_factory())
+                provider = LocalAuthProvider(repository=repo)
+
+                # Written through the repository, bypassing the provider's
+                # normalisation, to reproduce a legacy mixed-case row.
+                await repo.create_user(
+                    User(
+                        email="Mixed.Case@Example.COM",
+                        password_hash=await hash_password_async("Correct-Horse-1!"),
+                        system_role="admin",
+                    )
+                )
+
+                for candidate in (
+                    "Mixed.Case@Example.COM",
+                    "mixed.case@example.com",
+                    "MIXED.CASE@EXAMPLE.COM",
+                ):
+                    assert await repo.get_user_by_email(candidate) is not None, candidate
+                    assert await provider.authenticate({"email": candidate, "password": "Correct-Horse-1!"}) is not None, candidate
+
+                # Case-insensitivity must not weaken the password check.
+                assert await provider.authenticate({"email": "mixed.case@example.com", "password": "wrong"}) is None
+
+                # Surrounding whitespace is not part of an email either.
+                assert await provider.authenticate({"email": "  mixed.case@example.com  ", "password": "Correct-Horse-1!"}) is not None
+
+                # The unique index is case-sensitive, so without a pre-check
+                # this insert would succeed and make the lookups above raise
+                # MultipleResultsFound — locking out both accounts.
+                import pytest
+
+                with pytest.raises(ValueError):
+                    await provider.create_user(email="mixed.case@example.com", password="x")
+                assert await repo.get_user_by_email("mixed.case@example.com") is not None
+
+                # New accounts are stored canonically, so "one address" really
+                # is one row rather than two that differ only by casing.
+                created = await provider.create_user(email="New.User@Example.COM", password="x")
+                assert created.email == "new.user@example.com"
+            finally:
+                await close_engine()
+
+    asyncio.run(_run())
+
+
 def test_sqlite_round_trip_plan_and_referral_fields():
     """Nova Plus columns (plan/billing/consent/referral) survive round-trip.
 
@@ -898,3 +971,30 @@ def test_authenticate_skips_rehash_for_v2_hash():
     last_call_user = mock_repo.update_user.call_args_list[0].args[0]
     assert last_call_user.last_sign_in_at is not None
     assert last_call_user.password_hash is not None  # unchanged
+
+
+def test_sqlite_update_user_maps_duplicate_email_to_value_error():
+    """Losing a race for an address (unique index) is 'already in use', not a 500."""
+    import asyncio
+    import tempfile
+
+    from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
+
+    async def _run() -> None:
+        from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmpdir}/dup.db", sqlite_dir=tmpdir)
+            try:
+                repo = SQLiteUserRepository(get_session_factory())
+                await repo.create_user(User(email="a@example.com", system_role="user"))
+                b = await repo.create_user(User(email="b@example.com", system_role="user"))
+                b.email = "a@example.com"
+                import pytest
+
+                with pytest.raises(ValueError):
+                    await repo.update_user(b)
+            finally:
+                await close_engine()
+
+    asyncio.run(_run())

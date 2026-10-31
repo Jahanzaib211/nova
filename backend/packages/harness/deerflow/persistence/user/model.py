@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Integer, String, false, text
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, false, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from deerflow.persistence.base import Base
@@ -99,4 +99,10 @@ class UserRow(Base):
             unique=True,
             sqlite_where=text("oauth_provider IS NOT NULL AND oauth_id IS NOT NULL"),
         ),
+        # Email is a case-insensitive login identifier. The plain unique
+        # index on ``email`` lets ``Alice@x.com`` and ``alice@x.com``
+        # coexist, and two such rows make every lookup ambiguous. This one
+        # makes the database refuse the second row, and lets the
+        # ``lower(email) = ?`` lookup use an index instead of a scan.
+        Index("uq_users_email_lower", func.lower(email), unique=True),
     )
