@@ -1117,6 +1117,15 @@ sandbox:
 #   # Default timeout (seconds) for built-in subagents (default: 1800 = 30 min).
 #   # Custom agents use their own timeout_seconds (default 900) unless overridden.
 #   timeout_seconds: 1800
+#   # Ceiling on the timeout the `task` tool may request for ONE task, through
+#   # its timeout_seconds argument. The model may ask for a longer budget than
+#   # the default (a deep research sweep legitimately needs more than 30 min);
+#   # a request above this ceiling is CLAMPED to it, never rejected, so a run
+#   # never fails because of a number the model chose. A value that is not a
+#   # positive number is ignored and the configured timeout is kept.
+#   # Keep this >= the effective timeout of the agents you want a model to be
+#   # able to extend; the effective ceiling is the greater of the two.
+#   max_timeout_seconds: 1800
 #   # Optional global max-turn override for all subagents.
 #   # Built-in defaults: general-purpose=150, bash=60. Leave unset to keep them.
 #   # max_turns: 120
@@ -1124,7 +1133,7 @@ sandbox:
 #   # Optional per-agent overrides (applies to both built-in and custom agents)
 #   agents:
 #     general-purpose:
-#       timeout_seconds: 2700  # 45 minutes for very long deep-research tasks
+#       timeout_seconds: 1800  # per-agent default; a longer task opts in per call
 #       max_turns: 250         # raise above the 150 default for very deep tasks
 #       # model: qwen3:32b     # Use a specific model (default: inherit from lead agent)
 #       # skills:               # Skill whitelist (default: inherit all enabled skills)

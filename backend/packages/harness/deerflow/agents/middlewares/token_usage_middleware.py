@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Mapping
 from typing import Any, override
 
 from langchain.agents import AgentState
@@ -329,12 +330,29 @@ class TokenUsageMiddleware(AgentMiddleware):
             if output_token_details:
                 detail_parts.append(f"output_token_details={output_token_details}")
             detail_suffix = f" {' '.join(detail_parts)}" if detail_parts else ""
+            # The model that ACTUALLY produced this response, not the lead
+            # agent's configured name: a runtime dispatch or a provider
+            # wrapper can silently substitute a model, after which every
+            # token on the line is misattributed in cost accounting (the
+            # 2026-11-01 audit found MiniMax-M3 spend logged as another
+            # model). Same rule for run/thread scope.
+            response_meta = getattr(last, "response_metadata", None) or {}
+            actual_model = (response_meta.get("model_name") if isinstance(response_meta, Mapping) else None) or (response_meta.get("model") if isinstance(response_meta, Mapping) else None)
+            try:
+                from deerflow.runtime.run_context import current_run_fields, format_scope
+
+                run_suffix = f" ({format_scope()})" if current_run_fields() else ""
+            except Exception:
+                run_suffix = ""
+            model_suffix = f" model={actual_model}" if actual_model else ""
             logger.info(
-                "LLM token usage: input=%s output=%s total=%s%s",
+                "LLM token usage: input=%s output=%s total=%s%s%s%s",
                 usage.get("input_tokens", "?"),
                 usage.get("output_tokens", "?"),
                 usage.get("total_tokens", "?"),
                 detail_suffix,
+                model_suffix,
+                run_suffix,
             )
 
         todos = state.get("todos") or []

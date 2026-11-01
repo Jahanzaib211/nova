@@ -34,9 +34,46 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Upper bound on one store write. Every write the journal makes is gated on the
+# previous one finishing, so an unbounded write that never returns switches the
+# journal off for the rest of the run, silently: run 3cc50519 (2026-11-01)
+# counted 626 messages in memory and persisted zero events, and its progress
+# snapshot froze an hour before the run stopped. A bounded write fails loudly,
+# returns its batch to the buffer and lets the next flush retry it.
+DEFAULT_WRITE_TIMEOUT = 30.0
+
+# Minimum spacing between two run.heartbeat events in the store. This is a
+# liveness signal, not a log of activity — one row per minute answers "is the
+# journal still writing" and keeps a full-day run under ~1.4k rows.
+HEARTBEAT_INTERVAL_SECONDS = 60.0
+
+
+def _gates(task: asyncio.Task | None, loop: asyncio.AbstractEventLoop) -> bool:
+    """Whether an in-flight task should hold back new writes on *loop*.
+
+    Only an unfinished task on the same, still-open loop does. A task parked on
+    another loop -- or on one that is closed or no longer runs it -- can never
+    finish from here, and waiting on it is exactly how a journal goes quiet.
+    """
+    if task is None or task.done():
+        return False
+    task_loop = task.get_loop()
+    return task_loop is loop and not task_loop.is_closed()
+
 
 class RunJournal(BaseCallbackHandler):
     """LangChain callback handler that captures events to RunEventStore."""
+
+    # LangChain dispatches sync handler methods off the event loop, onto a
+    # thread-pool thread, unless a handler declares ``run_inline = True``
+    # (AsyncCallbackManagerForLLMRun → run_in_executor). On that thread
+    # asyncio.get_running_loop() raises, so every mid-run flush and progress
+    # snapshot in this class silently no-op'd: run 3cc50519 (2026-11-01)
+    # streamed for an hour and persisted zero events until the worker's
+    # final flush. These methods only append to buffers and schedule tasks,
+    # so running them inline on the loop is cheap. Without this flag mid-run
+    # liveness (progress snapshots, heartbeats) does not exist at all.
+    run_inline = True
 
     def __init__(
         self,
@@ -48,6 +85,7 @@ class RunJournal(BaseCallbackHandler):
         flush_threshold: int = 20,
         progress_reporter: Callable[[dict], Awaitable[None]] | None = None,
         progress_flush_interval: float = 5.0,
+        write_timeout: float = DEFAULT_WRITE_TIMEOUT,
     ):
         super().__init__()
         self.run_id = run_id
@@ -57,6 +95,7 @@ class RunJournal(BaseCallbackHandler):
         self._flush_threshold = flush_threshold
         self._progress_reporter = progress_reporter
         self._progress_flush_interval = progress_flush_interval
+        self._write_timeout = write_timeout
 
         # Write buffer
         self._buffer: list[dict] = []
@@ -65,6 +104,19 @@ class RunJournal(BaseCallbackHandler):
         self._pending_progress_delayed = False
         self._progress_dirty = False
         self._last_progress_flush = 0.0
+
+        # Liveness. ``_last_activity_mono`` is the monotonic clock reading of
+        # the last event the journal recorded (see ``_put``) — the run-side
+        # truth for "has this run done anything recently". The heartbeat
+        # event carries that truth into the event store, throttled so a
+        # busy run does not flood ``run_events``. Monotonic, not wall
+        # clock: comparisons must survive an NTP step. The throttle clock
+        # starts at construction, so the first heartbeat fires about a
+        # minute into the run — the first event is run.start, which is
+        # already a liveness signal on its own.
+        self._last_activity_mono = time.monotonic()
+        self._started_mono = self._last_activity_mono
+        self._last_heartbeat_mono = self._last_activity_mono
 
         # Token accumulators
         self._total_input_tokens = 0
@@ -375,6 +427,19 @@ class RunJournal(BaseCallbackHandler):
     # -- Internal methods --
 
     def _put(self, *, event_type: str, category: str, content: str | dict = "", metadata: dict | None = None) -> None:
+        self._last_activity_mono = time.monotonic()
+        heartbeat_metadata: dict | None = None
+        since_heartbeat = self._last_activity_mono - self._last_heartbeat_mono
+        if event_type != "run.heartbeat" and since_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+            # Record the heartbeat BEFORE we append it, so the call below
+            # cannot re-trigger this branch (no recursion).
+            self._last_heartbeat_mono = self._last_activity_mono
+            heartbeat_metadata = {
+                "elapsed_seconds": round(self._last_activity_mono - self._started_mono, 1),
+                "llm_call_count": self._llm_call_count,
+                "total_tokens": self._total_tokens,
+                "buffered_events": len(self._buffer),
+            }
         self._buffer.append(
             {
                 "thread_id": self.thread_id,
@@ -386,6 +451,18 @@ class RunJournal(BaseCallbackHandler):
                 "created_at": datetime.now(UTC).isoformat(),
             }
         )
+        if heartbeat_metadata is not None:
+            self._buffer.append(
+                {
+                    "thread_id": self.thread_id,
+                    "run_id": self.run_id,
+                    "event_type": "run.heartbeat",
+                    "category": "liveness",
+                    "content": "",
+                    "metadata": heartbeat_metadata,
+                    "created_at": datetime.now(UTC).isoformat(),
+                }
+            )
         if len(self._buffer) >= self._flush_threshold:
             self._flush_sync()
 
@@ -399,14 +476,20 @@ class RunJournal(BaseCallbackHandler):
         """
         if not self._buffer:
             return
-        # Skip if a flush is already in flight — avoids concurrent writes
-        # to the same SQLite file from multiple fire-and-forget tasks.
-        if self._pending_flush_tasks:
-            return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             # No event loop — keep events in buffer for later async flush.
+            return
+        # One write in flight at a time — avoids concurrent writes to the same
+        # SQLite file. Events that arrive meanwhile stay buffered and go out
+        # in the follow-up flush _on_flush_done schedules. Tasks that can no
+        # longer finish from this loop are dropped from the gate, not obeyed.
+        stale = {t for t in self._pending_flush_tasks if not t.done() and not _gates(t, loop)}
+        if stale:
+            logger.warning("Journal for run %s: dropping %d flush task(s) that cannot complete on the current event loop", self.run_id, len(stale))
+        self._pending_flush_tasks = {t for t in self._pending_flush_tasks if _gates(t, loop)}
+        if self._pending_flush_tasks:
             return
         batch = self._buffer.copy()
         self._buffer.clear()
@@ -416,7 +499,16 @@ class RunJournal(BaseCallbackHandler):
 
     async def _flush_async(self, batch: list[dict]) -> None:
         try:
-            await self._store.put_batch(batch)
+            async with asyncio.timeout(self._write_timeout):
+                await self._store.put_batch(batch)
+        except TimeoutError:
+            logger.warning(
+                "Journal write for run %s timed out after %.0f s — returning %d events to buffer",
+                self.run_id,
+                self._write_timeout,
+                len(batch),
+            )
+            self._buffer = batch + self._buffer
         except Exception:
             logger.warning(
                 "Failed to flush %d events for run %s — returning to buffer",
@@ -434,6 +526,11 @@ class RunJournal(BaseCallbackHandler):
         exc = task.exception()
         if exc:
             logger.warning("Journal flush task failed: %s", exc)
+        # Events that reached the threshold while this write was in flight
+        # were held back by the one-at-a-time gate; send them now instead of
+        # waiting for the next event to arrive (or for the run to end).
+        if len(self._buffer) >= self._flush_threshold:
+            self._flush_sync()
 
     def _identify_caller(self, tags: list[str] | None) -> str:
         _tags = tags or []
@@ -469,6 +566,16 @@ class RunJournal(BaseCallbackHandler):
         bucket["total_tokens"] += int(total_tokens)
 
     # -- Public methods (called by worker) --
+
+    @property
+    def last_activity_age_seconds(self) -> float:
+        """Seconds since the journal last recorded an event (monotonic clock).
+
+        A live run touches the journal constantly (chain/tool/LLM callbacks),
+        so a large value means the run has produced nothing recently —
+        workers and watchdogs can read this without querying the store.
+        """
+        return time.monotonic() - self._last_activity_mono
 
     def record_external_llm_usage_records(
         self,
@@ -548,10 +655,19 @@ class RunJournal(BaseCallbackHandler):
         )
 
     async def flush(self) -> None:
-        """Force flush remaining buffer. Called in worker's finally block."""
-        if self._pending_flush_tasks:
-            await asyncio.gather(*tuple(self._pending_flush_tasks), return_exceptions=True)
-        while self._pending_progress_task is not None and not self._pending_progress_task.done():
+        """Force flush remaining buffer. Called in worker's finally block.
+
+        Bounded throughout: the worker publishes the run's ``end`` only after
+        this returns, so an unbounded wait here would keep a finished run open.
+        In-flight writes are bounded by their own timeout; one stuck on another
+        loop is not waited for at all.
+        """
+        loop = asyncio.get_running_loop()
+        # A finishing write may schedule a follow-up (see _on_flush_done), so
+        # drain until none is in flight rather than waiting once.
+        while inflight := [t for t in self._pending_flush_tasks if _gates(t, loop)]:
+            await asyncio.gather(*inflight, return_exceptions=True)
+        while _gates(self._pending_progress_task, loop):
             if self._pending_progress_delayed:
                 self._pending_progress_task.cancel()
                 await asyncio.gather(self._pending_progress_task, return_exceptions=True)
@@ -564,7 +680,8 @@ class RunJournal(BaseCallbackHandler):
             batch = self._buffer[: self._flush_threshold]
             del self._buffer[: self._flush_threshold]
             try:
-                await self._store.put_batch(batch)
+                async with asyncio.timeout(self._write_timeout):
+                    await self._store.put_batch(batch)
             except Exception:
                 self._buffer = batch + self._buffer
                 raise
@@ -579,22 +696,22 @@ class RunJournal(BaseCallbackHandler):
             self._progress_dirty = True
             self._schedule_delayed_progress_flush(self._progress_flush_interval - elapsed)
             return
-        if self._pending_progress_task is not None and not self._pending_progress_task.done():
-            self._progress_dirty = True
-            return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
+            return
+        if _gates(self._pending_progress_task, loop):
+            self._progress_dirty = True
             return
         self._progress_dirty = False
         self._pending_progress_task = loop.create_task(self._flush_progress_async(snapshot=self.get_completion_data()))
 
     def _schedule_delayed_progress_flush(self, delay: float) -> None:
-        if self._pending_progress_task is not None and not self._pending_progress_task.done():
-            return
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
+            return
+        if _gates(self._pending_progress_task, loop):
             return
         delay = max(0.0, delay)
         self._pending_progress_delayed = delay > 0
@@ -611,8 +728,12 @@ class RunJournal(BaseCallbackHandler):
         self._progress_dirty = False
         snapshot_to_write = snapshot or self.get_completion_data()
         try:
-            await self._progress_reporter(snapshot_to_write)
+            async with asyncio.timeout(self._write_timeout):
+                await self._progress_reporter(snapshot_to_write)
             self._last_progress_flush = time.monotonic()
+        except TimeoutError:
+            logger.warning("Progress snapshot for run %s timed out after %.0f s", self.run_id, self._write_timeout)
+            self._progress_dirty = True
         except Exception:
             logger.warning("Failed to persist progress snapshot for run %s", self.run_id, exc_info=True)
         if dirty_before_write or self._progress_dirty:

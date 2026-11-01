@@ -16,6 +16,14 @@ from langchain_core.callbacks import BaseCallbackHandler
 class SubagentTokenCollector(BaseCallbackHandler):
     """Lightweight callback handler that collects LLM token usage within a subagent."""
 
+    # Same reason as RunJournal.run_inline: without this, LangChain runs
+    # on_llm_end on a thread-pool thread. The records still end up in the
+    # parent journal (the transfer happens in executor code, on the loop),
+    # but usage captured here is what keeps a long subagent's contribution
+    # mid-run instead of only at the end — and the callback is a dict
+    # append, so inline is the right cost/benefit.
+    run_inline = True
+
     def __init__(self, caller: str):
         super().__init__()
         self.caller = caller

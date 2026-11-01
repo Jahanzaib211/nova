@@ -98,6 +98,7 @@ class RunSummary:
     subagent_tokens: int = 0
     middleware_tokens: int = 0
     message_count: int = 0
+    token_usage_by_model: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,7 @@ class RunDetail:
     subagent_tokens: int = 0
     middleware_tokens: int = 0
     message_count: int = 0
+    token_usage_by_model: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

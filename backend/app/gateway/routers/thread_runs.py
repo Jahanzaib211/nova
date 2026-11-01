@@ -98,6 +98,7 @@ class RunResponse(BaseModel):
     subagent_tokens: int = 0
     middleware_tokens: int = 0
     message_count: int = 0
+    token_usage_by_model: dict[str, Any] = Field(default_factory=dict)
 
 
 class ThreadTokenUsageModelBreakdown(BaseModel):
@@ -155,6 +156,7 @@ def _record_to_response(record: RunRecord) -> RunResponse:
         subagent_tokens=record.subagent_tokens,
         middleware_tokens=record.middleware_tokens,
         message_count=record.message_count,
+        token_usage_by_model=dict(record.token_usage_by_model or {}),
     )
 
 
@@ -181,6 +183,7 @@ def _service_to_response(detail: Any) -> RunResponse:
         subagent_tokens=getattr(detail, "subagent_tokens", 0),
         middleware_tokens=getattr(detail, "middleware_tokens", 0),
         message_count=getattr(detail, "message_count", 0),
+        token_usage_by_model=dict(getattr(detail, "token_usage_by_model", None) or {}),
     )
 
 

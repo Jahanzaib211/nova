@@ -16,6 +16,7 @@ internal checkpoint callbacks that are not exposed in the Python public API.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import inspect
 import logging
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from langchain_core.messages import HumanMessage
 
 from deerflow.config.app_config import AppConfig
+from deerflow.runtime.run_context import reset_run_scope, set_run_scope
 from deerflow.runtime.serialization import serialize
 from deerflow.runtime.stream_bridge import StreamBridge
 from deerflow.runtime.stream_bridge.diagnostics import record_worker_publish
@@ -46,6 +48,17 @@ logger = logging.getLogger(__name__)
 
 # Valid stream_mode values for LangGraph's graph.astream()
 _VALID_LG_MODES = {"values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"}
+
+# Wall-clock bound on one run. Nothing else bounds a run as a whole:
+# ``recursion_limit`` counts lead-graph steps only (subagent graphs do not
+# count) and ``abort_event`` is read between stream chunks, so a run blocked
+# inside one tool call never sees it. Run 3cc50519 (2026-11-01) was still
+# going after an hour, 311 LLM calls and 68M tokens. The per-unit budgets it
+# must outlast are a subagent (``subagents.timeout_seconds``, 1800 s) and an
+# ACP turn (1800 s); a plan-mode run chains several waves of them, so two
+# hours leaves room for four sequential waves and still stops a runaway.
+DEFAULT_MAX_RUN_SECONDS = 2 * 60 * 60.0
+MAX_RUN_SECONDS_ENV = "NOVA_RUN_MAX_SECONDS"
 
 
 async def _service_set_status(
@@ -119,6 +132,37 @@ class RunContext:
     run_events_config: Any | None = field(default=None)
     thread_store: Any | None = field(default=None)
     app_config: AppConfig | None = field(default=None)
+    # Wall-clock bound for the run; ``None`` defers to NOVA_RUN_MAX_SECONDS,
+    # then DEFAULT_MAX_RUN_SECONDS. ``0`` disables it. See resolve_max_run_seconds.
+    max_run_seconds: float | None = field(default=None)
+
+
+def resolve_max_run_seconds(ctx: RunContext) -> float | None:
+    """The run's deadline in seconds, or ``None`` for no deadline.
+
+    An explicit ``ctx.max_run_seconds`` wins, then ``NOVA_RUN_MAX_SECONDS``,
+    then the default. Zero or negative disables the bound. An unparsable
+    value falls back to the default rather than to "unbounded": a typo in an
+    env file must not silently remove the safety net.
+    """
+    value = ctx.max_run_seconds
+    if value is None:
+        raw = os.environ.get(MAX_RUN_SECONDS_ENV, "").strip()
+        if not raw:
+            value = DEFAULT_MAX_RUN_SECONDS
+        else:
+            try:
+                value = float(raw)
+            except ValueError:
+                logger.warning("%s=%r is not a number of seconds; using the default %.0f s", MAX_RUN_SECONDS_ENV, raw, DEFAULT_MAX_RUN_SECONDS)
+                value = DEFAULT_MAX_RUN_SECONDS
+    return value if value > 0 else None
+
+
+def _deadline_error_message(seconds: float) -> str:
+    minutes = seconds / 60
+    limit = f"{minutes:.0f} min" if minutes >= 1 else f"{seconds:.1f} s"
+    return f"Run stopped at its time limit ({limit}) before finishing. Progress up to this point is saved — send a follow-up message (e.g. 'continue') to resume from where it stopped. The limit is set by {MAX_RUN_SECONDS_ENV}."
 
 
 def _install_runtime_context(config: dict, runtime_context: dict[str, Any]) -> None:
@@ -191,6 +235,16 @@ async def run_agent(
     pre_run_message_ids: frozenset[str] = frozenset()
     snapshot_capture_failed = False
     llm_error_fallback_message: str | None = None
+
+    # Task-scoped run identity (see runtime.run_context). Set before anything
+    # can emit an observable record, so journal events, sandbox.log lines and
+    # middleware warnings are attributable to this run — task-local, so every
+    # subtask spawned from here inherits it and the finally restores it.
+    scope_token = set_run_scope(
+        run_id=run_id,
+        thread_id=thread_id,
+        correlation_id=record.correlation_id or None,
+    )
 
     journal = None
 
@@ -266,6 +320,13 @@ async def run_agent(
         # runtime-internal channel; user code must not depend on the key name.
         if journal is not None:
             runtime_ctx["__run_journal"] = journal
+        # Cancellation signal for long-running tool paths. The per-chunk
+        # abort checks in the stream loop cannot see INTO a tool call: a run
+        # blocked inside one 45-min bash/subagent call never re-observes the
+        # chunk boundary. Tools that poll this event (its `.is_set()` is a
+        # plain attribute read, thread-safe) can return promptly when the
+        # user stops the run.
+        runtime_ctx["__run_abort_event"] = record.abort_event
         _install_runtime_context(config, runtime_ctx)
         runtime = Runtime(context=cast(Any, runtime_ctx), store=store)
         config.setdefault("configurable", {})["__pregel_runtime"] = runtime
@@ -346,53 +407,71 @@ async def run_agent(
 
         logger.info("Run %s: streaming with modes %s (requested: %s)", str(run_id).replace("\n", "").replace("\r", ""), str(lg_modes).replace("\n", "").replace("\r", ""), str(requested_modes).replace("\n", "").replace("\r", ""))
 
-        # 7. Stream using graph.astream
-        if len(lg_modes) == 1 and not stream_subgraphs:
-            # Single mode, no subgraphs: astream yields raw chunks
-            single_mode = lg_modes[0]
-            async for chunk in agent.astream(graph_input, config=runnable_config, stream_mode=single_mode):
-                if record.abort_event.is_set():
-                    logger.info("Run %s abort requested — stopping", run_id)
-                    break
-                llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, ignore_ids=pre_run_message_ids)
-                sse_event = _lg_mode_to_sse_event(single_mode)
-                serialized = serialize(chunk, mode=single_mode)
-                record_worker_publish(
-                    run_id=str(run_id),
-                    event=sse_event,
-                    payload_bytes=len(serialized) if isinstance(serialized, (str, bytes)) else 0,
-                    monotonic_ns_at_astream=time.monotonic_ns(),
-                )
-                await bridge.publish(run_id, sse_event, serialized)
-        else:
-            # Multiple modes or subgraphs: astream yields tuples
-            async for item in agent.astream(
-                graph_input,
-                config=runnable_config,
-                stream_mode=lg_modes,
-                subgraphs=stream_subgraphs,
-            ):
-                if record.abort_event.is_set():
-                    logger.info("Run %s abort requested — stopping", run_id)
-                    break
+        # 7. Stream using graph.astream, under the run's wall-clock deadline.
+        # ``asyncio.timeout`` cancels at whatever await the run is blocked on
+        # (an LLM call, a subagent poll, an ACP turn); the per-chunk check
+        # covers code that swallows that cancellation and keeps streaming.
+        max_run_seconds = resolve_max_run_seconds(ctx)
+        deadline = asyncio.timeout(max_run_seconds)
+        try:
+            async with deadline:
+                if len(lg_modes) == 1 and not stream_subgraphs:
+                    # Single mode, no subgraphs: astream yields raw chunks
+                    single_mode = lg_modes[0]
+                    async for chunk in agent.astream(graph_input, config=runnable_config, stream_mode=single_mode):
+                        if record.abort_event.is_set() or deadline.expired():
+                            logger.info("Run %s abort requested — stopping", run_id)
+                            break
+                        llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, ignore_ids=pre_run_message_ids)
+                        sse_event = _lg_mode_to_sse_event(single_mode)
+                        serialized = serialize(chunk, mode=single_mode)
+                        record_worker_publish(
+                            run_id=str(run_id),
+                            event=sse_event,
+                            payload_bytes=len(serialized) if isinstance(serialized, (str, bytes)) else 0,
+                            monotonic_ns_at_astream=time.monotonic_ns(),
+                        )
+                        await bridge.publish(run_id, sse_event, serialized)
+                else:
+                    # Multiple modes or subgraphs: astream yields tuples
+                    async for item in agent.astream(
+                        graph_input,
+                        config=runnable_config,
+                        stream_mode=lg_modes,
+                        subgraphs=stream_subgraphs,
+                    ):
+                        if record.abort_event.is_set() or deadline.expired():
+                            logger.info("Run %s abort requested — stopping", run_id)
+                            break
 
-                mode, chunk = _unpack_stream_item(item, lg_modes, stream_subgraphs)
-                if mode is None:
-                    continue
+                        mode, chunk = _unpack_stream_item(item, lg_modes, stream_subgraphs)
+                        if mode is None:
+                            continue
 
-                llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, ignore_ids=pre_run_message_ids)
-                sse_event = _lg_mode_to_sse_event(mode)
-                serialized = serialize(chunk, mode=mode)
-                record_worker_publish(
-                    run_id=str(run_id),
-                    event=sse_event,
-                    payload_bytes=len(serialized) if isinstance(serialized, (str, bytes)) else 0,
-                    monotonic_ns_at_astream=time.monotonic_ns(),
-                )
-                await bridge.publish(run_id, sse_event, serialized)
+                        llm_error_fallback_message = llm_error_fallback_message or _extract_llm_error_fallback_message(chunk, ignore_ids=pre_run_message_ids)
+                        sse_event = _lg_mode_to_sse_event(mode)
+                        serialized = serialize(chunk, mode=mode)
+                        record_worker_publish(
+                            run_id=str(run_id),
+                            event=sse_event,
+                            payload_bytes=len(serialized) if isinstance(serialized, (str, bytes)) else 0,
+                            monotonic_ns_at_astream=time.monotonic_ns(),
+                        )
+                        await bridge.publish(run_id, sse_event, serialized)
+
+        except TimeoutError:
+            # Only our deadline means ``timeout``; a TimeoutError raised by
+            # code inside the run is that code's failure.
+            if not deadline.expired():
+                raise
 
         # 8. Final status
-        if record.abort_event.is_set():
+        if deadline.expired():
+            error_msg = _deadline_error_message(max_run_seconds or 0)
+            logger.warning("Run %s exceeded its %.0f s deadline — stopped", run_id, max_run_seconds or 0)
+            await _service_set_status(run_manager, run_id, RunStatus.timeout, error=error_msg)
+            await bridge.publish(run_id, "error", {"message": error_msg, "name": "RunDeadlineExceeded"})
+        elif record.abort_event.is_set():
             action = record.abort_action
             if action == "rollback":
                 await _service_set_status(run_manager, run_id, RunStatus.error, error="Rolled back by user")
@@ -470,6 +549,19 @@ async def run_agent(
         )
 
     finally:
+        # Release the scheduler slots this run dispatched. Background
+        # subagents would otherwise hold their pool slot (3 for the whole
+        # gateway) until their own timeout elapsed, throttling every other
+        # thread's task dispatch long after the run is over. Cooperative:
+        # they stop at the next stream-iteration boundary. Non-fatal.
+        if thread_id:
+            try:
+                from deerflow.subagents.executor import cancel_background_tasks_for_thread
+
+                cancel_background_tasks_for_thread(thread_id)
+            except Exception:
+                logger.debug("Failed to request background-subagent cancellation for thread %s (non-fatal)", thread_id, exc_info=True)
+
         # Flush any buffered journal events and persist completion data
         if journal is not None:
             try:
@@ -483,6 +575,13 @@ async def run_agent(
                 await run_manager.update_run_completion(run_id, status=record.status.value, **completion)
             except Exception:
                 logger.warning("Failed to persist run completion for %s (non-fatal)", run_id, exc_info=True)
+
+        # Drop the run's task-scoped identity before the task ends, so a
+        # stray callback that runs after teardown doesn't stamp the NEXT
+        # task's context with this run's ids. Task-local anyway; this just
+        # keeps it from leaking into the spawn point.
+        with contextlib.suppress(Exception):
+            reset_run_scope(scope_token)
 
         # Sync title from checkpoint to threads_meta.display_name
         if checkpointer is not None and thread_store is not None:

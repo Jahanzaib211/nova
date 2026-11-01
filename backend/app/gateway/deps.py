@@ -345,6 +345,16 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # Wire the service container with gateway-owned singletons (Phase C2).
         # The container provides typed service interfaces; RunManager becomes
         # an implementation detail behind RunService.
+        # Phase C3/C4: the domain EventBus finally goes live in the gateway.
+        # Until now RunServiceImpl/HealthServiceImpl were constructed bare, so
+        # every lifecycle/health event they publish went into a nonexistent
+        # bus and the C4 RecoveryEngine's declarative policies had nothing to
+        # observe. DiagnosticsServiceImpl subscribes so run transitions are
+        # previewable in diagnostics. RecoveryEngine deliberately STARTS
+        # NOWHERE: its HealthChanged policies include restart_gateway /
+        # restart_tunnel (destructive auto-recovery from inside the process
+        # being restarted) — an explicit operator opt-in, not a default.
+        from deerflow.events.bus import event_bus as _domain_event_bus
         from deerflow.services.implementations import (
             ArtifactServiceImpl,
             BrowserServiceImpl,
@@ -359,9 +369,12 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         )
         from deerflow.services.protocols import RunService
 
-        app.state.run_service: RunService = RunServiceImpl(app.state.run_manager)
+        app.state.run_service: RunService = RunServiceImpl(app.state.run_manager, event_bus=_domain_event_bus)
         app.state.configuration_service = ConfigurationServiceImpl()
         app.state.diagnostics_service = DiagnosticsServiceImpl()
+        # Non-fatal by contract: EventBus.publish logs handler exceptions, and
+        # a diagnostics subscription must never be able to fail a run.
+        app.state.diagnostics_service.subscribe_to_events(_domain_event_bus)
         app.state.workspace_service = WorkspaceServiceImpl()
         app.state.browser_service = BrowserServiceImpl()
         app.state.terminal_service = TerminalServiceImpl()
@@ -371,7 +384,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # cannot fail, which is worse than none because it reads as evidence.
         from deerflow.services.health_probes import default_probes
 
-        app.state.health_service = HealthServiceImpl(probes=default_probes(app.state))
+        app.state.health_service = HealthServiceImpl(probes=default_probes(app.state), event_bus=_domain_event_bus)
         app.state.recovery_service = RecoveryServiceImpl()
         # Execution kernel (Phase C7) — the single execution architecture.
         # Resolved through the container so embedded/test callers share the

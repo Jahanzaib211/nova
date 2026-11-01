@@ -47,17 +47,24 @@ def _build_custom_subagent_config(name: str, *, app_config: Any | None = None) -
     )
 
 
-def get_subagent_config(name: str, *, app_config: Any | None = None) -> SubagentConfig | None:
+def get_subagent_config(name: str, *, app_config: Any | None = None, timeout_seconds: int | None = None) -> SubagentConfig | None:
     """Get a subagent configuration by name, with config.yaml overrides applied.
 
     Resolution order (mirrors Codex's config layering):
     1. Built-in subagents (general-purpose, bash)
     2. Custom subagents from config.yaml custom_agents section
     3. Per-agent overrides from config.yaml agents section (timeout, max_turns, model, skills)
+    4. An optional per-task timeout requested by the caller
 
     Args:
         name: The name of the subagent.
         app_config: Optional AppConfig or SubagentsAppConfig to resolve overrides from.
+        timeout_seconds: Optional per-task timeout — the ``task`` tool's
+            ``timeout_seconds`` argument. It is CLAMPED, never rejected:
+            the ceiling is ``subagents.max_timeout_seconds``, raised to
+            the agent's own configured timeout so an operator's setting is
+            never shortened. A value that is not a positive number is
+            ignored and the configured timeout is kept.
 
     Returns:
         SubagentConfig if found (with any config.yaml overrides applied), None otherwise.
@@ -109,6 +116,37 @@ def get_subagent_config(name: str, *, app_config: Any | None = None) -> Subagent
     if effective_skills is not None and effective_skills != config.skills:
         logger.debug("Subagent '%s': skills overridden (%s -> %s)", name, config.skills, effective_skills)
         overrides["skills"] = effective_skills
+
+    # Per-task timeout.
+    #
+    # The `task` tool lets the model ask for a longer bound than the
+    # agent's default — a deep research sweep legitimately needs more than
+    # 30 minutes — but it must not be able to ask for an unbounded one.
+    # So the value is clamped rather than rejected: a run must never fail
+    # because of a number a model chose.
+    #
+    # The ceiling is the configured maximum, raised to the agent's own
+    # effective timeout when the operator gave that agent more than the
+    # maximum. The clamp exists to stop a model from inventing a number,
+    # not to shorten the operator's decision.
+    if timeout_seconds is not None:
+        from deerflow.config.subagents_config import DEFAULT_MAX_TIMEOUT_SECONDS, clamp_task_timeout
+
+        effective_timeout = overrides.get("timeout_seconds", config.timeout_seconds)
+        max_timeout = getattr(subagents_config, "max_timeout_seconds", None) or DEFAULT_MAX_TIMEOUT_SECONDS
+        ceiling = max(effective_timeout, int(max_timeout))
+        clamped = clamp_task_timeout(timeout_seconds, maximum=ceiling)
+        if clamped is None:
+            logger.warning(
+                "Subagent '%s': ignoring unusable timeout_seconds=%r — keeping the configured %ss",
+                name,
+                timeout_seconds,
+                effective_timeout,
+            )
+        else:
+            if clamped != effective_timeout:
+                logger.debug("Subagent '%s': timeout from the task request (%ss -> %ss, ceiling %ss)", name, effective_timeout, clamped, ceiling)
+            overrides["timeout_seconds"] = clamped
 
     if overrides:
         config = replace(config, **overrides)

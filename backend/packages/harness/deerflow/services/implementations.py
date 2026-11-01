@@ -65,6 +65,11 @@ def _usage_fields(record: Any) -> dict[str, Any]:
         "subagent_tokens": getattr(record, "subagent_tokens", 0),
         "middleware_tokens": getattr(record, "middleware_tokens", 0),
         "message_count": getattr(record, "message_count", 0),
+        # Per-model token breakdown: persisted by the journal's
+        # ``_tokens_by_model`` accumulator and dropped by this projection
+        # until now, so the per-run endpoint could not answer "which model
+        # spent it" — the misattribution question of the 2026-11-01 audit.
+        "token_usage_by_model": dict(getattr(record, "token_usage_by_model", None) or {}),
     }
 
 
@@ -722,7 +727,10 @@ class DiagnosticsServiceImpl:
     ) -> None:
         from deerflow.runtime.stream_bridge.diagnostics import register_correlation_id
 
-        register_correlation_id(thread_id, run_id, correlation_id)
+        # Keyword-only upstream (def register_correlation_id(*, ...)): passing
+        # positionally raised TypeError on every call, so the mapping never got
+        # recorded and correlation lookup quietly always returned "".
+        register_correlation_id(run_id=run_id, thread_id=thread_id, correlation_id=correlation_id)
 
     def lookup_correlation_id(
         self,
@@ -730,7 +738,7 @@ class DiagnosticsServiceImpl:
     ) -> str:
         from deerflow.runtime.stream_bridge.diagnostics import lookup_correlation_id
 
-        return lookup_correlation_id(thread_id) or ""
+        return lookup_correlation_id(thread_id=thread_id) or ""
 
 
 # ---------------------------------------------------------------------------

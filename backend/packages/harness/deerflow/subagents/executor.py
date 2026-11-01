@@ -91,6 +91,11 @@ class SubagentResult:
     completed_at: datetime | None = None
     ai_messages: list[dict[str, Any]] | None = None
     token_usage_records: list[dict[str, int | str | None]] = field(default_factory=list)
+    # Owning run's thread, stamped at creation. The run worker needs it to
+    # cancel only THIS thread's background tasks when the lead run ends —
+    # a gateway concurrently hosts many threads, so a bare "cancel all"
+    # would kill other threads' still-running subagents.
+    thread_id: str | None = None
     usage_reported: bool = False
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _state_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
@@ -544,6 +549,7 @@ class SubagentExecutor:
                 trace_id=self.trace_id,
                 status=SubagentStatus.RUNNING,
                 started_at=datetime.now(UTC),
+                thread_id=self.thread_id,
             )
         ai_messages = result.ai_messages
         if ai_messages is None:
@@ -756,6 +762,10 @@ class SubagentExecutor:
         API, this path blocks the caller while the actual coroutine runs on the
         long-lived isolated loop. Reusing that loop keeps shared async clients
         from being tied to a short-lived loop that gets closed per execution.
+
+        The bound is ``self.config.timeout_seconds`` — the *resolved* value,
+        which may be a per-task timeout the ``task`` tool asked for (clamped
+        by the registry) rather than the agent's configured default.
         """
         future: Future[SubagentResult] | None = None
         parent_context = copy_context()
@@ -830,6 +840,7 @@ class SubagentExecutor:
                     task_id=str(uuid.uuid4())[:8],
                     trace_id=self.trace_id,
                     status=SubagentStatus.RUNNING,
+                    thread_id=self.thread_id,
                 )
             result.try_set_terminal(SubagentStatus.FAILED, error=str(e))
             return result
@@ -853,6 +864,7 @@ class SubagentExecutor:
             task_id=task_id,
             trace_id=self.trace_id,
             status=SubagentStatus.PENDING,
+            thread_id=self.thread_id,
         )
 
         logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} starting async execution, task_id={task_id}, timeout={self.config.timeout_seconds}s")
@@ -870,6 +882,10 @@ class SubagentExecutor:
         # clock when the poller's backstop fired at timeout+60s: the run saw
         # "Task polling timed out … the background task is stuck" instead of a
         # clean timeout, and the stuck task kept its slot.
+        #
+        # The bound is the *resolved* timeout: the agent's configured
+        # default, or the per-task timeout the ``task`` tool asked for
+        # (clamped by the registry to the configured maximum).
         deadline = time.monotonic() + self.config.timeout_seconds
 
         # Submit to scheduler pool
@@ -916,6 +932,40 @@ class SubagentExecutor:
 
         _scheduler_pool.submit(run_task)
         return task_id
+
+
+def cancel_background_tasks_for_thread(thread_id: str) -> int:
+    """Signal every not-yet-terminal background task of one thread to stop.
+
+    Called from the run worker's ``finally``: when the lead run ends (success,
+    error, interrupt, deadline), the subagents it dispatched on the shared
+    scheduler pool would otherwise keep occupying their slots until their own
+    ``timeout_seconds`` elapsed — up to the configured max, throttling every
+    other thread's dispatch for that whole time (3 scheduler workers).
+
+    Cooperative only: sets each task's ``cancel_event``, which
+    ``_aexecute`` checks at the next ``agent.astream()`` iteration.
+
+    Returns the number of tasks signalled. Never raises: a failure here must
+    not affect the run worker's teardown.
+    """
+    if not thread_id:
+        return 0
+    signalled = 0
+    try:
+        with _background_tasks_lock:
+            for result in _background_tasks.values():
+                if getattr(result, "thread_id", None) != thread_id:
+                    continue
+                if result.status.is_terminal or result.completed_at is not None:
+                    continue
+                result.cancel_event.set()
+                signalled += 1
+        if signalled:
+            logger.info("Run end: requested cancellation of %d background subagent task(s) for thread %s", signalled, thread_id)
+    except Exception:
+        logger.debug("Failed to cancel background tasks for thread %s (non-fatal)", thread_id, exc_info=True)
+    return signalled
 
 
 def request_cancel_background_task(task_id: str) -> None:

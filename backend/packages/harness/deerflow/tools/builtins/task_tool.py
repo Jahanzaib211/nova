@@ -215,6 +215,7 @@ async def task_tool(
     prompt: str,
     subagent_type: str,
     tool_call_id: Annotated[str, InjectedToolCallId],
+    timeout_seconds: int | None = None,
 ) -> str:
     """Delegate a task to a specialized subagent that runs in its own context.
 
@@ -246,17 +247,37 @@ async def task_tool(
     - Simple, single-step operations (use tools directly)
     - Tasks requiring user interaction or clarification
 
+    Time budget:
+    - Each subagent type has its own timeout (30 minutes by default). Raise it
+      with `timeout_seconds` when a task is genuinely long — a deep research
+      sweep across many sources, a large migration — and leave it out for
+      anything ordinary.
+    - The request is CLAMPED to the operator-configured maximum, never
+      rejected: asking for more does not grant more, and a run never fails
+      because of a number chosen here.
+
     Args:
         description: A short (3-5 word) description of the task for logging/display. ALWAYS PROVIDE THIS PARAMETER FIRST.
         prompt: The task description for the subagent. Be specific and clear about what needs to be done. ALWAYS PROVIDE THIS PARAMETER SECOND.
         subagent_type: The type of subagent to use. ALWAYS PROVIDE THIS PARAMETER THIRD.
+        timeout_seconds: Optional per-task time budget in seconds. Raise it only for a genuinely long task (a deep research sweep, a large migration); omit it for anything that finishes inside the subagent's configured timeout. Clamped to the configured maximum, so an out-of-range request is shortened rather than refused.
     """
     runtime_app_config = _get_runtime_app_config(runtime)
     cache_token_usage = _token_usage_cache_enabled(runtime_app_config)
     available_subagent_names = get_available_subagent_names(app_config=runtime_app_config) if runtime_app_config is not None else get_available_subagent_names()
 
     # Get subagent configuration
-    config = get_subagent_config(subagent_type, app_config=runtime_app_config) if runtime_app_config is not None else get_subagent_config(subagent_type)
+    #
+    # `timeout_seconds` is forwarded only when the model actually asked for
+    # one: the registry clamps it, and passing the argument unconditionally
+    # would change the call shape every caller has to satisfy. Leaving it
+    # out keeps the config-derived timeout exactly as it was.
+    lookup_kwargs: dict[str, Any] = {}
+    if runtime_app_config is not None:
+        lookup_kwargs["app_config"] = runtime_app_config
+    if timeout_seconds is not None:
+        lookup_kwargs["timeout_seconds"] = timeout_seconds
+    config = get_subagent_config(subagent_type, **lookup_kwargs)
     if config is None:
         available = ", ".join(available_subagent_names)
         return f"Error: Unknown subagent type '{subagent_type}'. Available: {available}"

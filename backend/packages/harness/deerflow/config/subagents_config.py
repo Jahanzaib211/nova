@@ -1,10 +1,61 @@
 """Configuration for the subagent system loaded from config.yaml."""
 
 import logging
+import math
 
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+#: Ceiling on the timeout a single task may ask for, unless the operator
+#: configures a different one (``subagents.max_timeout_seconds``).
+DEFAULT_MAX_TIMEOUT_SECONDS = 1800
+
+
+def clamp_task_timeout(requested: object, *, maximum: int, minimum: int = 1) -> int | None:
+    """Clamp a model-supplied per-task timeout to a usable range.
+
+    The ``task`` tool lets the model ask for a longer bound than the
+    agent's default -- a deep research sweep legitimately needs more than
+    30 minutes -- but it must not be able to ask for an unbounded one. So
+    the value is clamped rather than rejected: a run must never fail
+    because of a number a model chose.
+
+    Returns the number of seconds to use, or ``None`` when the value is
+    unusable and the caller should keep its configured default.
+
+    Rules:
+
+    - a positive number is clamped into ``[minimum, maximum]``;
+    - a numeric string (``"3600"``) is accepted, because a model may send
+      one;
+    - anything else -- ``None``, a bool, a non-numeric string, a
+      non-finite float, zero or a negative number -- is *ignored*
+      (``None``), never guessed at. A malformed number must not shorten a
+      legitimate task to a fraction of a second, and it must never raise
+      inside a tool call.
+    """
+    if requested is None or isinstance(requested, bool):
+        return None
+
+    if isinstance(requested, (int, float)):
+        value = float(requested)
+    elif isinstance(requested, str):
+        text = requested.strip()
+        if not text:
+            return None
+        try:
+            value = float(text)
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if not math.isfinite(value) or value <= 0:
+        return None
+
+    seconds = int(value)  # truncate toward zero
+    return max(minimum, min(seconds, maximum))
 
 
 class SubagentOverrideConfig(BaseModel):
@@ -75,6 +126,19 @@ class SubagentsAppConfig(BaseModel):
         default=1800,
         ge=1,
         description="Default timeout in seconds for built-in subagents (default: 1800 = 30 minutes); custom agents use their own timeout_seconds unless given a per-agent override",
+    )
+    max_timeout_seconds: int = Field(
+        default=DEFAULT_MAX_TIMEOUT_SECONDS,
+        ge=1,
+        description=(
+            "Ceiling on the timeout the `task` tool may request for a single "
+            "task through its timeout_seconds argument. A model asking for "
+            "more is clamped to this, never rejected — a run must not fail "
+            "because of a number a model chose. The effective ceiling is "
+            "the greater of this value and the agent's own configured "
+            "timeout, so an operator's per-agent setting is never shortened "
+            "by the clamp."
+        ),
     )
     max_turns: int | None = Field(
         default=None,
