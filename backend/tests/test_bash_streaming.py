@@ -198,9 +198,13 @@ class TestItStillBehavesLikeExecuteCommand:
             raise RuntimeError("no session for you")
 
         sandbox._client.shell.create_session = boom
-        with patch.object(type(sandbox), "_execute_command_locked", return_value="blocking result"):
+        # The fallback goes through the raising variant so a transport error
+        # can be told apart from a failing command by type, and it runs the
+        # command exactly once.
+        with patch.object(type(sandbox), "_execute_command_raising", return_value="blocking result") as blocking:
             out = sandbox.execute_command_streaming("echo hi", lambda t, r: None)
         assert out == "blocking result"
+        assert blocking.call_count == 1
 
     def test_no_output_matches_execute_command(self, sandbox):
         _stream(sandbox, [("", "completed")])
