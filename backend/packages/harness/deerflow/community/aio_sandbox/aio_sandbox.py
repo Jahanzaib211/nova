@@ -6,6 +6,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from typing import Any
 
 from agent_sandbox import Sandbox as AioSandboxClient
 
@@ -19,6 +20,27 @@ logger = logging.getLogger(__name__)
 _MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024  # 100 MB
 
 _ERROR_OBSERVATION_SIGNATURE = "'ErrorObservation' object has no attribute 'exit_code'"
+
+
+def _is_set(event: Any) -> bool:
+    """Whether a cancellation signal has been raised.
+
+    Accepts an ``asyncio.Event`` (the run's abort event), a
+    ``threading.Event``, or a plain callable, because the check happens on a
+    worker thread inside the streaming loop and must never raise: a broken
+    cancel check must not turn into a failed command.
+    """
+    try:
+        if event is None:
+            return False
+        is_set = getattr(event, "is_set", None)
+        if callable(is_set):
+            return bool(is_set())
+        if callable(event):
+            return bool(event())
+    except Exception:
+        return False
+    return False
 
 
 def _single_line(command: str) -> str:
@@ -87,6 +109,10 @@ class AioSandbox(Sandbox):
         self._lock = threading.Lock()
         self._closed = False
         self._busy_tracker = busy_tracker
+        # Set by the provider so a destroyed/unreachable sandbox can be dropped
+        # from tracking (and its thread mapping cleared) instead of being retried
+        # forever. Never fatal if unset.
+        self._on_unreachable: Callable[[str], None] | None = None
 
     @property
     def base_url(self) -> str:
@@ -256,7 +282,12 @@ class AioSandbox(Sandbox):
     #: The full output is still returned; only the live narration stops.
     _STREAM_MAX_TAIL_BYTES = 1_000_000
 
-    def execute_command_streaming(self, command: str, on_chunk: "Callable[[str, bool], None]") -> str:
+    def execute_command_streaming(
+        self,
+        command: str,
+        on_chunk: "Callable[[str, bool], None]",
+        cancel_event: "Any | None" = None,
+    ) -> str:
         """Run ``command``, reporting output as it appears rather than at exit.
 
         ``on_chunk(text, replace)`` is called for each change in output:
@@ -293,7 +324,7 @@ class AioSandbox(Sandbox):
         """
         self._mark_busy(1)
         try:
-            return self._execute_command_streaming_locked(command, on_chunk)
+            return self._execute_command_streaming_locked(command, on_chunk, cancel_event=cancel_event)
         finally:
             self._mark_busy(-1)
 
@@ -311,7 +342,12 @@ class AioSandbox(Sandbox):
         encoded = base64.b64encode(command.encode("utf-8")).decode("ascii")
         return f"echo {encoded} | base64 -d | bash -s > {shlex.quote(log_path)} 2>&1"
 
-    def _execute_command_streaming_locked(self, command: str, on_chunk: "Callable[[str, bool], None]") -> str:
+    def _execute_command_streaming_locked(
+        self,
+        command: str,
+        on_chunk: "Callable[[str, bool], None]",
+        cancel_event: "Any | None" = None,
+    ) -> str:
         with self._lock:
             # A dedicated session per command: the default session is shared
             # with `shell_session`, whose screen would mix another process's
@@ -319,6 +355,7 @@ class AioSandbox(Sandbox):
             session_id = f"nova-stream-{uuid.uuid4()}"
             log_path = f"/tmp/nova-stream-{uuid.uuid4().hex}.log"
 
+            start_error: Exception | None = None
             try:
                 self._require_client().shell.create_session(id=session_id)
                 self._require_client().shell.exec_command(
@@ -327,18 +364,53 @@ class AioSandbox(Sandbox):
                     async_mode=True,
                     no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT,
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
+                start_error = e
                 logger.warning("streaming exec failed to start (%s); falling back to blocking exec", e)
                 self._cleanup_stream_session(session_id)
-                # Not an error to the agent: the blocking path still works, it
-                # just cannot report progress. Degrade quietly rather than fail
-                # a command because a nicety was unavailable.
-                return self._execute_command_locked(command)
+
+            if start_error is not None:
+                # Release the lock before the blocking fallback: _execute_command_locked
+                # takes the same non-reentrant lock, and calling it while holding
+                # this one deadlocked the worker thread on 2026-11-01.
+                lock = self._lock
+                lock.release()
+                try:
+                    refused = isinstance(start_error, ConnectionRefusedError) or "Connection refused" in str(start_error)
+                    if refused:
+                        # Try the blocking path once; if the sandbox is really
+                        # gone it fails fast with the same error.
+                        try:
+                            out = self._execute_command_locked(command)
+                        except Exception as e2:  # noqa: BLE001
+                            out = f"Error: {e2}"
+                        if isinstance(out, str) and out.startswith("Error:") and ("Connection refused" in out or "refused" in out.lower()):
+                            if self._on_unreachable is not None:
+                                try:
+                                    self._on_unreachable(self.id)
+                                except Exception:  # noqa: BLE001
+                                    logger.debug("on_unreachable callback failed", exc_info=True)
+                            return f"Error: sandbox {self.id} is unreachable (connection refused); it may have been destroyed. Retry the command."
+                    # Ordinary failure or recovered: run the blocking path.
+                    return self._execute_command_locked(command)
+                finally:
+                    lock.acquire()
 
             seen = ""
             tailing = True
+            cancelled = False
             try:
                 while True:
+                    # The run's stop signal, observed from INSIDE the command.
+                    # The stream loop in the worker only checks between tool
+                    # calls, so a run sitting in a long build could not be
+                    # stopped for hours (the 2026-11-01 incident). The event
+                    # is an asyncio.Event whose is_set() is a plain attribute
+                    # read, safe from this worker thread.
+                    if cancel_event is not None and _is_set(cancel_event):
+                        cancelled = True
+                        logger.info("streaming command cancelled by the run's stop signal")
+                        break
                     grew = False
                     if tailing:
                         before = len(seen)
@@ -365,11 +437,19 @@ class AioSandbox(Sandbox):
 
             # The corruption backstop still applies: if the wrapper somehow did
             # not prevent it, re-run through the blocking path, which retries on
-            # a fresh session.
+            # a fresh session. Release the lock first: _execute_command_locked
+            # takes the same non-reentrant lock.
+            if cancelled:
+                # Say so plainly: the agent must not read a partial output as
+                # a finished command and build on it.
+                return f"{seen}\n[command cancelled by the run's stop signal]".strip()
             if seen and _ERROR_OBSERVATION_SIGNATURE in seen:
                 logger.warning("ErrorObservation in streamed output, retrying on the blocking path")
-                return self._execute_command_locked(command)
-
+                self._lock.release()
+                try:
+                    return self._execute_command_locked(command)
+                finally:
+                    self._lock.acquire()
             return seen if seen else "(no output)"
 
     def _emit_new_output(self, log_path: str, seen: str, on_chunk: "Callable[[str, bool], None]") -> str:

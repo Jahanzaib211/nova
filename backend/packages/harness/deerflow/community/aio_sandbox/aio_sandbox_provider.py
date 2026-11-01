@@ -42,6 +42,56 @@ from .sandbox_info import SandboxInfo
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Cross-instance shared activity + live-instance registry
+# ---------------------------------------------------------------------------
+class _SharedActivity:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._last: dict[str, float] = {}
+        self._busy: dict[str, int] = {}
+
+    def clear(self) -> None:
+        with self._lock:
+            self._last.clear()
+            self._busy.clear()
+
+    def touch(self, sandbox_id: str, when: float | None = None) -> None:
+        with self._lock:
+            self._last[sandbox_id] = when if when is not None else time.time()
+
+    def track_busy(self, sandbox_id: str, delta: int) -> None:
+        with self._lock:
+            self._busy[sandbox_id] = self._busy.get(sandbox_id, 0) + delta
+            if self._busy[sandbox_id] <= 0:
+                self._busy.pop(sandbox_id, None)
+            self._last[sandbox_id] = time.time()
+
+    def last(self, sandbox_id: str) -> float | None:
+        with self._lock:
+            return self._last.get(sandbox_id)
+
+    def busy(self, sandbox_id: str) -> int:
+        with self._lock:
+            return self._busy.get(sandbox_id, 0)
+
+    def forget(self, sandbox_id: str) -> None:
+        with self._lock:
+            self._last.pop(sandbox_id, None)
+            self._busy.pop(sandbox_id, None)
+
+
+_SHARED_ACTIVITY = _SharedActivity()
+
+_LIVE_INSTANCES: set = set()
+
+
+def _register_live_instance(instance) -> None:
+    _LIVE_INSTANCES.add(instance)
+    if len(_LIVE_INSTANCES) > 1:
+        logger.warning("more than one AioSandboxProvider instance in this process (%d) - sandbox reaper races possible", len(_LIVE_INSTANCES))
+
+
 def _under_pytest() -> bool:
     """True while a pytest run is in progress.
 
@@ -170,6 +220,7 @@ class AioSandboxProvider(SandboxProvider):
 
         self._config = self._load_config()
         self._backend: SandboxBackend = self._create_backend()
+        _register_live_instance(self)
 
         # Both of the next two steps are destructive, and they are skipped
         # under pytest for the same reason.
@@ -318,19 +369,23 @@ class AioSandboxProvider(SandboxProvider):
     def _reconcile_orphans(self) -> None:
         """Reconcile orphaned containers left by previous process lifecycles.
 
-        On startup, enumerate all running containers matching our prefix
-        and adopt them all into the warm pool.  The idle checker will reclaim
-        containers that nobody re-acquires within ``idle_timeout``.
+        On startup, enumerate all running containers matching our prefix:
+        a container that is provably stale (older than ``idle_timeout``) is
+        destroyed so its host ports are free immediately, and the rest are
+        adopted into the warm pool, where the idle checker reclaims the ones
+        nobody re-acquires.
 
-        All containers are adopted unconditionally because we cannot
-        distinguish "orphaned" from "actively used by another process"
-        based on age alone — ``idle_timeout`` represents inactivity, not
-        uptime.  Adopting into the warm pool and letting the idle checker
-        decide avoids destroying containers that a concurrent process may
-        still be using.
+        What is NOT destroyed, deliberately:
 
-        This closes the fundamental gap where in-memory state loss (process
-        restart, crash, SIGKILL) leaves Docker containers running forever.
+        - a container this provider is already tracking (it is being served);
+        - a container whose age is unknown (``created_at`` unreadable) — it
+          may be serving another replica, and the 2026-11-01 incident was
+          exactly a live sandbox reaped by another instance;
+        - anything at all when ``idle_timeout`` is 0 (the idle check is off).
+
+        Adopting instead of destroying leaves the decision to the idle
+        checker, which consults the shared activity clock and therefore
+        knows whether another instance is serving the sandbox.
         """
         try:
             running = self._backend.list_running()
@@ -343,12 +398,47 @@ class AioSandboxProvider(SandboxProvider):
 
         current_time = time.time()
         adopted = 0
+        destroyed = 0
+        idle_timeout = self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT)
+        # ``idle_timeout: 0`` documents "disable the idle check". Treating it
+        # as the default would silently re-arm a 10-minute bound that the
+        # operator explicitly turned off, and startup destruction is the most
+        # destructive thing this method does.
+        destroy_older_than = idle_timeout if idle_timeout and idle_timeout > 0 else None
 
         for info in running:
             age = current_time - info.created_at if info.created_at > 0 else float("inf")
+            # A container this provider is already tracking is being SERVED —
+            # by this process, for a live run. It must never be destroyed,
+            # however old it looks: age says nothing about activity (that is
+            # what idle_timeout measures, and what the shared activity clock
+            # exists to answer).
+            with self._lock:
+                already_tracked = info.sandbox_id in self._sandboxes or info.sandbox_id in self._warm_pool
+            if already_tracked:
+                continue
+            # Unknown age (``created_at`` unreadable) is not proof of
+            # staleness. The container may be serving another replica — the
+            # 2026-11-01 incident was exactly a live sandbox reaped by
+            # another instance. Adopt it and let the idle checker decide,
+            # since that one consults the shared activity clock.
+            if destroy_older_than is not None and info.created_at > 0 and age > destroy_older_than:
+                # Stale containers (older than idle_timeout) are destroyed
+                # outright instead of adopted: they would be reaped by the
+                # idle checker anyway, but destroying now frees their host
+                # ports immediately so a freshly created sandbox does not
+                # have to retry through a pile of quarantined ports
+                # (2026-11-01: new sandbox retried 4 times against ports
+                # held by deer-flow-sandbox-3d21a09c).
+                try:
+                    self._backend.destroy(info)
+                    destroyed += 1
+                    logger.info(f"Destroyed stale orphan container {info.sandbox_id} (age: {age:.0f}s > idle_timeout {destroy_older_than}s)")
+                except Exception as e:
+                    logger.warning(f"Failed to destroy stale orphan {info.sandbox_id}: {e}")
+                continue
+
             # Single lock acquisition per container: atomic check-and-insert.
-            # Avoids a TOCTOU window between the "already tracked?" check and
-            # the warm-pool insert.
             with self._lock:
                 if info.sandbox_id in self._sandboxes or info.sandbox_id in self._warm_pool:
                     continue
@@ -356,7 +446,7 @@ class AioSandboxProvider(SandboxProvider):
             adopted += 1
             logger.info(f"Adopted container {info.sandbox_id} into warm pool (age: {age:.0f}s)")
 
-        logger.info(f"Startup reconciliation complete: {adopted} adopted into warm pool, {len(running)} total found")
+        logger.info(f"Startup reconciliation complete: {adopted} adopted, {destroyed} stale destroyed, {len(running)} total found")
 
     # ── Deterministic ID ─────────────────────────────────────────────────
 
@@ -520,10 +610,19 @@ class AioSandboxProvider(SandboxProvider):
             # Warm pool: tracked via release_timestamp stored in _warm_pool
             for sandbox_id, (info, release_ts) in list(self._warm_pool.items()):
                 warm_duration = current_time - release_ts
-                if warm_duration > idle_timeout:
-                    warm_to_destroy.append((sandbox_id, info))
-                    del self._warm_pool[sandbox_id]
-                    logger.info(f"Warm-pool sandbox {sandbox_id} idle for {warm_duration:.1f}s, marking for destroy")
+                if warm_duration <= idle_timeout:
+                    continue
+                # Shared protection: another instance may be serving it.
+                shared_last = _SHARED_ACTIVITY.last(sandbox_id)
+                if shared_last is not None and (current_time - shared_last) < idle_timeout:
+                    logger.info(f"Warm-pool sandbox {sandbox_id} is being served by another instance; skipping idle destroy")
+                    continue
+                if _SHARED_ACTIVITY.busy(sandbox_id) > 0:
+                    logger.info(f"Warm-pool sandbox {sandbox_id} has commands in flight on another instance; skipping idle destroy")
+                    continue
+                warm_to_destroy.append((sandbox_id, info))
+                del self._warm_pool[sandbox_id]
+                logger.info(f"Warm-pool sandbox {sandbox_id} idle for {warm_duration:.1f}s, marking for destroy")
 
         # Destroy active sandboxes (re-verify still idle before acting)
         for sandbox_id in active_to_destroy:
@@ -541,18 +640,19 @@ class AioSandboxProvider(SandboxProvider):
                         # Re-acquired (activity updated) since the snapshot — skip.
                         logger.info(f"Sandbox {sandbox_id} was re-acquired before idle destroy, skipping")
                         continue
-                # Skip sandboxes whose thread runs a live dev-server preview: the
-                # preview proxy never calls provider.get(), so user-visible preview
-                # traffic does not refresh _last_activity — without this the reaper
-                # destroys an actively-watched preview every idle_timeout.
+                # Shared protection: another instance may be serving it or have
+                # a command in flight, even if this instance's own clock froze.
+                shared_last = _SHARED_ACTIVITY.last(sandbox_id)
+                if shared_last is not None and (time.time() - shared_last) < idle_timeout:
+                    logger.info(f"Sandbox {sandbox_id} is being served by another instance; skipping idle destroy")
+                    continue
+                if _SHARED_ACTIVITY.busy(sandbox_id) > 0:
+                    logger.info(f"Sandbox {sandbox_id} has commands in flight on another instance; skipping idle destroy")
+                    continue
+                # Skip sandboxes whose thread runs a live dev-server preview.
                 if self._thread_has_live_dev_server(sandbox_id):
                     logger.info(f"Sandbox {sandbox_id} hosts a live dev-server preview; skipping idle destroy")
                     continue
-                # A command is still running in it. The tool call blocks inside
-                # execute_command for as long as the build takes and refreshes
-                # nothing, so elapsed idle time says nothing about whether the
-                # sandbox is in use — destroying it here kills the build it is
-                # running.
                 with self._lock:
                     in_flight = self._busy.get(sandbox_id, 0)
                 if in_flight > 0:
@@ -672,6 +772,7 @@ class AioSandboxProvider(SandboxProvider):
             logger.info(f"Reusing in-process sandbox {existing_id} for thread {thread_id}{suffix}")
             self._last_activity[existing_id] = time.time()
             self._first_seen.setdefault(existing_id, time.time())
+            _SHARED_ACTIVITY.touch(existing_id)
             return existing_id
 
     def _reclaim_warm_pool_sandbox(self, thread_id: str | None, sandbox_id: str, *, post_lock: bool = False) -> str | None:
@@ -700,11 +801,13 @@ class AioSandboxProvider(SandboxProvider):
                 return None
             info, _ = warm_item
             sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
+            sandbox._on_unreachable = self._on_sandbox_unreachable
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
             self._last_activity[sandbox_id] = time.time()
             self._first_seen.setdefault(sandbox_id, time.time())
             self._thread_sandboxes[thread_id] = sandbox_id
+            _SHARED_ACTIVITY.touch(sandbox_id)
 
         suffix = " (post-lock check)" if post_lock else f" at {info.sandbox_url}"
         logger.info(f"Reclaimed warm-pool sandbox {sandbox_id} for thread {thread_id}{suffix}")
@@ -753,12 +856,14 @@ class AioSandboxProvider(SandboxProvider):
     def _register_discovered_sandbox(self, thread_id: str, info: SandboxInfo) -> str:
         """Track a sandbox discovered through the backend."""
         sandbox = AioSandbox(id=info.sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
+        sandbox._on_unreachable = self._on_sandbox_unreachable
         with self._lock:
             self._sandboxes[info.sandbox_id] = sandbox
             self._sandbox_infos[info.sandbox_id] = info
             self._last_activity[info.sandbox_id] = time.time()
             self._first_seen.setdefault(info.sandbox_id, time.time())
             self._thread_sandboxes[thread_id] = info.sandbox_id
+            _SHARED_ACTIVITY.touch(info.sandbox_id)
 
         logger.info(f"Discovered existing sandbox {info.sandbox_id} for thread {thread_id} at {info.sandbox_url}")
         return info.sandbox_id
@@ -766,6 +871,7 @@ class AioSandboxProvider(SandboxProvider):
     def _register_created_sandbox(self, thread_id: str | None, sandbox_id: str, info: SandboxInfo) -> str:
         """Track a newly-created sandbox in the active maps."""
         sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
+        sandbox._on_unreachable = self._on_sandbox_unreachable
         with self._lock:
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
@@ -773,6 +879,7 @@ class AioSandboxProvider(SandboxProvider):
             self._first_seen.setdefault(sandbox_id, time.time())
             if thread_id:
                 self._thread_sandboxes[thread_id] = sandbox_id
+            _SHARED_ACTIVITY.touch(sandbox_id)
 
         logger.info(f"Created sandbox {sandbox_id} for thread {thread_id} at {info.sandbox_url}")
         return sandbox_id
@@ -815,6 +922,7 @@ class AioSandboxProvider(SandboxProvider):
             self._last_activity.pop(sandbox_id, None)
             self._first_seen.pop(sandbox_id, None)
             self._busy.pop(sandbox_id, None)
+            _SHARED_ACTIVITY.forget(sandbox_id)
             if info is None and sandbox_id in self._warm_pool:
                 info, _ = self._warm_pool.pop(sandbox_id)
             else:
@@ -842,6 +950,20 @@ class AioSandboxProvider(SandboxProvider):
                 logger.warning(f"Error destroying unhealthy sandbox {sandbox_id}: {e}")
 
         logger.warning(f"Dropped unhealthy sandbox {sandbox_id}: {reason}")
+
+    def _on_sandbox_unreachable(self, sandbox_id: str) -> None:
+        """Drop a sandbox the backend confirms dead; keep it if alive/unknown."""
+        with self._lock:
+            info = self._sandbox_infos.get(sandbox_id)
+        if info is None:
+            return
+        try:
+            alive = self._backend.is_alive(info)
+        except Exception:
+            alive = None
+        if alive is False:
+            self._remove_tracked_sandbox(sandbox_id)
+            logger.warning(f"Dropped unreachable sandbox {sandbox_id}")
 
     #: Fallback when ``sandbox.startup_timeout`` is unset. Three minutes,
     #: because the image brings up supervisord, code-server, Jupyter, a VNC
@@ -1116,6 +1238,7 @@ class AioSandboxProvider(SandboxProvider):
             if sandbox is not None:
                 self._last_activity[sandbox_id] = time.time()
                 self._first_seen.setdefault(sandbox_id, time.time())
+                _SHARED_ACTIVITY.touch(sandbox_id)
             return sandbox
 
     def get_preview_endpoint(self, thread_id: str, container_port: int = 4100) -> tuple[str, int] | None:
@@ -1155,6 +1278,7 @@ class AioSandboxProvider(SandboxProvider):
             # A finishing command is also activity: refresh the idle clock so a
             # sandbox is not reaped in the moment right after a long build ends.
             self._last_activity[sandbox_id] = time.time()
+            _SHARED_ACTIVITY.track_busy(sandbox_id, delta)
 
     def mark_active(self, thread_id: str) -> None:
         """Refresh the idle timer for the thread's sandbox.
@@ -1169,6 +1293,7 @@ class AioSandboxProvider(SandboxProvider):
             if sandbox_id is not None:
                 self._last_activity[sandbox_id] = time.time()
                 self._first_seen.setdefault(sandbox_id, time.time())
+                _SHARED_ACTIVITY.touch(sandbox_id)
 
     def release(self, sandbox_id: str) -> None:
         """Release a sandbox from active use into the warm pool.

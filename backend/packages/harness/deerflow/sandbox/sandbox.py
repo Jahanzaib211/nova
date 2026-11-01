@@ -46,7 +46,12 @@ class Sandbox(ABC):
     #: grow a method to stay instantiable would be a tax on the common case.
     supports_streaming: bool = False
 
-    def execute_command_streaming(self, command: str, on_chunk: "Callable[[str, bool], None]") -> str:
+    def execute_command_streaming(
+        self,
+        command: str,
+        on_chunk: "Callable[[str, bool], None]",
+        cancel_event: "Any | None" = None,
+    ) -> str:
         """Execute a command, reporting output as it is produced.
 
         ``on_chunk(text, replace)`` is called for each change in output:
@@ -56,6 +61,14 @@ class Sandbox(ABC):
         rewritten rather than extended -- a truncated buffer, a redrawn screen
         -- cannot have stale text concatenated onto fresh. Returns the complete
         output, exactly as :meth:`execute_command` would.
+
+        ``cancel_event`` is an optional ``asyncio.Event`` whose ``is_set()``
+        asks the backend to stop early. A streaming command can run for
+        hours (a build, a test suite), and the run's own stop signal is
+        otherwise only observed BETWEEN tool calls: the 2026-11-01 incident
+        had a run that could not be stopped for an hour because it sat
+        inside one streaming command. Backends that cannot interrupt a
+        running command may ignore it, but must not block on it.
 
         Only meaningful when :attr:`supports_streaming` is True. Callers must
         check that flag rather than catching this error.

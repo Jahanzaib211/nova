@@ -19,6 +19,7 @@ import re
 import socket
 import zipfile
 from pathlib import Path
+from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -135,6 +136,19 @@ def _sandbox_csp(*, framed: bool) -> str:
 _NOTHING_ON_PORT_HTML = "<html><body style='font-family:system-ui;padding:2rem;color:#888'><h3>Nothing on that port yet</h3><p>Start the server, then retry.</p></body></html>"
 
 
+def _nothing_on_port_response() -> Response:
+    """The one friendly answer to "nothing is listening on that port yet".
+
+    All three proxy surfaces (preview, absproxy, appview) return THIS for the
+    same situation, so the Browser tab never shows one proxy's wording on
+    another surface's failure. It is a fresh ``Response`` on purpose: the
+    upstream's own headers (``Content-Length`` above all) describe the error
+    body we are NOT serving, and leaking them would truncate or desync the
+    page the user actually sees.
+    """
+    return Response(content=_NOTHING_ON_PORT_HTML, media_type="text/html", status_code=503)
+
+
 def _is_upstream_refused(upstream: Any) -> bool:
     """Does the sandbox's port gateway say "connection refused"?
 
@@ -149,6 +163,10 @@ def _is_upstream_refused(upstream: Any) -> bool:
     ``ECONNREFUSED`` and Go-style ``connection refused``), and only on small
     bodies: a large response that merely mentions the word is an app's own
     error page and must be passed through untouched.
+
+    Shared by every proxy surface: the same gateway fronts the preview port,
+    the absproxy port hop and the container's own web UI, so all three can
+    receive this body.
     """
     try:
         body = upstream.content or b""
@@ -215,28 +233,50 @@ def _caller_owns_thread(thread_id: str) -> bool:
         return False
 
 
-async def _owns_thread_or_fresh(thread_id: str, request: Request) -> bool:
-    """Ownership for the log stream, without the fresh-thread race.
+def _thread_store_for_request(request: Request):
+    """The thread metadata store behind this request, or ``None``.
 
-    The directory check below is the fast path (no database round-trip, and it
-    covers untracked legacy threads), but the thread directory is only created
-    when the first *run* starts -- while the panel opens this stream the moment
-    the chat page mounts. ``ws_caller_owns_thread`` was given a metadata-row
-    fallback for exactly this and the SSE path never got it, so the Terminal
-    404'd for the thread's own owner and the client backed off to a 30s ceiling
-    on top. Same fallback, same rule.
+    ``Request.app`` reads ``scope["app"]``, which raises ``KeyError`` on a
+    hand-built scope (the unit tests build one) -- and ``getattr`` only
+    swallows ``AttributeError``, so ``getattr(request, "app", None)`` would
+    propagate that KeyError instead of degrading to "no store". The lookup is
+    therefore wrapped: a missing request, a missing app, a missing state and a
+    missing store all mean the same thing to the ownership check, which is
+    "there is nothing to ask", i.e. a denial.
+    """
+    try:
+        app = request.app
+    except Exception:
+        return None
+    return getattr(getattr(app, "state", None), "thread_store", None)
+
+
+async def _owns_thread_or_fresh(thread_id: str, request: Request) -> bool:
+    """Ownership for a thread, without the fresh-thread race.
+
+    The directory check (:func:`_caller_owns_thread`) is the fast path (no
+    database round-trip, and it covers untracked legacy threads), but the
+    thread directory is only created when the first *run* starts -- while the
+    Browser panel, the dev-server endpoints, the Files tab and the Editor all
+    mount the moment the chat page loads. ``ws_caller_owns_thread`` was given
+    a metadata-row fallback for exactly this and the HTTP routes never got it,
+    so those endpoints 404'd for the thread's own owner until the first run
+    materialised the directory. Same fallback, same rule.
+
+    The fallback does NOT weaken ownership: the metadata row must exist
+    (``require_existing=True``) and must belong to the caller. A thread id
+    that is in neither the store nor the directory stays a denial, because
+    thread ids are guessable.
     """
     if _caller_owns_thread(thread_id):
         return True
     from app.gateway.ws_guards import caller_owns_thread_via_store
 
-    # `request` is Optional in practice: the denial tests call this endpoint
+    # `request` is Optional in practice: the denial tests call these endpoints
     # directly with request=None to assert the ownership check short-circuits
     # before anything touches it. No request means no app state means no store
     # to consult, which is a denial -- the same answer the fast path just gave.
-    app = getattr(request, "app", None)
-    store = getattr(getattr(app, "state", None), "thread_store", None)
-    return await caller_owns_thread_via_store(thread_id, store)
+    return await caller_owns_thread_via_store(thread_id, _thread_store_for_request(request))
 
 
 def _sandbox_log_path(thread_id: str, user_id: str | None = None) -> Path:
@@ -361,7 +401,9 @@ async def get_sandbox_todo(
     """
     # Ownership guard: the checkpoint fallback reads by raw thread_id, so without
     # this a caller could read another tenant's todos. Mirrors the dev endpoints.
-    if not _caller_owns_thread(thread_id):
+    # The store fallback covers a brand-new thread, whose directory only exists
+    # once its first run starts -- the panel mounts before that happens.
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
 
     # The checkpoint is the ONE authority.
@@ -476,7 +518,7 @@ async def get_sandbox_status(
     Reads ``sandbox_status.json`` written by the bash tool on each invocation.
     Returns ``{tool: None, label: "idle"}`` when no file exists.
     """
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     status_path = _sandbox_status_path(thread_id, user_id=user_id)
@@ -510,7 +552,7 @@ async def get_sandbox_file(
     Returns JSON so the frontend can use srcdoc for HTML iframe rendering
     without the XSS-protection download forced by the artifacts endpoint.
     """
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     paths = get_paths()
@@ -562,7 +604,7 @@ async def put_sandbox_file(body: SandboxFileWrite, request: Request) -> dict:
     than theoretical: ``expected_size`` makes a stale save fail loudly (409)
     instead of overwriting whatever the agent just produced.
     """
-    if not _caller_owns_thread(body.thread_id):
+    if not await _owns_thread_or_fresh(body.thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     paths = get_paths()
@@ -612,7 +654,7 @@ async def list_sandbox_files(
     Returns a flat list of files with virtual paths, sizes, and modified times,
     sorted newest-first. Skips hidden files and node_modules.
     """
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     import datetime as _dt
 
@@ -678,7 +720,7 @@ async def download_sandbox_zip(
     Excludes node_modules, .next, .git, and other build artifacts.
     Returns a streaming zip file response.
     """
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     import datetime as _dt
 
@@ -875,9 +917,12 @@ async def _handle_is_live(thread_id: str, handle) -> bool:
 
 
 @router.get("/dev-status")
-async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
+async def dev_status(thread_id: str, request: Request, label: str = DEFAULT_LABEL) -> dict:
     """Return the live dev server status for a thread (optionally a labeled one)."""
-    if not _caller_owns_thread(thread_id):
+    # The Browser panel polls this the moment the chat page mounts -- long
+    # before the thread's first run created its directory -- so the store
+    # fallback is what keeps the panel from 404ing on a brand-new thread.
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     handle = get_dev_server(thread_id, label)
     if handle is None or handle.status not in ("starting", "ready"):
@@ -926,7 +971,7 @@ async def dev_status(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
 
 
 @router.post("/dev-start")
-async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
+async def dev_start(thread_id: str, request: Request, label: str = DEFAULT_LABEL) -> dict:
     """Deterministically bring up the live preview for a thread — no LLM in the loop.
 
     Acquires the thread's container, finds the runnable project, installs deps if
@@ -934,7 +979,7 @@ async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
     calls this (button + auto-trigger) so the preview "just works" instead of
     nudging the agent to do it. Container/AIO sandbox only (host preview ports)."""
     label = label.replace("\n", "").replace("\r", "")
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
         from deerflow.sandbox import get_sandbox_provider
@@ -960,6 +1005,7 @@ async def dev_start(thread_id: str, label: str = DEFAULT_LABEL) -> dict:
 async def dev_external(
     thread_id: str,
     port: int,
+    request: Request,
     host: str = "127.0.0.1",
     label: str = DEFAULT_LABEL,
 ) -> dict:
@@ -977,7 +1023,7 @@ async def dev_external(
     """
     label = label.replace("\n", "").replace("\r", "")
     host = host.replace("\n", "").replace("\r", "")
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     if not (1 <= int(port) <= 65535):
         raise HTTPException(status_code=400, detail="port must be 1..65535")
@@ -999,9 +1045,9 @@ async def dev_external(
 
 
 @router.get("/dev-servers")
-async def dev_servers(thread_id: str) -> dict:
+async def dev_servers(thread_id: str, request: Request) -> dict:
     """List all live dev servers for a thread (for the multi-port label dropdown)."""
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     servers = [
         {
@@ -1018,13 +1064,13 @@ async def dev_servers(thread_id: str) -> dict:
 
 
 @router.get("/audit")
-async def sandbox_audit(thread_id: str, download: bool = False):
+async def sandbox_audit(thread_id: str, request: Request, download: bool = False):
     """Structured audit trail for a thread (every tool call) + JSONL export.
 
     The per-thread ``sandbox.log`` is already one JSON observation per line
     (ts, type, path, summary, output), so this parses it for the Audit tab and
     serves it verbatim as a downloadable ``.jsonl`` for compliance/export."""
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     user_id = get_effective_user_id()
     log_path = _sandbox_log_path(thread_id, user_id=user_id)
@@ -1053,14 +1099,14 @@ async def sandbox_audit(thread_id: str, download: bool = False):
 
 
 @router.get("/review")
-async def sandbox_review(thread_id: str, download: bool = False):
+async def sandbox_review(thread_id: str, request: Request, download: bool = False):
     """Deterministic dual-audience code review of a thread's workspace.
 
     Builds a plain-English verdict (for non-coders) + a developer section
     (per-file +/- stats, risk flags, detected checks) from git/file-scan + the
     audit trail. Writes ``REVIEW.md`` into the workspace so it's downloadable as
     an artifact. No LLM — reliable and reproducible."""
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
         user_id = get_effective_user_id()
@@ -1083,7 +1129,7 @@ def sandbox_review_download_url(thread_id: str) -> str:  # pragma: no cover - he
 
 
 @router.post("/browser-check")
-async def browser_check(thread_id: str, label: str = DEFAULT_LABEL, routes: str = "/"):
+async def browser_check(thread_id: str, request: Request, label: str = DEFAULT_LABEL, routes: str = "/"):
     """Self-test the thread's running app in the sandbox's native browser.
 
     Loads each route, captures console errors + render failures + a screenshot,
@@ -1091,7 +1137,9 @@ async def browser_check(thread_id: str, label: str = DEFAULT_LABEL, routes: str 
     loop consumes). Requires a running dev server + the container (AIO) sandbox."""
     label = label.replace("\n", "").replace("\r", "")
     routes = routes.replace("\n", "").replace("\r", "")
-    if not _caller_owns_thread(thread_id):
+    # The Browser tab runs this on mount, so a thread whose first run has not
+    # started yet must still get an answer instead of a 404.
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
         from deerflow.sandbox import get_sandbox_provider
@@ -1113,10 +1161,10 @@ async def browser_check(thread_id: str, label: str = DEFAULT_LABEL, routes: str 
 
 
 @router.get("/browser-check-last")
-async def browser_check_last(thread_id: str):
+async def browser_check_last(thread_id: str, request: Request):
     """Return the most recent browser self-test for a thread (auto-check or manual),
     so the Browser tab can show it without re-running."""
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     from deerflow.sandbox.browser_check import get_last_browser_check
 
@@ -1135,6 +1183,12 @@ async def save_skill(thread_id: str, name: str, path: str = ""):
     skills default to enabled, so it appears in the ✨ launcher + as ``/<name>`` next chat."""
     name = name.replace("\n", "").replace("\r", "")
     path = path.replace("\n", "").replace("\r", "")
+    # Deliberately the directory-only check, NOT the store fallback: this
+    # endpoint writes into the GLOBAL skills registry, and the source it
+    # promotes is a directory inside the thread's workspace -- which only
+    # exists once a run has materialised it. A thread with a metadata row but
+    # no workspace has nothing to promote, so the fallback would only widen
+    # who can reach a global write.
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -1169,6 +1223,12 @@ async def terminal_url(thread_id: str):
     Routing them through ``/api/sandbox/appview/{thread_id}/`` keeps them
     same-origin, so they satisfy ``frame-src 'self'``, inherit the proxy's opaque
     ``sandbox`` CSP, and work identically local and deployed."""
+    # Directory-only check on purpose. The answer this endpoint returns is
+    # derived from an ACQUIRED sandbox container (it reads ``sandbox.base_url``),
+    # and there is no container for a thread whose first run has not started --
+    # the pane would be empty either way. The three proxy surfaces that DO
+    # answer before the first run (preview, absproxy, appview) carry the store
+    # fallback instead.
     if not _caller_owns_thread(thread_id):
         raise HTTPException(status_code=404, detail="Not found")
     try:
@@ -1223,7 +1283,7 @@ _PROXY_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
 async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request) -> Response:
     """Shared implementation for the absproxy route — called once per HTTP method."""
     segment, thread_id = thread_id, thread_of(thread_id)
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
         from deerflow.sandbox import get_sandbox_provider
@@ -1270,7 +1330,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             upstream = await client.request(request.method, target, headers=fwd_headers, content=body)
     except httpx.ConnectError:
-        return Response(content=_NOTHING_ON_PORT_HTML, media_type="text/html", status_code=503)
+        return _nothing_on_port_response()
     except Exception as e:
         logger.warning("absproxy request failed for thread %s port %d: %s", thread_id, port, e)
         return Response(content="Proxy error", status_code=502)
@@ -1284,7 +1344,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     # already says this in words; the upstream one needs the same treatment.
     if upstream.status_code >= 500 and _is_upstream_refused(upstream):
         logger.info("absproxy: nothing listening on port %d for thread %s yet", port, thread_id)
-        return Response(content=_NOTHING_ON_PORT_HTML, media_type="text/html", status_code=503)
+        return _nothing_on_port_response()
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
     location = resp_headers.get("location") or resp_headers.get("Location")
@@ -1593,7 +1653,7 @@ def _prefix_css_urls(css: str, prefix: str) -> str:
 async def _proxy_appview(thread_id: str, path: str, request: Request) -> Response:
     """Proxy the sandbox container's own web UI (ttyd at /terminal, noVNC at
     /vnc/) through the gateway so it is same-origin with the app shell."""
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     base_url = await _sandbox_base_url(thread_id)
 
@@ -1612,6 +1672,18 @@ async def _proxy_appview(thread_id: str, path: str, request: Request) -> Respons
     except Exception as e:
         logger.warning("appview request failed for thread %s: %s", thread_id.replace("\n", "").replace("\r", ""), e)
         return Response(content="Proxy error", status_code=502)
+
+    # The appview target is the sandbox container's own web UI, served by the
+    # same in-container gateway that fronts the port hop the absproxy uses --
+    # so the same "500 + connect ECONNREFUSED" body can arrive here too (the
+    # gateway reports a refused port instead of a 502). It is worth
+    # translating for the same reason as on the other two surfaces: the raw
+    # Node error string in the framed pane reads as a broken sandbox rather
+    # than a port that is not up yet. The match stays narrow, so a real error
+    # page from the app is passed through untouched.
+    if upstream.status_code >= 500 and _is_upstream_refused(upstream):
+        logger.info("appview: nothing listening behind %s for thread %s yet", target, thread_id)
+        return _nothing_on_port_response()
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
     location = resp_headers.get("location") or resp_headers.get("Location")
@@ -1696,7 +1768,7 @@ for _method in _PROXY_METHODS:
 @router.get("/dev-logs")
 async def dev_logs(thread_id: str, request: Request, label: str = DEFAULT_LABEL) -> StreamingResponse:
     """SSE stream of the live dev server's stdout."""
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
 
     async def gen():
@@ -1805,7 +1877,7 @@ for _method in _PROXY_METHODS:
 
 async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Request):
     segment, thread_id = thread_id, thread_of(thread_id)
-    if not _caller_owns_thread(thread_id):
+    if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     _mark_sandbox_active(thread_id)
     handle = get_dev_server(thread_id, label)
@@ -1857,6 +1929,29 @@ async def _proxy_dev_server(thread_id: str, label: str, path: str, request: Requ
     except Exception as e:
         logger.warning("dev-proxy request failed for thread %s: %s", thread_id, e)
         return Response(content="Proxy error", status_code=502)
+
+    # The upstream here is the sandbox's own port gateway for the preview port
+    # (the same gateway that answers the absproxy port hop), and it answers 500
+    # with a plain-text Node error ("connect ECONNREFUSED 0.0.0.0:4100") when
+    # the app's port has no listener yet -- the normal state while a dev server
+    # is still booting. Passing that body through put a stack-trace-looking
+    # line of text in the Browser tab's iframe, which reads as a broken app
+    # rather than "the server has not come up yet".
+    #
+    # The friendly page is the SAME one the absproxy and appview surfaces
+    # return, so all three proxies answer "nothing is listening yet" in the
+    # same words instead of three different ones. The auto-reload page above
+    # stays for OUR OWN connect error: there we hold a handle whose status is
+    # "starting"/"ready", so we know the server is booting and a 3s refresh is
+    # the right answer -- whereas an upstream 500 may come from a hop we do
+    # not control, and a page that reloads itself forever would hide a
+    # genuinely broken server.
+    #
+    # Returned as a fresh Response: the upstream's headers (its Content-Length
+    # above all) describe the error body we are NOT serving.
+    if upstream.status_code >= 500 and _is_upstream_refused(upstream):
+        logger.info("preview: nothing listening on %s for thread %s yet", target, thread_id)
+        return _nothing_on_port_response()
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
 

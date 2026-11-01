@@ -623,6 +623,7 @@ def _make_provider_for_idle():
     provider._warm_pool = {}
     provider._config = {"idle_timeout": 600}
     provider._backend = MagicMock()
+    aio_mod._SHARED_ACTIVITY.clear()
     return provider
 
 
@@ -845,6 +846,9 @@ def test_reaper_destroys_it_once_the_command_finishes():
     # so the sandbox has to go idle again on its own terms before it is reaped.
     provider._track_busy("sandbox-1", -1)
     provider._last_activity["sandbox-1"] = 0.0
+    from deerflow.community.aio_sandbox.aio_sandbox_provider import _SHARED_ACTIVITY
+
+    _SHARED_ACTIVITY._last["sandbox-1"] = 0.0
 
     provider._cleanup_idle_sandboxes(600)
     assert destroyed == ["sandbox-1"]

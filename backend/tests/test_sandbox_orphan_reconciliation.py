@@ -334,8 +334,15 @@ def _make_provider_for_reconciliation():
     return provider
 
 
-def test_reconcile_adopts_old_containers_into_warm_pool():
-    """All containers are adopted into warm pool regardless of age — idle checker handles cleanup."""
+def test_reconcile_destroys_old_containers_to_free_their_ports():
+    """A container older than idle_timeout is destroyed, not adopted.
+
+    Changed deliberately: adopting it left its host port occupied, and a
+    freshly created sandbox had to retry through a pile of quarantined
+    ports (2026-11-01: a new sandbox retried 4 times against ports held by
+    deer-flow-sandbox-3d21a09c). Destroying at startup frees the port
+    immediately.
+    """
     provider = _make_provider_for_reconciliation()
     now = time.time()
 
@@ -349,9 +356,8 @@ def test_reconcile_adopts_old_containers_into_warm_pool():
 
     provider._reconcile_orphans()
 
-    # Should NOT destroy directly — let idle checker handle it
-    provider._backend.destroy.assert_not_called()
-    assert "old12345" in provider._warm_pool
+    provider._backend.destroy.assert_called_once()
+    assert "old12345" not in provider._warm_pool
 
 
 def test_reconcile_adopts_young_containers():
@@ -375,8 +381,8 @@ def test_reconcile_adopts_young_containers():
     assert adopted_info.sandbox_id == "young123"
 
 
-def test_reconcile_mixed_containers_all_adopted():
-    """All containers (old and young) are adopted into warm pool."""
+def test_reconcile_mixed_containers_stale_destroyed_young_adopted():
+    """Stale containers are destroyed; young ones are adopted for reuse."""
     provider = _make_provider_for_reconciliation()
     now = time.time()
 
@@ -396,8 +402,9 @@ def test_reconcile_mixed_containers_all_adopted():
 
     provider._reconcile_orphans()
 
-    provider._backend.destroy.assert_not_called()
-    assert "old_one" in provider._warm_pool
+    destroyed_ids = [call.args[0].sandbox_id for call in provider._backend.destroy.call_args_list]
+    assert destroyed_ids == ["old_one"]
+    assert "old_one" not in provider._warm_pool
     assert "young_one" in provider._warm_pool
 
 
@@ -446,7 +453,7 @@ def test_reconcile_no_running_containers():
 
 
 def test_reconcile_multiple_containers_all_adopted():
-    """Multiple containers should all be adopted into warm pool."""
+    """Multiple stale containers are each destroyed (their ports freed)."""
     provider = _make_provider_for_reconciliation()
     now = time.time()
 
@@ -457,9 +464,9 @@ def test_reconcile_multiple_containers_all_adopted():
 
     provider._reconcile_orphans()
 
-    provider._backend.destroy.assert_not_called()
-    assert "cont_one" in provider._warm_pool
-    assert "cont_two" in provider._warm_pool
+    destroyed_ids = sorted(call.args[0].sandbox_id for call in provider._backend.destroy.call_args_list)
+    assert destroyed_ids == ["cont_one", "cont_two"]
+    assert provider._warm_pool == {}
 
 
 def test_reconcile_zero_created_at_adopted():

@@ -11,6 +11,7 @@ import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -488,6 +489,16 @@ def _write_sandbox_observation(
             "summary": _truncate_bash_output(sanitize_terminal_text(summary), _SUMMARY_MAX_CHARS) if summary else "",
             "output": _truncate_bash_output(sanitize_terminal_text(output), max_chars) if output else "",
         }
+        # Run attribution (optional, additive): only fields the worker's
+        # run-scope context actually carries are stamped, so a line written
+        # outside a stamped run is byte-identical to before and no consumer
+        # sees null-padded keys.
+        try:
+            from deerflow.runtime.run_context import current_run_fields
+
+            record.update(current_run_fields())
+        except Exception:
+            pass
         # Only the streaming shapes carry these, so a non-streaming caller
         # writes a byte-identical line to the one it wrote before.
         if obs_id is not None:
@@ -602,16 +613,45 @@ def _readopt_released(sandbox: Sandbox):
         return None
 
 
-def _run_command_both_ways(sandbox: Sandbox, command: str, on_chunk) -> str:
-    """Streaming execution with the blocking path as fallback."""
+def _abort_event(runtime: Any) -> Any | None:
+    """The run's stop signal, as carried in the tool's runtime context.
+
+    The worker puts ``record.abort_event`` there (``__run_abort_event``) so a
+    long-running command can observe the user's Stop *while it runs* — the
+    stream loop only checks between tool calls. Returns None when the tool
+    runs outside a stamped run (embedded clients, tests): absence means
+    "nothing to observe", never a failure.
+    """
     try:
-        return sandbox.execute_command_streaming(command, on_chunk)
+        context = getattr(runtime, "context", None)
+        if isinstance(context, dict):
+            return context.get("__run_abort_event")
+    except Exception:
+        return None
+    return None
+
+
+def _run_command_both_ways(sandbox: Sandbox, command: str, on_chunk, cancel_event=None) -> str:
+    """Streaming execution with the blocking path as fallback.
+
+    ``cancel_event`` is the run's stop signal, passed to backends that can
+    interrupt a running command. It is only honoured on the streaming path:
+    the blocking path hands the command to the sandbox and waits for it, and
+    the local backend's blocking call is already bounded by the execution
+    kernel's timeout.
+    """
+    try:
+        try:
+            return sandbox.execute_command_streaming(command, on_chunk, cancel_event=cancel_event)
+        except TypeError:
+            # A backend that predates the cancel_event parameter.
+            return sandbox.execute_command_streaming(command, on_chunk)
     except Exception:
         logger.warning("streaming execution failed; falling back to blocking exec", exc_info=True)
         return sandbox.execute_command(command)
 
 
-def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -> str:
+def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str, cancel_event=None) -> str:
     """Run ``command`` on a streaming backend, narrating it into sandbox.log.
 
     Emits one opening frame, a frame per output change, and one closing frame,
@@ -650,7 +690,7 @@ def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -
     # late (opened the panel mid-command) still ends up with the whole thing
     # rather than the deltas it happened to catch.
     try:
-        output = _run_command_both_ways(sandbox, command, on_chunk)
+        output = _run_command_both_ways(sandbox, command, on_chunk, cancel_event=cancel_event)
     except Exception:
         fresh = _readopt_released(sandbox)
         if fresh is None:
@@ -670,7 +710,7 @@ def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str) -
         )
         sandbox = fresh
         try:
-            output = _run_command_both_ways(sandbox, command, on_chunk)
+            output = _run_command_both_ways(sandbox, command, on_chunk, cancel_event=cancel_event)
         except Exception:
             _write_sandbox_observation(
                 sandbox_id,
@@ -2030,7 +2070,7 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
             logger.debug("Failed to read bash_output_max_chars: %s", exc)
             max_chars = 20000
         if _terminal_streaming_enabled() and getattr(sandbox, "supports_streaming", False):
-            raw_output = _stream_bash_observations(sandbox, sandbox_id, command)
+            raw_output = _stream_bash_observations(sandbox, sandbox_id, command, cancel_event=_abort_event(runtime))
         else:
             try:
                 raw_output = sandbox.execute_command(command)

@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from abc import ABC, abstractmethod
 
 from deerflow.config import get_app_config
@@ -55,6 +56,9 @@ class SandboxProvider(ABC):
 
 
 _default_sandbox_provider: SandboxProvider | None = None
+# Guards construction of the singleton. Reentrant so a provider whose __init__
+# reaches back into get_sandbox_provider() cannot deadlock on itself.
+_provider_lock = threading.RLock()
 
 
 def get_sandbox_provider(**kwargs) -> SandboxProvider:
@@ -63,15 +67,26 @@ def get_sandbox_provider(**kwargs) -> SandboxProvider:
     Returns a cached singleton instance. Use `reset_sandbox_provider()` to clear
     the cache, or `shutdown_sandbox_provider()` to properly shutdown and clear.
 
+    Construction is double-checked under a lock. The first calls of a run arrive
+    concurrently from worker threads (``asyncio.to_thread`` acquires, subagent
+    pools), and the unlocked check-then-create let each of them build its own
+    provider: on 2026-11-01 one gateway process held three, each with its own
+    idle reaper and its own activity clock, and the two that never served a
+    call destroyed the sandbox the third was running a build in.
+
     Returns:
         A sandbox provider instance.
     """
     global _default_sandbox_provider
-    if _default_sandbox_provider is None:
-        config = get_app_config()
-        cls = resolve_class(config.sandbox.use, SandboxProvider)
-        _default_sandbox_provider = cls(**kwargs)
-    return _default_sandbox_provider
+    provider = _default_sandbox_provider
+    if provider is not None:
+        return provider
+    with _provider_lock:
+        if _default_sandbox_provider is None:
+            config = get_app_config()
+            cls = resolve_class(config.sandbox.use, SandboxProvider)
+            _default_sandbox_provider = cls(**kwargs)
+        return _default_sandbox_provider
 
 
 def reset_sandbox_provider() -> None:
@@ -90,9 +105,11 @@ def reset_sandbox_provider() -> None:
     Use `shutdown_sandbox_provider()` for proper cleanup.
     """
     global _default_sandbox_provider
-    if _default_sandbox_provider is not None:
-        _default_sandbox_provider.reset()
-        _default_sandbox_provider = None
+    with _provider_lock:
+        if _default_sandbox_provider is not None:
+            if hasattr(_default_sandbox_provider, "reset"):
+                _default_sandbox_provider.reset()
+            _default_sandbox_provider = None
 
 
 def shutdown_sandbox_provider() -> None:
@@ -103,10 +120,11 @@ def shutdown_sandbox_provider() -> None:
     is shutting down or when you need to completely reset the sandbox system.
     """
     global _default_sandbox_provider
-    if _default_sandbox_provider is not None:
-        if hasattr(_default_sandbox_provider, "shutdown"):
-            _default_sandbox_provider.shutdown()
-        _default_sandbox_provider = None
+    with _provider_lock:
+        if _default_sandbox_provider is not None:
+            if hasattr(_default_sandbox_provider, "shutdown"):
+                _default_sandbox_provider.shutdown()
+            _default_sandbox_provider = None
 
 
 def set_sandbox_provider(provider: SandboxProvider) -> None:
@@ -118,4 +136,5 @@ def set_sandbox_provider(provider: SandboxProvider) -> None:
         provider: The SandboxProvider instance to use.
     """
     global _default_sandbox_provider
-    _default_sandbox_provider = provider
+    with _provider_lock:
+        _default_sandbox_provider = provider
