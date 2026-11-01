@@ -199,7 +199,7 @@ async def test_heartbeat_rate_limited_to_one_per_minute() -> None:
         js = RunJournal(
             run_id="run-heartbeat-1",
             thread_id="thread-1",
-            event_store=RecordingStore(),  # type: ignore[arg-type]
+            event_store=store,  # type: ignore[arg-type]
             flush_threshold=1000,
         )
         # Events inside the first minute: no heartbeat, the one-per-minute
@@ -212,10 +212,14 @@ async def test_heartbeat_rate_limited_to_one_per_minute() -> None:
         js._put(event_type="trace.later2", category="trace")
         fake.now += 70.0  # second minute elapsed
         js._put(event_type="trace.later3", category="trace")
+        # A heartbeat triggers a flush, so the events are split between what
+        # was written and what is still buffered.
+        await js.flush()
     finally:
         journal_module.time = original_time  # type: ignore[assignment]
 
-    heartbeats = [e for e in js._buffer if e["event_type"] == "run.heartbeat"]
+    written = [e for batch in store.batches for e in batch]
+    heartbeats = [e for e in written if e["event_type"] == "run.heartbeat"]
     assert len(heartbeats) == 2, f"expected exactly 2 heartbeats (minute 1 + minute 2), got {len(heartbeats)}"
     first, second = heartbeats
     assert first["category"] == "liveness"

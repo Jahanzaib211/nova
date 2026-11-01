@@ -38,9 +38,33 @@ logger = logging.getLogger(__name__)
 # previous one finishing, so an unbounded write that never returns switches the
 # journal off for the rest of the run, silently: run 3cc50519 (2026-11-01)
 # counted 626 messages in memory and persisted zero events, and its progress
-# snapshot froze an hour before the run stopped. A bounded write fails loudly,
-# returns its batch to the buffer and lets the next flush retry it.
+# snapshot froze an hour before the run stopped. A bounded write fails loudly
+# and lets the next flush go out. A batch whose write *timed out* is not sent
+# again (see ``_flush_async``); a batch whose write raised is.
 DEFAULT_WRITE_TIMEOUT = 30.0
+
+# Backoff between write attempts after a failure: 0.5 s, doubling, capped at
+# 30 s, reset by the next successful write. Without it a store that fails fast
+# (connection refused, pool exhausted) put the journal into a tight loop — the
+# failed batch went back to the buffer, the buffer was still at threshold, and
+# the done callback re-flushed at once: 1699 attempts in 0.2 s, a pinned core
+# and a warning per attempt.
+RETRY_BASE_DELAY_SECONDS = 0.5
+RETRY_MAX_DELAY_SECONDS = 30.0
+
+# Only the first failure and every Nth after it are logged while the store
+# stays down; the count is in the message.
+FAILURE_LOG_EVERY = 10
+
+# Upper bound on events held in memory while the store is down. Past it the
+# oldest ordinary events are dropped (counted and logged); run boundaries are
+# kept so the stored timeline still says where the run started and ended.
+DEFAULT_MAX_BUFFER_EVENTS = 10_000
+_KEEP_ON_OVERFLOW = frozenset({"run.start", "run.end", "run.error"})
+
+# The final ``flush()`` gives up after this many write timeouts' worth of
+# wall time; the worker publishes the run's end only after it returns.
+FLUSH_DEADLINE_WRITE_TIMEOUTS = 3
 
 # Minimum spacing between two run.heartbeat events in the store. This is a
 # liveness signal, not a log of activity — one row per minute answers "is the
@@ -86,6 +110,8 @@ class RunJournal(BaseCallbackHandler):
         progress_reporter: Callable[[dict], Awaitable[None]] | None = None,
         progress_flush_interval: float = 5.0,
         write_timeout: float = DEFAULT_WRITE_TIMEOUT,
+        max_buffer_events: int = DEFAULT_MAX_BUFFER_EVENTS,
+        flush_deadline: float | None = None,
     ):
         super().__init__()
         self.run_id = run_id
@@ -96,9 +122,18 @@ class RunJournal(BaseCallbackHandler):
         self._progress_reporter = progress_reporter
         self._progress_flush_interval = progress_flush_interval
         self._write_timeout = write_timeout
+        self._max_buffer_events = max_buffer_events
+        self._flush_deadline = flush_deadline if flush_deadline is not None else FLUSH_DEADLINE_WRITE_TIMEOUTS * write_timeout
 
         # Write buffer
         self._buffer: list[dict] = []
+        self._dropped_events = 0
+        # Write-failure backoff (see RETRY_BASE_DELAY_SECONDS). While
+        # ``time.monotonic() < _retry_not_before`` no write is started; the
+        # timer in ``_retry_handle`` makes the next attempt.
+        self._consecutive_failures = 0
+        self._retry_not_before = 0.0
+        self._retry_handle: asyncio.TimerHandle | None = None
         self._pending_flush_tasks: set[asyncio.Task[None]] = set()
         self._pending_progress_task: asyncio.Task[None] | None = None
         self._pending_progress_delayed = False
@@ -463,8 +498,36 @@ class RunJournal(BaseCallbackHandler):
                     "created_at": datetime.now(UTC).isoformat(),
                 }
             )
-        if len(self._buffer) >= self._flush_threshold:
+        self._enforce_buffer_cap()
+        # A heartbeat is only worth anything once it is in the store: waiting
+        # for the threshold would hold it in memory exactly when the run is
+        # quiet (a long tool call), which is when liveness matters.
+        if heartbeat_metadata is not None or event_type == "run.heartbeat" or len(self._buffer) >= self._flush_threshold:
             self._flush_sync()
+
+    def _enforce_buffer_cap(self) -> None:
+        overflow = len(self._buffer) - self._max_buffer_events
+        if overflow <= 0:
+            return
+        kept: list[dict] = []
+        dropped = 0
+        for event in self._buffer:
+            if dropped < overflow and event.get("event_type") not in _KEEP_ON_OVERFLOW:
+                dropped += 1
+                continue
+            kept.append(event)
+        if not dropped:
+            return
+        self._buffer = kept
+        before = self._dropped_events
+        self._dropped_events += dropped
+        if before == 0 or before // 1000 != self._dropped_events // 1000:
+            logger.warning(
+                "Journal for run %s: buffer full (%d events) while the store is unavailable — dropped %d oldest event(s) so far",
+                self.run_id,
+                self._max_buffer_events,
+                self._dropped_events,
+            )
 
     def _flush_sync(self) -> None:
         """Best-effort flush of buffer to RunEventStore.
@@ -475,6 +538,10 @@ class RunJournal(BaseCallbackHandler):
         call in the worker's ``finally`` block.
         """
         if not self._buffer:
+            return
+        if time.monotonic() < self._retry_not_before:
+            # Backing off after a failed write; the scheduled retry sends
+            # these. Writing now is what turned a down store into a spin.
             return
         try:
             loop = asyncio.get_running_loop()
@@ -502,22 +569,68 @@ class RunJournal(BaseCallbackHandler):
             async with asyncio.timeout(self._write_timeout):
                 await self._store.put_batch(batch)
         except TimeoutError:
+            # Not re-sent, deliberately. The timeout cannot tell "never
+            # written" from "committed, acknowledgement late", and the store
+            # assigns seq numbers on insert with no dedupe key, so a re-send
+            # of a committed batch stores every event twice. A possibly-lost
+            # batch, logged with its size, is the lesser harm.
+            self._record_failure()
             logger.warning(
-                "Journal write for run %s timed out after %.0f s — returning %d events to buffer",
+                "Journal write for run %s timed out after %.0f s — %d event(s) not re-sent (they may already be stored)",
                 self.run_id,
                 self._write_timeout,
                 len(batch),
             )
-            self._buffer = batch + self._buffer
         except Exception:
-            logger.warning(
-                "Failed to flush %d events for run %s — returning to buffer",
-                len(batch),
-                self.run_id,
-                exc_info=True,
-            )
-            # Return failed events to buffer for retry on next flush
+            # The store refused the write, so nothing was stored: return
+            # the batch to the buffer for the backed-off retry.
             self._buffer = batch + self._buffer
+            self._enforce_buffer_cap()
+            failures = self._record_failure()
+            if failures == 1 or failures % FAILURE_LOG_EVERY == 0:
+                logger.warning(
+                    "Failed to flush %d events for run %s (%d consecutive failure(s)) — retrying in %.2f s",
+                    len(batch),
+                    self.run_id,
+                    failures,
+                    self._next_retry_delay(),
+                    exc_info=True,
+                )
+        else:
+            self._record_success()
+
+    def _next_retry_delay(self) -> float:
+        if self._consecutive_failures <= 0:
+            return 0.0
+        return min(RETRY_BASE_DELAY_SECONDS * 2 ** (self._consecutive_failures - 1), RETRY_MAX_DELAY_SECONDS)
+
+    def _record_failure(self) -> int:
+        self._consecutive_failures += 1
+        self._retry_not_before = time.monotonic() + self._next_retry_delay()
+        return self._consecutive_failures
+
+    def _record_success(self) -> None:
+        if self._consecutive_failures:
+            logger.info("Journal for run %s recovered after %d failed write(s)", self.run_id, self._consecutive_failures)
+        self._consecutive_failures = 0
+        self._retry_not_before = 0.0
+        self._cancel_retry()
+
+    def _cancel_retry(self) -> None:
+        if self._retry_handle is not None:
+            self._retry_handle.cancel()
+            self._retry_handle = None
+
+    def _schedule_retry(self, loop: asyncio.AbstractEventLoop) -> None:
+        if self._retry_handle is not None or loop.is_closed():
+            return
+        delay = max(0.0, self._retry_not_before - time.monotonic())
+        self._retry_handle = loop.call_later(delay, self._retry_flush)
+
+    def _retry_flush(self) -> None:
+        self._retry_handle = None
+        self._retry_not_before = 0.0
+        self._flush_sync()
 
     def _on_flush_done(self, task: asyncio.Task) -> None:
         self._pending_flush_tasks.discard(task)
@@ -526,6 +639,12 @@ class RunJournal(BaseCallbackHandler):
         exc = task.exception()
         if exc:
             logger.warning("Journal flush task failed: %s", exc)
+        if self._consecutive_failures:
+            # The write failed: retry after the backoff, never from here
+            # directly — the buffer is still at threshold, so an immediate
+            # re-flush is the tight loop this replaced.
+            self._schedule_retry(task.get_loop())
+            return
         # Events that reached the threshold while this write was in flight
         # were held back by the one-at-a-time gate; send them now instead of
         # waiting for the next event to arrive (or for the run to end).
@@ -660,13 +779,24 @@ class RunJournal(BaseCallbackHandler):
         Bounded throughout: the worker publishes the run's ``end`` only after
         this returns, so an unbounded wait here would keep a finished run open.
         In-flight writes are bounded by their own timeout; one stuck on another
-        loop is not waited for at all.
+        loop is not waited for at all. The whole call is bounded by
+        ``flush_deadline``: a store that keeps failing is retried with backoff
+        until then, after which the undelivered count is logged as an error
+        and the last write error is raised (the worker logs and continues).
         """
         loop = asyncio.get_running_loop()
+        deadline = time.monotonic() + self._flush_deadline
+        # From here on this method makes every write attempt itself.
+        self._cancel_retry()
         # A finishing write may schedule a follow-up (see _on_flush_done), so
         # drain until none is in flight rather than waiting once.
         while inflight := [t for t in self._pending_flush_tasks if _gates(t, loop)]:
-            await asyncio.gather(*inflight, return_exceptions=True)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                logger.warning("Journal for run %s: final flush stopped waiting for %d in-flight write(s)", self.run_id, len(inflight))
+                break
+            await asyncio.wait(inflight, timeout=remaining)
+            self._cancel_retry()
         while _gates(self._pending_progress_task, loop):
             if self._pending_progress_delayed:
                 self._pending_progress_task.cancel()
@@ -676,15 +806,45 @@ class RunJournal(BaseCallbackHandler):
                 break
             await asyncio.gather(self._pending_progress_task, return_exceptions=True)
 
+        last_exc: BaseException | None = None
+        possibly_written = 0
         while self._buffer:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             batch = self._buffer[: self._flush_threshold]
             del self._buffer[: self._flush_threshold]
             try:
-                async with asyncio.timeout(self._write_timeout):
+                async with asyncio.timeout(min(self._write_timeout, remaining)):
                     await self._store.put_batch(batch)
-            except Exception:
+            except TimeoutError as exc:
+                # Not re-sent, for the reason given in _flush_async.
+                last_exc = exc
+                possibly_written += len(batch)
+                self._record_failure()
+            except Exception as exc:
+                last_exc = exc
                 self._buffer = batch + self._buffer
-                raise
+                failures = self._record_failure()
+                if failures == 1 or failures % FAILURE_LOG_EVERY == 0:
+                    logger.warning("Final flush for run %s failed (%d consecutive failure(s))", self.run_id, failures, exc_info=True)
+                delay = min(self._next_retry_delay(), deadline - time.monotonic())
+                if delay > 0:
+                    await asyncio.sleep(delay)
+            else:
+                self._record_success()
+
+        if self._buffer or possibly_written:
+            logger.error(
+                "Journal for run %s: final flush gave up after %.1f s — %d event(s) undelivered (%d of them in timed-out writes that may have been stored)",
+                self.run_id,
+                self._flush_deadline,
+                len(self._buffer) + possibly_written,
+                possibly_written,
+            )
+            if last_exc is None:
+                last_exc = TimeoutError(f"journal flush deadline of {self._flush_deadline:.1f} s exceeded")
+            raise last_exc
 
     def _schedule_progress_flush(self) -> None:
         """Best-effort throttled progress snapshot for active run visibility."""

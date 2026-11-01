@@ -60,17 +60,20 @@ async def _contents(store: MemoryRunEventStore) -> list[str]:
     return [r["content"] for r in rows]
 
 
-async def test_a_hung_write_is_retried_not_dropped(caplog):
+async def test_a_hung_write_does_not_switch_the_journal_off(caplog):
     store = HangsFirstWrite()
     journal = RunJournal("r1", "t1", store, flush_threshold=2, write_timeout=0.1)
 
     with caplog.at_level(logging.WARNING, logger="deerflow.runtime.journal"):
         _emit(journal, 2)  # first flush hangs, then times out
         await _settle()
-        _emit(journal, 2, start=2)  # must still flush, carrying the failed batch with it
-        await _settle()
+        _emit(journal, 2, start=2)  # must still flush once the backoff ends
+        await _settle(0.8)
 
-    assert await _contents(store) == ["m0", "m1", "m2", "m3"]
+    # The timed-out batch is not re-sent: a timeout cannot tell "never
+    # written" from "committed, ack late", and a re-send of a committed
+    # batch duplicates it (see test_journal_write_resilience.py).
+    assert await _contents(store) == ["m2", "m3"]
     assert any("timed out" in r.getMessage() for r in caplog.records), "a stalled write must be visible in the log"
 
 

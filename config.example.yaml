@@ -1125,6 +1125,10 @@ sandbox:
 #   # positive number is ignored and the configured timeout is kept.
 #   # Keep this >= the effective timeout of the agents you want a model to be
 #   # able to extend; the effective ceiling is the greater of the two.
+#   # Keep it well BELOW the lead run's wall-clock deadline (NOVA_RUN_MAX_SECONDS,
+#   # default 7200 = 2 h): the deadline bounds the whole run, subagents included,
+#   # so at least two sequential max-length subagents (plus the lead agent's own
+#   # turns) must fit inside it, or the run times out mid-delegation.
 #   max_timeout_seconds: 1800
 #   # Optional global max-turn override for all subagents.
 #   # Built-in defaults: general-purpose=150, bash=60. Leave unset to keep them.

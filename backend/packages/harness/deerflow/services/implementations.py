@@ -689,13 +689,18 @@ class DiagnosticsServiceImpl:
         correlation_id: str = "",
         extra: dict[str, Any] | None = None,
     ) -> None:
-        from deerflow.runtime.stream_bridge.diagnostics import Diagnostics
+        # The module exports the ``diagnostics`` instance, not a class. Importing
+        # a ``Diagnostics`` name raised ImportError on every call, and the
+        # EventBus swallows handler exceptions, so every subscribed run event
+        # was silently dropped. Empty ids go in as None so the recorder neither
+        # stamps "" onto the record nor skips its correlation-id fallback.
+        from deerflow.runtime.stream_bridge.diagnostics import diagnostics
 
-        Diagnostics.record(
+        diagnostics.record(
             stage,
-            run_id=run_id,
-            thread_id=thread_id,
-            correlation_id=correlation_id,
+            run_id=run_id or None,
+            thread_id=thread_id or None,
+            correlation_id=correlation_id or None,
             extra=extra or {},
         )
 
@@ -703,18 +708,19 @@ class DiagnosticsServiceImpl:
         self,
         limit: int = 100,
     ) -> list[DiagnosticsRecord]:
-        from deerflow.runtime.stream_bridge.diagnostics import Diagnostics
+        from deerflow.runtime.stream_bridge.diagnostics import diagnostics
 
-        records = Diagnostics.read_recent(limit)
+        # The recorder's ring holds plain dicts; absent keys mean "not set".
+        records = diagnostics.read_recent(limit)
         return [
             DiagnosticsRecord(
-                seq=getattr(r, "seq", 0),
-                stage=getattr(r, "stage", ""),
-                run_id=getattr(r, "run_id", ""),
-                thread_id=getattr(r, "thread_id", ""),
-                correlation_id=getattr(r, "correlation_id", ""),
-                wall_iso=getattr(r, "wall_iso", ""),
-                extra=getattr(r, "extra", {}),
+                seq=r.get("seq", 0),
+                stage=r.get("stage", ""),
+                run_id=r.get("run_id", ""),
+                thread_id=r.get("thread_id", ""),
+                correlation_id=r.get("correlation_id", ""),
+                wall_iso=r.get("wall_iso", ""),
+                extra=r.get("extra", {}),
             )
             for r in records
         ]

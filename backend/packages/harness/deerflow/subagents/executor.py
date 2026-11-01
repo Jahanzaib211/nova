@@ -96,6 +96,11 @@ class SubagentResult:
     # a gateway concurrently hosts many threads, so a bare "cancel all"
     # would kill other threads' still-running subagents.
     thread_id: str | None = None
+    # Dispatching run, stamped at creation. Thread scope is not narrow
+    # enough for teardown: with multitask "interrupt" the replaced run's
+    # ``finally`` can run after its replacement has dispatched subagents on
+    # the same thread, and must not cancel those.
+    run_id: str | None = None
     usage_reported: bool = False
     cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _state_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
@@ -331,6 +336,7 @@ class SubagentExecutor:
         thread_id: str | None = None,
         trace_id: str | None = None,
         user_id: str | None = None,
+        run_id: str | None = None,
     ):
         """Initialize the executor.
 
@@ -347,6 +353,9 @@ class SubagentExecutor:
             trace_id: Trace ID from parent for distributed tracing.
             user_id: User ID captured from the parent tool's runtime context.
                 When None, the tracing layer falls back to DEFAULT_USER_ID.
+            run_id: The dispatching lead run. When None, taken from the
+                current run scope (the worker stamps it), so results can be
+                cancelled per run rather than per thread.
         """
         self.config = config
         self.app_config = app_config
@@ -361,6 +370,7 @@ class SubagentExecutor:
         self.sandbox_state = sandbox_state
         self.thread_data = thread_data
         self.thread_id = thread_id
+        self.run_id = run_id if run_id is not None else _current_run_id()
         # Generate trace_id if not provided (for top-level calls)
         self.trace_id = trace_id or str(uuid.uuid4())[:8]
         self.user_id = user_id
@@ -550,6 +560,7 @@ class SubagentExecutor:
                 status=SubagentStatus.RUNNING,
                 started_at=datetime.now(UTC),
                 thread_id=self.thread_id,
+                run_id=self.run_id,
             )
         ai_messages = result.ai_messages
         if ai_messages is None:
@@ -841,6 +852,7 @@ class SubagentExecutor:
                     trace_id=self.trace_id,
                     status=SubagentStatus.RUNNING,
                     thread_id=self.thread_id,
+                    run_id=self.run_id,
                 )
             result.try_set_terminal(SubagentStatus.FAILED, error=str(e))
             return result
@@ -865,6 +877,7 @@ class SubagentExecutor:
             trace_id=self.trace_id,
             status=SubagentStatus.PENDING,
             thread_id=self.thread_id,
+            run_id=self.run_id or _current_run_id(),
         )
 
         logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} starting async execution, task_id={task_id}, timeout={self.config.timeout_seconds}s")
@@ -932,6 +945,44 @@ class SubagentExecutor:
 
         _scheduler_pool.submit(run_task)
         return task_id
+
+
+def _current_run_id() -> str | None:
+    """The run id of the current run scope, or None outside a stamped run."""
+    # Imported lazily: ``deerflow.runtime`` pulls in the run worker, which
+    # imports this module.
+    from deerflow.runtime.run_context import current_run_scope
+
+    scope = current_run_scope()
+    return scope.run_id if scope is not None else None
+
+
+def cancel_background_tasks_for_run(run_id: str) -> int:
+    """Signal every not-yet-terminal background task dispatched by one run.
+
+    The run worker's ``finally`` uses this rather than the thread-scoped
+    variant: with multitask "interrupt" an old run's teardown can overlap
+    the new run on the same thread, and must only stop its own subagents.
+    Same cooperative semantics and never-raises contract as
+    :func:`cancel_background_tasks_for_thread`.
+    """
+    if not run_id:
+        return 0
+    signalled = 0
+    try:
+        with _background_tasks_lock:
+            for result in _background_tasks.values():
+                if getattr(result, "run_id", None) != run_id:
+                    continue
+                if result.status.is_terminal or result.completed_at is not None:
+                    continue
+                result.cancel_event.set()
+                signalled += 1
+        if signalled:
+            logger.info("Run end: requested cancellation of %d background subagent task(s) for run %s", signalled, run_id)
+    except Exception:
+        logger.debug("Failed to cancel background tasks for run %s (non-fatal)", run_id, exc_info=True)
+    return signalled
 
 
 def cancel_background_tasks_for_thread(thread_id: str) -> int:

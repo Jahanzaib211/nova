@@ -554,13 +554,16 @@ async def run_agent(
         # gateway) until their own timeout elapsed, throttling every other
         # thread's task dispatch long after the run is over. Cooperative:
         # they stop at the next stream-iteration boundary. Non-fatal.
-        if thread_id:
+        # Run-scoped, not thread-scoped: with multitask "interrupt" this
+        # ``finally`` can run after the replacement run on the same thread
+        # has dispatched its own subagents, which must keep running.
+        if run_id:
             try:
-                from deerflow.subagents.executor import cancel_background_tasks_for_thread
+                from deerflow.subagents.executor import cancel_background_tasks_for_run
 
-                cancel_background_tasks_for_thread(thread_id)
+                cancel_background_tasks_for_run(run_id)
             except Exception:
-                logger.debug("Failed to request background-subagent cancellation for thread %s (non-fatal)", thread_id, exc_info=True)
+                logger.debug("Failed to request background-subagent cancellation for run %s (non-fatal)", run_id, exc_info=True)
 
         # Flush any buffered journal events and persist completion data
         if journal is not None:
