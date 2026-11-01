@@ -28,13 +28,13 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from deerflow.runtimes.registry import RuntimeRegistry, get_runtime_registry
-from deerflow.runtimes.transcript import runtime_preamble, transcript_for_prompt
+from deerflow.runtimes.session import NARRATION_PREFIXES, NovaMcpFactory, default_nova_mcp, mirror_runtime_action, open_acp_session
+from deerflow.runtimes.transcript import transcript_for_prompt
 from deerflow.runtimes.types import NATIVE, policy_for_mode
 
 logger = logging.getLogger(__name__)
 
 RunPrompt = Callable[..., Any]
-NovaMcpFactory = Callable[[str | None, str | None], tuple[dict[str, Any] | None, Callable[[], Any]]]
 
 
 def _default_stream_writer():
@@ -46,25 +46,27 @@ def _default_stream_writer():
         return None
 
 
-def _default_nova_mcp(user_id: str | None, thread_id: str | None) -> tuple[dict[str, Any] | None, Callable[[], Any]]:
-    """Mint an ephemeral harness token and describe Nova's MCP server for
-    ``new_session``; the returned callable revokes the token afterwards."""
-    from deerflow.config.app_config import get_app_config
-    from deerflow.persistence.engine import get_session_factory
+_default_nova_mcp = default_nova_mcp
 
-    sf = get_session_factory()
-    rt = getattr(get_app_config(), "runtimes", None)
-    url = getattr(rt, "nova_mcp_url", None) or "http://127.0.0.1:8001/api/mcp/nova"
-    if sf is None or not user_id:
-        return None, lambda: None
-    from deerflow.persistence.harness_token.sql import HarnessTokenRepository
 
-    repo = HarnessTokenRepository(sf)
+def _usage_metadata_for(text: Any) -> dict[str, int] | None:
+    """The turn's usage in LangChain's ``usage_metadata`` shape.
 
-    async def _mint():
-        return await repo.create(owner_user_id=user_id, name=f"runtime:{thread_id or 'chat'}", scopes=["*"])
-
-    return {"__mint__": _mint, "url": url, "repo": repo}, lambda: None
+    ``None`` when the adapter reported no usage — a message without usage
+    metadata is what every non-ACP turn looks like, so this keeps the ACP
+    path indistinguishable from the native one when there is nothing to say.
+    """
+    usage = getattr(text, "usage", None)
+    if usage is None:
+        return None
+    total = int(getattr(usage, "total_tokens", 0) or 0)
+    if total <= 0:
+        return None
+    return {
+        "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
+        "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        "total_tokens": total,
+    }
 
 
 class RuntimeDispatchMiddleware(AgentMiddleware):
@@ -96,6 +98,47 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
         runtime = getattr(request, "runtime", None)
         ctx = getattr(runtime, "context", None) or {}
         return dict(ctx) if isinstance(ctx, dict) else {}
+
+    def _record_turn_usage(self, ctx: dict[str, Any], runtime_name: str, agent_cfg: Any, text: Any) -> None:
+        """Report the ACP turn's token usage to the run's journal.
+
+        An ACP turn never passes through an LLM callback, so the journal's
+        ``on_llm_end`` path cannot see it: the whole turn's tokens were
+        missing from the run's totals and from the per-model breakdown
+        (cost accounting read "this run cost nothing" for a turn that spent
+        200k tokens on Claude Code).
+
+        The usage rides on the turn's text (see ``ACPText``). Recorded as an
+        external usage record so the tokens land in the lead-agent bucket of
+        the run and in a per-model bucket named after the runtime. Never
+        raises: cost reporting must not be able to fail the turn it is
+        reporting on.
+        """
+        try:
+            usage = getattr(text, "usage", None)
+            if usage is None or usage.total_tokens <= 0:
+                return
+            journal = ctx.get("__run_journal")
+            if journal is None:
+                return
+            model_name = getattr(agent_cfg, "model", None) or f"acp:{runtime_name}"
+            journal.record_external_llm_usage_records(
+                [
+                    {
+                        # Stable per turn, so a re-reported turn is ignored
+                        # by the journal's source-id dedup instead of
+                        # double-counting.
+                        "source_run_id": f"acp:{runtime_name}:{getattr(text, 'session_id', '') or id(text)}",
+                        "caller": "lead_agent",
+                        "model_name": model_name,
+                        "input_tokens": usage.input_tokens,
+                        "output_tokens": usage.output_tokens,
+                        "total_tokens": usage.total_tokens,
+                    }
+                ]
+            )
+        except Exception:
+            logger.debug("Failed to record ACP turn usage (non-fatal)", exc_info=True)
 
     async def awrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         ctx = self._context(request)
@@ -132,34 +175,30 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
                 logger.debug("acp_update emit failed", exc_info=True)
 
         prompt = transcript_for_prompt(list(getattr(request, "messages", None) or []))
-        nova_server, cleanup = self._nova_mcp(user_id, thread_id)
-        mcp_servers: list[dict[str, Any]] = []
-        minted: dict[str, Any] | None = None
         try:
-            if nova_server and "__mint__" in nova_server:
-                minted = await nova_server["__mint__"]()
-                mcp_servers.append({"name": "nova", "type": "http", "url": nova_server["url"], "headers": [{"name": "Authorization", "value": f"Bearer {minted['token']}"}]})
-            elif nova_server:
-                mcp_servers.append(nova_server)
-            try:
-                from deerflow.runtimes.acp_transport import build_acp_mcp_servers
+            async with open_acp_session(agent=selection.runtime, user_id=user_id, thread_id=thread_id, nova_mcp=self._nova_mcp, turn_timeout=self._turn_timeout) as session:
+                run = self._run_prompt
+                if run is None:
+                    from deerflow.runtimes.acp_transport import run_acp_prompt
 
-                mcp_servers.extend(build_acp_mcp_servers())
-            except Exception as exc:
-                logger.warning("runtime %s: MCP client servers skipped: %s", selection.runtime, exc)
-
-            run = self._run_prompt
-            if run is None:
-                from deerflow.runtimes.acp_transport import run_acp_prompt
-
-                run = run_acp_prompt
-            cwd = _work_dir(thread_id)
-            preamble = runtime_preamble([str(m.get("name", "")) for m in mcp_servers])
-            if preamble:
-                prompt = f"{preamble}\n\n---\n\n{prompt}"
-            emit("", "status", f"runtime: {selection.runtime} ({permission.label})")
-            text = await run(agent_cfg, prompt, cwd=cwd, mcp_servers=mcp_servers, permission=permission, on_text=lambda sid, d: emit(sid, "text", d), on_status=lambda sid, s: emit(sid, "status", s), model=None, timeout=self._turn_timeout)
-            return AIMessage(content=text or "(no response)", response_metadata={"runtime": selection.runtime, "account": selection.account, "permission_mode": selection.permission_mode})
+                    run = run_acp_prompt
+                cwd = _work_dir(thread_id)
+                emit("", "status", f"runtime: {selection.runtime} ({permission.label})")
+                text = await session.run(run, agent_cfg, prompt, cwd=cwd, permission=permission, on_text=lambda sid, d: emit(sid, "text", d), on_status=lambda sid, s: emit(sid, "status", s))
+            # The ACP turn's tokens are not an LLM callback, so nothing else
+            # reports them: without this an entire Claude Code turn costs
+            # nothing in the run's totals and nothing in the per-model cost
+            # breakdown.
+            self._record_turn_usage(ctx, selection.runtime, agent_cfg, text)
+            # Also on the message itself, so the token middleware's log line
+            # and any consumer reading the message stream see the turn's
+            # real usage instead of a zero-usage message.
+            usage_metadata = _usage_metadata_for(text)
+            return AIMessage(
+                content=text or "(no response)",
+                usage_metadata=usage_metadata,
+                response_metadata={"runtime": selection.runtime, "account": selection.account, "permission_mode": selection.permission_mode},
+            )
         except Exception as exc:
             reason = _failure_reason(exc)
             if not self._fallback_to_native:
@@ -173,50 +212,11 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
             result = await handler(request)
             _mark_fallback(result, selection.runtime, reason)
             return result
-        finally:
-            if minted is not None and nova_server and nova_server.get("repo") is not None:
-                try:
-                    await nova_server["repo"].revoke(minted["id"], owner_user_id=str(user_id))
-                except Exception:
-                    logger.debug("ephemeral harness token revoke failed", exc_info=True)
-            try:
-                cleanup()
-            except Exception:
-                pass
 
 
-#: Status lines that narrate rather than act — never mirrored into the log.
-_NARRATION_PREFIXES = ("thinking:", "runtime")
-
-
-def _mirror_runtime_action(thread_id: str | None, agent: str, status: str) -> None:
-    """Write one of the runtime's own tool calls / permission decisions into
-    the thread's sandbox.log so the Agent's Computer shows it as an action.
-
-    ``acp_transport`` formats tool calls as ``"<kind>: <title>"`` and
-    permission decisions as ``"permission approved|denied: <kind> — <title>"``.
-    Calls the runtime makes *through* Nova's ``sandbox__*`` tools are logged
-    by those tools already; they surface here only as the ACP-side title
-    (``other: mcp__nova__sandbox__bash``) and are skipped so a single command
-    is not two cards.
-    """
-    if not thread_id or status.startswith(_NARRATION_PREFIXES):
-        return
-    if "mcp__nova__" in status:
-        return
-    head, sep, title = status.partition(": ")
-    if not sep:
-        return
-    kind = head
-    if head.startswith("permission "):
-        # "permission denied: execute — rm -rf" -> kind "permission_denied", title "execute — rm -rf"
-        kind = head.replace(" ", "_")
-    try:
-        from deerflow.sandbox.tools import record_runtime_observation
-
-        record_runtime_observation(thread_id, agent=agent, kind=kind, title=title)
-    except Exception:  # never let the mirror break the turn
-        logger.debug("runtime action mirror failed", exc_info=True)
+# The session module owns these now; the names stay importable from here.
+_NARRATION_PREFIXES = NARRATION_PREFIXES
+_mirror_runtime_action = mirror_runtime_action
 
 
 def _failure_reason(exc: BaseException) -> str:

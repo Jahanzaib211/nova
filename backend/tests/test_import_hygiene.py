@@ -27,6 +27,12 @@ _CYCLE_SENSITIVE_MODULES = [
     "deerflow.agents",
     "deerflow.agents.middlewares.subagent_limit_middleware",
     "deerflow.agents.lead_agent.prompt",
+    # sandbox.tools -> deerflow.tools.types runs deerflow/tools/__init__, which
+    # eagerly imported .tools -> workspace_tools -> sandbox.tools (half-built).
+    # A cold import raised, and the first ACP runtime action a fresh process
+    # mirrored into sandbox.log was silently dropped.
+    "deerflow.sandbox.tools",
+    "deerflow.runtimes.session",
 ]
 
 

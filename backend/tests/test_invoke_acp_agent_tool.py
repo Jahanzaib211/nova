@@ -125,7 +125,8 @@ async def test_build_invoke_tool_description_and_unknown_agent_error():
     assert "Available agents:" in tool.description
     assert "- codex: Codex CLI" in tool.description
     assert "- claude_code: Claude Code" in tool.description
-    assert "Do NOT include /mnt/user-data paths" in tool.description
+    # The agent usually works in the user's sandbox now (see test_acp_session.py).
+    assert "/mnt/user-data/workspace" in tool.description
     assert "/mnt/acp-workspace/" in tool.description
 
     result = await tool.coroutine(agent="missing", prompt="do work")
@@ -296,10 +297,13 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
         ],
         "model": "gpt-5-codex",
     }
-    assert captured["prompt"] == {
-        "session_id": "session-1",
-        "prompt": [{"type": "text", "text": "Implement the fix"}],
-    }
+    # The task arrives last, after the session briefing (permission contract
+    # always; the sandbox briefing too when Nova's server is mounted).
+    assert captured["prompt"]["session_id"] == "session-1"
+    [block] = captured["prompt"]["prompt"]
+    assert block["type"] == "text"
+    assert block["text"].endswith("\n\n---\n\nImplement the fix")
+    assert "denied by policy" in block["text"]
 
 
 @pytest.mark.anyio

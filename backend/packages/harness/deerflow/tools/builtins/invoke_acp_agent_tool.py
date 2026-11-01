@@ -51,6 +51,13 @@ def _get_work_dir(thread_id: str | None) -> str:
     return str(work_dir)
 
 
+def _nova_mcp(user_id: str | None, thread_id: str | None):
+    """Nova's MCP server for a delegated session (the chat runtime's factory)."""
+    from deerflow.runtimes.session import default_nova_mcp
+
+    return default_nova_mcp(user_id, thread_id)
+
+
 def _build_acp_mcp_servers() -> list[dict[str, Any]]:
     """ACP ``mcpServers`` payload for ``new_session`` (shared with the runtime dispatch)."""
     from deerflow.runtimes.acp_transport import build_acp_mcp_servers
@@ -108,10 +115,11 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         "Invoke an external ACP-compatible agent and return its final response.\n\n"
         "Available agents:\n"
         f"{agent_lines}\n\n"
-        "IMPORTANT: ACP agents operate in their own independent workspace. "
-        "Do NOT include /mnt/user-data paths in the prompt. "
-        "Give the agent a self-contained task description — it will produce results in its own workspace. "
-        "After the agent completes, its output files are accessible at /mnt/acp-workspace/ (read-only)."
+        "The agent is given this thread's sandbox through Nova's own MCP server whenever it can be attached (the normal case): "
+        "it then works directly in the user's /mnt/user-data/workspace, and its changes appear in the Agent's Computer like yours do, "
+        "so you may name /mnt/user-data paths in the prompt. "
+        "If the sandbox cannot be attached the agent falls back to its own workspace, whose files are afterwards readable at /mnt/acp-workspace/ (read-only). "
+        "Either way, give the agent a self-contained task description: it does not see this conversation."
     )
 
     # Capture agents in closure so the function can reference it
@@ -144,34 +152,48 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
                 logger.debug("acp_update emit failed", exc_info=True)
 
         physical_cwd = _get_work_dir(thread_id)
-        try:
-            mcp_servers = _build_acp_mcp_servers()
-        except ValueError as exc:
-            logger.warning(
-                "Invalid MCP server configuration for ACP agent '%s'; continuing without MCP servers: %s",
-                agent,
-                exc,
-            )
-            mcp_servers = []
 
         # The agent's own config decides permissions for a delegated subtask:
         # deny_kinds always deny, allow_kinds auto-approve, the rest follows
-        # auto_approve_permissions (see backend/docs/ACP_AGENTS.md).
+        # auto_approve_permissions (see backend/docs/ACP_AGENTS.md). Nova's own
+        # sandbox tools are judged by operation kind, so they work in this
+        # "standard" preset while the agent's private Write/Bash stay denied.
+        from deerflow.runtime.user_context import get_effective_user_id
+        from deerflow.runtimes.session import open_acp_session
+        from deerflow.runtimes.transcript import DELEGATE_ROLE
         from deerflow.runtimes.types import PermissionPreset
 
         permission = PermissionPreset(mode="standard", auto_approve=agent_config.auto_approve_permissions, policy=agent_config.permission_policy, label="agent policy", description="")
 
         try:
-            logger.info("Spawning ACP agent '%s' with command '%s' and args %s in cwd %s", agent, agent_config.command, agent_config.args, physical_cwd)
-            result = await run_acp_prompt(
-                agent_config,
-                prompt,
-                cwd=physical_cwd,
-                mcp_servers=mcp_servers,
-                permission=permission,
-                on_text=lambda sid, d: emit(sid, "text", d),
-                on_status=lambda sid, s: emit(sid, "status", s),
-            )
+            # The same session the chat runtime gets: Nova's MCP server, the
+            # briefing and the Activity mirror. A delegated agent can still do
+            # useful work in its own workspace, so a failed mount degrades
+            # instead of failing the task.
+            async with open_acp_session(
+                agent=agent,
+                user_id=get_effective_user_id(),
+                thread_id=thread_id,
+                role=DELEGATE_ROLE,
+                nova_mcp=_nova_mcp,
+                client_servers=_build_acp_mcp_servers,
+                degrade_on_mount_error=True,
+            ) as session:
+
+                def on_status(sid: str, delta: str) -> None:
+                    session.mirror(delta)
+                    emit(sid, "status", delta)
+
+                logger.info("Spawning ACP agent '%s' with command '%s' and args %s in cwd %s (nova sandbox: %s)", agent, agent_config.command, agent_config.args, physical_cwd, session.nova_mounted)
+                result = await session.run(
+                    run_acp_prompt,
+                    agent_config,
+                    prompt,
+                    cwd=physical_cwd,
+                    permission=permission,
+                    on_text=lambda sid, d: emit(sid, "text", d),
+                    on_status=on_status,
+                )
             logger.info("ACP agent '%s' returned %d characters", agent, len(result))
             return result or "(no response)"
         except Exception as e:

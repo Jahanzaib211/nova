@@ -305,3 +305,65 @@ async def test_runtime_can_show_a_sandbox_server_in_the_browser_tab(home: Path, 
     finally:
         listener.close()
         await server.stop()
+
+
+@pytest.mark.anyio
+async def test_delegated_agent_drives_the_users_sandbox_over_mcp(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The lead agent's ``invoke_acp_agent`` gets the same hands as a chat on
+    the runtime: Nova's MCP server minted by the *real* factory, the briefing,
+    and the Activity mirror.
+
+    Live 2026-11-01 ("build me a three js site of a car dealership"): the
+    lead agent delegated to Claude Code, which was started with only the
+    operator's MCP client servers and no briefing. Its private ``Write`` was
+    denied by policy, ACP reported that as "cancelled", and it told the user
+    to approve a permission prompt nobody was shown. The user's sandbox and
+    the Activity pane stayed empty.
+    """
+    from types import SimpleNamespace
+
+    from deerflow.config.acp_config import ACPAgentConfig
+    from deerflow.runtime.user_context import reset_current_user, set_current_user
+    from deerflow.runtimes import acp_transport
+    from deerflow.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(_CONFIG_YAML + "runtimes:\n  nova_mcp_url: http://nova/api/mcp/nova\n", encoding="utf-8")
+
+    app, server, tokens = await _gateway(tmp_path)
+    seen: dict[str, Any] = {}
+
+    async def adapter(agent_cfg, prompt, *, cwd, mcp_servers, permission, on_text, on_status, model=None, timeout=None):
+        """Stand-in for `npx claude-agent-acp`: tries its own Write first (as
+        Claude Code did), is denied, then follows the briefing."""
+        seen["prompt"] = prompt
+        on_status("sess-d", "edit: Write(/app/acp-workspace/index.html)")
+        on_status("sess-d", "permission denied: edit — Write")
+        nova = next(m for m in mcp_servers if m["name"] == "nova")
+        async with _Mcp(app, nova["url"], nova["headers"]) as s:
+            _text(await s.call_tool("sandbox__write_file", {"path": "/mnt/user-data/workspace/index.html", "content": "<h1>ALI MOTORS</h1>\n"}))
+        on_text("sess-d", "Built index.html in your workspace.")
+        return "Built index.html in your workspace."
+
+    monkeypatch.setattr(acp_transport, "run_acp_prompt", adapter)
+    token = set_current_user(SimpleNamespace(id=USER))
+    try:
+        tool = build_invoke_acp_agent_tool({"claude_code": ACPAgentConfig(command="npx", args=["-y", "claude-agent-acp"], description="cc")})
+        result = await tool.coroutine(agent="claude_code", prompt="build me a three js site of a car dealership", config={"configurable": {"thread_id": THREAD}})
+    finally:
+        reset_current_user(token)
+        await server.stop()
+
+    assert result == "Built index.html in your workspace."
+    assert seen["prompt"].startswith("You are running as a subagent Nova delegated a task to")
+    assert "`sandbox__write_file`" in seen["prompt"] and "denied by policy" in seen["prompt"]
+    assert seen["prompt"].endswith("build me a three js site of a car dealership")
+
+    thread = home / "users" / USER / "threads" / THREAD
+    assert (thread / "user-data" / "workspace" / "index.html").read_text() == "<h1>ALI MOTORS</h1>\n"
+    observed = [json.loads(line)["type"] for line in (thread / "sandbox.log").read_text().splitlines() if line.strip()]
+    # The agent's own attempt and its denial, then the write it made through Nova.
+    assert observed == ["acp_edit", "acp_permission_denied", "write_file"], observed
+
+    remaining = [t for t in await tokens.list(owner_user_id=USER) if t.get("name") == f"runtime:{THREAD}"]
+    assert remaining and all(t.get("revoked_at") for t in remaining), remaining

@@ -15,6 +15,7 @@ import os
 import signal
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +82,78 @@ class ACPFrameTooLarge(RuntimeError):
     Raised in place of asyncio's bare ``ValueError`` so the failure names the
     limit and the knob instead of reading as a generic parse error.
     """
+
+
+@dataclass
+class ACPTurnUsage:
+    """The token usage an ACP agent reported for one turn.
+
+    The ACP ``PromptResponse`` carries a ``usage`` object (still marked
+    UNSTABLE in the spec, but Claude Code and OpenClaw both send it). Until
+    this was read, an ACP turn contributed **zero** tokens to the run: the
+    runtime middleware returns an ``AIMessage`` that never passes through an
+    LLM callback, so the journal's ``on_llm_end`` path never saw it. A
+    Claude Code turn that spent 200k tokens was invisible in the run's
+    totals and in the per-model cost breakdown.
+    """
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    cached_read_tokens: int = 0
+    cached_write_tokens: int = 0
+
+    @classmethod
+    def from_acp(cls, usage: Any) -> ACPTurnUsage | None:
+        """Build from an ACP ``Usage`` payload, or ``None`` when absent.
+
+        Never raises: an adapter that sends a malformed usage object must
+        not fail the turn it was reporting on.
+        """
+        if usage is None:
+            return None
+        try:
+            inp = int(getattr(usage, "input_tokens", 0) or 0)
+            out = int(getattr(usage, "output_tokens", 0) or 0)
+            total = int(getattr(usage, "total_tokens", 0) or 0)
+            cached_read = int(getattr(usage, "cached_read_tokens", 0) or 0)
+            cached_write = int(getattr(usage, "cached_write_tokens", 0) or 0)
+        except Exception:
+            return None
+        if total <= 0:
+            total = inp + out
+        if total <= 0 and not (cached_read or cached_write):
+            return None
+        return cls(
+            input_tokens=inp,
+            output_tokens=out,
+            total_tokens=total,
+            cached_read_tokens=cached_read,
+            cached_write_tokens=cached_write,
+        )
+
+
+class ACPText(str):
+    """The turn's text, carrying the usage the agent reported.
+
+    A ``str`` subclass on purpose: the runner protocol returns plain text,
+    and every caller (the session, the middleware, the transcript) treats
+    it as text. The usage rides along as an attribute instead of changing
+    the protocol — which the ACP adapters' keyword-only signature (and the
+    test doubles mirroring it) fixes.
+
+    A contextvar would have been the obvious alternative, but the turn runs
+    under ``asyncio.wait_for``, which executes the coroutine in a COPIED
+    context: a value set inside the turn is invisible to the caller.
+    """
+
+    __slots__ = ("usage", "session_id")
+
+    def __new__(cls, value: str = "", *, usage: ACPTurnUsage | None = None, session_id: str = "") -> ACPText:
+        obj = super().__new__(cls, value)
+        obj.usage = usage
+        obj.session_id = session_id
+        return obj
 
 
 def build_acp_mcp_servers() -> list[dict[str, Any]]:
@@ -176,6 +249,22 @@ def resolve_env(agent_cfg: ACPAgentConfig) -> dict[str, str] | None:
     if not agent_cfg.env:
         return None
     return {k: (os.environ.get(v[1:], "") if v.startswith("$") else v) for k, v in agent_cfg.env.items()}
+
+
+def _run_scope_suffix() -> str:
+    """``run_id=<..> thread_id=<..>`` for these log lines, or ``''``.
+
+    An ACP session outlives nothing but its own turn, yet its log lines were
+    the only record of *which adapter process* talked to which run — with
+    multiple runtimes mounted, attribution was guesswork.
+    """
+    try:
+        from deerflow.runtime.run_context import format_scope
+
+        text = format_scope()
+        return f" ({text})" if text else ""
+    except Exception:
+        return ""
 
 
 def _descendants(pid: int) -> set[int]:
@@ -316,7 +405,13 @@ async def run_acp_prompt(
         except Exception:
             pass
 
+    # Hoisted out of _run() so the turn's usage and session id survive the
+    # nested function's scope and can be attached to the returned text.
+    turn_usage: ACPTurnUsage | None = None
+    session_id: str = ""
+
     async def _run() -> str:
+        nonlocal turn_usage, session_id
         proc_ref: Any = None
         kids: set[int] = set()
         # Spawn → initialize covers the launcher (npx resolving the adapter);
@@ -376,12 +471,28 @@ async def run_acp_prompt(
                     try:
                         await _until_exit(conn.initialize(protocol_version=PROTOCOL_VERSION, client_capabilities=ClientCapabilities(), client_info=Implementation(name="nova", title="Nova", version="0.1.0")))
                         kwargs: dict[str, Any] = {"cwd": cwd, "mcp_servers": mcp_servers}
-                        logger.info("acp session for %s: cwd=%s mcp_servers=%s (initialized in %.1fs)", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers], time.monotonic() - started)
+                        logger.info(
+                            "acp session for %s: cwd=%s mcp_servers=%s (initialized in %.1fs)%s", agent_cfg.command, cwd, [f"{m.get('name')}({m.get('type', 'stdio')})" for m in mcp_servers], time.monotonic() - started, _run_scope_suffix()
+                        )
                         if model or agent_cfg.model:
                             kwargs["model"] = model or agent_cfg.model
                         session = await _until_exit(conn.new_session(**kwargs))
-                        logger.info("acp session %s ready after %.1fs", session.session_id, time.monotonic() - started)
-                        await _until_exit(conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)]))
+                        session_id = str(getattr(session, "session_id", "") or "")
+                        logger.info("acp session %s ready after %.1fs%s", session.session_id, time.monotonic() - started, _run_scope_suffix())
+                        prompt_result = await _until_exit(conn.prompt(session_id=session.session_id, prompt=[text_block(prompt)]))
+                        # The turn's token usage rides on the prompt response.
+                        # Without reading it, an ACP turn costs nothing in the
+                        # run's totals — a Claude Code turn burning 200k
+                        # tokens was invisible to cost accounting.
+                        turn_usage = ACPTurnUsage.from_acp(getattr(prompt_result, "usage", None))
+                        if turn_usage is not None:
+                            logger.info(
+                                "acp turn usage: input=%s output=%s total=%s%s",
+                                turn_usage.input_tokens,
+                                turn_usage.output_tokens,
+                                turn_usage.total_tokens,
+                                _run_scope_suffix(),
+                            )
                     finally:
                         # Was only cancelled on the success path, so a failed
                         # initialize/prompt leaked the drain task too.
@@ -405,7 +516,7 @@ async def run_acp_prompt(
                 raise
         finally:
             _reap_adapter(proc_ref, kids)
-        return "".join(chunks)
+        return ACPText("".join(chunks), usage=turn_usage, session_id=session_id)
 
     try:
         if timeout:

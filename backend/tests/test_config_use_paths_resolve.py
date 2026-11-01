@@ -84,21 +84,20 @@ def test_use_path_resolves(dotted: str) -> None:
         assert hasattr(module, symbol), f"config.yaml `use: {dotted}` — {module_name} has no attribute {symbol!r}"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Known latent import cycle, recorded rather than silently worked around. "
-        "deerflow.sandbox.tools imports deerflow.tools.types, which runs "
-        "deerflow.tools.__init__ -> tools.tools -> builtins.workspace_tools, "
-        "which imports back into the half-built deerflow.sandbox.tools. "
-        "Production never hits it because the tool registry is always imported "
-        "first. Deferring the import under TYPE_CHECKING does NOT fix it: "
-        "langchain's @tool decorator introspects real type hints to build its "
-        "schemas, so Runtime has to exist at runtime. The fix is to stop "
-        "deerflow.tools.__init__ importing the builtins eagerly."
-    ),
-    strict=True,
-)
-def test_sandbox_tools_cold_import_is_fragile() -> None:
+def test_sandbox_tools_cold_import_works() -> None:
+    # Was a known latent import cycle, recorded as xfail(strict) so it could
+    # not be silently "fixed" by accident:
+    #   deerflow.sandbox.tools -> deerflow.tools.types -> deerflow.tools.__init__
+    #   -> tools.tools -> builtins.workspace_tools -> deerflow.sandbox.tools
+    #   (a cycle back into a half-built module).
+    #
+    # Fixed by making `deerflow.tools.__init__` lazy: both exports resolve
+    # through module __getattr__, so importing a submodule no longer pulls
+    # the builtins in eagerly. Pinned by tests/test_import_hygiene.py.
+    #
+    # The marker was removed when the fix landed; this now asserts the
+    # cold import SUCCEEDS, so a regression that re-introduces the cycle
+    # fails loudly instead of quietly becoming an xfail again.
     import subprocess
     import sys
 

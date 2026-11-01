@@ -52,7 +52,13 @@ def transcript_for_prompt(messages: list[AnyMessage], *, max_prior_turns: int = 
 SANDBOX_TOOL_NAMES: tuple[str, ...] = ("sandbox__bash", "sandbox__read_file", "sandbox__write_file", "sandbox__str_replace", "sandbox__ls", "sandbox__glob", "sandbox__grep", "sandbox__expose_port")
 
 
-def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...]) -> str:
+#: Who the agent is, per entry point. The chat runtime answers the user
+#: directly; a delegated agent works one task for Nova's lead agent.
+CHAT_ROLE = "the runtime for a Nova chat"
+DELEGATE_ROLE = "a subagent Nova delegated a task to"
+
+
+def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...], *, role: str = CHAT_ROLE) -> str:
     """Tell an ACP runtime where its hands are.
 
     Claude Code arrives with its own Bash/Read/Write. Inside Nova's gateway
@@ -70,7 +76,7 @@ def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...]) -> str:
         return ""
     tools = ", ".join(f"`{name}`" for name in SANDBOX_TOOL_NAMES)
     return (
-        "You are running as the runtime for a Nova chat. The user's Agent's Computer — the sandbox they are watching — is the `nova` MCP server. "
+        f"You are running as {role}. The user's Agent's Computer — the sandbox they are watching — is the `nova` MCP server. "
         f"Use its sandbox tools for every shell and file action: {tools}. Files live under /mnt/user-data/workspace (your work), /mnt/user-data/uploads (their files) and /mnt/user-data/outputs (deliverables). "
         "Everything you do through those tools appears live in the user's Terminal, Files and Activity panes. "
         "To show a web app in the user's Browser tab, start its server in the sandbox bound to 0.0.0.0 (for static files, `python3 -m http.server <port> --bind 0.0.0.0` in the project directory), then call `sandbox__expose_port` with that port. Nova's HTTP API is not reachable from inside the sandbox; do not try to call it there. "
@@ -78,3 +84,23 @@ def runtime_preamble(mcp_server_names: list[str] | tuple[str, ...]) -> str:
         "For parallel or delegated work prefer your own subagents (they run on your model and see the same `nova` server); Nova's `agents__delegate` runs a Nova subagent as a background job on Nova's configured model — use it only when a Nova-specific agent is what the task needs. "
         "The `nova` server also exposes Nova's platform (jobs, integrations, agents, models, skills); use those when the task calls for them."
     )
+
+
+def permission_contract(*, nova_mounted: bool) -> str:
+    """Say how permission requests are answered: by policy, never by a person.
+
+    Nova answers every ACP permission request itself, and a denial reaches
+    the adapter as a bare ``cancelled`` outcome, which Claude Code reports to
+    its model as the *user* aborting the request. Seen live on 2026-11-01: a
+    delegated Claude Code had its ``Write`` denied by policy, concluded a
+    dialog was waiting on the user, and spent the turn asking them to
+    "approve the permission prompt" -- there was no prompt and no one to
+    approve it. Sent on every ACP session, with or without Nova's server.
+    """
+    head = (
+        "Permissions: no human is watching permission prompts in this environment. Nova answers every permission request itself, by policy; "
+        "a request it denies is denied by policy and will be denied again if you retry it. Never ask the user to approve a permission or a tool call. "
+    )
+    if nova_mounted:
+        return head + "When one of your built-in tools is denied, do the same work through the `nova` sandbox tools instead."
+    return head + "Your built-in tools are limited by that policy and there is no other sandbox to fall back to; do what the policy allows, and report plainly what you could not do and why."
