@@ -276,6 +276,65 @@ async def probe_drift() -> ProbeResult:
     return ProbeResult(name, Status.GREEN, "no drift", latency)
 
 
+async def probe_runs() -> ProbeResult:
+    """Escalate a red run-liveness gate into the watchdog.
+
+    runs-gate.py looks at the one thing nothing else looks at: the runs
+    table. A run that says it is running while ``updated_at`` is stale is
+    a dead run, and a run that recorded LLM calls but persisted no
+    ``run_events`` is a run whose transcript was never written -- the
+    failure that let 3cc50519 sit 'running' with 311 calls and zero
+    events on 2026-11-01 without anybody noticing.
+
+    Modelled on probe_drift: the gate file is the source of truth, its
+    ``overall`` decides the status, and a file that has not been refreshed
+    is YELLOW rather than RED -- the gate not having run recently is a
+    nova-gates problem, not evidence that a run is stuck.
+    """
+    name = "P17_runs"
+    t0 = time.perf_counter()
+    path = os.environ.get("NOVA_RUNS_GATE_STATUS_PATH", "").strip()
+    target = Path(path) if path else Path.home() / ".nova" / "gates" / "runs.json"
+    latency = (time.perf_counter() - t0) * 1000
+
+    try:
+        payload = json.loads(target.read_text())
+    except FileNotFoundError:
+        return ProbeResult(name, Status.YELLOW, "no runs gate status file yet", latency)
+    except (OSError, json.JSONDecodeError) as exc:
+        return ProbeResult(name, Status.YELLOW, f"unreadable: {exc}", latency)
+
+    # The producer stamps its own cadence into the file; fall back to the
+    # registered default when it has not run yet.
+    try:
+        interval = float(payload.get("producer_interval_sec") or 300)
+    except (TypeError, ValueError):
+        interval = 300.0
+    age = time.time() - (payload.get("checked_at_epoch") or 0)
+    if age > 3 * interval:  # three runs-gate intervals
+        return ProbeResult(
+            name,
+            Status.YELLOW,
+            f"runs gate is stale ({age / 60:.0f} min old)",
+            latency,
+        )
+
+    checks = [c for c in payload.get("checks", []) if isinstance(c, dict)]
+    overall = payload.get("overall")
+    failing = [c.get("name") for c in checks if c.get("status") == "red"]
+    if overall == "red":
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"run liveness: {', '.join(failing) or 'see runs.json'}",
+            latency,
+        )
+    if overall == "yellow":
+        warn = [c.get("name") for c in checks if c.get("status") == "yellow"]
+        return ProbeResult(name, Status.YELLOW, f"{', '.join(warn) or 'see runs.json'}", latency)
+    return ProbeResult(name, Status.GREEN, "no run-liveness problems", latency)
+
+
 # ---------------------------------------------------------------------------
 # Status file
 # ---------------------------------------------------------------------------
@@ -1757,6 +1816,7 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
             lambda: probe_jobs_worker(port=int(os.environ.get("NOVA_NGINX_PORT", "2026"))),
         ),
         ("P16_host_bridge", probe_host_bridge),
+        ("P17_runs", probe_runs),
     ]
     return probe_factories
 

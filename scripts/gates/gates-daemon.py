@@ -18,6 +18,8 @@ window the console applies (3x the declared interval in nova-ops/src/lib/gates.t
 
   host   every  5 min  — cheap, and the numbers it watches move quickly
   drift  every 15 min  — only changes on deploy/commit
+  runs   every  5 min  — a run can freeze silently; five minutes is inside
+                         the staleness window the console applies
   ci     every  6 h    — the fast tier is ~35s of real CPU; more often than
                          this is noise, and the console has a Run button for
                          when you actually want it now
@@ -332,6 +334,20 @@ def build_producers() -> list[Producer]:
             "acp",
             ["scripts/gates/acp-gate.py"],
             env_float("NOVA_GATE_ACP_INTERVAL", 300),
+            timeout_sec=60,
+        ),
+        # Run liveness: a run that says it is running but has not moved, a
+        # run that recorded LLM calls but persisted no run_events, more than
+        # one live AioSandboxProvider in the gateway process, and the p95 of
+        # how long runs take to finish. Nothing else in the stack looks at
+        # the runs table, so a run could sit 'running' forever with nobody
+        # noticing -- which is exactly what happened to run 3cc50519 on
+        # 2026-11-01. Five minutes: the queries are indexed row lookups on
+        # a table that holds hundreds of rows, not millions.
+        Producer(
+            "runs",
+            ["scripts/gates/runs-gate.py"],
+            env_float("NOVA_GATE_RUNS_INTERVAL", 300),
             timeout_sec=60,
         ),
         # --- maintenance jobs -------------------------------------------------
