@@ -21,6 +21,7 @@ same message rather than a sentence telling them to try again later.
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -127,8 +128,11 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
                     {
                         # Stable per turn, so a re-reported turn is ignored
                         # by the journal's source-id dedup instead of
-                        # double-counting.
-                        "source_run_id": f"acp:{runtime_name}:{getattr(text, 'session_id', '') or id(text)}",
+                        # double-counting. Without a session id the fallback
+                        # is a fresh uuid, never ``id(text)``: CPython reuses
+                        # ids after GC, so a later turn could collide with an
+                        # earlier one and be silently dropped as a duplicate.
+                        "source_run_id": f"acp:{runtime_name}:{getattr(text, 'session_id', '') or uuid.uuid4().hex}",
                         "caller": "lead_agent",
                         "model_name": model_name,
                         "input_tokens": usage.input_tokens,

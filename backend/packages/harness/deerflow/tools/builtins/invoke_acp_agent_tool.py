@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+import uuid
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -52,10 +53,67 @@ def _get_work_dir(thread_id: str | None) -> str:
 
 
 def _nova_mcp(user_id: str | None, thread_id: str | None):
-    """Nova's MCP server for a delegated session (the chat runtime's factory)."""
+    """Nova's MCP server for a delegated session: the chat runtime's factory,
+    but minting a token scoped to the thread's sandbox only."""
     from deerflow.runtimes.session import default_nova_mcp
+    from deerflow.runtimes.transcript import DELEGATE_ROLE
 
-    return default_nova_mcp(user_id, thread_id)
+    return default_nova_mcp(user_id, thread_id, role=DELEGATE_ROLE)
+
+
+def _run_journal(config: Any) -> Any | None:
+    """The run's journal, from the tool's config, or None outside a run.
+
+    The worker puts it in the runtime context (``__run_journal``); it is also
+    a callback handler, so look there as a fallback (the shape ``task`` uses).
+    """
+    if not isinstance(config, dict):
+        return None
+    runtime = (config.get("configurable") or {}).get("__pregel_runtime")
+    ctx = getattr(runtime, "context", None) if runtime is not None else None
+    journal = ctx.get("__run_journal") if isinstance(ctx, dict) else None
+    if journal is not None:
+        return journal
+    callbacks = config.get("callbacks")
+    handlers = getattr(callbacks, "handlers", callbacks)
+    if isinstance(handlers, list):
+        for cb in handlers:
+            if hasattr(cb, "record_external_llm_usage_records"):
+                return cb
+    return None
+
+
+def _record_delegated_usage(config: Any, agent: str, agent_config: Any, text: Any) -> None:
+    """Report a delegated ACP turn's tokens to the run's journal.
+
+    The turn never passes through an LLM callback, so without this a whole
+    delegated Claude Code task cost nothing in the run's totals. Booked under
+    ``subagent:acp:<agent>`` -- the journal's subagent bucket -- because the
+    lead agent did not spend these tokens, its delegate did. Must run before
+    the result is returned: the ``ACPText`` (which carries the usage) becomes
+    a plain ``ToolMessage`` string after that. Never raises.
+    """
+    try:
+        usage = getattr(text, "usage", None)
+        if usage is None or (getattr(usage, "total_tokens", 0) or 0) <= 0:
+            return
+        journal = _run_journal(config)
+        if journal is None:
+            return
+        journal.record_external_llm_usage_records(
+            [
+                {
+                    "source_run_id": f"acp-delegate:{agent}:{getattr(text, 'session_id', '') or uuid.uuid4().hex}",
+                    "caller": f"subagent:acp:{agent}",
+                    "model_name": getattr(agent_config, "model", None) or f"acp:{agent}",
+                    "input_tokens": usage.input_tokens,
+                    "output_tokens": usage.output_tokens,
+                    "total_tokens": usage.total_tokens,
+                }
+            ]
+        )
+    except Exception:
+        logger.warning("Failed to record delegated ACP usage (non-fatal)", exc_info=True)
 
 
 def _build_acp_mcp_servers() -> list[dict[str, Any]]:
@@ -195,6 +253,7 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
                     on_status=on_status,
                 )
             logger.info("ACP agent '%s' returned %d characters", agent, len(result))
+            _record_delegated_usage(config, agent, agent_config, result)
             return result or "(no response)"
         except Exception as e:
             logger.error("ACP agent '%s' invocation failed: %s", agent, e)

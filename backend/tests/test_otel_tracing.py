@@ -231,3 +231,122 @@ def test_langsmith_stays_opt_in_and_off(monkeypatch) -> None:
     config = get_tracing_config()
     assert config.langsmith.enabled is False
     assert "langsmith" not in config.enabled_providers
+
+
+# --- the real SDK ----------------------------------------------------------
+#
+# Every test above uses a fake tracer, which is how a provider that was never
+# installed went unnoticed: ``hasattr(trace, "_TRACER_PROVIDER")`` is always
+# true (the API defines it as ``None``), so the exporter was never built and
+# every span was a NonRecordingSpan. These drive the real SDK.
+
+
+def test_real_sdk_records_spans_with_parents_and_error_status() -> None:
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.trace import StatusCode
+
+    from deerflow.tracing.otel import OTelTracingHandler
+
+    exporter = InMemorySpanExporter()
+    handler = OTelTracingHandler(service_name="nova-test", span_exporter=exporter)
+
+    handler.on_chain_start({"name": "agent"}, {}, run_id="chain-1")
+    handler.on_llm_start({"name": "chat_model"}, [], run_id="llm-1", parent_run_id="chain-1")
+    handler.on_llm_end(object(), run_id="llm-1")
+    handler.on_tool_start({"name": "bash"}, "ls", run_id="tool-1", parent_run_id="chain-1")
+    handler.on_tool_error(RuntimeError("command failed"), run_id="tool-1")
+    handler.on_chain_end({}, run_id="chain-1")
+
+    spans = {s.name: s for s in exporter.get_finished_spans()}
+    assert set(spans) == {"chain.agent", "llm.chat_model", "tool.bash"}
+    chain, llm, tool = spans["chain.agent"], spans["llm.chat_model"], spans["tool.bash"]
+
+    assert chain.parent is None
+    assert llm.parent is not None and llm.parent.span_id == chain.context.span_id
+    assert tool.parent is not None and tool.parent.span_id == chain.context.span_id
+    assert {llm.context.trace_id, tool.context.trace_id} == {chain.context.trace_id}
+
+    # The error is recorded BEFORE the span ends -- it used to be recorded
+    # on an already-popped span, i.e. never.
+    assert tool.status.status_code == StatusCode.ERROR
+    assert "command failed" in (tool.status.description or "")
+    assert any(e.name == "exception" for e in tool.events)
+    assert tool.attributes["error.type"] == "RuntimeError"
+    assert chain.status.status_code != StatusCode.ERROR
+    assert llm.status.status_code != StatusCode.ERROR
+    assert chain.resource.attributes["service.name"] == "nova-test"
+
+
+def test_chain_and_llm_errors_are_recorded_too() -> None:
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.trace import StatusCode
+
+    from deerflow.tracing.otel import OTelTracingHandler
+
+    exporter = InMemorySpanExporter()
+    handler = OTelTracingHandler(span_exporter=exporter)
+    handler.on_chain_start({"name": "agent"}, {}, run_id="c")
+    handler.on_llm_start({"name": "m"}, [], run_id="l", parent_run_id="c")
+    handler.on_llm_error(ValueError("rate limited"), run_id="l")
+    handler.on_chain_error(ValueError("rate limited"), run_id="c")
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 2
+    assert all(s.status.status_code == StatusCode.ERROR for s in spans)
+    assert all(any(e.name == "exception" for e in s.events) for s in spans)
+
+
+def test_enabled_handler_gets_a_recording_tracer_from_the_owned_provider(monkeypatch) -> None:
+    """With the flag and an endpoint set, spans must be recording -- the
+    regression was a tracer from the API's default (no-op) provider."""
+    import atexit
+
+    from deerflow.tracing import otel
+
+    monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:9/v1/traces")
+    monkeypatch.setattr(otel, "_provider", None)
+    registered: list = []
+    monkeypatch.setattr(atexit, "register", lambda fn, *a, **k: registered.append((fn, a)))
+
+    tracer = otel.OTelTracingHandler()._get_tracer()
+    assert tracer is not None
+    # Never ended: nothing is queued for export, so shutdown needs no network.
+    assert tracer.start_span("probe").is_recording() is True
+    # One provider per process, however many handlers are built.
+    assert otel.OTelTracingHandler()._get_tracer() is not None
+    provider = otel._provider
+    assert provider is not None
+    # Flushed at exit, registered once (the SDK may add its own hook too).
+    assert [r for r in registered if r[0] is otel._shutdown_provider] == [(otel._shutdown_provider, (provider,))]
+    provider.shutdown()
+
+
+def test_no_endpoint_means_no_tracer_even_with_the_sdk(monkeypatch) -> None:
+    from deerflow.tracing import otel
+
+    monkeypatch.setattr(otel, "_provider", None)
+    assert otel.OTelTracingHandler()._get_tracer() is None
+    assert otel._provider is None
+
+
+def test_missing_sdk_warns_once_when_tracing_is_enabled(monkeypatch, caplog) -> None:
+    import logging
+    import sys
+
+    from deerflow.tracing import otel
+
+    monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:9/v1/traces")
+    monkeypatch.setattr(otel, "_provider", None)
+    monkeypatch.setattr(otel, "_sdk_missing_warned", False)
+    monkeypatch.setitem(sys.modules, "opentelemetry.sdk.trace", None)
+
+    caplog.set_level(logging.WARNING, logger="deerflow.tracing.otel")
+    for _ in range(3):
+        handler = otel.OTelTracingHandler()
+        handler.on_chain_start({"name": "x"}, {}, run_id="r")
+        handler.on_chain_end({}, run_id="r")
+    warnings = [r for r in caplog.records if "could not be imported" in r.getMessage()]
+    assert len(warnings) == 1
+    assert warnings[0].levelno == logging.WARNING

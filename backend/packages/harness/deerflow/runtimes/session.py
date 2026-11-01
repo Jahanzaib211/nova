@@ -32,7 +32,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.runtimes.transcript import CHAT_ROLE, permission_contract, runtime_preamble
+from deerflow.runtimes.transcript import CHAT_ROLE, DELEGATE_ROLE, permission_contract, runtime_preamble
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +65,32 @@ def default_turn_timeout() -> float:
         return DEFAULT_TURN_TIMEOUT
 
 
-def default_nova_mcp(user_id: str | None, thread_id: str | None) -> tuple[dict[str, Any] | None, Callable[[], Any]]:
+#: Capability modules a *delegated* agent's token may reach. A delegate is
+#: handed one task by the lead agent; it needs the thread's sandbox
+#: (``sandbox__*``, including ``sandbox__expose_port``) and nothing else. It
+#: used to get ``["*"]`` -- every platform op (jobs, integrations, agents,
+#: secrets-adjacent settings) as the user -- for a task it was never meant to
+#: widen. Enforced by ``Principal.allows`` on Nova's MCP server, which filters
+#: both ``tools/list`` and ``tools/call`` by module id.
+DELEGATE_SCOPES: tuple[str, ...] = ("sandbox",)
+#: The chat runtime *is* the user's agent for the turn and keeps every op.
+CHAT_SCOPES: tuple[str, ...] = ("*",)
+
+
+def default_nova_mcp(user_id: str | None, thread_id: str | None, *, role: str = CHAT_ROLE) -> tuple[dict[str, Any] | None, Callable[[], Any]]:
     """Describe Nova's MCP server with a lazy token mint; the returned
-    callable is a cleanup hook (the token itself is revoked by the session)."""
+    callable is a cleanup hook (the token itself is revoked by the session).
+
+    ``role`` decides the token's scopes: the chat runtime gets every module,
+    a delegate (``DELEGATE_ROLE``) only :data:`DELEGATE_SCOPES`. A delegate
+    with no thread gets no token at all -- the sandbox ops are bound to the
+    thread named in the token, so an unbound token could reach nothing it
+    needs.
+    """
+
+    delegate = role == DELEGATE_ROLE
+    if delegate and not thread_id:
+        return None, lambda: None
     from deerflow.persistence.engine import get_session_factory
 
     sf = get_session_factory()
@@ -79,9 +102,10 @@ def default_nova_mcp(user_id: str | None, thread_id: str | None) -> tuple[dict[s
     rt = getattr(get_app_config(), "runtimes", None)
     url = getattr(rt, "nova_mcp_url", None) or "http://127.0.0.1:8001/api/mcp/nova"
     repo = HarnessTokenRepository(sf)
+    scopes = list(DELEGATE_SCOPES if delegate else CHAT_SCOPES)
 
     async def _mint():
-        return await repo.create(owner_user_id=user_id, name=f"runtime:{thread_id or 'chat'}", scopes=["*"])
+        return await repo.create(owner_user_id=user_id, name=f"runtime:{thread_id or 'chat'}", scopes=scopes)
 
     return {"__mint__": _mint, "url": url, "repo": repo}, lambda: None
 
@@ -161,6 +185,38 @@ class ACPSession:
             raise ACPTurnTimeout(f"{self.agent} did not finish within {budget} (the ACP turn budget, runtimes.turn_timeout_seconds); the adapter was stopped") from exc
 
 
+#: Revoke tasks still running after their session was cancelled, kept
+#: referenced so the event loop does not garbage-collect them mid-flight.
+_pending_revokes: set[asyncio.Task[Any]] = set()
+
+
+async def _revoke_token(repo: Any, token_id: str, owner_user_id: str, agent: str) -> None:
+    """Revoke the per-turn token, surviving a second cancellation.
+
+    The session's ``finally`` runs during cancellation more often than not
+    (a cancelled run, a timed-out turn). An unshielded ``await revoke(...)``
+    there is itself cancelled by the next cancel, leaving a live token that
+    grants the user's sandbox to whoever holds it. The revoke runs as its own
+    task behind ``asyncio.shield``: if the caller is cancelled again, the
+    task still finishes in the background and the cancellation propagates.
+
+    The token store has no expiry column, so a revoke that fails outright
+    leaves the token live until someone revokes it by hand -- hence WARNING,
+    not debug.
+    """
+
+    async def _revoke() -> None:
+        try:
+            await repo.revoke(token_id, owner_user_id=owner_user_id)
+        except Exception:
+            logger.warning("ACP %s: revoking the per-turn harness token %s failed; it stays live until revoked", agent, token_id, exc_info=True)
+
+    task = asyncio.ensure_future(_revoke())
+    _pending_revokes.add(task)
+    task.add_done_callback(_pending_revokes.discard)
+    await asyncio.shield(task)
+
+
 @contextlib.asynccontextmanager
 async def open_acp_session(
     *,
@@ -211,12 +267,11 @@ async def open_acp_session(
         session.preamble = "\n\n".join(part for part in (runtime_preamble(names, role=role), permission_contract(nova_mounted=session.nova_mounted)) if part)
         yield session
     finally:
-        if minted is not None and nova_server and nova_server.get("repo") is not None:
-            try:
-                await nova_server["repo"].revoke(minted["id"], owner_user_id=str(user_id))
-            except Exception:
-                logger.debug("ephemeral harness token revoke failed", exc_info=True)
         try:
-            cleanup()
-        except Exception:
-            pass
+            if minted is not None and nova_server and nova_server.get("repo") is not None:
+                await _revoke_token(nova_server["repo"], minted["id"], str(user_id), agent)
+        finally:
+            try:
+                cleanup()
+            except Exception:
+                pass
