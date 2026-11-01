@@ -298,3 +298,50 @@ def test_pre_rebase_hook_blocks_rebasing_onto_upstream(repos):
     assert "foreign root commit" in out.stdout + out.stderr
     assert "pre-rebase hook refused" in out.stderr
     assert git(nova, "log", "-1", "--format=%s") == "nova: own changes"
+
+
+def test_pre_rebase_hook_blocks_rebase_onto_upstream(repos):
+    """git hands pre-rebase only <upstream>, never the --onto target, and no
+    rebase state exists yet -- so `--onto upstream/main <base>` used to slip
+    past. The hook now reads the --onto target from the parent git command."""
+    nova = repos["nova"]
+    gate.install_hooks(nova)
+    env = {**os.environ, **GIT_ENV}
+    out = subprocess.run(["git", "-C", str(nova), "rebase", "--onto", "upstream/main", "HEAD~1"], capture_output=True, text=True, env=env)
+    assert out.returncode != 0
+    assert "foreign root commit" in out.stdout + out.stderr
+    assert "pre-rebase hook refused" in out.stderr
+    assert git(nova, "log", "-1", "--format=%s") == "nova: own changes"
+
+
+@pytest.mark.parametrize(
+    ("argv", "onto"),
+    [
+        (["git", "rebase", "--onto", "upstream/main", "base"], "upstream/main"),
+        (["git", "rebase", "--onto=upstream/main", "base"], "upstream/main"),
+        (["git", "-C", "/x", "rebase", "-q", "--onto", "u/m", "b", "topic"], "u/m"),
+        (["git", "rebase", "base"], None),
+        (["git", "rebase", "--onto"], None),
+        (["git", "commit", "--onto", "x"], None),
+        ([], None),
+    ],
+)
+def test_onto_is_parsed_from_the_rebase_command_line(argv, onto):
+    assert gate.parse_rebase_onto(argv) == onto
+
+
+def test_pre_rebase_inspects_the_onto_target_as_well_as_the_upstream(repos, monkeypatch):
+    nova = repos["nova"]
+    base = git(nova, "rev-parse", "HEAD~1")
+    monkeypatch.setattr(gate, "_parent_cmdline", lambda: ["git", "rebase", "--onto", "upstream/main", base])
+    report = gate._hook_report(nova, "pre-rebase", [base])
+    assert statuses(report)["history_roots"] == gate.RED
+
+
+def test_pre_rebase_without_a_readable_parent_still_checks_the_upstream(repos, monkeypatch):
+    nova = repos["nova"]
+    monkeypatch.setattr(gate, "_parent_cmdline", lambda: [])
+    report = gate._hook_report(nova, "pre-rebase", ["HEAD~1"])
+    assert statuses(report)["history_roots"] == gate.GREEN
+    # Says where the real enforcement is, since --onto may be invisible here.
+    assert "pre-push" in next(c for c in report["checks"] if c["name"] == "history_roots")["detail"]

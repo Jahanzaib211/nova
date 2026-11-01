@@ -468,11 +468,53 @@ def _hook_report(repo: Path, hook: str, hook_args: list[str]) -> dict:
     if hook in ("pre-merge-commit", "commit-msg"):
         return build_check_report(repo, include_merge_head=True)
     if hook == "pre-rebase":
-        onto = hook_args[0] if hook_args else "@{upstream}"
-        if _git(repo, "rev-parse", "--verify", "--quiet", onto, check=False).returncode != 0:
-            return build_check_report(repo, incoming=[])
-        return build_check_report(repo, incoming=[onto])
+        # git passes pre-rebase only <upstream> (and the branch, when it is
+        # not the current one) -- never the `--onto` target, and no rebase
+        # state exists on disk yet (rebase-merge/onto is written afterwards;
+        # verified on git 2.53). So `git rebase --onto upstream/main <base>`
+        # is invisible in the hook's arguments. The cheap detection is the
+        # parent git process's own command line; where that cannot be read
+        # (no /proc), pre-push remains the enforcement point.
+        upstream = hook_args[0] if hook_args else "@{upstream}"
+        candidates = [upstream]
+        onto = parse_rebase_onto(_parent_cmdline())
+        if onto:
+            candidates.append(onto)
+        incoming = [ref for ref in candidates if _git(repo, "rev-parse", "--verify", "--quiet", ref, check=False).returncode == 0]
+        report = build_check_report(repo, incoming=incoming)
+        for c in report["checks"]:
+            if c["name"] == "history_roots" and c["status"] != RED:
+                seen = "the --onto target and <upstream>" if onto else "<upstream> only (no --onto target visible)"
+                c["detail"] += f" [pre-rebase inspected {seen}; pre-push is the enforcement point]"
+        return report
     raise GateError(f"unknown hook {hook}")
+
+
+def parse_rebase_onto(argv: list[str]) -> str | None:
+    """The `--onto` target of a `git ... rebase ...` command line, or None."""
+    if "rebase" not in argv:
+        return None
+    args = argv[argv.index("rebase") + 1 :]
+    for i, arg in enumerate(args):
+        if arg.startswith("--onto="):
+            return arg.split("=", 1)[1] or None
+        if arg == "--onto":
+            return args[i + 1] if i + 1 < len(args) else None
+    return None
+
+
+def _parent_cmdline() -> list[str]:
+    """argv of the git process running this hook; [] where unreadable.
+
+    The hook body `exec`s python, so the parent is git itself. Linux-only
+    (/proc); elsewhere this returns [] and the hook degrades to inspecting
+    <upstream> alone.
+    """
+    try:
+        raw = Path(f"/proc/{os.getppid()}/cmdline").read_bytes()
+    except OSError:
+        return []
+    return [part.decode("utf-8", errors="replace") for part in raw.split(b"\0") if part]
 
 
 # --- CLI -----------------------------------------------------------------

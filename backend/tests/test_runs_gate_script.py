@@ -41,9 +41,10 @@ def gate():
 def _sqlite_db(tmp_path: Path, rows: list[tuple], events: list[tuple]) -> Path:
     db = tmp_path / "deerflow.db"
     conn = sqlite3.connect(db)
-    conn.execute("CREATE TABLE runs (run_id TEXT, status TEXT, llm_call_count INTEGER, created_at TEXT, updated_at TEXT)")
+    conn.execute("CREATE TABLE runs (run_id TEXT, status TEXT, llm_call_count INTEGER, created_at TEXT, updated_at TEXT, error TEXT)")
     conn.execute("CREATE TABLE run_events (id INTEGER, run_id TEXT, event_type TEXT, created_at TEXT)")
-    conn.executemany("INSERT INTO runs VALUES (?,?,?,?,?)", rows)
+    # Rows may omit the trailing ``error`` column.
+    conn.executemany("INSERT INTO runs VALUES (?,?,?,?,?,?)", [tuple(row) + (None,) * (6 - len(row)) for row in rows])
     conn.executemany("INSERT INTO run_events VALUES (?,?,?,?)", events)
     conn.commit()
     conn.close()
@@ -358,6 +359,206 @@ def test_latency_is_green_when_there_are_no_terminal_runs(gate, monkeypatch, tmp
     result = gate.check_run_completion_latency(dialect)
     assert result["status"] == gate.GREEN
     assert result["sample"] == 0
+
+
+# ---------------------------------------------------------------------------
+# review fixes: orphaned runs, bounded queries, reload boundary, pending runs
+# ---------------------------------------------------------------------------
+
+
+def _ago(seconds: int) -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - seconds))
+
+
+def test_orphan_error_matches_what_the_reaper_writes(gate):
+    """The gate matches the reaper's text, so it must be the reaper's text."""
+    root = Path(__file__).resolve().parents[1]
+    for source in (root / "app" / "gateway" / "deps.py", root / "packages" / "harness" / "deerflow" / "runtime" / "runs" / "manager.py"):
+        assert gate.ORPHAN_ERROR in source.read_text(), source
+
+
+def test_latency_excludes_runs_reaped_as_orphans(gate, monkeypatch, tmp_path):
+    """A reaped run's updated_at is the reap time, not a completion time:
+    one restart after a long idle inflated p95 to 6055s."""
+    dialect = _wire_sqlite(
+        gate,
+        monkeypatch,
+        tmp_path,
+        rows=[
+            ("ok", "success", 1, "2026-11-01 10:00:00", "2026-11-01 10:01:00", None),
+            ("reaped", "error", 1, "2026-11-01 10:00:00", "2026-11-01 13:00:00", gate.ORPHAN_ERROR),
+        ],
+    )
+    result = gate.check_run_completion_latency(dialect)
+    assert result["status"] == gate.GREEN
+    assert result["sample"] == 1
+    assert result["max_sec"] == pytest.approx(60.0, abs=1)
+
+
+def test_latency_keeps_ordinary_errors(gate, monkeypatch, tmp_path):
+    dialect = _wire_sqlite(
+        gate,
+        monkeypatch,
+        tmp_path,
+        rows=[("failed", "error", 1, "2026-11-01 10:00:00", "2026-11-01 12:00:00", "provider 500")],
+    )
+    result = gate.check_run_completion_latency(dialect)
+    assert result["sample"] == 1
+    assert result["status"] == gate.YELLOW
+
+
+def test_orphaned_runs_green_when_none(gate, monkeypatch, tmp_path):
+    dialect = _wire_sqlite(gate, monkeypatch, tmp_path, rows=[("ok", "success", 1, _ago(120), _ago(60), None)])
+    result = gate.check_orphaned_runs(dialect)
+    assert result["name"] == "orphaned_runs"
+    assert result["status"] == gate.GREEN
+    assert result["recent"] == 0
+
+
+def test_orphaned_runs_yellow_when_reaped_in_the_last_hour(gate, monkeypatch, tmp_path):
+    dialect = _wire_sqlite(
+        gate,
+        monkeypatch,
+        tmp_path,
+        rows=[
+            ("fresh", "error", 1, _ago(4000), _ago(300), gate.ORPHAN_ERROR),
+            ("old", "error", 1, _ago(50000), _ago(40000), gate.ORPHAN_ERROR),
+        ],
+    )
+    result = gate.check_orphaned_runs(dialect)
+    assert result["status"] == gate.YELLOW
+    assert result["recent"] == 1
+    assert result["day"] == 2
+
+
+def test_orphaned_runs_older_than_an_hour_are_reported_but_green(gate, monkeypatch, tmp_path):
+    dialect = _wire_sqlite(gate, monkeypatch, tmp_path, rows=[("old", "error", 1, _ago(50000), _ago(40000), gate.ORPHAN_ERROR)])
+    result = gate.check_orphaned_runs(dialect)
+    assert result["status"] == gate.GREEN
+    assert result["recent"] == 0
+    assert result["day"] == 1
+    assert "1 in the last" in result["detail"]
+
+
+def test_orphaned_runs_is_registered(gate):
+    assert gate.check_orphaned_runs in gate.CHECKS
+
+
+def test_orphaned_runs_yellow_when_the_query_cannot_run(gate, monkeypatch):
+    monkeypatch.setattr(gate, "_query_rows", lambda _d, _q: None)
+    result = gate.check_orphaned_runs(gate.PostgresDialect())
+    assert result["status"] == gate.YELLOW
+
+
+def test_stuck_pending_run_is_yellow_not_red(gate, monkeypatch, tmp_path):
+    """Queued-but-never-started is a backlog, not a dead worker."""
+    dialect = _wire_sqlite(gate, monkeypatch, tmp_path, rows=[("queued", "pending", 0, "2026-01-01 00:00:00", "2026-01-01 00:00:00")])
+    result = gate.check_stuck_runs(dialect)
+    assert result["status"] == gate.YELLOW
+    assert result["pending"] == 1
+    assert result["running"] == 0
+    assert "queued" in result["detail"]
+
+
+def test_stuck_running_run_is_red_even_beside_a_pending_one(gate, monkeypatch, tmp_path):
+    dialect = _wire_sqlite(
+        gate,
+        monkeypatch,
+        tmp_path,
+        rows=[
+            ("queued", "pending", 0, "2026-01-01 00:00:00", "2026-01-01 00:00:00"),
+            ("dead", "running", 9, "2026-01-01 00:00:00", "2026-01-01 00:00:00"),
+        ],
+    )
+    result = gate.check_stuck_runs(dialect)
+    assert result["status"] == gate.RED
+    assert result["running"] == 1
+    assert result["pending"] == 1
+    assert result["stuck"] == 2
+
+
+def _capture_psql(gate, monkeypatch, *, raises=None):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        if raises is not None:
+            raise raises
+        return gate.subprocess.CompletedProcess(cmd, 0, "1\n", "")
+
+    monkeypatch.setattr(gate.subprocess, "run", fake_run)
+    return calls
+
+
+def test_psql_is_bounded_well_under_the_producer_timeout(gate, monkeypatch):
+    """Six queries x 30s could outlive the daemon's 60s producer timeout."""
+    calls = _capture_psql(gate, monkeypatch)
+    assert gate._psql("SELECT 1") == "1\n"
+    cmd, kwargs = calls[0]
+    assert kwargs["timeout"] <= 10
+    assert "close_fds" not in kwargs
+    joined = " ".join(cmd)
+    assert "PGCONNECT_TIMEOUT=" in joined
+    assert "statement_timeout=" in joined
+    # The worst case over every query the gate can issue stays under 60s.
+    assert gate.PSQL_TIMEOUT_S * gate.MAX_QUERIES < 60
+
+
+def test_psql_timeout_marks_postgres_unavailable_and_short_circuits(gate, monkeypatch):
+    calls = _capture_psql(gate, monkeypatch, raises=gate.subprocess.TimeoutExpired(["psql"], 8))
+    assert gate._psql("SELECT 1") is None
+    assert gate._psql("SELECT 2") is None
+    assert len(calls) == 1, "after one timeout the remaining queries must not each wait again"
+    result = gate.check_stuck_runs(gate.PostgresDialect())
+    assert result["status"] == gate.YELLOW
+    assert "unavailable" in result["detail"]
+    assert "timed out" in result["detail"]
+
+
+def test_report_never_crashes_when_postgres_hangs(gate, monkeypatch):
+    _capture_psql(gate, monkeypatch, raises=gate.subprocess.TimeoutExpired(["psql"], 8))
+    monkeypatch.setattr(gate, "_active_backend", lambda: ("postgres", None))
+    monkeypatch.setenv("NOVA_GATE_LIVE_PROVIDER_INSTANCES", "1")
+    report = gate.build_report()
+    assert report["overall"] == gate.YELLOW
+    db_checks = [c for c in report["checks"] if c["name"] != "multi_instance_providers"]
+    assert db_checks and all(c["status"] == gate.YELLOW and "unavailable" in c["detail"] for c in db_checks)
+
+
+def test_a_reload_is_a_boot_boundary(gate, monkeypatch, tmp_path):
+    """uvicorn --reload restarts the worker without the entrypoint banner, so
+    a warning from before the reload must not stay sticky."""
+    log = tmp_path / "gateway.log"
+    log.write_text(
+        "===== gateway boot 2026-11-01T00:00:00Z (pid 1) =====\n"
+        "INFO:     Started server process [57]\n"
+        "more than one AioSandboxProvider instance in this process (3) - races\n"
+        "WARNING:  WatchFiles detected changes in 'x.py'. Reloading...\n"
+        "INFO:     Started server process [7533]\n"
+        "INFO:     Application startup complete.\n"
+    )
+    monkeypatch.setenv("NOVA_GATE_GATEWAY_LOG", str(log))
+    monkeypatch.delenv("NOVA_GATE_LIVE_PROVIDER_INSTANCES", raising=False)
+    count, _source = gate._live_provider_instance_count()
+    assert count == 1
+
+
+def test_a_warning_after_the_latest_reload_still_counts(gate, monkeypatch, tmp_path):
+    log = tmp_path / "gateway.log"
+    log.write_text("===== gateway boot 2026-11-01T00:00:00Z (pid 1) =====\nINFO:     Started server process [7533]\nmore than one AioSandboxProvider instance in this process (2) - races\n")
+    monkeypatch.setenv("NOVA_GATE_GATEWAY_LOG", str(log))
+    monkeypatch.delenv("NOVA_GATE_LIVE_PROVIDER_INSTANCES", raising=False)
+    count, _source = gate._live_provider_instance_count()
+    assert count == 2
+
+
+def test_a_reload_line_alone_is_a_boundary(gate, monkeypatch, tmp_path):
+    log = tmp_path / "gateway.log"
+    log.write_text("INFO:     Started server process [9]\nall quiet\n")
+    monkeypatch.setenv("NOVA_GATE_GATEWAY_LOG", str(log))
+    monkeypatch.delenv("NOVA_GATE_LIVE_PROVIDER_INSTANCES", raising=False)
+    count, _source = gate._live_provider_instance_count()
+    assert count == 1
 
 
 # ---------------------------------------------------------------------------

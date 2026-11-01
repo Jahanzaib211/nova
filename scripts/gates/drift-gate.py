@@ -785,6 +785,7 @@ def check_file_mounts() -> dict:
     import json
 
     stale: list[str] = []
+    stale_by_design: list[str] = []
     compared = 0
     for name in FILE_MOUNT_CONTAINERS:
         rc, out, _ = _run(["docker", "inspect", name, "--format", "{{json .Mounts}}"], timeout=30)
@@ -798,13 +799,6 @@ def check_file_mounts() -> dict:
             src, dest = m.get("Source", ""), m.get("Destination", "")
             if m.get("Type") != "bind" or not src or not os.path.isfile(src):
                 continue
-            # .claude.json is live Claude Code CLI state (OAuth tokens, onboarding
-            # flags) that the CLI rewrites on every invocation. It is not a
-            # project config file, so a stale mount here is expected, not drift.
-            # Skipping it prevents the gate from being permanently RED on a file
-            # that changes by design.
-            if Path(src).name == ".claude.json" or Path(dest).name == ".claude.json":
-                continue
             try:
                 host = hashlib.sha256(Path(src).read_bytes()).hexdigest()
                 p = subprocess.run(["docker", "exec", name, "cat", dest], capture_output=True, timeout=30)
@@ -814,14 +808,27 @@ def check_file_mounts() -> dict:
                 continue
             compared += 1
             if hashlib.sha256(p.stdout).hexdigest() != host:
-                stale.append(f"{name}:{dest}")
+                # .claude.json is live Claude Code CLI state (OAuth tokens,
+                # onboarding flags) that the CLI rewrites by rename on every
+                # invocation, so a single-file mount of it goes stale by
+                # design. It used to be skipped outright, which hid that the
+                # container was running on an old copy. Reported, but YELLOW:
+                # RED would pin the gate red on a file that changes by design.
+                if Path(src).name == ".claude.json" or Path(dest).name == ".claude.json":
+                    stale_by_design.append(f"{name}:{dest}")
+                else:
+                    stale.append(f"{name}:{dest}")
+    by_design_note = (
+        f"{len(stale_by_design)} .claude.json mount(s) differ from the host ({', '.join(stale_by_design)}): a single-file bind mount is stale by design "
+        "once the CLI rewrites the file by rename; recreate the container or mount the directory instead"
+    )
     if stale:
-        return check(
-            "file_mounts",
-            RED,
-            f"{len(stale)} file mount(s) stale in the container (host file was replaced, container still reads the old inode): {', '.join(stale)} — recreate those containers",
-            stale=stale,
-        )
+        detail = f"{len(stale)} file mount(s) stale in the container (host file was replaced, container still reads the old inode): {', '.join(stale)} — recreate those containers"
+        if stale_by_design:
+            detail += f"; also {by_design_note}"
+        return check("file_mounts", RED, detail, stale=stale, stale_by_design=stale_by_design)
+    if stale_by_design:
+        return check("file_mounts", YELLOW, by_design_note, stale=[], stale_by_design=stale_by_design)
     if compared == 0:
         return check("file_mounts", YELLOW, "no single-file bind mounts could be compared (containers down?)")
     return check("file_mounts", GREEN, f"{compared} single-file bind mount(s) match the host")

@@ -15,12 +15,13 @@ and **zero** persisted ``run_events``. Nothing noticed: the row was
 had died with its journal unwritten, and the only evidence was a row
 nobody was reading.
 
-So this gate answers four questions about the runs table:
+So this gate answers five questions about the runs table:
 
 - ``stuck_runs``            — a run that says it is running but has not
   moved for longer than the threshold. Progress snapshots bump
   ``updated_at`` every ~5 s while a run is alive, so a stale row is a
-  dead run, not a slow one.
+  dead run, not a slow one (red). A ``pending`` run past the threshold
+  was queued and never started: a backlog, reported yellow.
 - ``journal_persistence``   — a run that recorded LLM calls but persisted
   NO ``run_events``. That is the exact signature of the silent-journal
   failure above.
@@ -29,6 +30,13 @@ So this gate answers four questions about the runs table:
   of them can destroy the sandbox the third is running a build in.
 - ``run_completion_latency`` — the p95 of how long runs take to reach a
   terminal status. A signal, not a verdict: it is yellow when it drifts.
+  Runs reaped as orphans are excluded — their ``updated_at`` is the reap
+  time, not a completion time.
+- ``orphaned_runs``         — runs the gateway reaped at restart because no
+  worker survived to finish them. Yellow when any was reaped within
+  ``NOVA_GATE_ORPHAN_WINDOW_SECONDS`` (default 3600): a restart recently
+  killed in-flight work. Never red — reaping is recovery working. The
+  24-hour count is reported for context.
 
 Output is a JSON document written atomically to ``~/.nova/gates/runs.json``
 in the same envelope every other gate uses, so the console renders it with
@@ -48,6 +56,8 @@ NOVA_GATE_STUCK_RUN_SECONDS        stuck-run threshold (default 1800)
 NOVA_GATE_JOURNAL_WINDOW_SECONDS   how far back the journal check looks
                                    (default 3600)
 NOVA_GATE_LATENCY_P95_SECONDS      p95 completion-latency threshold (3600)
+NOVA_GATE_ORPHAN_WINDOW_SECONDS    how recent a reaped run must be to turn
+                                   ``orphaned_runs`` yellow (default 3600)
 NOVA_GATE_LIVE_PROVIDER_INSTANCES  explicit live AioSandboxProvider count
 NOVA_GATE_GATEWAY_LOG              path to the gateway log (default
                                    <repo>/logs/gateway.log)
@@ -80,6 +90,16 @@ TERMINAL_STATUSES = ("success", "error", "timeout", "interrupted")
 DEFAULT_STUCK_RUN_SECONDS = 1800
 DEFAULT_JOURNAL_WINDOW_SECONDS = 3600
 DEFAULT_LATENCY_P95_SECONDS = 3600
+DEFAULT_ORPHAN_WINDOW_SECONDS = 3600
+
+#: Context window for the orphaned-run count shown next to the recent one.
+ORPHAN_CONTEXT_SECONDS = 86400
+
+#: The error the gateway writes on a run it reaps because its worker died
+#: with it — ``app.gateway.deps`` (startup recovery) and
+#: ``RunManager.reap_orphaned_runs`` both use exactly this text. The test
+#: suite pins it against both sources.
+ORPHAN_ERROR = "Gateway restarted before this run reached a durable final state."
 
 #: How many rows a single check may pull back. The detail lists the
 #: offenders; the count comes from a separate COUNT(*) query.
@@ -96,6 +116,11 @@ PROVIDER_MULTI_WARNING = re.compile(r"more than one AioSandboxProvider instance 
 
 #: Written by docker/dev-entrypoint.sh at every gateway start.
 BOOT_MARKER = "===== gateway boot "
+
+#: uvicorn's worker-start line. Under ``--reload`` the worker restarts (and
+#: rebuilds its providers) without the entrypoint writing a banner, so this
+#: line is a boot boundary too: "INFO:     Started server process [7533]".
+WORKER_START = re.compile(r"Started server process \[\d+\]")
 
 
 # ---------------------------------------------------------------------------
@@ -224,19 +249,45 @@ def _dialect() -> Dialect:
 _FIELD_SEP = "\x1f"
 
 
-def _psql(query: str, timeout_s: float = 30) -> str | None:
+#: Per-query wall clock. The gates daemon kills a producer after 60 s and
+#: the gate issues at most ``MAX_QUERIES`` queries, so the worst case must
+#: stay under that with room for docker exec's own startup.
+PSQL_TIMEOUT_S = 8
+MAX_QUERIES = 6
+#: Server-side bounds, inside the wall clock: connect, then execute.
+PG_CONNECT_TIMEOUT_S = 3
+PG_STATEMENT_TIMEOUT_MS = 5000
+
+#: Why postgres could not answer, once it could not. Set on the first
+#: timeout so the remaining queries fail fast instead of each waiting out
+#: their own timeout, and quoted in every check's yellow detail.
+_PG_UNAVAILABLE: str | None = None
+
+
+def _psql(query: str, timeout_s: float = PSQL_TIMEOUT_S) -> str | None:
     """Run one query via the postgres container.
 
     Uses `docker exec psql` rather than a Python driver on purpose: this
     gate runs under the system interpreter from the gates daemon, where
     psycopg is not importable. Shelling into the container keeps the gate
     dependency-free. Mirrors scripts/gates/host-gate.py::_psql.
+
+    Bounded three ways: ``PGCONNECT_TIMEOUT`` for the connection, a
+    ``statement_timeout`` (via ``PGOPTIONS``) for the query, and the
+    subprocess timeout for everything else (a wedged docker daemon).
     """
+    global _PG_UNAVAILABLE
+    if _PG_UNAVAILABLE is not None:
+        return None
     try:
         out = subprocess.run(
             [
                 "docker",
                 "exec",
+                "-e",
+                f"PGCONNECT_TIMEOUT={PG_CONNECT_TIMEOUT_S}",
+                "-e",
+                f"PGOPTIONS=-c statement_timeout={PG_STATEMENT_TIMEOUT_MS}",
                 os.environ.get("NOVA_PG_CONTAINER", "deer-flow-postgres"),
                 "psql",
                 "-U",
@@ -252,11 +303,23 @@ def _psql(query: str, timeout_s: float = 30) -> str | None:
             capture_output=True,
             text=True,
             timeout=timeout_s,
-            close_fds=False,
         )
+    except subprocess.TimeoutExpired:
+        _PG_UNAVAILABLE = f"timed out after {timeout_s:.0f}s"
+        return None
     except (OSError, subprocess.SubprocessError):
         return None
-    return out.stdout if out.returncode == 0 else None
+    if out.returncode != 0:
+        if "statement timeout" in (out.stderr or ""):
+            _PG_UNAVAILABLE = f"statement timed out after {PG_STATEMENT_TIMEOUT_MS} ms"
+        return None
+    return out.stdout
+
+
+def _unavailable(dialect: Dialect) -> str:
+    """The yellow detail for a check whose query could not run."""
+    reason = f" — unavailable: {_PG_UNAVAILABLE}" if dialect.name == "postgres" and _PG_UNAVAILABLE else ""
+    return f"could not query the runs table ({dialect.name}){reason}"
 
 
 def _sqlite_rows(query: str, timeout_s: float = 5) -> list[list[str]] | None:
@@ -307,8 +370,13 @@ def check_stuck_runs(dialect: Dialect) -> dict:
 
     The worker flushes a progress snapshot every ~5 s while a run is alive
     (``RunJournal._progress_flush_interval``), and every snapshot bumps
-    ``runs.updated_at``. So a row whose ``updated_at`` is stale is a run
-    that stopped making progress — not a run that is merely slow.
+    ``runs.updated_at``. So a ``running`` row whose ``updated_at`` is stale
+    is a run that stopped making progress — not a run that is merely slow —
+    and that is RED.
+
+    A ``pending`` row past the threshold is different: it was queued and
+    never picked up. No worker died holding it; it is a backlog (or a
+    scheduler that is not draining), which is YELLOW.
     """
     threshold = _env_float("NOVA_GATE_STUCK_RUN_SECONDS", DEFAULT_STUCK_RUN_SECONDS)
     where = f"status IN ('running','pending') AND updated_at < {dialect.seconds_ago(threshold)}"
@@ -317,7 +385,7 @@ def check_stuck_runs(dialect: Dialect) -> dict:
         f"SELECT run_id, status, updated_at FROM runs WHERE {where} ORDER BY updated_at ASC LIMIT {DETAIL_LIMIT}",
     )
     if rows is None:
-        return check("stuck_runs", YELLOW, f"could not query the runs table ({dialect.name})", threshold_sec=threshold)
+        return check("stuck_runs", YELLOW, _unavailable(dialect), threshold_sec=threshold)
     if not rows:
         return check(
             "stuck_runs",
@@ -325,16 +393,36 @@ def check_stuck_runs(dialect: Dialect) -> dict:
             f"no run has been running/pending for more than {threshold:.0f}s",
             threshold_sec=threshold,
             stuck=0,
+            running=0,
+            pending=0,
         )
-    ids = ", ".join(row[0] for row in rows[:5])
-    count = _query_scalar(dialect, f"SELECT COUNT(*) FROM runs WHERE {where}")
-    total = count if count is not None else len(rows)
+    by_status = {"running": 0, "pending": 0}
+    counted = _query_rows(dialect, f"SELECT status, COUNT(*) FROM runs WHERE {where} GROUP BY status")
+    if counted:
+        for row in counted:
+            try:
+                by_status[row[0]] = int(row[1])
+            except (IndexError, ValueError):
+                continue
+    else:
+        for row in rows:
+            by_status[row[1]] = by_status.get(row[1], 0) + 1
+    running, pending = by_status.get("running", 0), by_status.get("pending", 0)
+    running_ids = [row[0] for row in rows if row[1] == "running"]
+    pending_ids = [row[0] for row in rows if row[1] == "pending"]
+    parts = []
+    if running:
+        parts.append(f"{running} run(s) stuck in running for over {threshold:.0f}s: {', '.join(running_ids[:5])}")
+    if pending:
+        parts.append(f"{pending} run(s) queued (pending) and not started for over {threshold:.0f}s: {', '.join(pending_ids[:5])}")
     return check(
         "stuck_runs",
-        RED,
-        f"{total} run(s) stuck in running/pending for over {threshold:.0f}s: {ids}",
+        RED if running else YELLOW,
+        "; ".join(parts),
         threshold_sec=threshold,
-        stuck=total,
+        stuck=running + pending,
+        running=running,
+        pending=pending,
         run_ids=[row[0] for row in rows],
     )
 
@@ -357,18 +445,13 @@ def check_journal_persistence(dialect: Dialect) -> dict:
     """
     window = _env_float("NOVA_GATE_JOURNAL_WINDOW_SECONDS", DEFAULT_JOURNAL_WINDOW_SECONDS)
     terminal = ", ".join(f"'{s}'" for s in TERMINAL_STATUSES)
-    where = (
-        "r.llm_call_count > 0 "
-        "AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = r.run_id) "
-        f"AND (r.status NOT IN ({terminal}) OR r.created_at > {dialect.seconds_ago(window)})"
-    )
+    where = f"r.llm_call_count > 0 AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = r.run_id) AND (r.status NOT IN ({terminal}) OR r.created_at > {dialect.seconds_ago(window)})"
     rows = _query_rows(
         dialect,
-        f"SELECT r.run_id, r.status, r.created_at, r.llm_call_count FROM runs r "
-        f"WHERE {where} ORDER BY r.created_at DESC LIMIT {DETAIL_LIMIT}",
+        f"SELECT r.run_id, r.status, r.created_at, r.llm_call_count FROM runs r WHERE {where} ORDER BY r.created_at DESC LIMIT {DETAIL_LIMIT}",
     )
     if rows is None:
-        return check("journal_persistence", YELLOW, f"could not query the runs table ({dialect.name})", window_sec=window)
+        return check("journal_persistence", YELLOW, _unavailable(dialect), window_sec=window)
     if not rows:
         return check(
             "journal_persistence",
@@ -400,7 +483,9 @@ def _current_boot_log() -> str | None:
 
     The log is appended across restarts, so a warning left by an earlier
     boot says nothing about the process running now. The entrypoint writes
-    a dated banner at every start, which gives the boundary.
+    a dated banner at every container start; uvicorn logs "Started server
+    process [pid]" at every worker start, including each ``--reload``.
+    The later of the two is the boundary.
     """
     path = _gateway_log_path()
     try:
@@ -419,7 +504,11 @@ def _current_boot_log() -> str | None:
     except OSError:
         return None
     text = raw.decode("utf-8", errors="replace")
+    # The latest of either boundary: a container start (entrypoint banner)
+    # or a worker start (which a --reload produces without a banner).
     index = text.rfind(BOOT_MARKER)
+    for match in WORKER_START.finditer(text):
+        index = max(index, match.start())
     if index == -1:
         return None
     return text[index:]
@@ -468,8 +557,7 @@ def check_multi_instance_providers(dialect: Dialect) -> dict:
         return check(
             "multi_instance_providers",
             YELLOW,
-            "cannot read the live AioSandboxProvider count from this host "
-            "(the registry is per-process; the gateway log has no current boot)",
+            "cannot read the live AioSandboxProvider count from this host (the registry is per-process; the gateway log has no current boot)",
             instances=None,
         )
     if count > 1:
@@ -487,6 +575,12 @@ def check_multi_instance_providers(dialect: Dialect) -> dict:
         instances=count,
         source=source,
     )
+
+
+#: SQL literal for the reaper's error (no quote in it, escaped anyway).
+_ORPHAN_LITERAL = "'" + ORPHAN_ERROR.replace("'", "''") + "'"
+_IS_ORPHANED = f"error = {_ORPHAN_LITERAL}"
+_NOT_ORPHANED = f"(error IS NULL OR error <> {_ORPHAN_LITERAL})"
 
 
 def _percentile(values: list[float], q: float) -> float:
@@ -512,16 +606,20 @@ def check_run_completion_latency(dialect: Dialect) -> dict:
 
     A signal, not a verdict: a long tail here is usually a genuinely
     heavy task, and it is worth seeing the drift without paging for it.
+
+    Runs reaped as orphans are left out: their ``updated_at`` is the moment
+    a later gateway boot reaped them, so a few dead runs reaped after a
+    quiet night pushed p95 to 6055 s. ``orphaned_runs`` counts them instead.
     """
     threshold = _env_float("NOVA_GATE_LATENCY_P95_SECONDS", DEFAULT_LATENCY_P95_SECONDS)
     terminal = ", ".join(f"'{s}'" for s in TERMINAL_STATUSES)
     duration = dialect.seconds_between("updated_at", "created_at")
     rows = _query_rows(
         dialect,
-        f"SELECT {duration} FROM runs WHERE status IN ({terminal}) ORDER BY updated_at DESC LIMIT {LATENCY_SAMPLE}",
+        f"SELECT {duration} FROM runs WHERE status IN ({terminal}) AND {_NOT_ORPHANED} ORDER BY updated_at DESC LIMIT {LATENCY_SAMPLE}",
     )
     if rows is None:
-        return check("run_completion_latency", YELLOW, f"could not query the runs table ({dialect.name})", threshold_sec=threshold)
+        return check("run_completion_latency", YELLOW, _unavailable(dialect), threshold_sec=threshold)
     durations = []
     for row in rows:
         try:
@@ -555,11 +653,41 @@ def check_run_completion_latency(dialect: Dialect) -> dict:
     )
 
 
+def check_orphaned_runs(dialect: Dialect) -> dict:
+    """Runs the gateway reaped because their worker died with a restart.
+
+    Thresholds: YELLOW when any run was reaped within
+    ``NOVA_GATE_ORPHAN_WINDOW_SECONDS`` (default one hour) — a restart
+    recently killed in-flight work, and its user saw the run end in an
+    error. GREEN otherwise. Never RED: the reap is the recovery path
+    working, and ``stuck_runs`` already turns red when recovery does not
+    happen. The last-24h count is reported alongside for context.
+    """
+    window = _env_float("NOVA_GATE_ORPHAN_WINDOW_SECONDS", DEFAULT_ORPHAN_WINDOW_SECONDS)
+    context = max(window, ORPHAN_CONTEXT_SECONDS)
+    rows = _query_rows(
+        dialect,
+        f"SELECT SUM(CASE WHEN updated_at > {dialect.seconds_ago(window)} THEN 1 ELSE 0 END), COUNT(*) FROM runs WHERE {_IS_ORPHANED} AND updated_at > {dialect.seconds_ago(context)}",
+    )
+    if rows is None:
+        return check("orphaned_runs", YELLOW, _unavailable(dialect), window_sec=window)
+    try:
+        recent = int(str(rows[0][0]).strip() or 0) if rows else 0
+        day = int(str(rows[0][1]).strip() or 0) if rows else 0
+    except (IndexError, ValueError):
+        return check("orphaned_runs", YELLOW, "could not parse the orphaned-run count", window_sec=window)
+    detail = f"{recent} run(s) reaped as orphans in the last {window:.0f}s, {day} in the last {context:.0f}s"
+    if recent:
+        detail += " — a gateway restart killed in-flight work"
+    return check("orphaned_runs", YELLOW if recent else GREEN, detail, window_sec=window, recent=recent, day=day)
+
+
 CHECKS = (
     check_stuck_runs,
     check_journal_persistence,
     check_multi_instance_providers,
     check_run_completion_latency,
+    check_orphaned_runs,
 )
 
 
