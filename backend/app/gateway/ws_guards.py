@@ -134,17 +134,31 @@ async def caller_owns_thread_via_store(thread_id: str, store) -> bool:
     thread's own owner until the first run materialised the directory — and the
     client's geometric backoff then kept the panel blank for another 30s.
 
-    ``require_existing=True`` matches the socket rule: a missing row is a
-    denial, because thread ids are guessable.
+    A missing row is a denial, because thread ids are guessable. So is a row
+    with no owner: ``check_access`` treats ``user_id IS NULL`` as shared and
+    grants it to *any* caller, and every consumer of this fallback (the voice
+    socket, the task/computer sockets, the sandbox shell, files and preview
+    proxies) would then open a guessable thread to every user. The
+    owner-scoped ``get`` returns a row only when its owner is the caller.
+
+    The one exception is auth-disabled single-user mode, where every request
+    runs as ``DEFAULT_USER_ID`` and an ownerless row is still the operator's.
     """
     if not thread_id or store is None:
         return False
     try:
-        user_id = get_effective_user_id()
+        user_id = str(get_effective_user_id())
     except Exception:
         return False
     try:
-        return await store.check_access(thread_id, str(user_id), require_existing=True)
+        if await store.get(thread_id, user_id=user_id) is not None:
+            return True
+        from app.gateway.auth_disabled import is_auth_disabled
+
+        if is_auth_disabled():
+            record = await store.get(thread_id, user_id=None)
+            return record is not None and record.get("user_id") is None
+        return False
     except Exception:
         logger.warning("ownership fallback failed for thread=%s", thread_id, exc_info=True)
         return False

@@ -124,3 +124,19 @@ class TestAuthDisabledSingleUserMode:
 
     def test_a_missing_row_is_still_refused(self, store):
         assert _owns("t-nowhere", store) is False
+
+
+def test_the_websocket_guard_refuses_an_ownerless_row(store, tmp_path, monkeypatch):
+    """The voice and task/computer sockets go through ``ws_caller_owns_thread``,
+    which used ``check_access`` and so admitted any caller to an ownerless row."""
+    from app.gateway import ws_guards
+
+    monkeypatch.setattr(ws_guards, "get_paths", lambda: SimpleNamespace(thread_dir=lambda tid, user_id=None: tmp_path / "none" / str(tid)))
+    asyncio.run(store.create("t-orphan-ws", user_id=None))
+    asyncio.run(store.create("t-mine-ws", user_id="alice"))
+    websocket = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(thread_store=store)))
+    with _as_user("mallory"):
+        assert asyncio.run(ws_guards.ws_caller_owns_thread(websocket, "t-orphan-ws")) is False
+        assert asyncio.run(ws_guards.ws_caller_owns_thread(websocket, "t-mine-ws")) is False
+    with _as_user("alice"):
+        assert asyncio.run(ws_guards.ws_caller_owns_thread(websocket, "t-mine-ws")) is True

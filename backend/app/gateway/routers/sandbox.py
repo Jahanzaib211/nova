@@ -280,36 +280,13 @@ async def _owns_thread_or_fresh(thread_id: str, request: Request) -> bool:
 async def _caller_owns_thread_via_store_strict(thread_id: str, store) -> bool:
     """The metadata-row fallback, requiring ``row owner == caller``.
 
-    Stricter than ``ws_guards.caller_owns_thread_via_store``: that one goes
-    through ``check_access(require_existing=True)``, which treats a row whose
-    ``user_id`` is NULL as shared and grants it to *any* caller. These
-    endpoints start dev servers, read files and proxy into the container, so
-    an ownerless (legacy / migration) row would open a guessable thread id's
-    sandbox to every user. The owner-scoped ``get`` returns a row only when
-    its owner is the caller, which refuses ownerless rows by construction.
-
-    The one exception is auth-disabled single-user mode, where every request
-    runs as ``DEFAULT_USER_ID`` and everything on the box belongs to the one
-    operator: there an ownerless row is still that operator's.
+    One definition shared with the sockets: see
+    :func:`app.gateway.ws_guards.caller_owns_thread_via_store`, which refuses
+    ownerless rows except in auth-disabled single-user mode.
     """
-    if not thread_id or store is None:
-        return False
-    try:
-        user_id = str(get_effective_user_id())
-    except Exception:
-        return False
-    try:
-        if await store.get(thread_id, user_id=user_id) is not None:
-            return True
-        from app.gateway.auth_disabled import is_auth_disabled
+    from app.gateway.ws_guards import caller_owns_thread_via_store
 
-        if is_auth_disabled():
-            record = await store.get(thread_id, user_id=None)
-            return record is not None and record.get("user_id") is None
-        return False
-    except Exception:
-        logger.warning("ownership fallback failed for thread=%s", sanitize_log_param(thread_id), exc_info=True)
-        return False
+    return await caller_owns_thread_via_store(thread_id, store)
 
 
 def _sandbox_log_path(thread_id: str, user_id: str | None = None) -> Path:
