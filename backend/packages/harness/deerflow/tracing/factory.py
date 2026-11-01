@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from deerflow.config import (
@@ -7,6 +8,8 @@ from deerflow.config import (
     get_tracing_config,
     validate_enabled_tracing_providers,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _create_langsmith_tracer(config) -> Any:
@@ -50,5 +53,17 @@ def build_tracing_callbacks() -> list[Any]:
                 callbacks.append(_create_langfuse_handler(tracing_config.langfuse))
             except Exception as exc:  # pragma: no cover - exercised via tests with monkeypatch
                 raise RuntimeError(f"Langfuse tracing initialization failed: {exc}") from exc
+        elif provider == "otel":
+            # Local / self-hosted tracing. Off unless BOTH the flag and an
+            # OTLP endpoint are set: an exporter with no endpoint would drop
+            # every span silently, which reads as "tracing works" while
+            # nothing is collected.
+            try:
+                from deerflow.tracing.otel import OTelTracingHandler, otel_tracing_enabled
+
+                if otel_tracing_enabled():
+                    callbacks.append(OTelTracingHandler())
+            except Exception as exc:  # pragma: no cover - exercised via tests with monkeypatch
+                logger.warning("OTLP tracing initialization failed; continuing without it: %s", exc)
 
     return callbacks

@@ -47,11 +47,42 @@ class LangfuseTracingConfig(BaseModel):
             raise ValueError(f"Langfuse tracing is enabled but required settings are missing: {', '.join(missing)}")
 
 
+class OTelTracingConfig(BaseModel):
+    """Configuration for OTLP (local / self-hosted) tracing.
+
+    The collector protocol is the standard one, so the same configuration
+    points at Jaeger, Tempo, Grafana Phlare, a Langfuse v3 instance, or any
+    other OTLP endpoint — with no data leaving the host.
+
+    ``enabled`` means "the flag is set AND an endpoint is known". Unlike
+    LangSmith (whose explicit flag without a key is a misconfiguration worth
+    reporting), an OTLP flag without an endpoint is the *expected* state of
+    "tracing switched on but the collector is not configured yet" — and it
+    must not raise: validation runs inside the agent's build path, so an
+    error here would stop the agent from starting.
+    """
+
+    enabled: bool = Field(...)
+    endpoint: str = Field(...)
+    service_name: str = Field(...)
+
+    @property
+    def is_configured(self) -> bool:
+        return self.enabled and bool(self.endpoint)
+
+    def validate(self) -> None:
+        # Never raises. An enabled-but-endpointless OTLP provider is simply
+        # not built (see build_tracing_callbacks), and a missing collector
+        # must degrade to "no spans", never to a failed agent start.
+        return
+
+
 class TracingConfig(BaseModel):
     """Tracing configuration for supported providers."""
 
     langsmith: LangSmithTracingConfig = Field(...)
     langfuse: LangfuseTracingConfig = Field(...)
+    otel: OTelTracingConfig = Field(...)
 
     @property
     def is_configured(self) -> bool:
@@ -64,6 +95,8 @@ class TracingConfig(BaseModel):
             enabled.append("langsmith")
         if self.langfuse.enabled:
             enabled.append("langfuse")
+        if self.otel.enabled:
+            enabled.append("otel")
         return enabled
 
     @property
@@ -73,11 +106,14 @@ class TracingConfig(BaseModel):
             enabled.append("langsmith")
         if self.langfuse.is_configured:
             enabled.append("langfuse")
+        if self.otel.is_configured:
+            enabled.append("otel")
         return enabled
 
     def validate_enabled(self) -> None:
         self.langsmith.validate()
         self.langfuse.validate()
+        self.otel.validate()
 
 
 _tracing_config: TracingConfig | None = None
@@ -124,6 +160,16 @@ def get_tracing_config() -> TracingConfig:
                 public_key=_first_env_value("LANGFUSE_PUBLIC_KEY"),
                 secret_key=_first_env_value("LANGFUSE_SECRET_KEY"),
                 host=_first_env_value("LANGFUSE_BASE_URL") or "https://cloud.langfuse.com",
+            ),
+            otel=OTelTracingConfig(
+                # Local / self-hosted tracing: a standard OTLP collector on
+                # this host (or any reachable one). Nothing leaves the box
+                # unless the operator points it somewhere else. The provider
+                # counts as enabled only when BOTH the flag and an endpoint
+                # are present — a flag alone has nowhere to send the spans.
+                enabled=(_env_flag_preferred("NOVA_OTEL_TRACING", "OTEL_TRACING") and bool(_first_env_value("OTEL_EXPORTER_OTLP_ENDPOINT"))),
+                endpoint=_first_env_value("OTEL_EXPORTER_OTLP_ENDPOINT") or "",
+                service_name=_first_env_value("OTEL_SERVICE_NAME") or "nova",
             ),
         )
         return _tracing_config
