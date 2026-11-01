@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 from agent_sandbox import Sandbox as AioSandboxClient
 
 from deerflow.config.paths import VIRTUAL_PATH_PREFIX
@@ -40,6 +41,27 @@ def _is_set(event: Any) -> bool:
             return bool(event())
     except Exception:
         return False
+    return False
+
+
+def _is_transport_error(exc: BaseException) -> bool:
+    """Whether ``exc`` means the sandbox's HTTP endpoint could not be reached.
+
+    Decided by exception type only -- never by message text. A command whose
+    own output says "Connection refused" (``curl`` to a dead port) ran in a
+    perfectly healthy sandbox; matching on text reported it as unreachable
+    and threw its output away. The ``__cause__``/``__context__`` chain is
+    walked because the SDK may wrap the transport error.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (ConnectionRefusedError, httpx.ConnectError)):
+            return True
+        if isinstance(current, OSError) and current.errno == errno.ECONNREFUSED:
+            return True
+        current = current.__cause__ or current.__context__
     return False
 
 
@@ -238,34 +260,44 @@ class AioSandbox(Sandbox):
             logger.debug("busy tracker failed for sandbox %s", self.id, exc_info=True)
 
     def _execute_command_locked(self, command: str) -> str:
+        try:
+            return self._execute_command_raising(command)
+        except Exception as e:
+            logger.error(f"Failed to execute command in sandbox: {e}")
+            return f"Error: {e}"
+
+    def _execute_command_raising(self, command: str) -> str:
+        """The blocking exec, letting exceptions escape.
+
+        :meth:`_execute_command_locked` folds every failure into an
+        ``"Error: ..."`` string, which leaves a caller only the message text
+        to tell a dead sandbox from a failing command. The streaming fallback
+        needs the exception itself to make that call by type.
+        """
         with self._lock:
-            try:
-                wire = _single_line(command)
-                result = self._require_client().shell.exec_command(command=wire, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
-                output = result.data.output if result.data else ""
+            wire = _single_line(command)
+            result = self._require_client().shell.exec_command(command=wire, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
+            output = result.data.output if result.data else ""
 
-                if output and _ERROR_OBSERVATION_SIGNATURE in output:
-                    logger.warning("ErrorObservation detected in sandbox output, retrying on a fresh session")
-                    # exec_command only auto-creates a session when called with
-                    # no id, so the recovery session must be created explicitly
-                    # before we target it on retry.
-                    fresh_id = str(uuid.uuid4())
-                    self._require_client().shell.create_session(id=fresh_id)
+            if output and _ERROR_OBSERVATION_SIGNATURE in output:
+                logger.warning("ErrorObservation detected in sandbox output, retrying on a fresh session")
+                # exec_command only auto-creates a session when called with
+                # no id, so the recovery session must be created explicitly
+                # before we target it on retry.
+                fresh_id = str(uuid.uuid4())
+                self._require_client().shell.create_session(id=fresh_id)
+                try:
+                    result = self._require_client().shell.exec_command(command=wire, id=fresh_id, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
+                    output = result.data.output if result.data else ""
+                finally:
+                    # Release the one-shot recovery session, best-effort, so
+                    # repeated corruption can't accumulate sessions.
                     try:
-                        result = self._require_client().shell.exec_command(command=wire, id=fresh_id, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
-                        output = result.data.output if result.data else ""
-                    finally:
-                        # Release the one-shot recovery session, best-effort, so
-                        # repeated corruption can't accumulate sessions.
-                        try:
-                            self._require_client().shell.cleanup_session(fresh_id)
-                        except Exception as cleanup_error:
-                            logger.warning(f"Failed to release recovery session {fresh_id}: {cleanup_error}")
+                        self._require_client().shell.cleanup_session(fresh_id)
+                    except Exception as cleanup_error:
+                        logger.warning(f"Failed to release recovery session {fresh_id}: {cleanup_error}")
 
-                return output if output else "(no output)"
-            except Exception as e:
-                logger.error(f"Failed to execute command in sandbox: {e}")
-                return f"Error: {e}"
+            return output if output else "(no output)"
 
     # This backend can report output while a command is still running, so the
     # Terminal fills line by line instead of showing one block at exit.
@@ -348,6 +380,13 @@ class AioSandbox(Sandbox):
         on_chunk: "Callable[[str, bool], None]",
         cancel_event: "Any | None" = None,
     ) -> str:
+        # Every blocking fallback runs AFTER the ``with`` block exits. The
+        # blocking path takes the same non-reentrant lock (calling it while
+        # holding this one deadlocked the worker thread on 2026-11-01), and
+        # releasing/re-acquiring by hand inside the ``with`` both let another
+        # command slip in mid-call and masked the real error with a
+        # RuntimeError whenever the release itself failed.
+        fallback: str | None = None
         with self._lock:
             # A dedicated session per command: the default session is shared
             # with `shell_session`, whose screen would mix another process's
@@ -355,7 +394,6 @@ class AioSandbox(Sandbox):
             session_id = f"nova-stream-{uuid.uuid4()}"
             log_path = f"/tmp/nova-stream-{uuid.uuid4().hex}.log"
 
-            start_error: Exception | None = None
             try:
                 self._require_client().shell.create_session(id=session_id)
                 self._require_client().shell.exec_command(
@@ -365,92 +403,121 @@ class AioSandbox(Sandbox):
                     no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT,
                 )
             except Exception as e:  # noqa: BLE001
-                start_error = e
                 logger.warning("streaming exec failed to start (%s); falling back to blocking exec", e)
                 self._cleanup_stream_session(session_id)
+                fallback = "start"
 
-            if start_error is not None:
-                # Release the lock before the blocking fallback: _execute_command_locked
-                # takes the same non-reentrant lock, and calling it while holding
-                # this one deadlocked the worker thread on 2026-11-01.
-                lock = self._lock
-                lock.release()
-                try:
-                    refused = isinstance(start_error, ConnectionRefusedError) or "Connection refused" in str(start_error)
-                    if refused:
-                        # Try the blocking path once; if the sandbox is really
-                        # gone it fails fast with the same error.
-                        try:
-                            out = self._execute_command_locked(command)
-                        except Exception as e2:  # noqa: BLE001
-                            out = f"Error: {e2}"
-                        if isinstance(out, str) and out.startswith("Error:") and ("Connection refused" in out or "refused" in out.lower()):
-                            if self._on_unreachable is not None:
-                                try:
-                                    self._on_unreachable(self.id)
-                                except Exception:  # noqa: BLE001
-                                    logger.debug("on_unreachable callback failed", exc_info=True)
-                            return f"Error: sandbox {self.id} is unreachable (connection refused); it may have been destroyed. Retry the command."
-                    # Ordinary failure or recovered: run the blocking path.
-                    return self._execute_command_locked(command)
-                finally:
-                    lock.acquire()
+            if fallback is None:
+                seen, cancelled = self._stream_until_done(session_id, log_path, on_chunk, cancel_event)
+                if cancelled:
+                    # Say so plainly: the agent must not read a partial output
+                    # as a finished command and build on it.
+                    return f"{seen}\n[command cancelled by the run's stop signal]".strip()
+                # The corruption backstop still applies: if the wrapper somehow
+                # did not prevent it, re-run through the blocking path, which
+                # retries on a fresh session.
+                if seen and _ERROR_OBSERVATION_SIGNATURE in seen:
+                    logger.warning("ErrorObservation in streamed output, retrying on the blocking path")
+                    fallback = "error_observation"
+                else:
+                    return seen if seen else "(no output)"
 
-            seen = ""
-            tailing = True
-            cancelled = False
-            try:
-                while True:
-                    # The run's stop signal, observed from INSIDE the command.
-                    # The stream loop in the worker only checks between tool
-                    # calls, so a run sitting in a long build could not be
-                    # stopped for hours (the 2026-11-01 incident). The event
-                    # is an asyncio.Event whose is_set() is a plain attribute
-                    # read, safe from this worker thread.
-                    if cancel_event is not None and _is_set(cancel_event):
-                        cancelled = True
-                        logger.info("streaming command cancelled by the run's stop signal")
-                        break
-                    grew = False
-                    if tailing:
-                        before = len(seen)
-                        seen = self._emit_new_output(log_path, seen, on_chunk)
-                        grew = len(seen) != before
-                        if len(seen) > self._STREAM_MAX_TAIL_BYTES:
-                            logger.debug("streaming output passed %d bytes; tailing off", self._STREAM_MAX_TAIL_BYTES)
-                            tailing = False
-                    # Output arriving is already proof the command is alive, so
-                    # only spend a `view` request when it goes quiet. Halves the
-                    # HTTP traffic during the noisy part of a build -- httpx logs
-                    # every one of these at INFO, and the poll loop was ~25% of
-                    # all gateway log lines.
-                    if not grew and self._stream_status(session_id) != "running":
-                        break
-                    time.sleep(self._STREAM_POLL_INTERVAL)
+        # Lock released.
+        if fallback == "start":
+            return self._blocking_fallback(command)
+        return self._execute_command_locked(command)
 
-                # One last read: the final write lands between the previous poll
-                # and the process exiting, so without this the last line of
-                # every command would be missing from the live view.
-                seen = self._emit_new_output(log_path, seen, on_chunk)
-            finally:
-                self._cleanup_stream_session(session_id, log_path)
+    def _stream_until_done(
+        self,
+        session_id: str,
+        log_path: str,
+        on_chunk: "Callable[[str, bool], None]",
+        cancel_event: "Any | None",
+    ) -> tuple[str, bool]:
+        """Tail the command's output file until it exits or the run is cancelled.
 
-            # The corruption backstop still applies: if the wrapper somehow did
-            # not prevent it, re-run through the blocking path, which retries on
-            # a fresh session. Release the lock first: _execute_command_locked
-            # takes the same non-reentrant lock.
+        Returns ``(output, cancelled)``. Always releases the session; on
+        cancel it first kills the still-running process, so a stopped run
+        does not leave its build burning CPU in the sandbox.
+        """
+        seen = ""
+        tailing = True
+        cancelled = False
+        try:
+            while True:
+                # The run's stop signal, observed from INSIDE the command.
+                # The stream loop in the worker only checks between tool
+                # calls, so a run sitting in a long build could not be
+                # stopped for hours (the 2026-11-01 incident). The event
+                # is an asyncio.Event whose is_set() is a plain attribute
+                # read, safe from this worker thread.
+                if cancel_event is not None and _is_set(cancel_event):
+                    cancelled = True
+                    logger.info("streaming command cancelled by the run's stop signal")
+                    break
+                grew = False
+                if tailing:
+                    before = len(seen)
+                    seen = self._emit_new_output(log_path, seen, on_chunk)
+                    grew = len(seen) != before
+                    if len(seen) > self._STREAM_MAX_TAIL_BYTES:
+                        logger.debug("streaming output passed %d bytes; tailing off", self._STREAM_MAX_TAIL_BYTES)
+                        tailing = False
+                # Output arriving is already proof the command is alive, so
+                # only spend a `view` request when it goes quiet. Halves the
+                # HTTP traffic during the noisy part of a build -- httpx logs
+                # every one of these at INFO, and the poll loop was ~25% of
+                # all gateway log lines.
+                if not grew and self._stream_status(session_id) != "running":
+                    break
+                time.sleep(self._STREAM_POLL_INTERVAL)
+
+            # One last read: the final write lands between the previous poll
+            # and the process exiting, so without this the last line of
+            # every command would be missing from the live view.
+            seen = self._emit_new_output(log_path, seen, on_chunk)
+        finally:
             if cancelled:
-                # Say so plainly: the agent must not read a partial output as
-                # a finished command and build on it.
-                return f"{seen}\n[command cancelled by the run's stop signal]".strip()
-            if seen and _ERROR_OBSERVATION_SIGNATURE in seen:
-                logger.warning("ErrorObservation in streamed output, retrying on the blocking path")
-                self._lock.release()
+                # Only queue the `rm -f` on the session once its process is
+                # gone: on a still-busy session it would wait behind the very
+                # command we are abandoning.
+                killed = self._kill_stream_process(session_id)
+                self._cleanup_stream_session(session_id, log_path if killed else None)
+            else:
+                self._cleanup_stream_session(session_id, log_path)
+        return seen, cancelled
+
+    def _kill_stream_process(self, session_id: str) -> bool:
+        """Terminate the process in a streaming session. Never raises."""
+        try:
+            self._require_client().shell.kill_process(id=session_id)
+            return True
+        except Exception as e:  # noqa: BLE001 - a failed kill must not fail the cancel
+            logger.warning("failed to kill cancelled streaming command in session %s: %s", session_id, e)
+            return False
+
+    def _blocking_fallback(self, command: str) -> str:
+        """Run ``command`` on the blocking path after a failed streaming start.
+
+        Must be called WITHOUT holding ``self._lock``. Runs the command exactly
+        once: its result is the answer, whatever the command printed. The
+        sandbox is declared unreachable only when the blocking call itself
+        raises a transport error -- never because the command's own output
+        mentions a refused connection.
+        """
+        try:
+            return self._execute_command_raising(command)
+        except Exception as e:  # noqa: BLE001
+            if not _is_transport_error(e):
+                logger.error(f"Failed to execute command in sandbox: {e}")
+                return f"Error: {e}"
+            logger.warning("sandbox %s unreachable on the blocking fallback: %s", self.id, e)
+            if self._on_unreachable is not None:
                 try:
-                    return self._execute_command_locked(command)
-                finally:
-                    self._lock.acquire()
-            return seen if seen else "(no output)"
+                    self._on_unreachable(self.id)
+                except Exception:  # noqa: BLE001
+                    logger.debug("on_unreachable callback failed", exc_info=True)
+            return f"Error: sandbox {self.id} is unreachable (connection refused); it may have been destroyed. Retry the command."
 
     def _emit_new_output(self, log_path: str, seen: str, on_chunk: "Callable[[str, bool], None]") -> str:
         """Report whatever the output file has gained since ``seen``."""

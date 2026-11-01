@@ -334,23 +334,23 @@ def _make_provider_for_reconciliation():
     return provider
 
 
-def test_reconcile_destroys_old_containers_to_free_their_ports():
-    """A container older than idle_timeout is destroyed, not adopted.
+def test_reconcile_destroys_containers_past_max_lifetime():
+    """A container older than ``max_lifetime`` is destroyed, not adopted.
 
-    Changed deliberately: adopting it left its host port occupied, and a
-    freshly created sandbox had to retry through a pile of quarantined
-    ports (2026-11-01: a new sandbox retried 4 times against ports held by
-    deer-flow-sandbox-3d21a09c). Destroying at startup frees the port
-    immediately.
+    ``max_lifetime`` bounds a sandbox's age however busy it is, so a
+    container past it is stale by definition, and destroying it at startup
+    frees its host port immediately (2026-11-01: a new sandbox retried 4
+    times against ports held by deer-flow-sandbox-3d21a09c).
     """
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
     old_info = SandboxInfo(
         sandbox_id="old12345",
         sandbox_url="http://localhost:8081",
         container_name="deer-flow-sandbox-old12345",
-        created_at=now - 1200,  # 20 minutes old, > 600s idle_timeout
+        created_at=now - 7200,  # 2 hours old, > 3600s max_lifetime
     )
     provider._backend.list_running.return_value = [old_info]
 
@@ -358,6 +358,48 @@ def test_reconcile_destroys_old_containers_to_free_their_ports():
 
     provider._backend.destroy.assert_called_once()
     assert "old12345" not in provider._warm_pool
+
+
+def test_reconcile_adopts_container_older_than_idle_timeout():
+    """Age past ``idle_timeout`` is uptime, not inactivity: adopt, never destroy.
+
+    After a gateway restart the in-process maps are empty, so a sandbox the
+    user was working in two minutes ago looks exactly like this one: created
+    20 minutes ago, longer than the 10-minute idle timeout. Destroying it on
+    that basis killed live sandboxes on every restart. The idle checker
+    reaps it later if nobody re-acquires it.
+    """
+    provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
+    now = time.time()
+
+    info = SandboxInfo(
+        sandbox_id="active12",
+        sandbox_url="http://localhost:8081",
+        container_name="deer-flow-sandbox-active12",
+        created_at=now - 1200,  # 20 minutes old, > 600s idle_timeout
+    )
+    provider._backend.list_running.return_value = [info]
+
+    provider._reconcile_orphans()
+
+    provider._backend.destroy.assert_not_called()
+    assert "active12" in provider._warm_pool
+
+
+def test_reconcile_without_max_lifetime_destroys_nothing():
+    """No ``max_lifetime`` configured: even a very old container is adopted."""
+    provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = None
+    now = time.time()
+
+    info = SandboxInfo(sandbox_id="ancient1", sandbox_url="http://localhost:8081", created_at=now - 86400 * 3)
+    provider._backend.list_running.return_value = [info]
+
+    provider._reconcile_orphans()
+
+    provider._backend.destroy.assert_not_called()
+    assert "ancient1" in provider._warm_pool
 
 
 def test_reconcile_adopts_young_containers():
@@ -382,21 +424,22 @@ def test_reconcile_adopts_young_containers():
 
 
 def test_reconcile_mixed_containers_stale_destroyed_young_adopted():
-    """Stale containers are destroyed; young ones are adopted for reuse."""
+    """Containers past max_lifetime are destroyed; younger ones are adopted for reuse."""
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
     old_info = SandboxInfo(
         sandbox_id="old_one",
         sandbox_url="http://localhost:8081",
         container_name="deer-flow-sandbox-old_one",
-        created_at=now - 1200,
+        created_at=now - 7200,
     )
     young_info = SandboxInfo(
         sandbox_id="young_one",
         sandbox_url="http://localhost:8082",
         container_name="deer-flow-sandbox-young_one",
-        created_at=now - 60,
+        created_at=now - 1200,  # past idle_timeout, within max_lifetime
     )
     provider._backend.list_running.return_value = [old_info, young_info]
 
@@ -417,8 +460,9 @@ def test_reconcile_skips_already_tracked_containers():
         sandbox_id="existing1",
         sandbox_url="http://localhost:8081",
         container_name="deer-flow-sandbox-existing1",
-        created_at=now - 1200,
+        created_at=now - 7200,
     )
+    provider._config["max_lifetime"] = 3600
     # Pre-populate _sandboxes to simulate already-tracked container
     provider._sandboxes["existing1"] = MagicMock()
     provider._backend.list_running.return_value = [existing_info]
@@ -453,12 +497,13 @@ def test_reconcile_no_running_containers():
 
 
 def test_reconcile_multiple_containers_all_adopted():
-    """Multiple stale containers are each destroyed (their ports freed)."""
+    """Multiple containers past max_lifetime are each destroyed (their ports freed)."""
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
-    info1 = SandboxInfo(sandbox_id="cont_one", sandbox_url="http://localhost:8081", created_at=now - 1200)
-    info2 = SandboxInfo(sandbox_id="cont_two", sandbox_url="http://localhost:8082", created_at=now - 1200)
+    info1 = SandboxInfo(sandbox_id="cont_one", sandbox_url="http://localhost:8081", created_at=now - 7200)
+    info2 = SandboxInfo(sandbox_id="cont_two", sandbox_url="http://localhost:8082", created_at=now - 7200)
 
     provider._backend.list_running.return_value = [info1, info2]
 
@@ -472,6 +517,7 @@ def test_reconcile_multiple_containers_all_adopted():
 def test_reconcile_zero_created_at_adopted():
     """Containers with created_at=0 (unknown age) should still be adopted into warm pool."""
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
 
     info = SandboxInfo(sandbox_id="unknown1", sandbox_url="http://localhost:8081", created_at=0.0)
     provider._backend.list_running.return_value = [info]
@@ -483,9 +529,10 @@ def test_reconcile_zero_created_at_adopted():
 
 
 def test_reconcile_idle_timeout_zero_adopts_all():
-    """When idle_timeout=0 (disabled), all containers are still adopted into warm pool."""
+    """When idle_timeout=0 (disabled), all containers are adopted, even past max_lifetime."""
     provider = _make_provider_for_reconciliation()
     provider._config["idle_timeout"] = 0
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
     old_info = SandboxInfo(sandbox_id="old_one", sandbox_url="http://localhost:8081", created_at=now - 7200)

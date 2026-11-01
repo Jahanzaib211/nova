@@ -19,6 +19,7 @@ import signal
 import threading
 import time
 import uuid
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 
 try:
@@ -62,6 +63,12 @@ class _SharedActivity:
 
     def track_busy(self, sandbox_id: str, delta: int) -> None:
         with self._lock:
+            known = sandbox_id in self._busy or sandbox_id in self._last
+            if delta < 0 and not known:
+                # The sandbox was forgotten (destroyed) while this command
+                # ran; its finishing -1 must not resurrect an activity entry
+                # that nothing will ever forget again.
+                return
             self._busy[sandbox_id] = self._busy.get(sandbox_id, 0) + delta
             if self._busy[sandbox_id] <= 0:
                 self._busy.pop(sandbox_id, None)
@@ -83,7 +90,10 @@ class _SharedActivity:
 
 _SHARED_ACTIVITY = _SharedActivity()
 
-_LIVE_INSTANCES: set = set()
+# Weak, so a provider dropped by ``reset_sandbox_provider()`` is neither
+# pinned in memory nor counted towards a false "more than one instance"
+# warning when its replacement registers.
+_LIVE_INSTANCES: "weakref.WeakSet" = weakref.WeakSet()
 
 
 def _register_live_instance(instance) -> None:
@@ -370,10 +380,20 @@ class AioSandboxProvider(SandboxProvider):
         """Reconcile orphaned containers left by previous process lifecycles.
 
         On startup, enumerate all running containers matching our prefix:
-        a container that is provably stale (older than ``idle_timeout``) is
+        a container that is provably stale (older than ``max_lifetime``) is
         destroyed so its host ports are free immediately, and the rest are
         adopted into the warm pool, where the idle checker reclaims the ones
         nobody re-acquires.
+
+        **Age is not activity.** ``created_at`` measures uptime, and
+        ``idle_timeout`` is an inactivity bound, so comparing the two says
+        nothing about whether a user is working in the sandbox. A gateway
+        restart (any backend ``.py`` save under ``--reload``) leaves every
+        in-process map empty, so a sandbox someone used a minute ago looks
+        exactly like an abandoned one. Destroying containers older than
+        ``idle_timeout`` here killed live sandboxes on every restart. Only
+        ``max_lifetime`` — a hard bound on age regardless of activity — is a
+        valid reason to destroy at startup.
 
         What is NOT destroyed, deliberately:
 
@@ -381,6 +401,8 @@ class AioSandboxProvider(SandboxProvider):
         - a container whose age is unknown (``created_at`` unreadable) — it
           may be serving another replica, and the 2026-11-01 incident was
           exactly a live sandbox reaped by another instance;
+        - anything past ``idle_timeout`` but within ``max_lifetime`` (or with
+          no ``max_lifetime`` configured) — it is adopted instead;
         - anything at all when ``idle_timeout`` is 0 (the idle check is off).
 
         Adopting instead of destroying leaves the decision to the idle
@@ -400,11 +422,15 @@ class AioSandboxProvider(SandboxProvider):
         adopted = 0
         destroyed = 0
         idle_timeout = self._config.get("idle_timeout", DEFAULT_IDLE_TIMEOUT)
-        # ``idle_timeout: 0`` documents "disable the idle check". Treating it
-        # as the default would silently re-arm a 10-minute bound that the
-        # operator explicitly turned off, and startup destruction is the most
-        # destructive thing this method does.
-        destroy_older_than = idle_timeout if idle_timeout and idle_timeout > 0 else None
+        max_lifetime = self._config.get("max_lifetime")
+        # Only a positive ``max_lifetime`` licenses destruction at startup:
+        # it bounds age outright, whereas ``idle_timeout`` bounds inactivity,
+        # which a container's creation time cannot measure. ``idle_timeout:
+        # 0`` documents "disable the idle check" and keeps startup
+        # destruction off entirely, as it always has.
+        idle_check_on = bool(idle_timeout) and idle_timeout > 0
+        lifetime_on = isinstance(max_lifetime, (int, float)) and max_lifetime > 0
+        destroy_older_than = max_lifetime if idle_check_on and lifetime_on else None
 
         for info in running:
             age = current_time - info.created_at if info.created_at > 0 else float("inf")
@@ -423,9 +449,9 @@ class AioSandboxProvider(SandboxProvider):
             # another instance. Adopt it and let the idle checker decide,
             # since that one consults the shared activity clock.
             if destroy_older_than is not None and info.created_at > 0 and age > destroy_older_than:
-                # Stale containers (older than idle_timeout) are destroyed
-                # outright instead of adopted: they would be reaped by the
-                # idle checker anyway, but destroying now frees their host
+                # Containers past max_lifetime are destroyed outright
+                # instead of adopted: no amount of activity would save them
+                # from _enforce_max_lifetime, and destroying now frees their host
                 # ports immediately so a freshly created sandbox does not
                 # have to retry through a pile of quarantined ports
                 # (2026-11-01: new sandbox retried 4 times against ports
@@ -433,7 +459,7 @@ class AioSandboxProvider(SandboxProvider):
                 try:
                     self._backend.destroy(info)
                     destroyed += 1
-                    logger.info(f"Destroyed stale orphan container {info.sandbox_id} (age: {age:.0f}s > idle_timeout {destroy_older_than}s)")
+                    logger.info(f"Destroyed stale orphan container {info.sandbox_id} (age: {age:.0f}s > max_lifetime {destroy_older_than}s)")
                 except Exception as e:
                     logger.warning(f"Failed to destroy stale orphan {info.sandbox_id}: {e}")
                 continue
@@ -962,7 +988,18 @@ class AioSandboxProvider(SandboxProvider):
         except Exception:
             alive = None
         if alive is False:
-            self._remove_tracked_sandbox(sandbox_id)
+            # ``expected_info``: the health check ran outside the lock, so the
+            # same deterministic id may have been re-created meanwhile; only
+            # drop the exact entry that was checked.
+            sandbox, _, removed = self._remove_tracked_sandbox(sandbox_id, expected_info=info)
+            if not removed:
+                logger.info(f"Skipped dropping unreachable sandbox {sandbox_id}: tracked info changed after health check")
+                return
+            if sandbox is not None:
+                try:
+                    sandbox.close()
+                except Exception as e:
+                    logger.warning(f"Error closing unreachable sandbox {sandbox_id}: {e}")
             logger.warning(f"Dropped unreachable sandbox {sandbox_id}")
 
     #: Fallback when ``sandbox.startup_timeout`` is unset. Three minutes,
@@ -1368,6 +1405,7 @@ class AioSandboxProvider(SandboxProvider):
 
     def shutdown(self) -> None:
         """Shutdown all sandboxes. Thread-safe and idempotent."""
+        _LIVE_INSTANCES.discard(self)
         with self._lock:
             if self._shutdown_called:
                 return
