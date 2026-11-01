@@ -85,6 +85,10 @@ class RunResponse(BaseModel):
     thread_id: str
     assistant_id: str | None = None
     status: str
+    # Phase C0 join key (``uuid4().hex``): the same value the SSE stream's first
+    # ``: correlation_id=`` comment frame carries and diagnostics records stamp.
+    # Empty for legacy rows written before the column existed.
+    correlation_id: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     kwargs: dict[str, Any] = Field(default_factory=dict)
     multitask_strategy: str = "reject"
@@ -143,6 +147,7 @@ def _record_to_response(record: RunRecord) -> RunResponse:
         thread_id=record.thread_id,
         assistant_id=record.assistant_id,
         status=record.status.value,
+        correlation_id=record.correlation_id or "",
         metadata=record.metadata,
         kwargs=record.kwargs,
         multitask_strategy=record.multitask_strategy,
@@ -173,6 +178,7 @@ def _service_to_response(detail: Any) -> RunResponse:
         thread_id=detail.thread_id,
         assistant_id=getattr(detail, "assistant_id", None),
         status=detail.status,
+        correlation_id=getattr(detail, "correlation_id", "") or "",
         created_at=getattr(detail, "created_at", "") or "",
         updated_at=getattr(detail, "updated_at", "") or "",
         total_input_tokens=getattr(detail, "total_input_tokens", 0),

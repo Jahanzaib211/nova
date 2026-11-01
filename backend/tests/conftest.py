@@ -19,6 +19,12 @@ import pytest
 # Make 'app' and 'deerflow' importable from any working directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+# Make the shared test helpers (``support``, ``_agent_e2e_helpers``) importable
+# from subdirectories such as ``tests/integration/`` too. pytest's default
+# rootdir-prepend import mode only puts a test module's *own* directory on
+# sys.path, so without this those imports resolved only when a module under
+# ``tests/`` happened to be collected first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Neutralize deployment-specific environment: the repo-root .env pins the
 # deployment paths to their in-container locations (/app/...), which do not
@@ -269,3 +275,33 @@ def _isolate_dev_server_registry():
     finally:
         ds._servers.clear()
         ds._servers.update(saved)
+
+
+# ---------------------------------------------------------------------------
+# Shared Gateway e2e harness (see tests/support/gateway_app.py).
+#
+# Defined here rather than in each e2e module so tests/ and tests/integration/
+# boot the app the same way. A module that needs a different staged config
+# overrides ``isolated_gateway_config_yaml``.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def isolated_gateway_config_yaml() -> str:
+    from support.gateway_app import MINIMAL_GATEWAY_CONFIG_YAML
+
+    return MINIMAL_GATEWAY_CONFIG_YAML
+
+
+@pytest.fixture
+def isolated_deer_flow_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_gateway_config_yaml: str) -> Path:
+    from support.gateway_app import stage_isolated_deer_flow_home
+
+    return stage_isolated_deer_flow_home(tmp_path, monkeypatch, config_yaml=isolated_gateway_config_yaml)
+
+
+@pytest.fixture
+def isolated_app(isolated_deer_flow_home: Path, monkeypatch: pytest.MonkeyPatch):
+    from support.gateway_app import build_isolated_app
+
+    return build_isolated_app(isolated_deer_flow_home, monkeypatch)
