@@ -102,12 +102,20 @@ def looks_like_crypto_pair(symbol: str) -> bool:
     return "/" in symbol
 
 
+#: Shortest window ever requested: Friday's close to a holiday Tuesday, plus today.
+_YF_MIN_LOOKBACK_DAYS = 5
+
+
 def _yf_period_for(interval: str, limit: int) -> str:
     """Smallest Yahoo `period` that can contain `limit` bars of `interval`."""
     minutes = _INTERVAL_MINUTES.get(interval, 1440)
     # 1.6x headroom: sessions have gaps (weekends, holidays, market hours),
     # so N bars of history spans materially more than N intervals of wall time.
-    days_needed = max(1, int((limit * minutes * 1.6) / 1440) + 1)
+    # The multiplier alone fails small requests: 40 x 15m is under a day of
+    # wall time, so it asked for "1d", which on a weekend or holiday Monday
+    # holds no session and came back empty. The latest bars are then on the
+    # previous trading day, so always reach back over a long weekend.
+    days_needed = max(_YF_MIN_LOOKBACK_DAYS, int((limit * minutes * 1.6) / 1440) + 1)
     cap = _YF_MAX_DAYS.get(interval)
     if cap:
         days_needed = min(days_needed, cap)

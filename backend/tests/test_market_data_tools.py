@@ -248,6 +248,16 @@ class TestYfinanceProvider:
         which is indistinguishable from a bad symbol — so clamp instead."""
         assert providers._yf_period_for("1m", 10000) == "7d"
 
+    @pytest.mark.parametrize(("interval", "limit"), [("15m", 40), ("1h", 5), ("5m", 10), ("1d", 3)])
+    def test_a_small_request_still_spans_a_long_weekend(self, interval: str, limit: int) -> None:
+        """Forty 15m bars is under a day of wall time, so the multiplier alone
+        asked Yahoo for "1d" -- which, on a Sunday or a holiday Monday, holds
+        no session at all and came back empty ("no data returned for 'GC=F'").
+        The latest N bars are on Friday; the window must reach them."""
+        period = providers._yf_period_for(interval, limit)
+        assert period.endswith("d")
+        assert int(period[:-1]) >= 5, f"{interval} x {limit} -> {period} cannot reach back over a 3-day weekend"
+
 
 class TestCcxtProvider:
     def _exchange(self, rows, timeframes=None):
