@@ -336,6 +336,31 @@ def _acp_agents_enabled() -> bool:
     return value == "1"
 
 
+def _nvidia_available() -> bool:
+    """Mirror scripts/pm2-deerflow.sh: nvidia-smi works AND the nvidia runtime is registered."""
+    try:
+        rc_smi, _, _ = _run(["nvidia-smi", "-L"], timeout=15)
+        if rc_smi != 0:
+            return False
+        rc_info, out, _ = _run(["docker", "info", "--format", "{{json .Runtimes}}"], timeout=15)
+        return rc_info == 0 and '"nvidia"' in out
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _local_llm_enabled() -> bool:
+    """Mirror scripts/pm2-deerflow.sh: NOVA_LOCAL_LLM=1 from process env or .env."""
+    value = os.environ.get("NOVA_LOCAL_LLM")
+    if value is None:
+        try:
+            for line in (REPO_ROOT / ".env").read_text(encoding="utf-8").splitlines():
+                if line.startswith("NOVA_LOCAL_LLM="):
+                    value = line.split("=", 1)[1].strip().strip("\"'")
+        except OSError:
+            value = None
+    return value == "1"
+
+
 def check_compose_chain() -> dict:
     """Union of per-service config_files vs the canonical chain."""
     canonical = {
@@ -352,11 +377,19 @@ def check_compose_chain() -> dict:
         pass
     if speech_on:
         canonical.add("docker-compose.voice.yaml")
+    # GPU voice overlay: only when speech is on AND Docker can hand a GPU to a
+    # container (same gate as scripts/pm2-deerflow.sh).
+    if speech_on and _nvidia_available():
+        canonical.add("docker-compose.voice-gpu.yaml")
     # ACP agents (Claude Code + OpenClaw inside Nova) are an opt-in pair of
     # overlays, selected by NOVA_ACP_AGENTS=1 in .env exactly as
     # scripts/pm2-deerflow.sh selects them.
     if _acp_agents_enabled():
         canonical.update({"docker-compose.cli-auth.yaml", "docker-compose.acp.yaml"})
+    # Self-hosted LLM (Ollama on the GPU): only when NOVA_LOCAL_LLM=1 AND the
+    # nvidia runtime is registered, same as the launcher.
+    if _local_llm_enabled() and _nvidia_available():
+        canonical.add("docker-compose.local-llm.yaml")
 
     seen: set[str] = set()
     missing_containers = []
@@ -764,6 +797,13 @@ def check_file_mounts() -> dict:
         for m in mounts:
             src, dest = m.get("Source", ""), m.get("Destination", "")
             if m.get("Type") != "bind" or not src or not os.path.isfile(src):
+                continue
+            # .claude.json is live Claude Code CLI state (OAuth tokens, onboarding
+            # flags) that the CLI rewrites on every invocation. It is not a
+            # project config file, so a stale mount here is expected, not drift.
+            # Skipping it prevents the gate from being permanently RED on a file
+            # that changes by design.
+            if Path(src).name == ".claude.json" or Path(dest).name == ".claude.json":
                 continue
             try:
                 host = hashlib.sha256(Path(src).read_bytes()).hexdigest()
