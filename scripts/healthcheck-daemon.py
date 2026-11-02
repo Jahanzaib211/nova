@@ -341,6 +341,64 @@ async def probe_runs() -> ProbeResult:
     return ProbeResult(name, Status.GREEN, "no run-liveness problems", latency)
 
 
+def _escalate_gate_file(
+    name: str,
+    gate: str,
+    env_key: str,
+    default_interval: float,
+    label: str,
+    only: frozenset[str] | None = None,
+) -> ProbeResult:
+    """Turn a gate status file into a probe result, the way probe_runs does.
+
+    ``only`` restricts the verdict to the named checks of that gate (P18_disk
+    reads just the disk checks of host.json, so a red rotate job does not
+    masquerade as a full disk). A missing, unreadable or stale file is
+    YELLOW: the gate not having run is a nova-gates problem, not evidence.
+    Read-only: probes built on this have no FIX_DISPATCH entry by design -- a
+    filling disk needs a human to find the writer.
+    """
+    t0 = time.perf_counter()
+    path = os.environ.get(env_key, "").strip()
+    target = Path(path) if path else Path.home() / ".nova" / "gates" / f"{gate}.json"
+    try:
+        payload = json.loads(target.read_text())
+    except FileNotFoundError:
+        return ProbeResult(name, Status.YELLOW, f"no {gate} gate status file yet", (time.perf_counter() - t0) * 1000)
+    except (OSError, json.JSONDecodeError) as exc:
+        return ProbeResult(name, Status.YELLOW, f"unreadable: {exc}", (time.perf_counter() - t0) * 1000)
+    latency = (time.perf_counter() - t0) * 1000
+    try:
+        interval = float(payload.get("producer_interval_sec") or default_interval)
+    except (TypeError, ValueError):
+        interval = default_interval
+    age = time.time() - (payload.get("checked_at_epoch") or 0)
+    if age > 3 * interval:
+        return ProbeResult(name, Status.YELLOW, f"{gate} gate is stale ({age / 60:.0f} min old)", latency)
+
+    checks = [c for c in payload.get("checks", []) if isinstance(c, dict) and (only is None or c.get("name") in only)]
+    if only is None:
+        overall = payload.get("overall")
+    else:
+        overall = "red" if any(c.get("status") == "red" for c in checks) else ("yellow" if any(c.get("status") == "yellow" for c in checks) else "green")
+    if overall == "red":
+        bad = [f"{c.get('name')}: {str(c.get('detail', ''))[:120]}" for c in checks if c.get("status") == "red"]
+        return ProbeResult(name, Status.RED, f"{label}: {'; '.join(bad) or f'see {gate}.json'}", latency)
+    if overall == "yellow":
+        warn = [c.get("name") for c in checks if c.get("status") == "yellow"]
+        return ProbeResult(name, Status.YELLOW, f"{', '.join(warn) or f'see {gate}.json'}", latency)
+    return ProbeResult(name, Status.GREEN, f"no {label} problems", latency)
+
+
+#: The host-gate checks that say "the disk is filling" (P18_disk ignores the rest).
+DISK_CHECKS = frozenset({"disk", "disk_growth", "inodes", "docker_build_cache", "docker_volumes"})
+
+
+async def probe_disk() -> ProbeResult:
+    """Escalate the disk-headroom checks of the host gate."""
+    return _escalate_gate_file("P18_disk", "host", "NOVA_HOST_GATE_STATUS_PATH", 300, "disk headroom", only=DISK_CHECKS)
+
+
 # ---------------------------------------------------------------------------
 # Status file
 # ---------------------------------------------------------------------------
@@ -1850,6 +1908,7 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
         ),
         ("P16_host_bridge", probe_host_bridge),
         ("P17_runs", probe_runs),
+        ("P18_disk", probe_disk),
     ]
     return probe_factories
 

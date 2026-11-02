@@ -665,6 +665,18 @@ PROBES: list[tuple[str, Callable[[], list[dict]]]] = [
 # --------------------------------------------------------------------------- report
 
 
+def _apply_optional_stacks(checks: list[dict]) -> list[dict]:
+    """Report stacks declared in NOVA_GATE_OPTIONAL_STACKS as `disabled` while
+    none of their items answers (scripts/lib/gate_optional.py). A partly-up
+    declared stack keeps its real status, so nothing that runs is hidden."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+        import gate_optional  # type: ignore[import-not-found]
+    except ImportError:
+        return checks
+    return gate_optional.apply_to_inventory(checks, gate_optional.optional_stacks())
+
+
 def build_report(probes: list[tuple[str, Callable[[], list[dict]]]] | None = None) -> dict:
     checks: list[dict] = []
     for name, fn in probes if probes is not None else PROBES:
@@ -672,6 +684,7 @@ def build_report(probes: list[tuple[str, Callable[[], list[dict]]]] | None = Non
             checks.extend(fn())
         except Exception as exc:  # noqa: BLE001 - one broken probe must not hide the rest
             checks.append(item(name, kind="agent_gateway", display_name=name, health="unknown", detail=f"probe raised: {exc}"))
+    checks = _apply_optional_stacks(checks)
     overall = RED if any(c["status"] == RED for c in checks) else (YELLOW if any(c["status"] == YELLOW for c in checks) else GREEN)
     return {
         "gate": "inventory",

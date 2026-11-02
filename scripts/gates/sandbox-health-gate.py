@@ -229,8 +229,18 @@ def evaluate_tool_inventory(image_ok: bool, manifest_tools: dict, live_tools: di
 # ---------------------------------------------------------------- vendor integrity
 
 
-def evaluate_vendor_integrity() -> dict:
-    """Check that vendor/ has the binaries needed to rebuild without network."""
+def evaluate_vendor_integrity(images_present: bool = False) -> dict:
+    """Check that vendor/ has the binaries needed to rebuild without network.
+
+    vendor/ is a rebuild cache, not a runtime dependency: the Agent's Computer
+    runs from the image chain. So an incomplete cache is RED only while the
+    image chain is also incomplete -- then the next rebuild must pull ~1 GB
+    over a throttled link before the sandbox can start again. With every
+    layer present it is YELLOW: true ("an offline rebuild is not possible"),
+    worth fixing, but not an outage. Before this the gate sat red every cycle
+    on a host whose sandbox was healthy, which is how a red gate stops being
+    read.
+    """
     if not SANDBOX_DIR.is_dir():
         return check("vendor_integrity", RED, "docker/sandbox/ directory missing")
 
@@ -255,10 +265,18 @@ def evaluate_vendor_integrity() -> dict:
     total_size = sum(f.stat().st_size for f in vendor.rglob("*") if f.is_file()) / (1024**3)
 
     if missing and not android_ok:
+        hint = ("restage: cd docker/sandbox && NOVA_ANDROID_DONOR=nova-sandbox-android:latest ./build.sh android "
+                "(rust.tar needs a rustup toolchain on the host)")
+        if images_present:
+            return check("vendor_integrity", YELLOW,
+                          f"image chain present, but an offline rebuild is not possible: missing {', '.join(missing)} "
+                          f"and the Android SDK ({total_size:.1f}GB staged) — {hint}",
+                          missing=missing, android=android_ok, wheels=wheel_count,
+                          staged_gb=round(total_size, 1), offline_rebuild=False)
         return check("vendor_integrity", RED,
                       f"{len(missing)} critical binaries missing, Android SDK missing — "
-                      f"rebuild requires full network download ({total_size:.1f}GB staged)",
-                      missing=missing, android=android_ok, wheels=wheel_count)
+                      f"rebuild requires full network download ({total_size:.1f}GB staged) — {hint}",
+                      missing=missing, android=android_ok, wheels=wheel_count, offline_rebuild=False)
 
     if missing:
         return check("vendor_integrity", YELLOW,
@@ -432,6 +450,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--rebuild", action="store_true",
                         help="trigger rebuild if image is missing")
+    parser.add_argument("--print", dest="print_only", action="store_true",
+                        help="print only; do not write the status file")
     args = parser.parse_args(argv)
 
     checks = []
@@ -451,9 +471,10 @@ def main(argv: list[str] | None = None) -> int:
     checks.append(evaluate_tool_inventory(exists, manifest_tools, live_tools))
 
     # 4. Vendor integrity — can we rebuild without network?
-    vendor_check = evaluate_vendor_integrity()
+    images_present = checks[0]["status"] == GREEN
+    vendor_check = evaluate_vendor_integrity(images_present)
     checks.append(vendor_check)
-    vendor_ok = vendor_check["status"] != RED
+    vendor_ok = vendor_check.get("offline_rebuild", vendor_check["status"] != RED)
 
     # 5. Host resources
     checks.append(evaluate_host_resources())
@@ -462,7 +483,8 @@ def main(argv: list[str] | None = None) -> int:
     checks.append(evaluate_auto_rebuild(exists, vendor_ok, args.rebuild))
 
     report = build_report(checks)
-    write_atomic(Path(args.out) / "sandbox-health.json", report)
+    if not args.print_only:
+        write_atomic(Path(args.out) / "sandbox-health.json", report)
 
     if args.json:
         print(json.dumps(report, indent=2))
