@@ -102,7 +102,7 @@
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.0.15",
     "@types/gsap": "^3.0.0",
-    "@types/node": "^20.14.10",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.23.0",
