@@ -7,6 +7,7 @@ from nova.config.app_config import AppConfig
 from nova.reflection import resolve_variable
 from nova.sandbox.security import is_host_bash_allowed
 from nova.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
+from nova.tools.builtins.browser_layer_tools import BROWSER_LAYER_TOOLS
 from nova.tools.builtins.igino_research_tool import igino_research_tool
 from nova.tools.builtins.workspace_tools import (
     agent_notify_tool,
@@ -73,6 +74,8 @@ BUILTIN_TOOLS = [
     browser_click_tool,
     browser_input_tool,
     browser_eval_tool,
+    # Browser layer: persistent profiles, downloads, PDF, captcha hand-off.
+    *BROWSER_LAYER_TOOLS,
     screenshot_tool,
     deploy_expose_tool,
     agent_notify_tool,

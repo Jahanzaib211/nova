@@ -485,7 +485,7 @@ def _localhost_navigate_hint(url: str, page_text: str | None) -> str | None:
     )
 
 
-def _cdp_browser_op(client, op, *, thread_id: str | None = None):
+def _cdp_browser_op(client, op, *, thread_id: str | None = None, layer=None, fresh_page: bool = False):
     """Run a page operation over CDP against the sandbox's live chromium.
 
     Fallback for AIO images that predate the SDK's ``/v1/browser_page/*`` REST
@@ -498,6 +498,12 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
     ``op`` receives a Playwright ``Page`` chosen by ``_active_page`` (the
     genuinely visible tab when one exists, else a fresh one) and returns a
     string.
+
+    ``layer`` (a ``nova.browser.session.LayerContext``) wraps ``op`` in the
+    browser layer: profile auto-load, stealth/blocking, download capture,
+    recording and the captcha probe. ``fresh_page`` runs ``op`` in a new tab
+    whose lifetime ``op`` owns (used by the web_fetch ladder so it never
+    navigates the tab the user is watching away from their page).
 
     ``thread_id`` scopes the CDP *connect* through the per-thread circuit
     breaker + bounded retry (browser_circuit_breaker.py / browser_retry.py)
@@ -544,8 +550,16 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
             browser = _connect(pw)
         try:
             ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-            page, _created = _active_page(ctx)
-            return op(page)
+            if fresh_page:
+                page, _created = ctx.new_page(), True
+            else:
+                page, _created = _active_page(ctx)
+            if layer is None:
+                return op(page)
+            from nova.browser.session import prepared
+
+            with prepared(browser, ctx, page, layer):
+                return op(page)
         except Exception as op_exc:
             # Classify for a consistent, typed error surface — NOT for retry.
             # `op` still runs at most once (see the invariant above); this
@@ -917,6 +931,46 @@ def shell_kill_tool(runtime: Runtime, description: str, session_id: str = "main"
         return f"Error: {e}"
 
 
+def _browser_layer(runtime: Runtime, tool: str, detail: dict, *, capture_downloads: bool = False):
+    """Build the browser-layer context for one tool call (see ``nova.browser.session``)."""
+    from nova.browser.session import LayerContext
+    from nova.runtime.user_context import resolve_runtime_user_id
+
+    outputs = None
+    thread_id = None
+    try:
+        td = get_thread_data(runtime) or {}
+        outputs = Path(td["outputs_path"]) if td.get("outputs_path") else None
+        thread_id = _extract_thread_id_from_thread_data(td)
+    except Exception:
+        pass
+    user_id = None
+    with contextlib.suppress(Exception):
+        user_id = resolve_runtime_user_id(runtime)
+    return LayerContext(tool=tool, thread_id=thread_id, user_id=user_id, outputs_dir=outputs, detail=detail, capture_downloads=capture_downloads)
+
+
+def _layer_suffix(layer) -> str:
+    """Model-facing notes the browser layer adds to a tool result."""
+    parts = []
+    if layer.profile_loaded:
+        parts.append(f"(browser profile {layer.profile_loaded!r} loaded)")
+    for d in layer.downloads:
+        if d.get("state") == "completed":
+            parts.append(f"Download saved: {d['path']} ({d.get('bytes', 0):,} bytes)")
+        else:
+            parts.append(f"Download {d.get('state', 'unfinished')}: {d['path']}")
+    return ("\n\n" + "\n".join(parts)) if parts else ""
+
+
+def _layer_block_result(layer, url: str) -> str | None:
+    if layer.block is not None and layer.block.needs_human:
+        from nova.browser.session import needs_human_message
+
+        return needs_human_message(layer.block, url)
+    return None
+
+
 @tool("browser_navigate", parse_docstring=True)
 def browser_navigate_tool(
     runtime: Runtime,
@@ -930,6 +984,9 @@ def browser_navigate_tool(
     itself — use them for servers you started inside the sandbox. Services
     running on the host machine are reachable at
     ``http://<host-alias>:<port>`` instead (see ``DEER_FLOW_SANDBOX_HOST``).
+
+    If the page shows a captcha the result starts with ``NEEDS_HUMAN`` — ask
+    the user to solve it in the live view, then call ``browser_await_human``.
 
     Args:
         description: Why you are navigating. ALWAYS PROVIDE THIS FIRST.
@@ -950,22 +1007,31 @@ def browser_navigate_tool(
         if cached is not None:
             return cached
 
+    layer = _browser_layer(runtime, "browser_navigate", {"url": url})
     try:
-        try:
-            client.browser_page.navigate(url=url, wait_until="load", timeout=20000)
-            text = _data_str(client.browser_page.get_text())[:1500]
-        except Exception as sdk_exc:
-            if not _should_fallback_to_cdp(sdk_exc):
-                raise
 
-            # Image predates /v1/browser_page — drive the same chromium over CDP.
-            def _nav(page):
-                page.goto(url, wait_until="load", timeout=20000)
-                return page.inner_text("body", timeout=5000)
+        def _nav(page):
+            page.goto(url, wait_until="load", timeout=20000)
+            return page.inner_text("body", timeout=5000)
 
-            text = _cdp_browser_op(client, _nav, thread_id=_tid)[:1500]
+        if layer.wants_cdp():
+            # Stealth, blocking, profiles and recording only exist on the CDP
+            # path — the SDK's REST navigate cannot carry them.
+            text = _cdp_browser_op(client, _nav, thread_id=_tid, layer=layer)[:1500]
+        else:
+            try:
+                client.browser_page.navigate(url=url, wait_until="load", timeout=20000)
+                text = _data_str(client.browser_page.get_text())[:1500]
+            except Exception as sdk_exc:
+                if not _should_fallback_to_cdp(sdk_exc):
+                    raise
+                # Image predates /v1/browser_page — drive the same chromium over CDP.
+                text = _cdp_browser_op(client, _nav, thread_id=_tid, layer=layer)[:1500]
         _write_sandbox_observation(_get_sandbox_id(runtime), "browser", url, f"navigated to {url[:80]}")
-        result = f"Opened {url}\n\n{text}"
+        blocked = _layer_block_result(layer, url)
+        if blocked:
+            return f"{blocked}\n\n{text[:500]}"
+        result = f"Opened {url}\n\n{text}" + _layer_suffix(layer)
         hint = _localhost_navigate_hint(url, text)
         if hint:
             result += hint
@@ -982,6 +1048,9 @@ def browser_navigate_tool(
 def browser_click_tool(runtime: Runtime, description: str, selector: str) -> str:
     """Click an element in the sandbox browser by CSS selector.
 
+    If the click starts a download, the file is saved to
+    ``/mnt/user-data/outputs/downloads/`` and its path is returned.
+
     Args:
         description: Why you are clicking. ALWAYS PROVIDE THIS FIRST.
         selector: CSS selector of the element to click.
@@ -989,27 +1058,34 @@ def browser_click_tool(runtime: Runtime, description: str, selector: str) -> str
     client, _tid, err = _aio_client_and_thread(runtime)
     if err:
         return err
+    layer = _browser_layer(runtime, "browser_click", {"selector": selector}, capture_downloads=True)
     try:
-        try:
-            client.browser_page.click(selector=selector)
-        except Exception as sdk_exc:
-            if not _should_fallback_to_cdp(sdk_exc):
-                raise
 
-            def _click(page):
-                def _do(target, timeout):
-                    # Scroll first: Playwright auto-waits for actionability,
-                    # but an element parked outside a scroll container can
-                    # stay "not stable" until something moves it into view.
-                    with contextlib.suppress(Exception):
-                        target.locator(selector).first.scroll_into_view_if_needed(timeout=timeout)
-                    target.click(selector, timeout=timeout)
-                    return ""
+        def _click(page):
+            def _do(target, timeout):
+                # Scroll first: Playwright auto-waits for actionability,
+                # but an element parked outside a scroll container can
+                # stay "not stable" until something moves it into view.
+                with contextlib.suppress(Exception):
+                    target.locator(selector).first.scroll_into_view_if_needed(timeout=timeout)
+                target.click(selector, timeout=timeout)
+                return ""
 
-                return _selector_action(page, selector, _do, what="click")
+            return _selector_action(page, selector, _do, what="click")
 
-            _cdp_browser_op(client, _click, thread_id=_tid)
-        return f"Clicked {selector}."
+        if layer.wants_cdp():
+            _cdp_browser_op(client, _click, thread_id=_tid, layer=layer)
+        else:
+            try:
+                client.browser_page.click(selector=selector)
+            except Exception as sdk_exc:
+                if not _should_fallback_to_cdp(sdk_exc):
+                    raise
+                _cdp_browser_op(client, _click, thread_id=_tid, layer=layer)
+        blocked = _layer_block_result(layer, "")
+        if blocked:
+            return blocked
+        return f"Clicked {selector}." + _layer_suffix(layer)
     except Exception as e:
         return f"Error: {e}"
 
@@ -1027,31 +1103,39 @@ def browser_input_tool(runtime: Runtime, description: str, selector: str, text: 
     client, _tid, err = _aio_client_and_thread(runtime)
     if err:
         return err
+    # Recordings keep only the length of `text` — it is often a password.
+    layer = _browser_layer(runtime, "browser_input", {"selector": selector, "text": text, "press_enter": press_enter})
     try:
-        try:
-            # `text=` is the SDK's parameter name, not `value=`. Passing
-            # `value=` raised TypeError before any request left the process,
-            # and that TypeError did not match the old CDP-fallback gate, so
-            # this tool could never type anything on any image.
-            client.browser_page.fill(selector=selector, text=text)
-            if press_enter:
-                client.browser_page.press_key(key="Enter")
-        except Exception as sdk_exc:
-            if not _should_fallback_to_cdp(sdk_exc):
-                raise
 
-            def _fill(page):
-                def _do(target, timeout):
-                    target.fill(selector, text, timeout=timeout)
-                    return ""
-
-                _selector_action(page, selector, _do, what="type into")
-                if press_enter:
-                    page.keyboard.press("Enter")
+        def _fill(page):
+            def _do(target, timeout):
+                target.fill(selector, text, timeout=timeout)
                 return ""
 
-            _cdp_browser_op(client, _fill, thread_id=_tid)
-        return f"Typed into {selector}."
+            _selector_action(page, selector, _do, what="type into")
+            if press_enter:
+                page.keyboard.press("Enter")
+            return ""
+
+        if layer.wants_cdp():
+            _cdp_browser_op(client, _fill, thread_id=_tid, layer=layer)
+        else:
+            try:
+                # `text=` is the SDK's parameter name, not `value=`. Passing
+                # `value=` raised TypeError before any request left the process,
+                # and that TypeError did not match the old CDP-fallback gate, so
+                # this tool could never type anything on any image.
+                client.browser_page.fill(selector=selector, text=text)
+                if press_enter:
+                    client.browser_page.press_key(key="Enter")
+            except Exception as sdk_exc:
+                if not _should_fallback_to_cdp(sdk_exc):
+                    raise
+                _cdp_browser_op(client, _fill, thread_id=_tid, layer=layer)
+        blocked = _layer_block_result(layer, "")
+        if blocked:
+            return blocked
+        return f"Typed into {selector}." + _layer_suffix(layer)
     except Exception as e:
         return f"Error: {e}"
 
@@ -1074,18 +1158,20 @@ def browser_eval_tool(runtime: Runtime, description: str, script: str) -> str:
     client, _tid, err = _aio_client_and_thread(runtime)
     if err:
         return err
+    layer = _browser_layer(runtime, "browser_eval", {"script": script})
     try:
-        try:
-            # `expression=` is the SDK's parameter name, not `script=`.
-            # Passing `script=` raised TypeError before any request was
-            # made, and that TypeError did not match the old CDP-fallback
-            # gate, so this tool had never executed a line of JavaScript.
-            return _data_str(client.browser_page.evaluate(expression=script))[:2000] or "(no result)"
-        except Exception as sdk_exc:
-            if not _should_fallback_to_cdp(sdk_exc):
-                raise
-            result = _cdp_browser_op(client, lambda page: _format_eval_result(_eval_js(page, script)), thread_id=_tid)
-            return result[:2000] or "(no result)"
+        if not layer.wants_cdp():
+            try:
+                # `expression=` is the SDK's parameter name, not `script=`.
+                # Passing `script=` raised TypeError before any request was
+                # made, and that TypeError did not match the old CDP-fallback
+                # gate, so this tool had never executed a line of JavaScript.
+                return _data_str(client.browser_page.evaluate(expression=script))[:2000] or "(no result)"
+            except Exception as sdk_exc:
+                if not _should_fallback_to_cdp(sdk_exc):
+                    raise
+        result = _cdp_browser_op(client, lambda page: _format_eval_result(_eval_js(page, script)), thread_id=_tid, layer=layer)
+        return result[:2000] or "(no result)"
     except Exception as e:
         return f"Error: {e}"
 
