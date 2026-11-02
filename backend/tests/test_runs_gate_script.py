@@ -51,6 +51,11 @@ def _sqlite_db(tmp_path: Path, rows: list[tuple], events: list[tuple]) -> Path:
     return db
 
 
+def _utc_ago(seconds: int) -> str:
+    """A ``YYYY-MM-DD HH:MM:SS`` UTC timestamp ``seconds`` in the past (sqlite's datetime format)."""
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() - seconds))
+
+
 def _wire_sqlite(gate, monkeypatch, tmp_path, rows, events=()):
     """Point the gate's sqlite reader at a temporary database."""
     db = _sqlite_db(tmp_path, rows, list(events))
@@ -261,7 +266,9 @@ def test_journal_catches_a_terminal_run_inside_the_window(gate, monkeypatch, tmp
         gate,
         monkeypatch,
         tmp_path,
-        rows=[("recent", "error", 36, "2026-11-01 10:00:00", "2026-11-01 10:10:00")],
+        # Relative to now: a fixed date passes on the day it is written and
+        # fails once it ages out of the 24 h window.
+        rows=[("recent", "error", 36, _utc_ago(3600), _utc_ago(3000))],
     )
     monkeypatch.setenv("NOVA_GATE_JOURNAL_WINDOW_SECONDS", "86400")
     result = gate.check_journal_persistence(dialect)
