@@ -55,7 +55,7 @@ Open <http://localhost:2026>
 ```
 nova/
 ├── backend/
-│   ├── packages/harness/deerflow/   # Agent framework (deerflow.*)
+│   ├── packages/harness/nova/   # Agent framework (nova.*)
 │   │   ├── agents/                  # LangGraph agent system
 │   │   │   ├── lead_agent/          # Main agent (factory + system prompt)
 │   │   │   ├── middlewares/         # 19 middleware components
@@ -141,12 +141,12 @@ make lint               # Lint with ruff
 make format             # Format code with ruff
 ```
 
-The `detect-blocking-io` target parses `app/`, `packages/harness/deerflow/`,
+The `detect-blocking-io` target parses `app/`, `packages/harness/nova/`,
 and `scripts/` with AST. By default it reports only blocking IO candidates that
 are inside async code, reachable from async code in the same file, or reachable
 from sync-only `AgentMiddleware` before/after hooks that LangGraph can execute
 on the async graph path. It prints a concise summary and writes complete JSON
-findings to `.deer-flow/blocking-io-findings.json` at the repository root
+findings to `.nova/blocking-io-findings.json` at the repository root
 (both `make detect-blocking-io` from the repo root and `cd backend && make
 detect-blocking-io` resolve to the same repo-root path). JSON findings include
 `priority`, `location`, `blocking_call`, `event_loop_exposure`, `reason`, and
@@ -172,9 +172,9 @@ Regression tests related to Docker/provisioner behavior:
 Blocking-IO runtime gate (`tests/blocking_io/`):
 
 - Wraps every item under `tests/blocking_io/` with a strict Blockbuster
-  context scoped to `app.*` and `deerflow.*` (see
+  context scoped to `app.*` and `nova.*` (see
   `tests/support/detectors/blocking_io_runtime.py`). Any sync blocking IO
-  call whose stack passes through DeerFlow business code while running on
+  call whose stack passes through Nova business code while running on
   the asyncio event loop raises `BlockingError` and fails the test.
 - Regression anchors live there: `test_skills_load.py` (locks the
   `asyncio.to_thread` offload around `LocalSkillStorage.load_skills`, fix
@@ -195,7 +195,7 @@ Blocking-IO runtime gate (`tests/blocking_io/`):
 
 Boundary check (harness → app import firewall):
 
-- `tests/test_harness_boundary.py` — ensures `packages/harness/deerflow/` never imports from `app.*`
+- `tests/test_harness_boundary.py` — ensures `packages/harness/nova/` never imports from `app.*`
 
 CI runs these regression tests for every pull request via `.github/workflows/backend-unit-tests.yml`.
 
@@ -207,24 +207,24 @@ CI runs these regression tests for every pull request via `.github/workflows/bac
 
 The backend is split into two layers with a strict dependency direction:
 
-- **Harness** (`packages/harness/deerflow/`): Publishable agent framework package (`deerflow-harness`). Import prefix: `deerflow.*`. Contains agent orchestration, tools, sandbox, models, MCP, skills, config — everything needed to build and run agents.
+- **Harness** (`packages/harness/nova/`): Publishable agent framework package (`nova-harness`). Import prefix: `nova.*`. Contains agent orchestration, tools, sandbox, models, MCP, skills, config — everything needed to build and run agents.
 - **App** (`app/`): Unpublished application code. Import prefix: `app.*`. Contains the FastAPI Gateway API and IM channel integrations (Feishu, Slack, Telegram, DingTalk).
 
-**Dependency rule**: App imports deerflow, but deerflow never imports app. This boundary is enforced by `tests/test_harness_boundary.py` which runs in CI.
+**Dependency rule**: App imports nova, but nova never imports app. This boundary is enforced by `tests/test_harness_boundary.py` which runs in CI.
 
 **Import conventions**:
 
 ```python
 # Harness internal
-from deerflow.agents import make_lead_agent
-from deerflow.models import create_chat_model
+from nova.agents import make_lead_agent
+from nova.models import create_chat_model
 
 # App internal
 from app.gateway.app import app
 from app.channels.service import start_channel_service
 
 # App → Harness (allowed)
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 # Harness → App (FORBIDDEN — enforced by test_harness_boundary.py)
 # from app.gateway.routers.uploads import ...  # ← will fail CI
@@ -244,18 +244,18 @@ Setup: Copy `config.example.yaml` to `config.yaml` in the **project root** direc
 
 **Config Hot-Reload Boundary**: Gateway dependencies route through `get_app_config()` on every request, so per-run fields like `models[*].max_tokens`, `summarization.*`, `title.*`, `memory.*`, `subagents.*`, `tools[*]`, and the agent system prompt pick up `config.yaml` edits on the next message. `AppConfig` is intentionally **not** cached on `app.state` — `lifespan()` keeps a local `startup_config` variable for one-shot bootstrap work and passes it to `langgraph_runtime(app, startup_config)`.
 
-Infrastructure fields are **restart-required**. The authoritative list lives in `packages/harness/deerflow/config/reload_boundary.py::STARTUP_ONLY_FIELDS` and is mirrored by the standardised `"startup-only:"` prefix on the corresponding `Field(description=...)` in `AppConfig`, so IDE hover on those fields surfaces the reason inline (no need to context-switch into this table). Currently registered: `database`, `checkpointer`, `run_events`, `stream_bridge`, `sandbox`, `log_level`, `channels`, `channel_connections`. Adding a new restart-required field requires updating the registry; drift is pinned by `tests/test_reload_boundary.py`.
+Infrastructure fields are **restart-required**. The authoritative list lives in `packages/harness/nova/config/reload_boundary.py::STARTUP_ONLY_FIELDS` and is mirrored by the standardised `"startup-only:"` prefix on the corresponding `Field(description=...)` in `AppConfig`, so IDE hover on those fields surfaces the reason inline (no need to context-switch into this table). Currently registered: `database`, `checkpointer`, `run_events`, `stream_bridge`, `sandbox`, `log_level`, `channels`, `channel_connections`. Adding a new restart-required field requires updating the registry; drift is pinned by `tests/test_reload_boundary.py`.
 
 Configuration priority:
 
 1. Explicit `config_path` argument
-2. `DEER_FLOW_CONFIG_PATH` environment variable
+2. `NOVA_CONFIG_PATH` environment variable
 3. `config.yaml` in current directory (backend/)
 4. `config.yaml` in parent directory (project root - **recommended location**)
 
-Levels 1 and 2 are **strict** — a path that is set but missing raises `FileNotFoundError` instead of falling through, so a wrong `DEER_FLOW_CONFIG_PATH` stops the gateway at import.
+Levels 1 and 2 are **strict** — a path that is set but missing raises `FileNotFoundError` instead of falling through, so a wrong `NOVA_CONFIG_PATH` stops the gateway at import.
 
-**In Docker, `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` must be pinned in the compose service's `environment:` block.** The repo-root `.env` holds *host* paths (it has to — `docker-compose.yaml` uses `${DEER_FLOW_CONFIG_PATH}` as a bind-mount source), and `env_file: ../.env` leaks them into any container that does not override them; `environment:` wins over `env_file:`. Omitting the pin is a deferred failure — the container starts, the gateway dies at import, and nginx reports `gateway could not be resolved`, which looks like DNS. Took the public deployment down on 2026-08-17. See [backend/docs/CONFIGURATION.md](backend/docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
+**In Docker, `NOVA_CONFIG_PATH` / `NOVA_EXTENSIONS_CONFIG_PATH` must be pinned in the compose service's `environment:` block.** The repo-root `.env` holds *host* paths (it has to — `docker-compose.yaml` uses `${NOVA_CONFIG_PATH}` as a bind-mount source), and `env_file: ../.env` leaks them into any container that does not override them; `environment:` wins over `env_file:`. Omitting the pin is a deferred failure — the container starts, the gateway dies at import, and nginx reports `gateway could not be resolved`, which looks like DNS. Took the public deployment down on 2026-08-17. See [backend/docs/CONFIGURATION.md](backend/docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
 
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
@@ -267,7 +267,7 @@ MCP servers and skills are configured together in `extensions_config.json` in pr
 Configuration priority:
 
 1. Explicit `config_path` argument
-2. `DEER_FLOW_EXTENSIONS_CONFIG_PATH` environment variable
+2. `NOVA_EXTENSIONS_CONFIG_PATH` environment variable
 3. `extensions_config.json` in current directory (backend/)
 4. `extensions_config.json` in parent directory (project root - **recommended location**)
 
@@ -304,7 +304,7 @@ uv run pytest
 `make detect-blocking-io` statically scans backend business code for blocking
 IO that may run on the backend event loop and is not test-coverage-bound. It
 prints a concise summary for human review and writes complete JSON findings to
-`.deer-flow/blocking-io-findings.json` at the repository root (regardless of
+`.nova/blocking-io-findings.json` at the repository root (regardless of
 whether the target is invoked from the repo root or from `backend/`). JSON
 findings include both broad IO category and review-oriented fields such as
 `priority`, `location`, `blocking_call`, `event_loop_exposure`, `reason`, and
@@ -471,7 +471,7 @@ Regression coverage includes Docker sandbox mode detection and provisioner kubec
 Backend blocking-IO diagnostics are available from the repository root with
 `make detect-blocking-io`: it statically scans backend business code for
 blocking IO that may run on the backend event loop, prints a concise summary,
-and writes complete JSON findings to `.deer-flow/blocking-io-findings.json`.
+and writes complete JSON findings to `.nova/blocking-io-findings.json`.
 The JSON includes compact review records with `priority`, `location`,
 `blocking_call`, `event_loop_exposure`, `reason`, and `code`.
 Gateway artifact serving now forces active web content types (`text/html`, `application/xhtml+xml`, `image/svg+xml`) to download as attachments instead of inline rendering, reducing XSS risk for generated artifacts.

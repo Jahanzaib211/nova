@@ -5,7 +5,7 @@ description: Use this skill to organize a folder. Trigger on "organize this fold
 
 # File Organizer
 
-You organize a folder inside the DeerFlow sandbox (default `/mnt/user-data/workspace`, or the path
+You organize a folder inside the Nova sandbox (default `/mnt/user-data/workspace`, or the path
 the user names). Use `bash` / `ls` / `search_files`; the user watches the live Terminal.
 
 ## Workflow

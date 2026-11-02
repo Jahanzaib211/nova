@@ -78,7 +78,7 @@ make docker-logs ARGS=--nginx
 > On the dev stack the gateway's entrypoint redirects its output to the
 > host-mounted `logs/gateway.log`, so its *container* log is empty.
 > `make docker-logs ARGS=--gateway` follows the real file; a bare
-> `docker logs deer-flow-gateway` will show you nothing and is a common
+> `docker logs nova-gateway` will show you nothing and is a common
 > false lead when debugging a failed start.
 
 If Docker builds are slow in your network, you can override the default package registries before running `make docker-init` or `make docker-start`:
@@ -148,9 +148,9 @@ If `docker ps` still reports a permission error after `usermod`, fully log out a
 ```
 Host Machine
   ↓
-Docker Compose (deer-flow-dev)
-# docker-compose project name is kept as `deer-flow-dev` for backwards
-# compatibility with `pm2 start` and `docker ps --filter name=deer-flow-*`.
+Docker Compose (nova)
+# docker-compose project name is kept as `nova` for backwards
+# compatibility with `pm2 start` and `docker ps --filter name=nova-*`.
 # Internal service DNS names (`gateway`, `frontend`, `nginx`) match the
 # service definitions in docker/docker-compose-dev.yaml.
   ├→ nginx (port 2026) ← Reverse proxy
@@ -374,7 +374,7 @@ removes, or modifies database columns requires a migration file.
 
 **Quick reference:**
 
-- Migration infrastructure: `backend/packages/harness/deerflow/persistence/migrations/`
+- Migration infrastructure: `backend/packages/harness/nova/persistence/migrations/`
 - Always make migrations idempotent (check if column exists before adding)
 - Stamp the alembic version for fresh deployments
 - See `docs/RUNBOOK.md` §8 for full workflow

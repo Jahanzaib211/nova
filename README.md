@@ -19,6 +19,7 @@ Built by **[Ali Technologies](https://www.alilabsx.com)** on top of [DeerFlow](h
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Upgrading from a DeerFlow-named install](#upgrading-from-a-deerflow-named-install)
 - [What Nova adds on DeerFlow](#what-nova-adds-on-deerflow)
 - [Security Arsenal](#security-arsenal) -- blue team, red team, scanning
 - [Core Features](#core-features)
@@ -42,6 +43,24 @@ make docker-start   # or: make dev
 
 Access: <http://localhost:2026>
 
+The Docker stack runs as Compose project `nova` (containers `nova-gateway`, `nova-frontend`, `nova-nginx`, …), keeps local data under `backend/.nova/`, and reads `NOVA_*` environment variables. Under PM2 the supervisor process is `nova` (`scripts/pm2-nova.sh`).
+
+### Upgrading from a DeerFlow-named install
+
+Earlier releases used the DeerFlow names: Python package `deerflow`, env vars `DEER_FLOW_*`, data dir `.deer-flow`, Compose project `deer-flow-dev` and containers `deer-flow-*`. Code changes alone break nothing — for one release:
+
+- `import deerflow…` and `use: deerflow.x:Y` paths in `config.yaml` still resolve (deprecated alias of `nova`);
+- every `NOVA_X` falls back to `DEER_FLOW_X` when unset;
+- an existing `.deer-flow` data dir is used when no `.nova` dir exists (data is never moved automatically).
+
+The infrastructure cutover (Compose project, containers, network and volumes, Postgres data included) is a separate, operator-run step:
+
+```bash
+scripts/migrate-deerflow-to-nova.sh            # dry run (default): prints the plan, changes nothing
+```
+
+The script backs up first and copies volumes rather than moving them; the old `deer-flow-*` volumes are never deleted, so rolling back means bringing the old project up again. See the script's `--help` and the rename entry in [NOVA_CHANGELOG.md](./NOVA_CHANGELOG.md).
+
 ### Configuration
 
 `make setup` generates `config.yaml` + `.env`. Manual config: `make config` copies the full template.
@@ -59,7 +78,7 @@ models:
 
   - name: qwen3-32b-vllm
     display_name: Qwen3 32B (vLLM)
-    use: deerflow.models.vllm_provider:VllmChatModel
+    use: nova.models.vllm_provider:VllmChatModel
     model: Qwen/Qwen3-32B
     api_key: $VLLM_API_KEY
     base_url: http://localhost:8000/v1
@@ -99,7 +118,10 @@ make down           # stop
 - **Runtime model management** — add/switch models via API and settings UI.
 - **4-layer sandbox image** — base → tools → dind → android (10.2 GB → 20.4 GB). Go, Rust, Playwright, pandoc, tesseract, nested Docker daemon, full Android SDK. Pinned by digest.
 - **Global skill promotion** — agent-authored skills security-scanned and promoted to global registry.
-- **Ops layer** — 14-probe self-healing watchdog, PM2 lifecycle, reboot persistence, tunnel auto-recovery.
+- **Sub-agents and ACP runtimes** — the lead agent fans work out to sub-agents; a chat can also run on **Claude Code** or **OpenClaw** over the Agent Client Protocol, driving the same sandbox and Agent's Computer, with fallback to the native agent if the runtime fails a turn.
+- **Run deadline and liveness** — every run has a wall-clock deadline (`NOVA_RUN_MAX_SECONDS`, default 2 h) and a liveness heartbeat; subagent timeouts are measured from dispatch.
+- **Voice** — self-hosted full-duplex speech (faster-whisper STT, Kokoro TTS, Silero VAD, optional semantic turn detection) with barge-in. Off by default; see [docs/VOICE.md](./docs/VOICE.md).
+- **Ops layer** — self-healing watchdog, ops gates (runs/liveness, drift, upstream, capabilities, regression), PM2 lifecycle, reboot persistence, tunnel auto-recovery.
 - **Free models via LiteLLM** — MiniMax M3, Nemotron 3 Super, Qwen3 Coder 480B, GPT-OSS 120B via Ollama.
 - **38,782 lines of new tests** — 152 backend test files + 53 frontend test files.
 
@@ -223,7 +245,7 @@ No API keys required. `cd backend && uv sync --extra trading`.
 ### Claude Code Integration
 
 ```bash
-npx skills add https://github.com/bytedance/deer-flow --skill claude-to-deerflow
+npx skills add https://github.com/Jahanzaib211/nova --skill claude-to-deerflow
 ```
 
 Send tasks, check status, manage threads — all from Claude Code.
@@ -296,7 +318,7 @@ Commands: `/new`, `/status`, `/models`, `/memory`, `/help`.
 
 ## Tracing
 
-**LangSmith** and **Langfuse** — both can run simultaneously. Trace correlation fields: `session_id`, `user_id`, `trace_name`, `tags`.
+**LangSmith**, **Langfuse** and local **OTLP** (Jaeger, Tempo, a self-hosted Langfuse, any OTLP collector) — any combination can run simultaneously. Trace correlation fields: `session_id`, `user_id`, `trace_name`, `tags`.
 
 ```bash
 # LangSmith
@@ -306,6 +328,10 @@ LANGSMITH_API_KEY=lsv2_pt_xxxxxxxxxxxxxxxx
 # Langfuse
 LANGFUSE_TRACING=true
 LANGFUSE_PUBLIC_KEY=pk-lf-xxxxxxxxxxxxxxxx
+
+# Local OTLP (nothing leaves the host unless you point it elsewhere)
+NOVA_OTEL_TRACING=true
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ```
 
 ## Recommended Models
@@ -315,9 +341,9 @@ Model-agnostic. Best with: long context (100k+), reasoning, multimodal, strong t
 ## Embedded Python Client
 
 ```python
-from deerflow.client import DeerFlowClient
+from nova.client import NovaClient
 
-client = DeerFlowClient()
+client = NovaClient()
 response = client.chat("Analyze this paper", thread_id="my-thread")
 
 for event in client.stream("hello"):

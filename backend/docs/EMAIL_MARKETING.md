@@ -8,13 +8,13 @@ bounce/complaint handling. Everything is owner-scoped.
 
 | Where | What |
 |---|---|
-| `deerflow/persistence/email_marketing/` | `em_*` tables + `EmailMarketingRepository` (migration `2026_09_19_email_marketing`) |
-| `deerflow/email_marketing/templates.py` | Jinja2 **sandbox**, autoescape, strict undefined, no loaders; context = `contact.*`, `unsubscribe_url`, `view_in_browser_url`, `tracking_pixel`; click-link rewriting, pixel injection, text alternative |
-| `deerflow/email_marketing/tracking.py` | HMAC tokens per send and purpose (`open`/`click`/`unsub`); click URLs carry their own HMAC → no open redirect |
-| `deerflow/email_marketing/smtp.py` | one SMTP connection per batch, `RSET` between messages, reconnect once, 4xx → deferred, 5xx → hard/soft bounce, per-domain token bucket that reports `throttled` instead of sleeping; VERP envelope `bounce+<send>@<domain>`, `List-Unsubscribe` (+ `One-Click`), `Precedence: bulk`, `X-Nova-Send` |
-| `deerflow/email_marketing/pipeline.py` | jobs `em.campaign.start` (snapshot recipients minus suppressions → `em_sends`) and `em.campaign.batch` (render per contact, send in a thread, record events, suppress hard bounces, requeue throttled/deferred, chain the next batch spaced by the throttle). Pause/cancel are read from the campaign row at the top of every batch |
-| `deerflow/email_marketing/bounces.py`, `imap.py` | DSN (RFC 3464) + ARF (RFC 5965) parsing; UID-cursor IMAP poll (`em.bounce.poll`) that matches VERP / `X-Nova-Send`, suppresses, and handles `unsubscribe+*@` mailto replies |
-| `deerflow/email_marketing/contacts_import.py` | CSV header guessing, normalisation, in-file dedupe, validation (`em.contacts.import` job) |
+| `nova/persistence/email_marketing/` | `em_*` tables + `EmailMarketingRepository` (migration `2026_09_19_email_marketing`) |
+| `nova/email_marketing/templates.py` | Jinja2 **sandbox**, autoescape, strict undefined, no loaders; context = `contact.*`, `unsubscribe_url`, `view_in_browser_url`, `tracking_pixel`; click-link rewriting, pixel injection, text alternative |
+| `nova/email_marketing/tracking.py` | HMAC tokens per send and purpose (`open`/`click`/`unsub`); click URLs carry their own HMAC → no open redirect |
+| `nova/email_marketing/smtp.py` | one SMTP connection per batch, `RSET` between messages, reconnect once, 4xx → deferred, 5xx → hard/soft bounce, per-domain token bucket that reports `throttled` instead of sleeping; VERP envelope `bounce+<send>@<domain>`, `List-Unsubscribe` (+ `One-Click`), `Precedence: bulk`, `X-Nova-Send` |
+| `nova/email_marketing/pipeline.py` | jobs `em.campaign.start` (snapshot recipients minus suppressions → `em_sends`) and `em.campaign.batch` (render per contact, send in a thread, record events, suppress hard bounces, requeue throttled/deferred, chain the next batch spaced by the throttle). Pause/cancel are read from the campaign row at the top of every batch |
+| `nova/email_marketing/bounces.py`, `imap.py` | DSN (RFC 3464) + ARF (RFC 5965) parsing; UID-cursor IMAP poll (`em.bounce.poll`) that matches VERP / `X-Nova-Send`, suppresses, and handles `unsubscribe+*@` mailto replies |
+| `nova/email_marketing/contacts_import.py` | CSV header guessing, normalisation, in-file dedupe, validation (`em.contacts.import` job) |
 | `app/gateway/routers/email_marketing.py` | `/api/em/*` (session auth) |
 | `app/gateway/routers/email_marketing_public.py` | `/api/em/t/o/{token}.gif`, `/api/em/t/c/{token}?u=&sig=`, `GET` and `POST` on `/api/em/u/{token}` — public, token-authenticated, CSRF-exempt for the RFC 8058 POST |
 
@@ -57,7 +57,7 @@ curl -s -X POST $NOVA/api/em/campaigns/$ID/send-now
 
 ## Bridges
 
-`deerflow/email_marketing/bridges.py`, built on each service's REST API and
+`nova/email_marketing/bridges.py`, built on each service's REST API and
 reached through `nova-host-bridge`. URLs and API keys come from
 `integrations.services.{mailcow,twenty,chatwoot}`; switches from
 `email_marketing.bridges`.

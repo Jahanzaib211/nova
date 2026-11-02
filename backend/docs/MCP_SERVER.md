@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol) Configuration
 
-DeerFlow supports configurable MCP servers and skills to extend its capabilities, which are loaded from a dedicated `extensions_config.json` file in the project root directory.
+Nova supports configurable MCP servers and skills to extend its capabilities, which are loaded from a dedicated `extensions_config.json` file in the project root directory.
 
 ## Setup
 
@@ -17,20 +17,20 @@ DeerFlow supports configurable MCP servers and skills to extend its capabilities
 
 ## Filesystem MCP Servers
 
-DeerFlow already provides built-in file tools for thread-scoped workspace access.
-Do not add an MCP filesystem server for the same DeerFlow workspace. The
+Nova already provides built-in file tools for thread-scoped workspace access.
+Do not add an MCP filesystem server for the same Nova workspace. The
 overlapping file tools use different path semantics, which can make LLM tool
 selection and file access behavior unstable.
 
-DeerFlow does not currently adapt the MCP Roots mode for filesystem servers. In
-particular, it does not publish per-thread MCP roots or map DeerFlow sandbox
+Nova does not currently adapt the MCP Roots mode for filesystem servers. In
+particular, it does not publish per-thread MCP roots or map Nova sandbox
 paths such as `/mnt/user-data/...` to paths accepted by
-`@modelcontextprotocol/server-filesystem`. Use DeerFlow's built-in file tools
-for DeerFlow workspace files.
+`@modelcontextprotocol/server-filesystem`. Use Nova's built-in file tools
+for Nova workspace files.
 
 ## OAuth Support (HTTP/SSE MCP Servers)
 
-For `http` and `sse` MCP servers, DeerFlow supports OAuth token acquisition and automatic token refresh.
+For `http` and `sse` MCP servers, Nova supports OAuth token acquisition and automatic token refresh.
 
 - Supported grants: `client_credentials`, `refresh_token`
 - Configure per-server `oauth` block in `extensions_config.json`
@@ -98,7 +98,7 @@ def build_auth_interceptor():
 
 ## How It Works
 
-MCP servers expose tools that are automatically discovered and integrated into DeerFlow’s agent system at runtime. Once enabled, these tools become available to agents without additional code changes.
+MCP servers expose tools that are automatically discovered and integrated into Nova’s agent system at runtime. Once enabled, these tools become available to agents without additional code changes.
 
 ## Example Capabilities
 

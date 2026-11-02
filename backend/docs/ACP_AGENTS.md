@@ -13,7 +13,7 @@ configured (`acp_agents` in `config.yaml`):
 
 ```bash
 echo NOVA_ACP_AGENTS=1 >> .env          # opt-in: mounts ~/.claude + ~/.claude.json (ro) + OpenClaw package/token
-pm2 restart nova                         # scripts/pm2-deerflow.sh reads the flag from .env and adds cli-auth + acp overlays
+pm2 restart nova                         # scripts/pm2-nova.sh reads the flag from .env and adds cli-auth + acp overlays
 ```
 
 Two things learned activating this on 2026-09-20: Claude Code keeps its
@@ -59,5 +59,5 @@ approve it. `auto_approve_permissions: true` approves everything not in
 ```bash
 # from a chat: "Use the claude_code agent to list the files in its workspace and describe them"
 # expect: a Working with claude_code step with streamed text, then the answer.
-docker exec deer-flow-gateway sh -c 'ls /root/.claude/.credentials.json && ls /run/nova/openclaw_token && node /opt/openclaw/openclaw.mjs --version'
+docker exec nova-gateway sh -c 'ls /root/.claude/.credentials.json && ls /run/nova/openclaw_token && node /opt/openclaw/openclaw.mjs --version'
 ```

@@ -1,7 +1,7 @@
 # Capability registry — declared once, reachable everywhere
 
 Every feature Nova ships declares its operations **once**, as a
-`CapabilityModule` in `deerflow.capabilities`. From that single declaration
+`CapabilityModule` in `nova.capabilities`. From that single declaration
 the platform derives every surface, so a capability cannot exist for the UI
 and be missing for the agent, or exist for the agent and be invisible to an
 external harness:
@@ -10,16 +10,16 @@ external harness:
 |---|---|---|
 | `GET /api/capabilities/ops` | `registry.snapshot()` + per-module status + feature flags | Settings pages, the ops console |
 | `POST /api/capabilities/ops/{name}` | validates the body against the op's input model, runs the handler as the session user | the typed frontend client |
-| Lead-agent tools | `deerflow.tools.capability_tools` → one `StructuredTool` per op, gated by `tool_groups: [{name: nova:<module>}]` in `config.yaml` | Nova's own agent (the harness) |
+| Lead-agent tools | `nova.tools.capability_tools` → one `StructuredTool` per op, gated by `tool_groups: [{name: nova:<module>}]` in `config.yaml` | Nova's own agent (the harness) |
 | Nova MCP server `/api/mcp/nova` | `app.gateway.mcp_server` → one MCP tool per `mcp=True` op, authenticated by a **harness token** | Claude Code (ACP), OpenClaw, scripts |
-| `features` in `/api/runtime/capabilities` | `deerflow.capabilities.modules.features.compute_flags()` — the only place flags are computed | frontend `useFeatureFlags` |
+| `features` in `/api/runtime/capabilities` | `nova.capabilities.modules.features.compute_flags()` — the only place flags are computed | frontend `useFeatureFlags` |
 | `contracts/capabilities.baseline.json` | `scripts/capabilities_snapshot.py`; pinned by `tests/test_capability_registry.py` (removals/retypes fail, additions pass) | CI |
 | `frontend/src/core/capabilities/generated.ts` | `scripts/gen_capabilities_client.py` from the contract; `--check` in `lint-check.yml` fails on drift | `invoke("jobs.list", {...})` |
 
 ## Declaring an operation
 
 ```python
-from deerflow.capabilities import CapabilityModule, Operation, OpContext, ModuleStatus
+from nova.capabilities import CapabilityModule, Operation, OpContext, ModuleStatus
 
 
 class ListIn(BaseModel):
@@ -60,7 +60,7 @@ MODULE = CapabilityModule(
   (`api` | `harness` | `mcp`). Ownership checks belong in the handler; the
   registry only enforces `admin_only`.
 
-Harness-side modules live in `deerflow/capabilities/modules/*` and register
+Harness-side modules live in `nova/capabilities/modules/*` and register
 through `register_builtin_modules`. Modules that need `app.*` objects (auth
 provider, user model) live in `app/gateway/capabilities_modules.py` and are
 registered at `create_app()` — the harness never imports `app`
@@ -99,7 +99,7 @@ and OpenClaw expect. `capabilities.mcp_server.enabled: false` turns it off.
 
 ```bash
 cd backend
-DEER_FLOW_AUTH_DISABLED=1 DEER_FLOW_CONFIG_PATH=../config.example.yaml \
+NOVA_AUTH_DISABLED=1 NOVA_CONFIG_PATH=../config.example.yaml \
   PYTHONPATH=. uv run python scripts/capabilities_snapshot.py > ../contracts/capabilities.baseline.json
 python3 scripts/gen_capabilities_client.py      # regenerates the TS client (prettier-formatted)
 ```

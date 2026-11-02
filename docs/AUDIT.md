@@ -59,7 +59,7 @@
 ### 1.2 Backend (harness) modules
 
 ```
-backend/packages/harness/deerflow/    390 Python files, ~70K LOC
+backend/packages/harness/nova/    390 Python files, ~70K LOC
 ├── agents/                Lead agent factory + 19 middlewares + memory + thread state
 ├── community/             3rd-party provider integrations (browserless, tavily, jina, ...)
 ├── config/                Typed config (AppConfig, ModelConfig, SandboxConfig, ...)
@@ -310,9 +310,9 @@ v7 (NEW, 219 tests):
 ```
 ┌─ pm2 ─────────────────────────────┐
 │  deerflow → docker compose up      │
-│    ├─ deer-flow-gateway   :8001    │
-│    ├─ deer-flow-frontend  :3000    │
-│    ├─ deer-flow-nginx     :2026    │ ← crashed 32 min ago (exit 137), recovered
+│    ├─ nova-gateway   :8001    │
+│    ├─ nova-frontend  :3000    │
+│    ├─ nova-nginx     :2026    │ ← crashed 32 min ago (exit 137), recovered
 │    └─ (provisioner disabled)       │
 └────────────────────────────────────┘
 ```
@@ -332,9 +332,9 @@ v7 (NEW, 219 tests):
 
 | Component | Restart policy | Observed behaviour |
 |---|---|---|
-| `deer-flow-nginx` | `restart: unless-stopped` | Stayed down 32 min; manual recovery today |
-| `deer-flow-gateway` | `restart: unless-stopped` | Auto-restarts ✓ |
-| `deer-flow-frontend` | `restart: unless-stopped` | Auto-restarts ✓ |
+| `nova-nginx` | `restart: unless-stopped` | Stayed down 32 min; manual recovery today |
+| `nova-gateway` | `restart: unless-stopped` | Auto-restarts ✓ |
+| `nova-frontend` | `restart: unless-stopped` | Auto-restarts ✓ |
 | pm2 `deerflow` wrapper | `pm2 restart on exit` | Survived ✓ |
 | OS-level systemd | host-managed | Boot resilience |
 

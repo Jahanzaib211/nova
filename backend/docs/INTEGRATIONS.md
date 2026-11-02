@@ -60,5 +60,5 @@ pm2 start ecosystem.config.js --only nova-host-bridge && pm2 save
 
 1. Add it under `integrations.services` (see `config.example.yaml`).
 2. If it needs a smarter probe than "GET health_path is 200", add a client in
-   `deerflow/integrations/clients.py` and register it in `CLIENTS`.
+   `nova/integrations/clients.py` and register it in `CLIENTS`.
 3. Tests: `tests/test_integrations_registry.py` (httpx `MockTransport`).

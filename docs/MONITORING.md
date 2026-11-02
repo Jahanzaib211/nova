@@ -215,7 +215,7 @@ Timestamps in queries are **nanoseconds** since epoch. Use `date +%s%N` in shell
 
 ## 7. Instrumented Code Paths
 
-The following call sites in `backend/packages/harness/deerflow/sandbox/` were wired so the counters in `sandbox/metrics.py` actually fire on production traffic. Without instrumentation, `browser_check_total`, `circuit_state_transitions_total`, and `retry_attempts_total` are declared as HELP/TYPE only — Prometheus would still see them but with no values.
+The following call sites in `backend/packages/harness/nova/sandbox/` were wired so the counters in `sandbox/metrics.py` actually fire on production traffic. Without instrumentation, `browser_check_total`, `circuit_state_transitions_total`, and `retry_attempts_total` are declared as HELP/TYPE only — Prometheus would still see them but with no values.
 
 ### 7.1 `browser_check.py` → `_run_browser_check_unlocked`
 
@@ -478,7 +478,7 @@ Makefile                           # monitoring-up/down/verify/logs/screenshots 
 | Grafana login returns 401 even with correct password | The `grafana.db` was initialised before the env var `GF_SECURITY_ADMIN_PASSWORD` was set. Either regenerate via `gf_reset_admin_password` (`/etc/grafana/provisioning/` doesn't help), or delete `/var/lib/grafana/grafana.db` and let Grafana recreate. |
 | Uptime Kuma refuses to start | Host port 3001 is occupied by another process. Confirm `UPTIME_KUMA_PORT=3003` in the compose env. |
 | PM2 `nova-monitoring` exits immediately | `~/.config/nova/monitoring.env` doesn't exist or is unreadable. Check `pm2 logs nova-monitoring`. |
-| No counters in Prometheus for `browser_*` | Gateway process is still running with old code (no instrumentation). Restart PM2 app `deerflow` so `--reload` re-imports the new modules. |
+| No counters in Prometheus for `browser_*` | Gateway process is still running with old code (no instrumentation). Restart PM2 app `nova` so `--reload` re-imports the new modules. |
 | Cloudflare tunnel refused dashboard | Email-OTP step. Cloudflare Access is the boundary, not the Grafana session. |
 
 ---
@@ -517,7 +517,7 @@ If any step fails, consult the per-section diagnostics above. In particular:
 | Alerting | `docker/monitoring/grafana/provisioning/alerting/` |
 | SLOs | `docker/monitoring/sloth/slos.yaml` |
 | Public ingress | `config/cloudflared-nova.yml` |
-| Instrumented counters in gateway | `backend/packages/harness/deerflow/sandbox/{browser_check,browser_circuit_breaker,browser_retry}.py` |
+| Instrumented counters in gateway | `backend/packages/harness/nova/sandbox/{browser_check,browser_circuit_breaker,browser_retry}.py` |
 
 Last verified: dashboard `Nova Home` is live at `http://127.0.0.1:3002/d/nova-home/nova-home` with 16 panels, 4 of them stats (green/red/yellow/total cycles), 1 trend timeseries, 3 browser subsystem panels (with 2 valid + 1 legitimate zero), tunnel + gateway section with real numbers (Tunnel throughput 34 req/s, Blackbox probe UP), and Live visitor tail streaming the access log.
 

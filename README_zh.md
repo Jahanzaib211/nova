@@ -315,12 +315,12 @@ Nova 是模型无关的——它适用于任何实现 OpenAI 兼容 API 的 LLM�
 
 ## 嵌入式 Python 客户端
 
-Nova 可以作为嵌入式 Python 库使用，无需运行完整的 HTTP 服务。`DeerFlowClient` 提供对所有智能体和 Gateway 功能的直接进程内访问，返回与 HTTP Gateway API 相同的响应模式：
+Nova 可以作为嵌入式 Python 库使用，无需运行完整的 HTTP 服务。`NovaClient` 提供对所有智能体和 Gateway 功能的直接进程内访问，返回与 HTTP Gateway API 相同的响应模式：
 
 ```python
-from deerflow.client import DeerFlowClient
+from nova.client import NovaClient
 
-client = DeerFlowClient()
+client = NovaClient()
 
 # 聊天
 response = client.chat("为我分析这篇论文", thread_id="my-thread")
@@ -337,7 +337,7 @@ client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-参见 `backend/packages/harness/deerflow/client.py` 获取完整 API 文档。
+参见 `backend/packages/harness/nova/client.py` 获取完整 API 文档。
 
 ## 文档
 

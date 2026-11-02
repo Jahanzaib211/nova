@@ -1,6 +1,6 @@
 ---
 name: nova-agent
-description: "Master skill for all Nova/DeerFlow agent work. Use this skill whenever you are building full-stack apps WITH Nova's computer agent (scaffold → verify → green loop), working ON Nova itself (middleware, harness, sprint patterns, journal hooks), or diagnosing Nova's agent-computer pipeline (white preview, 409, crash-loop, panel bugs, Stop not working). Routes to specialized references: build-loop (P1–P5 deterministic build), maintain (harness/middleware/sprint), diagnose (pipeline regressions). Triggers on: 'build me a...', 'I'm getting a 409', 'white preview', 'browser tab is blank', 'stop not working', 'add middleware', 'new sprint', 'harness boundary', 'extend Nova', 'run dev_verify', 'why is the agent stuck', 'the panel is clipped', 'BUILD_JOURNAL', 'drive to green'. Use this skill proactively — if the task touches Nova's codebase or uses Nova to build something, this skill applies."
+description: "Master skill for all Nova agent work. Use this skill whenever you are building full-stack apps WITH Nova's computer agent (scaffold → verify → green loop), working ON Nova itself (middleware, harness, sprint patterns, journal hooks), or diagnosing Nova's agent-computer pipeline (white preview, 409, crash-loop, panel bugs, Stop not working). Routes to specialized references: build-loop (P1–P5 deterministic build), maintain (harness/middleware/sprint), diagnose (pipeline regressions). Triggers on: 'build me a...', 'I'm getting a 409', 'white preview', 'browser tab is blank', 'stop not working', 'add middleware', 'new sprint', 'harness boundary', 'extend Nova', 'run dev_verify', 'why is the agent stuck', 'the panel is clipped', 'BUILD_JOURNAL', 'drive to green'. Use this skill proactively — if the task touches Nova's codebase or uses Nova to build something, this skill applies."
 ---
 
 # nova-agent
@@ -27,12 +27,12 @@ nginx :2026
   ├── /api/*           → gateway :8001 (REST)
   └── /                → frontend :3000 (Next.js)
 
-backend/packages/harness/deerflow/   ← agent harness (import: deerflow.*)
+backend/packages/harness/nova/   ← agent harness (import: nova.*)
 backend/app/gateway/                 ← FastAPI app   (import: app.*)
 frontend/src/                        ← Next.js UI
 ```
 
-PM2 process `deerflow` supervises the Docker Compose dev stack (`ecosystem.config.js`).  
+PM2 process `nova` supervises the Docker Compose dev stack (`ecosystem.config.js`).  
 Gateway host port: **8000** (8001 is internal; host port 8001 returns 000 — that's normal).
 
 ## Hard rules — never violate
@@ -41,29 +41,29 @@ Gateway host port: **8000** (8001 is internal; host port 8001 returns 000 — th
 2. **Local-sandbox path**: branch on `is_local_sandbox()` for provider differences; AIO gets new computer-use features, local stays byte-identical
 3. **Batch backend edits**: uvicorn `--reload` recreates active sandboxes — apply when the live thread is idle
 4. **Non-fatal run path**: any new code in middlewares or tools must be wrapped `try/except`; a failure must never crash a run
-5. **Harness boundary**: `deerflow.*` never imports `app.*` — enforced by `tests/test_harness_boundary.py` in CI
+5. **Harness boundary**: `nova.*` never imports `app.*` — enforced by `tests/test_harness_boundary.py` in CI
 
 ## Health check (run this first)
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" http://localhost:2026/health   # expect 200
 pm2 list | grep -E "^\| [0-9]+ *\| nova "   # expect: online, restarts < 10
-docker ps --filter "name=deer-flow" --format "{{.Names}}\t{{.Status}}"
-# expect: deer-flow-nginx Up, deer-flow-frontend Up, deer-flow-gateway Up
+docker ps --filter "name=nova-" --format "{{.Names}}\t{{.Status}}"
+# expect: nova-nginx Up, nova-frontend Up, nova-gateway Up
 ```
 
 Note: the gateway does **not** publish a host port — it is reachable only from
 inside the Docker network (nginx proxies to it), so `curl localhost:8001/health`
 from the host will always fail and is not a signal. Go through :2026. The PM2
-process is `nova` (it runs `scripts/pm2-deerflow.sh`), not `deerflow`.
+process is `nova` (it runs `scripts/pm2-nova.sh`), not `deerflow`.
 
 **If the gateway is crash-looping, read its log BEFORE restarting anything.**
-`docker logs deer-flow-gateway` is empty by design on the dev stack — the
+`docker logs nova-gateway` is empty by design on the dev stack — the
 entrypoint redirects to the host-mounted file — so an empty container log tells
 you nothing:
 
 ```bash
-docker ps -a --filter name=deer-flow-gateway --format '{{.Status}}'  # "Restarting (1)"?
+docker ps -a --filter name=nova-gateway --format '{{.Status}}'  # "Restarting (1)"?
 tail -100 logs/gateway.log                                           # the actual traceback
 ```
 
@@ -73,7 +73,7 @@ Docker DNS SERVFAILed its name) but have different fixes:
 
 | `logs/gateway.log` says | Fix |
 | --- | --- |
-| `FileNotFoundError: ... DEER_FLOW_CONFIG_PATH not found at /home/...` | A host path leaked in from `.env` via `env_file`. Pin the container path in the compose `environment:` block — recreating the container will NOT help. |
+| `FileNotFoundError: ... NOVA_CONFIG_PATH not found at /home/...` | A host path leaked in from `.env` via `env_file`. Pin the container path in the compose `environment:` block — recreating the container will NOT help. |
 | `WatchfilesRustInternalError: ... Too many open files (os error 24)` | Host inotify instances exhausted. `sudo sysctl fs.inotify.max_user_instances=1024`. |
 | Nothing / container never starts, and `docker ps` shows only nginx+frontend | Docker **name conflict** — see `references/diagnose.md`. This is the only one the recycle below fixes. |
 
@@ -85,7 +85,7 @@ docker compose \
   -f docker/docker-compose-dev.yaml \
   -f docker/docker-compose.dood.yaml \
   -f docker/docker-compose.prod-frontend.yaml \
-  -p deer-flow-dev down --remove-orphans
+  -p nova down --remove-orphans
 pm2 start nova
 # Poll until 200: until curl -sf http://localhost:2026/health; do sleep 3; done
 ```
@@ -103,7 +103,7 @@ LoopDetectionMiddleware     — repeated tool-call detection, hard-stop injectio
 ClarificationMiddleware     — ask_clarification intercept (must be LAST)
 ```
 
-Full chain + positions: `backend/packages/harness/deerflow/agents/middlewares/`
+Full chain + positions: `backend/packages/harness/nova/agents/middlewares/`
 
 ## Test suite commands
 

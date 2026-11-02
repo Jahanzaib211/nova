@@ -105,7 +105,7 @@ All four nginx configs (docker, tls, local, k8s) carry identical CSP headers. De
 
 ### Local Sandbox
 
-- Per-thread isolation: `backend/.deer-flow/users/{user_id}/threads/{thread_id}/user-data/`
+- Per-thread isolation: `backend/.nova/users/{user_id}/threads/{thread_id}/user-data/`
 - Virtual paths: `/mnt/user-data/{workspace,uploads,outputs}`
 - Path traversal protection: rejects paths outside `/mnt/user-data/`
 

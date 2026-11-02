@@ -1,6 +1,6 @@
 ---
 name: nova-loop-detect
-description: Diagnose and fix a loop-detection firing in Nova's agent run. Use when the user reports "the agent keeps doing the same thing", "agent is stuck in ENOENT hell", or "we hit loop detection again" — also when reading the run's `[self-test]` lines shows repeated identical tool calls or ENOENT-style grep/searches. Triages across Layer 1 (hash-based), Layer 2 (per-tool frequency), Layer 3 (dead-end search divergence) per `backend/packages/harness/deerflow/agents/middlewares/loop_detection_middleware.py:837` and recommends the next code change. Triggers on phrases like "loop fired", "agent is repeating", "ENOENT pattern", or after observing a loop in the Activity tab.
+description: Diagnose and fix a loop-detection firing in Nova's agent run. Use when the user reports "the agent keeps doing the same thing", "agent is stuck in ENOENT hell", or "we hit loop detection again" — also when reading the run's `[self-test]` lines shows repeated identical tool calls or ENOENT-style grep/searches. Triages across Layer 1 (hash-based), Layer 2 (per-tool frequency), Layer 3 (dead-end search divergence) per `backend/packages/harness/nova/agents/middlewares/loop_detection_middleware.py:837` and recommends the next code change. Triggers on phrases like "loop fired", "agent is repeating", "ENOENT pattern", or after observing a loop in the Activity tab.
 ---
 
 # nova-loop-detect
@@ -10,7 +10,7 @@ description: Diagnose and fix a loop-detection firing in Nova's agent run. Use w
 1. `cd backend && uv run pytest tests/test_loop_detector_dead_end.py tests/test_loop_detection_middleware.py -q` — confirm the failure isn't a test regression.
 
 2. Pull the run's `[middleware:loop_detection]` events from `RunEventStore`:
-   `jq '.events[] | select(.category=="middleware" and .name=="loop_detection")' backend/.deer-flow/threads/{tid}/runs/{rid}.jsonl`
+   `jq '.events[] | select(.category=="middleware" and .name=="loop_detection")' backend/.nova/threads/{tid}/runs/{rid}.jsonl`
 
 3. Classify the layer (per `loop_detection_middleware.py:837`):
    - **Layer 1 (line 423-450):** identical `(name, args)` call repeated. Fix: usually a tool returning a non-deterministic id (e.g., random uuid in the response). Add a normalizer to the hash.

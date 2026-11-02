@@ -1,6 +1,6 @@
 ---
 name: nova-hooks-author
-description: Author or wire a new hook emission in Nova's LangChain agent loop. Use when adding observability for a new tool, when promoting a logged audit event to a structured receipt, or when extending the agent's self-evaluation storage. Nova's hook surface today is `RunJournal` (`backend/packages/harness/deerflow/runtime/journal.py:38`) which implements `BaseCallbackHandler` (on_tool_start / on_tool_end / on_chain_start / on_chain_end); there is no separate `PreToolUse`/`PostToolUse` enum, so any new hook emission must go through `RunJournal.record_middleware` or a new `BaseCallbackHandler` subclass. Triggers on phrases like "add observability for X", "log when tool Y runs", "instrument Z", or before shipping any new middleware.
+description: Author or wire a new hook emission in Nova's LangChain agent loop. Use when adding observability for a new tool, when promoting a logged audit event to a structured receipt, or when extending the agent's self-evaluation storage. Nova's hook surface today is `RunJournal` (`backend/packages/harness/nova/runtime/journal.py:38`) which implements `BaseCallbackHandler` (on_tool_start / on_tool_end / on_chain_start / on_chain_end); there is no separate `PreToolUse`/`PostToolUse` enum, so any new hook emission must go through `RunJournal.record_middleware` or a new `BaseCallbackHandler` subclass. Triggers on phrases like "add observability for X", "log when tool Y runs", "instrument Z", or before shipping any new middleware.
 ---
 
 # nova-hooks-author
@@ -9,7 +9,7 @@ description: Author or wire a new hook emission in Nova's LangChain agent loop. 
 
 | Surface | Status | Where |
 |---|---|---|
-| `BaseCallbackHandler.on_tool_start` / `on_tool_end` | **Wired** (RunJournal at `worker.py:234-235`) | `backend/packages/harness/deerflow/runtime/journal.py:38` |
+| `BaseCallbackHandler.on_tool_start` / `on_tool_end` | **Wired** (RunJournal at `worker.py:234-235`) | `backend/packages/harness/nova/runtime/journal.py:38` |
 | `BaseCallbackHandler.on_chain_start` / `on_chain_end` | **Wired** | same |
 | `BaseCallbackHandler.on_llm_end` | **Wired** (per-model token capture) | `subagents/token_collector.py:16` |
 | `record_middleware(tag, *, name, hook, action, changes)` | **Dead stub** (only 2 callers) | `runtime/journal.py:529-548` |
@@ -20,7 +20,7 @@ description: Author or wire a new hook emission in Nova's LangChain agent loop. 
 
 1. **Identify the event class.** Is it a `tool.start` / `tool.end` / `chain.start` / `chain.end` (use `BaseCallbackHandler`)? Or a domain event that needs its own handler (define a new `BaseCallbackHandler` subclass and wire it in `worker.py:235`)?
 
-2. **If a LangChain hook:** extend `RunJournal` in `backend/packages/harness/deerflow/runtime/journal.py`. Add a method like `_record_tool_event(tool_name, tool_call_id, payload)` that writes a `RunEvent` to the store.
+2. **If a LangChain hook:** extend `RunJournal` in `backend/packages/harness/nova/runtime/journal.py`. Add a method like `_record_tool_event(tool_name, tool_call_id, payload)` that writes a `RunEvent` to the store.
 
 3. **If a domain event:** add a new `BaseCallbackHandler` subclass (see `subagents/token_collector.py:16` for the shape). Register it in `worker.py:235` alongside `journal`.
 

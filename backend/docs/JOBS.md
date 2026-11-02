@@ -7,7 +7,7 @@ long agent tasks, anything on a cron. Added in the 2026-09 upgrade program
 ## Shape
 
 ```
-gateway (FastAPI)            deer-flow-jobs (separate container)
+gateway (FastAPI)            nova-jobs (separate container)
   /api/jobs           ─┐       python -m app.jobs.worker
   /api/v1/admin/jobs   ├─ Postgres tables: jobs, job_events,
   enqueue / read /     │  job_schedules, job_workers
@@ -15,8 +15,8 @@ gateway (FastAPI)            deer-flow-jobs (separate container)
                                reaper · scheduler · self-heartbeat
 ```
 
-- Engine: `packages/harness/deerflow/jobs/` (queue, context, registry,
-  scheduler, worker) + `deerflow/persistence/job/`. Never imports `app.*`.
+- Engine: `packages/harness/nova/jobs/` (queue, context, registry,
+  scheduler, worker) + `nova/persistence/job/`. Never imports `app.*`.
 - Composition: `backend/app/jobs/` — `handlers/` registers job types,
   `worker.py` is the process entrypoint, `healthcheck.py` the container
   probe, `enqueue.py` a CLI (`make jobs-smoke`).
@@ -41,8 +41,8 @@ gateway (FastAPI)            deer-flow-jobs (separate container)
 ## Writing a handler
 
 ```python
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.errors import RetryableError
+from nova.jobs.context import JobContext
+from nova.jobs.errors import RetryableError
 
 
 async def send_batch(ctx: JobContext) -> dict:
@@ -76,7 +76,7 @@ User (`@require_auth`, owner-scoped, 404 for someone else's job):
 | PATCH/DELETE | `/api/jobs/schedules/{id}` | |
 
 Non-admins may schedule — and, through the `jobs.enqueue` capability, enqueue —
-only `USER_SCHEDULABLE_JOB_TYPES` (`deerflow/jobs/service.py`): job types that
+only `USER_SCHEDULABLE_JOB_TYPES` (`nova/jobs/service.py`): job types that
 act on the owner's own data. Maintenance and internal fan-out types are
 admin-only on both paths, so neither can be used to get around the other.
 Agents (lead-agent tools and Nova's MCP server, which is what an ACP runtime
@@ -98,7 +98,7 @@ pair, which nova-ops self-issues):
 
 ## Operations
 
-- Container: `deer-flow-jobs` (compose service `jobs`, reuses the gateway
+- Container: `nova-jobs` (compose service `jobs`, reuses the gateway
   image + `.venv` volume, no Docker socket, healthcheck = fresh
   `job_workers` row, autoheal). `NOVA_JOBS_SCALE=0` keeps it off.
 - Watchdog: `scripts/healthcheck-daemon.py` probe `P15_jobs_worker` (RED

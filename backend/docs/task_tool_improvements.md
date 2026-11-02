@@ -60,7 +60,7 @@ The `task_status_tool` is no longer exposed to the LLM. It's kept in the codebas
 
 ### Polling Logic
 
-Located in `packages/harness/deerflow/tools/builtins/task_tool.py`:
+Located in `packages/harness/nova/tools/builtins/task_tool.py`:
 
 ```python
 # Start background execution
@@ -88,7 +88,7 @@ while True:
 
 In addition to polling timeout, subagent execution now has a built-in timeout mechanism:
 
-**Configuration** (`packages/harness/deerflow/subagents/config.py`):
+**Configuration** (`packages/harness/nova/subagents/config.py`):
 
 ```python
 @dataclass

@@ -194,7 +194,7 @@ systemctl is-active cloudflared-nova.service
 ### Restart a single container
 
 ```bash
-docker compose -p deer-flow-dev \
+docker compose -p nova \
   -f /home/jahanzaib/Desktop/nova/docker/docker-compose-dev.yaml \
   up -d --no-deps --force-recreate <service>
 # Common services: frontend, gateway, nginx
@@ -204,12 +204,12 @@ docker compose -p deer-flow-dev \
 
 ```bash
 # Stop everything (preserves volumes + images)
-docker compose -p deer-flow-dev \
+docker compose -p nova \
   -f /home/jahanzaib/Desktop/nova/docker/docker-compose-dev.yaml \
   down
 
 # Bring it all back
-docker compose -p deer-flow-dev \
+docker compose -p nova \
   -f /home/jahanzaib/Desktop/nova/docker/docker-compose-dev.yaml \
   up -d
 
@@ -309,17 +309,17 @@ cd backend && .venv/bin/python -m pytest tests/ -x -q
 cd ../frontend && pnpm typecheck && pnpm lint && pnpm test --run
 
 # 3. Rebuild frontend container (build context is the repo root)
-docker compose -p deer-flow-dev -f ../docker/docker-compose-dev.yaml \
+docker compose -p nova -f ../docker/docker-compose-dev.yaml \
   build --no-cache frontend
-docker compose -p deer-flow-dev -f ../docker/docker-compose-dev.yaml \
+docker compose -p nova -f ../docker/docker-compose-dev.yaml \
   up -d --no-deps --force-recreate frontend
 
 # 4. Restart gateway if backend changed
-docker compose -p deer-flow-dev -f ../docker/docker-compose-dev.yaml \
+docker compose -p nova -f ../docker/docker-compose-dev.yaml \
   up -d --no-deps --force-recreate gateway
 
 # 5. Reload nginx if config changed
-docker compose -p deer-flow-dev -f ../docker/docker-compose-dev.yaml \
+docker compose -p nova -f ../docker/docker-compose-dev.yaml \
   up -d --no-deps --force-recreate nginx
 
 # 6. Verify end-to-end
@@ -337,7 +337,7 @@ git log --oneline -20
 git revert <bad-commit-sha>      # or: git reset --hard <good-sha>
 ./deploy.sh                      # if using the deploy script
 # Or manually:
-docker compose -p deer-flow-dev -f docker/docker-compose-dev.yaml \
+docker compose -p nova -f docker/docker-compose-dev.yaml \
   up -d --no-deps --force-recreate frontend gateway nginx
 
 # 3. Verify
@@ -386,7 +386,7 @@ Runs every 30 s. Auto-fixes known issues:
 | P10    | LiteLLM down                          | pm2 restart nova-litellm |
 | P11    | Dify stack down                       | pm2 restart nova-dify |
 | **P12** | **cloudflared tunnel down**         | **systemctl reset-failed + restart (with verification)** |
-| P15    | job runner worker missing/stale       | docker restart deer-flow-jobs |
+| P15    | job runner worker missing/stale       | docker restart nova-jobs |
 | P16    | host bridge (socat) not listening     | pm2 restart nova-host-bridge |
 
 ---
@@ -423,9 +423,9 @@ they don't, restart the frontend container. If still stale, the image
 may have been rebuilt without a fresh `pnpm install` — full image rebuild:
 
 ```bash
-docker compose -p deer-flow-dev -f docker/docker-compose-dev.yaml \
+docker compose -p nova -f docker/docker-compose-dev.yaml \
   build --no-cache frontend
-docker compose -p deer-flow-dev -f docker/docker-compose-dev.yaml \
+docker compose -p nova -f docker/docker-compose-dev.yaml \
   up -d --no-deps --force-recreate frontend
 ```
 
@@ -437,8 +437,8 @@ now uses `$XDG_RUNTIME_DIR` (or `/tmp`).
 
 ### Gateway returns 401 unexpectedly
 
-**Root cause**: `.env` has `DEER_FLOW_AUTH_DISABLED=0`. To restore
-dev-mode auth skip, set `DEER_FLOW_AUTH_DISABLED=1` in `.env` and restart
+**Root cause**: `.env` has `NOVA_AUTH_DISABLED=0`. To restore
+dev-mode auth skip, set `NOVA_AUTH_DISABLED=1` in `.env` and restart
 the gateway container. Production should keep auth disabled=0.
 
 ---
@@ -458,13 +458,13 @@ the gateway container. Production should keep auth disabled=0.
 | `curl 127.0.0.1:20001/ready` | `{"status":200,"readyConnections":4}` | `readyConnections:0` + `Unauthorized: Invalid tunnel secret` ⇒ rotated token; follow §2 |
 | `https://nova.alilabsx.com/health` | `{"status":"healthy",...}` | HTTP 530 ⇒ tunnel/token; 502 ⇒ origin down, follow the gateway rows |
 | `pm2 describe nova-healthcheck` uptime | growing, low restart count | check daemon logs |
-| `deer-flow-frontend Up` | minutes:hours, no restarts | `docker logs deer-flow-frontend` |
-| `deer-flow-gateway Up` | minutes:hours, no restarts | `logs/gateway.log` — **not** `docker logs`, see below |
+| `nova-frontend Up` | minutes:hours, no restarts | `docker logs nova-frontend` |
+| `nova-gateway Up` | minutes:hours, no restarts | `logs/gateway.log` — **not** `docker logs`, see below |
 | `fs.inotify.max_user_instances` | ≥ 1024 | at the 128 default, file watchers across this host's ~25 containers exhaust it and uvicorn `--reload` dies with `Too many open files`; persist a bump in `/etc/sysctl.d/` |
 
 **Gateway logs are not in `docker logs`.** On the dev stack
 `docker/dev-entrypoint.sh` redirects stdout/stderr to the host-mounted
-`logs/gateway.log`, so `docker logs deer-flow-gateway` and
+`logs/gateway.log`, so `docker logs nova-gateway` and
 `docker compose logs gateway` both stream an empty container log even while the
 gateway is crash-looping. Read `logs/gateway.log`, or
 `make docker-logs ARGS=--gateway`. The `nova-prod` stack does not redirect, so
@@ -475,7 +475,7 @@ gateway is crash-looping. Read `logs/gateway.log`, or
 ## 8. Alembic Database Migrations
 
 Nova uses Alembic for schema migrations. The migration infrastructure is at
-`backend/packages/harness/deerflow/persistence/migrations/`.
+`backend/packages/harness/nova/persistence/migrations/`.
 
 ### When a migration is needed
 
@@ -503,7 +503,7 @@ def upgrade() -> None:
 
 ```bash
 # Inside the running gateway container
-docker exec deer-flow-gateway python -c "
+docker exec nova-gateway python -c "
 import sqlite3; conn = sqlite3.connect('backend/data/deerflow.db');
 print([c[1] for c in conn.execute('PRAGMA table_info(runs)').fetchall()]);
 print(conn.execute('SELECT * FROM alembic_version').fetchall())

@@ -37,7 +37,7 @@ description: Configure per-tool-type model routing in Nova to save 40-60% of LLM
        # lead agent stays on opus (or whatever was selected at startup)
    ```
 
-2. Add `backend/packages/harness/deerflow/models/router.py`:
+2. Add `backend/packages/harness/nova/models/router.py`:
 
    ```python
    class ModelRouter:
