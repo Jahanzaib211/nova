@@ -176,6 +176,25 @@ Persistence engine (v9.4 — SQLite lock storm fix):
   pool_size=5 + pool_timeout=30 s meant the sixth waiter hung for the
   full 30 s — exactly the "Could not reach the Nova gateway" symptom.
 
+Checkpoint retention (`nova.persistence.checkpoint_retention`):
+
+- LangGraph never deletes a checkpoint; on Postgres each step that changes
+  `messages` writes a full copy of the message list to `checkpoint_blobs`
+  (7.8 GB of an ~8 GB database on 2026-11-02, 4 GB of it one thread).
+- Keeps the newest `checkpoint_retention.keep_per_thread` per
+  `(thread, ns)`; skips threads active within `keep_active_days` and any
+  thread with a `pending`/`running` run (re-checked inside each delete
+  transaction). Deletes writes → checkpoints → blobs no survivor references
+  (and only blobs older than the newest survivor version, so an in-flight
+  step's blob is never in range), `batch_size` checkpoints per transaction,
+  at most `max_batches` per sweep.
+- Off and dry-run by default. Jobs worker type `maintenance.checkpoints.prune`
+  (admin-scheduled); CLI `python -m app.jobs.checkpoint_retention [--apply]`
+  (`--apply` refuses unless `enabled`). Tests: `test_checkpoint_retention.py`
+  (real `AsyncSqliteSaver` rows), `test_checkpoint_retention_pg_schema.py`,
+  `test_checkpoint_retention_job.py`. `scripts/prune-checkpoints.py` is the
+  older host-side tool driven by the gates daemon.
+
 Boundary check (harness → app import firewall):
 
 - `tests/test_harness_boundary.py` — ensures `packages/harness/nova/` never imports from `app.*`
