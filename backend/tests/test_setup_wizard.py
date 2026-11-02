@@ -20,16 +20,6 @@ from wizard.writer import (
 )
 
 
-def _nova_use(path: str) -> str:
-    """Normalise a generated ``use:`` path to the canonical ``nova.`` prefix.
-
-    The wizard lives in scripts/ and may still emit the legacy ``deerflow.``
-    spelling, which resolves to the same object through the compatibility
-    alias; either spelling is correct output.
-    """
-    return "nova." + path[len("deerflow.") :] if path.startswith("deerflow.") else path
-
-
 class TestProviders:
     def test_llm_providers_not_empty(self):
         assert len(LLM_PROVIDERS) >= 8
@@ -61,9 +51,9 @@ class TestProviders:
         assert expected.issubset(providers)
 
         assert providers["openai_responses"].extra_config["use_responses_api"] is True
-        assert _nova_use(providers["gemini_openai_gateway"].use) == "nova.models.patched_openai:PatchedChatOpenAI"
-        assert _nova_use(providers["mimo"].use) == "nova.models.patched_mimo:PatchedChatMiMo"
-        assert _nova_use(providers["deepseek"].use) == "nova.models.patched_deepseek:PatchedChatDeepSeek"
+        assert providers["gemini_openai_gateway"].use == "nova.models.patched_openai:PatchedChatOpenAI"
+        assert providers["mimo"].use == "nova.models.patched_mimo:PatchedChatMiMo"
+        assert providers["deepseek"].use == "nova.models.patched_deepseek:PatchedChatDeepSeek"
         assert providers["volcengine"].extra_config["api_base"] == "https://ark.cn-beijing.volces.com/api/v3"
 
     def test_minimax_vision_is_per_model(self):
@@ -235,7 +225,7 @@ class TestBuildMinimalConfig:
         data = yaml.safe_load(content)
         assert "sandbox" in data
         assert "use" in data["sandbox"]
-        assert _nova_use(data["sandbox"]["use"]) == "nova.sandbox.local:LocalSandboxProvider"
+        assert data["sandbox"]["use"] == "nova.sandbox.local:LocalSandboxProvider"
         assert data["sandbox"]["allow_host_bash"] is False
 
     def test_bash_tool_disabled_by_default(self):
@@ -261,7 +251,7 @@ class TestBuildMinimalConfig:
             include_bash_tool=True,
         )
         data = yaml.safe_load(content)
-        assert _nova_use(data["sandbox"]["use"]) == "nova.community.aio_sandbox:AioSandboxProvider"
+        assert data["sandbox"]["use"] == "nova.community.aio_sandbox:AioSandboxProvider"
         assert "allow_host_bash" not in data["sandbox"]
         tool_names = [t["name"] for t in data.get("tools", [])]
         assert "bash" in tool_names
@@ -332,7 +322,7 @@ class TestBuildMinimalConfig:
         )
         data = yaml.safe_load(content)
         model = data["models"][0]
-        assert _nova_use(model["use"]) == "nova.models.patched_mimo:PatchedChatMiMo"
+        assert model["use"] == "nova.models.patched_mimo:PatchedChatMiMo"
         assert model["base_url"] == "https://api.xiaomimimo.com/v1"
         assert model["api_key"] == "$MIMO_API_KEY"
         assert model["supports_thinking"] is True

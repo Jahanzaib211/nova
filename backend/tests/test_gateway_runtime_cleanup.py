@@ -46,13 +46,21 @@ def test_service_launchers_always_use_gateway_runtime():
 def test_local_dev_gateway_reload_excludes_runtime_state_with_absolute_dirs():
     serve_sh = _read("scripts/serve.sh")
 
-    assert 'export DEER_FLOW_PROJECT_ROOT="$REPO_ROOT"' in serve_sh
+    # NOVA_ names are canonical and the DEER_FLOW_ twins are exported with the
+    # same values, so either reader resolves the same root and data dir.
+    assert 'NOVA_PROJECT_ROOT="${NOVA_PROJECT_ROOT:-${DEER_FLOW_PROJECT_ROOT:-$REPO_ROOT}}"' in serve_sh
+    assert 'DEER_FLOW_PROJECT_ROOT="$NOVA_PROJECT_ROOT"' in serve_sh
+    assert "export NOVA_PROJECT_ROOT DEER_FLOW_PROJECT_ROOT" in serve_sh
+    # .nova by default; an existing legacy .deer-flow is used in place.
+    assert 'BACKEND_RUNTIME_HOME="$REPO_ROOT/backend/.nova"' in serve_sh
     assert 'BACKEND_RUNTIME_HOME="$REPO_ROOT/backend/.deer-flow"' in serve_sh
-    assert 'export DEER_FLOW_HOME="$BACKEND_RUNTIME_HOME"' in serve_sh
+    assert 'NOVA_HOME="${NOVA_HOME:-${DEER_FLOW_HOME:-$BACKEND_RUNTIME_HOME}}"' in serve_sh
+    assert 'DEER_FLOW_HOME="$NOVA_HOME"' in serve_sh
+    assert "export NOVA_HOME DEER_FLOW_HOME" in serve_sh
     # Every absolute reload-exclude must be pre-created, including backend/sandbox
     # (#3459 / #3454) — see test_uvicorn_reload_exclude.py for the mechanism.
-    assert 'mkdir -p "$DEER_FLOW_HOME" "$BACKEND_RUNTIME_HOME" "$REPO_ROOT/backend/sandbox"' in serve_sh
-    assert "--reload-exclude='$DEER_FLOW_HOME'" in serve_sh
+    assert 'mkdir -p "$NOVA_HOME" "$BACKEND_RUNTIME_HOME" "$REPO_ROOT/backend/sandbox"' in serve_sh
+    assert "--reload-exclude='$NOVA_HOME'" in serve_sh
     assert "--reload-exclude='$BACKEND_RUNTIME_HOME'" in serve_sh
     assert "--reload-exclude='sandbox/'" not in serve_sh
     assert "--reload-exclude='.deer-flow/'" not in serve_sh
