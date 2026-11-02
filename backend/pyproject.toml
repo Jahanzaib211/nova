@@ -42,7 +42,7 @@ dev = [
     # package to see if it helps dies on "No module named pip" and the only
     # route left is an image rebuild. Cheap to carry, and it keeps the running
     # container debuggable.
-    "pip>=25.0",
+    "pip>=26.2.2",
     "blockbuster>=1.5.28,<1.6",
     "fakeredis>=2.26.0",
     "prompt-toolkit>=3.0.0",
