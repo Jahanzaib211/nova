@@ -30,6 +30,7 @@ from typing import Any
 
 from fastapi import APIRouter, Response
 
+from nova.config.env import getenv_compat
 from nova.sandbox import browser_circuit_breaker as cb
 from nova.sandbox.metrics import render_metrics
 
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/api", tags=["health"])
 
 # Cap how many circuit states we include in the response — protects the
 # endpoint from huge payloads when many sandboxes are active.
-_MAX_CIRCUIT_STATES_IN_RESPONSE = int(os.environ.get("DEERFLOW_HEALTH_MAX_CIRCUITS", "100"))
+_MAX_CIRCUIT_STATES_IN_RESPONSE = int(getenv_compat("HEALTH_MAX_CIRCUITS", "100"))
 
 # Cache the last probe result so a dashboard refresh doesn't hammer CDP.
 # ``cdp_reachable`` is a tri-state bool|None:

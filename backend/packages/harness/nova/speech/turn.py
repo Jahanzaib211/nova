@@ -40,6 +40,8 @@ import logging
 import os
 from dataclasses import dataclass
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16_000
@@ -65,14 +67,14 @@ class TurnConfig:
     def from_env(cls) -> TurnConfig:
         def _f(name: str, default: float) -> float:
             try:
-                return float(os.environ.get(name, default))
+                return float(getenv_compat(name, default))
             except (TypeError, ValueError):
                 return default
 
         return cls(
-            threshold=_f("DEERFLOW_TURN_THRESHOLD", 0.7),
-            extend_ms=int(_f("DEERFLOW_TURN_EXTEND_MS", 700)),
-            max_extensions=int(_f("DEERFLOW_TURN_MAX_EXTENSIONS", 3)),
+            threshold=_f("TURN_THRESHOLD", 0.7),
+            extend_ms=int(_f("TURN_EXTEND_MS", 700)),
+            max_extensions=int(_f("TURN_MAX_EXTENSIONS", 3)),
         )
 
 
@@ -116,7 +118,7 @@ class SmartTurnV3(TurnDetector):
     name = "smart-turn-v3"
 
     def __init__(self, model_path: str | None = None, device: str = "cpu") -> None:
-        self._model_path = model_path or os.environ.get("DEERFLOW_TURN_MODEL_PATH")
+        self._model_path = model_path or getenv_compat("TURN_MODEL_PATH")
         self.device = device
         self._session = None
         self._features = None

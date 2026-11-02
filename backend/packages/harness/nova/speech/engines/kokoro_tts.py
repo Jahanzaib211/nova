@@ -19,6 +19,7 @@ import re
 import threading
 from collections.abc import AsyncIterator
 
+from nova.config.env import getenv_compat
 from nova.speech.base import AudioChunk, SpeechEngineUnavailable, TextToSpeech
 
 logger = logging.getLogger(__name__)
@@ -60,12 +61,12 @@ class KokoroTTS(TextToSpeech):
         speed: float = 1.0,
         device: str | None = None,
     ) -> None:
-        self.voice = voice or os.environ.get("DEERFLOW_TTS_VOICE", "af_heart")
+        self.voice = voice or getenv_compat("TTS_VOICE", "af_heart")
         self.speed = speed
         self.sample_rate = 24_000
-        self._model_path = model_path or os.environ.get("DEERFLOW_TTS_MODEL_PATH")
-        self._voices_path = voices_path or os.environ.get("DEERFLOW_TTS_VOICES_PATH")
-        self.device = device or os.environ.get("DEERFLOW_TTS_DEVICE", "auto")
+        self._model_path = model_path or getenv_compat("TTS_MODEL_PATH")
+        self._voices_path = voices_path or getenv_compat("TTS_VOICES_PATH")
+        self.device = device or getenv_compat("TTS_DEVICE", "auto")
         # Set once the session is built, so callers (and the status probe) can
         # report where synthesis is *actually* running rather than what was asked for.
         self.resolved_device = "cpu"

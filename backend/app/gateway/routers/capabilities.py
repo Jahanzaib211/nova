@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_config
 from nova.config.app_config import AppConfig
+from nova.config.env import getenv_compat
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +299,7 @@ def _safe_server_info(config: AppConfig) -> dict[str, Any]:
     """Lightweight server-side metadata for the UI footer."""
     info: dict[str, Any] = {
         "process": "deer-flow-gateway",
-        "version": os.environ.get("DEERFLOW_VERSION", "dev"),
+        "version": getenv_compat("VERSION", "dev"),
         "pid": os.getpid(),
     }
     try:
@@ -324,7 +325,7 @@ def _safe_server_info(config: AppConfig) -> dict[str, Any]:
 async def _safe_igino() -> IGINOSummary:
     """Read-only Recon status snapshot."""
     try:
-        enabled = os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
+        enabled = getenv_compat("IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
 
         searxng_healthy = False
         try:

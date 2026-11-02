@@ -34,12 +34,14 @@ import threading
 import time
 from typing import Any
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
 # Default budget matches AWS's "shutdown budget" guidance: enough to drain
 # typical in-flight work, short enough to satisfy orchestrator timeouts
 # (Kubernetes default terminationGracePeriodSeconds=30).
-_SHUTDOWN_BUDGET_S = float(os.environ.get("DEERFLOW_SHUTDOWN_BUDGET_S", "5.0"))
+_SHUTDOWN_BUDGET_S = float(getenv_compat("SHUTDOWN_BUDGET_S", "5.0"))
 
 # Module-level state to make shutdown idempotent.
 _installed = False

@@ -20,10 +20,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
-_ENABLED = os.environ.get("DEERFLOW_IGINO_AUDIT_ENABLED", "true").lower() in ("true", "1", "yes")
-_REDACT = os.environ.get("DEERFLOW_IGINO_AUDIT_REDACT", "false").lower() in ("true", "1", "yes")
+_ENABLED = getenv_compat("IGINO_AUDIT_ENABLED", "true").lower() in ("true", "1", "yes")
+_REDACT = getenv_compat("IGINO_AUDIT_REDACT", "false").lower() in ("true", "1", "yes")
 
 
 @dataclass

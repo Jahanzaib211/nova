@@ -36,6 +36,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from nova.config.env import getenv_compat
+
 
 class DatabaseConfig(BaseModel):
     backend: Literal["memory", "sqlite", "postgres"] = Field(
@@ -77,7 +79,7 @@ class DatabaseConfig(BaseModel):
         """
         from pathlib import Path
 
-        override = os.environ.get("DEER_FLOW_SQLITE_DIR", "").strip()
+        override = getenv_compat("SQLITE_DIR", "").strip()
         target = override or self.sqlite_dir
         return str(Path(target).resolve())
 

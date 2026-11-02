@@ -24,6 +24,7 @@ from langchain_core.runnables import RunnableConfig
 from nova.agents.thread_state import SandboxState, ThreadDataState, ThreadState
 from nova.config import get_app_config
 from nova.config.app_config import AppConfig
+from nova.config.env import getenv_compat
 from nova.models import create_chat_model
 from nova.skills.tool_policy import filter_tools_by_skill_allowed_tools
 from nova.skills.types import Skill
@@ -609,7 +610,7 @@ class SubagentExecutor:
                 user_id=self.user_id,
                 assistant_id=assistant_id,
                 model_name=self.model_name,
-                environment=os.environ.get("DEER_FLOW_ENV") or os.environ.get("ENVIRONMENT"),
+                environment=getenv_compat("ENV") or os.environ.get("ENVIRONMENT"),
             )
 
             context: dict[str, Any] = {}

@@ -25,6 +25,8 @@ import logging
 import os
 from typing import Any
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
 # Module-level semaphore for ``run_browser_check`` callsites. Acquired BEFORE
@@ -32,19 +34,19 @@ logger = logging.getLogger(__name__)
 # Default of 4 matches the budget one chromium context can comfortably drive
 # on a single gateway host; override via env var for deployments with more RAM
 # or where the underlying AIO container manages its own queue.
-MAX_CONCURRENT_BROWSER_CHECKS = int(os.environ.get("DEERFLOW_MAX_CONCURRENT_BROWSER_CHECKS", "4"))
+MAX_CONCURRENT_BROWSER_CHECKS = int(getenv_compat("MAX_CONCURRENT_BROWSER_CHECKS", "4"))
 
 # When the semaphore is saturated, callers wait at most this long before
 # giving up and surfacing a structured error. 10s is long enough to ride
 # out short bursts (a typical check takes 3-6s) but short enough to fail
 # fast when saturation is sustained.
-_BROWSER_CHECK_QUEUE_TIMEOUT_S = float(os.environ.get("DEERFLOW_BROWSER_CHECK_QUEUE_TIMEOUT_S", "10.0"))
+_BROWSER_CHECK_QUEUE_TIMEOUT_S = float(getenv_compat("BROWSER_CHECK_QUEUE_TIMEOUT_S", "10.0"))
 
 # Total wall-clock timeout for a single ``run_browser_check`` call. This is
 # a hard ceiling that includes the queue wait PLUS the actual check. 30s is
 # well above the typical 5-15s check + queue wait, but short enough to fail
 # fast on truly hung CDP sessions.
-_BROWSER_CHECK_TOTAL_TIMEOUT_S = float(os.environ.get("DEERFLOW_BROWSER_CHECK_TOTAL_TIMEOUT_S", "30.0"))
+_BROWSER_CHECK_TOTAL_TIMEOUT_S = float(getenv_compat("BROWSER_CHECK_TOTAL_TIMEOUT_S", "30.0"))
 
 _BROWSER_CHECK_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_BROWSER_CHECKS)
 

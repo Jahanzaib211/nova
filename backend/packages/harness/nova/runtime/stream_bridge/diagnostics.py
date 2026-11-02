@@ -57,6 +57,8 @@ import time
 from collections import deque
 from typing import Any
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,9 +75,9 @@ class _Diagnostics:
     """
 
     def __init__(self) -> None:
-        self._enabled = os.environ.get("DEER_FLOW_STREAM_TRACE") == "1"
-        self._file_path = os.environ.get("DEER_FLOW_STREAM_TRACE_FILE") or None
-        self._ring_size = int(os.environ.get("DEER_FLOW_STREAM_TRACE_RING", "10000"))
+        self._enabled = getenv_compat("STREAM_TRACE") == "1"
+        self._file_path = getenv_compat("STREAM_TRACE_FILE") or None
+        self._ring_size = int(getenv_compat("STREAM_TRACE_RING", "10000"))
         self._ring: deque[dict[str, Any]] = deque(maxlen=self._ring_size)
         self._lock = threading.Lock()
         self._seq = 0

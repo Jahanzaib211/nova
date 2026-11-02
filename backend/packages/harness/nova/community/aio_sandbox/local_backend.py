@@ -13,6 +13,7 @@ import re
 import shlex
 from datetime import datetime
 
+from nova.config.env import getenv_compat
 from nova.execution.models import ExecutionResult, ExecutionStatus
 from nova.utils.network import get_free_port, release_port, reserve_port
 
@@ -154,14 +155,14 @@ def _resolve_docker_bind_host(sandbox_host: str | None = None, bind_host: str | 
     an IPv6 loopback sandbox host, bind Docker to IPv6 loopback as well so the
     advertised sandbox URL and published socket use the same address family.
     """
-    explicit_bind = bind_host if bind_host is not None else os.environ.get("DEER_FLOW_SANDBOX_BIND_HOST")
+    explicit_bind = bind_host if bind_host is not None else getenv_compat("SANDBOX_BIND_HOST")
     if explicit_bind is not None:
         explicit_bind = explicit_bind.strip()
         if explicit_bind:
             logger.debug("Docker sandbox bind: %s (explicit bind host override)", explicit_bind)
             return explicit_bind
 
-    host = sandbox_host if sandbox_host is not None else os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+    host = sandbox_host if sandbox_host is not None else getenv_compat("SANDBOX_HOST", "localhost")
     if _is_ipv6_loopback_sandbox_host(host):
         logger.debug("Docker sandbox bind: [::1] (IPv6 loopback sandbox host)")
         return "[::1]"
@@ -456,7 +457,7 @@ class LocalContainerBackend(SandboxBackend):
 
         # When running inside Docker (DooD), sandbox containers are reachable via
         # host.docker.internal rather than localhost (they run on the host daemon).
-        sandbox_host = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+        sandbox_host = getenv_compat("SANDBOX_HOST", "localhost")
         return SandboxInfo(
             sandbox_id=sandbox_id,
             sandbox_url=f"http://{sandbox_host}:{port}",
@@ -536,7 +537,7 @@ class LocalContainerBackend(SandboxBackend):
         if port is None:
             return None
 
-        sandbox_host = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+        sandbox_host = getenv_compat("SANDBOX_HOST", "localhost")
         sandbox_url = f"http://{sandbox_host}:{port}"
         if not wait_for_sandbox_ready(sandbox_url, timeout=5):
             return None
@@ -625,7 +626,7 @@ class LocalContainerBackend(SandboxBackend):
         inspections = self._batch_inspect(container_names)
 
         infos: list[SandboxInfo] = []
-        sandbox_host = os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+        sandbox_host = getenv_compat("SANDBOX_HOST", "localhost")
         for container_name in container_names:
             data = inspections.get(container_name)
             if data is None:

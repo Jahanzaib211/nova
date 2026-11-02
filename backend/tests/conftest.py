@@ -112,6 +112,29 @@ if _real_config.exists():
 os.environ.setdefault("DEER_FLOW_ENV", "")
 
 
+# Env names were renamed DEER_FLOW_<X> -> NOVA_<X>, and the code reads the
+# canonical name first (nova.config.env.getenv_compat). The pins above are on
+# the legacy names, so a canonical twin coming from the repo .env would shadow
+# them -- and every test that monkeypatches the legacy name. Load the .env now
+# (load_dotenv never overrides, so this is what nova.config.app_config would do
+# at import anyway) and drop any NOVA_<X> it introduced whose legacy twin is
+# already pinned. A NOVA_<X> exported in the shell is left alone, exactly like
+# the setdefault pins above.
+def _drop_dotenv_canonical_twins() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    before = set(os.environ)
+    load_dotenv()
+    for name in set(os.environ) - before:
+        if name.startswith("NOVA_") and f"DEER_FLOW_{name[len('NOVA_') :]}" in before:
+            os.environ.pop(name, None)
+
+
+_drop_dotenv_canonical_twins()
+
+
 @pytest.fixture(autouse=True)
 def _guard_process_managers_from_tests():
     """Interlock: no test may reach real ``pm2``/``systemctl`` via the DI kernel.

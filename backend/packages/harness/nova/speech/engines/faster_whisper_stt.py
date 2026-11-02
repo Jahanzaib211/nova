@@ -18,6 +18,7 @@ import os
 import threading
 import wave
 
+from nova.config.env import getenv_compat
 from nova.speech.base import AudioChunk, SpeechEngineUnavailable, SpeechToText, Transcript
 
 logger = logging.getLogger(__name__)
@@ -34,19 +35,19 @@ class FasterWhisperSTT(SpeechToText):
         language: str | None = None,
         download_root: str | None = None,
     ) -> None:
-        self.model_size = model or os.environ.get("DEERFLOW_STT_MODEL", "base")
+        self.model_size = model or getenv_compat("STT_MODEL", "base")
         # `device` is resolved lazily at load time, not here: CTranslate2 can see
         # a CUDA device while still failing to load one (its CUDA runtime libs
         # are a separate install), and the honest answer is only known after a
         # load attempt. `resolved_device` carries what actually happened.
-        self.device = device or os.environ.get("DEERFLOW_STT_DEVICE", "auto")
+        self.device = device or getenv_compat("STT_DEVICE", "auto")
         self.resolved_device = "cpu"
         # Deliberately not defaulted here — the right compute type depends on the
         # device, and int8 only makes sense as a CPU concession.
-        self._configured_compute = compute_type or os.environ.get("DEERFLOW_STT_COMPUTE") or None
+        self._configured_compute = compute_type or getenv_compat("STT_COMPUTE") or None
         self.compute_type = self._configured_compute or "int8"
-        self.language = language or os.environ.get("DEERFLOW_STT_LANGUAGE") or None
-        self.download_root = download_root or os.environ.get("DEERFLOW_VOICE_MODEL_DIR")
+        self.language = language or getenv_compat("STT_LANGUAGE") or None
+        self.download_root = download_root or getenv_compat("VOICE_MODEL_DIR")
         self._model = None
         # Model load is not thread-safe and is expensive; serialize it.
         self._lock = threading.Lock()

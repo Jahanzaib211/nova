@@ -3,21 +3,26 @@
 import os
 from pathlib import Path
 
+from nova.config.env import getenv_compat
+
 
 def project_root() -> Path:
     """Return the caller project root for runtime-owned files."""
-    if env_root := os.getenv("DEER_FLOW_PROJECT_ROOT"):
+    if env_root := getenv_compat("PROJECT_ROOT"):
         root = Path(env_root).resolve()
         if not root.exists():
-            raise ValueError(f"DEER_FLOW_PROJECT_ROOT is set to '{env_root}', but the resolved path '{root}' does not exist.")
+            raise ValueError(f"NOVA_PROJECT_ROOT/DEER_FLOW_PROJECT_ROOT is set to '{env_root}', but the resolved path '{root}' does not exist.")
         if not root.is_dir():
-            raise ValueError(f"DEER_FLOW_PROJECT_ROOT is set to '{env_root}', but the resolved path '{root}' is not a directory.")
+            raise ValueError(f"NOVA_PROJECT_ROOT/DEER_FLOW_PROJECT_ROOT is set to '{env_root}', but the resolved path '{root}' is not a directory.")
         return root
     return Path.cwd().resolve()
 
 
 def set_project_root_from_cwd(*, overwrite: bool = False) -> Path | None:
-    """Promote ``Path.cwd()`` to ``DEER_FLOW_PROJECT_ROOT`` for this process.
+    """Promote ``Path.cwd()`` to ``NOVA_PROJECT_ROOT`` for this process.
+
+    The legacy ``DEER_FLOW_PROJECT_ROOT`` is written too, so child processes
+    and scripts that still read the old name see the same root.
 
     Useful for ad-hoc scripts and test harnesses that want the same
     resolution semantics as the running gateway. Idempotent: if the
@@ -33,12 +38,13 @@ def set_project_root_from_cwd(*, overwrite: bool = False) -> Path | None:
         one if the call was a no-op). Returns None only when cwd does
         not exist (rare, e.g. the process's CWD was deleted underneath it).
     """
-    existing = os.getenv("DEER_FLOW_PROJECT_ROOT")
+    existing = getenv_compat("PROJECT_ROOT")
     if existing and not overwrite:
         return Path(existing).resolve()
     cwd = Path.cwd().resolve()
     if not cwd.exists() or not cwd.is_dir():
         return None
+    os.environ["NOVA_PROJECT_ROOT"] = str(cwd)
     os.environ["DEER_FLOW_PROJECT_ROOT"] = str(cwd)
     return cwd
 
@@ -70,7 +76,7 @@ def in_container() -> bool:
 
 def runtime_home() -> Path:
     """Return the writable DeerFlow state directory."""
-    if env_home := os.getenv("DEER_FLOW_HOME"):
+    if env_home := getenv_compat("HOME"):
         return Path(env_home).resolve()
     return project_root() / ".deer-flow"
 

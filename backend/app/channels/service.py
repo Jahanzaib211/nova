@@ -12,6 +12,7 @@ from app.channels.manager import DEFAULT_GATEWAY_URL, DEFAULT_LANGGRAPH_URL, Cha
 from app.channels.message_bus import MessageBus
 from app.channels.runtime_config_store import merge_runtime_channel_configs
 from app.channels.store import ChannelStore
+from nova.config.env import getenv_compat
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,8 @@ _CHANNEL_CREDENTIAL_KEYS: dict[str, list[str]] = {
     "wechat": ["bot_token"],
 }
 
-_CHANNELS_LANGGRAPH_URL_ENV = "DEER_FLOW_CHANNELS_LANGGRAPH_URL"
-_CHANNELS_GATEWAY_URL_ENV = "DEER_FLOW_CHANNELS_GATEWAY_URL"
+_CHANNELS_LANGGRAPH_URL_ENV = "CHANNELS_LANGGRAPH_URL"  # NOVA_ / DEER_FLOW_ prefix via getenv_compat
+_CHANNELS_GATEWAY_URL_ENV = "CHANNELS_GATEWAY_URL"
 
 
 def _channel_has_credentials(name: str, channel_config: dict[str, Any]) -> bool:
@@ -54,7 +55,7 @@ def _resolve_service_url(config: dict[str, Any], config_key: str, env_key: str, 
     value = config.pop(config_key, None)
     if isinstance(value, str) and value.strip():
         return value
-    env_value = os.getenv(env_key, "").strip()
+    env_value = (getenv_compat(env_key) or "").strip()
     if env_value:
         return env_value
     return default

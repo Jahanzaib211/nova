@@ -25,6 +25,7 @@ def _clear_path_env(monkeypatch):
         "DEER_FLOW_SKILLS_PATH",
     ):
         monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv("NOVA_" + name[len("DEER_FLOW_") :], raising=False)
 
 
 def test_default_runtime_paths_resolve_from_current_project(tmp_path: Path, monkeypatch):

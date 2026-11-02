@@ -15,6 +15,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from nova.config.env import getenv_compat
 from nova.persistence.base import Base
 
 # Import all models so metadata is populated.
@@ -86,8 +87,8 @@ def do_run_migrations(connection):
 
 def _resolve_database_url() -> str:
     """Return the database URL, preferring ``DEER_FLOW_DATABASE_URL``."""
-    return os.environ.get(
-        "DEER_FLOW_DATABASE_URL",
+    return getenv_compat(
+        "DATABASE_URL",
         config.get_main_option("sqlalchemy.url"),
     )
 

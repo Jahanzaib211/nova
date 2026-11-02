@@ -15,6 +15,25 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _no_canonical_project_root(monkeypatch):
+    # These tests exercise the legacy name; the canonical one would shadow it.
+    # setenv first so monkeypatch records the original state and removes the
+    # NOVA_ name set_project_root_from_cwd() writes, instead of leaking it.
+    monkeypatch.setenv("NOVA_PROJECT_ROOT", "")
+    monkeypatch.delenv("NOVA_PROJECT_ROOT")
+
+
+def test_project_root_prefers_nova_name(monkeypatch, tmp_path):
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    monkeypatch.setenv("DEER_FLOW_PROJECT_ROOT", str(legacy))
+    monkeypatch.setenv("NOVA_PROJECT_ROOT", str(tmp_path))
+    from nova.config.runtime_paths import project_root
+
+    assert project_root() == tmp_path.resolve()
+
+
 def test_project_root_resolves_env_var(monkeypatch, tmp_path):
     monkeypatch.setenv("DEER_FLOW_PROJECT_ROOT", str(tmp_path))
     from nova.config.runtime_paths import project_root
@@ -67,6 +86,7 @@ def test_set_project_root_from_cwd_overwrite_true(monkeypatch, tmp_path):
     expected = Path.cwd().resolve()
     assert result == expected
     assert os.environ["DEER_FLOW_PROJECT_ROOT"] == str(expected)
+    assert os.environ["NOVA_PROJECT_ROOT"] == str(expected)
 
 
 def test_set_project_root_from_cwd_returns_none_for_invalid_cwd(monkeypatch):

@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from langgraph.checkpoint.base import empty_checkpoint
 from langgraph.errors import GraphRecursionError
 
+from nova.config.env import getenv_compat
+
 if TYPE_CHECKING:
     from langchain_core.messages import HumanMessage
 
@@ -346,7 +348,7 @@ async def run_agent(
             user_id=get_effective_user_id(),
             assistant_id=record.assistant_id,
             model_name=record.model_name,
-            environment=os.environ.get("DEER_FLOW_ENV") or os.environ.get("ENVIRONMENT"),
+            environment=getenv_compat("ENV") or os.environ.get("ENVIRONMENT"),
         )
 
         # Resolve after runtime context installation so context/configurable reflect

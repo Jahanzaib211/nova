@@ -37,14 +37,15 @@ from nova.community.searxng.search_errors import (
     is_transient,
 )
 from nova.community.searxng.tor import get_tor_proxy
+from nova.config.env import getenv_compat
 from nova.sandbox.browser_tracing import browser_span, get_trace_id, set_trace_id
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = os.environ.get("DEERFLOW_IGINO_SEARXNG_URL", "http://searxng:8080")
-_TIMEOUT_S = float(os.environ.get("DEERFLOW_IGINO_TIMEOUT_S", "10"))
-_TOR_ENABLED = os.environ.get("DEERFLOW_IGINO_TOR_ENABLED", "false").lower() in ("true", "1", "yes")
-_RETRY_MAX = int(os.environ.get("DEERFLOW_IGINO_RETRY_MAX", "3"))
+_BASE_URL = getenv_compat("IGINO_SEARXNG_URL", "http://searxng:8080")
+_TIMEOUT_S = float(getenv_compat("IGINO_TIMEOUT_S", "10"))
+_TOR_ENABLED = getenv_compat("IGINO_TOR_ENABLED", "false").lower() in ("true", "1", "yes")
+_RETRY_MAX = int(getenv_compat("IGINO_RETRY_MAX", "3"))
 _RETRY_BASE_MS = 100
 _RETRY_JITTER = 0.30
 

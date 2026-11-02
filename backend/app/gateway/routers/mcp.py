@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import require_admin_user
+from nova.config.env import getenv_compat
 from nova.config.extensions_config import get_extensions_config, reload_extensions_config, update_extensions_config_file
 from nova.mcp.cache import reset_mcp_tools_cache
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/api", tags=["mcp"])
 _ADMIN_REQUIRED_DETAIL = "Admin privileges required to manage MCP configuration."
 
 
-_MCP_STDIO_COMMAND_ALLOWLIST_ENV = "DEER_FLOW_MCP_STDIO_COMMAND_ALLOWLIST"
+_MCP_STDIO_COMMAND_ALLOWLIST_ENV = "NOVA_MCP_STDIO_COMMAND_ALLOWLIST"  # legacy DEER_FLOW_ name still honoured
 _DEFAULT_MCP_STDIO_COMMAND_ALLOWLIST = frozenset({"npx", "uvx"})
 _SHELL_METACHARS = frozenset(";|&`$<>\n\r")
 
@@ -83,7 +84,7 @@ _MASKED_VALUE = "***"
 
 def _allowed_stdio_commands() -> set[str]:
     """Return executable names allowed for API-managed stdio MCP servers."""
-    raw = os.environ.get(_MCP_STDIO_COMMAND_ALLOWLIST_ENV)
+    raw = getenv_compat("MCP_STDIO_COMMAND_ALLOWLIST")
     base = set(_DEFAULT_MCP_STDIO_COMMAND_ALLOWLIST)
     if raw is None:
         return base

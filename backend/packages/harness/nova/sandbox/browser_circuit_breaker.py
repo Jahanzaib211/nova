@@ -59,6 +59,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
 
+from nova.config.env import getenv_compat
 from nova.sandbox.browser_errors import BrowserCircuitOpenError
 
 logger = logging.getLogger(__name__)
@@ -66,10 +67,10 @@ logger = logging.getLogger(__name__)
 # Defaults match the AWS / Fowler guidance for "short-lived service blip":
 # 3 failures within 60s is enough to declare the subsystem degraded; 30s
 # cooldown gives chromium time to recover without hammering it.
-_FAILURE_THRESHOLD = int(os.environ.get("DEERFLOW_BROWSER_CIRCUIT_FAILURE_THRESHOLD", "3"))
-_WINDOW_S = float(os.environ.get("DEERFLOW_BROWSER_CIRCUIT_WINDOW_S", "60.0"))
-_COOLDOWN_S = float(os.environ.get("DEERFLOW_BROWSER_CIRCUIT_COOLDOWN_S", "30.0"))
-_FORCE = os.environ.get("DEERFLOW_BROWSER_CIRCUIT_FORCE", "").strip().lower()
+_FAILURE_THRESHOLD = int(getenv_compat("BROWSER_CIRCUIT_FAILURE_THRESHOLD", "3"))
+_WINDOW_S = float(getenv_compat("BROWSER_CIRCUIT_WINDOW_S", "60.0"))
+_COOLDOWN_S = float(getenv_compat("BROWSER_CIRCUIT_COOLDOWN_S", "30.0"))
+_FORCE = getenv_compat("BROWSER_CIRCUIT_FORCE", "").strip().lower()
 
 
 class CircuitState(str, Enum):

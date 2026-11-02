@@ -14,9 +14,11 @@ from typing import Any
 
 import yaml
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
-RUNTIME_MODELS_ENV = "DEER_FLOW_RUNTIME_MODELS_PATH"
+RUNTIME_MODELS_ENV = "NOVA_RUNTIME_MODELS_PATH"  # legacy DEER_FLOW_RUNTIME_MODELS_PATH still honoured
 RUNTIME_MODELS_FILENAME = "runtime_models.yaml"
 
 
@@ -27,10 +29,10 @@ def runtime_models_path(config_path: Path | str | None = None) -> Path:
     ``$DEER_FLOW_HOME/runtime_models.yaml`` (set in the Docker images, where it
     lives on a bind-mounted volume), then a sibling of the resolved config.yaml.
     """
-    env_path = os.getenv(RUNTIME_MODELS_ENV)
+    env_path = getenv_compat("RUNTIME_MODELS_PATH")
     if env_path:
         return Path(env_path)
-    home = os.getenv("DEER_FLOW_HOME")
+    home = getenv_compat("HOME")
     if home:
         return Path(home) / RUNTIME_MODELS_FILENAME
     if config_path is None:

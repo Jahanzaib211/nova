@@ -22,6 +22,8 @@ import uuid
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 
+from nova.config.env import getenv_compat
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows fallback
@@ -511,7 +513,7 @@ class AioSandboxProvider(SandboxProvider):
         # Resolution order: this process env, then the sandbox environment
         # map (config.yaml sandbox.environment) — either may carry it.
         env_map = self._config.get("environment") or {}
-        sec_kb = os.environ.get("DEER_FLOW_SECURITY_TOOLKIT") or self._resolve_env_vars({k: v for k, v in env_map.items() if k == "DEER_FLOW_SECURITY_TOOLKIT"}).get("DEER_FLOW_SECURITY_TOOLKIT", "")
+        sec_kb = getenv_compat("SECURITY_TOOLKIT") or self._resolve_env_vars({k: v for k, v in env_map.items() if k == "DEER_FLOW_SECURITY_TOOLKIT"}).get("DEER_FLOW_SECURITY_TOOLKIT", "")
         sec_kb = (sec_kb or "").strip()
         if sec_kb and _Path(sec_kb).is_dir():
             mounts.append((sec_kb, "/mnt/security-toolkit", True))
@@ -554,7 +556,7 @@ class AioSandboxProvider(SandboxProvider):
 
             if skills_path.exists():
                 # When running inside Docker with DooD, use host-side skills path.
-                host_skills = os.environ.get("DEER_FLOW_HOST_SKILLS_PATH") or str(skills_path)
+                host_skills = getenv_compat("HOST_SKILLS_PATH") or str(skills_path)
                 return (host_skills, container_path, True)  # Read-only for security
         except Exception as e:
             logger.warning(f"Could not setup skills mount: {e}")
@@ -1301,7 +1303,7 @@ class AioSandboxProvider(SandboxProvider):
         if not host_port:
             return None
 
-        host = urlparse(info.sandbox_url).hostname or os.environ.get("DEER_FLOW_SANDBOX_HOST", "localhost")
+        host = urlparse(info.sandbox_url).hostname or getenv_compat("SANDBOX_HOST", "localhost")
         return host, host_port
 
     def _track_busy(self, sandbox_id: str, delta: int) -> None:

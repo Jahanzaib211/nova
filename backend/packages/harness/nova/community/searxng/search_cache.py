@@ -20,8 +20,10 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-_TTL_S = float(os.environ.get("DEERFLOW_IGINO_CACHE_TTL_S", "300"))
-_MAX_SIZE = int(os.environ.get("DEERFLOW_IGINO_CACHE_MAX_SIZE", "1024"))
+from nova.config.env import getenv_compat
+
+_TTL_S = float(getenv_compat("IGINO_CACHE_TTL_S", "300"))
+_MAX_SIZE = int(getenv_compat("IGINO_CACHE_MAX_SIZE", "1024"))
 
 
 @dataclass(frozen=True)

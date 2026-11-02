@@ -13,6 +13,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
 from langchain.tools import tool
@@ -71,7 +73,7 @@ _DEFAULT_WRITE_FILE_ERROR_MAX_CHARS = 2000
 # threshold entirely (auto-chunking then only kicks in at the hard ceiling
 # below).
 _WRITE_FILE_CONTENT_MAX_BYTES = 200 * 1024
-_WRITE_FILE_MAX_BYTES_ENV = "DEERFLOW_WRITE_FILE_MAX_BYTES"
+_WRITE_FILE_MAX_BYTES_ENV = "NOVA_WRITE_FILE_MAX_BYTES"  # legacy DEERFLOW_ name still honoured
 
 # Above this, even auto-chunking is refused — a call this large is almost
 # certainly a runaway/looping generation rather than a legitimate document,
@@ -79,7 +81,7 @@ _WRITE_FILE_MAX_BYTES_ENV = "DEERFLOW_WRITE_FILE_MAX_BYTES"
 # error" to "very slow write of garbage." Deployments can override via env
 # var DEERFLOW_WRITE_FILE_HARD_MAX_BYTES.
 _WRITE_FILE_HARD_MAX_BYTES = 2 * 1024 * 1024
-_WRITE_FILE_HARD_MAX_BYTES_ENV = "DEERFLOW_WRITE_FILE_HARD_MAX_BYTES"
+_WRITE_FILE_HARD_MAX_BYTES_ENV = "NOVA_WRITE_FILE_HARD_MAX_BYTES"  # legacy DEERFLOW_ name still honoured
 
 # Chunk size used when a write auto-chunks — comfortably under the soft
 # threshold above so each individual internal write stays cheap regardless
@@ -2646,7 +2648,7 @@ def _effective_write_file_max_bytes() -> int:
     the default on missing/malformed values. A non-positive value disables
     the guard.
     """
-    raw = os.environ.get(_WRITE_FILE_MAX_BYTES_ENV)
+    raw = getenv_compat("WRITE_FILE_MAX_BYTES")
     if raw is None:
         return _WRITE_FILE_CONTENT_MAX_BYTES
     try:
@@ -2657,7 +2659,7 @@ def _effective_write_file_max_bytes() -> int:
 
 def _effective_write_file_hard_max_bytes() -> int:
     """Return the hard ceiling above which even auto-chunking is refused."""
-    raw = os.environ.get(_WRITE_FILE_HARD_MAX_BYTES_ENV)
+    raw = getenv_compat("WRITE_FILE_HARD_MAX_BYTES")
     if raw is None:
         return _WRITE_FILE_HARD_MAX_BYTES
     try:

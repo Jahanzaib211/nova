@@ -19,6 +19,7 @@ from pathlib import Path
 
 from langchain.tools import tool
 
+from nova.config.env import getenv_compat
 from nova.sandbox.sandbox_provider import get_sandbox_provider
 from nova.sandbox.tools import (
     _extract_thread_id_from_thread_data,
@@ -394,8 +395,8 @@ def _aio_client_and_thread(runtime: Runtime):
 # Idempotency cache for browser_navigate. Maps (thread_id, navigate_id) →
 # cached result, with TTL eviction. Bounded by entry count to prevent
 # memory growth on long-running threads.
-_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES = int(os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES", "256"))
-_NAVIGATE_IDEMPOTENCY_TTL_S = float(os.environ.get("DEERFLOW_BROWSER_NAVIGATE_IDEMPOTENCY_TTL_S", "60.0"))
+_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES = int(getenv_compat("BROWSER_NAVIGATE_IDEMPOTENCY_MAX_ENTRIES", "256"))
+_NAVIGATE_IDEMPOTENCY_TTL_S = float(getenv_compat("BROWSER_NAVIGATE_IDEMPOTENCY_TTL_S", "60.0"))
 
 
 class _BrowserNavigateIdempotency:
@@ -450,7 +451,7 @@ def _host_alias() -> str:
     it resolves to nothing, so hardcoding it into model-facing hints sent the
     agent chasing an address that cannot exist there.
     """
-    return os.environ.get("DEER_FLOW_SANDBOX_HOST") or "host.docker.internal"
+    return getenv_compat("SANDBOX_HOST") or "host.docker.internal"
 
 
 def _localhost_navigate_hint(url: str, page_text: str | None) -> str | None:
@@ -604,7 +605,7 @@ def _browser_op_timeout_ms() -> int:
     just an impatient deadline.
     """
     try:
-        return max(1000, int(os.environ.get("DEERFLOW_BROWSER_OP_TIMEOUT_MS", "30000")))
+        return max(1000, int(getenv_compat("BROWSER_OP_TIMEOUT_MS", "30000")))
     except ValueError:
         return 30000
 

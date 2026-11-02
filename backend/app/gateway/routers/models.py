@@ -9,6 +9,7 @@ from app.gateway.authz import require_auth
 from app.gateway.deps import get_config, get_current_user_from_request, is_admin
 from app.gateway.repositories.model_repository import get_model_repo
 from nova.config.app_config import AppConfig, reload_app_config
+from nova.config.env import getenv_compat
 from nova.config.model_config import ModelConfig
 from nova.config.runtime_models import (
     load_runtime_model_dicts,
@@ -389,7 +390,7 @@ _DEFAULT_DISCOVER_URLS = [
 def _discover_candidate_urls() -> list[str]:
     import os
 
-    env = os.getenv("DEER_FLOW_LOCAL_LLM_URLS")
+    env = getenv_compat("LOCAL_LLM_URLS")
     if env:
         return [u.strip().rstrip("/") for u in env.split(",") if u.strip()]
     return _DEFAULT_DISCOVER_URLS

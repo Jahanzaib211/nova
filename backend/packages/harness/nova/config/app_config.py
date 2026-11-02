@@ -18,6 +18,7 @@ from nova.config.checkpointer_config import CheckpointerConfig, load_checkpointe
 from nova.config.database_config import DatabaseConfig
 from nova.config.email_config import EmailConfig
 from nova.config.email_marketing_config import EmailMarketingConfig
+from nova.config.env import env_name_in_use, getenv_compat
 from nova.config.extensions_config import ExtensionsConfig
 from nova.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
 from nova.config.integrations_config import IntegrationsConfig
@@ -220,7 +221,7 @@ class AppConfig(BaseModel):
 
         Priority:
         1. If provided `config_path` argument, use it.
-        2. If provided `DEER_FLOW_CONFIG_PATH` environment variable, use it.
+        2. If provided `NOVA_CONFIG_PATH` (legacy `DEER_FLOW_CONFIG_PATH`) environment variable, use it.
         3. Otherwise, search the caller project root.
         4. Finally, search legacy backend/repository-root defaults for monorepo compatibility.
         """
@@ -229,10 +230,10 @@ class AppConfig(BaseModel):
             if not Path.exists(path):
                 raise FileNotFoundError(f"Config file specified by param `config_path` not found at {path}")
             return path
-        elif os.getenv("DEER_FLOW_CONFIG_PATH"):
-            path = Path(os.getenv("DEER_FLOW_CONFIG_PATH"))
+        elif getenv_compat("CONFIG_PATH"):
+            path = Path(getenv_compat("CONFIG_PATH"))
             if not Path.exists(path):
-                raise FileNotFoundError(f"Config file specified by environment variable `DEER_FLOW_CONFIG_PATH` not found at {path}")
+                raise FileNotFoundError(f"Config file specified by environment variable `{env_name_in_use('CONFIG_PATH')}` not found at {path}")
             return path
         else:
             project_config = existing_project_file(("config.yaml",))

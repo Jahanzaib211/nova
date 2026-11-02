@@ -5,6 +5,7 @@ import re
 import shutil
 from pathlib import Path, PureWindowsPath
 
+from nova.config.env import getenv_compat
 from nova.config.runtime_paths import runtime_home
 
 # Virtual path prefix seen by agents inside the sandbox
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def _default_local_base_dir() -> Path:
-    """Return the caller project's writable DeerFlow state directory."""
+    """Return the caller project's writable Nova state directory."""
     return runtime_home()
 
 
@@ -110,7 +111,7 @@ class Paths:
 
     BaseDir resolution (in priority order):
         1. Constructor argument `base_dir`
-        2. DEER_FLOW_HOME environment variable
+        2. NOVA_HOME (legacy: DEER_FLOW_HOME) environment variable
         3. Caller project fallback: `{project_root}/.deer-flow`
     """
 
@@ -128,13 +129,13 @@ class Paths:
 
         Falls back to base_dir when the env var is not set (native/local execution).
         """
-        if env := os.getenv("DEER_FLOW_HOST_BASE_DIR"):
+        if env := getenv_compat("HOST_BASE_DIR"):
             return Path(env)
         return self.base_dir
 
     def _host_base_dir_str(self) -> str:
         """Return the host base dir as a raw string for bind mounts."""
-        if env := os.getenv("DEER_FLOW_HOST_BASE_DIR"):
+        if env := getenv_compat("HOST_BASE_DIR"):
             return env
         return str(self.base_dir)
 
@@ -144,7 +145,7 @@ class Paths:
         if self._base_dir is not None:
             return self._base_dir
 
-        if env_home := os.getenv("DEER_FLOW_HOME"):
+        if env_home := getenv_compat("HOME"):
             return Path(env_home).resolve()
 
         return _default_local_base_dir()

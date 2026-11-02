@@ -20,10 +20,12 @@ import time
 
 import httpx
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
-_SOCKS5_URL = os.environ.get("DEERFLOW_IGINO_TOR_SOCKS5", "socks5h://tor:9050")
-_FALLBACK = os.environ.get("DEERFLOW_IGINO_TOR_FALLBACK", "true").lower() in ("true", "1", "yes")
+_SOCKS5_URL = getenv_compat("IGINO_TOR_SOCKS5", "socks5h://tor:9050")
+_FALLBACK = getenv_compat("IGINO_TOR_FALLBACK", "true").lower() in ("true", "1", "yes")
 
 _PROBE_INTERVAL_S = 60.0
 

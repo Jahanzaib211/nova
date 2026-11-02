@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from nova.config.env import getenv_compat
 from nova.config.runtime_paths import project_root, resolve_path
 
 
@@ -45,7 +46,7 @@ class SkillsConfig(BaseModel):
         if self.path:
             # Use configured path (can be absolute or relative to project root)
             return resolve_path(self.path)
-        if env_path := os.getenv("DEER_FLOW_SKILLS_PATH"):
+        if env_path := getenv_compat("SKILLS_PATH"):
             return resolve_path(env_path)
 
         project_default = project_root() / "skills"

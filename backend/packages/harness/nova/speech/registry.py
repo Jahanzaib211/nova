@@ -33,6 +33,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from nova.config.env import getenv_compat
 from nova.reflection import resolve_class
 from nova.speech.base import SpeechEngineUnavailable, SpeechToText, TextToSpeech
 
@@ -76,7 +77,7 @@ def overrides_path() -> Path:
 
     Precedence: this file wins over ``config.yaml``, key by key.
     """
-    home = os.environ.get("DEER_FLOW_HOME")
+    home = getenv_compat("HOME")
     base = Path(home) if home else Path(".deer-flow")
     return base / "voice-settings.yaml"
 

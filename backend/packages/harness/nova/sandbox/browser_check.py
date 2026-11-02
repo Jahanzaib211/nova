@@ -42,6 +42,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 from weakref import WeakValueDictionary
 
+from nova.config.env import getenv_compat
 from nova.sandbox.dev_server import get_dev_server
 from nova.sandbox.metrics import browser_check_duration_ms, browser_check_total
 
@@ -60,8 +61,8 @@ _route_engine_used: Any = None  # callable(_result) -> str; set by the inner fun
 #
 # Defaults: 1500ms matches the previous fixed value, 10000ms is the hard cap
 # (prevents runaway waits). Override via env for tight CI / lax dev sandboxes.
-_DEFAULT_RENDER_BUDGET_MS = int(os.environ.get("DEERFLOW_RENDER_BUDGET_MS", "1500"))
-_MAX_RENDER_BUDGET_MS = int(os.environ.get("DEERFLOW_MAX_RENDER_BUDGET_MS", "10000"))
+_DEFAULT_RENDER_BUDGET_MS = int(getenv_compat("RENDER_BUDGET_MS", "1500"))
+_MAX_RENDER_BUDGET_MS = int(getenv_compat("MAX_RENDER_BUDGET_MS", "10000"))
 
 # Server-rendered failure fingerprints (no JS runtime needed to catch these).
 _HTML_ERROR_MARKERS = [
@@ -634,7 +635,7 @@ def _cdp_url_for_gateway(client: Any, sandbox: Any = None) -> str | None:
 
     new_host, new_port = gateway_reachable_host_port(sandbox, client)
     if not new_host:
-        new_host = os.environ.get("DEER_FLOW_SANDBOX_HOST") or None
+        new_host = getenv_compat("SANDBOX_HOST") or None
         new_port = None
     if not new_host:
         # Nothing better to offer than what the sandbox reported.

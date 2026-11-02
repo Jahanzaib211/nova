@@ -60,6 +60,7 @@ from app.gateway.routers import (
 )
 from nova.config import app_config as deerflow_app_config
 from nova.config.app_config import apply_logging_level
+from nova.config.env import getenv_compat
 
 # Warm the lead-agent stack (and its enabled-skills cache) at process start,
 # before the event loop exists. nova/agents/__init__.py exports the stack
@@ -265,7 +266,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # (langgraph-sdk), so they have no reason to be colocated with the
         # scaled replicas at all — see deployment-channels.yaml, a
         # dedicated single-replica Deployment with this flag set to "1".
-        if os.environ.get("DEER_FLOW_RUN_CHANNELS", "1") != "0":
+        if getenv_compat("RUN_CHANNELS", "1") != "0":
             try:
                 from app.channels.service import start_channel_service
 
@@ -274,7 +275,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception:
                 logger.exception("No IM channels configured or channel service failed to start")
         else:
-            logger.info("Channel service disabled on this replica (DEER_FLOW_RUN_CHANNELS=0)")
+            logger.info("Channel service disabled on this replica (NOVA_RUN_CHANNELS=0)")
 
         # Nova's MCP server: bind the harness-token repository now that the
         # database is up, then run its session manager for the app's lifetime.
@@ -610,6 +611,6 @@ try:
     from nova.sandbox.shutdown import install_shutdown_hooks
 
     if install_shutdown_hooks():
-        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)", os.environ.get("DEERFLOW_SHUTDOWN_BUDGET_S", "5.0"))
+        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)", getenv_compat("SHUTDOWN_BUDGET_S", "5.0"))
 except Exception as _install_err:  # pragma: no cover - defensive
     logger.warning("gateway: failed to install shutdown hooks: %s", _install_err)

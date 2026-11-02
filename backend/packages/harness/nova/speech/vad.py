@@ -29,6 +29,8 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 
+from nova.config.env import getenv_compat
+
 logger = logging.getLogger(__name__)
 
 FRAME_MS = 20
@@ -61,14 +63,14 @@ class VadConfig:
     def from_env(cls) -> VadConfig:
         def _int(name: str, default: int) -> int:
             try:
-                return int(os.environ.get(name, default))
+                return int(getenv_compat(name, default))
             except (TypeError, ValueError):
                 return default
 
         return cls(
-            silence_ms=_int("DEERFLOW_VAD_SILENCE_MS", 600),
-            speech_ms=_int("DEERFLOW_VAD_SPEECH_MS", 160),
-            max_utterance_ms=_int("DEERFLOW_VAD_MAX_UTTERANCE_MS", 30_000),
+            silence_ms=_int("VAD_SILENCE_MS", 600),
+            speech_ms=_int("VAD_SPEECH_MS", 160),
+            max_utterance_ms=_int("VAD_MAX_UTTERANCE_MS", 30_000),
         )
 
 
@@ -190,7 +192,7 @@ class SileroVad(Vad):
         self._session = None
         self._state = None
         self._fallback = EnergyVad(config, sample_rate)
-        self._model_path = model_path or os.environ.get("DEERFLOW_VAD_MODEL_PATH")
+        self._model_path = model_path or getenv_compat("VAD_MODEL_PATH")
         self._load_attempted = False
         # Frames arrive at FRAME_MS; windows leave at _window_samples. The two
         # do not divide evenly (320 vs 512), so partial audio is carried over.

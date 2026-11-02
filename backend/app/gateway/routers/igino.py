@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from app.gateway.auth_disabled import is_auth_disabled
 from app.gateway.deps import get_optional_user_from_request
 from nova.config import get_app_config
+from nova.config.env import getenv_compat
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ router = APIRouter(prefix="/api/igino", tags=["igino"])
 def _is_enabled() -> bool:
     # Resolved per-request so the flag flips after a process restart without
     # needing to reload any Python module.
-    return os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
+    return getenv_compat("IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
 
 
 def _require_enabled_and_user(user: Any | None) -> None:
