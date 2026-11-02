@@ -2,11 +2,7 @@
 import type { JobStatus } from "./types";
 
 export type StatusTone =
-  | "muted"
-  | "info"
-  | "success"
-  | "warning"
-  | "destructive";
+  "muted" | "info" | "success" | "warning" | "destructive";
 
 export function toneFor(status: JobStatus): StatusTone {
   switch (status) {

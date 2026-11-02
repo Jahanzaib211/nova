@@ -40,11 +40,7 @@ const STALE = {
 // ── Event types ────────────────────────────────────────────
 
 export type SandboxEventType =
-  | "bash"
-  | "write_file"
-  | "str_replace"
-  | "read_file"
-  | string;
+  "bash" | "write_file" | "str_replace" | "read_file" | string;
 
 export type SandboxEvent = {
   ts: string;
