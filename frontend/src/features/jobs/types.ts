@@ -3,7 +3,7 @@
  *
  * Pinned to `contracts/job_status_contract.json` by
  * `tests/unit/contracts/job-status.contract.test.ts`; the backend
- * (`deerflow.jobs.status`) pins the same file.
+ * (`nova.jobs.status`) pins the same file.
  */
 
 export const JOB_STATUSES = [

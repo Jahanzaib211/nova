@@ -1,13 +1,13 @@
 ---
 title: Agents and Threads
-description: DeerFlow App supports multiple named agents and maintains conversation state across sessions through threads and checkpointing.
+description: Nova App supports multiple named agents and maintains conversation state across sessions through threads and checkpointing.
 ---
 
 import { Callout, Cards, Steps } from "nextra/components";
 
 # Agents and Threads
 
-DeerFlow App supports multiple named agents and maintains conversation state across sessions through threads and checkpointing.
+Nova App supports multiple named agents and maintains conversation state across sessions through threads and checkpointing.
 
 ## Agents
 
@@ -107,13 +107,13 @@ checkpointer:
 # PostgreSQL (multi-process, production)
 # checkpointer:
 #   type: postgres
-#   connection_string: postgresql://user:password@localhost:5432/deerflow
+#   connection_string: postgresql://user:password@localhost:5432/nova
 ```
 
 <Callout type="info">
   The Gateway embedded runtime uses the <code>checkpointer</code> setting in
   <code>config.yaml</code>. The same setting is also used by
-  <code>DeerFlowClient</code> in direct Python integrations.
+  <code>NovaClient</code> in direct Python integrations.
 </Callout>
 
 ### Thread data storage
@@ -121,12 +121,12 @@ checkpointer:
 Working files produced during a thread (uploads, intermediate files, output artifacts) are stored under:
 
 ```
-backend/.deer-flow/threads/{thread_id}/user-data/
+backend/.nova/threads/{thread_id}/user-data/
 ```
 
 This directory is mounted into the sandbox as `/mnt/user-data/` for the agent to read and write.
 
-In Docker deployments, this path is bind-mounted from the host so that thread data persists across container restarts. Set `DEER_FLOW_ROOT` to the absolute path of your deer-flow repository root to ensure the correct host path is used.
+In Docker deployments, this path is bind-mounted from the host so that thread data persists across container restarts. Set `NOVA_ROOT` to the absolute path of your nova repository root to ensure the correct host path is used.
 
 <Cards num={2}>
   <Cards.Card

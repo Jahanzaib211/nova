@@ -199,7 +199,7 @@ describe("visibility store", () => {
   test("unrelated storage keys do not notify", () => {
     const listener = vi.fn();
     const unsubscribe = visibility.subscribeModelVisibility(listener);
-    emitStorage("deerflow.local-settings");
+    emitStorage("nova.local-settings");
     unsubscribe();
 
     expect(listener).not.toHaveBeenCalled();

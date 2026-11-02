@@ -8,13 +8,13 @@ import { Callout, Cards, Tabs } from "nextra/components";
 # 工具
 
 <Callout type="info" emoji="🔧">
-  工具是 Lead Agent 可以采取的行动。DeerFlow 提供内置工具、社区集成、MCP
+  工具是 Lead Agent 可以采取的行动。Nova 提供内置工具、社区集成、MCP
   工具和技能工具——全部通过 <code>config.yaml</code> 控制。
 </Callout>
 
 Lead Agent 是一个工具调用 Agent。工具是它与世界交互的方式：搜索网络、读写文件、运行命令、委派任务以及向用户呈现输出。
 
-DeerFlow 将工具分为四类：
+Nova 将工具分为四类：
 
 1. **内置工具** — 核心运行时能力，始终对 Agent 可用
 2. **社区工具** — 与外部搜索、抓取和图像服务的集成
@@ -95,13 +95,13 @@ task(agent="general-purpose", task="...", context="...")
 
 ```yaml
 tools:
-  - use: deerflow.sandbox.tools:ls_tool
-  - use: deerflow.sandbox.tools:read_file_tool
-  - use: deerflow.sandbox.tools:glob_tool
-  - use: deerflow.sandbox.tools:grep_tool
-  - use: deerflow.sandbox.tools:write_file_tool
-  - use: deerflow.sandbox.tools:str_replace_tool
-  - use: deerflow.sandbox.tools:bash_tool
+  - use: nova.sandbox.tools:ls_tool
+  - use: nova.sandbox.tools:read_file_tool
+  - use: nova.sandbox.tools:glob_tool
+  - use: nova.sandbox.tools:grep_tool
+  - use: nova.sandbox.tools:write_file_tool
+  - use: nova.sandbox.tools:str_replace_tool
+  - use: nova.sandbox.tools:bash_tool
 ```
 
 ## 行情数据工具
@@ -121,14 +121,14 @@ tool_groups:
 tools:
   - name: get_ohlcv
     group: trading
-    use: deerflow.community.market_data.tools:get_ohlcv_tool
+    use: nova.community.market_data.tools:get_ohlcv_tool
     max_limit: 1000
   - name: compute_indicators
     group: trading
-    use: deerflow.community.market_data.tools:compute_indicators_tool
+    use: nova.community.market_data.tools:compute_indicators_tool
   - name: backtest_signals
     group: trading
-    use: deerflow.community.market_data.tools:backtest_signals_tool
+    use: nova.community.market_data.tools:backtest_signals_tool
 ```
 
 指标实现为纯 Python，因此 `compute_indicators` 和 `backtest_signals` 在默认安装下即可使用。
@@ -160,25 +160,25 @@ cd backend && uv sync --extra trading   # yfinance + ccxt
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.ddg_search.tools:web_search_tool
+  - use: nova.community.ddg_search.tools:web_search_tool
 ```
 无需 API Key。默认配置，适合开发和通用用途。
   </Tabs.Tab>
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.tavily.tools:web_search_tool
+  - use: nova.community.tavily.tools:web_search_tool
     api_key: $TAVILY_API_KEY
 ```
 高质量搜索，带结构化结果。需要 [Tavily](https://tavily.com) API Key。
 
-安装：`cd backend && uv add 'deerflow-harness[tavily]'`
+安装：`cd backend && uv add 'nova-harness[tavily]'`
 
   </Tabs.Tab>
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.brave.tools:web_search_tool
+  - use: nova.community.brave.tools:web_search_tool
     api_key: $BRAVE_SEARCH_API_KEY
 ```
 通过官方 [Brave Search API](https://brave.com/search/api/) 返回 Brave 独立索引的结果。需要 API Key，`max_results` 上限为 20。
@@ -189,18 +189,18 @@ tools:
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.exa.tools:web_search_tool
+  - use: nova.community.exa.tools:web_search_tool
     api_key: $EXA_API_KEY
 ```
 带神经检索的语义搜索。需要 [Exa](https://exa.ai) API Key。
 
-安装：`cd backend && uv add 'deerflow-harness[exa]'`
+安装：`cd backend && uv add 'nova-harness[exa]'`
 
   </Tabs.Tab>
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.infoquest.tools:web_search_tool
+  - use: nova.community.infoquest.tools:web_search_tool
     api_key: $INFOQUEST_API_KEY
 ```
 InfoQuest 搜索集成。
@@ -208,7 +208,7 @@ InfoQuest 搜索集成。
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.firecrawl.tools:web_search_tool
+  - use: nova.community.firecrawl.tools:web_search_tool
     api_key: $FIRECRAWL_API_KEY
 ```
 Firecrawl 驱动的搜索和爬取。需要 [Firecrawl](https://firecrawl.dev) API Key。
@@ -221,7 +221,7 @@ Firecrawl 驱动的搜索和爬取。需要 [Firecrawl](https://firecrawl.dev) A
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.jina_ai.tools:web_fetch_tool
+  - use: nova.community.jina_ai.tools:web_fetch_tool
     api_key: $JINA_API_KEY # 可选；匿名使用有速率限制
 ```
 将网页转换为干净的 Markdown。无 API Key 也可使用，但有更严格的速率限制。
@@ -229,7 +229,7 @@ tools:
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.exa.tools:web_fetch_tool
+  - use: nova.community.exa.tools:web_fetch_tool
     api_key: $EXA_API_KEY
 ```
   </Tabs.Tab>
@@ -241,14 +241,14 @@ tools:
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.image_search.tools:image_search_tool
+  - use: nova.community.image_search.tools:image_search_tool
 ```
 无需 API Key。默认配置，适合开发和通用用途。
   </Tabs.Tab>
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.infoquest.tools:image_search_tool
+  - use: nova.community.infoquest.tools:image_search_tool
     api_key: $INFOQUEST_API_KEY
 ```
 需要 InfoQuest API Key。
@@ -256,7 +256,7 @@ tools:
   <Tabs.Tab>
 ```yaml
 tools:
-  - use: deerflow.community.serper.tools:image_search_tool
+  - use: nova.community.serper.tools:image_search_tool
     api_key: $SERPER_API_KEY
 ```
 通过 Serper 获取 Google 图片结果。需要 [Serper](https://serper.dev) API Key，与 Serper `web_search` 工具复用同一个 `SERPER_API_KEY`。

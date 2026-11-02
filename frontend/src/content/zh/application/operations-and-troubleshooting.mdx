@@ -1,17 +1,17 @@
 ---
 title: 运维与排障
-description: 本页面涵盖运行 DeerFlow 应用的操作信息：日志记录、常见问题和维护任务。
+description: 本页面涵盖运行 Nova 应用的操作信息：日志记录、常见问题和维护任务。
 ---
 
 import { Callout, Cards } from "nextra/components";
 
 # 运维与排障
 
-本页面涵盖运行 DeerFlow 应用的操作信息：日志记录、常见问题和维护任务。
+本页面涵盖运行 Nova 应用的操作信息：日志记录、常见问题和维护任务。
 
 ## 日志
 
-DeerFlow 应用在 `logs/` 目录中写入每个服务的日志：
+Nova 应用在 `logs/` 目录中写入每个服务的日志：
 
 | 文件                 | 内容                                   |
 | -------------------- | -------------------------------------- |
@@ -34,7 +34,7 @@ log_level: debug # debug | info | warning | error
 
 ## 健康检查
 
-DeerFlow 暴露健康检查端点：
+Nova 暴露健康检查端点：
 
 ```bash
 # Gateway 健康状态
@@ -83,13 +83,13 @@ grep -i "error\|apikey\|unauthorized" logs/gateway.log | tail -20
 
 ```bash
 # 检查线程用户数据目录是否存在且可写
-ls -la backend/.deer-flow/threads/
+ls -la backend/.nova/threads/
 ```
 
 **解决**：
 
-1. 确保 `backend/.deer-flow/` 对运行 DeerFlow 的进程可写。
-2. 在 Docker 部署中，验证卷挂载路径正确（`DEER_FLOW_ROOT` 设置为绝对路径）。
+1. 确保 `backend/.nova/` 对运行 Nova 的进程可写。
+2. 在 Docker 部署中，验证卷挂载路径正确（`NOVA_ROOT` 设置为绝对路径）。
 3. 如果使用基于容器的沙箱，确认 Docker 已运行并且容器镜像已拉取。
 
 ---
@@ -142,11 +142,11 @@ grep -i "mcp\|timeout" logs/gateway.log | tail -20
 
 ## 数据备份
 
-DeerFlow 将持久化数据存储在：
+Nova 将持久化数据存储在：
 
-- **线程数据**：`backend/.deer-flow/threads/` — 每个线程的上传文件、输出和工作区文件
-- **检查点**：取决于检查点器配置（SQLite：`backend/.deer-flow/checkpoints.db`，Redis：外部存储）
-- **记忆**：`backend/.deer-flow/memory.json`（以及 `agents/*/memory.json`）
+- **线程数据**：`backend/.nova/threads/` — 每个线程的上传文件、输出和工作区文件
+- **检查点**：取决于检查点器配置（SQLite：`backend/.nova/checkpoints.db`，Redis：外部存储）
+- **记忆**：`backend/.nova/memory.json`（以及 `agents/*/memory.json`）
 - **自定义 Agent 配置**：`backend/agents/*/config.yaml`
 
 对于生产部署，定期备份这些目录。Docker 部署中，确保这些目录绑定挂载到持久卷，而不是容器内部。

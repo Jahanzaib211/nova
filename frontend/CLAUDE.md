@@ -47,13 +47,14 @@ isn't running under `pnpm start`, the tabs render empty, and assertions pass
 vacuously.
 
 **Never let an e2e build reach the live gateway.** `next.config.js` bakes its
-`/api/*` rewrites to `DEER_FLOW_INTERNAL_GATEWAY_BASE_URL` at _build_ time
+`/api/*` rewrites to `NOVA_INTERNAL_GATEWAY_BASE_URL` (legacy fallback:
+`DEER_FLOW_INTERNAL_GATEWAY_BASE_URL`) at _build_ time
 (default `127.0.0.1:8001`). On this box that gateway is up, so an unmocked
 call returned 401 and the fetcher redirected the page to `/login` — tests
 that pass in CI (no gateway, 404) failed here, and test traffic hit
 production. `playwright.config.ts` sets the variable to a closed port for its
 own `webServer`; when you build by hand for a manual `pnpm start`, pass
-`DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://127.0.0.1:9` to `pnpm build`.
+`NOVA_INTERNAL_GATEWAY_BASE_URL=http://127.0.0.1:9` to `pnpm build`.
 
 **Visual regression** (`tests/e2e/visual/`): 34 screens × {chromium,
 mobile-chrome} pinned with `toHaveScreenshot` at 0.1 % tolerance (1 % let a

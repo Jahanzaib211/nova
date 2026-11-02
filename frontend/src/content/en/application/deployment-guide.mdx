@@ -1,17 +1,17 @@
 ---
 title: Deployment Guide
-description: "This guide covers all supported deployment methods for DeerFlow App: local development, Docker Compose, and production with Kubernetes-managed sandboxes."
+description: "This guide covers all supported deployment methods for Nova App: local development, Docker Compose, and production with Kubernetes-managed sandboxes."
 ---
 
 import { Callout, Cards, Steps, Tabs } from "nextra/components";
 
 # Deployment Guide
 
-This guide covers all supported deployment methods for DeerFlow App: local development, Docker Compose, and production with Kubernetes-managed sandboxes.
+This guide covers all supported deployment methods for Nova App: local development, Docker Compose, and production with Kubernetes-managed sandboxes.
 
 ## Local development deployment
 
-The local workflow is the fastest way to run DeerFlow. All services run as native processes on your machine.
+The local workflow is the fastest way to run Nova. All services run as native processes on your machine.
 
 <Tabs items={["Start", "Stop", "Logs"]}>
   <Tabs.Tab>
@@ -66,8 +66,8 @@ Docker Compose runs all services in containers. Use this for a more production-l
 ### Development compose
 
 ```bash
-# Set the absolute path to your deer-flow repo root
-export DEER_FLOW_ROOT=/path/to/deer-flow
+# Set the absolute path to your nova repo root
+export NOVA_ROOT=/path/to/nova
 
 docker compose -f docker/docker-compose-dev.yaml up --build
 ```
@@ -83,7 +83,7 @@ Create a `.env` file in the repo root for secrets and runtime configuration:
 ```bash
 # .env
 OPENAI_API_KEY=sk-...
-DEER_FLOW_ROOT=/absolute/path/to/deer-flow
+NOVA_ROOT=/absolute/path/to/nova
 BETTER_AUTH_SECRET=your-secret-here-min-32-chars
 ```
 
@@ -97,11 +97,11 @@ The `docker-compose*.yaml` files include an `env_file: ../.env` directive that l
 
 ### Data persistence
 
-Thread data is stored in `backend/.deer-flow/threads/`. In Docker deployments, this directory is bind-mounted into the gateway container.
+Thread data is stored in `backend/.nova/threads/`. In Docker deployments, this directory is bind-mounted into the gateway container.
 
 To avoid data loss when containers are recreated:
 
-1. Set `DEER_FLOW_ROOT` to the absolute repo root path (or a stable host path).
+1. Set `NOVA_ROOT` to the absolute repo root path (or a stable host path).
 2. Verify the `threads/` and `skills/` directories are mounted correctly.
 
 For production, use a named volume or a Persistent Volume Claim (PVC) instead of a host bind-mount.
@@ -129,9 +129,9 @@ The provisioner manages sandbox Pods in a Kubernetes cluster. It is included in 
 Set required environment variables in your `.env` or compose override:
 
 ```bash
-K8S_NAMESPACE=deer-flow
+K8S_NAMESPACE=nova
 SANDBOX_IMAGE=enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
-DEER_FLOW_ROOT=/absolute/path/to/deer-flow
+NOVA_ROOT=/absolute/path/to/nova
 ```
 
 #### Configure the sandbox provider
@@ -139,7 +139,7 @@ DEER_FLOW_ROOT=/absolute/path/to/deer-flow
 ```yaml
 # config.yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: nova.community.aio_sandbox:AioSandboxProvider
   provisioner_url: http://provisioner:8002
 ```
 
@@ -149,8 +149,8 @@ For production, use PVCs instead of hostPath volumes:
 
 ```bash
 # In .env or compose environment
-USERDATA_PVC_NAME=deer-flow-userdata-pvc
-SKILLS_PVC_NAME=deer-flow-skills-pvc
+USERDATA_PVC_NAME=nova-userdata-pvc
+SKILLS_PVC_NAME=nova-skills-pvc
 ```
 
 When `USERDATA_PVC_NAME` is set, the provisioner automatically uses subPath (`threads/{thread_id}/user-data`) so each thread gets its own directory in the PVC.
@@ -163,7 +163,7 @@ nginx routes all traffic to the frontend or Gateway. `/api/langgraph/*` is rewri
 
 ### Authentication
 
-DeerFlow App uses [Better Auth](https://www.better-auth.com/) for session management. In production:
+Nova App uses [Better Auth](https://www.better-auth.com/) for session management. In production:
 
 1. Set `BETTER_AUTH_SECRET` to a strong random string (minimum 32 characters).
 2. Set `BETTER_AUTH_URL` to your public-facing URL (e.g., `https://your-domain.com`).

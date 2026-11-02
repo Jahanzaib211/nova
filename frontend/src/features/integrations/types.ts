@@ -3,7 +3,7 @@
  *
  * Pinned to `contracts/integrations_health_contract.json` by
  * `tests/unit/contracts/integrations-health.contract.test.ts`; the backend
- * (`deerflow.integrations.health`) and `scripts/inventory.py` pin the same
+ * (`nova.integrations.health`) and `scripts/inventory.py` pin the same
  * file.
  */
 

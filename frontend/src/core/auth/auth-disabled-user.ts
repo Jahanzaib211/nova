@@ -1,3 +1,5 @@
+import { getEnvCompat } from "../compat/env";
+
 import type { User } from "./types";
 
 export const AUTH_DISABLED_USER: User = {
@@ -14,14 +16,13 @@ export const AUTH_DISABLED_USER: User = {
 const PRODUCTION_ENV_VALUES = new Set(["prod", "production"]);
 
 function isExplicitProductionEnvironment() {
-  return ["DEER_FLOW_ENV", "ENVIRONMENT"].some((name) =>
-    PRODUCTION_ENV_VALUES.has((process.env[name] ?? "").trim().toLowerCase()),
+  return [getEnvCompat("ENV"), process.env.ENVIRONMENT].some((value) =>
+    PRODUCTION_ENV_VALUES.has((value ?? "").trim().toLowerCase()),
   );
 }
 
 export function isAuthDisabledMode() {
   return (
-    process.env.DEER_FLOW_AUTH_DISABLED === "1" &&
-    !isExplicitProductionEnvironment()
+    getEnvCompat("AUTH_DISABLED") === "1" && !isExplicitProductionEnvironment()
   );
 }

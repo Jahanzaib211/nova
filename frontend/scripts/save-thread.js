@@ -38,11 +38,14 @@ export async function main() {
     path.resolve(rootPath, "thread.json"),
     JSON.stringify(data, null, 2),
   );
-  const backendRootPath = path.resolve(
-    process.cwd(),
-    "../backend/.deer-flow/threads",
-    threadId,
-  );
+  // Data dir is `.nova`; fall back to the legacy `.deer-flow` if only it exists.
+  const novaHome = path.resolve(process.cwd(), "../backend/.nova");
+  const legacyHome = path.resolve(process.cwd(), "../backend/.deer-flow");
+  const dataHome =
+    !fs.existsSync(novaHome) && fs.existsSync(legacyHome)
+      ? legacyHome
+      : novaHome;
+  const backendRootPath = path.resolve(dataHome, "threads", threadId);
   copyFolder("user-data/outputs", rootPath, backendRootPath);
   copyFolder("user-data/uploads", rootPath, backendRootPath);
   console.info(`Saved thread "${title}" to ${rootPath}`);

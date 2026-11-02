@@ -1,13 +1,13 @@
 ---
 title: Use Tools and Skills
-description: This tutorial shows you how to configure and use tools and skills in DeerFlow to give the agent access to web search, file operations, and domain-specific capabilities.
+description: This tutorial shows you how to configure and use tools and skills in Nova to give the agent access to web search, file operations, and domain-specific capabilities.
 ---
 
 import { Callout } from "nextra/components";
 
 # Use Tools and Skills
 
-This tutorial shows you how to configure and use tools and skills in DeerFlow to give the agent access to web search, file operations, and domain-specific capabilities.
+This tutorial shows you how to configure and use tools and skills in Nova to give the agent access to web search, file operations, and domain-specific capabilities.
 
 ## Configuring tools
 
@@ -16,25 +16,25 @@ Add tools to `config.yaml`:
 ```yaml
 tools:
   # Web search
-  - use: deerflow.community.ddg_search.tools:web_search_tool
+  - use: nova.community.ddg_search.tools:web_search_tool
 
   # Web content fetching
-  - use: deerflow.community.jina_ai.tools:web_fetch_tool
+  - use: nova.community.jina_ai.tools:web_fetch_tool
 
   # Sandbox file operations
-  - use: deerflow.sandbox.tools:ls_tool
-  - use: deerflow.sandbox.tools:read_file_tool
-  - use: deerflow.sandbox.tools:write_file_tool
-  - use: deerflow.sandbox.tools:bash_tool
+  - use: nova.sandbox.tools:ls_tool
+  - use: nova.sandbox.tools:read_file_tool
+  - use: nova.sandbox.tools:write_file_tool
+  - use: nova.sandbox.tools:bash_tool
 ```
 
 ## Enabling skills
 
-Enable skills through the DeerFlow app's extensions panel, or edit `extensions_config.json` directly.
+Enable skills through the Nova app's extensions panel, or edit `extensions_config.json` directly.
 
 **Via the app UI:**
 
-1. Open the DeerFlow app
+1. Open the Nova app
 2. Click the Extensions/Skills icon in the sidebar
 3. Find `deep-research` and toggle it on
 

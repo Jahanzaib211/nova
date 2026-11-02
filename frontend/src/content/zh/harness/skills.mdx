@@ -38,7 +38,7 @@ import { Callout, Cards, FileTree, Steps } from "nextra/components";
 
 ## 内置技能
 
-DeerFlow 内置以下公共技能：
+Nova 内置以下公共技能：
 
 | 技能                           | 描述                                         |
 | ------------------------------ | -------------------------------------------- |
@@ -116,7 +116,7 @@ skills:
 
 技能可用性在 `extensions_config.json` 中跟踪（独立于 `config.yaml`）。你可以管理技能状态：
 
-- **通过 DeerFlow 应用界面**：技能面板允许你切换技能的启用/禁用状态。
+- **通过 Nova 应用界面**：技能面板允许你切换技能的启用/禁用状态。
 - **通过 Gateway API**：`POST /api/extensions/skills/{name}/enable` 和 `/disable`。
 - **直接编辑 `extensions_config.json`**。
 
@@ -140,7 +140,7 @@ skills:
 
 ## 技能进化
 
-DeerFlow 包含一个可选的**技能进化**功能，允许 Agent 在 `skills/custom/` 目录中自主创建和改进技能：
+Nova 包含一个可选的**技能进化**功能，允许 Agent 在 `skills/custom/` 目录中自主创建和改进技能：
 
 ```yaml
 skill_evolution:

@@ -1,13 +1,13 @@
 ---
 title: Operations and Troubleshooting
-description: This page covers day-to-day operational tasks and solutions to common problems when running DeerFlow App.
+description: This page covers day-to-day operational tasks and solutions to common problems when running Nova App.
 ---
 
 import { Callout, Cards } from "nextra/components";
 
 # Operations and Troubleshooting
 
-This page covers day-to-day operational tasks and solutions to common problems when running DeerFlow App.
+This page covers day-to-day operational tasks and solutions to common problems when running Nova App.
 
 ## Log files
 
@@ -45,7 +45,7 @@ curl http://localhost:2026/api/models
 
 ## Config upgrade
 
-When you pull a new version of DeerFlow, the `config_version` in `config.example.yaml` may be higher than your `config.yaml`. To merge new fields without losing your customizations:
+When you pull a new version of Nova, the `config_version` in `config.example.yaml` may be higher than your `config.yaml`. To merge new fields without losing your customizations:
 
 ```bash
 make config-upgrade
@@ -131,15 +131,15 @@ If MCP tools appear in `extensions_config.json` but are not available in the age
 ### Memory not persisting across sessions
 
 - Verify `memory.enabled: true` in `config.yaml`.
-- Check that the storage path is writable: `ls -la backend/.deer-flow/`.
+- Check that the storage path is writable: `ls -la backend/.nova/`.
 - Look for memory update errors in `logs/gateway.log` (search for "memory").
 
 ## Data backup
 
-Thread data and memory are stored under `backend/.deer-flow/`:
+Thread data and memory are stored under `backend/.nova/`:
 
 ```
-backend/.deer-flow/
+backend/.nova/
   memory.json           # global agent memory
   agents/               # per-agent memory
   threads/              # thread working directories
@@ -152,7 +152,7 @@ backend/.deer-flow/
 
 Back up this entire directory to preserve conversation history, artifacts, and learned memory.
 
-In Docker deployments, the bind-mounted host path (`$DEER_FLOW_ROOT/backend/.deer-flow/`) is the source of truth — back up the host path.
+In Docker deployments, the bind-mounted host path (`$NOVA_ROOT/backend/.nova/`) is the source of truth — back up the host path.
 
 ## Restarting services
 

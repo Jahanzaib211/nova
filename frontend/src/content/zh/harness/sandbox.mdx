@@ -8,7 +8,7 @@ import { Callout, Cards, Tabs } from "nextra/components";
 # 沙箱
 
 <Callout type="info" emoji="📦">
-  沙箱是 Agent 进行文件和命令操作的隔离工作区。它让 DeerFlow
+  沙箱是 Agent 进行文件和命令操作的隔离工作区。它让 Nova
   能够采取真实行动，而不仅仅是对话。
 </Callout>
 
@@ -16,7 +16,7 @@ import { Callout, Cards, Tabs } from "nextra/components";
 
 ## 沙箱模式
 
-DeerFlow 支持三种沙箱模式，选择适合你部署的一种：
+Nova 支持三种沙箱模式，选择适合你部署的一种：
 
 ### LocalSandbox（默认）
 
@@ -27,7 +27,7 @@ DeerFlow 支持三种沙箱模式，选择适合你部署的一种：
 
 ```yaml
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
   allow_host_bash: false # 默认；仅对完全受信任的工作流设置为 true
 ```
 
@@ -39,7 +39,7 @@ sandbox:
 
 ```yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: nova.community.aio_sandbox:AioSandboxProvider
 
   # 可选：容器镜像（下方显示默认值）
   image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
@@ -57,7 +57,7 @@ sandbox:
       read_only: false
 ```
 
-安装：`cd backend && uv add 'deerflow-harness[aio-sandbox]'`
+安装：`cd backend && uv add 'nova-harness[aio-sandbox]'`
 
 ### Provisioner 管理的沙箱（Kubernetes）
 
@@ -65,7 +65,7 @@ sandbox:
 
 ```yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: nova.community.aio_sandbox:AioSandboxProvider
   provisioner_url: http://provisioner:8002
 ```
 
@@ -76,7 +76,7 @@ sandbox:
 | 主机路径                                    | 容器路径                                      | 访问权限 |
 | ------------------------------------------- | --------------------------------------------- | -------- |
 | `skills/`（来自 `skills.path`）             | `/mnt/skills`（来自 `skills.container_path`） | 只读     |
-| `.deer-flow/threads/{thread_id}/user-data/` | `/mnt/user-data/`                             | 读写     |
+| `.nova/threads/{thread_id}/user-data/` | `/mnt/user-data/`                             | 读写     |
 
 技能目录始终以只读方式挂载。线程将其工作数据（上传文件、输出、中间文件）写入 `/mnt/user-data/`。
 
@@ -86,7 +86,7 @@ sandbox:
 
 ```yaml
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
   mounts:
     - host_path: /home/user/my-project
       container_path: /mnt/my-project
@@ -105,7 +105,7 @@ sandbox:
 
 ```yaml
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
 
   # bash 使用中间截断（头部 + 尾部）
   bash_output_max_chars: 20000
