@@ -374,11 +374,14 @@ else
   st TODO "$PM2_APP currently: ${cur:-absent} ($(pm2_status "$PM2_APP"))"
   [ -n "$cur" ] && run pm2 delete "$PM2_APP"
   run pm2 start "$REPO_ROOT/ecosystem.config.js" --only "$PM2_APP"
-  run pm2 save
 fi
 for app in "${PM2_SIDECARS[@]}"; do
   st TODO "restart $app on the new code"; run pm2 restart "$app" --update-env
 done
+# Save only now: step 1 stopped the sidecars, and a dump taken before they
+# were restarted resurrects them as stopped (observed on the first cutover,
+# 2026-11-02 -- the gates and the watchdog came back down).
+run pm2 save
 
 # ── 8. postflight ───────────────────────────────────────────────────────────
 step "8. Postflight"
