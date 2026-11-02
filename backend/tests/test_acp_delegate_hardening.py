@@ -28,8 +28,8 @@ class _RecordingRepo:
     def __init__(self, *_a, **_k) -> None:
         self.created: list[dict[str, Any]] = []
 
-    async def create(self, *, owner_user_id: str, name: str, scopes: list[str]) -> dict[str, Any]:
-        self.created.append({"owner_user_id": owner_user_id, "name": name, "scopes": scopes})
+    async def create(self, *, owner_user_id: str, name: str, scopes: list[str], ttl_seconds: float | None = None) -> dict[str, Any]:
+        self.created.append({"owner_user_id": owner_user_id, "name": name, "scopes": scopes, "ttl_seconds": ttl_seconds})
         return {"id": "tok", "token": "nhk_x"}
 
 
@@ -58,7 +58,10 @@ async def test_delegate_token_is_scoped_to_the_sandbox_module(mint_env) -> None:
 
     server, _ = default_nova_mcp("u1", "thread-1", role=DELEGATE_ROLE)
     await server["__mint__"]()
-    assert mint_env[0].created == [{"owner_user_id": "u1", "name": "runtime:thread-1", "scopes": list(DELEGATE_SCOPES)}]
+    created = mint_env[0].created
+    assert [{k: v for k, v in c.items() if k != "ttl_seconds"} for c in created] == [{"owner_user_id": "u1", "name": "runtime:thread-1", "scopes": list(DELEGATE_SCOPES)}]
+    # Per-turn tokens always expire (a failed revoke must not leave them live).
+    assert created[0]["ttl_seconds"] and created[0]["ttl_seconds"] > 0
     assert "*" not in DELEGATE_SCOPES
 
 
