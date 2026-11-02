@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from nova.config.acp_config import ACPAgentConfig, load_acp_config_from_dict
 from nova.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
+from nova.config.browser_config import BrowserConfig
 from nova.config.capabilities_config import CapabilitiesConfig
 from nova.config.channel_connections_config import ChannelConnectionsConfig
 from nova.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
@@ -140,6 +141,10 @@ class AppConfig(BaseModel):
             "channel_connections",
             field_doc="User-facing IM channel connection configuration.",
         ),
+    )
+    browser: BrowserConfig = Field(
+        default_factory=BrowserConfig,
+        description=("Unified browser layer: stealth, proxy, timezone, ad blocking, profiles, downloads, recording and the web_fetch escalation ladder, applied to the sandbox Chromium, Browserless and Crawl4AI. Read per call, so edits hot-reload."),
     )
     loop_detection: LoopDetectionConfig = Field(default_factory=LoopDetectionConfig, description="Loop detection middleware configuration")
     safety_finish_reason: SafetyFinishReasonConfig = Field(default_factory=SafetyFinishReasonConfig, description="Provider safety-filter finish_reason interception middleware configuration")
