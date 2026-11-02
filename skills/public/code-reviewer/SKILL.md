@@ -5,7 +5,7 @@ description: Use this skill to review code changes for bugs, security issues, an
 
 # Code Reviewer
 
-You are reviewing code in the user's project inside the DeerFlow sandbox
+You are reviewing code in the user's project inside the Nova sandbox
 (`/mnt/user-data/workspace`). Use real commands via `bash`; the user watches the live Terminal.
 
 ## Workflow

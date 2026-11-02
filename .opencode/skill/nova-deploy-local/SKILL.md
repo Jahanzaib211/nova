@@ -23,7 +23,7 @@ which gh && gh --version  # For the post-deploy tag/release
 # 1. Configure (only on first run; config.example.yaml is the template)
 cp config.example.yaml config.yaml
 cp .env.example .env
-# Edit .env: set DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
+# Edit .env: set NOVA_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
 # Edit config.yaml: confirm models are configured (or use the default OpenAI-compatible stub)
 
 # 2. Install dependencies
@@ -56,19 +56,19 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 ## Stop
 
 ```bash
-pm2 stop deerflow
+pm2 stop nova
 # OR
 ./scripts/serve.sh --stop
 # OR
-docker compose -f docker/docker-compose-dev.yaml -f docker/docker-compose.dood.yaml -p deer-flow-dev down
+docker compose -f docker/docker-compose-dev.yaml -f docker/docker-compose.dood.yaml -p nova down
 ```
 
 ## Common issues
 
 - **Port 2026 already in use:** `lsof -i :2026`; kill the process or change nginx port
 - **Config.yaml not found:** the gateway app raises `FileNotFoundError: 'config.yaml' file not found in the project root or legacy backend/repository root locations` (per `app_config.py:205`)
-- **AIO container won't start:** `docker logs deer-flow-aio-{uuid} --tail 30`; check `enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest` is pullable
-- **PM2 doesn't restart on crash:** `pm2 status deerflow`; check `ecosystem.config.js` for `autorestart: true`
+- **AIO container won't start:** `docker logs nova-sandbox-{uuid} --tail 30`; check `enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest` is pullable
+- **PM2 doesn't restart on crash:** `pm2 status nova`; check `ecosystem.config.js` for `autorestart: true`
 
 ## Anti-patterns
 

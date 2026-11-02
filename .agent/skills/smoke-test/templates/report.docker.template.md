@@ -1,4 +1,4 @@
-# DeerFlow Smoke Test Report
+# Nova Smoke Test Report
 
 **Test Date**: {{test_date}}  
 **Test Environment**: {{test_environment}}  
@@ -144,16 +144,16 @@ Commit Message: {{git_commit_message}}
 
 | Container Name | Status | Uptime |
 |----------|------|----------|
-| deer-flow-nginx | {{nginx_status}} | {{nginx_uptime}} |
-| deer-flow-frontend | {{frontend_status}} | {{frontend_uptime}} |
-| deer-flow-gateway | {{gateway_status}} | {{gateway_uptime}} |
+| nova-nginx | {{nginx_status}} | {{nginx_uptime}} |
+| nova-frontend | {{frontend_status}} | {{frontend_uptime}} |
+| nova-gateway | {{gateway_status}} | {{gateway_uptime}} |
 
 ---
 
 ## Recommendations and Next Steps
 
 ### If the Test Passes
-1. [ ] Visit http://localhost:2026 to start using DeerFlow
+1. [ ] Visit http://localhost:2026 to start using Nova
 2. [ ] Configure your preferred model if it is not configured yet
 3. [ ] Explore available skills
 4. [ ] Refer to the documentation to learn more features

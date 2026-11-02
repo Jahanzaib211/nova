@@ -1,12 +1,12 @@
 ---
 name: blocking-io-guard
-description: Ensure async-path backend code that could block the asyncio event loop is protected by a teeth-verified runtime anchor in tests/blocking_io/. Use when changing backend Python under app/, packages/harness/deerflow/, or scripts/, when running a blocking-IO triage round over the whole repo, or when a reviewer/CI asks for blocking-IO coverage. Runs a deterministic scan (changed-lines or full-repo), routes each candidate, drafts/extends an anchor, and proves it fails when the blocking IO regresses.
+description: Ensure async-path backend code that could block the asyncio event loop is protected by a teeth-verified runtime anchor in tests/blocking_io/. Use when changing backend Python under app/, packages/harness/nova/, or scripts/, when running a blocking-IO triage round over the whole repo, or when a reviewer/CI asks for blocking-IO coverage. Runs a deterministic scan (changed-lines or full-repo), routes each candidate, drafts/extends an anchor, and proves it fails when the blocking IO regresses.
 ---
 
 # Blocking-IO Guard Skill
 
 Help a contributor ship backend async changes together with the runtime anchor
-that lets DeerFlow's blocking-IO CI gate actually see the new code. The dynamic
+that lets Nova's blocking-IO CI gate actually see the new code. The dynamic
 detector only catches blocking IO on paths a test executes — this skill closes
 that gap, either for your own diff or for a repo-wide triage round.
 
@@ -17,7 +17,7 @@ detector domain — it is not needed to execute the steps below.
 ## When to use
 
 - Your change touches Python under `backend/app/`,
-  `backend/packages/harness/deerflow/`, or `backend/scripts/` and may run on
+  `backend/packages/harness/nova/`, or `backend/scripts/` and may run on
   the async event loop (Mode A). If unsure, run Step 0 — it answers
   deterministically.
 - You are doing a maintenance triage round over the existing codebase
@@ -53,7 +53,7 @@ make detect-blocking-io
 ```
 
 Prints a summary and writes the complete structured finding list to
-`.deer-flow/blocking-io-findings.json`. Work HIGH priority first; do not start
+`.nova/blocking-io-findings.json`. Work HIGH priority first; do not start
 MEDIUM until every HIGH is dispositioned (fixed, guarded, or recorded
 NO-ACTION).
 

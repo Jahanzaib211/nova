@@ -52,7 +52,7 @@ Operational and development scripts for Nova.
 
 | Script | Description |
 |---|---|
-| `pm2-deerflow.sh` | PM2 management for DeerFlow |
+| `pm2-nova.sh` | PM2 management for Nova |
 | `pm2-cloudflared-nova.sh` | PM2 management for Cloudflare tunnel |
 | `pm2-litellm.sh` | PM2 management for LiteLLM proxy |
 | `pm2-monitoring.sh` | PM2 monitoring setup |

@@ -69,8 +69,8 @@ If the pull includes a new Alembic migration:
 
 ```bash
 # Inside the running gateway container
-docker exec deer-flow-gateway python -c "
-from packages.harness.deerflow.persistence.migrations.env import *
+docker exec nova-gateway python -c "
+from packages.harness.nova.persistence.migrations.env import *
 "
 ```
 

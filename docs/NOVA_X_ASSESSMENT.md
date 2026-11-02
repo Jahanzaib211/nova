@@ -47,7 +47,7 @@ not (each tab loads, errors, and refreshes independently, visibly).
 
 ### 1.2 Backend
 
-**Stack:** FastAPI gateway (28 routers) + `deerflow` harness package with a strict
+**Stack:** FastAPI gateway (28 routers) + `nova` harness package (formerly `deerflow`) with a strict
 one-way boundary (harness never imports app — CI-enforced by `test_harness_boundary`).
 
 **Strong, recently-hardened foundations (all verified green this session):**

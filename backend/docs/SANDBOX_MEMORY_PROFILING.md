@@ -3,7 +3,7 @@
 This guide records a repeatable baseline before changing the sandbox runtime.
 Issue #3213 reports per-sandbox memory near 1 GiB in Kubernetes. Before adding
 or recommending a new provider, capture the current AIO sandbox baseline and
-compare candidates with the same DeerFlow workload.
+compare candidates with the same Nova workload.
 
 ## What to Measure
 
@@ -30,7 +30,7 @@ Run this from the repository root:
 ```bash
 python scripts/sandbox_memory_profile.py \
   --namespace deer-flow \
-  --selector app=deer-flow-sandbox \
+  --selector app=nova-sandbox \
   --sample empty \
   --include-processes \
   --format markdown
@@ -73,9 +73,9 @@ the same workload and record:
 ## PR Guidance
 
 Do not claim that a new provider fixes high-concurrency memory usage until the
-same DeerFlow workload has been measured on both the current AIO sandbox and the
+same Nova workload has been measured on both the current AIO sandbox and the
 candidate backend.
 
 For an experimental provider PR, prefer `Related to #3213` unless the PR also
-includes reproducible DeerFlow workload data that demonstrates the target memory
+includes reproducible Nova workload data that demonstrates the target memory
 reduction and preserves uploads, outputs, artifacts, and isolation behavior.

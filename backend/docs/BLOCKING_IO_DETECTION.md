@@ -1,6 +1,6 @@
 # Blocking IO detection usage and maintenance
 
-This document describes how to use and maintain DeerFlow backend blocking-IO
+This document describes how to use and maintain Nova backend blocking-IO
 detection for async event-loop safety.
 
 The goal is narrow: find and prevent synchronous IO from blocking backend
@@ -27,7 +27,7 @@ make detect-blocking-io
 The report is written to:
 
 ```text
-.deer-flow/blocking-io-findings.json
+.nova/blocking-io-findings.json
 ```
 
 Use this output for review and triage. A static finding is a candidate, not
@@ -41,7 +41,7 @@ pattern that is invisible to the current detector.
 ## Runtime detector
 
 The runtime detector is the CI regression guard. It uses Blockbuster to fail a
-focused test when code under `app.*` or `deerflow.*` performs blocking IO on
+focused test when code under `app.*` or `nova.*` performs blocking IO on
 the asyncio event-loop thread.
 
 Run it from `backend/`:
@@ -86,7 +86,7 @@ backend/tests/support/detectors/blocking_io_runtime.py
 ```
 
 Add them to `_PROJECT_BLOCKING_RULES`, not directly inside individual tests.
-Keeping rules centralized makes it clear which extra primitives DeerFlow
+Keeping rules centralized makes it clear which extra primitives Nova
 expects Blockbuster to catch.
 
 Example shape:
@@ -102,7 +102,7 @@ _PROJECT_BLOCKING_RULES = (
         BlockBusterFunction(
             subprocess.Popen,
             "__init__",
-            scanned_modules=["app", "deerflow"],
+            scanned_modules=["app", "nova"],
         ),
     ),
 )

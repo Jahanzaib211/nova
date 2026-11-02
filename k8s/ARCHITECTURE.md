@@ -44,7 +44,7 @@ on this hardware.
 
 ## 3. Every Secret / Environment Variable
 
-Full detail gathered by exhaustive `os.environ.get`/`os.getenv` search across `backend/app/` and `backend/packages/harness/deerflow/`.
+Full detail gathered by exhaustive `os.environ.get`/`os.getenv` search across `backend/app/` and `backend/packages/harness/nova/`.
 
 ### (a) Third-party API keys
 
@@ -52,26 +52,26 @@ Full detail gathered by exhaustive `os.environ.get`/`os.getenv` search across `b
 
 ### (b) Session / auth secrets
 
-`AUTH_JWT_SECRET` (auto-generated + persisted to `{base_dir}/.jwt_secret` mode 0600 if unset — a durability dependency on `DEER_FLOW_HOME`/PVC persistence), `DEER_FLOW_INTERNAL_AUTH_TOKEN` (required in production, process refuses to start without it), `NOVA_OPS_TOKEN`, `DEER_FLOW_AUTH_DISABLED`, `NOVA_BYOK_SECRET` (Fernet key encrypting user API keys at rest), `NOVA_BYOK_ENABLED`, `AUTH_TRUSTED_PROXIES`.
+`AUTH_JWT_SECRET` (auto-generated + persisted to `{base_dir}/.jwt_secret` mode 0600 if unset — a durability dependency on `NOVA_HOME`/PVC persistence), `NOVA_INTERNAL_AUTH_TOKEN` (required in production, process refuses to start without it), `NOVA_OPS_TOKEN`, `NOVA_AUTH_DISABLED`, `NOVA_BYOK_SECRET` (Fernet key encrypting user API keys at rest), `NOVA_BYOK_ENABLED`, `AUTH_TRUSTED_PROXIES`.
 
 ### (c) Infrastructure connection strings
 
-`DATABASE_URL` (Postgres DSN via `$DATABASE_URL` config.yaml interpolation), `DEER_FLOW_DATABASE_URL` (**separate** env var used only by Alembic migrations — a documented drift risk between the app's own DB-URL resolution and the migration tool's), `DEER_FLOW_SQLITE_DIR`. No Redis connection var exists yet (added in Phase 2).
+`DATABASE_URL` (Postgres DSN via `$DATABASE_URL` config.yaml interpolation), `NOVA_DATABASE_URL` (**separate** env var used only by Alembic migrations — a documented drift risk between the app's own DB-URL resolution and the migration tool's), `NOVA_SQLITE_DIR`. No Redis connection var exists yet (added in Phase 2).
 
 ### (d)/(e) Feature flags, paths, misc
 
-`NOVA_CREDITS_ENFORCED`, `GATEWAY_CORS_ORIGINS`, `GATEWAY_ENABLE_DOCS`, `DEER_FLOW_ENV`/`ENVIRONMENT`, the full `DEERFLOW_IGINO_*` privacy-search config block, `DEER_FLOW_HOME`/`DEER_FLOW_PROJECT_ROOT`/`DEER_FLOW_CONFIG_PATH`/`DEER_FLOW_EXTENSIONS_CONFIG_PATH` path overrides, tracing env names (`LANGSMITH_*`, `LANGFUSE_*`).
+`NOVA_CREDITS_ENFORCED`, `GATEWAY_CORS_ORIGINS`, `GATEWAY_ENABLE_DOCS`, `NOVA_ENV`/`ENVIRONMENT`, the full `DEERFLOW_IGINO_*` privacy-search config block, `NOVA_HOME`/`NOVA_PROJECT_ROOT`/`NOVA_CONFIG_PATH`/`NOVA_EXTENSIONS_CONFIG_PATH` path overrides, tracing env names (`LANGSMITH_*`, `LANGFUSE_*`).
 
 ### Secrets gap — closed in Phase 6
 
 `k8s/scripts/bootstrap-secrets.sh` originally populated exactly 10 keys in `nova-secrets`:
 
 ```
-BETTER_AUTH_SECRET, DEER_FLOW_INTERNAL_AUTH_TOKEN, NOVA_OPS_TOKEN, SEARXNG_SECRET_KEY   (freshly generated)
+BETTER_AUTH_SECRET, NOVA_INTERNAL_AUTH_TOKEN, NOVA_OPS_TOKEN, SEARXNG_SECRET_KEY   (freshly generated)
 FIREWORKS_API_KEY, MINIMAX_API_KEY, TAVILY_API_KEY, JINA_API_KEY, SERPER_API_KEY, INFOQUEST_API_KEY   (from .env)
 ```
 
-Compose's `env_file: ../.env` pattern (`docker-compose.yaml:154-155,192-193`) implicitly grants the container access to **every** variable in root `.env` — the K8s script only covered 10, leaving `DATABASE_URL`, Stripe, BYOK, `GITHUB_TOKEN`, tracing keys, most LLM/search providers, and every IM channel credential silently unbootstrapped. Phase 6 expanded the script to explicitly enumerate every secret-shaped env var the codebase actually reads (found via `grep -rn os.environ` across `app/`/`packages/harness/` plus every `$VAR` reference in `config.example.yaml`) — 48 keys now, not a blind full-`.env` passthrough (that would risk local dev path values like `DEER_FLOW_HOME` silently overriding `configmap-env.yaml`'s correct in-container paths, since `secretRef` is listed after `configMapRef` in every Deployment's `envFrom`). It also now generates `AUTH_JWT_SECRET` itself rather than relying on `auth/config.py`'s file-persisted fallback, which has a real check-then-act race across replicas on a fresh PVC — see §9 bug #12.
+Compose's `env_file: ../.env` pattern (`docker-compose.yaml:154-155,192-193`) implicitly grants the container access to **every** variable in root `.env` — the K8s script only covered 10, leaving `DATABASE_URL`, Stripe, BYOK, `GITHUB_TOKEN`, tracing keys, most LLM/search providers, and every IM channel credential silently unbootstrapped. Phase 6 expanded the script to explicitly enumerate every secret-shaped env var the codebase actually reads (found via `grep -rn os.environ` across `app/`/`packages/harness/` plus every `$VAR` reference in `config.example.yaml`) — 48 keys now, not a blind full-`.env` passthrough (that would risk local dev path values like `NOVA_HOME` silently overriding `configmap-env.yaml`'s correct in-container paths, since `secretRef` is listed after `configMapRef` in every Deployment's `envFrom`). It also now generates `AUTH_JWT_SECRET` itself rather than relying on `auth/config.py`'s file-persisted fallback, which has a real check-then-act race across replicas on a fresh PVC — see §9 bug #12.
 
 ### nova-ops (separate repo) secrets
 
@@ -79,7 +79,7 @@ Compose's `env_file: ../.env` pattern (`docker-compose.yaml:154-155,192-193`) im
 
 ## 4. State Architecture — the actual scaling blocker, with exact code references
 
-**`RunManager` (`backend/packages/harness/deerflow/runtime/runs/manager.py`)** holds `self._runs: dict[str, RunRecord]` and `self._runs_by_thread` (line 136-141) — process-local, `asyncio.Lock`-guarded. Two fields on `RunRecord` are the actual, specific blockers:
+**`RunManager` (`backend/packages/harness/nova/runtime/runs/manager.py`)** holds `self._runs: dict[str, RunRecord]` and `self._runs_by_thread` (line 136-141) — process-local, `asyncio.Lock`-guarded. Two fields on `RunRecord` are the actual, specific blockers:
 
 1. **`task: asyncio.Task | None`** — the live coroutine driving the run (`app/gateway/services.py:511`: `record.task = task` right after `asyncio.create_task(run_agent(...))`). Bound to one process's event loop; no other process can ever reference it.
 2. **`abort_event: asyncio.Event`** — the cooperative cancel signal `run_agent()`'s streaming loop polls (`worker.py:345/366`). Meaningless cross-process — a different replica cannot `.set()` another process's `Event`.
@@ -105,10 +105,10 @@ Compose's `env_file: ../.env` pattern (`docker-compose.yaml:154-155,192-193`) im
 
 | Component | Today | K8s treatment |
 |---|---|---|
-| SQLite (default) | Bind-mounted file, `${DEER_FLOW_HOME}:/app/backend/.deer-flow`, WAL mode | Static hostPath PV (`pvc-deerflow-data.yaml`) — deliberately static (not dynamic `local-path`) so sandbox Pods and Gateway see identical files at a predictable path |
+| SQLite (default) | Bind-mounted file, `${NOVA_HOME}:/app/backend/.nova`, WAL mode | Static hostPath PV (`pvc-deerflow-data.yaml`) — deliberately static (not dynamic `local-path`) so sandbox Pods and Gateway see identical files at a predictable path |
 | PostgreSQL | Not deployed | Would need its own StatefulSet + PVC if self-hosted — not built (Postgres isn't in use yet) |
 | Redis | Not deployed | New in Phase 2 — single-replica Deployment + PVC (AOF persistence) |
-| User uploads/outputs/memory | Same `.deer-flow` tree | Same PVC as SQLite |
+| User uploads/outputs/memory | Same `.nova` tree | Same PVC as SQLite |
 
 ### Disaster recovery (Phase 7)
 
@@ -140,7 +140,7 @@ Kept here as living architecture knowledge, not just a changelog entry — each 
 3. **`SKILLS_HOST_PATH` on the provisioner is a real node-filesystem path**, not a path inside the provisioner's own container — it's embedded verbatim into the *sandbox* Pod's hostPath volume spec.
 4. **k3s enforces `NetworkPolicy` by default** — embeds kube-router's controller inside the k3s binary itself (no separate pod), active unless `--disable-network-policy` was passed at install (it wasn't). A missing allow-rule for sandbox Pods caused connection-refused on every access path (NodePort, ClusterIP, direct Pod IP) while host-originated kubelet probes worked fine — looked exactly like a hairpin-NAT bug until traced to the real cause.
 5. **`fsGroup` does not cover static hostPath-backed PVs** — only dynamic `local-path` PVCs get ownership management; a one-shot root `chown` initContainer is the correct fix, confirmed by evidence (the error persisted after adding `fsGroup`) rather than assumed from docs.
-6. **`DatabaseConfig._resolved_sqlite_dir` resolves relative to raw process CWD**, not `DEER_FLOW_HOME` — SQLite was never actually persisted on the PVC before this was caught (two replicas of the same "user" silently had two disconnected databases). Fixed via the `DEER_FLOW_SQLITE_DIR` override env var, which the property already supported.
+6. **`DatabaseConfig._resolved_sqlite_dir` resolves relative to raw process CWD**, not `NOVA_HOME` — SQLite was never actually persisted on the PVC before this was caught (two replicas of the same "user" silently had two disconnected databases). Fixed via the `NOVA_SQLITE_DIR` override env var, which the property already supported.
 7. **redis-py's default `socket_timeout` races against `XREAD BLOCK` / `pubsub.listen()`** — both are legitimately long-lived blocking server-side reads; the client-side socket timeout fires first and surfaces as a spurious `redis.exceptions.TimeoutError` under real load. Fixed via explicit `socket_timeout=None` on every Redis client this codebase constructs.
 8. **`kubernetes` Python client v36.0.3's `read_namespaced_pod_log` sometimes returns the literal `repr()` of a `bytes` object** (`"b'...\\n...'"`) instead of decoded text, for non-JSON (`text/plain`) log responses — a real upstream library bug, reproduced directly against the live cluster. Worked around via `ast.literal_eval` in the provisioner's `_normalize_pod_log_text()`.
 9. **`init_engine_from_config` passed the raw, unresolved `DatabaseConfig.sqlite_dir` field to `os.makedirs()`**, not the `_resolved_sqlite_dir` property that `sqlite_path`/`app_sqlalchemy_url` actually use — silently created an unused directory under CWD whenever CWD happened to be writable (every environment before k8s), and crashed outright once Phase 5 made the root filesystem read-only. Fixed by passing the resolved property everywhere; regression-tested in `test_persistence_scaffold.py`.

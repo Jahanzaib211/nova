@@ -46,7 +46,7 @@ Developer-facing documentation for the Nova backend.
 
 ### RFCs
 
-- `rfc-create-deerflow-agent.md` — RFC: Create DeerFlow agent
+- `rfc-create-deerflow-agent.md` — RFC: Create Nova agent
 - `rfc-extract-shared-modules.md` — RFC: Extract shared modules
 - `rfc-grep-glob-tools.md` — RFC: Grep/glob tools
 

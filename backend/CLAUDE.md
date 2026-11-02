@@ -15,7 +15,7 @@ Nova is a LangGraph-based AI super agent system with a full-stack architecture. 
 
 **Runtime**:
 
-- `make dev`, Docker dev, and production all run the agent runtime in Gateway via `RunManager` + `run_agent()` + `StreamBridge` (`packages/harness/deerflow/runtime/`). Nginx exposes that runtime at `/api/langgraph/*` and rewrites it to Gateway's native `/api/*` routers.
+- `make dev`, Docker dev, and production all run the agent runtime in Gateway via `RunManager` + `run_agent()` + `StreamBridge` (`packages/harness/nova/runtime/`). Nginx exposes that runtime at `/api/langgraph/*` and rewrites it to Gateway's native `/api/*` routers.
 
 **Project Structure**:
 
@@ -28,9 +28,9 @@ nova/
 │   ├── Makefile               # Backend-only commands (dev, gateway, lint)
 │   ├── langgraph.json         # LangGraph Studio graph configuration
 │   ├── packages/
-│   │   └── harness/           # deerflow-harness package (import: deerflow.*)
+│   │   └── harness/           # nova-harness package (import: nova.*)
 │   │       ├── pyproject.toml
-│   │       └── deerflow/
+│   │       └── nova/
 │   │           ├── agents/            # LangGraph agent system
 │   │           │   ├── lead_agent/    # Main agent (factory + system prompt)
 │   │           │   ├── middlewares/   # 28 modules; 23 in the live chain
@@ -104,12 +104,12 @@ make lint               # Lint with ruff
 make format             # Format code with ruff
 ```
 
-The `detect-blocking-io` target parses `app/`, `packages/harness/deerflow/`,
+The `detect-blocking-io` target parses `app/`, `packages/harness/nova/`,
 and `scripts/` with AST. By default it reports only blocking IO candidates that
 are inside async code, reachable from async code in the same file, or reachable
 from sync-only `AgentMiddleware` before/after hooks that LangGraph can execute
 on the async graph path. It prints a concise summary and writes complete JSON
-findings to `.deer-flow/blocking-io-findings.json` at the repository root
+findings to `.nova/blocking-io-findings.json` at the repository root
 (both `make detect-blocking-io` from the repo root and `cd backend && make
 detect-blocking-io` resolve to the same repo-root path). JSON findings include
 `priority`, `location`, `blocking_call`, `event_loop_exposure`, `reason`, and
@@ -135,9 +135,9 @@ Regression tests related to Docker/provisioner behavior:
 Blocking-IO runtime gate (`tests/blocking_io/`):
 
 - Wraps every item under `tests/blocking_io/` with a strict Blockbuster
-  context scoped to `app.*` and `deerflow.*` (see
+  context scoped to `app.*` and `nova.*` (see
   `tests/support/detectors/blocking_io_runtime.py`). Any sync blocking IO
-  call whose stack passes through DeerFlow business code while running on
+  call whose stack passes through Nova business code while running on
   the asyncio event loop raises `BlockingError` and fails the test.
 - Regression anchors live there: `test_skills_load.py` (locks the
   `asyncio.to_thread` offload around `LocalSkillStorage.load_skills`, fix
@@ -158,7 +158,7 @@ Blocking-IO runtime gate (`tests/blocking_io/`):
 
 Persistence engine (v9.4 — SQLite lock storm fix):
 
-- `deerflow.persistence.engine.init_engine` for `backend == "sqlite"` configures
+- `nova.persistence.engine.init_engine` for `backend == "sqlite"` configures
   a `_LockRetrySession` subclass whose `commit()` always routes through
   `commit_with_lock_retry`. Every SQL write site (admin_audit, thread_meta,
   credit_requests, run/sql, channel_connections, byok, sharing,
@@ -178,7 +178,7 @@ Persistence engine (v9.4 — SQLite lock storm fix):
 
 Boundary check (harness → app import firewall):
 
-- `tests/test_harness_boundary.py` — ensures `packages/harness/deerflow/` never imports from `app.*`
+- `tests/test_harness_boundary.py` — ensures `packages/harness/nova/` never imports from `app.*`
 
 CI runs these regression tests for every pull request via [.github/workflows/backend-unit-tests.yml](../.github/workflows/backend-unit-tests.yml).
 
@@ -188,24 +188,24 @@ CI runs these regression tests for every pull request via [.github/workflows/bac
 
 The backend is split into two layers with a strict dependency direction:
 
-- **Harness** (`packages/harness/deerflow/`): Publishable agent framework package (`deerflow-harness`). Import prefix: `deerflow.*`. Contains agent orchestration, tools, sandbox, models, MCP, skills, config — everything needed to build and run agents.
+- **Harness** (`packages/harness/nova/`): Publishable agent framework package (`nova-harness`). Import prefix: `nova.*`. Contains agent orchestration, tools, sandbox, models, MCP, skills, config — everything needed to build and run agents.
 - **App** (`app/`): Unpublished application code. Import prefix: `app.*`. Contains the FastAPI Gateway API and IM channel integrations (Feishu, Slack, Telegram, DingTalk).
 
-**Dependency rule**: App imports deerflow, but deerflow never imports app. This boundary is enforced by `tests/test_harness_boundary.py` which runs in CI.
+**Dependency rule**: App imports nova, but nova never imports app. This boundary is enforced by `tests/test_harness_boundary.py` which runs in CI.
 
 **Import conventions**:
 
 ```python
 # Harness internal
-from deerflow.agents import make_lead_agent
-from deerflow.models import create_chat_model
+from nova.agents import make_lead_agent
+from nova.models import create_chat_model
 
 # App internal
 from app.gateway.app import app
 from app.channels.service import start_channel_service
 
 # App → Harness (allowed)
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 # Harness → App (FORBIDDEN — enforced by test_harness_boundary.py)
 # from app.gateway.routers.uploads import ...  # ← will fail CI
@@ -213,14 +213,14 @@ from deerflow.config import get_app_config
 
 ### Agent System
 
-**Lead Agent** (`packages/harness/deerflow/agents/lead_agent/agent.py`):
+**Lead Agent** (`packages/harness/nova/agents/lead_agent/agent.py`):
 
 - Entry point: `make_lead_agent(config: RunnableConfig)` registered in `langgraph.json`
 - Dynamic model selection via `create_chat_model()` with thinking/vision support
 - Tools loaded via `get_available_tools()` - combines sandbox, built-in, MCP, community, and subagent tools
 - System prompt generated by `apply_prompt_template()` with skills, memory, and subagent instructions
 
-**ThreadState** (`packages/harness/deerflow/agents/thread_state.py`):
+**ThreadState** (`packages/harness/nova/agents/thread_state.py`):
 
 - Extends `AgentState` with: `sandbox`, `thread_data`, `title`, `artifacts`, `todos`, `uploaded_files`, `viewed_images`
 - Uses custom reducers: `merge_artifacts` (deduplicate), `merge_viewed_images` (merge/clear)
@@ -234,9 +234,9 @@ from deerflow.config import get_app_config
 
 ### Middleware Chain
 
-Lead-agent middlewares are assembled in strict append order across `packages/harness/deerflow/agents/middlewares/tool_error_handling_middleware.py` (`build_lead_runtime_middlewares`) and `packages/harness/deerflow/agents/lead_agent/agent.py` (`build_middlewares`):
+Lead-agent middlewares are assembled in strict append order across `packages/harness/nova/agents/middlewares/tool_error_handling_middleware.py` (`build_lead_runtime_middlewares`) and `packages/harness/nova/agents/lead_agent/agent.py` (`build_middlewares`):
 
-1. **ThreadDataMiddleware** - Creates per-thread directories under the user's isolation scope (`backend/.deer-flow/users/{user_id}/threads/{thread_id}/user-data/{workspace,uploads,outputs}`); resolves `user_id` via `get_effective_user_id()` (falls back to `"default"` in no-auth mode); Web UI thread deletion now follows LangGraph thread removal with Gateway cleanup of the local thread directory
+1. **ThreadDataMiddleware** - Creates per-thread directories under the user's isolation scope (`backend/.nova/users/{user_id}/threads/{thread_id}/user-data/{workspace,uploads,outputs}`); resolves `user_id` via `get_effective_user_id()` (falls back to `"default"` in no-auth mode); Web UI thread deletion now follows LangGraph thread removal with Gateway cleanup of the local thread directory
 2. **UploadsMiddleware** - Tracks and injects newly uploaded files into conversation
 3. **SandboxMiddleware** - Acquires sandbox, stores `sandbox_id` in state
 4. **DanglingToolCallMiddleware** - Injects placeholder ToolMessages for AIMessage tool_calls that lack responses (e.g., due to user interruption), including raw provider tool-call payloads preserved only in `additional_kwargs["tool_calls"]`
@@ -268,18 +268,18 @@ Setup: Copy `config.example.yaml` to `config.yaml` in the **project root** direc
 
 **Config Hot-Reload Boundary**: Gateway dependencies route through `get_app_config()` on every request, so per-run fields like `models[*].max_tokens`, `summarization.*`, `title.*`, `memory.*`, `subagents.*`, `tools[*]`, and the agent system prompt pick up `config.yaml` edits on the next message. `AppConfig` is intentionally **not** cached on `app.state` — `lifespan()` keeps a local `startup_config` variable for one-shot bootstrap work and passes it to `langgraph_runtime(app, startup_config)`.
 
-Infrastructure fields are **restart-required**. The authoritative list lives in `packages/harness/deerflow/config/reload_boundary.py::STARTUP_ONLY_FIELDS` and is mirrored by the standardised `"startup-only:"` prefix on the corresponding `Field(description=...)` in `AppConfig`, so IDE hover on those fields surfaces the reason inline (no need to context-switch into this table). Currently registered: `database`, `checkpointer`, `run_events`, `stream_bridge`, `sandbox`, `log_level`, `channels`, `channel_connections`. Adding a new restart-required field requires updating the registry; drift is pinned by `tests/test_reload_boundary.py`.
+Infrastructure fields are **restart-required**. The authoritative list lives in `packages/harness/nova/config/reload_boundary.py::STARTUP_ONLY_FIELDS` and is mirrored by the standardised `"startup-only:"` prefix on the corresponding `Field(description=...)` in `AppConfig`, so IDE hover on those fields surfaces the reason inline (no need to context-switch into this table). Currently registered: `database`, `checkpointer`, `run_events`, `stream_bridge`, `sandbox`, `log_level`, `channels`, `channel_connections`. Adding a new restart-required field requires updating the registry; drift is pinned by `tests/test_reload_boundary.py`.
 
 Configuration priority:
 
 1. Explicit `config_path` argument
-2. `DEER_FLOW_CONFIG_PATH` environment variable
+2. `NOVA_CONFIG_PATH` environment variable
 3. `config.yaml` in current directory (backend/)
 4. `config.yaml` in parent directory (project root - **recommended location**)
 
-Levels 1 and 2 are **strict** — a path that is set but missing raises `FileNotFoundError` instead of falling through, so a wrong `DEER_FLOW_CONFIG_PATH` stops the gateway at import.
+Levels 1 and 2 are **strict** — a path that is set but missing raises `FileNotFoundError` instead of falling through, so a wrong `NOVA_CONFIG_PATH` stops the gateway at import.
 
-**In Docker, `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` must be pinned in the compose service's `environment:` block.** The repo-root `.env` holds *host* paths (it has to — `docker-compose.yaml` uses `${DEER_FLOW_CONFIG_PATH}` as a bind-mount source), and `env_file: ../.env` leaks them into any container that does not override them; `environment:` wins over `env_file:`. Omitting the pin is a deferred failure — the container starts, the gateway dies at import, and nginx reports `gateway could not be resolved`, which looks like DNS. Took the public deployment down on 2026-08-17. Contrast `DEER_FLOW_HOST_BASE_DIR` / `DEER_FLOW_HOST_SKILLS_PATH`, which are deliberately host paths for the DooD sandbox provider. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
+**In Docker, `NOVA_CONFIG_PATH` / `NOVA_EXTENSIONS_CONFIG_PATH` must be pinned in the compose service's `environment:` block.** The repo-root `.env` holds *host* paths (it has to — `docker-compose.yaml` uses `${NOVA_CONFIG_PATH}` as a bind-mount source), and `env_file: ../.env` leaks them into any container that does not override them; `environment:` wins over `env_file:`. Omitting the pin is a deferred failure — the container starts, the gateway dies at import, and nginx reports `gateway could not be resolved`, which looks like DNS. Took the public deployment down on 2026-08-17. Contrast `NOVA_HOST_BASE_DIR` / `NOVA_HOST_SKILLS_PATH`, which are deliberately host paths for the DooD sandbox provider. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
 
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
@@ -291,7 +291,7 @@ MCP servers and skills are configured together in `extensions_config.json` in pr
 Configuration priority:
 
 1. Explicit `config_path` argument
-2. `DEER_FLOW_EXTENSIONS_CONFIG_PATH` environment variable
+2. `NOVA_EXTENSIONS_CONFIG_PATH` environment variable
 3. `extensions_config.json` in current directory (backend/)
 4. `extensions_config.json` in parent directory (project root - **recommended location**)
 
@@ -307,7 +307,7 @@ CORS is same-origin by default when requests enter through nginx on port 2026. S
 |--------|-----------|
 | **Models** (`/api/models`) | `GET /` - list models; `GET /{name}` - model details. B3 per-user scoping (Gate 5): runtime-model writes (`POST /models`, `PUT/DELETE /models/{name}`) are `@require_auth`-gated; ownership metadata in `model_configs` — rows owned by another user are 403 for non-admins, NULL-owner (legacy/backfilled) rows stay editable by any authenticated user, admins manage all; editing a shared row never claims it. `runtime_models.yaml` remains the authoritative store; repo metadata is memory-mode safe |
 | **MCP** (`/api/mcp`) | `GET /config` - get config; `PUT /config` - update config (saves to extensions_config.json) |
-| **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` - details; `PUT /{name}` - update enabled (admin-only: `extensions_config.json` is global; every writer of that file goes through `deerflow.config.extensions_config.update_extensions_config_file`, a raw-JSON merge that keeps `$VAR` placeholders and keys like `mcpInterceptors`); `POST /install` - install from .skill archive (accepts standard optional frontmatter like `version`, `author`, `compatibility`) |
+| **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` - details; `PUT /{name}` - update enabled (admin-only: `extensions_config.json` is global; every writer of that file goes through `nova.config.extensions_config.update_extensions_config_file`, a raw-JSON merge that keeps `$VAR` placeholders and keys like `mcpInterceptors`); `POST /install` - install from .skill archive (accepts standard optional frontmatter like `version`, `author`, `compatibility`) |
 | **Memory** (`/api/memory`) | `GET /` - memory data; `POST /reload` - force reload; `GET /config` - config; `GET /status` - config + data |
 | **Uploads** (`/api/threads/{id}/uploads`) | `POST /` - upload files (auto-converts PDF/PPT/Excel/Word); `GET /list` - list; `DELETE /{filename}` - delete |
 | **Threads** (`/api/threads/{id}`) | `DELETE /` - remove Nova-managed local thread data after LangGraph thread deletion; unexpected failures are logged server-side and return a generic 500 detail |
@@ -316,7 +316,7 @@ CORS is same-origin by default when requests enter through nginx on port 2026. S
 | **Thread Runs** (`/api/threads/{id}/runs`) | `POST /` - create background run; `POST /stream` - create + SSE stream; `POST /wait` - create + block; `GET /` - list runs; `GET /{rid}` - run details; `POST /{rid}/cancel` - cancel; `GET /{rid}/join` - join SSE; `GET /{rid}/messages` - paginated messages `{data, has_more}`; `GET /{rid}/events` - full event stream; `GET /../messages` - thread messages with feedback; `GET /../token-usage` - aggregate tokens |
 | **Feedback** (`/api/threads/{id}/runs/{rid}/feedback`) | `PUT /` - upsert feedback; `DELETE /` - delete user feedback; `POST /` - create feedback; `GET /` - list feedback; `GET /stats` - aggregate stats; `DELETE /{fid}` - delete specific |
 | **Runs** (`/api/runs`) | `POST /stream` - stateless run + SSE; `POST /wait` - stateless run + block; `GET /{rid}/messages` - paginated messages by run_id `{data, has_more}` (cursor: `after_seq`/`before_seq`); `GET /{rid}/feedback` - list feedback by run_id |
-| **Workspace** (`/api/workspace/{thread_id}`) | Feature-flagged (`workspace.intelligence_enabled`, default off). `POST /index` - build/refresh workspace snapshot (cost rate-limit tier); `GET /snapshot` - snapshot summary; `POST /plan` - read-only execution planning (search/run); `GET /commands` - detected command registry (real commands only: Makefile targets take precedence over generic fallbacks; `migrate` emitted only when alembic artifacts exist); `GET /symbols?q=` - symbol prefix search (`file=` filter for per-file outline); `POST /impact` - blast radius of changed files (accepts workspace-relative or absolute paths); `GET /metrics` - kernel metrics `{scan: {count, ...}, cache: {...}}`; `GET /events` - SSE stream of live WIK events (`WorkspaceScanned`/`PlanBuilt`/`CacheHit`/`CacheMiss`) via `WorkspaceEventBridge` (`deerflow.workspace.events.bridge`), scoped by root path, 15s heartbeat. All owner-checked; scanned root derived server-side; plan execution NOT exposed over HTTP. Full-stack no-mock E2E: `tests/test_workspace_e2e.py` (real auth, real engine, real scan). **`GET /events` testing note**: a genuinely infinite SSE generator cannot be observed through `starlette.TestClient` or `httpx.ASGITransport` — both buffer the ASGI app's response until its `__call__` coroutine returns, which never happens for an endpoint that never terminates (reproduces with a bare 2-line `StreamingResponse` generator, no app code involved). `TestWorkspaceEventsSSE` in `test_workspace_e2e.py` works around this with a `live_server` fixture that runs a real `uvicorn.Server` on a real TCP socket and reads with a real `httpx.Client` — the only reliable way to test true incremental SSE delivery in this stack |
+| **Workspace** (`/api/workspace/{thread_id}`) | Feature-flagged (`workspace.intelligence_enabled`, default off). `POST /index` - build/refresh workspace snapshot (cost rate-limit tier); `GET /snapshot` - snapshot summary; `POST /plan` - read-only execution planning (search/run); `GET /commands` - detected command registry (real commands only: Makefile targets take precedence over generic fallbacks; `migrate` emitted only when alembic artifacts exist); `GET /symbols?q=` - symbol prefix search (`file=` filter for per-file outline); `POST /impact` - blast radius of changed files (accepts workspace-relative or absolute paths); `GET /metrics` - kernel metrics `{scan: {count, ...}, cache: {...}}`; `GET /events` - SSE stream of live WIK events (`WorkspaceScanned`/`PlanBuilt`/`CacheHit`/`CacheMiss`) via `WorkspaceEventBridge` (`nova.workspace.events.bridge`), scoped by root path, 15s heartbeat. All owner-checked; scanned root derived server-side; plan execution NOT exposed over HTTP. Full-stack no-mock E2E: `tests/test_workspace_e2e.py` (real auth, real engine, real scan). **`GET /events` testing note**: a genuinely infinite SSE generator cannot be observed through `starlette.TestClient` or `httpx.ASGITransport` — both buffer the ASGI app's response until its `__call__` coroutine returns, which never happens for an endpoint that never terminates (reproduces with a bare 2-line `StreamingResponse` generator, no app code involved). `TestWorkspaceEventsSSE` in `test_workspace_e2e.py` works around this with a `live_server` fixture that runs a real `uvicorn.Server` on a real TCP socket and reads with a real `httpx.Client` — the only reliable way to test true incremental SSE delivery in this stack |
 | **Sandbox** (`/api/sandbox`) | Backs the Agent's Computer panel. Proxy surfaces, all owner-checked and all served **same-origin** so the UI can iframe them: `/preview/{tid}/{path}` + `/lpreview/{tid}/{label}/{path}` (dev-server previews, HMR over `/preview-ws`, `/lpreview-ws`), `/absproxy/{tid}/{port}/{path}` (any in-container port), and `/appview/{tid}/{path}` + `/appview-ws/{tid}/{path}` (the sandbox container's own web UI — ttyd at `/terminal`, noVNC at `/vnc/index.html`). `GET /terminal-url` returns **relative** `/api/sandbox/appview/...` paths; it previously returned absolute `http://localhost:{published_port}` URLs, which only resolve when the browser runs on the Docker host — on nova.alilabsx.com (Compose behind a Cloudflare tunnel) and on k3s both panes were permanently blank, and the app shell's `frame-src 'self' blob:` CSP would have refused a foreign origin anyway. Every proxied response is stamped with an opaque `Content-Security-Policy: sandbox …` and has cookies stripped. `_proxy_appview` injects a WebSocket-constructor shim into HTML because ttyd/noVNC build their socket URL in JS from `window.location`, which a `<base href>` cannot reach. **All three HTTP proxies rewrite HTML** — `<base href="{prefix}/">` plus `_prefix_html_urls`, which re-points root-absolute `href`/`src`/`action` and Next.js's attribute-less `"/_next/` inlining back through the prefix. `_absproxy_impl` did **not** until 2026-08-21: it rewrote only the `Location` header, so a page served through it loaded and then 404'd every asset against the app origin, rendering as unstyled HTML. That is not a corner case — the Browser tab falls back to absproxy whenever the canonical preview proxy cannot reach the server, which is the normal path for a dev server the agent started with raw `bash` instead of `start_dev_server`, so the safety net caught the request and served it unusably. `_prefix_html_urls` is idempotent by construction (already-prefixed URLs are hidden behind a placeholder before the naive rewrite), which matters because a page can be proxied twice or arrive already prefixed after the browser resolved a link against `<base>`. See `tests/test_absproxy_html_rewrite.py`. **The HTML rewrite alone breaks hydrating frameworks** — a client component renders `<Link href="/">` as `/` while the rewritten server HTML says `/api/sandbox/preview/…/`, so React discarded the document and re-rendered it with unprefixed asset URLs (the unstyled Browser tab + the Next dev overlay's "1 error"); no server-side rewrite can fix it because client components hardcode their hrefs. The preview and absproxy therefore inject `_url_shim` ahead of every script: `getAttribute` returns the app's own path, `setAttribute`/URL property setters/`fetch`/XHR/EventSource/`history` add the prefix, and on Next.js pages (`_NEXT_ROUTER_MARKERS`) the location is set to the app's path before the router boots (Next's mount-time `replaceState` restores the prefix; other apps keep a prefixed location so a Vite full reload still lands in the preview). Appview keeps its frozen prepend-only shim. `Link:` response headers are rewritten too (`_prefix_link_header`) — Next preloads its fonts through them. See `tests/test_preview_url_virtualization.py`, which drives the shim in real Chromium. **Framed previews authenticate by capability, not cookie.** The Browser tab's iframe is an opaque-origin sandbox on purpose (no `allow-same-origin`: agent-built code must not run as the user in Nova's origin), so Chromium sends its sub-resource requests without the `SameSite=Lax` session cookie — every asset 401'd while Firefox, which still sends it, rendered fine. `/dev-status` & friends mint URLs whose thread segment is `{thread}~{user}~{expiry}~{hmac}` (`app/gateway/preview_capability.py`); proxies call `thread_of(segment)` for the id but build prefixes from the raw segment so the capability rides every rewritten URL; `AuthMiddleware` accepts it only on preview/lpreview/absproxy paths with **no cookie fallback**; CSRF exempts capability paths; `_ws_admit_preview` admits `Origin: null` sockets that carry one; `PreviewCapabilityCORSMiddleware` (outermost, `app/gateway/preview_cors.py`) answers their preflights and adds `ACAO: *` because fonts and `fetch()` from an opaque origin are CORS requests and `CORSMiddleware`'s allowlist 400s `Origin: null`. **Verify Browser-tab fixes signed in, framed with the real `sandbox` attribute** — an unauthenticated or top-level check cannot see any of this. See `tests/test_preview_capability.py`. Both WS bridges share `_bridge_ws`, which relays binary as well as text (the previous inline pump used `receive_text()` and tore down on any binary frame). See `tests/test_sandbox_appview_same_origin.py`. `GET /download-zip` dedupes archive entry names: the workspace is flattened to the archive root while outputs/ and uploads/ are prefixed, so a workspace-local `outputs/` directory collided with the outputs mount and `zipfile` wrote **both** entries (it only warns) — every extractor keeps the last, so one file was silently unrecoverable from the archive. Entry names are `as_posix()` on both branches; `str(rel)` emitted backslashes on Windows. See `tests/test_download_zip_dedupe.py` |
 | **Agents** (`/api/agents`) | B3 per-user scoping (Gate 4): write endpoints (`POST /agents`, `PUT /agents/{name}`, `PUT /user-profile`, `DELETE /agents/{name}`) are `@require_auth`-gated and resolve the owner server-side via `get_current_user_from_request`; ownership metadata tracked in `agent_configs` (memory-mode safe — repo errors on missing DB are logged, not fatal). Reads stay public per-user via the disk layout |
 | **Admin** (`/api/v1/admin`) | Ops-console god-mode surface, gated by `require_admin_user` (real admin session or the `X-Nova-Ops-Token` service token — see `ops_auth.py`). Every endpoint reads from a SQL-backed `database.backend` (sqlite/postgres); 503 otherwise. Audit trail (`admin_audit`) is append-only and captures the caller's `actor`, `actor_ip` (after `AUTH_TRUSTED_PROXIES` trust chain), `actor_user_agent`, `action`, `target_user_id`, `payload`, `created_at`. Read-only listing endpoints are audited too (`view-*` actions) so the trail is a complete record of operator visibility. Self-service auth events (`login`, `failed-login`, `logout`, `change-password`, `update-email`, `register`, `initialize`) and channel-runtime config (`configure-channel-runtime`, `deconfigure-channel-runtime`) are also audited. Endpoints: `GET /users` / `/users/stats` / `/users/recent` (per-user live stats with `last_sign_in_at` + `last_run_at`) — registration roster + growth metrics; `GET /users/studio` — ranked view of the whole user base (sortable by tokens / runs / activity / recency / failed-logins; plan filter; per-row aggregations via `runs` + `admin_audit` LEFT JOINs); `GET /users/{id}` - full standing (profile, credit balance, `recent_runs_for_user`, plus `last_sign_in_at` and `is_forbidden`); `PATCH /users/{id}/plan` - manual plan override; `POST /users/{id}/reset-usage`, `POST /users/{id}/grant`, `PATCH /users/{id}/limit` - credit controls; `POST /users/{id}/reset-password` - generates a fresh bcrypt hash + returns the one-time plaintext; `POST /users/{id}/revoke-sessions` - bumps `token_version` to sign out everywhere; `POST /users/{id}/forbid` / `/unforbid` - toggle the AuthMiddleware's `is_forbidden` flag (403 not 401 on next login to avoid leaking the ban); `GET /users/{id}/sessions` - auth history from the audit trail; `GET /users/{id}/byok` / `DELETE /users/{id}/byok` - list/revoke a user's BYOK key (encrypted value never returned); `GET /users/{id}/conversations` - list a user's threads (metadata only); `GET /users/{id}/conversations/{thread_id}/messages` - full message content for one of that user's threads (verifies thread ownership first, 404s otherwise); `POST /users/{id}/conversations/{thread_id}/runs/{run_id}/cancel` - cancel another user's in-flight run (same thread-ownership check, 404 on mismatch or unknown run, 409 if not cancellable); `GET /users/{id}/channels` - list a user's IM channel connections (no raw credentials); `DELETE /users/{id}/channels/{connection_id}` - revoke one of a user's channel connections; `GET /activity` - cross-user recent runs; `GET /audit` - operator audit trail, optional `target_user_id` query param to scope to one user's rows; `GET/POST /credit-requests` - self-service credit request inbox. The two conversation endpoints are the only surface that exposes private message text, so every read is written to the audit trail (`view-conversations` / `view-conversation-messages`) alongside every mutating action. The one-time password returned by `/reset-password` is the only plaintext secret that ever crosses the wire — the rest of the god-mode surface is metadata (counts, timestamps, audit rows). The ops console UI itself is a separate external app, not part of this repo; this router is only its backend API surface |
@@ -331,14 +331,14 @@ CORS is same-origin by default when requests enter through nginx on port 2026. S
 
 Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runtime, all other `/api/*` → Gateway REST APIs.
 
-### Sandbox System (`packages/harness/deerflow/sandbox/`)
+### Sandbox System (`packages/harness/nova/sandbox/`)
 
 **Interface**: Abstract `Sandbox` with `execute_command`, `read_file`, `write_file`, `list_dir`
 **Provider Pattern**: `SandboxProvider` with `acquire`, `acquire_async`, `get`, `release` lifecycle. Async agent/tool paths call async sandbox lifecycle hooks so Docker sandbox creation, discovery, cross-process locking, readiness polling, and release stay off the event loop.
 **Implementations**:
 
 - `LocalSandboxProvider` - Local filesystem execution. `acquire(thread_id)` returns a per-thread `LocalSandbox` (id `local:{thread_id}`) whose `path_mappings` resolve `/mnt/user-data/{workspace,uploads,outputs}` and `/mnt/acp-workspace` to that thread's host directories, so the public `Sandbox` API honours the `/mnt/user-data` contract uniformly with AIO. `acquire()` / `acquire(None)` keeps the legacy generic singleton (id `local`) for callers without a thread context. Per-thread sandboxes are held in an LRU cache (default 256 entries) guarded by a `threading.Lock`.
-- `AioSandboxProvider` (`packages/harness/deerflow/community/`) - Docker-based isolation. Active-cache and warm-pool entries are checked with the backend during acquire/reuse; definitively dead containers are dropped from all in-process maps so the thread can discover or create a fresh sandbox instead of reusing a stale client. Backend health-check failures are treated as unknown, not dead; local discovery likewise treats an unverifiable container as not adoptable and falls through to create rather than failing acquire. `get()` remains an in-memory lookup for event-loop-safe tool paths.
+- `AioSandboxProvider` (`packages/harness/nova/community/`) - Docker-based isolation. Active-cache and warm-pool entries are checked with the backend during acquire/reuse; definitively dead containers are dropped from all in-process maps so the thread can discover or create a fresh sandbox instead of reusing a stale client. Backend health-check failures are treated as unknown, not dead; local discovery likewise treats an unverifiable container as not adoptable and falls through to create rather than failing acquire. `get()` remains an in-memory lookup for event-loop-safe tool paths.
 
 **AIO command encoding — never put a newline on the wire.** `AioSandbox._single_line()` base64-wraps any command containing a newline into `echo <b64> | base64 -d | bash -s`. The upstream sandbox server mis-parses a newline in `exec_command` and returns an `ErrorObservation` whose `exit_code` it then fails to read, surfacing to the agent as `Command failed: 'ErrorObservation' object has no attribute 'exit_code'`. Measured against the live container: **10/10 multi-line commands failed, 0/10 single-line**; one real run lost 13 of 25. The pre-existing signature-detection retry cannot help — the corruption comes from the payload, not the session, so retrying re-sends the same command. `bash -s` is non-interactive, which also disables history expansion and kills the `bash: !: event not found` seen on a `!` inside double quotes. Single-line commands pass through untouched. Pinned by `tests/test_aio_multiline_command.py`.
 
@@ -367,11 +367,11 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 **Virtual Path System**:
 
 - Agent sees: `/mnt/user-data/{workspace,uploads,outputs}`, `/mnt/skills`
-- Physical: `backend/.deer-flow/users/{user_id}/threads/{thread_id}/user-data/...`, `deer-flow/skills/`
+- Physical: `backend/.nova/users/{user_id}/threads/{thread_id}/user-data/...`, `skills/`
 - Translation: `LocalSandboxProvider` builds per-thread `PathMapping`s for the user-data prefixes at acquire time; `tools.py` keeps `replace_virtual_path()` / `replace_virtual_paths_in_command()` as a defense-in-depth layer (and for path validation). AIO has the directories volume-mounted at the same virtual paths inside its container, so both implementations accept `/mnt/user-data/...` natively.
 - Detection: `is_local_sandbox()` accepts both `sandbox_id == "local"` (legacy / no-thread) and `sandbox_id.startswith("local:")` (per-thread)
 
-**Sandbox Tools** (in `packages/harness/deerflow/sandbox/tools.py`):
+**Sandbox Tools** (in `packages/harness/nova/sandbox/tools.py`):
 
 - `bash` - Execute commands with path translation and error handling
 - `ls` - Directory listing (tree format, max 2 levels)
@@ -379,7 +379,7 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 - `write_file` - Write/append to files, creates directories; overwrites by default and exposes the `append` argument in the model-facing schema for end-of-file writes. Non-append calls over 200 KB (`DEERFLOW_WRITE_FILE_MAX_BYTES`) auto-chunk into sequential internal writes rather than failing outright (issue #3189); only content over the 2 MB hard ceiling (`DEERFLOW_WRITE_FILE_HARD_MAX_BYTES`) is rejected, since a call that size is almost certainly a runaway generation rather than a legitimate document. A failure partway through an auto-chunked write is reported explicitly (chunk/byte counts, "PARTIAL" state, told to `read_file` to check the real on-disk content) rather than as a generic error, since the file is genuinely neither the old nor the new content at that point. **Integrity contract**: `LocalSandbox.write_file` must produce byte-exact output for any payload ≤ 2 MB. Pinned by `tests/test_write_file_no_truncation.py` (8 cases, including the 102 810 B self-probe payload).
 - `str_replace` - Substring replacement (single or all occurrences); same-path serialization is scoped to `(sandbox.id, path)` so isolated sandboxes do not contend on identical virtual paths inside one process
 
-**Browser tools** (`browser_navigate`/`browser_click`/`browser_input`/`browser_eval` in `packages/harness/deerflow/tools/builtins/workspace_tools.py`, plus the `browser_check` self-test in `sandbox/browser_check.py`) drive the AIO sandbox's real Chromium over CDP via Playwright (`sync_playwright().chromium.connect_over_cdp(...)`) — Nova's backend never spawns a browser process, only ever attaches to the one the sandbox container owns. Every real CDP call site is wired through the per-thread circuit breaker + bounded retry (`sandbox/browser_circuit_breaker.py` / `sandbox/browser_retry.py`) via a shared exception classifier (`sandbox/browser_errors.py::classify_playwright_exception`) that sorts connection-layer failures (retry with backoff) from page-level ones (bad selector, eval exception — fail fast). Only the CDP *connect* is retried, never the page operation itself — retrying a click/fill that already succeeded server-side but then hit a transient error on `browser.close()` would otherwise double-submit it, since `navigate` is the only one of these with its own idempotency cache (`navigate_id`). Page-op exceptions are still passed through the classifier for a consistent typed error surface, but deliberately are not retried.
+**Browser tools** (`browser_navigate`/`browser_click`/`browser_input`/`browser_eval` in `packages/harness/nova/tools/builtins/workspace_tools.py`, plus the `browser_check` self-test in `sandbox/browser_check.py`) drive the AIO sandbox's real Chromium over CDP via Playwright (`sync_playwright().chromium.connect_over_cdp(...)`) — Nova's backend never spawns a browser process, only ever attaches to the one the sandbox container owns. Every real CDP call site is wired through the per-thread circuit breaker + bounded retry (`sandbox/browser_circuit_breaker.py` / `sandbox/browser_retry.py`) via a shared exception classifier (`sandbox/browser_errors.py::classify_playwright_exception`) that sorts connection-layer failures (retry with backoff) from page-level ones (bad selector, eval exception — fail fast). Only the CDP *connect* is retried, never the page operation itself — retrying a click/fill that already succeeded server-side but then hit a transient error on `browser.close()` would otherwise double-submit it, since `navigate` is the only one of these with its own idempotency cache (`navigate_id`). Page-op exceptions are still passed through the classifier for a consistent typed error surface, but deliberately are not retried.
 
 **SDK contract (learned the hard way).** The tools call the `agent-sandbox` REST API first and fall back to CDP. That fallback is gated by `_should_fallback_to_cdp()`, which treats a real `ApiError(404)`, a `TypeError`, or an `AttributeError` as "the SDK surface can't serve this — use CDP". The `TypeError`/`AttributeError` cases exist because `browser_eval` called `evaluate(script=...)` against a signature of `evaluate(*, expression: str)`, and `browser_input` called `fill(..., value=...)` against `fill(*, text: str, ...)`. Both raise before any HTTP request, neither matched the original substring-only gate (`"404" and "not found"`), so both were re-raised and the CDP fallback beneath them was unreachable — those two tools had never worked on any image, silently, because every browser tool funnels exceptions into `return f"Error: {e}"`. `tests/test_browser_sdk_contract.py` now walks the AST of `workspace_tools.py`, extracts every `client.browser_page.*` kwarg, and validates it against `inspect.signature` of the installed SDK, so future drift fails a test instead of silently disabling a tool.
 
@@ -399,7 +399,7 @@ One thread-scoped WebSocket per surface, replacing poll-driven liveness:
 Plumbing: `app/gateway/task_events.py` holds the thread-keyed hubs and a
 `MirroringStreamBridge` decorator that duplicates `task_*` custom events out
 of whatever StreamBridge is configured; harness seams
-(`deerflow/sandbox/computer_events.py`) announce dev-server status changes
+(`nova/sandbox/computer_events.py`) announce dev-server status changes
 and sandbox observations as plain callbacks the gateway registers at
 lifespan (removed on exit — test-safe). Emitters are cross-thread;
 `publish_threadsafe` marshals onto the lifespan loop. Hubs replay a bounded
@@ -415,7 +415,7 @@ first-N heuristic. Absent field = older backend → no strike, never a wrong
 strike. The observation-type ↔ frontend-classifier contract is pinned by
 pure-text assertions in `tests/test_frontend_contract.py`.
 
-### Subagent System (`packages/harness/deerflow/subagents/`)
+### Subagent System (`packages/harness/nova/subagents/`)
 
 **Built-in Agents**: `general-purpose` (all tools except `task`) and `bash` (command specialist)
 **Execution**: Dual thread pool - `_scheduler_pool` (3 workers) + `_execution_pool` (3 workers)
@@ -426,7 +426,7 @@ pure-text assertions in `tests/test_frontend_contract.py`.
 **Deferred MCP tools** (if `tool_search.enabled`): `SubagentExecutor._build_initial_state` assembles deferral after policy filtering via the shared `assemble_deferred_tools` (fail-closed), appends the `tool_search` tool, injects the `<available-deferred-tools>` section into the subagent's `SystemMessage`, and threads the setup to `_create_agent`, which attaches `DeferredToolFilterMiddleware` through `build_subagent_runtime_middlewares(deferred_setup=...)`. Subagents thus withhold full MCP schemas until promotion, same as the lead agent; each task run gets a fresh `ThreadState` so promotion is isolated per run
 **Checkpointer isolation**: Subagent graphs are compiled with `checkpointer=False` to avoid inheriting the parent run's checkpointer, since subagents are one-shot and never resume.
 
-### Tool System (`packages/harness/deerflow/tools/`)
+### Tool System (`packages/harness/nova/tools/`)
 
 `GET /api/runtime/capabilities` reports the agent's live skill/tool/hook/subagent set to the UI header. It builds the tool list through `get_available_tools()` — the same call the lead agent uses — so the report cannot drift from what the model is really given. It previously iterated `BUILTIN_TOOLS` alone despite documenting itself as "builtin + configured", reporting **25 tools where the agent binds 40**: the omitted half was `bash`, `ls`, `read_file`, `glob`, `grep`, `write_file`, `str_replace`, the web tools, the trading group, plus `task` and `view_image` — precisely the entries that answer "can it run a shell? can it read my files?". MCP is excluded deliberately, since it is reported separately and resolving it would make a 30 s UI poll wait on remote servers.
 
@@ -443,7 +443,7 @@ pure-text assertions in `tests/test_frontend_contract.py`.
 4. **Subagent tool** (if enabled):
    - `task` - Delegate to subagent (description, prompt, subagent_type)
 
-**Community tools** (`packages/harness/deerflow/community/`):
+**Community tools** (`packages/harness/nova/community/`):
 
 - `tavily/` - Web search (5 results default) and web fetch (4KB limit)
 - `jina_ai/` - Web fetch via the Jina reader API, with a **keyless direct-fetch fallback**. `r.jina.ai` used to serve anonymous requests and now answers 401 without a key, which left `web_fetch` dead on every deployment that had never set `JINA_API_KEY` — the tool just handed the model back `Error: Jina API returned status 401`. On any Jina failure `web_fetch_tool` now falls through to `_direct_fetch` (plain httpx GET, browser UA, redirects followed, http/https only) and runs the result through the same `ReadabilityExtractor`. Only if both legs fail does it return an error, and that error names `JINA_API_KEY` as the optional upgrade. Tests: `tests/test_web_fetch_fallback.py`
@@ -453,7 +453,7 @@ pure-text assertions in `tests/test_frontend_contract.py`.
 - `browserless/` - `web_fetch`, one URL rendered in headless Chrome
 - `crawl4ai/` - two tools, and the distinction is the point. `tools.py` binds `web_fetch_many`: batch retrieval of URLs the agent already named, fetched in parallel. `crawl_tool.py` binds `web_crawl`, the only tool in Nova that **follows links** — breadth-first from a start URL, driving the same Crawl4AI service one depth at a time. The BFS lives in Nova rather than in the service because Crawl4AI's REST API validates every config under an untrusted trust boundary and rejects `deep_crawl_strategy` outright (an HTTP-reachable link-following crawler is an SSRF amplifier). Owning the loop means owning the limits: `max_pages` (≤50), `max_depth` (≤3), `same_domain`, a wall-clock deadline and a **robots.txt check** all live in `crawl_tool.py`, where they can be read and tested. `crawl_site()` returns pages *and* the link graph and is separated from the tool wrapper so tests assert on structure rather than grepping markdown. Tests: `tests/test_web_crawl.py` (28 cases)
 
-**Trading tools** (`packages/harness/deerflow/community/market_data/`, group `trading`):
+**Trading tools** (`packages/harness/nova/community/market_data/`, group `trading`):
 
 - `get_ohlcv` - OHLCV candles from free, keyless sources. `providers.py` routes `BASE/QUOTE` pairs to **ccxt** public endpoints (crypto) and everything else to **yfinance** (equities, FX, futures). Normalizes both to `{time, open, high, low, close, volume}` with ISO8601 UTC timestamps.
 - `compute_indicators` - SMA, EMA, RSI (Wilder), MACD, ATR, ADX/DMI, Bollinger, and session-anchored VWAP with ±kσ bands. Returns only the last `tail` values (default 5, capped at 100) so a series can't flood the context.
@@ -480,7 +480,7 @@ These tools run in the gateway/harness process, not the sandbox — they hand da
 - **An ACP runtime shows its own servers in the Browser tab with `sandbox__expose_port`.** It wraps the lead agent's `register_external_dev_server` tool (same in-sandbox port probe, same `ready` handle the Browser tab polls) and `runtime_preamble()` tells the runtime to use it. Before it existed Claude Code started `python -m http.server` in the sandbox and then spent four minutes curling Nova's HTTP API from inside the container (`localhost:8001`, `172.17.0.1`, `host.docker.internal:*`) — unreachable by design, and probing the host on the way. `capabilities/modules/sandbox.py::_invoke` now prefers a tool's own `coroutine` over `func`: tool loading can set `func` to a generic sync wrapper whose signature names none of the real parameters, and the kwargs filter then dropped every argument (`missing 3 required positional arguments`) — only when other tools had been loaded first. Pinned by `tests/test_acp_runtime_drives_sandbox_e2e.py::test_runtime_can_show_a_sandbox_server_in_the_browser_tab`
 - **The sandbox proxies choose the upstream `Accept-Encoding` themselves** (`routers/sandbox.py::_forward_headers`, shared by preview, absproxy and appview). Each reads `upstream.content` — decoded by httpx — and drops `Content-Encoding`, so it may only ask for encodings httpx can decode here. Forwarding the browser's `gzip, deflate, br, zstd` got `br` back from the sandbox; the gateway has no brotli decoder, so the compressed body went out labelled `text/html` and the Browser tab showed garbage for every page served through a proxy. Pinned by `tests/test_proxy_accept_encoding.py`
 - **Never `docker stop` a container of the live compose project by hand.** PM2's `nova` app *is* an attached `docker compose up`; when a project container is stopped or killed from outside, that process exits, PM2 restarts it, and the relaunched `up` recreates every service whose config drifted (and restarts the one you stopped). Observed 2026-10-31: stopping autoheal recreated the gateway mid-install. Change compose files, then let the launcher apply them
-- **Never build a sandbox provider in a throwaway process.** `AioSandboxProvider.__init__` adopts every live `deer-flow-sandbox-*` container (`_reconcile_orphans`) and registers an atexit `shutdown` that destroys them, unless `PYTEST_CURRENT_TEST` is set. A one-off script that so much as reached `get_sandbox_provider()` (e.g. via `discover_live_preview`) killed the user's live sandbox on exit on 2026-10-31. Set `PYTEST_CURRENT_TEST` for any diagnostic script that imports gateway/sandbox code, and never call provider methods from one
+- **Never build a sandbox provider in a throwaway process.** `AioSandboxProvider.__init__` adopts every live `nova-sandbox-*` container (`_reconcile_orphans`) and registers an atexit `shutdown` that destroys them, unless `PYTEST_CURRENT_TEST` is set. A one-off script that so much as reached `get_sandbox_provider()` (e.g. via `discover_live_preview`) killed the user's live sandbox on exit on 2026-10-31. Set `PYTEST_CURRENT_TEST` for any diagnostic script that imports gateway/sandbox code, and never call provider methods from one
 - **Saving any backend `.py` file restarts a `--reload` gateway, and the restart stops every active sandbox container** (`aio_sandbox_provider` shutdown: "Shutting down N active sandbox(es)"). In-flight runs are cancelled and servers the agent started inside a sandbox are gone; workspace files survive. Check `select count(*) from runs where status in ('pending','running')` before editing backend code on a live dev stack
 - **`config.yaml` is a single-file bind mount, so an editor's atomic save does not reach a running container.** The mount pins the inode that existed at container creation; a save that writes a new file and renames it over the old one (most editors, `sed -i`) leaves the gateway reading the old inode for the rest of its life, and the per-request hot-reload never fires. Observed 2026-10-30: the gateway and jobs containers were still serving a copy that predated the host file. Edit in place or recreate the containers (`up -d --force-recreate gateway jobs`) after editing
 - **An ACP runtime drives the real Agent's Computer.** `sandbox.*` capability ops (`sandbox__bash`, `sandbox__write_file`, …) are what Claude Code / OpenClaw reach over `/api/mcp/nova` with the per-turn `runtime:<thread_id>` token. Two things made that path fail silently on 2026-09-22 while every layer's unit tests were green: the MCP server never bound the token owner as the current user, so a harness write landed under `users/default/` instead of the chat's thread (Files tab empty); and the capability's `_ToolRuntime` carried no `thread_data`, so on the local provider every call refused with `Thread data not available`. `app/gateway/mcp_server.py` now binds the owner for the call and `capabilities/modules/sandbox.py` computes the same three paths `ThreadDataMiddleware` does. Pinned end to end — real MCP client, real registry, real sandbox tools, real per-user layout, only the Claude binary replaced — by `tests/test_acp_runtime_drives_sandbox_e2e.py`
@@ -493,20 +493,20 @@ These tools run in the gateway/harness process, not the sandbox — they hand da
 - Each ACP agent uses a per-thread workspace at `{base_dir}/users/{user_id}/threads/{thread_id}/acp-workspace/`. The workspace is accessible to the lead agent via the virtual path `/mnt/acp-workspace/` (read-only). In docker sandbox mode, the directory is volume-mounted into the container at `/mnt/acp-workspace` (read-only); in local sandbox mode, path translation is handled by `tools.py`
 - `image_search/` - Image search via DuckDuckGo
 
-### MCP System (`packages/harness/deerflow/mcp/`)
+### MCP System (`packages/harness/nova/mcp/`)
 
 - Uses `langchain-mcp-adapters` `MultiServerMCPClient` for multi-server management
 - **Lazy initialization**: Tools loaded on first use via `get_cached_mcp_tools()`
 - **Cache invalidation**: Detects config file changes via mtime comparison
 - **Transports**: stdio (command-based), SSE, HTTP
 - **OAuth (HTTP/SSE)**: Supports token endpoint flows (`client_credentials`, `refresh_token`) with automatic token refresh + Authorization header injection
-- **Stdio file outputs**: Persistent stdio sessions are scoped by `user_id:thread_id`. For stdio transports only, DeerFlow pins the subprocess default `cwd` to the thread workspace and `TMPDIR`/`TMP`/`TEMP` to `workspace/.mcp/tmp/`, unless the operator explicitly configured `cwd` or temp env values. SSE/HTTP transports skip this filesystem prep entirely.
+- **Stdio file outputs**: Persistent stdio sessions are scoped by `user_id:thread_id`. For stdio transports only, Nova pins the subprocess default `cwd` to the thread workspace and `TMPDIR`/`TMP`/`TEMP` to `workspace/.mcp/tmp/`, unless the operator explicitly configured `cwd` or temp env values. SSE/HTTP transports skip this filesystem prep entirely.
 - **Stdio path translation**: MCP-returned local file references are not copied. If a `ResourceLink` or conservative free-text path resolves to an existing file inside the thread's mounted user-data tree, it is translated deterministically to `/mnt/user-data/...`; paths outside that tree remain unchanged.
 - **Runtime updates**: Gateway API saves to extensions_config.json; the Gateway-embedded runtime detects changes via mtime
 
-### Skills System (`packages/harness/deerflow/skills/`)
+### Skills System (`packages/harness/nova/skills/`)
 
-- **Location**: `deer-flow/skills/{public,custom}/`
+- **Location**: `skills/{public,custom}/`
 - **Format**: Directory with `SKILL.md` (YAML frontmatter: name, description, license, allowed-tools)
 - **`allowed-tools` scope (load-bearing)**: a skill's `allowed-tools` constrains the agent **only when that skill was deliberately selected** — bootstrap, or a custom agent listing `skills:` in its config. For the default agent (`available_skills is None`) *no* skill restricts the binding. `skills_for_tool_policy()` in `agents/lead_agent/agent.py` enforces this, and `filter_tools_by_skill_allowed_tools()` additionally preserves `CORE_TOOL_NAMES` (currently `task`) against any policy, logging a WARNING that names the declaring skill.
 
@@ -522,7 +522,7 @@ These tools run in the gateway/harness process, not the sandbox — they hand da
 
 The validator's contract is deliberate: **an unrecognised identifier is a WARNING, never an ERROR.** Its built-in inventory is hand-maintained and incomplete, and a validator that confidently rejects valid code trains you to ignore it. Errors are reserved for the provably wrong — missing/duplicate `//@version` pragma, two `strategy()` declarations in one file, unbalanced brackets, v4 bare functions in a v5+ script, and a `KNOWN_INVALID` list of identifiers observed causing real `Undeclared identifier` failures (`strategy.profit_factor`, `strategy.avg_winning_trade`, `ta.crossabove`, `ta.stddev`, …) — each carrying the correct replacement. Note `strategy.max_drawdown` **is** a real built-in and must not be confused with the UI-only metrics beside it. It also warns on backtest-realism defects (no commission/slippage, `process_orders_on_close=true`, `percent_of_equity` sizing paired with `cash_per_contract` commission). Covered by `tests/test_pine_script_skill.py`, which verifies both that it catches real bugs and that it produces no false positives on the shipped templates.
 
-### Model Factory (`packages/harness/deerflow/models/factory.py`)
+### Model Factory (`packages/harness/nova/models/factory.py`)
 
 - `create_chat_model(name, thinking_enabled)` instantiates LLM from config via reflection
 - Supports `thinking_enabled` flag with per-model `when_thinking_enabled` overrides
@@ -531,7 +531,7 @@ The validator's contract is deliberate: **an unrecognised identifier is a WARNIN
 - Config values starting with `$` resolved as environment variables
 - Missing provider modules surface actionable install hints from reflection resolvers (for example `uv add langchain-google-genai`)
 
-### vLLM Provider (`packages/harness/deerflow/models/vllm_provider.py`)
+### vLLM Provider (`packages/harness/nova/models/vllm_provider.py`)
 
 - `VllmChatModel` subclasses `langchain_openai:ChatOpenAI` for vLLM 0.19.0 OpenAI-compatible endpoints
 - Preserves vLLM's non-standard assistant `reasoning` field on full responses, streaming deltas, and follow-up tool-call turns
@@ -552,7 +552,7 @@ Bridges external messaging platforms (Feishu, Slack, Telegram, Discord, DingTalk
 - `service.py` - Manages lifecycle of all configured channels from `config.yaml`
 - `slack.py` / `feishu.py` / `telegram.py` / `discord.py` / `dingtalk.py` - Platform-specific implementations (`feishu.py` tracks the running card `message_id` in memory and patches the same card in place; `telegram.py` registers the "Working on it..." placeholder as the stream target and edits it in place via `editMessageText`; `dingtalk.py` optionally uses AI Card streaming for in-place updates when `card_template_id` is configured)
 - `app/gateway/routers/channel_connections.py` - Browser-facing user connection and disconnect APIs
-- `deerflow.persistence.channel_connections` - SQL-backed user-owned connection, optional credential, connect state, and conversation store
+- `nova.persistence.channel_connections` - SQL-backed user-owned connection, optional credential, connect state, and conversation store
 
 **Message Flow**:
 
@@ -579,7 +579,7 @@ The cached value is reused for both the blocking (`runs.wait`) and streaming (`_
 
 - `langgraph_url` - LangGraph-compatible Gateway API base URL (default: `http://localhost:8001/api`)
 - `gateway_url` - Gateway API URL for auxiliary commands (default: `http://localhost:8001`)
-- In Docker Compose, IM channels run inside the `gateway` container, so `localhost` points back to that container. Use `http://gateway:8001/api` for `langgraph_url` and `http://gateway:8001` for `gateway_url`, or set `DEER_FLOW_CHANNELS_LANGGRAPH_URL` / `DEER_FLOW_CHANNELS_GATEWAY_URL`.
+- In Docker Compose, IM channels run inside the `gateway` container, so `localhost` points back to that container. Use `http://gateway:8001/api` for `langgraph_url` and `http://gateway:8001` for `gateway_url`, or set `NOVA_CHANNELS_LANGGRAPH_URL` / `NOVA_CHANNELS_GATEWAY_URL`.
 - Per-channel configs: `feishu` (app_id, app_secret), `slack` (bot_token, app_token), `telegram` (bot_token), `dingtalk` (client_id, client_secret, optional `card_template_id` for AI Card streaming)
 
 **User-owned channel connections** (`config.yaml` -> `channel_connections`):
@@ -596,7 +596,7 @@ The cached value is reused for both the blocking (`runs.wait`) and streaming (`_
 - **Single-active-owner transfer semantics**: an external identity is keyed by `(provider, external_account_id, workspace_id)`. The latest successful bind wins — `upsert_connection` revokes other owners' active rows for the same identity (ownership transfer). This invariant is enforced at the DB layer by the partial unique index `uq_channel_connection_active_identity` (`WHERE status != 'revoked'`), so concurrent connects from different owners cannot both end `connected`; the losing writer retries against the now-visible state. `find_connection_by_external_identity` therefore resolves deterministically.
 - See `backend/docs/IM_CHANNEL_CONNECTIONS.md` for provider setup and operational notes.
 
-### Memory System (`packages/harness/deerflow/agents/memory/`)
+### Memory System (`packages/harness/nova/agents/memory/`)
 
 **Components**:
 
@@ -610,7 +610,7 @@ The cached value is reused for both the blocking (`runs.wait`) and streaming (`_
 - Memory is stored per-user at `{base_dir}/users/{user_id}/memory.json`
 - Per-agent per-user memory at `{base_dir}/users/{user_id}/agents/{agent_name}/memory.json`
 - Custom agent definitions (`SOUL.md` + `config.yaml`) are also per-user at `{base_dir}/users/{user_id}/agents/{agent_name}/`. The legacy shared layout `{base_dir}/agents/{agent_name}/` remains read-only fallback for unmigrated installations
-- `user_id` is resolved via `get_effective_user_id()` from `deerflow.runtime.user_context`
+- `user_id` is resolved via `get_effective_user_id()` from `nova.runtime.user_context`
 - The `/api/memory*` endpoints resolve the owner through `_resolve_memory_user_id(request)`: trusted internal callers (IM channel workers carrying the `X-DeerFlow-Owner-User-Id` header, e.g. a bound `/memory` command) act for the connection owner; browser/API callers fall back to `get_effective_user_id()`. The header is only honored after `AuthMiddleware` validated the internal token, mirroring `get_trusted_internal_owner_user_id` used by the threads router
 - In no-auth mode, `user_id` defaults to `"default"` (constant `DEFAULT_USER_ID`)
 - Absolute `storage_path` in config opts out of per-user isolation
@@ -630,7 +630,7 @@ The cached value is reused for both the blocking (`runs.wait`) and streaming (`_
 4. Applies updates atomically (temp file + rename) with cache invalidation, skipping duplicate fact content before append
 5. Next interaction injects top 15 facts + context into `<memory>` tags in system prompt
 
-**Token counting** (`packages/harness/deerflow/agents/memory/prompt.py`):
+**Token counting** (`packages/harness/nova/agents/memory/prompt.py`):
 
 - `_count_tokens` budgets the injection. In default `tiktoken` mode, the encoding is loaded lazily and cached.
 - Failed tiktoken loads are cached with a timestamp. During the fixed cooldown (`_TIKTOKEN_RETRY_COOLDOWN_S`, 600s), callers fall back to char estimation immediately instead of re-triggering the blocking BPE download; after the cooldown, transient outages can self-heal without a restart.
@@ -649,35 +649,35 @@ Focused regression coverage for the updater lives in `backend/tests/test_memory_
 - `max_injection_tokens` - Token limit for prompt injection (2000)
 - `token_counting` - Token counting strategy for the injection budget: `tiktoken` (default, accurate but may download BPE data from a public endpoint on first use — can block for a long time in network-restricted environments, see issues #3402/#3429) or `char` (network-free CJK-aware char estimate, never touches tiktoken)
 
-### Reflection System (`packages/harness/deerflow/reflection/`)
+### Reflection System (`packages/harness/nova/reflection/`)
 
 - `resolve_variable(path)` - Import module and return variable (e.g., `module.path:variable_name`)
 - `resolve_class(path, base_class)` - Import and validate class against base class
 
-### Tracing System (`packages/harness/deerflow/tracing/`)
+### Tracing System (`packages/harness/nova/tracing/`)
 
 LangSmith and Langfuse are both supported. The wiring lives in two layers:
 
-- `factory.py::build_tracing_callbacks()` — returns the LangChain `CallbackHandler` list for the providers currently enabled via env vars (`LANGSMITH_TRACING`, `LANGFUSE_TRACING`, etc.). The handlers are attached at the **graph invocation root** for in-graph runs (`make_lead_agent` and `DeerFlowClient.stream` both append them to `config["callbacks"]` before invoking the graph) so a single run produces one trace with all node / LLM / tool calls as child spans. Standalone callers — anything that invokes a model outside such a graph (e.g. `MemoryUpdater`) — keep `create_chat_model`'s default `attach_tracing=True`, which falls back to model-level callback attachment.
+- `factory.py::build_tracing_callbacks()` — returns the LangChain `CallbackHandler` list for the providers currently enabled via env vars (`LANGSMITH_TRACING`, `LANGFUSE_TRACING`, etc.). The handlers are attached at the **graph invocation root** for in-graph runs (`make_lead_agent` and `NovaClient.stream` both append them to `config["callbacks"]` before invoking the graph) so a single run produces one trace with all node / LLM / tool calls as child spans. Standalone callers — anything that invokes a model outside such a graph (e.g. `MemoryUpdater`) — keep `create_chat_model`'s default `attach_tracing=True`, which falls back to model-level callback attachment.
 - `metadata.py::build_langfuse_trace_metadata()` — builds the Langfuse-reserved trace attributes for `RunnableConfig.metadata`. The Langfuse v4 `langchain.CallbackHandler` lifts these onto the root trace (see its `_parse_langfuse_trace_attributes`), but only when it sees `on_chain_start(parent_run_id=None)` — which is why the callbacks have to live at the graph root, not the model.
 
-**Trace-attribute injection points**: both `runtime/runs/worker.py::run_agent` (gateway path) and `client.py::DeerFlowClient.stream` (embedded path) merge the metadata into `config["metadata"]` right before constructing the graph. `subagents/executor.py::_aexecute` does the same for every subagent run so subagent traces group under the parent thread's session card (carrying the parent `thread_id` → `langfuse_session_id`, the user_id captured at `task_tool` → `langfuse_user_id`, and a `subagent:<normalized-name>` trace name). Caller-supplied keys win via `setdefault`, so an external `session_id` override is preserved. Field mapping:
+**Trace-attribute injection points**: both `runtime/runs/worker.py::run_agent` (gateway path) and `client.py::NovaClient.stream` (embedded path) merge the metadata into `config["metadata"]` right before constructing the graph. `subagents/executor.py::_aexecute` does the same for every subagent run so subagent traces group under the parent thread's session card (carrying the parent `thread_id` → `langfuse_session_id`, the user_id captured at `task_tool` → `langfuse_user_id`, and a `subagent:<normalized-name>` trace name). Caller-supplied keys win via `setdefault`, so an external `session_id` override is preserved. Field mapping:
 
 | Langfuse field         | Source                                       |
 |-----------------------|----------------------------------------------|
 | `langfuse_session_id` | LangGraph `thread_id`                         |
 | `langfuse_user_id`    | `get_effective_user_id()` (`default` in no-auth); for subagents, captured from `runtime.context` at `task_tool` time via `resolve_runtime_user_id()` |
 | `langfuse_trace_name` | `RunRecord.assistant_id` / client `agent_name` (defaults to `lead-agent`); for subagents, `subagent:<name>` (lowercased, `_` → `-`) |
-| `langfuse_tags`       | `env:<DEER_FLOW_ENV>` + `model:<model_name>`  |
+| `langfuse_tags`       | `env:<NOVA_ENV>` + `model:<model_name>`  |
 
-Returns `{}` when Langfuse is not in the enabled providers — LangSmith-only deployments are unaffected. Set `DEER_FLOW_ENV` (or `ENVIRONMENT`) to tag traces by deployment environment. Tests live in `tests/test_tracing_factory.py`, `tests/test_tracing_metadata.py`, `tests/test_worker_langfuse_metadata.py`, `tests/test_client_langfuse_metadata.py`, and `tests/test_subagent_executor.py::TestSubagentTracingWiring`.
+Returns `{}` when Langfuse is not in the enabled providers — LangSmith-only deployments are unaffected. Set `NOVA_ENV` (or `ENVIRONMENT`) to tag traces by deployment environment. Tests live in `tests/test_tracing_factory.py`, `tests/test_tracing_metadata.py`, `tests/test_worker_langfuse_metadata.py`, `tests/test_client_langfuse_metadata.py`, and `tests/test_subagent_executor.py::TestSubagentTracingWiring`.
 
 ### Config Schema
 
 **`config.yaml`** key sections:
 
 - `models[]` - LLM configs with `use` class path, `supports_thinking`, `supports_vision`, provider-specific fields
-- vLLM reasoning models should use `deerflow.models.vllm_provider:VllmChatModel`; for Qwen-style parsers prefer `when_thinking_enabled.extra_body.chat_template_kwargs.enable_thinking`, and DeerFlow will also normalize the older `thinking` alias
+- vLLM reasoning models should use `nova.models.vllm_provider:VllmChatModel`; for Qwen-style parsers prefer `when_thinking_enabled.extra_body.chat_template_kwargs.enable_thinking`, and Nova will also normalize the older `thinking` alias
 - `tools[]` - Tool configs with `use` variable path and `group`
 - `tool_groups[]` - Logical groupings for tools
 - `sandbox.use` - Sandbox provider class path
@@ -692,13 +692,13 @@ Returns `{}` when Langfuse is not in the enabled providers — LangSmith-only de
 - `mcpServers` - Map of server name → config (enabled, type, command, args, env, url, headers, oauth, description)
 - `skills` - Map of skill name → state (enabled)
 
-Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` methods.
+Both can be modified at runtime via Gateway API endpoints or `NovaClient` methods.
 
-### Embedded Client (`packages/harness/deerflow/client.py`)
+### Embedded Client (`packages/harness/nova/client.py`)
 
-`DeerFlowClient` provides direct in-process access to all DeerFlow capabilities without HTTP services. All return types align with the Gateway API response schemas, so consumer code works identically in HTTP and embedded modes.
+`NovaClient` provides direct in-process access to all Nova capabilities without HTTP services. All return types align with the Gateway API response schemas, so consumer code works identically in HTTP and embedded modes.
 
-**Architecture**: Imports the same `deerflow` modules that Gateway API uses. Shares the same config files and data directories. No FastAPI dependency.
+**Architecture**: Imports the same `nova` modules that Gateway API uses. Shares the same config files and data directories. No FastAPI dependency.
 
 **Agent Conversation**:
 
@@ -711,7 +711,7 @@ Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` me
 - Agent created lazily via `create_agent()` + `build_middlewares()`, same as `make_lead_agent`
 - Supports `checkpointer` parameter for state persistence across turns
 - `reset_agent()` forces agent recreation (e.g. after memory or skill changes)
-- See [docs/STREAMING.md](docs/STREAMING.md) for the full design: why Gateway and DeerFlowClient are parallel paths, LangGraph's `stream_mode` semantics, the per-id dedup invariants, and regression testing strategy
+- See [docs/STREAMING.md](docs/STREAMING.md) for the full design: why Gateway and NovaClient are parallel paths, LangGraph's `stream_mode` semantics, the per-id dedup invariants, and regression testing strategy
 
 **Gateway Equivalent Methods** (replaces Gateway API):
 
@@ -724,7 +724,7 @@ Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` me
 | Uploads | `upload_files(thread_id, files)`, `list_uploads(thread_id)`, `delete_upload(thread_id, filename)` | `{"success": true, "files": [...]}`, `{"files": [...], "count": N}` |
 | Artifacts | `get_artifact(thread_id, path)` → `(bytes, mime_type)` | tuple |
 
-**Key difference from Gateway**: Upload accepts local `Path` objects instead of HTTP `UploadFile`, rejects directory paths before copying, and reuses a single worker when document conversion must run inside an active event loop. Artifact returns `(bytes, mime_type)` instead of HTTP Response. The new Gateway-only thread cleanup route deletes `.deer-flow/threads/{thread_id}` after LangGraph thread deletion; there is no matching `DeerFlowClient` method yet. `update_mcp_config()` and `update_skill()` automatically invalidate the cached agent.
+**Key difference from Gateway**: Upload accepts local `Path` objects instead of HTTP `UploadFile`, rejects directory paths before copying, and reuses a single worker when document conversion must run inside an active event loop. Artifact returns `(bytes, mime_type)` instead of HTTP Response. The new Gateway-only thread cleanup route deletes `.nova/threads/{thread_id}` after LangGraph thread deletion; there is no matching `NovaClient` method yet. `update_mcp_config()` and `update_skill()` automatically invalidate the cached agent.
 
 **Tests**: `tests/test_client.py` (77 unit tests including `TestGatewayConformance`), `tests/test_client_live.py` (live integration tests, requires config.yaml)
 
@@ -740,12 +740,12 @@ Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` me
 - Run the full suite before and after your change: `make test`
 - Tests must pass before a feature is considered complete
 - For lightweight config/utility modules, prefer pure unit tests with no external dependencies
-- If a module causes circular import issues in tests, fix the cycle in production code (move shared constants to a leaf module, use lazy PEP 562 package exports) rather than mocking modules in `sys.modules`. The historical `deerflow.subagents.executor` cycle was fixed this way and is pinned by `tests/test_import_hygiene.py` (subprocess-based clean-import regression tests) — add new cycle-sensitive modules there.
+- If a module causes circular import issues in tests, fix the cycle in production code (move shared constants to a leaf module, use lazy PEP 562 package exports) rather than mocking modules in `sys.modules`. The historical `nova.subagents.executor` cycle was fixed this way and is pinned by `tests/test_import_hygiene.py` (subprocess-based clean-import regression tests) — add new cycle-sensitive modules there.
 
 **The suite is hermetic against the deployment's database.** `tests/conftest.py`
 hands pytest a sanitized copy of `config.yaml` with `database.backend` forced to
 `sqlite`, alongside the existing neutralization of deployment paths and
-`DEER_FLOW_ENV`. Two reasons, and the second is the important one:
+`NOVA_ENV`. Two reasons, and the second is the important one:
 
 - After the Postgres migration `config.yaml` carries `postgres_url: $DATABASE_URL`.
   That variable is unset in a plain shell, so `AppConfig` raises during collection
@@ -813,7 +813,7 @@ This starts all services and makes the application available at `http://localhos
 
 **The self-hosted public deployment** (`nova.alilabsx.com`) is a fourth mode, run
 under PM2 rather than any of the above: PM2's `nova` process execs
-`scripts/pm2-deerflow.sh`, which brings up a compose stack and stays attached.
+`scripts/pm2-nova.sh`, which brings up a compose stack and stays attached.
 `NOVA_STACK` selects which:
 
 | `NOVA_STACK` | Files | Gateway |
@@ -829,7 +829,7 @@ but can never remove the dev stack's `.venv` / source bind mounts. It requires a
 built image (the launcher runs `--no-build`):
 
 ```bash
-docker compose -f docker/docker-compose.nova-prod.yaml -p deer-flow-dev build
+docker compose -f docker/docker-compose.nova-prod.yaml -p nova build
 NOVA_STACK=prod pm2 restart nova --update-env
 ```
 
@@ -925,7 +925,7 @@ Kokoro and Silero.
 
 **Engines are not models.** `models/factory.py` resolves every `models:` entry
 through `resolve_class(..., BaseChatModel)`, a hard type gate — a Whisper client
-cannot be declared there. `deerflow/speech/registry.py` is a small parallel
+cannot be declared there. `nova/speech/registry.py` is a small parallel
 registry on the generic reflection layer, mirroring how `sandbox.use` works.
 
 **Everything is testable without weights.** `speech/engines/null.py` provides
@@ -1100,7 +1100,7 @@ is false. Pinned by `test_resuming_after_a_pause_keeps_the_first_half`.
 operator-owned and commented, and there is no way to rewrite it from Python
 without either destroying every comment (`yaml.dump`) or adding a round-trip
 YAML dependency for one endpoint. `registry.overrides_path()` resolves to
-`$DEER_FLOW_HOME/voice-settings.yaml`; `_merged_config()` layers it over
+`$NOVA_HOME/voice-settings.yaml`; `_merged_config()` layers it over
 `config.yaml`'s `speech:` section, one level deep — **not** a deep merge, so a
 section the user rewrites is replaced wholesale rather than letting a stale key
 survive inside it.

@@ -106,6 +106,9 @@ MCP servers and skill states in a single file:
 - `NOVA_PROJECT_ROOT` - Override config.yaml location
 - `NOVA_CONFIG_PATH` - Override config.yaml location
 - `NOVA_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location
+- `NOVA_HOME` - Data directory (default `backend/.nova`; an existing legacy `backend/.deer-flow` is used when no `.nova` exists)
+
+All `NOVA_*` variables fall back to their old `DEER_FLOW_*` names for one release, so an existing `.env` keeps working.
 - Model API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.
 - Tool API keys: `TAVILY_API_KEY`, `GITHUB_TOKEN`, etc.
 
@@ -235,9 +238,9 @@ nova/
 │   ├── Makefile               # Backend-only commands (dev, gateway, lint)
 │   ├── langgraph.json         # LangGraph graph registry for tooling/Studio compatibility
 │   ├── packages/
-│   │   └── harness/           # deerflow-harness package (import: deerflow.*)
+│   │   └── harness/           # nova-harness package (import: nova.*)
 │   │       ├── pyproject.toml
-│   │       └── deerflow/
+│   │       └── nova/
 │   │           ├── agents/            # LangGraph agent system
 │   │           │   ├── lead_agent/    # Main agent (factory + system prompt)
 │   │           │   ├── middlewares/   # 19 middleware components
@@ -417,7 +420,7 @@ uv run pytest
 `make detect-blocking-io` statically scans backend business code for blocking
 IO that may run on the backend event loop and is not test-coverage-bound. It
 prints a concise summary for human review and writes complete JSON findings to
-`.deer-flow/blocking-io-findings.json` at the repository root (regardless of
+`.nova/blocking-io-findings.json` at the repository root (regardless of
 whether the target is invoked from the repo root or from `backend/`). JSON
 findings include both broad IO category and review-oriented fields such as
 `priority`, `location`, `blocking_call`, `event_loop_exposure`, `reason`, and
@@ -584,7 +587,7 @@ Regression coverage includes Docker sandbox mode detection and provisioner kubec
 Backend blocking-IO diagnostics are available from the repository root with
 `make detect-blocking-io`: it statically scans backend business code for
 blocking IO that may run on the backend event loop, prints a concise summary,
-and writes complete JSON findings to `.deer-flow/blocking-io-findings.json`.
+and writes complete JSON findings to `.nova/blocking-io-findings.json`.
 The JSON includes compact review records with `priority`, `location`,
 `blocking_call`, `event_loop_exposure`, `reason`, and `code`.
 Gateway artifact serving now forces active web content types (`text/html`, `application/xhtml+xml`, `image/svg+xml`) to download as attachments instead of inline rendering, reducing XSS risk for generated artifacts.

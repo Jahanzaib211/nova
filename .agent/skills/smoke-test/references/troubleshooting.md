@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This document lists common issues encountered during DeerFlow smoke testing and how to resolve them.
+This document lists common issues encountered during Nova smoke testing and how to resolve them.
 
 ## Code Update Issues
 
@@ -160,7 +160,7 @@ Error: listen EADDRINUSE: address already in use :::2026
    taskkill /PID <PID> /F  # Windows
    ```
 
-3. Or stop DeerFlow services first:
+3. Or stop Nova services first:
    ```bash
    make stop
    ```
@@ -481,7 +481,7 @@ The browser shows a connection failure when visiting http://localhost:2026.
 
 2. Check nginx logs:
    ```bash
-   cd docker && docker compose -p deer-flow-dev -f docker-compose-dev.yaml logs nginx
+   cd docker && docker compose -p nova -f docker-compose-dev.yaml logs nginx
    ```
 
 3. Check firewall settings
@@ -565,13 +565,13 @@ docker stats
 
 #### Enter a Container for Debugging
 ```bash
-docker exec -it deer-flow-gateway sh
+docker exec -it nova-gateway sh
 ```
 
-#### Clean Up All DeerFlow-Related Containers and Images
+#### Clean Up All Nova-Related Containers and Images
 ```bash
 make docker-stop
-cd docker && docker compose -p deer-flow-dev -f docker-compose-dev.yaml down -v
+cd docker && docker compose -p nova -f docker-compose-dev.yaml down -v
 ```
 
 #### Fully Reset the Docker Environment

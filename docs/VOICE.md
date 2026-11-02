@@ -74,22 +74,22 @@ Whisper on CUDA: RTF 0.632 → 0.021 (~30x).
 speech:
   enabled: true
   stt:
-    engine: deerflow.speech.engines.faster_whisper:FasterWhisperSTT
+    engine: nova.speech.engines.faster_whisper:FasterWhisperSTT
     model_size: small
     device: auto  # auto|cuda|cpu
   tts:
-    engine: deerflow.speech.engines.kokoro:KokoroTTS
+    engine: nova.speech.engines.kokoro:KokoroTTS
     voice: af_heart
     device: auto
   vad:
-    engine: deerflow.speech.engines.silero:SileroVad
+    engine: nova.speech.engines.silero:SileroVad
     threshold: 0.5
   turn_detection:
     enabled: false
-    engine: deerflow.speech.engines.smart_turn:SmartTurnV3
+    engine: nova.speech.engines.smart_turn:SmartTurnV3
 ```
 
-Settings are stored in `$DEER_FLOW_HOME/voice-settings.yaml` (overrides `config.yaml`).
+Settings are stored in `$NOVA_HOME/voice-settings.yaml` (overrides `config.yaml`).
 
 ## Troubleshooting
 
@@ -116,7 +116,7 @@ Settings are stored in `$DEER_FLOW_HOME/voice-settings.yaml` (overrides `config.
 
 ## Key Files
 
-- `backend/packages/harness/deerflow/speech/` — Speech engines (STT, TTS, VAD, turn detection)
+- `backend/packages/harness/nova/speech/` — Speech engines (STT, TTS, VAD, turn detection)
 - `backend/app/gateway/routers/voice.py` — Voice WebSocket and REST endpoints
 - `backend/tests/test_voice_session.py` — Voice session unit tests
 - `frontend/src/core/voice/` — Browser-side voice capture and playback

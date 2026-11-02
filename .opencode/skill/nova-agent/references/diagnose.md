@@ -43,7 +43,7 @@ Symptom → root cause → fix. Every bug listed here was confirmed in productio
 
 **Check**: In `page.tsx` → `handleStop` should call `stopRun()`. In `hooks.ts` → `stopRun` should call `thread.stop()` AND optionally hit the cancel endpoint.
 
-**Verify backend**: `pm2 logs deerflow --lines 20 | grep "abort\|interrupt\|cancel"` — you should see "Run X abort requested — stopping" in the worker log.
+**Verify backend**: `pm2 logs nova --lines 20 | grep "abort\|interrupt\|cancel"` — you should see "Run X abort requested — stopping" in the worker log.
 
 ---
 
@@ -70,18 +70,18 @@ Docker's embedded DNS SERVFAILing the name of a container that is **down**, not
 a DNS problem. Tell them apart before touching anything:
 
 ```bash
-docker ps -a --filter name=deer-flow-gateway --format '{{.Status}}'
+docker ps -a --filter name=nova-gateway --format '{{.Status}}'
 ```
 
 - **`Restarting (1)`** → the container exists and keeps exiting. Go to
   variant A. **Do not** run the `down --remove-orphans` recycle; it recreates
   the container with the same broken configuration and the loop resumes.
-- **Container absent entirely**, only `deer-flow-nginx` and
-  `deer-flow-frontend` in `docker ps` → variant B.
+- **Container absent entirely**, only `nova-nginx` and
+  `nova-frontend` in `docker ps` → variant B.
 
 ### Variant A — the container starts and exits (exit code 1)
 
-**`docker logs deer-flow-gateway` is EMPTY and that is expected**, not evidence
+**`docker logs nova-gateway` is EMPTY and that is expected**, not evidence
 of a silent process: `docker/dev-entrypoint.sh` does
 `exec >/app/logs/gateway.log 2>&1`, so the traceback is in the host-mounted
 file. `scripts/docker.sh logs --gateway` now follows that file; plain
@@ -93,7 +93,7 @@ tail -100 logs/gateway.log
 
 | Traceback | Root cause | Fix |
 | --- | --- | --- |
-| `FileNotFoundError: Config file specified by environment variable DEER_FLOW_CONFIG_PATH not found at /home/...` | A **host** path reached the container. `../.env` legitimately holds host paths (docker-compose.yaml uses them as bind-mount *sources*), and `env_file:` leaks them in wherever the compose service does not pin the container path in `environment:`. | Add `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` to the gateway's `environment:` block — it wins over `env_file:`. Then recreate the container. |
+| `FileNotFoundError: Config file specified by environment variable NOVA_CONFIG_PATH not found at /home/...` | A **host** path reached the container. `../.env` legitimately holds host paths (docker-compose.yaml uses them as bind-mount *sources*), and `env_file:` leaks them in wherever the compose service does not pin the container path in `environment:`. | Add `NOVA_CONFIG_PATH` / `NOVA_EXTENSIONS_CONFIG_PATH` to the gateway's `environment:` block — it wins over `env_file:`. Then recreate the container. |
 | `_rust_notify.WatchfilesRustInternalError: Error creating recommended watcher: Too many open files (os error 24)` | Host-wide inotify **instance** exhaustion (`fs.inotify.max_user_instances`, Ubuntu default 128). The uvicorn `--reload` supervisor is PID 1, so its death exits the container. | `sudo sysctl fs.inotify.max_user_instances=1024` (persist in `/etc/sysctl.d/`). Absent entirely on the `nova-prod` stack, which runs no reload watcher. |
 
 Both were live simultaneously in the 2026-08-17 outage.
@@ -101,7 +101,7 @@ Both were live simultaneously in the 2026-08-17 outage.
 ### Variant B — the container never gets created
 
 **Root cause**: Docker name conflict. pm2 tries to `compose up` the full stack,
-hits "container name already in use" on `deer-flow-frontend`, exits before the
+hits "container name already in use" on `nova-frontend`, exits before the
 gateway starts, pm2 immediately restarts — infinite loop.
 
 **Fix**:
@@ -111,14 +111,14 @@ docker compose \
   -f docker/docker-compose-dev.yaml \
   -f docker/docker-compose.dood.yaml \
   -f docker/docker-compose.prod-frontend.yaml \
-  -p deer-flow-dev down --remove-orphans
+  -p nova down --remove-orphans
 pm2 start nova
 until curl -sf http://localhost:2026/health; do sleep 3; done
 echo "healthy"
 ```
 
 **Verify**: `pm2 list` shows `nova` → `online, restarts=0`.
-`docker ps | grep deer-flow` → all three Up.
+`docker ps | grep nova-` → all three Up.
 
 ---
 
@@ -184,11 +184,11 @@ When something's wrong and you don't know what:
 ```bash
 # 1. Is the stack up?
 curl -s localhost:2026/health  # 200?
-pm2 list | grep deerflow       # online, restarts < 10?
-docker ps | grep deer-flow     # all 3 containers Up?
+pm2 list | grep nova       # online, restarts < 10?
+docker ps | grep nova-     # all 3 containers Up?
 
 # 2. Is the gateway logging errors?
-docker logs deer-flow-gateway --tail 20
+docker logs nova-gateway --tail 20
 
 # 3. Is the frontend build broken?
 cd frontend && pnpm lint && pnpm typecheck && pnpm build

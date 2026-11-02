@@ -1,6 +1,6 @@
-# DeerFlow Sandbox Provisioner
+# Nova Sandbox Provisioner
 
-The **Sandbox Provisioner** is a FastAPI service that dynamically manages sandbox Pods in Kubernetes. It provides a REST API for the DeerFlow backend to create, monitor, and destroy isolated sandbox environments for code execution.
+The **Sandbox Provisioner** is a FastAPI service that dynamically manages sandbox Pods in Kubernetes. It provides a REST API for the Nova backend to create, monitor, and destroy isolated sandbox environments for code execution.
 
 ## Architecture
 
@@ -197,7 +197,7 @@ See the [Sandbox configuration](../../backend/docs/CONFIGURATION.md#sandbox) sec
 
 Older provisioner versions mounted PVC user-data from `threads/{thread_id}/user-data`. The user-scoped layout mounts from `deer-flow/users/{user_id}/threads/{thread_id}/user-data`.
 
-If an existing deployment already has PVC-backed user-data under the legacy layout, migrate the DeerFlow data directory before relying on the new PVC subPath. Mount the same PVC path that the gateway uses as its DeerFlow base directory, then run the existing user-isolation migration script:
+If an existing deployment already has PVC-backed user-data under the legacy layout, migrate the Nova data directory before relying on the new PVC subPath. Mount the same PVC path that the gateway uses as its Nova base directory, then run the existing user-isolation migration script:
 
 ```bash
 cd backend
@@ -259,7 +259,7 @@ The provisioner runs as part of the docker-compose-dev stack:
 make docker-start
 
 # Or start just the provisioner
-docker compose -p deer-flow-dev -f docker/docker-compose-dev.yaml up -d provisioner
+docker compose -p nova -f docker/docker-compose-dev.yaml up -d provisioner
 ```
 
 The compose file:
@@ -277,21 +277,21 @@ The compose file:
 curl http://localhost:8002/health
 
 # Create a sandbox (via provisioner container for internal DNS)
-docker exec deer-flow-provisioner curl -X POST http://localhost:8002/api/sandboxes \
+docker exec nova-provisioner curl -X POST http://localhost:8002/api/sandboxes \
   -H "Content-Type: application/json" \
   -d '{"sandbox_id":"test-001","thread_id":"thread-001","user_id":"user-001"}'
 
 # Check sandbox status
-docker exec deer-flow-provisioner curl http://localhost:8002/api/sandboxes/test-001
+docker exec nova-provisioner curl http://localhost:8002/api/sandboxes/test-001
 
 # List all sandboxes
-docker exec deer-flow-provisioner curl http://localhost:8002/api/sandboxes
+docker exec nova-provisioner curl http://localhost:8002/api/sandboxes
 
 # Verify Pod and Service in K8s
 kubectl get pod,svc -n deer-flow -l sandbox-id=test-001
 
 # Delete sandbox
-docker exec deer-flow-provisioner curl -X DELETE http://localhost:8002/api/sandboxes/test-001
+docker exec nova-provisioner curl -X DELETE http://localhost:8002/api/sandboxes/test-001
 ```
 
 ### Verify from Backend Containers
@@ -300,10 +300,10 @@ Once a sandbox is created, the backend containers (gateway, langgraph) can acces
 
 ```bash
 # Get sandbox URL from provisioner
-SANDBOX_URL=$(docker exec deer-flow-provisioner curl -s http://localhost:8002/api/sandboxes/test-001 | jq -r .sandbox_url)
+SANDBOX_URL=$(docker exec nova-provisioner curl -s http://localhost:8002/api/sandboxes/test-001 | jq -r .sandbox_url)
 
 # Test from gateway container
-docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
+docker exec nova-gateway curl -s $SANDBOX_URL/v1/sandbox
 ```
 
 ## Troubleshooting
@@ -328,7 +328,7 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 - Verify inside container:
 
   ```bash
-  docker exec deer-flow-provisioner ls -ld /root/.kube/config
+  docker exec nova-provisioner ls -ld /root/.kube/config
   ```
 
 - Expected output should indicate a regular file (`-`), not a directory (`d`)
@@ -363,7 +363,7 @@ docker exec deer-flow-gateway curl -s $SANDBOX_URL/v1/sandbox
 
   ```bash
   ls -la /path/to/skills
-  ls -la /path/to/backend/.deer-flow/threads
+  ls -la /path/to/backend/.nova/threads
   ```
 
 ### Issue: Pod stuck in "ContainerCreating"

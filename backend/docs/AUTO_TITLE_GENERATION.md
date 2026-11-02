@@ -51,7 +51,7 @@ checkpointer = PostgresSaver.from_conn_string("postgresql://user:pass@localhost/
 ```json
 {
   "graphs": {
-    "lead_agent": "deerflow.agents:lead_agent"
+    "lead_agent": "nova.agents:lead_agent"
   },
   "checkpointer": "checkpointer:checkpointer"
 }
@@ -72,7 +72,7 @@ title:
 或在代码中配置：
 
 ```python
-from deerflow.config.title_config import TitleConfig, set_title_config
+from nova.config.title_config import TitleConfig, set_title_config
 
 set_title_config(
     TitleConfig(
@@ -188,7 +188,7 @@ sequenceDiagram
 ```python
 # 测试 title 生成
 import pytest
-from deerflow.agents.title_middleware import TitleMiddleware
+from nova.agents.title_middleware import TitleMiddleware
 
 
 def test_title_generation():
@@ -249,11 +249,11 @@ def after_agent(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | N
 
 ### 涉及文件
 
-- `packages/harness/deerflow/agents/thread_state.py` — 新增 `title: str | None = None` 字段
-- `packages/harness/deerflow/config/title_config.py`（新建）— `TitleConfig` 配置类 + `get_title_config()` / `set_title_config()` / `load_title_config_from_dict()`
-- `packages/harness/deerflow/agents/middlewares/title_middleware.py`（新建）— `TitleMiddleware`：`_should_generate_title()`、`_generate_title()`、`after_agent()` 钩子，含 fallback 策略
-- `packages/harness/deerflow/config/app_config.py` — 在 `from_file()` 中加载 title 配置
-- `packages/harness/deerflow/agents/lead_agent/agent.py` — 注册 `TitleMiddleware`
+- `packages/harness/nova/agents/thread_state.py` — 新增 `title: str | None = None` 字段
+- `packages/harness/nova/config/title_config.py`（新建）— `TitleConfig` 配置类 + `get_title_config()` / `set_title_config()` / `load_title_config_from_dict()`
+- `packages/harness/nova/agents/middlewares/title_middleware.py`（新建）— `TitleMiddleware`：`_should_generate_title()`、`_generate_title()`、`after_agent()` 钩子，含 fallback 策略
+- `packages/harness/nova/config/app_config.py` — 在 `from_file()` 中加载 title 配置
+- `packages/harness/nova/agents/lead_agent/agent.py` — 注册 `TitleMiddleware`
 - `config.example.yaml` — 新增 `title` 配置段
 - `backend/tests/test_title_generation.py`（新建）— 配置类与 middleware 初始化测试
 
@@ -272,11 +272,11 @@ def after_agent(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | N
 
 ## 相关文件
 
-- [`packages/harness/deerflow/agents/thread_state.py`](../packages/harness/deerflow/agents/thread_state.py) - ThreadState 定义
-- [`packages/harness/deerflow/agents/middlewares/title_middleware.py`](../packages/harness/deerflow/agents/middlewares/title_middleware.py) - TitleMiddleware 实现
-- [`packages/harness/deerflow/config/title_config.py`](../packages/harness/deerflow/config/title_config.py) - 配置管理
+- [`packages/harness/nova/agents/thread_state.py`](../packages/harness/nova/agents/thread_state.py) - ThreadState 定义
+- [`packages/harness/nova/agents/middlewares/title_middleware.py`](../packages/harness/nova/agents/middlewares/title_middleware.py) - TitleMiddleware 实现
+- [`packages/harness/nova/config/title_config.py`](../packages/harness/nova/config/title_config.py) - 配置管理
 - [`config.yaml`](../../config.example.yaml) - 配置文件
-- [`packages/harness/deerflow/agents/lead_agent/agent.py`](../packages/harness/deerflow/agents/lead_agent/agent.py) - Middleware 注册
+- [`packages/harness/nova/agents/lead_agent/agent.py`](../packages/harness/nova/agents/lead_agent/agent.py) - Middleware 注册
 
 ## 参考资料
 

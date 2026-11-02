@@ -16,13 +16,18 @@ This repo MUST NOT contain literal references to:
   benchmark JSON) or the actual GGUF file path on disk. Never as an
   identifier, function name, or comment.
 
-The `deerflow` Python package namespace IS allowed (it's the historical
-package name — Nova was forked from DeerFlow). So `from deerflow.x import y`
-is fine — it's an internal import, not a cross-project reference.
+The Python package namespace is **`nova`** (`backend/packages/harness/nova/`,
+distribution `nova-harness`). Write new code as `from nova.x import y`.
+`deerflow` remains importable as a **deprecated alias** that resolves to the
+same `nova` module objects, so legacy imports and `use: deerflow.x:Y` paths in
+existing config files keep working for one release. Do not add new
+`deerflow` imports; neither name is a cross-project reference.
 
-"DeerFlow" and "nova" themselves are SELF references (Nova was renamed
-from DeerFlow). Allowed freely in user-facing strings, comments, URLs, and
-i18n keys.
+"Nova" is the product name. "DeerFlow" refers to the upstream ByteDance
+project Nova was forked from (and the historical name of this codebase); keep
+it for attribution, upstream links, and compatibility notes. Environment
+variables are `NOVA_*`; the old `DEER_FLOW_*` names are read only as a
+fallback.
 
 ## Why this matters
 

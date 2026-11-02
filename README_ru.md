@@ -312,12 +312,12 @@ Nova агностичен к моделям — работает с любым L
 
 ## Встроенный Python Клиент
 
-Nova может использоваться как встроенная Python-библиотека без запуска полных HTTP-сервисов. `DeerFlowClient` обеспечивает прямой доступ в процессе ко всем возможностям агента и Gateway, возвращая те же схемы ответов что и HTTP Gateway API:
+Nova может использоваться как встроенная Python-библиотека без запуска полных HTTP-сервисов. `NovaClient` обеспечивает прямой доступ в процессе ко всем возможностям агента и Gateway, возвращая те же схемы ответов что и HTTP Gateway API:
 
 ```python
-from deerflow.client import DeerFlowClient
+from nova.client import NovaClient
 
-client = DeerFlowClient()
+client = NovaClient()
 
 # Чат
 response = client.chat("Проанализируй для меня эту статью", thread_id="my-thread")
@@ -334,7 +334,7 @@ client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-Полная документация API в `backend/packages/harness/deerflow/client.py`.
+Полная документация API в `backend/packages/harness/nova/client.py`.
 
 ## Документация
 

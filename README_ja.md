@@ -308,12 +308,12 @@ Nova はモデル非依存——OpenAI互換APIを実装するすべてのLLMで
 
 ## 組み込みPythonクライアント
 
-Nova は完全なHTTPサービスを実行せずに、組み込みPythonライブラリとして使用可能。`DeerFlowClient`はすべてのエージェントとGateway機能への直接プロセス内アクセスを提供し、HTTP Gateway APIと同じレスポンススキーマを返却：
+Nova は完全なHTTPサービスを実行せずに、組み込みPythonライブラリとして使用可能。`NovaClient`はすべてのエージェントとGateway機能への直接プロセス内アクセスを提供し、HTTP Gateway APIと同じレスポンススキーマを返却：
 
 ```python
-from deerflow.client import DeerFlowClient
+from nova.client import NovaClient
 
-client = DeerFlowClient()
+client = NovaClient()
 
 # チャット
 response = client.chat("この論文を分析して", thread_id="my-thread")
@@ -330,7 +330,7 @@ client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-完全なAPIドキュメントは `backend/packages/harness/deerflow/client.py` を参照。
+完全なAPIドキュメントは `backend/packages/harness/nova/client.py` を参照。
 
 ## ドキュメント
 

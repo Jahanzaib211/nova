@@ -19,7 +19,7 @@ Keep changes additive and reversible. Never group backend + frontend in one unte
 
 ## Adding a new middleware
 
-1. Create `backend/packages/harness/deerflow/agents/middlewares/my_middleware.py`
+1. Create `backend/packages/harness/nova/agents/middlewares/my_middleware.py`
 2. Subclass `AgentMiddleware` from `langchain.agents.middleware`
 3. Override only the hooks you need (wrap them `try/except` — non-fatal)
 4. Wire into the chain in `build_lead_runtime_middlewares()` or `build_middlewares()` in `agent.py`
@@ -75,11 +75,11 @@ Existing pattern reference: `skill_activation_middleware.py:202-220`, `reflect_f
 
 ## Harness boundary rule
 
-`deerflow.*` never imports `app.*`. This is enforced in CI by `tests/test_harness_boundary.py`.
+`nova.*` never imports `app.*`. This is enforced in CI by `tests/test_harness_boundary.py`.
 
 ```python
 # ALLOWED: app imports harness
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 # FORBIDDEN: harness imports app
 from app.gateway.routers.uploads import ...  # will fail CI
@@ -89,14 +89,14 @@ If you need gateway behavior from the harness, put the shared logic in the harne
 
 ## Editing the system prompt
 
-The prompt lives in `backend/packages/harness/deerflow/agents/lead_agent/prompt.py` as a Python function returning a `ChatPromptTemplate`. Read `nova-prompt-author` skill before touching it.
+The prompt lives in `backend/packages/harness/nova/agents/lead_agent/prompt.py` as a Python function returning a `ChatPromptTemplate`. Read `nova-prompt-author` skill before touching it.
 
 Critical: **never use `{variable}` brace syntax in raw prompt strings** — the template is compiled with `.format()` and any `{...}` will try to substitute. Use `{{literal braces}}` if you need them in the output, or restructure to avoid them.
 
 Test after every prompt change:
 ```bash
 cd backend && uv run python -c "
-from deerflow.agents.lead_agent.prompt import apply_prompt_template
+from nova.agents.lead_agent.prompt import apply_prompt_template
 print('prompt compiles OK')
 "
 ```

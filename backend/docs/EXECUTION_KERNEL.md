@@ -4,7 +4,7 @@ Nova has exactly **one** execution architecture. Nothing in the platform
 creates OS processes directly — every subprocess, docker CLI call, git
 command, pm2/systemctl invocation, and long-running dev-server spawn flows
 through the Execution Kernel at
-`packages/harness/deerflow/execution/`.
+`packages/harness/nova/execution/`.
 
 ## Pipeline
 
@@ -55,8 +55,8 @@ ExecutionRequest
 Resolve the kernel through DI — never construct one ad hoc:
 
 ```python
-from deerflow.services.container import service_container
-from deerflow.execution.adapters import GitAdapter
+from nova.services.container import service_container
+from nova.execution.adapters import GitAdapter
 
 kernel = service_container.execution_kernel()
 result = GitAdapter(kernel).run("/repo", "status", "--porcelain")
@@ -89,8 +89,8 @@ run_id, thread_id, and an execution payload.
 ## Testing
 
 ```python
-from deerflow.execution.testing import FakeExecutionKernel
-from deerflow.services.container import service_container
+from nova.execution.testing import FakeExecutionKernel
+from nova.services.container import service_container
 
 fake = FakeExecutionKernel(lambda req: (0, "stdout", ""))
 service_container.override(execution_kernel=fake)
@@ -104,7 +104,7 @@ service_container.reset()
 `tests/test_execution_guardrails.py` fails CI if any direct execution
 primitive (`subprocess.run/Popen/...`, `create_subprocess_*`,
 `os.system`, `os.popen`, `shell=True`) appears in `backend/packages` or
-`backend/app` outside `deerflow/execution/`.
+`backend/app` outside `nova/execution/`.
 
 ## Shutdown semantics
 

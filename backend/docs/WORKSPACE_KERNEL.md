@@ -79,7 +79,7 @@ Plans are validated before execution: non-empty, ≤50 steps, no duplicate step 
 `WorkspaceIntelligenceService` is registered in `ServiceContainer`:
 
 ```python
-from deerflow.services.container import service_container
+from nova.services.container import service_container
 
 wis = service_container.workspace_intelligence_service()
 snap = wis.scan("/path/to/repo")
@@ -90,7 +90,7 @@ result = wis.plan_run("test")
 
 ## Cache
 
-Cache keys are SHA-256 of workspace metadata (root, kind, language, project count, file count). Cache directory: `{DEER_FLOW_HOME}/.deer-flow/workspace_cache/`. TTL: 3600s default.
+Cache keys are SHA-256 of workspace metadata (root, kind, language, project count, file count). Cache directory: `{NOVA_HOME}/.nova/workspace_cache/`. TTL: 3600s default.
 
 ## Phase C9 Coverage
 

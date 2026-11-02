@@ -7,7 +7,7 @@ description: Debug a Nova sandbox failure (Local vs AIO) — which provider is a
 
 ## Triage
 
-1. Which provider? `python -c "from deerflow.sandbox import get_sandbox_provider; print(type(get_sandbox_provider()).__name__)"`. Returns `LocalSandboxProvider` or `AioSandboxProvider`.
+1. Which provider? `python -c "from nova.sandbox import get_sandbox_provider; print(type(get_sandbox_provider()).__name__)"`. Returns `LocalSandboxProvider` or `AioSandboxProvider`.
 
 2. Read `config.yaml:sandbox.use` — controls which provider class is loaded via reflection (`sandbox_provider.py:60-74`).
 

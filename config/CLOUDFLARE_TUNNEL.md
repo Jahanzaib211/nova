@@ -28,7 +28,7 @@ watchdog-monitored.
                   │ HTTP (plain, localhost only)
                   ▼
         ┌──────────────────────────────┐
-        │  nginx :2026 (deer-flow-dev) │
+        │  nginx :2026 (nova) │
         │  → gateway :8001 (docker)    │
         └──────────────────────────────┘
 

@@ -1,13 +1,13 @@
 ---
 name: nova-prompt-author
-description: Edit the lead agent's system prompt with discipline. Use when the user says "the agent is being too X", "tell the agent to Y", "the prompt needs a rule about Z", or before adding any new rule to the system prompt. The system prompt is at `backend/packages/harness/deerflow/agents/lead_agent/prompt.py` (a single function that returns a `ChatPromptTemplate`). Use this skill BEFORE making the change; the skill walks through the change-and-validate cycle. Triggers on phrases like "edit the agent prompt", "add a rule to the lead agent", "system prompt", "AGENT_MANIFEST", or before merging any change touching `agents/lead_agent/prompt.py`.
+description: Edit the lead agent's system prompt with discipline. Use when the user says "the agent is being too X", "tell the agent to Y", "the prompt needs a rule about Z", or before adding any new rule to the system prompt. The system prompt is at `backend/packages/harness/nova/agents/lead_agent/prompt.py` (a single function that returns a `ChatPromptTemplate`). Use this skill BEFORE making the change; the skill walks through the change-and-validate cycle. Triggers on phrases like "edit the agent prompt", "add a rule to the lead agent", "system prompt", "AGENT_MANIFEST", or before merging any change touching `agents/lead_agent/prompt.py`.
 ---
 
 # nova-prompt-author
 
 ## The change-and-validate cycle
 
-1. **Read the current prompt:** `wc -l backend/packages/harness/deerflow/agents/lead_agent/prompt.py` (should be 500+ lines). Identify the section you're changing (e.g., `<skill_persistence>`, `<command_arsenal>`, `<self_verify>`, etc.).
+1. **Read the current prompt:** `wc -l backend/packages/harness/nova/agents/lead_agent/prompt.py` (should be 500+ lines). Identify the section you're changing (e.g., `<skill_persistence>`, `<command_arsenal>`, `<self_verify>`, etc.).
 
 2. **Find or create the test:** `backend/tests/test_lead_agent_prompt.py` (exists per the audit's test inventory). Add a regression assertion: e.g., "the prompt contains `<rule>no ENOENT hunts</rule>`" so the rule is enforced by the test, not just the prompt.
 

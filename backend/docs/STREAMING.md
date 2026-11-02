@@ -1,12 +1,12 @@
-# DeerFlow 流式输出设计
+# Nova 流式输出设计
 
-本文档解释 DeerFlow 是如何把 LangGraph agent 的事件流端到端送到两类消费者（HTTP 客户端、嵌入式 Python 调用方）的：两条路径为什么**必须**并存、它们各自的契约是什么、以及设计里那些 non-obvious 的不变式。
+本文档解释 Nova 是如何把 LangGraph agent 的事件流端到端送到两类消费者（HTTP 客户端、嵌入式 Python 调用方）的：两条路径为什么**必须**并存、它们各自的契约是什么、以及设计里那些 non-obvious 的不变式。
 
 ---
 
 ## TL;DR
 
-- DeerFlow 有**两条并行**的流式路径：**Gateway 路径**（async / HTTP SSE / JSON 序列化）服务浏览器和 IM 渠道；**DeerFlowClient 路径**（sync / in-process / 原生 LangChain 对象）服务 Jupyter、脚本、测试。它们**无法合并**——消费者模型不同。
+- Nova 有**两条并行**的流式路径：**Gateway 路径**（async / HTTP SSE / JSON 序列化）服务浏览器和 IM 渠道；**NovaClient 路径**（sync / in-process / 原生 LangChain 对象）服务 Jupyter、脚本、测试。它们**无法合并**——消费者模型不同。
 - 两条路径都从 `create_agent()` 工厂出发，核心都是订阅 LangGraph 的 `stream_mode=["values", "messages", "custom"]`。`values` 是节点级 state 快照，`messages` 是 LLM token 级 delta，`custom` 是显式 `StreamWriter` 事件。**这三种模式不是详细程度的梯度，是三个独立的事件源**，要 token 流就必须显式订阅 `messages`。
 - 嵌入式 client 为每个 `stream()` 调用维护三个 `set[str]`：`seen_ids` / `streamed_ids` / `counted_usage_ids`。三者看起来相似但管理**三个独立的不变式**，不能合并。
 
@@ -16,10 +16,10 @@
 
 两条路径服务的消费者模型根本不同：
 
-| 维度 | Gateway 路径 | DeerFlowClient 路径 |
+| 维度 | Gateway 路径 | NovaClient 路径 |
 |---|---|---|
-| 入口 | FastAPI `/runs/stream` endpoint | `DeerFlowClient.stream(message)` |
-| 触发层 | `runtime/runs/worker.py::run_agent` | `packages/harness/deerflow/client.py::DeerFlowClient.stream` |
+| 入口 | FastAPI `/runs/stream` endpoint | `NovaClient.stream(message)` |
+| 触发层 | `runtime/runs/worker.py::run_agent` | `packages/harness/nova/client.py::NovaClient.stream` |
 | 执行模型 | `async def` + `agent.astream()` | sync generator + `agent.stream()` |
 | 事件传输 | `StreamBridge`（asyncio Queue）+ `sse_consumer` | 直接 `yield` |
 | 序列化 | `serialize(chunk)` → 纯 JSON dict，匹配 LangGraph Platform wire 格式 | `StreamEvent.data`，携带原生 LangChain 对象 |
@@ -29,12 +29,12 @@
 
 **两条路径的存在是 DRY 的刻意妥协**：Gateway 的全部基础设施（async + Queue + JSON + RunManager）**都是为了跨网络边界把事件送给 HTTP 消费者**。当生产者（agent）和消费者（Python 调用栈）在同一个进程时，这整套东西都是纯开销。
 
-### 为什么不能让 DeerFlowClient 复用 Gateway
+### 为什么不能让 NovaClient 复用 Gateway
 
 曾经考虑过三种复用方案，都被否决：
 
 1. **让 `client.stream()` 变成 `async def client.astream()`**  
-   breaking change。用户用不上的 `async for` / `asyncio.run()` 要硬塞进 Jupyter notebook 和同步脚本。DeerFlowClient 的一大卖点（"把 agent 当普通函数调用"）直接消失。
+   breaking change。用户用不上的 `async for` / `asyncio.run()` 要硬塞进 Jupyter notebook 和同步脚本。NovaClient 的一大卖点（"把 agent 当普通函数调用"）直接消失。
 
 2. **在 `client.stream()` 内部起一个独立事件循环线程，用 `StreamBridge` 在 sync/async 之间做桥接**  
    引入线程池、队列、信号量。为了"消除重复"，把**复杂度**代替代码行数引进来。是典型的"wrong abstraction"——开销高于复用收益。
@@ -95,7 +95,7 @@ Application                    HTTP / SSE                    LangGraph Graph
 - **Platform SDK 层**（`langgraph-sdk` HTTP client）：跨进程 HTTP 契约，mode 叫 **`"messages-tuple"`**。
 - **Gateway worker** 显式做翻译：`if m == "messages-tuple": lg_modes.append("messages")`（`runtime/runs/worker.py:117-121`）。
 
-**后果**：`DeerFlowClient.stream()` 直接调 `agent.stream()`（Graph 层），所以必须传 `"messages"`。`app/channels/manager.py` 通过 `langgraph-sdk` 走 HTTP SDK，所以传 `"messages-tuple"`。**这两个字符串不能互相替代**，也不能抽成"一个共享常量"——它们是不同协议层的 type alias，共享只会让某一层说不是它母语的话。
+**后果**：`NovaClient.stream()` 直接调 `agent.stream()`（Graph 层），所以必须传 `"messages"`。`app/channels/manager.py` 通过 `langgraph-sdk` 走 HTTP SDK，所以传 `"messages-tuple"`。**这两个字符串不能互相替代**，也不能抽成"一个共享常量"——它们是不同协议层的 type alias，共享只会让某一层说不是它母语的话。
 
 ---
 
@@ -145,12 +145,12 @@ sequenceDiagram
 
 ---
 
-## DeerFlowClient 路径：sync + in-process
+## NovaClient 路径：sync + in-process
 
 ```mermaid
 sequenceDiagram
     participant User as Python caller
-    participant Client as DeerFlowClient.stream
+    participant Client as NovaClient.stream
     participant Agent as LangGraph<br/>agent.stream (sync)
 
     User->>Client: for event in client.stream("hi"):
@@ -176,9 +176,9 @@ sequenceDiagram
 
 LangGraph `messages` mode 给出的是 **delta**：每个 `AIMessageChunk.content` 只包含这一次新 yield 的 token，**不是**从头的累计文本。
 
-这个语义和 LangChain 的 `fs2 Stream` 风格一致：**上游发增量，下游负责累加**。Gateway 路径里前端 `useStream` React hook 自己维护累加器；DeerFlowClient 路径里 `chat()` 方法替调用者做累加。
+这个语义和 LangChain 的 `fs2 Stream` 风格一致：**上游发增量，下游负责累加**。Gateway 路径里前端 `useStream` React hook 自己维护累加器；NovaClient 路径里 `chat()` 方法替调用者做累加。
 
-### `DeerFlowClient.chat()` 的 O(n) 累加器
+### `NovaClient.chat()` 的 O(n) 累加器
 
 ```python
 chunks: dict[str, list[str]] = {}
@@ -199,7 +199,7 @@ return "".join(chunks.get(last_id, ()))
 
 ## 三个 id set 为什么不能合并
 
-`DeerFlowClient.stream()` 在一次调用生命周期内维护三个 `set[str]`：
+`NovaClient.stream()` 在一次调用生命周期内维护三个 `set[str]`：
 
 ```python
 seen_ids: set[str] = set()  # values 路径内部 dedup
@@ -252,7 +252,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant C as DeerFlowClient
+    participant C as NovaClient
     participant A as LangGraph<br/>agent.stream
 
     U->>C: stream("Count ... 15")
@@ -291,12 +291,12 @@ sequenceDiagram
 
 ## 为什么这个设计容易出 bug，以及测试策略
 
-本文档的直接起因是 bytedance/deer-flow#1969：`DeerFlowClient.stream()` 原本只订阅 `["values", "custom"]`，**漏了 `"messages"`**。结果 `client.stream("hello")` 等价于一次性返回，视觉上和 `chat()` 没区别。
+本文档的直接起因是 bytedance/deer-flow#1969：`NovaClient.stream()` 原本只订阅 `["values", "custom"]`，**漏了 `"messages"`**。结果 `client.stream("hello")` 等价于一次性返回，视觉上和 `chat()` 没区别。
 
 这类 bug 有三个结构性原因：
 
 1. **多协议层命名**：`messages` / `messages-tuple` / HTTP SSE `messages` 是同一概念的三个名字。在其中一层出错不会在另外两层报错。
-2. **多消费者模型**：Gateway 和 DeerFlowClient 是两套独立实现，**没有单一的"订阅哪些 mode"的 single source of truth**。前者订阅对了不代表后者也订阅对了。
+2. **多消费者模型**：Gateway 和 NovaClient 是两套独立实现，**没有单一的"订阅哪些 mode"的 single source of truth**。前者订阅对了不代表后者也订阅对了。
 3. **mock 测试绕开了真实路径**：老测试用 `agent.stream.return_value = iter([dict_chunk, ...])` 喂 values 形状的 dict 模拟 state 快照。这样构造的输入**永远不会进入 `messages` mode 分支**，所以即使 `stream_mode` 里少一个元素，CI 依然全绿。
 
 ### 防御手段
@@ -341,12 +341,12 @@ assert "messages" in agent.stream.call_args.kwargs["stream_mode"]
 
 | 关心什么 | 看这里 |
 |---|---|
-| DeerFlowClient 嵌入式流 | `packages/harness/deerflow/client.py::DeerFlowClient.stream` |
-| `chat()` 的 delta 累加器 | `packages/harness/deerflow/client.py::DeerFlowClient.chat` |
-| Gateway async 流 | `packages/harness/deerflow/runtime/runs/worker.py::run_agent` |
+| NovaClient 嵌入式流 | `packages/harness/nova/client.py::NovaClient.stream` |
+| `chat()` 的 delta 累加器 | `packages/harness/nova/client.py::NovaClient.chat` |
+| Gateway async 流 | `packages/harness/nova/runtime/runs/worker.py::run_agent` |
 | HTTP SSE 帧输出 | `app/gateway/services.py::sse_consumer` / `format_sse` |
-| 序列化到 wire 格式 | `packages/harness/deerflow/runtime/serialization.py` |
-| LangGraph mode 命名翻译 | `packages/harness/deerflow/runtime/runs/worker.py:117-121` |
+| 序列化到 wire 格式 | `packages/harness/nova/runtime/serialization.py` |
+| LangGraph mode 命名翻译 | `packages/harness/nova/runtime/runs/worker.py:117-121` |
 | 飞书渠道的增量卡片更新 | `app/channels/manager.py::_handle_streaming_chat` |
 | Channels 自带的 delta/cumulative 防御性累加 | `app/channels/manager.py::_merge_stream_text` |
 | Frontend useStream 支持的 mode 集合 | `frontend/src/core/api/stream-mode.ts` |
