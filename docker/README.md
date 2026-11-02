@@ -48,16 +48,21 @@ docker run --rm --network none --user 1000:1000 -e HOME=/tmp \
   nova-gateway-prod:latest \
   sh -c 'cd backend && PYTHONPATH=. uv run --no-sync python -c "import app.gateway.app, nova; print(\"ok\")"'
 
-# c) A stable JWT secret, so sessions do not depend on a file the uid-1000
-#    gateway may not be able to read. Reuse the persisted value so nobody is signed out by the switch:
+# c) A stable JWT secret. The launcher REFUSES the prod stack without one.
+#    Reuse the persisted value so nobody is signed out by the switch:
 grep -q '^AUTH_JWT_SECRET=' .env || \
   printf 'AUTH_JWT_SECRET=%s\n' "$(cat backend/.nova/.jwt_secret)" >> .env
 
 # d) File ownership. The dev gateway runs as root and has left root-owned
 #    directories under backend/.nova (per-user dirs, memory.json, threads);
-#    the prod gateway runs as uid 1000 and cannot write them. Count, then fix:
+#    the prod gateway runs as uid 1000 and cannot write them. The launcher
+#    refuses the prod stack while any exist. Count, then fix:
 sudo find backend/.nova skills ! -uid 1000 | wc -l
 sudo chown -R 1000:1000 backend/.nova skills
+
+# e) Dry-run the launcher's preflight for the prod stack (read-only). It must
+#    end without "REFUSING"; warnings are worth reading too.
+python3 scripts/stack_preflight.py --stack prod
 ```
 
 The dev stack keeps working after (c) and (d): it runs as root, and the secret
@@ -73,7 +78,7 @@ docker exec nova-postgres sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\
 # Durable: the launcher reads NOVA_STACK from .env on every start and reboot.
 sed -i '/^NOVA_STACK=/d' .env && echo 'NOVA_STACK=prod' >> .env
 pm2 restart nova
-pm2 logs nova --lines 50          # watch for compose errors
+pm2 logs nova --lines 50          # watch for [preflight] lines and compose errors
 ```
 
 ### 2. Verify

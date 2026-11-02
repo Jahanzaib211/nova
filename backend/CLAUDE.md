@@ -840,6 +840,15 @@ opt-in overlays as dev (voice on CPU, local LLM, ACP via
 `docker-compose.nova-prod.acp.yaml`), its own jobs worker, and runs the schema
 step (`db-migrate.sh`, baked into the image) before uvicorn.
 
+Before every `compose up` the launcher runs `scripts/stack_preflight.py`
+(read-only): `AUTH_JWT_SECRET` unset → loud warning on dev, **refusal** on prod
+(a secret under 32 bytes fails both); configured Postgres pools (per process:
+`database.pool_size` + 10 overflow + 4 checkpointer, × gateway workers + jobs)
+versus the live `max_connections` → warning only (the 2026-11-01 outage
+exhausted all 100); and on prod, any entry under `backend/.nova` or `skills`
+not owned by uid 1000 → refusal with the `chown` that fixes it. Pinned by
+`tests/test_stack_preflight.py`.
+
 **Nginx routing**:
 
 - `/api/langgraph/*` → Gateway embedded runtime (8001), rewritten to `/api/*`

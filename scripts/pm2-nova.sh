@@ -199,6 +199,24 @@ if [ "${NOVA_JOBS_SCALE:-1}" = "0" ]; then
   SCALE_FLAGS+=(--scale jobs=0)
 fi
 
+# ── Preflight ───────────────────────────────────────────────────────────────
+# scripts/stack_preflight.py: AUTH_JWT_SECRET (warn on dev, REFUSE on prod),
+# Postgres max_connections vs the configured pools (warn; the 2026-11-01 outage
+# exhausted all 100), and on prod the data-dir ownership the uid-1000 gateway
+# needs (refuse). Read-only. A missing python3 must not keep the stack down.
+if command -v python3 >/dev/null 2>&1; then
+  if ! python3 "$NOVA_ROOT/scripts/stack_preflight.py" \
+       --root "$NOVA_ROOT" --stack "$NOVA_STACK" \
+       --data-dirname "$NOVA_DATA_DIRNAME" \
+       --container-prefix "${NOVA_CONTAINER_PREFIX:-nova}" \
+       --jobs-replicas "$([ "${NOVA_JOBS_SCALE:-1}" = "0" ] && echo 0 || echo 1)"; then
+    echo "[pm2-nova] preflight refused NOVA_STACK=$NOVA_STACK — fix the FAIL lines above, or roll back to NOVA_STACK=dev (docker/README.md)." >&2
+    exit 1
+  fi
+else
+  echo "[pm2-nova] WARNING: python3 not found; preflight checks skipped" >&2
+fi
+
 # ── Stale-frontend warning ────────────────────────────────────────────────
 # `up --no-build` can start, restart and recreate the frontend container, but
 # it can never rebuild the image -- and the frontend is prod-baked (`next start`
