@@ -51,7 +51,7 @@ class RunScope:
         return replace(self, **fields)  # type: ignore[arg-type]
 
 
-_scope: ContextVar[RunScope | None] = ContextVar("deerflow_run_scope", default=None)
+_scope: ContextVar[RunScope | None] = ContextVar("nova_run_scope", default=None)
 
 
 def set_run_scope(

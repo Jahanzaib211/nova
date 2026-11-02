@@ -1,4 +1,4 @@
-"""Declarative feature flags and middleware positioning for create_deerflow_agent.
+"""Declarative feature flags and middleware positioning for create_nova_agent.
 
 Pure data classes and decorators — no I/O, no side effects.
 """
@@ -13,7 +13,7 @@ from langchain.agents.middleware import AgentMiddleware
 
 @dataclass
 class RuntimeFeatures:
-    """Declarative feature flags for ``create_deerflow_agent``.
+    """Declarative feature flags for ``create_nova_agent``.
 
     Most features accept:
     - ``True``: use the built-in default middleware

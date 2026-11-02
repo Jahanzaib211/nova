@@ -2,7 +2,7 @@
 
 What it proves
 --------------
-- The real ``make_lead_agent`` / ``DeerFlowClient`` pipeline is built (full
+- The real ``make_lead_agent`` / ``NovaClient`` pipeline is built (full
   18-middleware chain, sandbox, tools, etc.).
 - A model that returns ``finish_reason='content_filter'`` + ``tool_calls``
   triggers SafetyFinishReasonMiddleware.
@@ -104,10 +104,10 @@ def main() -> int:
     lead_agent_module.create_chat_model = fake_create_chat_model
     client_module.create_chat_model = fake_create_chat_model
 
-    from nova.client import DeerFlowClient
+    from nova.client import NovaClient
 
     try:
-        client = DeerFlowClient()
+        client = NovaClient()
 
         print("\n=== Streaming a turn through the real lead-agent ===")
         events: list[dict[str, Any]] = []

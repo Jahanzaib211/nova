@@ -359,11 +359,11 @@ async def _create_state(
 
 def _connect_instruction(provider: str, code: str) -> str:
     if provider == "telegram":
-        return f"Send /start {code} to the DeerFlow Telegram bot."
+        return f"Send /start {code} to the Nova Telegram bot."
     meta = _PROVIDER_META.get(provider)
     if meta is None:
         raise HTTPException(status_code=404, detail="Unknown channel provider")
-    return f"Send /connect {code} to the DeerFlow {meta['display_name']} bot."
+    return f"Send /connect {code} to the Nova {meta['display_name']} bot."
 
 
 def _connect_url(config: ChannelConnectionsConfig, provider: str, code: str) -> str | None:

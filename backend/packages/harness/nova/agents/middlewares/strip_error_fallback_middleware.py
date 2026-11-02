@@ -1,7 +1,7 @@
 """Strip synthetic error-fallback messages before they reach the model.
 
 Companion serializer filter:
-    ``nova.runtime.serialization.strip_deerflow_error_fallback_messages``
+    ``nova.runtime.serialization.strip_nova_error_fallback_messages``
 
 When ``LLMErrorHandlingMiddleware`` injects a synthetic AIMessage for a
 quota / auth / transient failure, the message persists in thread state and
@@ -63,9 +63,9 @@ class StripErrorFallbackMiddleware(AgentMiddleware[AgentState]):
         output) and in-process LangChain message objects (which carry
         ``.additional_kwargs`` as a dict or None).
         """
-        from nova.runtime.serialization import strip_deerflow_error_fallback_messages
+        from nova.runtime.serialization import strip_nova_error_fallback_messages
 
-        return strip_deerflow_error_fallback_messages(messages)
+        return strip_nova_error_fallback_messages(messages)
 
     @override
     def before_model(self, state: AgentState, runtime: Runtime) -> dict | None:

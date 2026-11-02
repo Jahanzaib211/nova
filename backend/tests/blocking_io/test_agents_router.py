@@ -33,7 +33,7 @@ DEFAULT_AGENT_USER_ID = "test-user-autouse"
 
 
 def _make_auth_stub() -> SimpleNamespace:
-    return SimpleNamespace(state=SimpleNamespace(state=SimpleNamespace()), cookies={}, _deerflow_test_bypass_auth=True)
+    return SimpleNamespace(state=SimpleNamespace(state=SimpleNamespace()), cookies={}, _nova_test_bypass_auth=True)
 
 
 async def test_create_agent_does_not_block_event_loop(tmp_path: Path, monkeypatch) -> None:

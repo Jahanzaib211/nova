@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 # ContextVar so trace_id propagates through ``await`` boundaries in async code
 # AND falls back to thread-local for sync worker threads (asyncio.to_thread).
-_current_trace_id: ContextVar[str | None] = ContextVar("deerflow_trace_id", default=None)
+_current_trace_id: ContextVar[str | None] = ContextVar("nova_trace_id", default=None)
 _thread_trace_id = threading.local()
 
 
@@ -82,7 +82,7 @@ def new_trace_id() -> str:
 
 # ---------- span stack (parent/child) ----------
 
-_current_spans: ContextVar[list[BrowserSpan] | None] = ContextVar("deerflow_current_spans", default=None)
+_current_spans: ContextVar[list[BrowserSpan] | None] = ContextVar("nova_current_spans", default=None)
 
 
 @dataclass

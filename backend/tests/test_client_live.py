@@ -1,4 +1,4 @@
-"""Live integration tests for DeerFlowClient with real API.
+"""Live integration tests for NovaClient with real API.
 
 These tests require a working config.yaml with valid API credentials.
 They are skipped in CI and must be run explicitly:
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from support.live_gate import live_skip_reason
 
-from nova.client import DeerFlowClient, StreamEvent
+from nova.client import NovaClient, StreamEvent
 from nova.sandbox.security import is_host_bash_allowed
 from nova.uploads.manager import PathTraversalError
 
@@ -32,8 +32,8 @@ if _skip_reason:
 
 @pytest.fixture(scope="module")
 def client():
-    """Create a real DeerFlowClient (no mocks)."""
-    return DeerFlowClient(thinking_enabled=False)
+    """Create a real NovaClient (no mocks)."""
+    return NovaClient(thinking_enabled=False)
 
 
 @pytest.fixture

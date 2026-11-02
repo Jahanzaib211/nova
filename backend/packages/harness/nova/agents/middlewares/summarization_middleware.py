@@ -1,4 +1,4 @@
-"""Summarization middleware extensions for DeerFlow."""
+"""Summarization middleware extensions for Nova."""
 
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ class _SkillBundle:
     skill_key: str
 
 
-class DeerFlowSummarizationMiddleware(SummarizationMiddleware):
+class NovaSummarizationMiddleware(SummarizationMiddleware):
     """Summarization middleware with pre-compression hook dispatch and skill rescue."""
 
     def __init__(
@@ -442,3 +442,7 @@ class DeerFlowSummarizationMiddleware(SummarizationMiddleware):
             except Exception:
                 hook_name = getattr(hook, "__name__", None) or type(hook).__name__
                 logger.exception("before_summarization hook %s failed", hook_name)
+
+
+# Pre-rename name (Nova was forked from DeerFlow); kept as an alias for one release.
+DeerFlowSummarizationMiddleware = NovaSummarizationMiddleware

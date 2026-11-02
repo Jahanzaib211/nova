@@ -467,7 +467,7 @@ def test_create_summarization_middleware_uses_configured_model_alias(monkeypatch
 
     monkeypatch.setattr(lead_agent_module, "get_app_config", _raise_get_app_config)
     monkeypatch.setattr(lead_agent_module, "create_chat_model", _fake_create_chat_model)
-    monkeypatch.setattr(lead_agent_module, "DeerFlowSummarizationMiddleware", lambda **kwargs: kwargs)
+    monkeypatch.setattr(lead_agent_module, "NovaSummarizationMiddleware", lambda **kwargs: kwargs)
 
     middleware = lead_agent_module._create_summarization_middleware(app_config=app_config)
 
@@ -493,7 +493,7 @@ def test_create_summarization_middleware_uses_frontend_supported_update_key(monk
 
     assert middleware is not None
     update_key = f"{type(middleware).__name__}.before_model"
-    assert update_key == "DeerFlowSummarizationMiddleware.before_model"
+    assert update_key == "NovaSummarizationMiddleware.before_model"
 
 
 def test_create_summarization_middleware_threads_resolved_app_config_to_model(monkeypatch):
@@ -513,7 +513,7 @@ def test_create_summarization_middleware_threads_resolved_app_config_to_model(mo
 
     monkeypatch.setattr(lead_agent_module, "get_app_config", lambda: fallback_app_config)
     monkeypatch.setattr(lead_agent_module, "create_chat_model", _fake_create_chat_model)
-    monkeypatch.setattr(lead_agent_module, "DeerFlowSummarizationMiddleware", lambda **kwargs: kwargs)
+    monkeypatch.setattr(lead_agent_module, "NovaSummarizationMiddleware", lambda **kwargs: kwargs)
 
     lead_agent_module._create_summarization_middleware()
 

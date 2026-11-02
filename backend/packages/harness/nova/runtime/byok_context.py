@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar, Token
 
-_current_byok_api_key: ContextVar[str | None] = ContextVar("deerflow_byok_api_key", default=None)
+_current_byok_api_key: ContextVar[str | None] = ContextVar("nova_byok_api_key", default=None)
 
 
 def set_byok_api_key(key: str | None) -> Token[str | None]:

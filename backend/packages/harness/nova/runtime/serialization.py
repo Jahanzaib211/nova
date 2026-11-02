@@ -107,7 +107,7 @@ def strip_data_url_image_blocks(messages: list[dict[str, Any]]) -> list[dict[str
     return result
 
 
-def strip_deerflow_error_fallback_messages(messages: list[Any]) -> list[Any]:
+def strip_nova_error_fallback_messages(messages: list[Any]) -> list[Any]:
     """Drop synthetic error-fallback messages from a message list.
 
     ``LLMErrorHandlingMiddleware`` injects a synthetic AIMessage when the LLM
@@ -155,7 +155,7 @@ def serialize_channel_values_for_api(channel_values: dict[str, Any]) -> dict[str
 
     Convenience wrapper combining :func:`serialize_channel_values` with
     :func:`strip_data_url_image_blocks` and
-    :func:`strip_deerflow_error_fallback_messages`.  Use this in all REST
+    :func:`strip_nova_error_fallback_messages`.  Use this in all REST
     endpoints that return channel values to the frontend so that
     ``data:``-scheme base64 image payloads and synthetic LLM error
     fallbacks are never sent over the wire.
@@ -163,7 +163,7 @@ def serialize_channel_values_for_api(channel_values: dict[str, Any]) -> dict[str
     result = serialize_channel_values(channel_values)
     if isinstance(result.get("messages"), list):
         result["messages"] = strip_data_url_image_blocks(result["messages"])
-        result["messages"] = strip_deerflow_error_fallback_messages(result["messages"])
+        result["messages"] = strip_nova_error_fallback_messages(result["messages"])
     return result
 
 
@@ -190,3 +190,7 @@ def serialize(obj: Any, *, mode: str = "") -> Any:
         # must drop base64 image payloads the same way the REST endpoints do.
         return serialize_channel_values_for_api(obj) if isinstance(obj, dict) else serialize_lc_object(obj)
     return serialize_lc_object(obj)
+
+
+# Pre-rename name (Nova was forked from DeerFlow); kept as an alias for one release.
+strip_deerflow_error_fallback_messages = strip_nova_error_fallback_messages

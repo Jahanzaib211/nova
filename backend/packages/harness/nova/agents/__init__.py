@@ -4,7 +4,7 @@ from .features import Next, Prev, RuntimeFeatures
 from .thread_state import SandboxState, ThreadState
 
 if TYPE_CHECKING:
-    from .factory import create_deerflow_agent
+    from .factory import create_deerflow_agent, create_nova_agent
     from .lead_agent import make_lead_agent
     from .lead_agent.prompt import prime_enabled_skills_cache
 
@@ -16,12 +16,15 @@ if TYPE_CHECKING:
 # priming moved to lead_agent/__init__, so it still runs when LangGraph
 # resolves make_lead_agent for graph registration.
 _LAZY_EXPORTS = {
+    "create_nova_agent": ("nova.agents.factory", "create_nova_agent"),
+    # Pre-rename alias, kept for one release.
     "create_deerflow_agent": ("nova.agents.factory", "create_deerflow_agent"),
     "make_lead_agent": ("nova.agents.lead_agent", "make_lead_agent"),
     "prime_enabled_skills_cache": ("nova.agents.lead_agent.prompt", "prime_enabled_skills_cache"),
 }
 
 __all__ = [
+    "create_nova_agent",
     "create_deerflow_agent",
     "RuntimeFeatures",
     "Next",

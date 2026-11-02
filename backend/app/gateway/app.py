@@ -58,7 +58,7 @@ from app.gateway.routers import (
 from app.gateway.routers import (
     voice as voice_router,
 )
-from nova.config import app_config as deerflow_app_config
+from nova.config import app_config as nova_app_config
 from nova.config.app_config import apply_logging_level
 from nova.config.env import getenv_compat
 
@@ -69,8 +69,8 @@ from nova.config.env import getenv_compat
 # event loop inside resolve_agent_factory().
 import nova.agents.lead_agent  # noqa: F401, E402  isort: skip
 
-AppConfig = deerflow_app_config.AppConfig
-get_app_config = deerflow_app_config.get_app_config
+AppConfig = nova_app_config.AppConfig
+get_app_config = nova_app_config.get_app_config
 
 # Default logging; lifespan overrides from config.yaml log_level.
 logging.basicConfig(
@@ -341,7 +341,7 @@ def create_app() -> FastAPI:
     openapi_url = "/openapi.json" if config.enable_docs else None
 
     app = FastAPI(
-        title="DeerFlow API Gateway",
+        title="Nova API Gateway",
         default_response_class=ORJSONResponse,
         description="""
 ## DeerFlow API Gateway
@@ -394,7 +394,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
             },
             {
                 "name": "threads",
-                "description": "Manage DeerFlow thread-local filesystem data",
+                "description": "Manage Nova thread-local filesystem data",
             },
             {
                 "name": "agents",

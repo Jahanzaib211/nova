@@ -10,7 +10,7 @@ Async usage (FastAPI lifespan)::
     async with make_store() as store:
         app.state.store = store
 
-Sync usage (CLI / DeerFlowClient)::
+Sync usage (CLI / NovaClient)::
 
     from nova.runtime.store import get_store, store_context
 

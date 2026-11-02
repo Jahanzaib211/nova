@@ -12,7 +12,7 @@ not a cosmetic bug.
 a reader always sees either the old file or the fully-written new one,
 never a partial write. This is the same tempfile-then-replace pattern
 already used by ``ChannelStore``, ``ChannelRuntimeConfigStore``,
-``DeerFlowClient._atomic_write_json``, ``MemoryStorage``, and
+``NovaClient._atomic_write_json``, ``MemoryStorage``, and
 ``save_runtime_model_dicts`` — centralized here so new call sites reuse
 it instead of re-deriving (and potentially getting wrong) the same
 try/except/cleanup boilerplate.

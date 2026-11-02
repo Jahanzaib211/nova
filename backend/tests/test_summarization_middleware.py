@@ -13,7 +13,7 @@ from langgraph.constants import TAG_NOSTREAM
 
 from nova.agents.memory.summarization_hook import memory_flush_hook
 from nova.agents.middlewares.dynamic_context_middleware import _DYNAMIC_CONTEXT_REMINDER_KEY, DynamicContextMiddleware
-from nova.agents.middlewares.summarization_middleware import DeerFlowSummarizationMiddleware, SummarizationEvent
+from nova.agents.middlewares.summarization_middleware import NovaSummarizationMiddleware, SummarizationEvent
 from nova.config.memory_config import MemoryConfig
 
 
@@ -75,10 +75,10 @@ def _middleware(
     preserve_recent_skill_count: int = 0,
     preserve_recent_skill_tokens: int = 0,
     preserve_recent_skill_tokens_per_skill: int = 0,
-) -> DeerFlowSummarizationMiddleware:
+) -> NovaSummarizationMiddleware:
     model = MagicMock()
     model.invoke.return_value = SimpleNamespace(text="compressed summary")
-    return DeerFlowSummarizationMiddleware(
+    return NovaSummarizationMiddleware(
         model=model,
         trigger=trigger,
         keep=keep,
@@ -136,7 +136,7 @@ def test_before_summarization_hook_receives_messages_before_compression() -> Non
 
 
 def test_summarization_middleware_emits_frontend_update_key_in_agent_stream() -> None:
-    middleware = DeerFlowSummarizationMiddleware(
+    middleware = NovaSummarizationMiddleware(
         model=_StaticChatModel(text="compressed summary"),
         trigger=("messages", 4),
         keep=("messages", 2),
@@ -150,7 +150,7 @@ def test_summarization_middleware_emits_frontend_update_key_in_agent_stream() ->
 
     chunks = list(agent.stream({"messages": _messages()}, stream_mode="updates"))
     update = next(
-        (chunk["DeerFlowSummarizationMiddleware.before_model"] for chunk in chunks if "DeerFlowSummarizationMiddleware.before_model" in chunk),
+        (chunk["NovaSummarizationMiddleware.before_model"] for chunk in chunks if "NovaSummarizationMiddleware.before_model" in chunk),
         None,
     )
 
@@ -170,7 +170,7 @@ def test_summary_model_is_tagged_nostream_to_avoid_stream_pollution() -> None:
             return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
 
     model = _RecordingChatModel(text="compressed summary")
-    middleware = DeerFlowSummarizationMiddleware(
+    middleware = NovaSummarizationMiddleware(
         model=model,
         trigger=("messages", 4),
         keep=("messages", 2),
@@ -215,7 +215,7 @@ def test_summarization_does_not_mutate_shared_model_across_concurrent_runs() -> 
             return self._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
 
     model = _BlockingChatModel(text="compressed summary")
-    middleware = DeerFlowSummarizationMiddleware(
+    middleware = NovaSummarizationMiddleware(
         model=model,
         trigger=("messages", 4),
         keep=("messages", 2),
@@ -239,7 +239,7 @@ def test_summarization_does_not_mutate_shared_model_across_concurrent_runs() -> 
 def test_raw_model_is_preserved_for_parent_profile_inspection() -> None:
     """self.model must stay the original model so attribute access does not drift."""
     model = _StaticChatModel(text="compressed summary")
-    middleware = DeerFlowSummarizationMiddleware(
+    middleware = NovaSummarizationMiddleware(
         model=model,
         trigger=("messages", 4),
         keep=("messages", 2),
@@ -261,7 +261,7 @@ def test_summary_model_preserves_existing_tags_when_adding_nostream() -> None:
     preserve existing tags instead of overwriting them with just [TAG_NOSTREAM].
     """
     tagged_model = _StaticChatModel(text="compressed summary").with_config(tags=["middleware:summarize"])
-    middleware = DeerFlowSummarizationMiddleware(
+    middleware = NovaSummarizationMiddleware(
         model=tagged_model,
         trigger=("messages", 4),
         keep=("messages", 2),

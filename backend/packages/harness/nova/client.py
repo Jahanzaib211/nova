@@ -1,12 +1,12 @@
-"""DeerFlowClient — Embedded Python client for DeerFlow agent system.
+"""NovaClient — Embedded Python client for the Nova agent system.
 
 Provides direct programmatic access to DeerFlow's agent capabilities
 without requiring LangGraph Server or Gateway API processes.
 
 Usage:
-    from nova.client import DeerFlowClient
+    from nova.client import NovaClient
 
-    client = DeerFlowClient()
+    client = NovaClient()
     response = client.chat("Analyze this paper for me", thread_id="my-thread")
     print(response)
 
@@ -81,8 +81,8 @@ class StreamEvent:
     data: dict[str, Any] = field(default_factory=dict)
 
 
-class DeerFlowClient:
-    """Embedded Python client for DeerFlow agent system.
+class NovaClient:
+    """Embedded Python client for the Nova agent system.
 
     Provides direct programmatic access to DeerFlow's agent capabilities
     without requiring LangGraph Server or Gateway API processes.
@@ -99,9 +99,9 @@ class DeerFlowClient:
 
     Example::
 
-        from nova.client import DeerFlowClient
+        from nova.client import NovaClient
 
-        client = DeerFlowClient()
+        client = NovaClient()
 
         # Simple one-shot
         print(client.chat("hello"))
@@ -315,7 +315,7 @@ class DeerFlowClient:
             "type": "ai",
             "content": "",
             "id": msg_id,
-            "tool_calls": DeerFlowClient._serialize_tool_calls(tool_calls),
+            "tool_calls": NovaClient._serialize_tool_calls(tool_calls),
         }
         if additional_kwargs:
             data["additional_kwargs"] = additional_kwargs
@@ -328,7 +328,7 @@ class DeerFlowClient:
             type="messages-tuple",
             data={
                 "type": "tool",
-                "content": DeerFlowClient._extract_text(msg.content),
+                "content": NovaClient._extract_text(msg.content),
                 "name": msg.name,
                 "tool_call_id": msg.tool_call_id,
                 "id": msg.id,
@@ -341,31 +341,31 @@ class DeerFlowClient:
         if isinstance(msg, AIMessage):
             d: dict[str, Any] = {"type": "ai", "content": msg.content, "id": getattr(msg, "id", None)}
             if msg.tool_calls:
-                d["tool_calls"] = DeerFlowClient._serialize_tool_calls(msg.tool_calls)
+                d["tool_calls"] = NovaClient._serialize_tool_calls(msg.tool_calls)
             if getattr(msg, "usage_metadata", None):
                 d["usage_metadata"] = msg.usage_metadata
-            if additional_kwargs := DeerFlowClient._serialize_additional_kwargs(msg):
+            if additional_kwargs := NovaClient._serialize_additional_kwargs(msg):
                 d["additional_kwargs"] = additional_kwargs
             return d
         if isinstance(msg, ToolMessage):
             d = {
                 "type": "tool",
-                "content": DeerFlowClient._extract_text(msg.content),
+                "content": NovaClient._extract_text(msg.content),
                 "name": getattr(msg, "name", None),
                 "tool_call_id": getattr(msg, "tool_call_id", None),
                 "id": getattr(msg, "id", None),
             }
-            if additional_kwargs := DeerFlowClient._serialize_additional_kwargs(msg):
+            if additional_kwargs := NovaClient._serialize_additional_kwargs(msg):
                 d["additional_kwargs"] = additional_kwargs
             return d
         if isinstance(msg, HumanMessage):
             d = {"type": "human", "content": msg.content, "id": getattr(msg, "id", None)}
-            if additional_kwargs := DeerFlowClient._serialize_additional_kwargs(msg):
+            if additional_kwargs := NovaClient._serialize_additional_kwargs(msg):
                 d["additional_kwargs"] = additional_kwargs
             return d
         if isinstance(msg, SystemMessage):
             d = {"type": "system", "content": msg.content, "id": getattr(msg, "id", None)}
-            if additional_kwargs := DeerFlowClient._serialize_additional_kwargs(msg):
+            if additional_kwargs := NovaClient._serialize_additional_kwargs(msg):
                 d["additional_kwargs"] = additional_kwargs
             return d
         return {"type": "unknown", "content": str(msg), "id": getattr(msg, "id", None)}
@@ -567,7 +567,7 @@ class DeerFlowClient:
           heartbeats, multi-subscriber fan-out).  A single in-process
           caller with a direct iterator needs none of that.
 
-        So ``DeerFlowClient.stream()`` is a parallel, sync, in-process
+        So ``NovaClient.stream()`` is a parallel, sync, in-process
         consumer of the same ``create_agent()`` factory — not a wrapper
         around Gateway.  The two paths **should** stay in sync on which
         LangGraph stream modes they subscribe to; that invariant is
@@ -1317,3 +1317,7 @@ class DeerFlowClient:
 
         mime_type, _ = mimetypes.guess_type(actual)
         return actual.read_bytes(), mime_type or "application/octet-stream"
+
+
+# Pre-rename name (Nova was forked from DeerFlow); kept as an alias for one release.
+DeerFlowClient = NovaClient

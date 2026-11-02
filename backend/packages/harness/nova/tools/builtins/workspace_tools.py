@@ -209,7 +209,7 @@ _TEMPLATES: dict[str, dict[str, str]] = {
         # with ``Configuring Next.js via 'next.config.ts' is not supported``.
         "next.config.mjs": "/** @type {import('next').NextConfig} */\nconst nextConfig = {};\nexport default nextConfig;\n",
         "src/app/globals.css": "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
-        "src/app/layout.tsx": "import type { Metadata } from 'next'\nimport './globals.css'\nexport const metadata: Metadata = { title: 'My App', description: 'Built by DeerFlow' }\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return (<html lang=\"en\"><body>{children}</body></html>)\n}",
+        "src/app/layout.tsx": "import type { Metadata } from 'next'\nimport './globals.css'\nexport const metadata: Metadata = { title: 'My App', description: 'Built by Nova' }\nexport default function RootLayout({ children }: { children: React.ReactNode }) {\n  return (<html lang=\"en\"><body>{children}</body></html>)\n}",
         "src/app/page.tsx": 'export default function Home() {\n  return (<main className="min-h-screen p-8"><h1 className="text-4xl font-bold">My App</h1></main>)\n}',
     },
     "react-vite": {

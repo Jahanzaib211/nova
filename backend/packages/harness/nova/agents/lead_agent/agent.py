@@ -37,7 +37,7 @@ from nova.agents.middlewares.reflect_fix_middleware import ReflectFixBudgetMiddl
 from nova.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
 from nova.agents.middlewares.strip_error_fallback_middleware import StripErrorFallbackMiddleware
 from nova.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
-from nova.agents.middlewares.summarization_middleware import BeforeSummarizationHook, DeerFlowSummarizationMiddleware
+from nova.agents.middlewares.summarization_middleware import BeforeSummarizationHook, NovaSummarizationMiddleware
 from nova.agents.middlewares.title_middleware import TitleMiddleware
 from nova.agents.middlewares.todo_middleware import TodoMiddleware
 from nova.agents.middlewares.token_usage_middleware import TokenUsageMiddleware
@@ -80,7 +80,7 @@ def _resolve_model_name(requested_model_name: str | None = None, *, app_config: 
     return default_model_name
 
 
-def _create_summarization_middleware(*, app_config: AppConfig | None = None) -> DeerFlowSummarizationMiddleware | None:
+def _create_summarization_middleware(*, app_config: AppConfig | None = None) -> NovaSummarizationMiddleware | None:
     """Create and configure the summarization middleware from config."""
     resolved_app_config = app_config or get_app_config()
     config = resolved_app_config.summarization
@@ -131,11 +131,11 @@ def _create_summarization_middleware(*, app_config: AppConfig | None = None) -> 
         hooks.append(memory_flush_hook)
 
     # The logic below relies on two assumptions holding true: this factory is
-    # the sole entry point for DeerFlowSummarizationMiddleware, and the runtime
+    # the sole entry point for NovaSummarizationMiddleware, and the runtime
     # config is not expected to change after startup.
     skills_container_path = resolved_app_config.skills.container_path or "/mnt/skills"
 
-    return DeerFlowSummarizationMiddleware(
+    return NovaSummarizationMiddleware(
         **kwargs,
         skills_container_path=skills_container_path,
         skill_file_read_tool_names=config.skill_file_read_tool_names,
@@ -227,7 +227,7 @@ def build_middlewares(
     """Build the lead-agent middleware chain based on runtime configuration.
 
     Public entry point for the lead agent's full middleware composition. Used by
-    ``make_lead_agent`` and by the embedded ``DeerFlowClient`` (a lead-agent variant
+    ``make_lead_agent`` and by the embedded ``NovaClient`` (a lead-agent variant
     that needs the identical chain). Keep this name stable: it is imported across a
     module boundary, so renames/signature changes ripple into ``client.py``.
 

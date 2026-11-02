@@ -632,11 +632,11 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
     """
 
     def _drain(queue: queue_mod.Queue[str | None], text: str, cancel: threading.Event) -> None:
-        from nova.client import DeerFlowClient
+        from nova.client import NovaClient
         from nova.speech.registry import voice_agent_settings
 
         model_name, thinking_enabled = voice_agent_settings()
-        client = DeerFlowClient(model_name=model_name, thinking_enabled=thinking_enabled)
+        client = NovaClient(model_name=model_name, thinking_enabled=thinking_enabled)
         buffer = ""
         seen: dict[str, str] = {}
         stream = client.stream(text, thread_id=thread_id)

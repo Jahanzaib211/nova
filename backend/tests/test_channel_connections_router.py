@@ -494,7 +494,7 @@ def test_connect_slack_returns_binding_command_and_persists_state(tmp_path):
     assert body["mode"] == "binding_code"
     assert body["url"] is None
     assert len(body["code"]) >= 22
-    assert body["instruction"] == f"Send /connect {body['code']} to the DeerFlow Slack bot."
+    assert body["instruction"] == f"Send /connect {body['code']} to the Nova Slack bot."
 
     async def count_states():
         return await repo.count_oauth_states(owner_user_id=str(_user().id), provider="slack")
@@ -540,7 +540,7 @@ def test_connect_discord_returns_binding_command_and_persists_state(tmp_path):
     assert body["mode"] == "binding_code"
     assert body["url"] is None
     assert body["code"]
-    assert body["instruction"] == f"Send /connect {body['code']} to the DeerFlow Discord bot."
+    assert body["instruction"] == f"Send /connect {body['code']} to the Nova Discord bot."
 
     async def count_states():
         return await repo.count_oauth_states(owner_user_id=str(_user().id), provider="discord")
@@ -573,7 +573,7 @@ def test_connect_existing_binding_code_channels_return_command_and_persist_state
         assert body["mode"] == "binding_code"
         assert body["url"] is None
         assert len(body["code"]) >= 22
-        assert body["instruction"] == f"Send /connect {body['code']} to the DeerFlow {expected_display_name} bot."
+        assert body["instruction"] == f"Send /connect {body['code']} to the Nova {expected_display_name} bot."
 
         async def count_states(provider=provider):
             return await repo.count_oauth_states(owner_user_id=str(_user().id), provider=provider)
