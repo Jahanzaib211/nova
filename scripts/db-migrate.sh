@@ -28,9 +28,9 @@ else
 fi
 cd "$BACKEND_DIR"
 
-url="${DEER_FLOW_DATABASE_URL:-${DATABASE_URL:-}}"
+url="${NOVA_DATABASE_URL:-${DEER_FLOW_DATABASE_URL:-${DATABASE_URL:-}}}"
 if [ -z "$url" ]; then
-  echo "[db-migrate] no DATABASE_URL / DEER_FLOW_DATABASE_URL; nothing to migrate" >&2
+  echo "[db-migrate] no DATABASE_URL / NOVA_DATABASE_URL; nothing to migrate" >&2
   exit 0
 fi
 case "$url" in
@@ -38,17 +38,18 @@ case "$url" in
   postgres://*)   url="postgresql+asyncpg://${url#postgres://}" ;;
   sqlite://*)     url="sqlite+aiosqlite://${url#sqlite://}" ;;
 esac
-export DEER_FLOW_DATABASE_URL="$url"
+# Both names for one release: the backend reads NOVA_ first, then DEER_FLOW_.
+export NOVA_DATABASE_URL="$url" DEER_FLOW_DATABASE_URL="$url"
 
 echo "[db-migrate] create_all (new tables) …" >&2
 PYTHONPATH=. uv run --no-sync python - <<'PY'
 import asyncio, os
 from sqlalchemy.ext.asyncio import create_async_engine
-import deerflow.persistence.models  # noqa: F401
-from deerflow.persistence.base import Base
+import nova.persistence.models  # noqa: F401
+from nova.persistence.base import Base
 
 async def main():
-    engine = create_async_engine(os.environ["DEER_FLOW_DATABASE_URL"])
+    engine = create_async_engine(os.environ["NOVA_DATABASE_URL"])
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await engine.dispose()
@@ -58,5 +59,5 @@ PY
 
 echo "[db-migrate] alembic upgrade head …" >&2
 PYTHONPATH=. uv run --no-sync alembic \
-  -c packages/harness/deerflow/persistence/migrations/alembic.ini upgrade head
+  -c packages/harness/nova/persistence/migrations/alembic.ini upgrade head
 echo "[db-migrate] done" >&2

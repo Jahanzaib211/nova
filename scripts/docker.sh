@@ -12,8 +12,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DOCKER_DIR="$PROJECT_ROOT/docker"
 
-# Docker Compose command with project name
-COMPOSE_CMD="docker compose -p deer-flow-dev -f docker-compose-dev.yaml"
+# Docker Compose command with project name. The project is `nova`, or the
+# legacy `deer-flow-dev` (plus the legacy-names overlay) on a host that has not
+# been through scripts/migrate-deerflow-to-nova.sh — see scripts/lib/nova-names.sh.
+# shellcheck source=lib/nova-names.sh
+. "$SCRIPT_DIR/lib/nova-names.sh"
+if docker info >/dev/null 2>&1; then
+    nova_resolve_names "$PROJECT_ROOT"
+else
+    COMPOSE_PROJECT="${NOVA_COMPOSE_PROJECT:-nova}"
+    NOVA_LEGACY_OVERLAY=""
+fi
+COMPOSE_CMD="docker compose -p $COMPOSE_PROJECT -f docker-compose-dev.yaml${NOVA_LEGACY_OVERLAY:+ -f $NOVA_LEGACY_OVERLAY}"
 
 load_proxy_env_from_dotenv() {
     local env_file="$PROJECT_ROOT/.env"
@@ -88,9 +98,9 @@ detect_sandbox_mode() {
         }
     ' "$config_file")
 
-    if [[ "$sandbox_use" == *"deerflow.sandbox.local:LocalSandboxProvider"* ]]; then
+    if [[ "$sandbox_use" == *"sandbox.local:LocalSandboxProvider"* ]]; then
         echo "local"
-    elif [[ "$sandbox_use" == *"deerflow.community.aio_sandbox:AioSandboxProvider"* ]]; then
+    elif [[ "$sandbox_use" == *"community.aio_sandbox:AioSandboxProvider"* ]]; then
         if [ -n "$provisioner_url" ]; then
             echo "provisioner"
         else
@@ -128,7 +138,7 @@ docker_available() {
 # Initialize: pre-pull the sandbox image so first Pod startup is fast
 init() {
     echo "=========================================="
-    echo "  DeerFlow Init — Pull Sandbox Image"
+    echo "  Nova Init — Pull Sandbox Image"
     echo "=========================================="
     echo ""
 
@@ -200,7 +210,7 @@ start() {
     fi
 
     echo "=========================================="
-    echo "  Starting DeerFlow Docker Development"
+    echo "  Starting Nova Docker Development"
     echo "=========================================="
     echo ""
 
@@ -233,7 +243,7 @@ start() {
     # the default (local) and provisioner modes never expose the host daemon.
     # Mounting the socket = root-equivalent host control; see SECURITY.md.
     if [ "$sandbox_mode" = "aio" ]; then
-        local docker_socket="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
+        local docker_socket="${NOVA_DOCKER_SOCKET:-${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}}"
         if [ ! -S "$docker_socket" ]; then
             echo -e "${YELLOW}⚠ Docker socket not found at $docker_socket — AioSandboxProvider (DooD) will not work.${NC}"
             exit 1
@@ -311,10 +321,10 @@ start() {
     fi
     echo ""
     
-    # Set DEER_FLOW_ROOT for provisioner if not already set
-    if [ -z "$DEER_FLOW_ROOT" ]; then
-        export DEER_FLOW_ROOT="$PROJECT_ROOT"
-        echo -e "${BLUE}Setting DEER_FLOW_ROOT=$DEER_FLOW_ROOT${NC}"
+    # Set NOVA_ROOT (legacy DEER_FLOW_ROOT) for provisioner if not already set
+    if [ -z "${NOVA_ROOT:-}" ]; then
+        export NOVA_ROOT="${DEER_FLOW_ROOT:-$PROJECT_ROOT}"
+        echo -e "${BLUE}Setting NOVA_ROOT=$NOVA_ROOT${NC}"
         echo ""
     fi
     
@@ -326,7 +336,7 @@ start() {
             echo -e "${YELLOW}============================================================${NC}"
             echo -e "${YELLOW}  config.yaml has been created from config.example.yaml.${NC}"
             echo -e "${YELLOW}  Please edit config.yaml to set your API keys and model   ${NC}"
-            echo -e "${YELLOW}  configuration before starting DeerFlow.                  ${NC}"
+            echo -e "${YELLOW}  configuration before starting Nova.                      ${NC}"
             echo -e "${YELLOW}============================================================${NC}"
             echo ""
             echo -e "${YELLOW}  Recommended: run 'make setup' before starting Docker.    ${NC}"
@@ -358,7 +368,7 @@ start() {
     cd "$DOCKER_DIR" && $COMPOSE_CMD up --build -d --remove-orphans $services
     echo ""
     echo "=========================================="
-    echo "  DeerFlow Docker is starting!"
+    echo "  Nova Docker is starting!"
     echo "=========================================="
     echo ""
     echo "  🌐 Application: http://localhost:2026"
@@ -417,15 +427,16 @@ logs() {
 
 # Stop Docker development environment
 stop() {
-    # DEER_FLOW_ROOT is referenced in docker-compose-dev.yaml; set it before
+    # NOVA_ROOT is referenced in docker-compose-dev.yaml; set it before
     # running compose down to suppress "variable is not set" warnings.
-    if [ -z "$DEER_FLOW_ROOT" ]; then
-        export DEER_FLOW_ROOT="$PROJECT_ROOT"
+    if [ -z "${NOVA_ROOT:-}" ]; then
+        export NOVA_ROOT="${DEER_FLOW_ROOT:-$PROJECT_ROOT}"
     fi
     echo "Stopping Docker development services..."
     cd "$DOCKER_DIR" && $COMPOSE_CMD down
     echo "Cleaning up sandbox containers..."
-    "$SCRIPT_DIR/cleanup-containers.sh" deer-flow-sandbox 2>/dev/null || true
+    "$SCRIPT_DIR/cleanup-containers.sh" nova-sandbox 2>/dev/null || true
+    "$SCRIPT_DIR/cleanup-containers.sh" deer-flow-sandbox 2>/dev/null || true   # pre-rename prefix
     echo -e "${GREEN}✓ Docker services stopped${NC}"
 }
 
@@ -442,7 +453,7 @@ status() {
     sandbox_mode="$(detect_sandbox_mode)"
 
     echo "=========================================="
-    echo "  DeerFlow Docker Status"
+    echo "  Nova Docker Status"
     echo "=========================================="
     echo ""
 
@@ -454,15 +465,19 @@ status() {
 
     echo -e "${BLUE}Sandbox mode (config.yaml): ${sandbox_mode}${NC}"
 
-    local socket="${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}"
+    local socket="${NOVA_DOCKER_SOCKET:-${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}}"
     if [ -S "$socket" ]; then
         echo -e "${GREEN}✓ Host Docker socket present: ${socket}${NC}"
     else
         echo -e "${YELLOW}✗ Host Docker socket missing: ${socket}${NC}"
-        echo "  Start Docker, or set DEER_FLOW_DOCKER_SOCKET to a valid path."
+        echo "  Start Docker, or set NOVA_DOCKER_SOCKET to a valid path."
     fi
 
-    local gateway_container="deer-flow-gateway"
+    local gateway_container="nova-gateway"
+    # Pre-migration hosts still run the legacy container name.
+    if ! docker inspect "$gateway_container" >/dev/null 2>&1 && docker inspect deer-flow-gateway >/dev/null 2>&1; then
+        gateway_container="deer-flow-gateway"
+    fi
     local state
     state="$(docker inspect -f '{{.State.Status}}' "$gateway_container" 2>/dev/null || echo absent)"
     if [ "$state" = "absent" ]; then
@@ -490,7 +505,7 @@ status() {
 
     echo ""
     echo -e "${BLUE}Containers:${NC}"
-    docker ps --filter "label=com.docker.compose.project=deer-flow-dev" --format "  table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null \
+    docker ps --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --format "  table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null \
         | sed 's/^/  /'
 
     return 0
@@ -499,7 +514,7 @@ status() {
 # Restart Docker development environment
 restart() {
     echo "========================================"
-    echo "  Restarting DeerFlow Docker Services"
+    echo "  Restarting Nova Docker Services"
     echo "========================================"
     echo ""
     echo -e "${BLUE}Restarting containers...${NC}"
@@ -514,7 +529,7 @@ restart() {
 
 # Show help
 help() {
-    echo "DeerFlow Docker Management Script"
+    echo "Nova Docker Management Script"
     echo ""
     echo "Usage: $0 <command> [options]"
     echo ""

@@ -45,7 +45,7 @@ if [ -n "$EXTRAS_FLAGS" ]; then
 fi
 
 # ── Sync ────────────────────────────────────────────────────────────────────
-# `--all-packages` propagates extras into workspace members: deerflow-harness
+# `--all-packages` propagates extras into workspace members: nova-harness
 # declares its own trading / voice / postgres extras, and without this flag they
 # are silently skipped (same reason dev-entrypoint.sh uses it — PR #2584).
 # $EXTRAS_FLAGS is intentionally unquoted so each `--extra X` becomes its own arg.

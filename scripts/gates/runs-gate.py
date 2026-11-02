@@ -109,7 +109,7 @@ DETAIL_LIMIT = 20
 LATENCY_SAMPLE = 500
 
 #: The provider's own warning, emitted by
-#: ``deerflow.community.aio_sandbox.aio_sandbox_provider._register_live_instance``
+#: ``nova.community.aio_sandbox.aio_sandbox_provider._register_live_instance``
 #: every time a second provider is constructed in the same process:
 #:   "more than one AioSandboxProvider instance in this process (N) - ..."
 PROVIDER_MULTI_WARNING = re.compile(r"more than one AioSandboxProvider instance in this process \((\d+)\)")
@@ -127,6 +127,13 @@ WORKER_START = re.compile(r"Started server process \[\d+\]")
 # helpers
 # ---------------------------------------------------------------------------
 
+
+
+def _data_home(repo_root: Path) -> Path:
+    """backend/.nova, or the pre-rename backend/.deer-flow while only that exists."""
+    backend = repo_root / "backend"
+    new, legacy = backend / ".nova", backend / ".deer-flow"
+    return legacy if not new.exists() and legacy.exists() else new
 
 def check(name: str, status: str, detail: str, **extra) -> dict:
     return {"name": name, "status": status, "detail": detail, **extra}
@@ -264,6 +271,18 @@ PG_STATEMENT_TIMEOUT_MS = 5000
 _PG_UNAVAILABLE: str | None = None
 
 
+
+def _pg_containers() -> list[str]:
+    """Postgres container names to try: NOVA_PG_CONTAINER pins one; otherwise
+    nova-postgres, then the pre-rename deer-flow-postgres (so the gate keeps
+    working on a host that has not run scripts/migrate-deerflow-to-nova.sh)."""
+    pinned = os.environ.get("NOVA_PG_CONTAINER")
+    return [pinned] if pinned else ["nova-postgres", "deer-flow-postgres"]
+
+
+def _no_such_container(proc) -> bool:
+    return proc.returncode != 0 and "No such container" in (proc.stderr or "")
+
 def _psql(query: str, timeout_s: float = PSQL_TIMEOUT_S) -> str | None:
     """Run one query via the postgres container.
 
@@ -280,30 +299,33 @@ def _psql(query: str, timeout_s: float = PSQL_TIMEOUT_S) -> str | None:
     if _PG_UNAVAILABLE is not None:
         return None
     try:
-        out = subprocess.run(
-            [
-                "docker",
-                "exec",
+        for container in _pg_containers():
+            out = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-e",
+                    f"PGCONNECT_TIMEOUT={PG_CONNECT_TIMEOUT_S}",
                 "-e",
-                f"PGCONNECT_TIMEOUT={PG_CONNECT_TIMEOUT_S}",
-                "-e",
-                f"PGOPTIONS=-c statement_timeout={PG_STATEMENT_TIMEOUT_MS}",
-                os.environ.get("NOVA_PG_CONTAINER", "deer-flow-postgres"),
-                "psql",
-                "-U",
-                os.environ.get("NOVA_PG_USER", "nova"),
-                "-d",
-                os.environ.get("NOVA_PG_DB", "nova"),
-                "-tA",
-                "-F",
-                _FIELD_SEP,
-                "-c",
-                query,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-        )
+                    f"PGOPTIONS=-c statement_timeout={PG_STATEMENT_TIMEOUT_MS}",
+                    container,
+                    "psql",
+                    "-U",
+                    os.environ.get("NOVA_PG_USER", "nova"),
+                    "-d",
+                    os.environ.get("NOVA_PG_DB", "nova"),
+                    "-tA",
+                    "-F",
+                    _FIELD_SEP,
+                    "-c",
+                    query,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+            )
+            if not _no_such_container(out):
+                break
     except subprocess.TimeoutExpired:
         _PG_UNAVAILABLE = f"timed out after {timeout_s:.0f}s"
         return None
@@ -324,7 +346,7 @@ def _unavailable(dialect: Dialect) -> str:
 
 def _sqlite_rows(query: str, timeout_s: float = 5) -> list[list[str]] | None:
     """Run one query against the sqlite file, read-only."""
-    db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
+    db = _data_home(REPO_ROOT) / "data" / "deerflow.db"
     if not db.exists():
         return None
     try:

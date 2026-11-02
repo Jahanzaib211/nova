@@ -4,7 +4,7 @@ admin jobs summary (workers, queue depth, dead-letter).
 
 Distinct from jobs.json, which records the gates-daemon's own maintenance
 producers (prune, rotate) and which the ops console keys on. This one is
-about the application's job runner (P2): the deer-flow-jobs worker
+about the application's job runner (P2): the nova-jobs worker
 container behind /api/jobs.
 
     python3 scripts/gates/jobs-gate.py            # write + summary

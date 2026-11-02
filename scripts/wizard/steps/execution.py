@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from wizard.ui import ask_choice, ask_yes_no, print_header, print_info, print_warning
 
-LOCAL_SANDBOX = "deerflow.sandbox.local:LocalSandboxProvider"
-CONTAINER_SANDBOX = "deerflow.community.aio_sandbox:AioSandboxProvider"
+LOCAL_SANDBOX = "nova.sandbox.local:LocalSandboxProvider"
+CONTAINER_SANDBOX = "nova.community.aio_sandbox:AioSandboxProvider"
 
 
 @dataclass
@@ -21,7 +21,7 @@ class ExecutionStepResult:
 def run_execution_step(step_label: str = "Step 3/4") -> ExecutionStepResult:
     print_header(f"{step_label} · Execution & Safety")
     print_info(
-        "Choose how much execution power DeerFlow should have in this workspace."
+        "Choose how much execution power Nova should have in this workspace."
     )
 
     options = [

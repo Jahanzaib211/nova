@@ -25,7 +25,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MIDDLEWARES_DIR = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "agents" / "middlewares"
+_HARNESS = REPO_ROOT / "backend" / "packages" / "harness"
+# The package moved deerflow/ -> nova/; fall back while a checkout predates it.
+MIDDLEWARES_DIR = next((p for p in (_HARNESS / "nova" / "agents" / "middlewares", _HARNESS / "deerflow" / "agents" / "middlewares") if p.is_dir()), _HARNESS / "nova" / "agents" / "middlewares")
 CONSOLIDATION_MD = REPO_ROOT / "CONSOLIDATION.md"
 HOOKS_TS = REPO_ROOT / "frontend" / "src" / "core" / "threads" / "hooks.ts"
 

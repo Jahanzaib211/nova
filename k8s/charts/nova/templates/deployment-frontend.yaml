@@ -41,6 +41,8 @@ spec:
           env:
             - name: NODE_ENV
               value: "production"
+            - name: NOVA_INTERNAL_GATEWAY_BASE_URL
+              value: "http://gateway:8001"
             - name: DEER_FLOW_INTERNAL_GATEWAY_BASE_URL
               value: "http://gateway:8001"
             # Caught live going to readOnlyRootFilesystem: `pnpm start` runs

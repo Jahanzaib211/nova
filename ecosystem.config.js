@@ -1,7 +1,7 @@
 // PM2 supervisor for the nova (formerly DeerFlow) Docker dev stack.
 //
 // A single foreground `docker compose up` (no -d) so PM2 owns the lifecycle and
-// restarts the stack on crash/reboot. This MUST match the running `deerflow`
+// restarts the stack on crash/reboot. This MUST match the running `nova`
 // process and include the dood overlay so AioSandboxProvider gets the host
 // Docker socket — without it, AIO loses /var/run/docker.sock after a reboot or
 // `pm2 restart` and per-thread sandbox containers fail to start.
@@ -28,15 +28,17 @@ module.exports = {
       name: "nova",
       // Absolute path + interpreter:none so PM2 execs docker directly instead of
       // trying to require() it as a Node module.
-      // Run via a wrapper shell script so DEER_FLOW_ROOT and cwd are set
+      // Run via a wrapper shell script so NOVA_ROOT and cwd are set
       // explicitly before exec'ing docker compose. PM2's `env:` block isn't
       // reliably inherited by docker compose subprocesses — using a wrapper
       // makes the env deterministic regardless of PM2 version or fork mode.
-      script: `${require("path").resolve(__dirname, "scripts/pm2-deerflow.sh")}`,
+      script: `${require("path").resolve(__dirname, "scripts/pm2-nova.sh")}`,
       interpreter: "none",
       args: "",
       cwd: __dirname,
       env: {
+        NOVA_ROOT: __dirname,
+        // Legacy name, read by pre-rename tooling; same value. Drop after one release.
         DEER_FLOW_ROOT: __dirname,
       },
       autorestart: true,
@@ -274,7 +276,7 @@ module.exports = {
         //   WATCHDOG_ATTESTATION_HASH_DIR=/tmp/ali-ram-moat
         //   WATCHDOG_ATTESTATION_RESTART_CMD="sudo systemctl restart my-svc"
         HEALTHCHECK_CYCLE_DEADLINE_SEC: "60",
-        // While the deer-flow-autoheal sidecar runs, container/stack repairs
+        // While the autoheal sidecar (nova-autoheal) runs, container/stack repairs
         // (P2/P7/P15) only alert until the target has been unhealthy this
         // long — docker's restart policy + autoheal own container liveness
         // first, so four supervisors do not race on one container.

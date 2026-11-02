@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect Kubernetes sandbox pod memory snapshots for DeerFlow.
+"""Collect Kubernetes sandbox pod memory snapshots for Nova.
 
 This script is intentionally lightweight: it shells out to ``kubectl`` and
 emits either JSON or Markdown so maintainers can compare sandbox backends and
@@ -295,7 +295,7 @@ def build_report(
 def render_markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
     lines = [
-        "# DeerFlow Sandbox Memory Profile",
+        "# Nova Sandbox Memory Profile",
         "",
         f"- Captured at: `{report['captured_at']}`",
         f"- Namespace: `{report['namespace']}`",

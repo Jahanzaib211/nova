@@ -5,7 +5,7 @@
 #   - claude_code: `npx -y @zed-industries/claude-agent-acp` — the Claude Code
 #     agent behind the Zed ACP adapter. It reads the SAME login the `claude`
 #     CLI uses (~/.claude, mounted read-only by docker-compose.cli-auth.yaml,
-#     which scripts/pm2-deerflow.sh adds alongside this file). Nova never
+#     which scripts/pm2-nova.sh adds alongside this file). Nova never
 #     reads or forwards that credential itself; only the Claude Code binary
 #     consumes it.
 #   - openclaw: `node /opt/openclaw/openclaw.mjs acp` — the OpenClaw gateway's

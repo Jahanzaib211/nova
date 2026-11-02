@@ -94,7 +94,7 @@ db-migrate: ## Create missing tables and apply Alembic head to the app database 
 	@DATABASE_URL="$${DATABASE_URL:-postgresql://$${NOVA_PG_USER:-nova}:$${NOVA_PG_PASSWORD}@127.0.0.1:$${NOVA_PG_PORT:-5433}/$${NOVA_PG_DB:-nova}}" scripts/db-migrate.sh
 
 jobs-smoke: ## Enqueue the smoke-test job into the live stack and wait for the worker to finish it
-	docker exec deer-flow-gateway sh -c 'cd /app/backend && PYTHONPATH=. uv run --no-sync python -m app.jobs.enqueue jobs.smoke.sleep "{\"seconds\": 3}" --wait'
+	docker exec $$(docker inspect nova-gateway >/dev/null 2>&1 && echo nova-gateway || echo deer-flow-gateway) sh -c 'cd /app/backend && PYTHONPATH=. uv run --no-sync python -m app.jobs.enqueue jobs.smoke.sleep "{\"seconds\": 3}" --wait'
 
 doctor:
 	@python3 scripts/doctor.py

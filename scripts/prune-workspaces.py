@@ -3,7 +3,7 @@
 
 Why this exists
 ---------------
-Every thread gets a workspace under ``.deer-flow/users/<user>/threads/<thread>/``
+Every thread gets a workspace under ``.nova/users/<user>/threads/<thread>/``
 that the agent writes into, and nothing ever cleans it. By 2026-08-21 that was
 7.3 GB across 115 workspaces on a disk that had already been taken down once by
 unbounded growth (see ``prune-checkpoints.py`` for the 59 GB story).
@@ -69,11 +69,19 @@ REGENERABLE = frozenset(
 )
 
 
+
+def _data_home(repo_root: Path) -> Path:
+    """backend/.nova, or the pre-rename backend/.deer-flow while only that exists."""
+    backend = repo_root / "backend"
+    new, legacy = backend / ".nova", backend / ".deer-flow"
+    return legacy if not new.exists() and legacy.exists() else new
+
+
 def default_users_dir() -> Path:
-    env = os.environ.get("DEER_FLOW_DATA_DIR")
+    env = os.environ.get("NOVA_DATA_DIR") or os.environ.get("DEER_FLOW_DATA_DIR")
     if env:
         return Path(env) / "users"
-    return Path(__file__).resolve().parent.parent / "backend" / ".deer-flow" / "users"
+    return _data_home(Path(__file__).resolve().parent.parent) / "users"
 
 
 def dir_size(path: Path) -> int:

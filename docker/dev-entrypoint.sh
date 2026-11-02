@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 #
-# DeerFlow gateway dev entrypoint — runs inside the docker-compose-dev gateway
+# Nova gateway dev entrypoint — runs inside the docker-compose-dev gateway
 # container. Extracted from docker/docker-compose-dev.yaml's inline `command:`
 # (PR #2767, addressing review on Issue #2754).
 #
@@ -9,7 +9,7 @@
 #      mirroring scripts/detect_uv_extras.py for parity with local `make dev`).
 #   2. Validate each extra against [A-Za-z][A-Za-z0-9_-]* so a stray shell
 #      metacharacter in `.env` cannot reach `uv sync`.
-#   3. `uv sync --all-packages` so workspace member extras (deerflow-harness's
+#   3. `uv sync --all-packages` so workspace member extras (nova-harness's
 #      postgres extra in particular) are installed — see PR #2584.
 #   4. Self-heal: if the first sync fails, recreate .venv and retry once.
 #   5. Hand off to uvicorn with reload, replacing this shell so uvicorn becomes
@@ -78,10 +78,28 @@ fi
 # must exist before uvicorn starts so watchfiles treats it as an excluded
 # directory, not as a plain glob pattern — on Python 3.12, globbing an absolute
 # pattern raises NotImplementedError and crashes startup (#3459 / #3454). That
-# means `sandbox` must be created here too, not just `.deer-flow`.
-: "${DEER_FLOW_HOME:=/app/backend/.deer-flow}"
-export DEER_FLOW_HOME
-mkdir -p "$DEER_FLOW_HOME" /app/backend/.deer-flow /app/backend/sandbox /app/backend/tests
+# means `sandbox` must be created here too, not just the data dir.
+#
+# Data dir: NOVA_HOME (compose sets it), else the legacy DEER_FLOW_HOME, else
+# /app/backend/.nova. Both names are exported with the same value for one
+# release. The *other* of .nova / .deer-flow is excluded only if it already
+# exists: creating an empty .nova on a host that has not migrated yet would
+# make the backend's ".nova if it exists" resolution pick the empty one.
+: "${NOVA_HOME:=${DEER_FLOW_HOME:-/app/backend/.nova}}"
+DEER_FLOW_HOME="$NOVA_HOME"
+export NOVA_HOME DEER_FLOW_HOME
+mkdir -p "$NOVA_HOME" /app/backend/sandbox /app/backend/tests
+# (the `mkdir -p` of an existing path is a no-op; it keeps every absolute
+# exclude visibly pre-created, which tests/test_uvicorn_reload_exclude.py pins.)
+_data_excludes=""
+if [ -e /app/backend/.nova ]; then
+    mkdir -p /app/backend/.nova
+    _data_excludes="$_data_excludes --reload-exclude=/app/backend/.nova"
+fi
+if [ -e /app/backend/.deer-flow ]; then
+    mkdir -p /app/backend/.deer-flow
+    _data_excludes="$_data_excludes --reload-exclude=/app/backend/.deer-flow"
+fi
 
 # ── Sync dependencies (with self-heal) ──────────────────────────────────────
 
@@ -193,8 +211,8 @@ PYTHONPATH=. exec uv run uvicorn app.gateway.app:app \
     --reload-include='*.yaml' \
     --reload-include='.env' \
     --reload-exclude=/app/backend/sandbox \
-    --reload-exclude="$DEER_FLOW_HOME" \
-    --reload-exclude=/app/backend/.deer-flow \
+    --reload-exclude="$NOVA_HOME" \
+    $_data_excludes \
     --reload-exclude=/app/backend/tests \
     --timeout-graceful-shutdown 10
     # Without a graceful-shutdown bound, a reload waits forever for the UI's

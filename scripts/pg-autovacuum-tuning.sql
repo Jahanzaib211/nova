@@ -2,7 +2,7 @@
 --
 -- Apply after creating or restoring the Postgres database:
 --
---     docker exec -i deer-flow-postgres psql -U nova -d nova \
+--     docker exec -i nova-postgres psql -U nova -d nova \
 --       < scripts/pg-autovacuum-tuning.sql
 --
 -- The role and database are both `nova` (POSTGRES_USER / POSTGRES_DB on the

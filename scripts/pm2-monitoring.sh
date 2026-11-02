@@ -18,7 +18,7 @@
 # Start it manually with:  sh scripts/pm2-monitoring.sh
 set -eu
 
-COMPOSE_DIR="${DEER_FLOW_ROOT:-$(dirname "$(dirname "$0")")}/docker/monitoring"
+COMPOSE_DIR="${NOVA_ROOT:-${DEER_FLOW_ROOT:-$(dirname "$(dirname "$0")")}}/docker/monitoring"
 COMPOSE_FILE="$COMPOSE_DIR/docker-compose.yaml"
 ENV_FILE="${HOME}/.config/nova/monitoring.env"
 

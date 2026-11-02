@@ -135,6 +135,7 @@ DINGTALK_CLIENT_SECRET="$(read_env_key DINGTALK_CLIENT_SECRET)"
 kubectl create secret generic nova-secrets \
   -n "$NAMESPACE" \
   --from-literal=BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+  --from-literal=NOVA_INTERNAL_AUTH_TOKEN="$DEER_FLOW_INTERNAL_AUTH_TOKEN" \
   --from-literal=DEER_FLOW_INTERNAL_AUTH_TOKEN="$DEER_FLOW_INTERNAL_AUTH_TOKEN" \
   --from-literal=NOVA_OPS_TOKEN="$NOVA_OPS_TOKEN" \
   --from-literal=SEARXNG_SECRET_KEY="$SEARXNG_SECRET_KEY" \

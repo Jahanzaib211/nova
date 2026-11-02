@@ -348,7 +348,7 @@ def load_integrations(path: Path | None = None) -> tuple[bool, dict[str, dict]]:
 
 
 # Probe path and accepted codes per service id — mirrors
-# backend/packages/harness/deerflow/integrations/clients.py so the inventory
+# backend/packages/harness/nova/integrations/clients.py so the inventory
 # asks each service the same question its Settings card does. A config
 # `health_path` overrides, as it does there.
 SERVICE_PROBES: dict[str, tuple[str, tuple[int, ...]]] = {
@@ -390,9 +390,25 @@ def host_url(url: str) -> str | None:
 
 
 def compose_container(url: str) -> str:
-    """Container name for a compose-internal service URL (``http://searxng:8080`` → ``deer-flow-searxng``)."""
-    prefix = os.environ.get("NOVA_COMPOSE_CONTAINER_PREFIX", "deer-flow-")
+    """Container name for a compose-internal service URL (``http://searxng:8080`` → ``nova-searxng``)."""
+    prefix = os.environ.get("NOVA_COMPOSE_CONTAINER_PREFIX", "nova-")
     return prefix + (urllib.parse.urlsplit(url).hostname or "")
+
+
+#: Pre-rename container prefix; a host that has not run
+#: scripts/migrate-deerflow-to-nova.sh still carries these names.
+LEGACY_COMPOSE_CONTAINER_PREFIX = "deer-flow-"
+
+
+def _container_state(docker_ps: dict[str, dict], url: str) -> tuple[str, dict | None]:
+    """(container name, its ps entry) — the new name first, then the legacy one."""
+    endpoint = compose_container(url)
+    if endpoint in docker_ps or "NOVA_COMPOSE_CONTAINER_PREFIX" in os.environ:
+        return endpoint, docker_ps.get(endpoint)
+    legacy = LEGACY_COMPOSE_CONTAINER_PREFIX + (urllib.parse.urlsplit(url).hostname or "")
+    if legacy in docker_ps:
+        return legacy, docker_ps[legacy]
+    return endpoint, None
 
 
 def integration_group(svc: dict) -> str:
@@ -424,7 +440,7 @@ def integration_item(sid: str, svc: dict, *, docker_ps: dict[str, dict] | None =
         return item(name, kind=kind, display_name=display, health="disabled", detail=f"disabled in config.yaml ({why})", endpoint=endpoint, capabilities=[])
 
     if reachable is None:
-        state = (docker_ps or {}).get(endpoint)
+        endpoint, state = _container_state(docker_ps or {}, url)
         return item(name, kind=kind, display_name=display, health=container_health(state), detail=(state or {}).get("status", "container not found"), endpoint=endpoint, capabilities=[])
 
     _, ok_codes = SERVICE_PROBES.get(sid, ("/", (200,)))

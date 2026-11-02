@@ -6,13 +6,18 @@ metadata:
   labels:
     {{- include "nova.labels" . | nindent 4 }}
 data:
-  # DEER_FLOW_ENV=production activates the auth-disabled fail-safe in
+  # Every NOVA_<X> key is mirrored by its legacy DEER_FLOW_<X> twin (same
+  # value) for one release; the backend reads NOVA_<X> first.
+  # NOVA_ENV=production activates the auth-disabled fail-safe in
   # app/gateway/auth_disabled.py (is_explicit_production_environment()) as
   # defense in depth, independent of the explicit DEER_FLOW_AUTH_DISABLED=0
   # below — belt and suspenders, matching the plan's explicit callout not to
   # rely on the dev-friendly default.
+  NOVA_ENV: "production"
   DEER_FLOW_ENV: "production"
+  NOVA_AUTH_DISABLED: "0"
   DEER_FLOW_AUTH_DISABLED: "0"
+  NOVA_PROJECT_ROOT: "/app"
   DEER_FLOW_PROJECT_ROOT: "/app"
   # Deliberately NOT ".deer-flow" (the Compose deployment's convention) —
   # docker/provisioner/app.py hardcodes its PVC subPath as literally
@@ -26,6 +31,7 @@ data:
   # Compose's convention, verify this alignment explicitly during the
   # "Deploy and verify" pass (a real sandbox pod's file read must see what
   # the gateway wrote).
+  NOVA_HOME: "/app/backend/deerflow-pvc/deer-flow"
   DEER_FLOW_HOME: "/app/backend/deerflow-pvc/deer-flow"
   GATEWAY_ENABLE_DOCS: "true"
   # Caught live, the hard way, running 2 gateway replicas: DatabaseConfig
@@ -42,6 +48,7 @@ data:
   # var is the code's own purpose-built override for exactly this — see
   # DatabaseConfig._resolved_sqlite_dir's docstring — a config-only fix,
   # no rebuild needed.
+  NOVA_SQLITE_DIR: "/app/backend/deerflow-pvc/deer-flow/.deer-flow/data"
   DEER_FLOW_SQLITE_DIR: "/app/backend/deerflow-pvc/deer-flow/.deer-flow/data"
   # In-cluster Redis Service DNS, no auth configured (staging trust level —
   # see the comment in files/config.yaml's stream_bridge section). Resolved

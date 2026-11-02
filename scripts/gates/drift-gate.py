@@ -42,7 +42,39 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GREEN, YELLOW, RED = "green", "yellow", "red"
-NOVA_SERVICES = ("deer-flow-gateway", "deer-flow-frontend", "deer-flow-nginx")
+# Compose services whose containers the chain checks inspect. Container names
+# are nova-<svc>; until scripts/migrate-deerflow-to-nova.sh has run, a host
+# still carries the legacy deer-flow-<svc> names, so _ctr() accepts either.
+NOVA_SERVICES = ("gateway", "frontend", "nginx")
+CONTAINER_PREFIXES = ("nova-", "deer-flow-")
+COMPOSE_PROJECTS = ("nova", "deer-flow-dev")
+
+
+def _ctr(service: str) -> str:
+    """The existing container for ``service`` (nova-<svc>, else deer-flow-<svc>)."""
+    for prefix in CONTAINER_PREFIXES:
+        name = prefix + service
+        rc, out, _ = _run(["docker", "inspect", name, "--format", "{{.Name}}"], timeout=10)
+        if rc == 0 and out:
+            return name
+    return CONTAINER_PREFIXES[0] + service
+
+
+def _compose_project() -> str:
+    """NOVA_COMPOSE_PROJECT, else the first project with containers (nova, else deer-flow-dev)."""
+    explicit = os.environ.get("NOVA_COMPOSE_PROJECT", "").strip()
+    if explicit:
+        return explicit
+    for project in COMPOSE_PROJECTS:
+        rc, out, _ = _run(["docker", "ps", "-a", "-q", "--filter", f"label=com.docker.compose.project={project}"], timeout=10)
+        if rc == 0 and out.strip():
+            return project
+    return COMPOSE_PROJECTS[0]
+
+
+def _launcher_path() -> Path:
+    """The PM2 launcher (renamed from pm2-deerflow.sh, which is now a wrapper)."""
+    return REPO_ROOT / "scripts" / "pm2-nova.sh"
 
 
 def _resolve_container(name: str) -> str | None:
@@ -165,8 +197,8 @@ def check_frontend_build_freshness() -> dict:
     the working tree answers the question exactly, and needs no build-pipeline
     change or recorded marker.
     """
-    # Container name may have a compose project prefix (e.g. 48352e221a29_deer-flow-frontend)
-    container = _resolve_container("deer-flow-frontend")
+    # Container name may have a compose project prefix (e.g. 48352e221a29_nova-frontend)
+    container = _resolve_container("nova-frontend") or _resolve_container("deer-flow-frontend")
     if not container:
         return check("frontend_build", YELLOW, "frontend container not running")
     rc, image, _ = _run(
@@ -251,7 +283,7 @@ def check_frontend_build_freshness() -> dict:
         return check(
             "frontend_build",
             RED,
-            "frontend/.next/BUILD_ID is missing — the last `next build` did not finish, so deer-flow-frontend cannot be restarted and lazily loaded route chunks 500",
+            "frontend/.next/BUILD_ID is missing — the last `next build` did not finish, so the frontend container cannot be restarted and lazily loaded route chunks 500",
         )
 
     rc_h, host_hash, _ = _run(["bash", "-c", _SRC_HASH_CMD.format(path=str(src))], timeout=120)
@@ -324,7 +356,7 @@ def check_frontend_build_freshness() -> dict:
 
 
 def _acp_agents_enabled() -> bool:
-    """Mirror scripts/pm2-deerflow.sh: process env first, then `.env`."""
+    """Mirror scripts/pm2-nova.sh: process env first, then `.env`."""
     value = os.environ.get("NOVA_ACP_AGENTS")
     if value is None:
         try:
@@ -337,7 +369,7 @@ def _acp_agents_enabled() -> bool:
 
 
 def _nvidia_available() -> bool:
-    """Mirror scripts/pm2-deerflow.sh: nvidia-smi works AND the nvidia runtime is registered."""
+    """Mirror scripts/pm2-nova.sh: nvidia-smi works AND the nvidia runtime is registered."""
     try:
         rc_smi, _, _ = _run(["nvidia-smi", "-L"], timeout=15)
         if rc_smi != 0:
@@ -349,7 +381,7 @@ def _nvidia_available() -> bool:
 
 
 def _local_llm_enabled() -> bool:
-    """Mirror scripts/pm2-deerflow.sh: NOVA_LOCAL_LLM=1 from process env or .env."""
+    """Mirror scripts/pm2-nova.sh: NOVA_LOCAL_LLM=1 from process env or .env."""
     value = os.environ.get("NOVA_LOCAL_LLM")
     if value is None:
         try:
@@ -378,12 +410,12 @@ def check_compose_chain() -> dict:
     if speech_on:
         canonical.add("docker-compose.voice.yaml")
     # GPU voice overlay: only when speech is on AND Docker can hand a GPU to a
-    # container (same gate as scripts/pm2-deerflow.sh).
+    # container (same gate as scripts/pm2-nova.sh).
     if speech_on and _nvidia_available():
         canonical.add("docker-compose.voice-gpu.yaml")
     # ACP agents (Claude Code + OpenClaw inside Nova) are an opt-in pair of
     # overlays, selected by NOVA_ACP_AGENTS=1 in .env exactly as
-    # scripts/pm2-deerflow.sh selects them.
+    # scripts/pm2-nova.sh selects them.
     if _acp_agents_enabled():
         canonical.update({"docker-compose.cli-auth.yaml", "docker-compose.acp.yaml"})
     # Self-hosted LLM (Ollama on the GPU): only when NOVA_LOCAL_LLM=1 AND the
@@ -393,7 +425,8 @@ def check_compose_chain() -> dict:
 
     seen: set[str] = set()
     missing_containers = []
-    for name in NOVA_SERVICES:
+    for service in NOVA_SERVICES:
+        name = _ctr(service)
         rc, out, _ = _run(
             [
                 "docker",
@@ -411,6 +444,9 @@ def check_compose_chain() -> dict:
 
     if missing_containers and len(missing_containers) == len(NOVA_SERVICES):
         return check("compose_chain", YELLOW, "no Nova containers running")
+    # Pre-migration hosts run with the legacy-names overlay (scripts/pm2-nova.sh
+    # adds it only then); it renames nothing the chain check cares about.
+    seen.discard("docker-compose.legacy-names.yaml")
 
     if seen == canonical:
         return check("compose_chain", GREEN, f"{len(seen)} overlay(s) match the canonical chain")
@@ -423,21 +459,21 @@ def check_compose_chain() -> dict:
     return check(
         "compose_chain",
         YELLOW,
-        "; ".join(bits) + " — containers were not brought up by scripts/pm2-deerflow.sh",
+        "; ".join(bits) + " — containers were not brought up by scripts/pm2-nova.sh",
         seen=sorted(seen),
         canonical=sorted(canonical),
     )
 
 
 def _launcher_scaled_to_zero() -> set[str]:
-    """Services scripts/pm2-deerflow.sh intentionally starts with --scale N=0.
+    """Services scripts/pm2-nova.sh intentionally starts with --scale N=0.
 
     Parsed from the launcher instead of hardcoded: this set is the difference
     between "a service is down" and "a service was never meant to be up", and a
     copy here would silently rot the moment the launcher changed.
     """
     try:
-        text = (REPO_ROOT / "scripts" / "pm2-deerflow.sh").read_text()
+        text = _launcher_path().read_text()
     except OSError:
         return set()
     return set(re.findall(r"--scale\s+([A-Za-z0-9_-]+)=0\b", text))
@@ -454,7 +490,7 @@ def check_services_running() -> dict:
     leaves the rest of the chain alone.
 
     Services the launcher deliberately scales to zero are not failures. As of
-    2026-08-30 ``scripts/pm2-deerflow.sh`` runs with
+    2026-08-30 ``scripts/pm2-nova.sh`` runs with
     ``--scale provisioner=0 --scale searxng=0``, so both are *expected* absent
     and this check must not flag them -- a gate that is permanently red on an
     intentional configuration is one people learn to ignore. The scale-0 set is
@@ -478,7 +514,7 @@ def check_services_running() -> dict:
         return check("services_running", YELLOW, f"cannot read chain: {err[:120]}")
     declared = {line.strip() for line in declared_out.splitlines() if line.strip()}
 
-    rc, running_out, err = _run(["docker", "compose", "-p", "deer-flow-dev", "ps", "--services"])
+    rc, running_out, err = _run(["docker", "compose", "-p", _compose_project(), "ps", "--services"])
     if rc != 0:
         return check("services_running", YELLOW, f"cannot list running: {err[:120]}")
     running = {line.strip() for line in running_out.splitlines() if line.strip()}
@@ -499,7 +535,7 @@ def check_services_running() -> dict:
     return check(
         "services_running",
         RED,
-        f"declared but not running: {', '.join(missing)} ({len(running)}/{len(declared)} up) -- bring the stack up with scripts/pm2-deerflow.sh (pm2 restart nova), not a per-service up",
+        f"declared but not running: {', '.join(missing)} ({len(running)}/{len(declared)} up) -- bring the stack up with scripts/pm2-nova.sh (pm2 restart nova), not a per-service up",
         missing=missing,
         declared=sorted(declared),
     )
@@ -599,7 +635,8 @@ def check_restart_storm() -> dict:
     findings = []
     worst = GREEN
 
-    for name in NOVA_SERVICES:
+    for service in NOVA_SERVICES:
+        name = _ctr(service)
         rc, out, _ = _run(
             [
                 "docker",
@@ -696,8 +733,9 @@ def check_gateway_freshness() -> dict:
     file; mtime is the right instrument here because the question is literally
     "did this process start before that edit".
     """
+    gateway = _ctr("gateway")
     rc, started_at, _ = _run(
-        ["docker", "inspect", "deer-flow-gateway", "--format", "{{.State.StartedAt}}"],
+        ["docker", "inspect", gateway, "--format", "{{.State.StartedAt}}"],
         timeout=30,
     )
     if rc != 0 or not started_at.strip():
@@ -738,7 +776,7 @@ def check_gateway_freshness() -> dict:
 
     now = time.time()
     # `docker top` rejects a format without a pid column.
-    rc_p, top_out, _ = _run(["docker", "top", "deer-flow-gateway", "-eo", "pid,etimes,args"], timeout=30)
+    rc_p, top_out, _ = _run(["docker", "top", gateway, "-eo", "pid,etimes,args"], timeout=30)
     worker_start = 0.0
     if rc_p == 0:
         for line in top_out.splitlines()[1:]:
@@ -755,7 +793,7 @@ def check_gateway_freshness() -> dict:
         return check(
             "gateway_freshness",
             RED,
-            f"{newest_file} is {drift_s}s newer than the running uvicorn worker — the --reload watcher did not pick it up (wedged reloader); restart deer-flow-gateway",
+            f"{newest_file} is {drift_s}s newer than the running uvicorn worker — the --reload watcher did not pick it up (wedged reloader); restart {gateway}",
             newest_file=newest_file,
             drift_seconds=drift_s,
         )
@@ -767,7 +805,10 @@ def check_gateway_freshness() -> dict:
 
 
 # Containers whose single-file bind mounts are compared against the host.
-FILE_MOUNT_CONTAINERS = ("deer-flow-gateway", "deer-flow-jobs", "deer-flow-nginx", "deer-flow-searxng")
+# Both the nova-<svc> names and their legacy deer-flow-<svc> twins: whichever
+# does not exist is skipped (inspect fails), so the check works on either side
+# of the rename migration.
+FILE_MOUNT_CONTAINERS = tuple(f"{p}{svc}" for p in ("nova-", "deer-flow-") for svc in ("gateway", "jobs", "nginx", "searxng"))
 
 
 def check_file_mounts() -> dict:

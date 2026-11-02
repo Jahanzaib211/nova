@@ -144,6 +144,8 @@ spec:
           ports:
             - containerPort: 8001
           env:
+            - name: NOVA_EXTENSIONS_CONFIG_PATH
+              value: "/app/state/extensions_config.json"
             - name: DEER_FLOW_EXTENSIONS_CONFIG_PATH
               value: "/app/state/extensions_config.json"
             # Real bug caught live: the backend Dockerfile's final/prod
@@ -163,6 +165,8 @@ spec:
             # DEER_FLOW_RUN_CHANNELS comment. Explicit "0" here, not
             # relying on any default, since this Deployment is the one
             # that actually gets scaled to 2+ replicas.
+            - name: NOVA_RUN_CHANNELS
+              value: "0"
             - name: DEER_FLOW_RUN_CHANNELS
               value: "0"
           envFrom:
