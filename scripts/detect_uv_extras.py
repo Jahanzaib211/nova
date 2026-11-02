@@ -60,7 +60,7 @@ def parse_env_extras(value: str) -> list[str]:
 
 def find_config_file() -> Path | None:
     """Locate config.yaml using the same precedence as serve.sh."""
-    explicit = os.environ.get("DEER_FLOW_CONFIG_PATH")
+    explicit = os.environ.get("NOVA_CONFIG_PATH") or os.environ.get("DEER_FLOW_CONFIG_PATH")
     if explicit:
         candidate = Path(explicit)
         if candidate.is_file():
@@ -105,7 +105,7 @@ def _unquote(value: str) -> str:
 def section_value(lines: list[str], section: str, key: str) -> str | None:
     """Return the value of `section.key` from a flat-ish YAML, or None.
 
-    Only handles the shallow shape DeerFlow uses for these settings:
+    Only handles the shallow shape Nova uses for these settings:
         database:
           backend: postgres
     Nested mappings deeper than the immediate child level are ignored on

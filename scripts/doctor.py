@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""DeerFlow Health Check (make doctor).
+"""Nova Health Check (make doctor).
 
 Checks system requirements, configuration, LLM provider, and optional
 components, then prints an actionable report.
@@ -85,7 +85,7 @@ def _load_yaml_file(path: Path) -> dict:
 
 
 def _load_app_config(config_path: Path) -> object:
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
     return AppConfig.from_file(str(config_path))
 
@@ -391,7 +391,7 @@ def check_llm_auth(config_path: Path) -> list[CheckResult]:
             use = model.get("use", "")
             model_name = model.get("name", "default")
 
-            if use == "deerflow.models.openai_codex_provider:CodexChatModel":
+            if use.removeprefix("deerflow.").removeprefix("nova.") == "models.openai_codex_provider:CodexChatModel":
                 auth_path = Path(
                     os.environ.get("CODEX_AUTH_PATH", "~/.codex/auth.json")
                 ).expanduser()
@@ -413,7 +413,7 @@ def check_llm_auth(config_path: Path) -> list[CheckResult]:
                         )
                     )
 
-            if use == "deerflow.models.claude_provider:ClaudeChatModel":
+            if use.removeprefix("deerflow.").removeprefix("nova.") == "models.claude_provider:ClaudeChatModel":
                 credential_paths = [
                     Path(os.environ["CLAUDE_CODE_CREDENTIALS_PATH"]).expanduser()
                     for env_name in ("CLAUDE_CODE_CREDENTIALS_PATH",)
@@ -489,7 +489,7 @@ def check_web_tool(config_path: Path, *, tool_name: str, label: str) -> CheckRes
             "web_search": {"ddg_search": "DuckDuckGo (no key needed)"},
             "web_fetch": {"jina_ai": "Jina AI Reader (no key needed)"},
             "image_search": {
-                "deerflow.community.image_search.tools": "DuckDuckGo Images (no key needed)"
+                "community.image_search.tools": "DuckDuckGo Images (no key needed)"
             },
         }
         key_providers = {
@@ -735,7 +735,7 @@ def main() -> int:
         pass
 
     print()
-    print(bold("DeerFlow Health Check"))
+    print(bold("Nova Health Check"))
     print("═" * 40)
 
     sections: list[tuple[str, list[CheckResult]]] = []
@@ -800,10 +800,10 @@ def main() -> int:
     print("═" * 40)
     if total_fails == 0 and total_warns == 0:
         print(f"Status: {green('Ready')}")
-        print(f"Run {cyan('make dev')} to start DeerFlow")
+        print(f"Run {cyan('make dev')} to start Nova")
     elif total_fails == 0:
         print(f"Status: {yellow(f'Ready ({total_warns} warning(s))')}")
-        print(f"Run {cyan('make dev')} to start DeerFlow")
+        print(f"Run {cyan('make dev')} to start Nova")
     else:
         print(f"Status: {red(f'{total_fails} error(s), {total_warns} warning(s)')}")
         print("Fix the errors above, then run 'make doctor' again.")

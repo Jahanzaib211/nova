@@ -99,12 +99,16 @@ spec:
           ports:
             - containerPort: 8001   # unrouted — no Service points at this pod
           env:
+            - name: NOVA_EXTENSIONS_CONFIG_PATH
+              value: "/app/state/extensions_config.json"
             - name: DEER_FLOW_EXTENSIONS_CONFIG_PATH
               value: "/app/state/extensions_config.json"
             - name: UV_CACHE_DIR
               value: "/tmp/uv-cache"
             - name: HOME
               value: "/tmp"
+            - name: NOVA_RUN_CHANNELS
+              value: "1"
             - name: DEER_FLOW_RUN_CHANNELS
               value: "1"
           envFrom:

@@ -5,7 +5,7 @@ token_usage:
 models:
 - name: minimax-m3
   display_name: MiniMax M3
-  use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  use: nova.models.patched_minimax:PatchedChatMiniMax
   model: MiniMax-M3
   api_key: $MINIMAX_API_KEY
   base_url: https://api.minimax.io/v1
@@ -77,39 +77,39 @@ tool_groups:
 tools:
 - name: web_search
   group: web
-  use: deerflow.community.ddg_search.tools:web_search_tool
+  use: nova.community.ddg_search.tools:web_search_tool
   max_results: 5
 - name: web_fetch
   group: web
-  use: deerflow.community.jina_ai.tools:web_fetch_tool
+  use: nova.community.jina_ai.tools:web_fetch_tool
   timeout: 10
 - name: image_search
   group: web
-  use: deerflow.community.image_search.tools:image_search_tool
+  use: nova.community.image_search.tools:image_search_tool
   max_results: 5
 - name: ls
   group: file:read
-  use: deerflow.sandbox.tools:ls_tool
+  use: nova.sandbox.tools:ls_tool
 - name: read_file
   group: file:read
-  use: deerflow.sandbox.tools:read_file_tool
+  use: nova.sandbox.tools:read_file_tool
 - name: glob
   group: file:read
-  use: deerflow.sandbox.tools:glob_tool
+  use: nova.sandbox.tools:glob_tool
   max_results: 200
 - name: grep
   group: file:read
-  use: deerflow.sandbox.tools:grep_tool
+  use: nova.sandbox.tools:grep_tool
   max_results: 100
 - name: write_file
   group: file:write
-  use: deerflow.sandbox.tools:write_file_tool
+  use: nova.sandbox.tools:write_file_tool
 - name: str_replace
   group: file:write
-  use: deerflow.sandbox.tools:str_replace_tool
+  use: nova.sandbox.tools:str_replace_tool
 - name: bash
   group: bash
-  use: deerflow.sandbox.tools:bash_tool
+  use: nova.sandbox.tools:bash_tool
 tool_search:
   enabled: false
 tool_output:
@@ -153,7 +153,7 @@ uploads:
   auto_convert_documents: false
   pdf_converter: auto
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: nova.community.aio_sandbox:AioSandboxProvider
   # K8s-staging difference from the Compose deployment: provisioner_url set
   # -> AioSandboxProvider returns a RemoteSandboxBackend instead of the DooD
   # local-Docker backend (verified in aio_sandbox_provider.py — this is a
@@ -164,7 +164,7 @@ sandbox:
   provisioner_url: http://provisioner.nova-staging.svc.cluster.local:8002
   image: nova-sandbox-android:latest
   replicas: 3
-  container_prefix: deer-flow-sandbox
+  container_prefix: nova-sandbox
   bash_output_max_chars: 20000
   read_file_output_max_chars: 50000
   ls_output_max_chars: 20000

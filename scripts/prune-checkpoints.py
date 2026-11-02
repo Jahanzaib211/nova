@@ -71,6 +71,13 @@ _GREGORIAN_TO_UNIX_TICKS = int(
 )
 
 
+
+def _data_home(repo_root: Path) -> Path:
+    """backend/.nova, or the pre-rename backend/.deer-flow while only that exists."""
+    backend = repo_root / "backend"
+    new, legacy = backend / ".nova", backend / ".deer-flow"
+    return legacy if not new.exists() and legacy.exists() else new
+
 def uuid6_unix_seconds(value: str) -> float | None:
     """Unix timestamp encoded in a UUIDv6, or None if not a parseable v6.
 
@@ -342,7 +349,7 @@ def _url_from_dotenv(var: str = "DATABASE_URL") -> str | None:
 
 def default_db_path() -> Path:
     repo_root = Path(__file__).resolve().parent.parent
-    return repo_root / "backend" / ".deer-flow" / "data" / "deerflow.db"
+    return _data_home(repo_root) / "data" / "deerflow.db"
 
 
 def human_bytes(count: int) -> str:

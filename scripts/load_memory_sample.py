@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Load the Memory Settings review sample into a local DeerFlow runtime."""
+"""Load the Memory Settings review sample into a local Nova runtime."""
 
 from __future__ import annotations
 
@@ -10,12 +10,19 @@ from datetime import datetime
 from pathlib import Path
 
 
+
+def _data_home(repo_root: Path) -> Path:
+    """backend/.nova, or the pre-rename backend/.deer-flow while only that exists."""
+    backend = repo_root / "backend"
+    new, legacy = backend / ".nova", backend / ".deer-flow"
+    return legacy if not new.exists() and legacy.exists() else new
+
 def default_source(repo_root: Path) -> Path:
     return repo_root / "backend" / "docs" / "memory-settings-sample.json"
 
 
 def default_target(repo_root: Path) -> Path:
-    return repo_root / "backend" / ".deer-flow" / "memory.json"
+    return _data_home(repo_root) / "memory.json"
 
 
 def parse_args(repo_root: Path) -> argparse.Namespace:

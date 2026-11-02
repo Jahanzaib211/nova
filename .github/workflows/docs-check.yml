@@ -51,6 +51,7 @@ jobs:
             --ignore "node_modules/**" \
             --ignore "frontend/node_modules/**" \
             --ignore ".deer-flow/**" \
+            --ignore ".nova/**" \
             --ignore ".next/**" \
             --ignore "backend/.venv/**" \
             --ignore "skills/**" \

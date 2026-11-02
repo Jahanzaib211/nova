@@ -283,7 +283,7 @@ def build_producers() -> list[Producer]:
             env_float("NOVA_GATE_INVENTORY_INTERVAL", 600),
             timeout_sec=120,
         ),
-        # Application job runner (deer-flow-jobs): worker liveness, backlog,
+        # Application job runner (nova-jobs): worker liveness, backlog,
         # dead-letter, via the gateway's admin summary. Two minutes: a dead
         # worker should show within one reaper interval of the next cycle.
         Producer(

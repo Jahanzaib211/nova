@@ -11,7 +11,7 @@
 # Backend Python harness
 /backend/                              @Jahanzaib211
 /backend/app/gateway/                  @Jahanzaib211
-/backend/packages/harness/deerflow/     @Jahanzaib211
+/backend/packages/harness/nova/     @Jahanzaib211
 
 # Frontend Next.js
 /frontend/                             @Jahanzaib211
@@ -29,4 +29,4 @@
 # Security-sensitive (auth, secrets, sandbox audit)
 /backend/app/gateway/auth*/            @Jahanzaib211
 /backend/app/gateway/*security*        @Jahanzaib211
-/backend/packages/harness/deerflow/sandbox/audit.py   @Jahanzaib211
+/backend/packages/harness/nova/sandbox/audit.py   @Jahanzaib211

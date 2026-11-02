@@ -1,4 +1,4 @@
-# Self-hosted LLM for voice turns — appended by scripts/pm2-deerflow.sh when
+# Self-hosted LLM for voice turns — appended by scripts/pm2-nova.sh when
 # NOVA_LOCAL_LLM=1 (in .env) and Docker can hand a GPU to a container.
 #
 # Why: a spoken turn is judged by the silence before the first word back, and a
@@ -19,7 +19,7 @@
 services:
   ollama:
     image: ollama/ollama:0.40.5
-    container_name: deer-flow-ollama
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-ollama
     restart: unless-stopped
     # Pinned like every other service on this network. Unpinned, Docker hands
     # out the lowest free address, and after a host reboot ollama can start
@@ -27,7 +27,7 @@ services:
     # with "Address already in use", `compose up` exits, and PM2 restart-loops
     # the whole stack with the site down (2026-11-02).
     networks:
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.10
     volumes:
       - ollama-models:/root/.ollama

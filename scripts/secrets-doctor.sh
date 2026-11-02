@@ -19,7 +19,15 @@ set_count=0
 missing_count=0
 
 # Is NAME assigned a non-empty value in .env? Never echoes the value.
+# A NOVA_<X> also counts as set when only its legacy DEER_FLOW_<X> twin is.
 is_set() {
+  case "$1" in
+    NOVA_*) is_set_raw "$1" || is_set_raw "DEER_FLOW_${1#NOVA_}"; return ;;
+  esac
+  is_set_raw "$1"
+}
+
+is_set_raw() {
   local name="$1"
   [ -f "$ENV_FILE" ] || return 1
   local line
@@ -31,8 +39,22 @@ is_set() {
   [ -n "$value" ]
 }
 
-# Read a NON-SECRET flag (e.g. DEER_FLOW_AUTH_DISABLED) for the safety checks.
+# Read a NON-SECRET flag (e.g. NOVA_AUTH_DISABLED) for the safety checks.
+# NOVA_<X> wins; the legacy DEER_FLOW_<X> is read when NOVA_<X> is absent.
 flag_value() {
+  local name="$1"
+  case "$name" in
+    NOVA_*)
+      local v
+      v="$(flag_value_raw "$name")"
+      if [ -z "$v" ]; then v="$(flag_value_raw "DEER_FLOW_${name#NOVA_}")"; fi
+      printf '%s' "$v"
+      return 0 ;;
+  esac
+  flag_value_raw "$name"
+}
+
+flag_value_raw() {
   local name="$1"
   [ -f "$ENV_FILE" ] || return 0
   local line
@@ -66,7 +88,7 @@ fi
 
 section "Auth & session"
 row BETTER_AUTH_SECRET            "required — signs sessions"
-row DEER_FLOW_INTERNAL_AUTH_TOKEN "required in prod — internal calls"
+row NOVA_INTERNAL_AUTH_TOKEN "required in prod — internal calls (legacy name: DEER_FLOW_INTERNAL_AUTH_TOKEN)"
 row NOVA_OPS_TOKEN                "unset = /ops auth DISABLED"
 row AUTH_JWT_SECRET               "optional — auto-generated if unset"
 row NOVA_BYOK_SECRET              "UNRECOVERABLE if lost"
@@ -103,7 +125,8 @@ row DATABASE_URL "only needed with database.backend: postgres"
 row REDIS_URL    "set by ConfigMap in k8s"
 
 section "Files that hold secrets outside .env"
-for f in "$REPO_ROOT/backend/.deer-flow/.jwt_secret" \
+for f in "$REPO_ROOT/backend/.nova/.jwt_secret" \
+         "$REPO_ROOT/backend/.deer-flow/.jwt_secret" \
          "/etc/cloudflared/env" \
          "$REPO_ROOT/docker/monitoring/monitoring.env"; do
   if [ -e "$f" ]; then
@@ -117,18 +140,18 @@ done
 section "Safety checks"
 problems=0
 
-auth_disabled="$(flag_value DEER_FLOW_AUTH_DISABLED)"
-env_name="$(flag_value DEER_FLOW_ENV)"
+auth_disabled="$(flag_value NOVA_AUTH_DISABLED)"
+env_name="$(flag_value NOVA_ENV)"
 if [ "$auth_disabled" = "1" ]; then
-  echo "  $(red 'DANGER') DEER_FLOW_AUTH_DISABLED=1 — anyone can act as the default user"
+  echo "  $(red 'DANGER') NOVA_AUTH_DISABLED=1 — anyone can act as the default user"
   problems=$((problems + 1))
 else
   echo "  $(green '  ok  ') auth is enabled"
 fi
 
 if [ "$env_name" = "production" ] || [ "$env_name" = "prod" ]; then
-  echo "  $(green '  ok  ') DEER_FLOW_ENV=$env_name (auth-disabled mode is refused here)"
-  dim "         note: local test harnesses must set DEER_FLOW_ENV=test or they will 401"; echo
+  echo "  $(green '  ok  ') NOVA_ENV=$env_name (auth-disabled mode is refused here)"
+  dim "         note: local test harnesses must set NOVA_ENV=test or they will 401"; echo
 fi
 
 if ! is_set NOVA_OPS_TOKEN; then
