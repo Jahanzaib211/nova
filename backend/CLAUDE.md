@@ -348,6 +348,8 @@ CORS is same-origin by default when requests enter through nginx on port 2026. S
 - Store-only hydrated runs are readable history. If the current worker has no in-memory task/control state for that run, cancellation APIs can return 409 because this worker cannot stop the task.
 - `POST /wait` (both thread-scoped and `/api/runs/wait`) drains the stream bridge via `wait_for_run_completion()` instead of bare `await record.task`, so it honours the run's `on_disconnect` setting and cancels the background run on real client disconnect rather than returning a stale checkpoint (issue #3265).
 
+**RunJournal liveness** (`runtime/journal.py`): besides the event-driven heartbeat in `_put`, the journal arms an owner-loop timer (`LIVENESS_TICK_SECONDS`, 60 s) that writes a `run.heartbeat` (`source: "timer"`, `idle_seconds`) when none went out for a full interval and flushes the buffer, so a run stuck in one long tool call still proves liveness and sub-threshold events still reach the store. The timer does not count as activity (`last_activity_age_seconds` measures real events) and the final `flush()` cancels it. `tests/test_journal_periodic_flush.py`.
+
 Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runtime, all other `/api/*` → Gateway REST APIs.
 
 ### Sandbox System (`packages/harness/nova/sandbox/`)

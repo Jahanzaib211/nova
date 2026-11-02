@@ -71,6 +71,13 @@ FLUSH_DEADLINE_WRITE_TIMEOUTS = 3
 # journal still writing" and keeps a full-day run under ~1.4k rows.
 HEARTBEAT_INTERVAL_SECONDS = 60.0
 
+# How often the owner-loop liveness timer fires (see ``_liveness_tick``). The
+# heartbeat inside ``_put`` only fires when *some* event arrives, so a run
+# parked in one long tool call -- the case liveness exists for -- wrote
+# nothing at all, and events below ``flush_threshold`` sat in memory with it.
+# The timer writes a heartbeat (and flushes the buffer) on wall-clock time.
+LIVENESS_TICK_SECONDS = HEARTBEAT_INTERVAL_SECONDS
+
 
 def _gates(task: asyncio.Task | None, loop: asyncio.AbstractEventLoop) -> bool:
     """Whether an in-flight task should hold back new writes on *loop*.
@@ -112,6 +119,7 @@ class RunJournal(BaseCallbackHandler):
         write_timeout: float = DEFAULT_WRITE_TIMEOUT,
         max_buffer_events: int = DEFAULT_MAX_BUFFER_EVENTS,
         flush_deadline: float | None = None,
+        liveness_interval: float | None = LIVENESS_TICK_SECONDS,
     ):
         super().__init__()
         self.run_id = run_id
@@ -167,6 +175,15 @@ class RunJournal(BaseCallbackHandler):
         self._last_activity_mono = time.monotonic()
         self._started_mono = self._last_activity_mono
         self._last_heartbeat_mono = self._last_activity_mono
+
+        # Owner-loop liveness timer: a heartbeat + flush every
+        # ``liveness_interval`` seconds while the run is active, cancelled by
+        # the final ``flush()``. Needs an owner loop to run on; a journal built
+        # outside a loop (embedded callers, sync tests) has none.
+        self._liveness_interval = liveness_interval if liveness_interval and liveness_interval > 0 else None
+        self._liveness_handle: asyncio.TimerHandle | None = None
+        self._liveness_stopped = False
+        self._arm_liveness_timer()
 
         # Token accumulators
         self._total_input_tokens = 0
@@ -484,12 +501,7 @@ class RunJournal(BaseCallbackHandler):
             # Record the heartbeat BEFORE we append it, so the call below
             # cannot re-trigger this branch (no recursion).
             self._last_heartbeat_mono = self._last_activity_mono
-            heartbeat_metadata = {
-                "elapsed_seconds": round(self._last_activity_mono - self._started_mono, 1),
-                "llm_call_count": self._llm_call_count,
-                "total_tokens": self._total_tokens,
-                "buffered_events": len(self._buffer),
-            }
+            heartbeat_metadata = self._heartbeat_metadata(self._last_activity_mono)
         self._buffer.append(
             {
                 "thread_id": self.thread_id,
@@ -519,6 +531,71 @@ class RunJournal(BaseCallbackHandler):
         # quiet (a long tool call), which is when liveness matters.
         if heartbeat_metadata is not None or event_type == "run.heartbeat" or len(self._buffer) >= self._flush_threshold:
             self._flush_sync()
+
+    def _heartbeat_metadata(self, now: float) -> dict:
+        return {
+            "elapsed_seconds": round(now - self._started_mono, 1),
+            "llm_call_count": self._llm_call_count,
+            "total_tokens": self._total_tokens,
+            "buffered_events": len(self._buffer),
+        }
+
+    def _arm_liveness_timer(self) -> None:
+        owner = self._owner_loop
+        if self._liveness_interval is None or self._liveness_stopped or owner is None or owner.is_closed():
+            return
+        try:
+            self._liveness_handle = owner.call_later(self._liveness_interval, self._liveness_tick)
+        except RuntimeError:
+            # call_later from a thread other than the owner's is not allowed;
+            # the journal is always built on its owner loop, so this only
+            # guards a loop that closed in between.
+            self._liveness_handle = None
+
+    def _stop_liveness_timer(self) -> None:
+        self._liveness_stopped = True
+        if self._liveness_handle is not None:
+            self._liveness_handle.cancel()
+            self._liveness_handle = None
+
+    def _liveness_tick(self) -> None:
+        """Owner-loop timer: prove the run is alive even when it emits nothing.
+
+        Writes a ``run.heartbeat`` when none has gone out for a full interval
+        (``source: "timer"``, with ``idle_seconds`` since the last real event)
+        and flushes whatever is buffered, so events below the threshold reach
+        the store on time too. Does not count as activity:
+        ``last_activity_age_seconds`` keeps measuring real events, so a
+        watchdog can still tell "alive but stuck in one call" from "busy".
+        Never raises -- a timer error must not surface in the run.
+        """
+        self._liveness_handle = None
+        if self._liveness_stopped:
+            return
+        try:
+            now = time.monotonic()
+            if now - self._last_heartbeat_mono >= HEARTBEAT_INTERVAL_SECONDS:
+                self._last_heartbeat_mono = now
+                metadata = self._heartbeat_metadata(now)
+                metadata["idle_seconds"] = round(now - self._last_activity_mono, 1)
+                metadata["source"] = "timer"
+                self._buffer.append(
+                    {
+                        "thread_id": self.thread_id,
+                        "run_id": self.run_id,
+                        "event_type": "run.heartbeat",
+                        "category": "liveness",
+                        "content": "",
+                        "metadata": metadata,
+                        "created_at": datetime.now(UTC).isoformat(),
+                    }
+                )
+                self._enforce_buffer_cap()
+            self._flush_sync()
+        except Exception:
+            logger.debug("Journal liveness tick failed for run %s", self.run_id, exc_info=True)
+        finally:
+            self._arm_liveness_timer()
 
     def _enforce_buffer_cap(self) -> None:
         overflow = len(self._buffer) - self._max_buffer_events
@@ -802,6 +879,8 @@ class RunJournal(BaseCallbackHandler):
         """
         loop = asyncio.get_running_loop()
         deadline = time.monotonic() + self._flush_deadline
+        # The run is over: no more timer heartbeats after the final flush.
+        self._stop_liveness_timer()
         # From here on this method makes every write attempt itself.
         self._cancel_retry()
         # A finishing write may schedule a follow-up (see _on_flush_done), so
