@@ -1,6 +1,6 @@
 # CI/CD Pipeline
 
-Nova's CI/CD runs on GitHub Actions with 20 workflows. You can also run the full CI locally using `nektos/act`.
+Nova's CI/CD runs on GitHub Actions with 21 workflows. You can also run the full CI locally using `nektos/act`.
 
 ## Local CI
 
