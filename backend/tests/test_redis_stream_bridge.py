@@ -222,15 +222,19 @@ async def test_maxlen_bounds_history(bridge: RedisStreamBridge):
     """Retained history should be approximately bounded by queue_maxsize."""
     small_bridge = RedisStreamBridge(client=fakeredis.FakeAsyncRedis(decode_responses=True), queue_maxsize=2)
     run_id = "run-bounded"
-    for i in range(20):
+    published = 1000
+    for i in range(published):
         await small_bridge.publish(run_id, f"event-{i}", {"i": i})
     await small_bridge.publish_end(run_id)
 
     length = await small_bridge._redis.xlen(small_bridge._key(run_id))
-    # MAXLEN ~ is approximate (Redis trims in whole macro-nodes for
-    # performance) — assert it's bounded to a small multiple of maxsize,
-    # not exactly maxsize.
-    assert length <= 10
+    # MAXLEN ~ is approximate: Redis trims only whole macro-nodes
+    # (stream-node-max-entries, default 100), so a short stream is never
+    # trimmed at all. fakeredis >= 2.40 models this faithfully. Publish far
+    # past one node and assert the real guarantee: history stays within
+    # maxsize plus one node, not proportional to what was published.
+    assert length <= 2 + 100
+    assert length < published
 
 
 # ---------------------------------------------------------------------------
