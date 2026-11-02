@@ -125,6 +125,21 @@ class RunJournal(BaseCallbackHandler):
         self._max_buffer_events = max_buffer_events
         self._flush_deadline = flush_deadline if flush_deadline is not None else FLUSH_DEADLINE_WRITE_TIMEOUTS * write_timeout
 
+        # The loop every store write and progress snapshot runs on: the run
+        # worker's, where the journal is built. Callbacks also fire on other
+        # loops -- subagents run on their own loop in another thread and
+        # inherit this handler -- and the store's database connections belong
+        # to this loop. A write scheduled on a subagent's loop could neither
+        # use nor close its connection, so each one leaked; at one per progress
+        # interval that exhausted Postgres' connection slots in six minutes
+        # (2026-11-01). Such calls are handed back here instead. ``None`` when
+        # built outside a loop (embedded callers, tests): write wherever called.
+        try:
+            self._owner_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            self._owner_loop = None
+        self._handoff_pending: set[str] = set()
+
         # Write buffer
         self._buffer: list[dict] = []
         self._dropped_events = 0
@@ -543,10 +558,10 @@ class RunJournal(BaseCallbackHandler):
             # Backing off after a failed write; the scheduled retry sends
             # these. Writing now is what turned a down store into a spin.
             return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # No event loop — keep events in buffer for later async flush.
+        loop = self._write_loop("flush", self._flush_sync)
+        if loop is None:
+            # Not on the owning loop (handed off) or no loop at all — the
+            # events stay buffered for the hand-off or the final flush.
             return
         # One write in flight at a time — avoids concurrent writes to the same
         # SQLite file. Events that arrive meanwhile stay buffered and go out
@@ -558,8 +573,9 @@ class RunJournal(BaseCallbackHandler):
         self._pending_flush_tasks = {t for t in self._pending_flush_tasks if _gates(t, loop)}
         if self._pending_flush_tasks:
             return
-        batch = self._buffer.copy()
-        self._buffer.clear()
+        # Swap rather than copy-then-clear: a callback on another thread can
+        # append between the two, and that event would be cleared unsent.
+        batch, self._buffer = self._buffer, []
         task = loop.create_task(self._flush_async(batch))
         self._pending_flush_tasks.add(task)
         task.add_done_callback(self._on_flush_done)
@@ -856,9 +872,8 @@ class RunJournal(BaseCallbackHandler):
             self._progress_dirty = True
             self._schedule_delayed_progress_flush(self._progress_flush_interval - elapsed)
             return
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
+        loop = self._write_loop("progress", self._schedule_progress_flush)
+        if loop is None:
             return
         if _gates(self._pending_progress_task, loop):
             self._progress_dirty = True
@@ -866,10 +881,40 @@ class RunJournal(BaseCallbackHandler):
         self._progress_dirty = False
         self._pending_progress_task = loop.create_task(self._flush_progress_async(snapshot=self.get_completion_data()))
 
-    def _schedule_delayed_progress_flush(self, delay: float) -> None:
+    def _write_loop(self, kind: str, retry: Callable[[], None]) -> asyncio.AbstractEventLoop | None:
+        """The loop to write on now, or ``None`` after handing the call off.
+
+        On the owning loop (or anywhere, for a journal built outside a loop)
+        that loop is returned. Called from any other loop or thread, ``retry``
+        is scheduled onto the owning loop -- at most one pending hand-off per
+        ``kind``, since a burst of subagent events needs one write, not one per
+        event -- and ``None`` tells the caller not to write here.
+        """
         try:
-            loop = asyncio.get_running_loop()
+            current: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
         except RuntimeError:
+            current = None
+        owner = self._owner_loop
+        if owner is None or current is owner:
+            return current
+        if owner.is_closed() or kind in self._handoff_pending:
+            return None
+        self._handoff_pending.add(kind)
+
+        def _run() -> None:
+            self._handoff_pending.discard(kind)
+            retry()
+
+        try:
+            owner.call_soon_threadsafe(_run)
+        except RuntimeError:
+            # The owning loop closed between the check and the call.
+            self._handoff_pending.discard(kind)
+        return None
+
+    def _schedule_delayed_progress_flush(self, delay: float) -> None:
+        loop = self._write_loop("progress-delayed", lambda: self._schedule_delayed_progress_flush(delay))
+        if loop is None:
             return
         if _gates(self._pending_progress_task, loop):
             return
