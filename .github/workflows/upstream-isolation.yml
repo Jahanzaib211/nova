@@ -1,0 +1,53 @@
+name: Upstream Isolation
+
+# Nova shares no history with DeerFlow and must never acquire it: fixes come
+# across one commit at a time as patches (scripts/gates/upstream-gate.py port).
+# Local hooks can be skipped with --no-verify; this job cannot, because it is a
+# required status check on the protected main (scripts/gates/protect-main.sh).
+# Keep the job name stable -- the branch protection refers to it by name.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upstream-isolation:
+    name: Upstream isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # The root check needs real history: a shallow clone's roots are its
+          # boundary, and the gate refuses to vouch for one.
+          fetch-depth: 0
+
+      - name: Fetch upstream commit graph (no trees, no blobs)
+        # Provenance needs ancestry only, which the commit graph answers. A
+        # named remote is required for --filter (it becomes a promisor); the
+        # push URL is disabled so the gate's own push check stays green.
+        run: |
+          git remote add upstream https://github.com/bytedance/deer-flow.git
+          git remote set-url --push upstream DISABLED
+          git fetch --filter=tree:0 --no-tags upstream main:refs/remotes/upstream/main
+
+      - name: History has only Nova's root
+        run: python3 scripts/gates/upstream-gate.py check
+
+      - name: Upstream-Ref claims are true and unique
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/gates/upstream-gate.py verify-provenance --range "origin/${{ github.base_ref }}..HEAD"
+          else
+            python3 scripts/gates/upstream-gate.py verify-provenance --all
+          fi

@@ -345,3 +345,152 @@ def test_pre_rebase_without_a_readable_parent_still_checks_the_upstream(repos, m
     assert statuses(report)["history_roots"] == gate.GREEN
     # Says where the real enforcement is, since --onto may be invisible here.
     assert "pre-push" in next(c for c in report["checks"] if c["name"] == "history_roots")["detail"]
+
+
+# --- hook resolution -----------------------------------------------------
+#
+# Hooks live in the common git dir, so one installed hook serves every
+# worktree and every branch -- including branches that predate the gate.
+
+
+def _run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, env={**os.environ, **GIT_ENV})
+
+
+def test_hook_prefers_the_gate_in_the_current_worktree(repos, tmp_path):
+    nova = repos["nova"]
+    gate.install_hooks(nova)
+    marker = tmp_path / "worktree-gate-ran"
+    stub = nova / "scripts" / "gates" / "upstream-gate.py"
+    stub.parent.mkdir(parents=True)
+    stub.write_text(f"import pathlib\npathlib.Path({str(marker)!r}).write_text('yes')\n")
+    out = _run(nova, "commit", "-q", "--allow-empty", "-m", "uses the worktree's own gate")
+    assert out.returncode == 0, out.stderr
+    assert marker.read_text() == "yes"
+
+
+def test_hook_falls_back_to_the_installed_gate(repos):
+    # The fixture repo has no scripts/gates/ of its own -- like a branch that
+    # predates the gate -- so the installed copy must still guard it.
+    nova = repos["nova"]
+    gate.install_hooks(nova)
+    out = _run(nova, "merge", "--allow-unrelated-histories", "-X", "ours", "-m", "merge upstream", "upstream/main")
+    assert out.returncode != 0
+    assert "foreign root commit" in out.stdout + out.stderr
+
+
+def test_missing_gate_fails_closed_for_pre_push(repos, tmp_path):
+    nova = repos["nova"]
+    gate.install_hooks(nova, script=tmp_path / "gone" / "upstream-gate.py")
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    git(nova, "remote", "add", "origin", str(remote))
+    out = _run(nova, "push", "-q", "origin", "main")
+    assert out.returncode != 0
+    assert "cannot find the upstream gate" in out.stderr
+    assert git(remote, "branch", "--list") == ""
+
+
+def test_missing_gate_warns_but_allows_local_commits(repos, tmp_path):
+    nova = repos["nova"]
+    gate.install_hooks(nova, script=tmp_path / "gone" / "upstream-gate.py")
+    out = _run(nova, "commit", "-q", "--allow-empty", "-m", "still allowed")
+    assert out.returncode == 0, out.stderr
+    assert "cannot find the upstream gate" in out.stderr
+    assert git(nova, "log", "-1", "--format=%s") == "still allowed"
+
+
+# --- provenance ----------------------------------------------------------
+
+
+def port_commit(repo: Path, files: dict[str, str], subject: str, ref_value: str) -> str:
+    return commit(repo, files, f"{subject}\n\nUpstream-Ref: {ref_value}")
+
+
+def test_provenance_green_for_a_real_port(repos):
+    nova = repos["nova"]
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", f"bytedance/deer-flow@{repos['clean']}")
+    report = gate.verify_provenance(nova)
+    assert report["status"] == gate.GREEN, report
+    assert report["ported"] == 1
+
+
+def test_provenance_without_trailers_is_green(repos):
+    report = gate.verify_provenance(repos["nova"])
+    assert report["status"] == gate.GREEN
+    assert report["ported"] == 0
+
+
+def test_provenance_rejects_a_malformed_value(repos):
+    nova = repos["nova"]
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", f"deer-flow@{repos['clean'][:12]}")
+    assert statuses(gate.verify_provenance(nova))["provenance_format"] == gate.RED
+
+
+def test_provenance_rejects_a_sha_that_is_not_upstream(repos):
+    nova = repos["nova"]
+    own = git(nova, "rev-parse", "HEAD")
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", f"bytedance/deer-flow@{own}")
+    assert statuses(gate.verify_provenance(nova))["provenance_upstream"] == gate.RED
+
+
+def test_provenance_rejects_the_fork_base_itself(repos):
+    nova = repos["nova"]
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", f"bytedance/deer-flow@{gate.FORK_BASE}")
+    assert statuses(gate.verify_provenance(nova))["provenance_upstream"] == gate.RED
+
+
+def test_provenance_rejects_a_duplicate_claim(repos):
+    nova = repos["nova"]
+    value = f"bytedance/deer-flow@{repos['clean']}"
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", value)
+    port_commit(nova, {"a.py": "a = 3\n"}, "fix(a): bump a again", value)
+    report = gate.verify_provenance(nova)
+    assert statuses(report)["provenance_unique"] == gate.RED
+    assert repos["clean"][:12] in next(c for c in report["checks"] if c["name"] == "provenance_unique")["detail"]
+
+
+def test_provenance_flags_a_duplicate_of_a_claim_outside_the_range(repos):
+    # A PR re-porting a commit main already carries must fail, even though the
+    # first claim is not in the PR's range.
+    nova = repos["nova"]
+    value = f"bytedance/deer-flow@{repos['clean']}"
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", value)
+    base = git(nova, "rev-parse", "HEAD")
+    port_commit(nova, {"a.py": "a = 3\n"}, "fix(a): bump a again", value)
+    assert statuses(gate.verify_provenance(nova, rev_range=f"{base}..HEAD"))["provenance_unique"] == gate.RED
+
+
+def test_provenance_ignores_old_history_outside_the_range(repos):
+    nova = repos["nova"]
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): sloppy old port", "not-a-ref")
+    base = git(nova, "rev-parse", "HEAD")
+    port_commit(nova, {"b.py": "b = 9\n"}, "fix(b): good port", f"bytedance/deer-flow@{repos['conflict']}")
+    report = gate.verify_provenance(nova, rev_range=f"{base}..HEAD")
+    assert report["status"] == gate.GREEN, report
+    assert report["ported"] == 1
+
+
+def test_provenance_is_yellow_without_the_upstream_ref(repos):
+    nova = repos["nova"]
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): bump a", f"bytedance/deer-flow@{repos['clean']}")
+    git(nova, "remote", "remove", "upstream")
+    report = gate.verify_provenance(nova)
+    check = next(c for c in report["checks"] if c["name"] == "provenance_upstream")
+    assert check["status"] == gate.YELLOW
+    assert "git fetch" in check["detail"]
+    assert report["status"] == gate.YELLOW
+
+
+def test_provenance_default_range_is_relative_to_origin_main(repos, tmp_path):
+    nova = repos["nova"]
+    port_commit(nova, {"a.py": "a = 2\n"}, "fix(a): sloppy port already on main", "not-a-ref")
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    git(nova, "remote", "add", "origin", str(remote))
+    git(nova, "push", "-q", "origin", "main")
+    git(nova, "fetch", "-q", "origin")
+    report = gate.verify_provenance(nova)
+    assert report["range"] == "origin/main..HEAD"
+    assert report["status"] == gate.GREEN
+    assert gate.verify_provenance(nova, rev_range="HEAD")["status"] == gate.RED

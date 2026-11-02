@@ -60,6 +60,25 @@ Fixes #
        Frontend E2E (if you touched frontend/): cd frontend && make test-e2e -->
 
 
+## Upstream provenance
+
+<!-- Delete this section if nothing here came from bytedance/deer-flow.
+     Ported code arrives only as patches via `scripts/gates/upstream-gate.py port`,
+     never as a merge, pull or rebase; each ported commit carries the trailers the
+     tool writes, which the "Upstream isolation" check verifies. -->
+
+- Upstream commit(s): `bytedance/deer-flow@<sha>` (upstream PR #…)
+- What Nova changed while porting, and why:
+
+
+## Self-test (AGENTS.md)
+
+- [ ] `cd backend && PYTHONPATH=../scripts uv run pytest tests/test_healthcheck_daemon.py tests/test_no_cross_references.py tests/test_upstream_gate.py -v`
+- [ ] `cd frontend && pnpm check && pnpm test`
+- [ ] `python3 scripts/gates/upstream-gate.py check` is GREEN
+- [ ] `git status` is clean
+
+
 ## AI assistance
 
 <!-- Nova is an AI project — most PRs here use AI coding tools, and that's

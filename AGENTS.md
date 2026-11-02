@@ -67,8 +67,9 @@ Before EVERY commit in this repo:
 
 ```bash
 cd backend && PYTHONPATH=../scripts \
-  uv run pytest tests/test_healthcheck_daemon.py tests/test_no_cross_references.py -v
+  uv run pytest tests/test_healthcheck_daemon.py tests/test_no_cross_references.py tests/test_upstream_gate.py -v
 cd frontend && pnpm check && pnpm test
+python3 scripts/gates/upstream-gate.py check   # GREEN
 git status                       # working tree clean
 ```
 
@@ -82,6 +83,42 @@ All must succeed. If cross-ref-check finds a violation:
 3. If you genuinely need to keep the string (e.g. `ornith` as a model id
    literal in a benchmark JSON), add the file path to the test's allow-list
    AND explain in the commit message why.
+
+## Upstream isolation — HARD RULE
+
+Nova was forked from DeerFlow `v2.0.0-rc1` and shares **no git history** with
+`bytedance/deer-flow`. It must never acquire any:
+
+- **Never** `git pull upstream`, `git merge upstream/...` (with or without
+  `--allow-unrelated-histories`), or `git rebase upstream/...`. Any of them
+  drags in ~2,300 upstream commits and silently reverts Nova's changes.
+- **Never push to upstream.** The `upstream` remote is fetch-only
+  (`git remote set-url --push upstream DISABLED`).
+- **Mine, don't merge.** Take an upstream fix as a patch:
+
+```bash
+git fetch upstream
+python3 scripts/gates/upstream-gate.py mine --security --apply clean   # what's portable
+python3 scripts/gates/upstream-gate.py port <sha>                      # stages it, never commits
+# run the tests, then:
+git commit -e -F .git/UPSTREAM_PORT_MSG    # carries Upstream-Ref / Upstream-PR / Upstream-Author
+python3 scripts/gates/upstream-gate.py skip <sha> --reason "..."      # or record a no
+```
+
+Enforcement, in layers:
+
+1. **Hooks** (`python3 scripts/gates/upstream-gate.py install-hooks`) refuse
+   merges, rebases and pushes that would add a foreign root commit. They are a
+   convenience — `--no-verify` skips them.
+2. **CI** (`.github/workflows/upstream-isolation.yml`, job `Upstream isolation`)
+   runs `check` and `verify-provenance` on every push and PR. Every
+   `Upstream-Ref:` must name a real upstream commit after the fork base, once.
+3. **Branch protection** (`scripts/gates/protect-main.sh`) makes that job a
+   required check and requires a pull request for every change to `main`, for
+   admins too. Changes reach `main` only when the owner merges the PR.
+
+Never edit `NOVA_ROOTS` in the gate to make a red check pass — a new root
+means foreign history arrived, which is exactly what the check exists to stop.
 
 ## Adding a new feature
 
