@@ -107,10 +107,10 @@ MCP servers and skill states in a single file:
 - `NOVA_CONFIG_PATH` - Override config.yaml location
 - `NOVA_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location
 - `NOVA_HOME` - Data directory (default `backend/.nova`; an existing legacy `backend/.deer-flow` is used when no `.nova` exists)
-
-All `NOVA_*` variables fall back to their old `DEER_FLOW_*` names for one release, so an existing `.env` keeps working.
 - Model API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.
 - Tool API keys: `TAVILY_API_KEY`, `GITHUB_TOKEN`, etc.
+
+All `NOVA_*` variables fall back to their old `DEER_FLOW_*` names for one release, so an existing `.env` keeps working.
 
 ### LangSmith Tracing
 
