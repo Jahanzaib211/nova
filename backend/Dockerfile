@@ -57,6 +57,24 @@ COPY docker/uv-sync-extras.sh /usr/local/bin/uv-sync-extras.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     sh /usr/local/bin/uv-sync-extras.sh /app/backend
 
+# readabilipy shells out to `node ExtractArticle.js`, whose npm tree ships
+# incomplete in the wheel (no package.json under node_modules/tldts, undici
+# likewise), so every article extraction dies with "Cannot find module" and
+# web_fetch silently returns the raw page. dev-entrypoint.sh repairs that at
+# boot because the dev venv is a volume; the production image cannot (its venv
+# is read-only to the runtime user), so repair it here, once, and keep the
+# build green if the registry is unreachable — a raw-HTML fallback is a
+# degradation, not a reason to ship no gateway.
+RUN js="$(find /app/backend/.venv -type d -path '*readabilipy/javascript' 2>/dev/null | head -1)"; \
+    if [ -n "$js" ]; then \
+      printf '<html><body><article><p>probe body text</p></article></body></html>' >/tmp/probe.html; \
+      if ! (cd "$js" && node ExtractArticle.js -i /tmp/probe.html -o /tmp/probe.json >/dev/null 2>&1); then \
+        (cd "$js" && rm -rf node_modules package-lock.json && npm install --no-audit --no-fund --silent) \
+          || echo "readabilipy JS deps could not be installed; article extraction falls back to raw HTML" >&2; \
+      fi; \
+      rm -f /tmp/probe.html /tmp/probe.json; \
+    fi
+
 # UTF-8 locale prevents UnicodeEncodeError on Chinese/emoji content in minimal
 # containers where locale configuration may be missing and the default encoding is not UTF-8.
 ENV LANG=C.UTF-8
@@ -117,6 +135,11 @@ RUN groupadd --system --gid 10001 app \
 
 # Copy backend with pre-built virtualenv from builder (Batch 2A: chown to app user)
 COPY --from=builder --chown=app:app /app/backend ./backend
+
+# Boot-time schema step (create_all, then alembic upgrade head). The dev stack
+# bind-mounts this script; the production compose file runs it from the image
+# so no repo file has to be mounted into the serving container.
+COPY --chmod=0755 scripts/db-migrate.sh /usr/local/bin/db-migrate.sh
 
 # Expose Gateway API port.
 EXPOSE 8001

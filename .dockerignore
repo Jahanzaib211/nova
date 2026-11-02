@@ -64,6 +64,10 @@ docker/
 # runtime concerns (compose files, nginx conf, dev-entrypoint.sh — that one is
 # bind-mounted, not baked, so it never needed the context).
 !docker/uv-sync-extras.sh
+# …and the boot-time schema step, which the production image bakes in (the dev
+# stack bind-mounts it instead; docker-compose.nova-prod.yaml has no mounts of
+# repo files by design).
+!scripts/db-migrate.sh
 skills/
 frontend/.next
 frontend/node_modules
@@ -74,6 +78,12 @@ backend/.coverage
 # build context; contains container-owned files unreadable by the host sender.
 backend/.deer-flow
 .deer-flow
+# Same for the post-rename data dir. Without these the live host's sessions,
+# memory and thread files were COPYed into the gateway image by `COPY backend`
+# (and root-owned entries made the build fail outright with EACCES).
+backend/.nova
+.nova
+backend/.env
 *.md
 !README.md
 !frontend/README.md

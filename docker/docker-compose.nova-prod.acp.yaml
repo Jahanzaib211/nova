@@ -1,0 +1,41 @@
+# Nova — ACP agents overlay for the PRODUCTION stack (docker-compose.nova-prod.yaml).
+#
+# Appended by scripts/pm2-nova.sh (NOVA_STACK=prod) together with
+# docker-compose.cli-auth.yaml when NOVA_ACP_AGENTS=1. The dev stack uses
+# docker-compose.acp.yaml instead; that file cannot be reused here because:
+#
+#   * The prod gateway/jobs run as uid 1000, and /root in the image is 0700
+#     root, so nothing mounted under /root (the read-only ~/.claude login, the
+#     staged ~/.claude.json) would even be reachable. A tmpfs owned by uid 1000
+#     at /root fixes traversal, and gives the /root/.claude.json symlink and the
+#     npx cache somewhere writable.
+#   * docker-compose.acp.yaml mounts the `gateway-npm-cache` volume at
+#     /root/.npm. The dev gateway (root) populated it, so uid 1000 cannot write
+#     it and `npx -y @zed-industries/claude-agent-acp` fails. Here the npm
+#     cache lives in the tmpfs: the adapter is re-fetched once per container
+#     start, then served from memory.
+#   * config.yaml's claude_code agent sets HOME=/root for the adapter, and the
+#     prod services otherwise use HOME=/tmp; pinning HOME=/root keeps the CLI's
+#     view identical across the gateway, its children and jobs.
+#
+# Security posture is unchanged from the dev overlays: the login dir and the
+# staged state are read-only binds, the OpenClaw token is one 0600 file.
+x-acp-common: &acp-common
+  tmpfs:
+    - /root:uid=1000,gid=1000,mode=0755,size=1g
+  volumes:
+    - type: bind
+      source: ${HOME:?HOME must be set}/.nova/secrets/openclaw_token
+      target: /run/nova/openclaw_token
+      read_only: true
+    - type: bind
+      source: ${NOVA_OPENCLAW_PACKAGE:-${HOME}/.npm-global/lib/node_modules/openclaw}
+      target: /opt/openclaw
+      read_only: true
+  environment:
+    - NOVA_ACP_AGENTS=1
+    - HOME=/root
+
+services:
+  gateway: *acp-common
+  jobs: *acp-common

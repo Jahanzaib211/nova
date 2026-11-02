@@ -1,9 +1,20 @@
 # Nova — production stack for the public deployment (nova.alilabsx.com).
 #
 # Usage (via PM2, which is what actually runs it):
-#   pm2 restart nova          # → scripts/pm2-nova.sh (NOVA_STACK=prod)
-# Directly:
-#   docker compose -f docker/docker-compose.nova-prod.yaml -p nova up -d
+#   NOVA_STACK=prod pm2 restart nova --update-env   # → scripts/pm2-nova.sh
+# Build first (the launcher runs --no-build):
+#   docker compose -f docker/docker-compose.nova-prod.yaml -p nova build
+# Switching the live deployment from the dev stack, with rollback and expected
+# downtime: docker/README.md, "Switching the public deployment to the prod stack".
+#
+# ── Image names ─────────────────────────────────────────────────────────────
+# gateway/jobs/frontend carry explicit `image:` names (nova-*-prod). Without
+# them compose names a build <project>-<service> — `nova-gateway`, exactly the
+# tag the running DEV stack uses (its jobs service even pins
+# nova-gateway:latest). Building this file would then re-point that tag at the
+# prod image, and the next `pm2 restart nova` of the dev stack would recreate
+# its gateway and jobs on an image with no toolchain, a different user and a
+# different layout. Separate names make building prod side-effect free.
 #
 # ── Why this file exists ────────────────────────────────────────────────────
 # The public site used to be served by docker-compose-dev.yaml + the dood and
@@ -117,7 +128,10 @@ services:
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
+        NOVA_INTERNAL_GATEWAY_BASE_URL: http://192.168.200.3:8001
         DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: http://192.168.200.3:8001
+    # See "Image names" in the header: never the dev stack's nova-frontend.
+    image: nova-frontend-prod:${NOVA_PROD_IMAGE_TAG:-latest}
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-frontend
     # `pnpm start` against the baked `next build`. No source bind mounts: the
     # prod image is self-contained, and mounting host src over it is what made
@@ -198,21 +212,45 @@ services:
         # Comma-separated; parsed by docker/uv-sync-extras.sh at build time.
         # In the dev stack this was a runtime env var consumed by
         # dev-entrypoint.sh — here the extras must be baked into the image.
-        UV_EXTRAS: ${UV_EXTRAS:-}
+        # The default was empty, which built an image WITHOUT the postgres
+        # extra: config.yaml's postgres backend then died at import. CPU
+        # `voice`, not `voice-gpu`: the GPU path also needs the CUDA 12 wheels
+        # that `make voice-libs` installs out of band, which no image has.
+        UV_EXTRAS: ${NOVA_PROD_UV_EXTRAS:-${UV_EXTRAS:-postgres,trading,voice}}
+    # See "Image names" in the header: never the dev stack's nova-gateway.
+    image: nova-gateway-prod:${NOVA_PROD_IMAGE_TAG:-latest}
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-gateway
     # Pinned IP: nginx and the frontend both address the gateway here, and the
     # bridge IP would otherwise change on every container recreation.
     networks:
       nova:
         ipv4_address: 192.168.200.3
+    # Loopback, like the dev stack: host-side probes (healthcheck daemon, the
+    # gates, `curl localhost:8001/health`) address the gateway here.
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      postgres:
+        # Healthy, not merely started: create_app() opens the database, and a
+        # Postgres still in initdb refuses the connection (2026-08-17 shape).
+        condition: service_healthy
     # No --reload, and no uv sync. `--no-sync` keeps uv from touching the baked
     # venv at startup (it would need write access we deliberately do not grant).
     # The graceful-shutdown bound stops a restart from hanging forever on the
     # UI's long-lived SSE connections.
+    #
+    # Schema first: the dev entrypoint runs scripts/db-migrate.sh on every boot
+    # (audit PROD-001: until 2026-09 nothing applied migrations on deploy), and
+    # this stack had dropped that step. Baked into the image at
+    # /usr/local/bin/db-migrate.sh; opt out with NOVA_DB_MIGRATE=0. Fatal on
+    # failure, as in dev. The ln is the cli-auth overlay's ~/.claude.json
+    # symlink (no-op unless NOVA_CLAUDE_STATE_FILE is set).
     command:
       - sh
       - -c
       - >-
+        if [ -n "$${NOVA_CLAUDE_STATE_FILE:-}" ]; then ln -sfn "$$NOVA_CLAUDE_STATE_FILE" "$${HOME}/.claude.json" || true; fi &&
+        if [ "$${NOVA_DB_MIGRATE:-1}" = "1" ]; then NOVA_BACKEND_DIR=/app/backend /usr/local/bin/db-migrate.sh; fi &&
         cd backend &&
         PYTHONPATH=. exec uv run --no-sync uvicorn app.gateway.app:app
         --host 0.0.0.0 --port 8001
@@ -278,6 +316,7 @@ services:
       - DEER_FLOW_SANDBOX_BIND_HOST=${NOVA_SANDBOX_BIND_HOST:-${DEER_FLOW_SANDBOX_BIND_HOST:-172.17.0.1}}
       - AUTH_TRUSTED_PROXIES=${AUTH_TRUSTED_PROXIES:-192.168.200.0/24}
       - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-prod}
+      - NOVA_VERSION=${DEERFLOW_VERSION:-nova-prod}
       - NOVA_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
       - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
       - NOVA_CHANNELS_LANGGRAPH_URL=${NOVA_CHANNELS_LANGGRAPH_URL:-${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}}
@@ -329,6 +368,76 @@ services:
       - "no-new-privileges:true"
     pids_limit: 512
     mem_limit: 6g
+
+  # ── Job runner ─────────────────────────────────────────────────────────────
+  # The worker behind /api/jobs (campaign sends, imports, delegate_async agent
+  # tasks). The dev stack runs it; this file did not, so switching to prod
+  # would have silently stopped every background job. Same image as the
+  # gateway (never built here), no ports, no Docker socket, so a gateway
+  # restart cannot kill an in-flight job. Waits for a *healthy* gateway because
+  # the gateway runs the schema step. Scale to zero with NOVA_JOBS_SCALE=0.
+  jobs:
+    image: nova-gateway-prod:${NOVA_PROD_IMAGE_TAG:-latest}
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-jobs
+    # Same string as docker-compose-dev.yaml's jobs command, so the cli-auth
+    # overlay's override (which prepends the ~/.claude.json link) fits both.
+    command: ["sh", "-c", "cd /app/backend && PYTHONPATH=. exec uv run --no-sync python -m app.jobs.worker"]
+    user: "1000:1000"
+    working_dir: /app
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      # Pinned: after a reboot an unpinned jobs container came up first and
+      # took the gateway's .3 (dev stack, 2026-10).
+      nova:
+        ipv4_address: 192.168.200.9
+    env_file:
+      - ../.env
+    environment:
+      # In-container paths, pinned over the host paths ../.env carries (see
+      # the gateway's note on the 2026-08-17 outage).
+      - NOVA_PROJECT_ROOT=/app
+      - DEER_FLOW_PROJECT_ROOT=/app
+      - NOVA_HOME=/app/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - DEER_FLOW_HOME=/app/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - NOVA_CONFIG_PATH=/app/backend/config.yaml
+      - DEER_FLOW_CONFIG_PATH=/app/backend/config.yaml
+      - NOVA_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
+      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/backend/extensions_config.json
+      - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
+      - NOVA_INTERNAL_AUTH_TOKEN=${NOVA_INTERNAL_AUTH_TOKEN:-${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}}
+      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${NOVA_INTERNAL_AUTH_TOKEN:-${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}}
+      - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-prod}
+      - NOVA_VERSION=${DEERFLOW_VERSION:-nova-prod}
+      - HOME=/tmp
+      - XDG_CACHE_HOME=/tmp/.cache
+      - UV_CACHE_DIR=/tmp/.cache/uv
+      - PYTHONDONTWRITEBYTECODE=1
+      - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
+      - no_proxy=${no_proxy:-}${no_proxy:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../config.yaml:/app/backend/config.yaml:ro
+      - ../extensions_config.json:/app/backend/extensions_config.json:ro
+      - ../skills:/app/skills
+      - ../backend/${NOVA_DATA_DIRNAME:-.nova}:/app/backend/${NOVA_DATA_DIRNAME:-.nova}
+    tmpfs:
+      - /tmp:size=512m
+    healthcheck:
+      test: ["CMD", "sh", "-c", "cd /app/backend && PYTHONPATH=. uv run --no-sync python -m app.jobs.healthcheck --max-age 90"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    labels:
+      - autoheal=true
+    security_opt:
+      - "no-new-privileges:true"
+    mem_limit: 3g
+    pids_limit: 256
+    restart: unless-stopped
 
   # ── Autoheal ───────────────────────────────────────────────────────────────
   # Restarts any container labelled autoheal=true when Docker reports it
@@ -435,7 +544,12 @@ services:
       - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:?Set SEARXNG_SECRET_KEY in .env}
       - SEARXNG_BASE_URL=http://searxng:8080
     networks:
-      - nova
+      nova:
+        # Static like everything else on this network (dev stack: same .6).
+        # Unpinned, IPAM hands out the lowest free address -- nginx's .2 --
+        # and whichever container starts second fails with "Address already
+        # in use".
+        ipv4_address: 192.168.200.6
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
       interval: 30s

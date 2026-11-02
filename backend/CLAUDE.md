@@ -829,9 +829,16 @@ but can never remove the dev stack's `.venv` / source bind mounts. It requires a
 built image (the launcher runs `--no-build`):
 
 ```bash
-docker compose -f docker/docker-compose.nova-prod.yaml -p nova build
-NOVA_STACK=prod pm2 restart nova --update-env
+docker compose -f docker/docker-compose.nova-prod.yaml -p nova build   # tags nova-{gateway,frontend}-prod, never the dev tags
+echo NOVA_STACK=prod >> .env && pm2 restart nova                       # the launcher reads NOVA_STACK from .env
 ```
+
+The full switch procedure — preconditions (JWT secret, uid-1000 ownership of
+`backend/.nova`), verification, rollback and expected downtime — is in
+[`docker/README.md`](../docker/README.md). The prod stack carries the same
+opt-in overlays as dev (voice on CPU, local LLM, ACP via
+`docker-compose.nova-prod.acp.yaml`), its own jobs worker, and runs the schema
+step (`db-migrate.sh`, baked into the image) before uvicorn.
 
 **Nginx routing**:
 
