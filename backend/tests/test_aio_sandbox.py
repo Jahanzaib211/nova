@@ -114,17 +114,16 @@ class TestErrorObservationRetry:
 
         assert result == "ok"
         assert len(exec_calls) == 2
-        # First attempt runs on the default session (no id).
-        assert "id" not in exec_calls[0]
-        # A fresh session was explicitly created...
-        assert len(created_ids) == 1
-        assert len(created_ids[0]) == 36  # UUID format
-        # ...and the retry targets exactly that created session, never an
+        # Every attempt runs on its own explicitly created session (so a hung
+        # command has an id kill_process can target) -- never an
         # uncreated/fabricated id (which would 404).
-        assert exec_calls[1].get("id") == created_ids[0]
-        # ...and that one-shot recovery session is released afterwards so a
-        # sandbox that keeps hitting corruption doesn't accumulate sessions.
-        assert cleaned_ids == [created_ids[0]]
+        assert len(created_ids) == 2
+        assert all(len(i) == 36 for i in created_ids)  # UUID format
+        assert created_ids[0] != created_ids[1]
+        assert [c.get("id") for c in exec_calls] == created_ids
+        # ...and each one-shot session is released afterwards so a sandbox
+        # that keeps hitting corruption doesn't accumulate sessions.
+        assert cleaned_ids == created_ids
 
     def test_cleanup_failure_does_not_mask_successful_retry(self, sandbox):
         """A failure releasing the recovery session must not lose the retry output."""

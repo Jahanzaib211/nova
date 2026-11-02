@@ -633,14 +633,26 @@ def _abort_event(runtime: Any) -> Any | None:
     return None
 
 
+def _execute_blocking(sandbox: Sandbox, command: str, cancel_event=None) -> str:
+    """The blocking exec, handing the run's stop signal to backends that take it.
+
+    Gated on ``supports_blocking_cancel`` rather than a ``TypeError`` retry:
+    a TypeError raised from inside a command that already ran would re-run it.
+    The AIO backend sets the flag (R3-3: its blocking exec held a hung
+    command until the 2 h run deadline); the local backend's blocking call
+    is bounded by the execution kernel's timeout instead.
+    """
+    if cancel_event is not None and getattr(sandbox, "supports_blocking_cancel", False):
+        return sandbox.execute_command(command, cancel_event=cancel_event)
+    return sandbox.execute_command(command)
+
+
 def _run_command_both_ways(sandbox: Sandbox, command: str, on_chunk, cancel_event=None) -> str:
     """Streaming execution with the blocking path as fallback.
 
     ``cancel_event`` is the run's stop signal, passed to backends that can
-    interrupt a running command. It is only honoured on the streaming path:
-    the blocking path hands the command to the sandbox and waits for it, and
-    the local backend's blocking call is already bounded by the execution
-    kernel's timeout.
+    interrupt a running command -- on the streaming path, and on the
+    blocking fallback for backends that advertise ``supports_blocking_cancel``.
     """
     try:
         try:
@@ -650,7 +662,7 @@ def _run_command_both_ways(sandbox: Sandbox, command: str, on_chunk, cancel_even
             return sandbox.execute_command_streaming(command, on_chunk)
     except Exception:
         logger.warning("streaming execution failed; falling back to blocking exec", exc_info=True)
-        return sandbox.execute_command(command)
+        return _execute_blocking(sandbox, command, cancel_event)
 
 
 def _stream_bash_observations(sandbox: Sandbox, sandbox_id: str, command: str, cancel_event=None) -> str:
@@ -2074,8 +2086,9 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
         if _terminal_streaming_enabled() and getattr(sandbox, "supports_streaming", False):
             raw_output = _stream_bash_observations(sandbox, sandbox_id, command, cancel_event=_abort_event(runtime))
         else:
+            cancel_event = _abort_event(runtime)
             try:
-                raw_output = sandbox.execute_command(command)
+                raw_output = _execute_blocking(sandbox, command, cancel_event)
             except SandboxError:
                 # Same released-client race the streaming path handles; one
                 # provider-mediated readopt and retry before surfacing the error.
@@ -2083,7 +2096,7 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
                 if fresh is None:
                     raise
                 sandbox = fresh
-                raw_output = sandbox.execute_command(command)
+                raw_output = _execute_blocking(sandbox, command, cancel_event)
             _write_sandbox_observation(sandbox_id, "bash", None, f"$ {command}", raw_output)
 
         # A dev server started via raw bash is invisible to the panel (no

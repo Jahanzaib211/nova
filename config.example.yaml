@@ -943,6 +943,11 @@ sandbox:
   # not subscribe ignores by spec. Leave false unless the frontend serving this
   # deployment is built from source that understands it.
   stream_terminal_output: false
+  # Wall-clock limit (seconds) on one blocking AIO sandbox command. On expiry
+  # the in-sandbox process is killed and the tool returns an explicit timeout
+  # error. Keep it well under the run deadline (2 h). 0 disables the limit;
+  # the run's Stop still ends a running command either way.
+  # command_timeout: 1800
   use: nova.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is
   # not a secure isolation boundary for shell access. Enable only for fully

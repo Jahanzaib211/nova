@@ -198,6 +198,18 @@ class SandboxConfig(BaseModel):
         description="Environment variables to inject into the sandbox container. Values starting with $ will be resolved from host environment variables.",
     )
 
+    command_timeout: int = Field(
+        default=1800,
+        ge=0,
+        description=(
+            "Wall-clock limit in seconds on one blocking sandbox command (AIO "
+            "backend). When reached the in-sandbox process is killed and the "
+            "tool returns an explicit timeout error instead of output. Without "
+            "it a hung command held its tool call -- and the run -- until the "
+            "2 h run deadline. Default 30 min, well under that deadline. Set to "
+            "0 to disable the limit (the run's stop signal still ends the command)."
+        ),
+    )
     bash_output_max_chars: int = Field(
         default=20000,
         ge=0,
