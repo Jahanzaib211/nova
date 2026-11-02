@@ -1233,6 +1233,11 @@
           "primary_key": false,
           "type": "DATETIME"
         },
+        "expires_at": {
+          "nullable": true,
+          "primary_key": false,
+          "type": "DATETIME"
+        },
         "id": {
           "nullable": false,
           "primary_key": true,

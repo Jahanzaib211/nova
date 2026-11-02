@@ -196,6 +196,29 @@ async def _migrate_orphaned_threads(store, admin_user_id: str) -> int:
     return migrated
 
 
+async def _sweep_stale_runtime_tokens(tokens) -> int:
+    """Revoke per-turn ``runtime:*`` harness tokens left live by a failed revoke.
+
+    An ACP session revokes its token when it closes; a gateway that died or
+    reloaded mid-turn never got there. Expired tokens and pre-expiry rows older
+    than one token lifetime are revoked; younger ones may belong to a session
+    still running in the jobs worker and are left to their own expiry.
+    Never fatal: startup must not depend on housekeeping.
+    """
+    if tokens is None:
+        return 0
+    try:
+        from nova.runtimes.session import runtime_token_ttl
+
+        revoked = await tokens.revoke_stale_runtime_tokens(max_age_seconds=runtime_token_ttl())
+        if revoked:
+            logger.warning("Revoked %d stale per-turn runtime harness token(s) at startup", revoked)
+        return revoked
+    except Exception:
+        logger.warning("Stale runtime-token sweep failed", exc_info=True)
+        return 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
@@ -287,6 +310,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
                 sf = get_session_factory()
                 mcp_server.tokens = HarnessTokenRepository(sf) if sf is not None else None
+                await _sweep_stale_runtime_tokens(mcp_server.tokens)
                 await mcp_server.start()
             except Exception:
                 logger.exception("Nova MCP server failed to start; /api/mcp/nova will answer 503")
