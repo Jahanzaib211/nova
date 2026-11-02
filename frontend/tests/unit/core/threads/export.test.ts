@@ -66,7 +66,7 @@ describe("formatThreadAsMarkdown", () => {
   it("drops messages marked hide_from_ui", () => {
     const hidden = human("internal system reminder", {
       additional_kwargs: { hide_from_ui: true },
-    } as Partial<Message>);
+    });
     const md = formatThreadAsMarkdown(makeThread(), [
       hidden,
       ai("public answer"),
@@ -80,7 +80,7 @@ describe("formatThreadAsMarkdown", () => {
       additional_kwargs: {
         reasoning_content: "secret chain of thought",
       },
-    } as Partial<Message>);
+    });
     const md = formatThreadAsMarkdown(makeThread(), [message]);
     expect(md).not.toContain("secret chain of thought");
     expect(md).not.toContain("Thinking");
@@ -89,7 +89,7 @@ describe("formatThreadAsMarkdown", () => {
   it("does not emit tool calls by default", () => {
     const message = ai("ok", {
       tool_calls: [{ id: "1", name: "task", args: { description: "do work" } }],
-    } as Partial<Message>);
+    });
     const md = formatThreadAsMarkdown(makeThread(), [message]);
     expect(md).not.toContain("**Tool:**");
     expect(md).not.toContain("`task`");
@@ -110,7 +110,7 @@ describe("formatThreadAsMarkdown opt-in flags", () => {
       additional_kwargs: {
         reasoning_content: "step-by-step chain of thought",
       },
-    } as Partial<Message>);
+    });
     const md = formatThreadAsMarkdown(makeThread(), [message], {
       includeReasoning: true,
     });
@@ -121,7 +121,7 @@ describe("formatThreadAsMarkdown opt-in flags", () => {
   it("emits tool call rows when includeToolCalls is true", () => {
     const message = ai("ok", {
       tool_calls: [{ id: "1", name: "task", args: { description: "do work" } }],
-    } as Partial<Message>);
+    });
     const md = formatThreadAsMarkdown(makeThread(), [message], {
       includeToolCalls: true,
     });
@@ -132,7 +132,7 @@ describe("formatThreadAsMarkdown opt-in flags", () => {
   it("keeps hidden messages when includeHidden is true", () => {
     const hidden = human("internal reminder", {
       additional_kwargs: { hide_from_ui: true },
-    } as Partial<Message>);
+    });
     const md = formatThreadAsMarkdown(makeThread(), [hidden], {
       includeHidden: true,
     });
@@ -144,7 +144,7 @@ describe("formatThreadAsJSON opt-in flags", () => {
   it("emits tool_calls field when includeToolCalls is true", () => {
     const message = ai("ok", {
       tool_calls: [{ id: "1", name: "task", args: { description: "x" } }],
-    } as Partial<Message>);
+    });
     const raw = formatThreadAsJSON(makeThread(), [message], {
       includeToolCalls: true,
     });
@@ -170,13 +170,13 @@ describe("formatThreadAsJSON", () => {
       human("hello"),
       human("secret reminder", {
         additional_kwargs: { hide_from_ui: true },
-      } as Partial<Message>),
+      }),
       ai("answer", {
         additional_kwargs: {
           reasoning_content: "secret reasoning",
         },
         tool_calls: [{ id: "1", name: "task", args: {} }],
-      } as Partial<Message>),
+      }),
       toolMsg("internal trace"),
     ];
     const raw = formatThreadAsJSON(makeThread(), messages);
@@ -198,7 +198,7 @@ describe("formatThreadAsJSON", () => {
     // even when `includeReasoning` is left at its default false.
     const message = ai("<think>internal monologue</think>visible answer", {
       id: "ai-1",
-    } as Partial<Message>);
+    });
     const raw = formatThreadAsJSON(makeThread(), [message]);
     expect(raw).not.toContain("internal monologue");
     expect(raw).not.toContain("<think>");
@@ -221,7 +221,7 @@ describe("formatThreadAsJSON", () => {
   it("strips <uploaded_files> markers from content", () => {
     const message = human(
       "real prompt\n<uploaded_files>\n/mnt/user-data/uploads/secret.pdf\n</uploaded_files>",
-      { id: "h-clean" } as Partial<Message>,
+      { id: "h-clean" },
     );
     const raw = formatThreadAsJSON(makeThread(), [message]);
     expect(raw).not.toContain("<uploaded_files>");
@@ -234,7 +234,7 @@ describe("formatThreadAsJSON", () => {
     // not survive as `{content: ""}` rows in the export.
     const message = ai("<think>only thinking, no answer</think>", {
       id: "ai-3",
-    } as Partial<Message>);
+    });
     const raw = formatThreadAsJSON(makeThread(), [message]);
     const parsed = JSON.parse(raw) as { messages: unknown[] };
     expect(parsed.messages).toHaveLength(0);
@@ -251,7 +251,7 @@ describe("formatThreadAsJSON", () => {
         "<system-reminder>\n<memory>secret fact A</memory>\n<current_date>2026-01-01, Tuesday</current_date>\n</system-reminder>\nreal user text",
       // Deliberately *not* setting hide_from_ui to model the regression
       // case the defence-in-depth strip is guarding against.
-    } as unknown as Partial<Message>);
+    });
     const raw = formatThreadAsJSON(makeThread(), [leaky]);
     expect(raw).not.toContain("<system-reminder>");
     expect(raw).not.toContain("<memory>");
@@ -268,7 +268,7 @@ describe("formatThreadAsJSON", () => {
       id: "leak-slash-skill",
       content:
         "<slash_skill_activation>\n<skill_content># Secret SKILL.md\nUse internal source.</skill_content>\n</slash_skill_activation>\nreal user task",
-    } as unknown as Partial<Message>);
+    });
     const raw = formatThreadAsJSON(makeThread(), [leaky]);
     expect(raw).not.toContain("<slash_skill_activation>");
     expect(raw).not.toContain("Secret SKILL.md");
@@ -323,7 +323,7 @@ describe("formatThreadAsJSON", () => {
     const message = ai("", {
       id: "ai-empty-reasoning",
       additional_kwargs: { reasoning_content: "" },
-    } as Partial<Message>);
+    });
     const raw = formatThreadAsJSON(makeThread(), [message], {
       includeReasoning: true,
     });

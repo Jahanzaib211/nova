@@ -68,9 +68,9 @@ export function ChannelRuntimeConfigDialog({
       return;
     }
     setValues(
-      Object.fromEntries(
+      Object.fromEntries<string>(
         fields.map((field) => [field.name, credentialValues[field.name] ?? ""]),
-      ) as ChannelRuntimeConfigValues,
+      ),
     );
   }, [credentialValues, fields, open, provider]);
 

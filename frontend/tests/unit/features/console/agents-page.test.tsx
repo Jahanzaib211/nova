@@ -25,12 +25,12 @@ import {
 
 const { capabilityState, flagsState } = vi.hoisted(() => ({
   capabilityState: {
-    data: undefined as unknown,
+    data: undefined,
     isLoading: false,
     isError: false,
   },
   flagsState: {
-    flags: { runtimes: false } as { runtimes: boolean },
+    flags: { runtimes: false },
     isLoading: false,
   },
 }));

@@ -740,6 +740,7 @@ export function useThreadStream({
         thread_id: meta.thread_id,
         created_at: now,
         updated_at: now,
+        state_updated_at: now,
         metadata: context.agent_name ? { agent_name: context.agent_name } : {},
         status: "busy",
         values: {
@@ -753,6 +754,7 @@ export function useThreadStream({
         thread_id: meta.thread_id,
         created_at: now,
         updated_at: now,
+        state_updated_at: now,
         metadata: context.agent_name ? { agent_name: context.agent_name } : {},
         status: "busy",
         values: {
@@ -778,8 +780,7 @@ export function useThreadStream({
         typeof performance !== "undefined" ? performance.now() : Date.now();
       lastEventAtRef.current = now;
       const eventId = (event as unknown as Record<string, unknown>).id as
-        | string
-        | undefined;
+        string | undefined;
       if (typeof eventId === "string" && eventId.length > 0) {
         lastEventIdRef.current = eventId;
       }
@@ -798,8 +799,7 @@ export function useThreadStream({
         });
         const id =
           ((event as unknown as Record<string, unknown>).run_id as
-            | string
-            | undefined) ?? `${event.name}-${Date.now()}`;
+            string | undefined) ?? `${event.name}-${Date.now()}`;
         listeners.current.onToolActivity?.({
           id,
           ts,
@@ -819,21 +819,16 @@ export function useThreadStream({
         // Extract output, and try to get input.path/command from on_tool_end data
         // (available in some LangGraph SDK versions alongside the output)
         const raw = event.data as
-          | Record<string, unknown>
-          | string
-          | null
-          | undefined;
+          Record<string, unknown> | string | null | undefined;
         const output =
           typeof raw === "string"
             ? raw
             : (((raw as Record<string, unknown> | null)?.output as
-                | string
-                | undefined) ?? "");
+                string | undefined) ?? "");
         const inputFromEnd =
           typeof raw !== "string"
             ? ((raw as Record<string, unknown> | null)?.input as
-                | Record<string, unknown>
-                | undefined)
+                Record<string, unknown> | undefined)
             : undefined;
         const pathFromEnd =
           typeof inputFromEnd?.path === "string" ? inputFromEnd.path : null;
@@ -843,8 +838,7 @@ export function useThreadStream({
             : null;
         const id =
           ((event as unknown as Record<string, unknown>).run_id as
-            | string
-            | undefined) ?? "";
+            string | undefined) ?? "";
         // Pass full info so the callback can CREATE an event if on_tool_start never fired
         listeners.current.onToolActivityDone?.({
           id,
@@ -917,18 +911,16 @@ export function useThreadStream({
               exact: false,
             },
             (oldData: InfiniteData<AgentThread[]> | undefined) =>
-              mapInfiniteThreadsCache(
-                oldData,
-                (t): AgentThread =>
-                  t.thread_id === threadIdRef.current
-                    ? {
-                        ...t,
-                        values: {
-                          ...t.values,
-                          title: nextTitle,
-                        },
-                      }
-                    : t,
+              mapInfiniteThreadsCache(oldData, (t): AgentThread =>
+                t.thread_id === threadIdRef.current
+                  ? {
+                      ...t,
+                      values: {
+                        ...t.values,
+                        title: nextTitle,
+                      },
+                    }
+                  : t,
               ),
           );
         }
@@ -1420,10 +1412,7 @@ export function useThreadStream({
           let runs: Array<{ run_id: string; status: string }> | null = null;
           try {
             const result = await getAPIClient().runs.list(threadId);
-            runs = (result ?? []) as Array<{
-              run_id: string;
-              status: string;
-            }>;
+            runs = result ?? [];
           } catch {
             runs = null;
           }

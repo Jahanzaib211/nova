@@ -9,7 +9,7 @@ async function loadHookWithCapturedHandler() {
   const addEventListener = vi.fn(
     (type: string, listener: EventListenerOrEventListenerObject) => {
       if (type === "keydown" && typeof listener === "function") {
-        keydownHandler = listener as KeydownHandler;
+        keydownHandler = listener;
       }
     },
   );

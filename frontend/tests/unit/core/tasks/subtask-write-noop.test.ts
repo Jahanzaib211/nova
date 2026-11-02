@@ -65,7 +65,7 @@ describe("subtaskWriteIsNoop", () => {
         latestMessage: {
           type: "ai",
           content: "hi",
-        } as Subtask["latestMessage"],
+        },
       }),
     ).toBe(false);
   });

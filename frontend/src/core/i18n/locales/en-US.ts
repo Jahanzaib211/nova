@@ -1554,13 +1554,13 @@ export const enUS: Translations = {
         web_fetch: "Fetch · one page",
         web_fetch_many: "Fetch many · parallel",
         web_crawl: "Crawl · follows links",
-      } as Record<string, string>,
+      },
       capabilityHints: {
         web_search: "finds pages",
         web_fetch: "reads one page",
         web_fetch_many: "reads several pages you name, at once",
         web_crawl: "starts at one page and follows its links",
-      } as Record<string, string>,
+      },
       /* Shown where a counter has no value at all. Rendering 0 for "the
          server sent nothing" is a lie the panel used to tell in six places. */
       noData: "—",

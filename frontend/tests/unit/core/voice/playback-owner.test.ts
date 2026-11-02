@@ -56,7 +56,7 @@ function installFakes() {
     }
   }
 
-  vi.stubGlobal("Audio", Audio as unknown as typeof globalThis.Audio);
+  vi.stubGlobal("Audio", Audio);
   vi.stubGlobal("URL", {
     ...URL,
     createObjectURL: (_b: Blob) => `blob:clip-${created.length}`,
@@ -171,7 +171,7 @@ describe("autoplay refusal", () => {
         pause() {}
         // eslint-disable-next-line @typescript-eslint/no-empty-function
         addEventListener() {}
-      } as unknown as typeof globalThis.Audio,
+      },
     );
 
     const result = await testSpeaker("hello", undefined, {

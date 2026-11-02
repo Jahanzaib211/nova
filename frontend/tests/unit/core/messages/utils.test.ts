@@ -20,7 +20,7 @@ function aiMessage(content: string): Message {
     id: "ai-1",
     type: "ai",
     content,
-  } as Message;
+  };
 }
 
 test("aggregates token usage messages once per assistant turn", () => {
