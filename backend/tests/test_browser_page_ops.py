@@ -19,7 +19,7 @@ import json
 
 import pytest
 
-from deerflow.tools.builtins.workspace_tools import (
+from nova.tools.builtins.workspace_tools import (
     _active_page,
     _browser_op_timeout_ms,
     _eval_js,
@@ -324,7 +324,7 @@ class TestAioClientAndThread:
 
     @staticmethod
     def _patch(monkeypatch: pytest.MonkeyPatch, *, sandbox, thread_id="t-1", local=False):
-        import deerflow.tools.builtins.workspace_tools as wt
+        import nova.tools.builtins.workspace_tools as wt
 
         monkeypatch.setattr(wt, "is_local_sandbox", lambda runtime: local)
         monkeypatch.setattr(wt, "get_thread_data", lambda runtime: {"thread_id": thread_id})
@@ -344,7 +344,7 @@ class TestAioClientAndThread:
         """The exact cold-start bug: no sandbox in state on the first call."""
         from types import SimpleNamespace
 
-        from deerflow.tools.builtins.workspace_tools import _aio_client_and_thread
+        from nova.tools.builtins.workspace_tools import _aio_client_and_thread
 
         sentinel = object()
         calls = self._patch(monkeypatch, sandbox=SimpleNamespace(id="aio:t-1", _client=sentinel))
@@ -359,7 +359,7 @@ class TestAioClientAndThread:
         """Stale sandbox_id in state — ensure_sandbox_initialized re-acquires."""
         from types import SimpleNamespace
 
-        from deerflow.tools.builtins.workspace_tools import _aio_client_and_thread
+        from nova.tools.builtins.workspace_tools import _aio_client_and_thread
 
         sentinel = object()
         self._patch(monkeypatch, sandbox=SimpleNamespace(id="aio:new", _client=sentinel))
@@ -370,7 +370,7 @@ class TestAioClientAndThread:
         assert client is sentinel
 
     def test_local_sandbox_is_still_rejected_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from deerflow.tools.builtins.workspace_tools import _aio_client_and_thread
+        from nova.tools.builtins.workspace_tools import _aio_client_and_thread
 
         self._patch(monkeypatch, sandbox=None, local=True)
         client, thread_id, error = _aio_client_and_thread(_FakeRuntime())
@@ -378,7 +378,7 @@ class TestAioClientAndThread:
         assert "container (AIO) sandbox" in error
 
     def test_missing_thread_id_is_still_an_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from deerflow.tools.builtins.workspace_tools import _aio_client_and_thread
+        from nova.tools.builtins.workspace_tools import _aio_client_and_thread
 
         self._patch(monkeypatch, sandbox=None, thread_id=None)
         _client, _thread_id, error = _aio_client_and_thread(_FakeRuntime())
@@ -386,7 +386,7 @@ class TestAioClientAndThread:
 
     def test_acquisition_failure_surfaces_the_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A genuine failure must stay a failure — and say why."""
-        from deerflow.tools.builtins.workspace_tools import _aio_client_and_thread
+        from nova.tools.builtins.workspace_tools import _aio_client_and_thread
 
         self._patch(monkeypatch, sandbox=RuntimeError("docker daemon unreachable"))
         _client, _thread_id, error = _aio_client_and_thread(_FakeRuntime())
@@ -396,7 +396,7 @@ class TestAioClientAndThread:
     def test_sandbox_without_client_is_reported_distinctly(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from types import SimpleNamespace
 
-        from deerflow.tools.builtins.workspace_tools import _aio_client_and_thread
+        from nova.tools.builtins.workspace_tools import _aio_client_and_thread
 
         self._patch(monkeypatch, sandbox=SimpleNamespace(id="aio:t-1", _client=None))
         _client, _thread_id, error = _aio_client_and_thread(_FakeRuntime())

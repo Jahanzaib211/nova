@@ -28,10 +28,10 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool as as_tool
 
-from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
-from deerflow.agents.thread_state import ThreadState
-from deerflow.tools.builtins.tool_search import assemble_deferred_tools, get_deferred_tools_prompt_section
-from deerflow.tools.mcp_metadata import tag_mcp_tool
+from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+from nova.agents.thread_state import ThreadState
+from nova.tools.builtins.tool_search import assemble_deferred_tools, get_deferred_tools_prompt_section
+from nova.tools.mcp_metadata import tag_mcp_tool
 
 
 @as_tool
@@ -107,11 +107,11 @@ def test_subagent_builder_emits_working_deferred_filter():
     builder given a real setup, so a regression in the builder's wiring is caught: a
     wrong catalog hash silently stops promotion (turn 2 would keep mcp_calc hidden), a
     dropped filter stops hiding (turn 1 would bind mcp_calc)."""
-    from deerflow.agents.middlewares.tool_error_handling_middleware import build_subagent_runtime_middlewares
-    from deerflow.config.app_config import AppConfig, CircuitBreakerConfig
-    from deerflow.config.guardrails_config import GuardrailsConfig
-    from deerflow.config.model_config import ModelConfig
-    from deerflow.config.sandbox_config import SandboxConfig
+    from nova.agents.middlewares.tool_error_handling_middleware import build_subagent_runtime_middlewares
+    from nova.config.app_config import AppConfig, CircuitBreakerConfig
+    from nova.config.guardrails_config import GuardrailsConfig
+    from nova.config.model_config import ModelConfig
+    from nova.config.sandbox_config import SandboxConfig
 
     bound: list[list[str]] = []
 

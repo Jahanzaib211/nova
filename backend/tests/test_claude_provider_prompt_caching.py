@@ -9,7 +9,7 @@ from unittest import mock
 
 import pytest
 
-from deerflow.models.claude_provider import ClaudeChatModel
+from nova.models.claude_provider import ClaudeChatModel
 
 
 def _make_model(prompt_cache_size: int = 3) -> ClaudeChatModel:

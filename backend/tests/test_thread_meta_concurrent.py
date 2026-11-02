@@ -2,7 +2,7 @@
 
 Pins the same fix as test_audit_writer_concurrent.py — the
 ``commit_with_lock_retry`` helper from
-``deerflow.persistence.engine`` is wired into every
+``nova.persistence.engine`` is wired into every
 ``ThreadMetaRepository`` write site (``create``, ``update_display_name``,
 ``update_status``, ``update_metadata``, ``update_owner``, ``delete``).
 
@@ -27,8 +27,8 @@ os.environ.setdefault("AUTH_JWT_SECRET", "test-secret-key-thread-meta-concurrenc
 
 @pytest_asyncio.fixture
 async def thread_engine(tmp_path):
-    from deerflow.persistence.engine import close_engine, init_engine
-    from deerflow.persistence.models import ThreadMetaRow  # noqa: F401 — register model
+    from nova.persistence.engine import close_engine, init_engine
+    from nova.persistence.models import ThreadMetaRow  # noqa: F401 — register model
 
     url = f"sqlite+aiosqlite:///{tmp_path}/thread_meta_concurrency.db"
     await init_engine("sqlite", url=url, sqlite_dir=str(tmp_path))
@@ -42,9 +42,9 @@ async def thread_engine(tmp_path):
 async def test_concurrent_thread_create_does_not_lose_rows(thread_engine):
     from sqlalchemy import func, select
 
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.models import ThreadMetaRow
-    from deerflow.persistence.thread_meta.sql import ThreadMetaRepository
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.models import ThreadMetaRow
+    from nova.persistence.thread_meta.sql import ThreadMetaRepository
 
     repo = ThreadMetaRepository(get_session_factory())
     n = 32
@@ -68,9 +68,9 @@ async def test_concurrent_create_and_update_does_not_lose(thread_engine):
     status updater loses the race and the user sees an HTTP 500."""
     from sqlalchemy import func, select
 
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.models import ThreadMetaRow
-    from deerflow.persistence.thread_meta.sql import ThreadMetaRepository
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.models import ThreadMetaRow
+    from nova.persistence.thread_meta.sql import ThreadMetaRepository
 
     repo = ThreadMetaRepository(get_session_factory())
     # Create one thread first.
@@ -115,9 +115,9 @@ async def test_create_survives_rollback_with_on_retry(thread_engine, monkeypatch
     from sqlalchemy.exc import OperationalError
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from deerflow.persistence import thread_meta as tm
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.models import ThreadMetaRow
+    from nova.persistence import thread_meta as tm
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.models import ThreadMetaRow
 
     sf = get_session_factory()
     repo = tm.sql.ThreadMetaRepository(sf)

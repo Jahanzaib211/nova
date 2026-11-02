@@ -12,12 +12,13 @@ from app.channels.manager import DEFAULT_GATEWAY_URL, DEFAULT_LANGGRAPH_URL, Cha
 from app.channels.message_bus import MessageBus
 from app.channels.runtime_config_store import merge_runtime_channel_configs
 from app.channels.store import ChannelStore
+from nova.config.env import getenv_compat
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
-    from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+    from nova.config.app_config import AppConfig
+    from nova.config.channel_connections_config import ChannelConnectionsConfig
 
 # Channel name → import path for lazy loading
 _CHANNEL_REGISTRY: dict[str, str] = {
@@ -41,8 +42,8 @@ _CHANNEL_CREDENTIAL_KEYS: dict[str, list[str]] = {
     "wechat": ["bot_token"],
 }
 
-_CHANNELS_LANGGRAPH_URL_ENV = "DEER_FLOW_CHANNELS_LANGGRAPH_URL"
-_CHANNELS_GATEWAY_URL_ENV = "DEER_FLOW_CHANNELS_GATEWAY_URL"
+_CHANNELS_LANGGRAPH_URL_ENV = "CHANNELS_LANGGRAPH_URL"  # NOVA_ / DEER_FLOW_ prefix via getenv_compat
+_CHANNELS_GATEWAY_URL_ENV = "CHANNELS_GATEWAY_URL"
 
 
 def _channel_has_credentials(name: str, channel_config: dict[str, Any]) -> bool:
@@ -54,7 +55,7 @@ def _resolve_service_url(config: dict[str, Any], config_key: str, env_key: str, 
     value = config.pop(config_key, None)
     if isinstance(value, str) and value.strip():
         return value
-    env_value = os.getenv(env_key, "").strip()
+    env_value = (getenv_compat(env_key) or "").strip()
     if env_value:
         return env_value
     return default
@@ -70,8 +71,8 @@ def _make_connection_repo(connection_config: ChannelConnectionsConfig | None):
         return None
 
     try:
-        from deerflow.persistence.channel_connections import ChannelConnectionRepository
-        from deerflow.persistence.engine import get_session_factory
+        from nova.persistence.channel_connections import ChannelConnectionRepository
+        from nova.persistence.engine import get_session_factory
     except Exception:
         logger.exception("Failed to import channel connection repository")
         return None
@@ -124,7 +125,7 @@ class ChannelService:
     def from_app_config(cls, app_config: AppConfig | None = None) -> ChannelService:
         """Create a ChannelService from the application config."""
         if app_config is None:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             app_config = get_app_config()
         channels_config = {}
@@ -243,7 +244,7 @@ class ChannelService:
         Falls back to the cached ``self._config`` when config loading fails.
         """
         try:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             app_config = get_app_config()
             extra = app_config.model_extra or {}
@@ -315,7 +316,7 @@ class ChannelService:
             return False
 
         try:
-            from deerflow.reflection import resolve_class
+            from nova.reflection import resolve_class
 
             channel_cls = resolve_class(import_path, base_class=None)
         except Exception:

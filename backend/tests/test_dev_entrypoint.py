@@ -43,14 +43,22 @@ def test_entrypoint_script_exists_and_is_posix_sh():
 def test_entrypoint_excludes_runtime_state_from_uvicorn_reload():
     content = ENTRYPOINT.read_text(encoding="utf-8")
 
-    assert ': "${DEER_FLOW_HOME:=/app/backend/.deer-flow}"' in content
-    # sandbox must be created too, not just .deer-flow (#3459 / #3454).
-    assert 'mkdir -p "$DEER_FLOW_HOME" /app/backend/.deer-flow /app/backend/sandbox' in content
+    # NOVA_HOME is canonical; the legacy DEER_FLOW_HOME is honoured and kept
+    # equal to it so anything still reading the old name sees the same dir.
+    assert ': "${NOVA_HOME:=${DEER_FLOW_HOME:-/app/backend/.nova}}"' in content
+    assert 'DEER_FLOW_HOME="$NOVA_HOME"' in content
+    # sandbox must be created too, not just the data dir (#3459 / #3454).
+    assert 'mkdir -p "$NOVA_HOME" /app/backend/sandbox' in content
     assert "--reload-include='*.yaml .env'" not in content
     assert "--reload-include='*.yaml'" in content
     assert "--reload-include='.env'" in content
     assert "--reload-exclude=/app/backend/sandbox" in content
-    assert '--reload-exclude="$DEER_FLOW_HOME"' in content
+    assert '--reload-exclude="$NOVA_HOME"' in content
+    # Both the new and the legacy in-tree data dir are excluded when present,
+    # each pre-created before it is handed to --reload-exclude.
+    assert "mkdir -p /app/backend/.nova" in content
+    assert "--reload-exclude=/app/backend/.nova" in content
+    assert "mkdir -p /app/backend/.deer-flow" in content
     assert "--reload-exclude=/app/backend/.deer-flow" in content
 
 

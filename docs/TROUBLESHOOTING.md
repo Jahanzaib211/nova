@@ -34,7 +34,7 @@ this shows up as `502`, or in `logs/nova/` as
 SERVFAILs the name of a container that is down, so "could not be resolved" means
 *the gateway is not running*, not that DNS is broken.
 
-> **`docker logs deer-flow-gateway` is EMPTY on the dev stack — this is not a
+> **`docker logs nova-gateway` is EMPTY on the dev stack — this is not a
 > clue, it is a dead end.** `docker/dev-entrypoint.sh` does
 > `exec >/app/logs/gateway.log 2>&1`, so everything the gateway prints goes to
 > the host-mounted **`logs/gateway.log`** instead. `scripts/docker.sh logs
@@ -47,7 +47,7 @@ SERVFAILs the name of a container that is down, so "could not be resolved" means
 tail -100 logs/gateway.log
 
 # Is it crash-looping? "Restarting (1)" means it exits and Docker restarts it
-docker ps -a --filter name=deer-flow-gateway --format '{{.Status}}'
+docker ps -a --filter name=nova-gateway --format '{{.Status}}'
 
 # Check if port 8001 is in use
 lsof -i :8001
@@ -63,7 +63,7 @@ scripts/docker.sh restart
 
 | In `logs/gateway.log` | Cause |
 | --- | --- |
-| `FileNotFoundError: Config file specified by environment variable DEER_FLOW_CONFIG_PATH not found at /home/...` | A **host** path leaked into the container from `.env` via `env_file`. Container path vars must be pinned in the compose service's `environment:` block, which wins over `env_file:`. See [backend/docs/CONFIGURATION.md](../backend/docs/CONFIGURATION.md#docker-config-paths-vs-env_file). |
+| `FileNotFoundError: Config file specified by environment variable NOVA_CONFIG_PATH not found at /home/...` | A **host** path leaked into the container from `.env` via `env_file`. Container path vars must be pinned in the compose service's `environment:` block, which wins over `env_file:`. See [backend/docs/CONFIGURATION.md](../backend/docs/CONFIGURATION.md#docker-config-paths-vs-env_file). |
 | `WatchfilesRustInternalError: Error creating recommended watcher: Too many open files (os error 24)` | inotify instances exhausted host-wide (`fs.inotify.max_user_instances`, default 128). Raise it — see [RUNBOOK.md](RUNBOOK.md). Only affects stacks that run uvicorn `--reload`. |
 | `Address already in use` | Something else holds 8001; `lsof -i :8001`. |
 
@@ -76,7 +76,7 @@ scripts/docker.sh restart
 grep -A5 "sandbox:" config.yaml
 
 # For local sandbox, check user data directory
-ls -la backend/.deer-flow/users/
+ls -la backend/.nova/users/
 
 # For Docker sandbox, check container
 docker ps | grep sandbox
@@ -129,7 +129,7 @@ cd backend && make test 2>&1 | tail -20
 cd backend && PYTHONPATH=. uv run pytest tests/test_<name>.py -v
 
 # Check for circular imports
-cd backend && PYTHONPATH=. python -c "from deerflow.sandbox.tools import str_replace_tool"
+cd backend && PYTHONPATH=. python -c "from nova.sandbox.tools import str_replace_tool"
 
 # Run blocking IO gate
 cd backend && make test-blocking-io
@@ -163,7 +163,7 @@ docker compose -f docker/docker-compose.yaml config
 
 ```bash
 # Validate config schema
-cd backend && PYTHONPATH=. python -c "from deerflow.config import get_app_config; get_app_config()"
+cd backend && PYTHONPATH=. python -c "from nova.config import get_app_config; get_app_config()"
 
 # Auto-upgrade config
 make config-upgrade
@@ -182,7 +182,7 @@ curl -s http://localhost:2026/api/memory/status | python3 -m json.tool
 curl -s -X POST http://localhost:2026/api/memory/reload
 
 # Check memory file
-ls -la backend/.deer-flow/users/*/memory.json
+ls -la backend/.nova/users/*/memory.json
 ```
 
 ### IM channel issues
@@ -200,7 +200,7 @@ grep -A10 "channels:" config.yaml
 
 ## Getting Help
 
-- **Logs**: `docker logs deer-flow-gateway` (Docker) or terminal output (local)
+- **Logs**: `docker logs nova-gateway` (Docker) or terminal output (local)
 - **Health**: `curl -s http://localhost:2026/health`
 - **Tests**: `cd backend && make test`
 - **Doctor**: `scripts/doctor.py`

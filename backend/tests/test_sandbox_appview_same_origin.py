@@ -49,7 +49,7 @@ def owned_thread(monkeypatch):
 @pytest.fixture
 def fake_provider(monkeypatch):
     provider = _FakeProvider()
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
     return provider
@@ -84,7 +84,7 @@ class TestTerminalUrl:
 
     def test_missing_base_url_degrades_without_raising(self, owned_thread, monkeypatch) -> None:
         provider = _FakeProvider(base_url=None)
-        import deerflow.sandbox as sandbox_pkg
+        import nova.sandbox as sandbox_pkg
 
         monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
         out = asyncio.run(sandbox_router.terminal_url("thread-abc"))

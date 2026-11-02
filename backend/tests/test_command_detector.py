@@ -9,9 +9,9 @@ Pins:
 
 import textwrap
 
-from deerflow.workspace.detectors.command_detector import CommandDetector
-from deerflow.workspace.models.command import CommandKind
-from deerflow.workspace.models.project import Project, ProjectKind
+from nova.workspace.detectors.command_detector import CommandDetector
+from nova.workspace.models.command import CommandKind
+from nova.workspace.models.project import Project, ProjectKind
 
 
 def _python_project(tmp_path, **kw):

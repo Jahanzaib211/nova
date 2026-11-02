@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.community.aio_sandbox import backend as readiness
+from nova.community.aio_sandbox import backend as readiness
 
 
 class _FakeAsyncClient:

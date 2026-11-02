@@ -1,4 +1,4 @@
-"""Tests for deerflow.skills.installer — shared skill installation logic."""
+"""Tests for nova.skills.installer — shared skill installation logic."""
 
 import shutil
 import stat
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from deerflow.skills.installer import (
+from nova.skills.installer import (
     SkillSecurityScanError,
     is_symlink_member,
     is_unsafe_zip_member,
@@ -15,8 +15,8 @@ from deerflow.skills.installer import (
     safe_extract_skill_archive,
     should_ignore_archive_entry,
 )
-from deerflow.skills.security_scanner import ScanResult
-from deerflow.skills.storage import get_or_new_skill_storage
+from nova.skills.security_scanner import ScanResult
+from nova.skills.storage import get_or_new_skill_storage
 
 # ---------------------------------------------------------------------------
 # is_unsafe_zip_member
@@ -177,7 +177,7 @@ class TestInstallSkillFromArchive:
         async def _scan(*args, **kwargs):
             return ScanResult(decision="allow", reason="ok")
 
-        monkeypatch.setattr("deerflow.skills.installer.scan_skill_content", _scan)
+        monkeypatch.setattr("nova.skills.installer.scan_skill_content", _scan)
 
     def _make_skill_zip(self, tmp_path: Path, skill_name: str = "test-skill") -> Path:
         """Create a valid .skill archive."""
@@ -228,7 +228,7 @@ class TestInstallSkillFromArchive:
             calls.append({"content": content, "executable": executable, "location": location})
             return ScanResult(decision="allow", reason="ok")
 
-        monkeypatch.setattr("deerflow.skills.installer.scan_skill_content", _scan)
+        monkeypatch.setattr("nova.skills.installer.scan_skill_content", _scan)
 
         get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)
 
@@ -258,7 +258,7 @@ class TestInstallSkillFromArchive:
             calls.append({"content": content, "executable": executable, "location": location})
             return ScanResult(decision="allow", reason="ok")
 
-        monkeypatch.setattr("deerflow.skills.installer.scan_skill_content", _scan)
+        monkeypatch.setattr("nova.skills.installer.scan_skill_content", _scan)
 
         get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)
 
@@ -312,7 +312,7 @@ class TestInstallSkillFromArchive:
                 return ScanResult(decision="warn", reason="script needs review")
             return ScanResult(decision="allow", reason="ok")
 
-        monkeypatch.setattr("deerflow.skills.installer.scan_skill_content", _scan)
+        monkeypatch.setattr("nova.skills.installer.scan_skill_content", _scan)
 
         with pytest.raises(SkillSecurityScanError, match="rejected executable.*script needs review"):
             get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)
@@ -327,7 +327,7 @@ class TestInstallSkillFromArchive:
         async def _scan(*args, **kwargs):
             return ScanResult(decision="block", reason="prompt injection")
 
-        monkeypatch.setattr("deerflow.skills.installer.scan_skill_content", _scan)
+        monkeypatch.setattr("nova.skills.installer.scan_skill_content", _scan)
 
         with pytest.raises(SkillSecurityScanError, match="Security scan blocked.*prompt injection"):
             get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)
@@ -345,7 +345,7 @@ class TestInstallSkillFromArchive:
             (partial / "partial.txt").write_text("partial", encoding="utf-8")
             raise OSError("copy failed")
 
-        monkeypatch.setattr("deerflow.skills.installer.shutil.copytree", _copytree)
+        monkeypatch.setattr("nova.skills.installer.shutil.copytree", _copytree)
 
         with pytest.raises(OSError, match="copy failed"):
             get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)
@@ -366,7 +366,7 @@ class TestInstallSkillFromArchive:
             (target / "marker.txt").write_text("external", encoding="utf-8")
             return original_copytree(src, dst)
 
-        monkeypatch.setattr("deerflow.skills.installer.shutil.copytree", _copytree)
+        monkeypatch.setattr("nova.skills.installer.shutil.copytree", _copytree)
 
         with pytest.raises(ValueError, match="already exists"):
             get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)
@@ -383,7 +383,7 @@ class TestInstallSkillFromArchive:
             Path(dst).write_text("partial", encoding="utf-8")
             raise OSError("move failed")
 
-        monkeypatch.setattr("deerflow.skills.installer.shutil.move", _move)
+        monkeypatch.setattr("nova.skills.installer.shutil.move", _move)
 
         with pytest.raises(OSError, match="move failed"):
             get_or_new_skill_storage(skills_path=skills_root).install_skill_from_archive(zip_path)

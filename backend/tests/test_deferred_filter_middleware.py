@@ -2,7 +2,7 @@
 
 from langchain_core.tools import tool as as_tool
 
-from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
 
 
 @as_tool

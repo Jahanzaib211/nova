@@ -23,32 +23,13 @@ from unittest.mock import patch
 import pytest
 from _agent_e2e_helpers import FakeToolCallingModel, build_single_tool_call_model
 from langchain_core.messages import AIMessage, HumanMessage
+from support.gateway_app import create_thread as _create_thread
+from support.gateway_app import drain_stream as _drain_stream
+from support.gateway_app import register_user as _register_user
+from support.gateway_app import run_body as _run_body
+from support.gateway_app import run_id_from_response as _run_id_from_response
 
 pytestmark = pytest.mark.no_auto_user
-
-
-_MINIMAL_CONFIG_YAML = """\
-log_level: info
-models:
-  - name: fake-test-model
-    display_name: Fake Test Model
-    use: langchain_openai:ChatOpenAI
-    model: gpt-4o-mini
-    api_key: $OPENAI_API_KEY
-    base_url: $OPENAI_API_BASE
-sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
-agents_api:
-  enabled: true
-title:
-  enabled: false
-memory:
-  enabled: false
-database:
-  backend: sqlite
-run_events:
-  backend: memory
-"""
 
 
 class _RunController:
@@ -154,192 +135,6 @@ def _build_fake_setup_agent_model(agent_name: str):
     return fake_create_chat_model
 
 
-@pytest.fixture
-def isolated_deer_flow_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    home = tmp_path / "deer-flow-home"
-    home.mkdir()
-    monkeypatch.setenv("DEER_FLOW_HOME", str(home))
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-fake-key-not-used")
-    monkeypatch.setenv("OPENAI_API_BASE", "https://example.invalid")
-
-    staged_config = tmp_path / "config.yaml"
-    staged_config.write_text(_MINIMAL_CONFIG_YAML, encoding="utf-8")
-    monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(staged_config))
-
-    staged_extensions_config = tmp_path / "extensions_config.json"
-    staged_extensions_config.write_text('{"mcpServers": {}, "skills": {}}', encoding="utf-8")
-    monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(staged_extensions_config))
-    return home
-
-
-def _reset_process_singletons(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Clear runtime singletons that depend on this test's temporary config.
-
-    The Gateway app/lifespan path reads process-wide caches before wiring
-    request-scoped dependencies. These E2E tests stage a temporary
-    ``config.yaml``/``extensions_config.json`` and ``DEER_FLOW_HOME``, so the
-    caches below must be reset before app creation:
-
-    - app_config / extensions_config: parsed config file caches.
-    - paths: ``DEER_FLOW_HOME``-derived filesystem paths.
-    - persistence.engine: SQLAlchemy engine/session factory for the sqlite dir.
-    - app.gateway.deps: cached local auth provider/repository.
-
-    A shared public reset helper would be cleaner long-term; this test keeps
-    the reset boundary explicit because the PR is focused on runtime lifecycle
-    coverage rather than config-cache API cleanup.
-    """
-
-    from app.gateway import deps as deps_module
-    from deerflow.config import app_config as app_config_module
-    from deerflow.config import extensions_config as extensions_config_module
-    from deerflow.config import paths as paths_module
-    from deerflow.persistence import engine as engine_module
-
-    for module, attr, value in (
-        (app_config_module, "_app_config", None),
-        (app_config_module, "_app_config_path", None),
-        (app_config_module, "_app_config_mtime", None),
-        (app_config_module, "_app_config_is_custom", False),
-        (extensions_config_module, "_extensions_config", None),
-        (paths_module, "_paths_singleton", None),
-        (paths_module, "_paths", None),
-        (engine_module, "_engine", None),
-        (engine_module, "_session_factory", None),
-        (deps_module, "_cached_local_provider", None),
-        (deps_module, "_cached_repo", None),
-    ):
-        monkeypatch.setattr(module, attr, value, raising=False)
-
-
-def _preserve_process_config_singletons(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Restore config singletons mutated as a side effect of AppConfig loading.
-
-    ``AppConfig.from_file()`` calls ``_apply_singleton_configs()``, which pushes
-    nested config sections into module-level caches used by middlewares, tool
-    selection, and runtime providers. Snapshotting those attributes with
-    ``monkeypatch`` lets pytest restore the pre-test values during teardown, so
-    loading the isolated test config does not leak into later tests.
-    """
-
-    from deerflow.config import (
-        acp_config,
-        agents_api_config,
-        checkpointer_config,
-        guardrails_config,
-        memory_config,
-        stream_bridge_config,
-        subagents_config,
-        summarization_config,
-        title_config,
-        tool_search_config,
-    )
-
-    for module, attr in (
-        (title_config, "_title_config"),
-        (summarization_config, "_summarization_config"),
-        (memory_config, "_memory_config"),
-        (agents_api_config, "_agents_api_config"),
-        (subagents_config, "_subagents_config"),
-        (tool_search_config, "_tool_search_config"),
-        (guardrails_config, "_guardrails_config"),
-        (checkpointer_config, "_checkpointer_config"),
-        (stream_bridge_config, "_stream_bridge_config"),
-        (acp_config, "_acp_agents"),
-    ):
-        monkeypatch.setattr(module, attr, getattr(module, attr), raising=False)
-
-
-@pytest.fixture
-def isolated_app(isolated_deer_flow_home: Path, monkeypatch: pytest.MonkeyPatch):
-    _preserve_process_config_singletons(monkeypatch)
-    _reset_process_singletons(monkeypatch)
-
-    from deerflow.config import app_config as app_config_module
-
-    cfg = app_config_module.get_app_config()
-    cfg.database.sqlite_dir = str(isolated_deer_flow_home / "db")
-
-    from app.gateway.app import create_app
-
-    return create_app()
-
-
-def _register_user(client, *, email: str = "runtime-e2e@example.com") -> str:
-    response = client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "password": "very-strong-password-123"},
-    )
-    assert response.status_code == 201, response.text
-    csrf_token = client.cookies.get("csrf_token")
-    assert csrf_token
-    return csrf_token
-
-
-def _create_thread(client, csrf_token: str) -> str:
-    thread_id = str(uuid.uuid4())
-    response = client.post(
-        "/api/threads",
-        json={"thread_id": thread_id, "metadata": {"purpose": "runtime-lifecycle-e2e"}},
-        headers={"X-CSRF-Token": csrf_token},
-    )
-    assert response.status_code == 200, response.text
-    return thread_id
-
-
-def _run_body(**overrides) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "assistant_id": "lead_agent",
-        "input": {"messages": [{"role": "user", "content": "Run lifecycle E2E prompt"}]},
-        "config": {"recursion_limit": 50},
-        "stream_mode": ["values"],
-    }
-    body.update(overrides)
-    return body
-
-
-def _drain_stream(response, *, timeout: float = 10.0, max_bytes: int = 1024 * 1024) -> str:
-    chunks: queue.Queue[bytes | BaseException | object] = queue.Queue()
-    sentinel = object()
-
-    def read_stream() -> None:
-        try:
-            for chunk in response.iter_bytes():
-                chunks.put(chunk)
-                if b"event: end" in chunk:
-                    break
-        except Exception as exc:  # pragma: no cover - reported in the main test thread
-            chunks.put(exc)
-        finally:
-            chunks.put(sentinel)
-
-    reader = threading.Thread(target=read_stream, daemon=True)
-    reader.start()
-
-    deadline = time.monotonic() + timeout
-    body = b""
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise AssertionError(f"SSE stream did not finish within {timeout}s; transcript tail={body[-4000:].decode('utf-8', errors='replace')}")
-        try:
-            chunk = chunks.get(timeout=remaining)
-        except queue.Empty as exc:
-            raise AssertionError(f"SSE stream did not produce data within {timeout}s; transcript tail={body[-4000:].decode('utf-8', errors='replace')}") from exc
-        if chunk is sentinel:
-            break
-        if isinstance(chunk, BaseException):
-            raise AssertionError("SSE reader failed") from chunk
-        body += chunk
-        if b"event: end" in body:
-            break
-        if len(body) >= max_bytes:
-            raise AssertionError(f"SSE stream exceeded {max_bytes} bytes without event: end")
-    if b"event: end" not in body:
-        raise AssertionError(f"SSE stream closed before event: end; transcript tail={body[-4000:].decode('utf-8', errors='replace')}")
-    return body.decode("utf-8", errors="replace")
-
-
 def _parse_sse(transcript: str) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     for raw_frame in transcript.split("\n\n"):
@@ -358,12 +153,6 @@ def _parse_sse(transcript: str) -> list[dict[str, Any]]:
         if parsed:
             events.append(parsed)
     return events
-
-
-def _run_id_from_response(response) -> str:
-    location = response.headers.get("content-location", "")
-    assert location, "run stream response must include Content-Location"
-    return location.rstrip("/").split("/")[-1]
 
 
 def _wait_for_status(client, thread_id: str, run_id: str, status: str, *, timeout: float = 5.0) -> dict:
@@ -541,7 +330,7 @@ def test_stream_run_executes_real_lead_agent_setup_agent_business_path(isolated_
 
     with (
         patch(
-            "deerflow.agents.lead_agent.agent.create_chat_model",
+            "nova.agents.lead_agent.agent.create_chat_model",
             new=_build_fake_setup_agent_model(agent_name),
         ),
         TestClient(isolated_app) as client,
@@ -640,7 +429,7 @@ def test_cancel_interrupt_stops_running_background_run(isolated_app):
 async def test_sse_consumer_disconnect_cancels_inflight_run():
     """A disconnected SSE request should cancel an in-flight run when configured."""
     from app.gateway.services import sse_consumer
-    from deerflow.runtime import DisconnectMode, MemoryStreamBridge, RunManager, RunStatus
+    from nova.runtime import DisconnectMode, MemoryStreamBridge, RunManager, RunStatus
 
     bridge = MemoryStreamBridge()
     run_manager = RunManager()

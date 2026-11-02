@@ -28,8 +28,8 @@ Thank you for your interest in contributing to Nova! This document provides guid
 2. Clone your fork locally:
 
    ```bash
-   git clone https://github.com/YOUR_USERNAME/deer-flow.git
-   cd deer-flow
+   git clone https://github.com/YOUR_USERNAME/nova.git
+   cd nova
    ```
 
 ## Development Setup
@@ -226,7 +226,7 @@ Example test:
 
 ```python
 import pytest
-from deerflow.models.factory import create_chat_model
+from nova.models.factory import create_chat_model
 
 
 def test_create_chat_model_with_valid_name():
@@ -270,10 +270,10 @@ Include in your PR description:
 
 ### Adding New Tools
 
-1. Create tool in `packages/harness/deerflow/tools/builtins/` or `packages/harness/deerflow/community/`:
+1. Create tool in `packages/harness/nova/tools/builtins/` or `packages/harness/nova/community/`:
 
 ```python
-# packages/harness/deerflow/tools/builtins/my_tool.py
+# packages/harness/nova/tools/builtins/my_tool.py
 from langchain_core.tools import tool
 
 
@@ -296,15 +296,15 @@ def my_tool(param: str) -> str:
 tools:
   - name: my_tool
     group: my_group
-    use: deerflow.tools.builtins.my_tool:my_tool
+    use: nova.tools.builtins.my_tool:my_tool
 ```
 
 ### Adding New Middleware
 
-1. Create middleware in `packages/harness/deerflow/agents/middlewares/`:
+1. Create middleware in `packages/harness/nova/agents/middlewares/`:
 
 ```python
-# packages/harness/deerflow/agents/middlewares/my_middleware.py
+# packages/harness/nova/agents/middlewares/my_middleware.py
 from langchain.agents.middleware import BaseMiddleware
 from langchain_core.runnables import RunnableConfig
 
@@ -318,7 +318,7 @@ class MyMiddleware(BaseMiddleware):
         return state
 ```
 
-2. Register in `packages/harness/deerflow/agents/lead_agent/agent.py`:
+2. Register in `packages/harness/nova/agents/lead_agent/agent.py`:
 
 ```python
 middlewares = [
@@ -365,7 +365,7 @@ app.include_router(my_router.router)
 
 When adding new configuration options:
 
-1. Update `packages/harness/deerflow/config/app_config.py` with new fields
+1. Update `packages/harness/nova/config/app_config.py` with new fields
 2. Add default values in `config.example.yaml`
 3. Document in `docs/CONFIGURATION.md`
 
@@ -423,7 +423,7 @@ Instructions for the agent when this skill is enabled...
 ## Database Migrations (Alembic)
 
 Nova uses Alembic for database schema migrations. The migration infrastructure
-lives at `packages/harness/deerflow/persistence/migrations/`.
+lives at `packages/harness/nova/persistence/migrations/`.
 
 ### When to create a migration
 
@@ -433,8 +433,8 @@ in production — it only creates tables, not adds columns.
 
 ### Creating a migration
 
-1. Edit `packages/harness/deerflow/persistence/migrations/env.py` if needed
-   (it reads `DEER_FLOW_DATABASE_URL` env-var for production containers).
+1. Edit `packages/harness/nova/persistence/migrations/env.py` if needed
+   (it reads `NOVA_DATABASE_URL` env-var for production containers).
 
 2. Create a new migration file in `versions/`:
 
@@ -465,8 +465,8 @@ in production — it only creates tables, not adds columns.
 
 ```bash
 # Inside the running gateway container
-docker exec deer-flow-gateway python -c "
-from packages.harness.deerflow.persistence.migrations.env import *
+docker exec nova-gateway python -c "
+from packages.harness.nova.persistence.migrations.env import *
 "
 ```
 

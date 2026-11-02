@@ -1,7 +1,7 @@
 """Regression test: tool args schemas must not emit Pydantic serialization warnings.
 
 DeerFlow tools annotate their runtime parameter as ``Runtime``
-(``deerflow.tools.types.Runtime`` = ``ToolRuntime[dict[str, Any], ThreadState]``)
+(``nova.tools.types.Runtime`` = ``ToolRuntime[dict[str, Any], ThreadState]``)
 so the LangChain tool framework injects the runtime automatically.
 When the inner ``Runtime.context`` field is left as the unbound ``ContextT``
 TypeVar (default ``None``), Pydantic's ``model_dump()`` on the auto-generated
@@ -18,7 +18,7 @@ import warnings
 import pytest
 from langchain.tools import ToolRuntime
 
-from deerflow.sandbox.tools import (
+from nova.sandbox.tools import (
     bash_tool,
     glob_tool,
     grep_tool,
@@ -27,12 +27,12 @@ from deerflow.sandbox.tools import (
     str_replace_tool,
     write_file_tool,
 )
-from deerflow.tools.builtins.present_file_tool import present_file_tool
-from deerflow.tools.builtins.setup_agent_tool import setup_agent
-from deerflow.tools.builtins.task_tool import task_tool
-from deerflow.tools.builtins.update_agent_tool import update_agent
-from deerflow.tools.builtins.view_image_tool import view_image_tool
-from deerflow.tools.skill_manage_tool import skill_manage_tool
+from nova.tools.builtins.present_file_tool import present_file_tool
+from nova.tools.builtins.setup_agent_tool import setup_agent
+from nova.tools.builtins.task_tool import task_tool
+from nova.tools.builtins.update_agent_tool import update_agent
+from nova.tools.builtins.view_image_tool import view_image_tool
+from nova.tools.skill_manage_tool import skill_manage_tool
 
 
 def _make_runtime(context: dict) -> ToolRuntime:

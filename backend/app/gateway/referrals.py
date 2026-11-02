@@ -20,8 +20,8 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.credit_grant.model import CreditGrantRow
-from deerflow.persistence.engine import get_session_factory
+from nova.persistence.credit_grant.model import CreditGrantRow
+from nova.persistence.engine import get_session_factory
 
 # ── Bonus policy (see plan) ──────────────────────────────────────────────
 # Welcome boost doubles a free account's 250k/day to 500k/day for a week.

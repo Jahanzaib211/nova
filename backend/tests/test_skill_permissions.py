@@ -1,6 +1,6 @@
 import stat
 
-from deerflow.skills.permissions import make_skill_tree_sandbox_readable, make_skill_written_path_sandbox_readable
+from nova.skills.permissions import make_skill_tree_sandbox_readable, make_skill_written_path_sandbox_readable
 
 
 def _mode(path):

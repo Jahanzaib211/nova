@@ -3,7 +3,7 @@ syntax validation, and a progress-reporting job over the repository."""
 
 from __future__ import annotations
 
-from deerflow.email_marketing.contacts_import import guess_mapping, parse_contacts_csv
+from nova.email_marketing.contacts_import import guess_mapping, parse_contacts_csv
 
 
 def test_guess_mapping_handles_common_headers():

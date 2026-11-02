@@ -1,8 +1,8 @@
-"""Tests for DeerFlowClient's graph-root tracing wiring.
+"""Tests for NovaClient's graph-root tracing wiring.
 
 Regression coverage for the Copilot review on PR #2944: when the title
 and summarization middlewares request ``attach_tracing=False`` we must
-make sure ``DeerFlowClient`` injects the tracing callbacks at the graph
+make sure ``NovaClient`` injects the tracing callbacks at the graph
 invocation root instead, otherwise those middlewares produce untraced
 LLM calls.
 """
@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from deerflow.client import DeerFlowClient
+from nova.client import NovaClient
 
 
 class _FakeAgent:
@@ -32,7 +32,7 @@ class _FakeAgent:
 
 @pytest.fixture(autouse=True)
 def _clear_langfuse_env(monkeypatch):
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     for name in ("LANGFUSE_TRACING", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
@@ -53,15 +53,15 @@ def _stub_agent_creation(monkeypatch, fake_agent: _FakeAgent) -> dict[str, Any]:
         self._agent = fake_agent
         self._agent_config_key = ("stub",)
 
-    monkeypatch.setattr(DeerFlowClient, "_ensure_agent", _stub_ensure_agent)
+    monkeypatch.setattr(NovaClient, "_ensure_agent", _stub_ensure_agent)
     return captured
 
 
-def _make_client(_monkeypatch) -> DeerFlowClient:
+def _make_client(_monkeypatch) -> NovaClient:
     """Build a client without going through ``__init__`` so we never load
     config.yaml or perform any other side-effectful startup work."""
     fake_app_config = SimpleNamespace(models=[SimpleNamespace(name="stub-model")])
-    client = DeerFlowClient.__new__(DeerFlowClient)
+    client = NovaClient.__new__(NovaClient)
     client._app_config = fake_app_config
     client._extensions_config = None
     client._model_name = "stub-model"
@@ -82,7 +82,7 @@ def test_stream_injects_langfuse_metadata_when_enabled(monkeypatch):
     monkeypatch.setenv("LANGFUSE_TRACING", "true")
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     reset_tracing_config()
 
@@ -90,7 +90,7 @@ def test_stream_injects_langfuse_metadata_when_enabled(monkeypatch):
         pass
 
     sentinel = _SentinelHandler()
-    monkeypatch.setattr("deerflow.client.build_tracing_callbacks", lambda: [sentinel])
+    monkeypatch.setattr("nova.client.build_tracing_callbacks", lambda: [sentinel])
 
     fake_agent = _FakeAgent()
     captured = _stub_agent_creation(monkeypatch, fake_agent)
@@ -109,7 +109,7 @@ def test_stream_injects_langfuse_metadata_when_enabled(monkeypatch):
 
 
 def test_stream_is_inert_when_langfuse_disabled(monkeypatch):
-    monkeypatch.setattr("deerflow.client.build_tracing_callbacks", lambda: [])
+    monkeypatch.setattr("nova.client.build_tracing_callbacks", lambda: [])
 
     fake_agent = _FakeAgent()
     captured = _stub_agent_creation(monkeypatch, fake_agent)
@@ -128,10 +128,10 @@ def test_stream_preserves_caller_metadata_overrides(monkeypatch):
     monkeypatch.setenv("LANGFUSE_TRACING", "true")
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     reset_tracing_config()
-    monkeypatch.setattr("deerflow.client.build_tracing_callbacks", lambda: [])
+    monkeypatch.setattr("nova.client.build_tracing_callbacks", lambda: [])
 
     fake_agent = _FakeAgent()
     captured = _stub_agent_creation(monkeypatch, fake_agent)
@@ -139,7 +139,7 @@ def test_stream_preserves_caller_metadata_overrides(monkeypatch):
 
     # Drive stream with a pre-populated metadata so the worker-equivalent
     # ``setdefault`` semantics are exercised.
-    original_get_config = DeerFlowClient._get_runnable_config
+    original_get_config = NovaClient._get_runnable_config
 
     def patched_get_runnable_config(self, thread_id, **overrides):
         cfg = original_get_config(self, thread_id, **overrides)
@@ -149,7 +149,7 @@ def test_stream_preserves_caller_metadata_overrides(monkeypatch):
         }
         return cfg
 
-    monkeypatch.setattr(DeerFlowClient, "_get_runnable_config", patched_get_runnable_config)
+    monkeypatch.setattr(NovaClient, "_get_runnable_config", patched_get_runnable_config)
     list(client.stream("hi", thread_id="thread-client-3"))
 
     metadata = captured["config"].get("metadata") or {}

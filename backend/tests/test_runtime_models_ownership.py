@@ -15,7 +15,7 @@ import stat
 
 import pytest
 
-from deerflow.config import runtime_models
+from nova.config import runtime_models
 
 
 @pytest.fixture

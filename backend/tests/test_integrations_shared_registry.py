@@ -12,8 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.config.integrations_config import IntegrationsConfig
-from deerflow.integrations.registry import get_integrations_registry, reset_integrations_registry
+from nova.config.integrations_config import IntegrationsConfig
+from nova.integrations.registry import get_integrations_registry, reset_integrations_registry
 
 
 @pytest.fixture(autouse=True)
@@ -25,11 +25,11 @@ def _fresh():
 
 def test_gateway_and_capability_share_one_instance(monkeypatch):
     from app.gateway import deps
-    from deerflow.capabilities.modules import integrations as cap
+    from nova.capabilities.modules import integrations as cap
 
     config = IntegrationsConfig()
     monkeypatch.setattr(deps, "get_config", lambda: SimpleNamespace(integrations=config))
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: SimpleNamespace(integrations=config))
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: SimpleNamespace(integrations=config))
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
     assert deps.get_integrations_registry(request) is cap._registry()
 
@@ -43,6 +43,6 @@ def test_rebuilt_only_when_the_section_changes():
 
 
 def test_package_exports_the_accessor():
-    import deerflow.integrations as pkg
+    import nova.integrations as pkg
 
     assert pkg.get_integrations_registry is get_integrations_registry

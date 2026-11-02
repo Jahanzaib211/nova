@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from deerflow.skills.tool_policy import (
+from nova.skills.tool_policy import (
     CORE_TOOL_NAMES,
     allowed_tool_names_for_skills,
     filter_tools_by_skill_allowed_tools,

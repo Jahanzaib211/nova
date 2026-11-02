@@ -8,19 +8,19 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-import deerflow.config.app_config as app_config_module
-from deerflow.config.acp_config import load_acp_config_from_dict
-from deerflow.config.agents_api_config import get_agents_api_config, load_agents_api_config_from_dict
-from deerflow.config.checkpointer_config import get_checkpointer_config, load_checkpointer_config_from_dict
-from deerflow.config.guardrails_config import get_guardrails_config, load_guardrails_config_from_dict
-from deerflow.config.memory_config import get_memory_config, load_memory_config_from_dict
-from deerflow.config.stream_bridge_config import get_stream_bridge_config, load_stream_bridge_config_from_dict
-from deerflow.config.subagents_config import get_subagents_app_config, load_subagents_config_from_dict
-from deerflow.config.summarization_config import get_summarization_config, load_summarization_config_from_dict
-from deerflow.config.title_config import get_title_config, load_title_config_from_dict
-from deerflow.config.tool_search_config import get_tool_search_config, load_tool_search_config_from_dict
-from deerflow.runtime.checkpointer import get_checkpointer, reset_checkpointer
-from deerflow.runtime.store import get_store, reset_store
+import nova.config.app_config as app_config_module
+from nova.config.acp_config import load_acp_config_from_dict
+from nova.config.agents_api_config import get_agents_api_config, load_agents_api_config_from_dict
+from nova.config.checkpointer_config import get_checkpointer_config, load_checkpointer_config_from_dict
+from nova.config.guardrails_config import get_guardrails_config, load_guardrails_config_from_dict
+from nova.config.memory_config import get_memory_config, load_memory_config_from_dict
+from nova.config.stream_bridge_config import get_stream_bridge_config, load_stream_bridge_config_from_dict
+from nova.config.subagents_config import get_subagents_app_config, load_subagents_config_from_dict
+from nova.config.summarization_config import get_summarization_config, load_summarization_config_from_dict
+from nova.config.title_config import get_title_config, load_title_config_from_dict
+from nova.config.tool_search_config import get_tool_search_config, load_tool_search_config_from_dict
+from nova.runtime.checkpointer import get_checkpointer, reset_checkpointer
+from nova.runtime.store import get_store, reset_store
 
 
 def _reset_config_singletons() -> None:
@@ -43,7 +43,7 @@ def _write_config(path: Path, *, model_name: str, supports_thinking: bool) -> No
     path.write_text(
         yaml.safe_dump(
             {
-                "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
                 "models": [
                     {
                         "name": model_name,
@@ -66,7 +66,7 @@ def _write_config_with_agents_api(
     agents_api: dict | None = None,
 ) -> None:
     config = {
-        "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+        "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
         "models": [
             {
                 "name": model_name,
@@ -84,7 +84,7 @@ def _write_config_with_agents_api(
 
 def _write_config_with_sections(path: Path, sections: dict | None = None) -> None:
     config = {
-        "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+        "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
         "models": [
             {
                 "name": "first-model",
@@ -125,7 +125,7 @@ def test_app_config_defaults_empty_database_to_sqlite(tmp_path, monkeypatch):
         yaml.safe_dump(
             {
                 "database": {},
-                "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
             }
         ),
         encoding="utf-8",
@@ -152,7 +152,7 @@ def test_app_config_coerces_commented_out_list_sections(tmp_path, monkeypatch):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
                 "models": None,
                 "tools": None,
                 "tool_groups": None,
@@ -180,7 +180,7 @@ def test_app_config_warns_when_no_models_configured(tmp_path, monkeypatch, caplo
     config_path.write_text(
         yaml.safe_dump(
             {
-                "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
                 "models": None,
             }
         ),
@@ -192,7 +192,7 @@ def test_app_config_warns_when_no_models_configured(tmp_path, monkeypatch, caplo
     # config.yaml's own `models:` coercion.
     monkeypatch.setenv("DEER_FLOW_RUNTIME_MODELS_PATH", str(tmp_path / "runtime_models.yaml"))
 
-    with caplog.at_level("WARNING", logger="deerflow.config.app_config"):
+    with caplog.at_level("WARNING", logger="nova.config.app_config"):
         app_config_module.AppConfig.from_file(str(config_path))
 
     assert "No models are configured" in caplog.text

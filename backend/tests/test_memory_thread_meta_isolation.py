@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import pytest
 from langgraph.store.memory import InMemoryStore
 
-from deerflow.persistence.thread_meta.memory import MemoryThreadMetaStore
-from deerflow.runtime.user_context import reset_current_user, set_current_user
+from nova.persistence.thread_meta.memory import MemoryThreadMetaStore
+from nova.runtime.user_context import reset_current_user, set_current_user
 
 USER_A = SimpleNamespace(id="user-a", email="a@test.local")
 USER_B = SimpleNamespace(id="user-b", email="b@test.local")

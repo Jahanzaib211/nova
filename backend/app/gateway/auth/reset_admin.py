@@ -24,7 +24,7 @@ from sqlalchemy import select
 from app.gateway.auth.credential_file import write_initial_credentials
 from app.gateway.auth.password import hash_password
 from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
-from deerflow.persistence.user.model import UserRow
+from nova.persistence.user.model import UserRow
 
 
 async def reset_user_password(repo: SQLiteUserRepository, user_email: str | None) -> tuple[str, str] | None:
@@ -48,7 +48,7 @@ async def reset_user_password(repo: SQLiteUserRepository, user_email: str | None
         # Find first admin via direct SELECT — repository does not
         # expose a "first admin" helper and we do not want to add
         # one just for this CLI.
-        from deerflow.persistence.engine import get_session_factory
+        from nova.persistence.engine import get_session_factory
 
         sf = get_session_factory()
         if sf is None:
@@ -72,8 +72,8 @@ async def reset_user_password(repo: SQLiteUserRepository, user_email: str | None
 
 
 async def _run(email: str | None) -> int:
-    from deerflow.config import get_app_config
-    from deerflow.persistence.engine import (
+    from nova.config import get_app_config
+    from nova.persistence.engine import (
         close_engine,
         get_session_factory,
         init_engine_from_config,

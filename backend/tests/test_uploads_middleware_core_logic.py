@@ -12,9 +12,9 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from deerflow.agents.middlewares.uploads_middleware import UploadsMiddleware
-from deerflow.config.paths import Paths
-from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
+from nova.agents.middlewares.uploads_middleware import UploadsMiddleware
+from nova.config.paths import Paths
+from nova.utils.messages import ORIGINAL_USER_CONTENT_KEY
 
 THREAD_ID = "thread-abc123"
 
@@ -35,7 +35,7 @@ def _runtime(thread_id: str | None = THREAD_ID) -> MagicMock:
 
 
 def _uploads_dir(tmp_path: Path, thread_id: str = THREAD_ID) -> Path:
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.runtime.user_context import get_effective_user_id
 
     d = Paths(str(tmp_path)).sandbox_uploads_dir(thread_id, user_id=get_effective_user_id())
     d.mkdir(parents=True, exist_ok=True)
@@ -431,7 +431,7 @@ class TestBeforeAgent:
 
     def test_outline_truncation_hint_shown(self, tmp_path):
         """When outline is truncated, a hint line is appended after the last visible entry."""
-        from deerflow.utils.file_conversion import MAX_OUTLINE_ENTRIES
+        from nova.utils.file_conversion import MAX_OUTLINE_ENTRIES
 
         mw = _middleware(tmp_path)
         uploads_dir = _uploads_dir(tmp_path)

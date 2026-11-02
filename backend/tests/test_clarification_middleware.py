@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from langgraph.graph.message import add_messages
 
-from deerflow.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from nova.agents.middlewares.clarification_middleware import ClarificationMiddleware
 
 
 @pytest.fixture

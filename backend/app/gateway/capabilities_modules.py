@@ -11,15 +11,15 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities import CapabilityModule, CapabilityRegistry, ModuleStatus, OpContext, Operation
-from deerflow.capabilities.modules._common import Empty, Items, Ok
+from nova.capabilities import CapabilityModule, CapabilityRegistry, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items, Ok
 
 # ---------------------------------------------------------------- sessions
 
 
 def _tokens_repo():
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.harness_token.sql import HarnessTokenRepository
 
     sf = get_session_factory()
     if sf is None:
@@ -52,7 +52,7 @@ async def _tokens_list(ctx: OpContext, inp: Empty) -> Items:
 
 async def _tokens_create(ctx: OpContext, inp: TokenCreateIn) -> TokenCreatedOut:
     from app.gateway.mcp_server import MOUNT_PATH
-    from deerflow.capabilities import get_registry
+    from nova.capabilities import get_registry
 
     known = {m.id for m in get_registry().modules()}
     bad = [s for s in inp.scopes if s != "*" and s not in known]
@@ -96,7 +96,7 @@ async def _sessions_revoke_all(ctx: OpContext, inp: Empty) -> Ok:
 
 
 async def _sessions_status() -> ModuleStatus:
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.engine import get_session_factory
 
     ok = get_session_factory() is not None
     return ModuleStatus(configured=ok, healthy=ok, detail="database-backed" if ok else "no database: harness tokens unavailable")

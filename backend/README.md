@@ -72,7 +72,7 @@ Per-thread isolated execution with virtual path translation:
 - **Abstract interface**: `execute_command`, `read_file`, `write_file`, `list_dir`
 - **Providers**: `LocalSandboxProvider` (filesystem) and `AioSandboxProvider` (Docker, in community/). Async runtime paths use async sandbox lifecycle hooks so startup, readiness polling, and release do not block the event loop. `AioSandboxProvider` validates active-cache and warm-pool containers during acquire/reuse, dropping definitively dead entries so a thread can provision a fresh sandbox after an unexpected container exit while keeping `get()` as an in-memory lookup. Backend health-check failures are treated as unknown, not dead, and a container that cannot be verified during discovery is simply not adopted (acquire falls through to create instead of failing).
 - **Virtual paths**: `/mnt/user-data/{workspace,uploads,outputs}` → thread-specific physical directories
-- **Skills path**: `/mnt/skills` → `deer-flow/skills/` directory
+- **Skills path**: `/mnt/skills` → `skills/` directory
 - **Skills loading**: Recursively discovers nested `SKILL.md` files under `skills/{public,custom}` and preserves nested container paths
 - **File-write safety**: `str_replace` serializes read-modify-write per `(sandbox.id, path)` so isolated sandboxes keep concurrency even when virtual paths match
 - **Tools**: `bash`, `ls`, `read_file`, `write_file`, `str_replace` (`write_file` overwrites by default and exposes `append` for end-of-file writes; `bash` is disabled by default when using `LocalSandboxProvider`; use `AioSandboxProvider` for isolated shell access)
@@ -145,7 +145,7 @@ For Feishu card updates, Nova stores the running card's `message_id` per inbound
 ### Installation
 
 ```bash
-cd deer-flow
+cd nova
 
 # Copy configuration files
 cp config.example.yaml config.yaml
@@ -308,8 +308,8 @@ MCP servers and skill states in a single file:
 
 ### Environment Variables
 
-- `DEER_FLOW_CONFIG_PATH` - Override config.yaml location. Strict: if set but missing, startup fails with `FileNotFoundError` rather than falling back to the search path. In Docker this **must** be pinned to the in-container path in the compose `environment:` block — the repo-root `.env` carries host paths and `env_file:` would otherwise leak them in. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
-- `DEER_FLOW_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location (same strictness and same Docker caveat)
+- `NOVA_CONFIG_PATH` - Override config.yaml location. Strict: if set but missing, startup fails with `FileNotFoundError` rather than falling back to the search path. In Docker this **must** be pinned to the in-container path in the compose `environment:` block — the repo-root `.env` carries host paths and `env_file:` would otherwise leak them in. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md#docker-config-paths-vs-env_file).
+- `NOVA_EXTENSIONS_CONFIG_PATH` - Override extensions_config.json location (same strictness and same Docker caveat)
 - Model API keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.
 - Tool API keys: `TAVILY_API_KEY`, `GITHUB_TOKEN`, etc.
 
@@ -386,7 +386,7 @@ uv run pytest
 `make detect-blocking-io` statically scans backend business code for blocking
 IO that may run on the backend event loop and is not test-coverage-bound. It
 prints a concise summary for human review and writes complete JSON findings to
-`.deer-flow/blocking-io-findings.json` at the repository root (regardless of
+`.nova/blocking-io-findings.json` at the repository root (regardless of
 whether the target is invoked from the repo root or from `backend/`). JSON
 findings include both broad IO category and review-oriented fields such as
 `priority`, `location`, `blocking_call`, `event_loop_exposure`, `reason`, and

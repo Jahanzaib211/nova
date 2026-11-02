@@ -11,7 +11,7 @@ balance is non-positive. These tests cover:
     patch on the middleware's own httpx reference)
 
 The probe is mocked at the module attribute level
-("deerflow.agents.middlewares.preflight_quota_middleware.httpx.AsyncClient")
+("nova.agents.middlewares.preflight_quota_middleware.httpx.AsyncClient")
 so the patch is scoped exactly where the import is used.
 """
 
@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from deerflow.agents.middlewares.preflight_quota_middleware import (
+from nova.agents.middlewares.preflight_quota_middleware import (
     PreflightQuotaMiddleware,
     _extract_balance,
     _ProbeResult,

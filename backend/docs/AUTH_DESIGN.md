@@ -1,10 +1,10 @@
 # 用户认证与隔离设计
 
-本文档描述 DeerFlow 当前内置认证模块的设计，而不是历史 RFC。它覆盖浏览器登录、API 认证、CSRF、用户隔离、首次初始化、密码重置、内部调用和升级迁移。
+本文档描述 Nova 当前内置认证模块的设计，而不是历史 RFC。它覆盖浏览器登录、API 认证、CSRF、用户隔离、首次初始化、密码重置、内部调用和升级迁移。
 
 ## 设计目标
 
-认证模块的核心目标是把 DeerFlow 从“本地单用户工具”提升为“可多用户部署的 agent runtime”，并让用户身份贯穿 HTTP API、LangGraph-compatible runtime、文件系统、memory、自定义 agent 和反馈数据。
+认证模块的核心目标是把 Nova 从“本地单用户工具”提升为“可多用户部署的 agent runtime”，并让用户身份贯穿 HTTP API、LangGraph-compatible runtime、文件系统、memory、自定义 agent 和反馈数据。
 
 设计约束：
 
@@ -66,7 +66,7 @@ graph TB
 
 - `request.state.user`
 - `request.state.auth`
-- `deerflow.runtime.user_context` 的 `ContextVar`
+- `nova.runtime.user_context` 的 `ContextVar`
 
 `ContextVar` 是这里的核心边界。上层 Gateway 负责写入身份，下层 persistence / file path 只读取结构化的当前用户，不反向依赖 `app.gateway.auth` 具体类型。
 
@@ -136,7 +136,7 @@ enum UserScope:
 - 更新密码 hash。
 - `token_version += 1`。
 - 设置 `needs_setup=true`。
-- 写入 `.deer-flow/admin_initial_credentials.txt`，权限 `0600`。
+- 写入 `.nova/admin_initial_credentials.txt`，权限 `0600`。
 
 命令行只输出凭据文件路径，不输出明文密码。
 
@@ -165,7 +165,7 @@ enum UserScope:
 
 ## CSRF 设计
 
-DeerFlow 使用 Double Submit Cookie：
+Nova 使用 Double Submit Cookie：
 
 - 服务端设置 `csrf_token` cookie。
 - 前端 state-changing 请求发送同值 `X-CSRF-Token` header。
@@ -251,7 +251,7 @@ IM channel worker 不是浏览器用户，不持有浏览器 cookie。它们通�
 - 同时带匹配的 CSRF cookie/header。
 - 服务端识别为内部用户，`id="default"`、`system_role="internal"`。
 
-这意味着 channel 产生的数据默认进入 `default` 用户桶。这个选择适合“平台级 bot 身份”，但不是“每个 IM 用户单独隔离”。如果后续要做到外部 IM 用户隔离，需要把外部 platform user 映射到 DeerFlow user，并让 channel manager 设置对应的 scoped identity。
+这意味着 channel 产生的数据默认进入 `default` 用户桶。这个选择适合“平台级 bot 身份”，但不是“每个 IM 用户单独隔离”。如果后续要做到外部 IM 用户隔离，需要把外部 platform user 映射到 Nova user，并让 channel manager 设置对应的 scoped identity。
 
 ## LangGraph-compatible 认证
 
@@ -304,7 +304,7 @@ PYTHONPATH=. python scripts/migrate_user_isolation.py --user-id <target-user-id>
 | 无 admin 时注册普通用户 | 允许注册普通 `user` | 如产品要求先初始化 admin，给 `/register` 加 gate |
 | 登录限速 | 进程内 dict，单 worker 精确，多 worker 近似 | Redis / DB-backed rate limiter |
 | OAuth | 端点占位，未实现 | 接入 provider 并统一 `token_version` / role 语义 |
-| IM 用户隔离 | channel 使用 `default` 内部用户 | 建立外部用户到 DeerFlow user 的映射 |
+| IM 用户隔离 | channel 使用 `default` 内部用户 | 建立外部用户到 Nova user 的映射 |
 | 绝对 memory path | 显式共享 memory | UI / docs 明确提示 opt-out 风险 |
 
 ## 相关文件
@@ -318,14 +318,14 @@ PYTHONPATH=. python scripts/migrate_user_isolation.py --user-id <target-user-id>
 | `app/gateway/auth/reset_admin.py` | 密码 reset CLI |
 | `app/gateway/auth/credential_file.py` | 0600 凭据文件写入 |
 | `app/gateway/authz.py` | 路由权限与 owner check |
-| `deerflow/runtime/user_context.py` | 当前用户 ContextVar 与 `AUTO` sentinel |
-| `deerflow/persistence/thread_meta/` | thread metadata owner filter |
-| `deerflow/config/paths.py` | per-user filesystem layout |
-| `deerflow/agents/middlewares/thread_data_middleware.py` | run 时解析用户线程目录 |
-| `deerflow/agents/memory/storage.py` | per-user memory storage |
-| `deerflow/config/agents_config.py` | per-user custom agents |
+| `nova/runtime/user_context.py` | 当前用户 ContextVar 与 `AUTO` sentinel |
+| `nova/persistence/thread_meta/` | thread metadata owner filter |
+| `nova/config/paths.py` | per-user filesystem layout |
+| `nova/agents/middlewares/thread_data_middleware.py` | run 时解析用户线程目录 |
+| `nova/agents/memory/storage.py` | per-user memory storage |
+| `nova/config/agents_config.py` | per-user custom agents |
 | `app/channels/manager.py` | IM channel 内部认证调用 |
 | `scripts/migrate_user_isolation.py` | legacy 数据迁移到 per-user layout |
-| `.deer-flow/data/deerflow.db` | 统一 SQLite 数据库，包含 users / threads_meta / runs / feedback 等表 |
-| `.deer-flow/users/{user_id}/agents/{agent_name}/` | 用户自定义 agent 配置、SOUL 和 agent memory |
-| `.deer-flow/admin_initial_credentials.txt` | `reset_admin` 生成的新凭据文件（0600，读完应删除） |
+| `.nova/data/deerflow.db` | 统一 SQLite 数据库，包含 users / threads_meta / runs / feedback 等表 |
+| `.nova/users/{user_id}/agents/{agent_name}/` | 用户自定义 agent 配置、SOUL 和 agent memory |
+| `.nova/admin_initial_credentials.txt` | `reset_admin` 生成的新凭据文件（0600，读完应删除） |

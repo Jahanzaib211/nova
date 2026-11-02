@@ -4,7 +4,7 @@ Two tools shipped fully implemented, documented, and unreachable:
 
 * ``register_external_dev_server`` — implemented with port validation and a
   liveness probe, named in ``backend/CLAUDE.md`` as "the agent-facing tool",
-  never imported into ``deerflow.tools.tools``. The Browser tab's only escape
+  never imported into ``nova.tools.tools``. The Browser tab's only escape
   hatch for a dev server started outside the pipeline, dead.
 * ``igino_research`` — implemented, metric-instrumented, audit-wired, and named
   *in the system prompt* ("for privacy-sensitive research, use igino_research
@@ -30,7 +30,7 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HARNESS = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow"
+HARNESS = REPO_ROOT / "backend" / "packages" / "harness" / "nova"
 TOOLS_PY = HARNESS / "tools" / "tools.py"
 PROMPT_PY = HARNESS / "agents" / "lead_agent" / "prompt.py"
 MANIFEST_PY = HARNESS / "agents" / "manifest.py"

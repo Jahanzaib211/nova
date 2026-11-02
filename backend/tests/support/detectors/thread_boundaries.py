@@ -23,7 +23,7 @@ from support.detectors.repo_root import resolve_repo_root
 REPO_ROOT = resolve_repo_root(Path(__file__))
 DEFAULT_SCAN_PATHS = (
     REPO_ROOT / "backend" / "app",
-    REPO_ROOT / "backend" / "packages" / "harness" / "deerflow",
+    REPO_ROOT / "backend" / "packages" / "harness" / "nova",
 )
 IGNORED_DIR_NAMES = {
     ".git",

@@ -15,7 +15,8 @@ Probes:
   P4. local LLM gateway on http://localhost:${LOCAL_LLM_GATEWAY_PORT:-9000}/health
   P5. llama-server loopback reachability (127.0.0.1:8081/v1/models → 200)
   P6. llama-server VRAM readiness (tiny 1-token chat completion)
-  P7. Docker container count for the deer-flow-dev project (≥ 3 expected)
+  P7. Docker container count for the nova compose project (≥ 3 expected;
+      falls back to the legacy deer-flow-dev project until it is migrated)
   P8. binary attestation drift (env-driven paths; skipped if unset)
   P9. llama-bridge reachability (172.17.0.1:8081 → the path Nova's
       container actually uses via host.docker.internal)
@@ -38,12 +39,13 @@ Probes:
 Auto-fixes (only safe, reversible ones):
   - Attestation drift → clear the hash dir (and run WATCHDOG_ATTESTATION_RESTART_CMD
     if set)
-  - Container count < 3 → pm2 restart deerflow
+  - Container count < 3 → pm2 restart nova
   - llama-server ECONNREFUSED at boot → wait one cycle, no action (cold load)
   - P9 llama-bridge dead → pm2 restart (re-register from ecosystem.config.js on drift)
   - P10 nova-litellm dead → pm2 restart (start from ecosystem.config.js if missing)
   - P11 Dify dead → pm2 restart nova-dify (start from ecosystem.config.js if missing)
-  - P2 gateway dead + container exists but stopped → docker start deer-flow-gateway
+  - P2 gateway dead + container exists but stopped → docker start nova-gateway
+    (or the legacy deer-flow-gateway while that is the one that exists)
   - P7/P2/P15 container repairs are deferred (alert only) while the autoheal
     sidecar is running and the target has been unhealthy for less than
     HEALTHCHECK_CONTAINER_GRACE_SEC (default 600s) — docker's restart policy
@@ -105,7 +107,7 @@ FIX_BACKOFF_MAX_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_BACKOFF_MAX_CYCLES"
 # rebooted, docker was slow, P7 went RED twice, and the daemon issued
 # `pm2 restart nova` at 08:29:15 and again at 08:29:40. The second restart
 # SIGINT'd the first `docker compose up` while it was still bringing the stack
-# up; that compose run stopped deer-flow-gateway on its way out *after* the
+# up; that compose run stopped the gateway container on its way out *after* the
 # new compose run had already seen it running, so nothing ever started it
 # again (`unless-stopped` does not recover from an explicit stop). Gateway
 # down for four hours, nova-ops reporting "Could not reach the Nova gateway".
@@ -116,7 +118,11 @@ FIX_BACKOFF_MAX_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_BACKOFF_MAX_CYCLES"
 # it was restarted — by anyone — less than STACK_RESTART_MIN_AGE_SEC ago.
 FIX_GRACE_CYCLES = int(os.environ.get("HEALTHCHECK_FIX_GRACE_CYCLES", "8"))
 STACK_RESTART_MIN_AGE_SEC = int(os.environ.get("HEALTHCHECK_STACK_RESTART_MIN_AGE_SEC", "240"))
-GATEWAY_CONTAINER = os.environ.get("NOVA_GATEWAY_CONTAINER", "deer-flow-gateway")
+# Container names default to the post-rename `nova-<svc>`; while a host still
+# runs the legacy `deer-flow-<svc>` containers (before
+# scripts/migrate-deerflow-to-nova.sh), _container() resolves to whichever
+# exists. Setting the env var pins the name and disables that fallback.
+GATEWAY_CONTAINER = os.environ.get("NOVA_GATEWAY_CONTAINER", "nova-gateway")
 # Container liveness has four supervisors on this stack: docker's
 # `restart: unless-stopped`, the autoheal sidecar (restarts containers whose
 # healthcheck fails), the pm2 `nova` app (foreground `docker compose up`), and
@@ -127,10 +133,10 @@ GATEWAY_CONTAINER = os.environ.get("NOVA_GATEWAY_CONTAINER", "deer-flow-gateway"
 # — docker and autoheal get the first ten minutes; this daemon is the backstop
 # for what they cannot fix (a container that stays down), not a fourth racer.
 CONTAINER_GRACE_SEC = float(os.environ.get("HEALTHCHECK_CONTAINER_GRACE_SEC", "600"))
-AUTOHEAL_CONTAINER = os.environ.get("NOVA_AUTOHEAL_CONTAINER", "deer-flow-autoheal")
+AUTOHEAL_CONTAINER = os.environ.get("NOVA_AUTOHEAL_CONTAINER", "nova-autoheal")
 # Probes whose repair restarts or starts containers (or the whole stack).
 CONTAINER_LIVENESS_PROBES = frozenset({"P2_gateway", "P7_containers", "P15_jobs_worker"})
-JOBS_CONTAINER = os.environ.get("NOVA_JOBS_CONTAINER", "deer-flow-jobs")
+JOBS_CONTAINER = os.environ.get("NOVA_JOBS_CONTAINER", "nova-jobs")
 # A worker that has not written its heartbeat row in this long is gone.
 JOBS_WORKER_MAX_AGE_S = float(os.environ.get("NOVA_JOBS_WORKER_MAX_AGE_S", "90"))
 HOST_BRIDGE_BIND = os.environ.get("NOVA_HOST_BRIDGE_BIND", "172.17.0.1")
@@ -274,6 +280,65 @@ async def probe_drift() -> ProbeResult:
         warn = [c.get("name") for c in payload.get("checks", []) if c.get("status") == "yellow"]
         return ProbeResult(name, Status.YELLOW, f"{', '.join(warn) or 'see drift.json'}", latency)
     return ProbeResult(name, Status.GREEN, "no drift", latency)
+
+
+async def probe_runs() -> ProbeResult:
+    """Escalate a red run-liveness gate into the watchdog.
+
+    runs-gate.py looks at the one thing nothing else looks at: the runs
+    table. A run that says it is running while ``updated_at`` is stale is
+    a dead run, and a run that recorded LLM calls but persisted no
+    ``run_events`` is a run whose transcript was never written -- the
+    failure that let 3cc50519 sit 'running' with 311 calls and zero
+    events on 2026-11-01 without anybody noticing.
+
+    Modelled on probe_drift: the gate file is the source of truth, its
+    ``overall`` decides the status, and a file that has not been refreshed
+    is YELLOW rather than RED -- the gate not having run recently is a
+    nova-gates problem, not evidence that a run is stuck.
+    """
+    name = "P17_runs"
+    t0 = time.perf_counter()
+    path = os.environ.get("NOVA_RUNS_GATE_STATUS_PATH", "").strip()
+    target = Path(path) if path else Path.home() / ".nova" / "gates" / "runs.json"
+    latency = (time.perf_counter() - t0) * 1000
+
+    try:
+        payload = json.loads(target.read_text())
+    except FileNotFoundError:
+        return ProbeResult(name, Status.YELLOW, "no runs gate status file yet", latency)
+    except (OSError, json.JSONDecodeError) as exc:
+        return ProbeResult(name, Status.YELLOW, f"unreadable: {exc}", latency)
+
+    # The producer stamps its own cadence into the file; fall back to the
+    # registered default when it has not run yet.
+    try:
+        interval = float(payload.get("producer_interval_sec") or 300)
+    except (TypeError, ValueError):
+        interval = 300.0
+    age = time.time() - (payload.get("checked_at_epoch") or 0)
+    if age > 3 * interval:  # three runs-gate intervals
+        return ProbeResult(
+            name,
+            Status.YELLOW,
+            f"runs gate is stale ({age / 60:.0f} min old)",
+            latency,
+        )
+
+    checks = [c for c in payload.get("checks", []) if isinstance(c, dict)]
+    overall = payload.get("overall")
+    failing = [c.get("name") for c in checks if c.get("status") == "red"]
+    if overall == "red":
+        return ProbeResult(
+            name,
+            Status.RED,
+            f"run liveness: {', '.join(failing) or 'see runs.json'}",
+            latency,
+        )
+    if overall == "yellow":
+        warn = [c.get("name") for c in checks if c.get("status") == "yellow"]
+        return ProbeResult(name, Status.YELLOW, f"{', '.join(warn) or 'see runs.json'}", latency)
+    return ProbeResult(name, Status.GREEN, "no run-liveness problems", latency)
 
 
 # ---------------------------------------------------------------------------
@@ -761,15 +826,16 @@ async def probe_llama_vram(host: str = "127.0.0.1", port: int = 8081, model: str
     return await _do()
 
 
-async def probe_containers(project: str = "deer-flow-dev", min_count: int = 3) -> ProbeResult:
+async def probe_containers(project: str | None = None, min_count: int = 3) -> ProbeResult:
     async def _do() -> ProbeResult:
         t0 = time.perf_counter()
+        target = project or await asyncio.to_thread(_compose_project)
         try:
             proc = await asyncio.create_subprocess_exec(
                 "docker",
                 "ps",
                 "--filter",
-                f"label=com.docker.compose.project={project}",
+                f"label=com.docker.compose.project={target}",
                 "--format",
                 "{{.Names}}",
                 stdout=asyncio.subprocess.PIPE,
@@ -913,6 +979,25 @@ def _tunnel_config():
     import stack_config
 
     return stack_config
+
+
+def _container(configured: str, env_key: str) -> str:
+    """The container to act on: ``configured`` when pinned via ``env_key``,
+    else whichever of nova-<svc> / deer-flow-<svc> exists (rename migration)."""
+    if os.environ.get(env_key):
+        return configured
+    try:
+        return _tunnel_config().resolve_container(configured)
+    except Exception:  # noqa: BLE001 - name resolution must never break a probe
+        return configured
+
+
+def _compose_project() -> str:
+    """The compose project to count containers for (nova, else legacy deer-flow-dev)."""
+    try:
+        return _tunnel_config().resolve_compose_project()
+    except Exception:  # noqa: BLE001
+        return "nova"
 
 
 async def _tunnel_metrics_ready(urls: list[str]) -> tuple[bool | None, str]:
@@ -1163,10 +1248,10 @@ def _heal_pm2_app(app: str, timeout: int = 30, check_drift: bool = False) -> boo
 
 def fix_deerflow_containers() -> bool:
     """Heal a RED P7_containers by restarting the pm2 app that owns the
-    deer-flow-dev compose stack.
+    nova compose stack.
 
     That app is named ``nova`` in ecosystem.config.js — it execs
-    scripts/pm2-deerflow.sh, which brings the stack up with
+    scripts/pm2-nova.sh, which brings the stack up with
     docker-compose.prod-frontend.yaml in the -f chain. Restarting it both
     recreates missing containers and puts the frontend back on the prod
     target. This previously restarted a pm2 app named "deerflow", which has
@@ -1218,9 +1303,10 @@ def fix_gateway_container() -> bool:
     it is most likely mid-boot (`uv sync` + uvicorn reload takes a while), and
     a `docker restart` there would only reset the clock.
     """
+    name = _container(GATEWAY_CONTAINER, "NOVA_GATEWAY_CONTAINER")
     try:
         inspected = subprocess.run(
-            ["docker", "inspect", "--format", "{{.State.Status}}", GATEWAY_CONTAINER],
+            ["docker", "inspect", "--format", "{{.State.Status}}", name],
             timeout=15,
             capture_output=True,
             text=True,
@@ -1228,19 +1314,19 @@ def fix_gateway_container() -> bool:
         if inspected.returncode != 0:
             log.warning(
                 "auto-fix: %s not found — stack not up, leaving it to P7",
-                GATEWAY_CONTAINER,
+                name,
             )
             return False
         status = inspected.stdout.strip()
         if status == "running":
             log.warning(
                 "auto-fix: %s is running but unhealthy — not restarting it (probably still booting)",
-                GATEWAY_CONTAINER,
+                name,
             )
             return False
-        log.warning("auto-fix: docker start %s (was %s)", GATEWAY_CONTAINER, status)
+        log.warning("auto-fix: docker start %s (was %s)", name, status)
         subprocess.run(
-            ["docker", "start", GATEWAY_CONTAINER],
+            ["docker", "start", name],
             check=True,
             timeout=60,
             capture_output=True,
@@ -1251,7 +1337,7 @@ def fix_gateway_container() -> bool:
         subprocess.TimeoutExpired,
         FileNotFoundError,
     ) as e:
-        log.error("auto-fix: failed to start %s: %s", GATEWAY_CONTAINER, e)
+        log.error("auto-fix: failed to start %s: %s", name, e)
         return False
 
 
@@ -1267,9 +1353,10 @@ def fix_jobs_container() -> bool:
     left alone — the worker heartbeats every 10 s once its engine is up, so
     a fresh container is usually seconds from green; restarting it would only
     reset that clock (and its lease-release grace)."""
+    name = _container(JOBS_CONTAINER, "NOVA_JOBS_CONTAINER")
     try:
         inspected = subprocess.run(
-            ["docker", "inspect", "--format", "{{.State.Status}}", JOBS_CONTAINER],
+            ["docker", "inspect", "--format", "{{.State.Status}}", name],
             timeout=15,
             capture_output=True,
             text=True,
@@ -1277,19 +1364,19 @@ def fix_jobs_container() -> bool:
         if inspected.returncode != 0:
             log.warning(
                 "auto-fix: %s not found — stack not up, leaving it to P7",
-                JOBS_CONTAINER,
+                name,
             )
             return False
         status = inspected.stdout.strip()
         if status == "running":
             log.warning(
                 "auto-fix: %s is running but no worker heartbeat — not restarting it (probably booting)",
-                JOBS_CONTAINER,
+                name,
             )
             return False
-        log.warning("auto-fix: docker restart %s (was %s)", JOBS_CONTAINER, status)
+        log.warning("auto-fix: docker restart %s (was %s)", name, status)
         subprocess.run(
-            ["docker", "restart", JOBS_CONTAINER],
+            ["docker", "restart", name],
             check=True,
             timeout=60,
             capture_output=True,
@@ -1300,7 +1387,7 @@ def fix_jobs_container() -> bool:
         subprocess.TimeoutExpired,
         FileNotFoundError,
     ) as e:
-        log.error("auto-fix: failed to restart %s: %s", JOBS_CONTAINER, e)
+        log.error("auto-fix: failed to restart %s: %s", name, e)
         return False
 
 
@@ -1507,7 +1594,7 @@ FIX_DISPATCH: dict[str, tuple[Callable[[], bool], str]] = {
     "P11_dify": (lambda: fix_dify(), " [nova-dify healed via pm2]"),
     "P15_jobs_worker": (
         lambda: fix_jobs_container(),
-        " [deer-flow-jobs restarted]",
+        " [jobs container restarted]",
     ),
     "P16_host_bridge": (
         lambda: fix_host_bridge(),
@@ -1528,9 +1615,10 @@ def _monotonic() -> float:
 def autoheal_running() -> bool:
     """Is the autoheal sidecar (AUTOHEAL_CONTAINER) running? False when unknown:
     if this daemon cannot tell, it must not assume someone else is healing."""
+    name = _container(AUTOHEAL_CONTAINER, "NOVA_AUTOHEAL_CONTAINER")
     try:
         proc = subprocess.run(
-            ["docker", "inspect", "--format", "{{.State.Running}}", AUTOHEAL_CONTAINER],
+            ["docker", "inspect", "--format", "{{.State.Running}}", name],
             capture_output=True,
             text=True,
             timeout=10,
@@ -1543,7 +1631,10 @@ def autoheal_running() -> bool:
 #: The container each deferrable probe's repair acts on. P7_containers is
 #: absent on purpose: it fires when containers are *missing*, and autoheal
 #: only restarts containers that exist, run, and report unhealthy.
-_AUTOHEAL_TARGETS = {"P2_gateway": GATEWAY_CONTAINER, "P15_jobs_worker": JOBS_CONTAINER}
+_AUTOHEAL_TARGETS = {
+    "P2_gateway": (GATEWAY_CONTAINER, "NOVA_GATEWAY_CONTAINER"),
+    "P15_jobs_worker": (JOBS_CONTAINER, "NOVA_JOBS_CONTAINER"),
+}
 
 
 def _autoheal_can_act(container: str) -> bool:
@@ -1577,9 +1668,10 @@ def _defer_to_autoheal(probe: ProbeResult, state: WatchdogState) -> bool:
     """
     if probe.name not in CONTAINER_LIVENESS_PROBES or CONTAINER_GRACE_SEC <= 0:
         return False
-    target = _AUTOHEAL_TARGETS.get(probe.name)
-    if target is None:
+    pinned = _AUTOHEAL_TARGETS.get(probe.name)
+    if pinned is None:
         return False
+    target = _container(*pinned)
     unhealthy_for = _monotonic() - state.red_since.get(probe.name, _monotonic())
     if unhealthy_for >= CONTAINER_GRACE_SEC:
         return False
@@ -1757,6 +1849,7 @@ def build_probe_factories() -> list[tuple[str, Callable[[], Awaitable[ProbeResul
             lambda: probe_jobs_worker(port=int(os.environ.get("NOVA_NGINX_PORT", "2026"))),
         ),
         ("P16_host_bridge", probe_host_bridge),
+        ("P17_runs", probe_runs),
     ]
     return probe_factories
 

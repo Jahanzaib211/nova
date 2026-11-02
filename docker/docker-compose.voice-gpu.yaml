@@ -11,7 +11,7 @@
 #   Kokoro   first audio 510 ms -> 200 ms   (fp32 weights)
 #
 # Both engines resolve `device: auto` at load and fall back to CPU on their own
-# (deerflow/speech/devices.py), so this overlay only grants access — it never
+# (nova/speech/devices.py), so this overlay only grants access — it never
 # forces anything onto the GPU.
 services:
   gateway:

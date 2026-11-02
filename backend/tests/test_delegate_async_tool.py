@@ -11,20 +11,20 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from deerflow.config.app_config import AppConfig
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.queue import JobQueue
-from deerflow.persistence.base import Base
-from deerflow.persistence.job.sql import JobRepository
-from deerflow.tools.builtins.delegate_async_tool import build_delegate_tools
+from nova.config.app_config import AppConfig
+from nova.jobs.context import JobContext
+from nova.jobs.queue import JobQueue
+from nova.persistence.base import Base
+from nova.persistence.job.sql import JobRepository
+from nova.tools.builtins.delegate_async_tool import build_delegate_tools
 
 pytestmark = pytest.mark.anyio
-SANDBOX = {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}
+SANDBOX = {"use": "nova.sandbox.local.local_sandbox:LocalSandboxProvider"}
 
 
 @pytest.fixture()
 def repo():
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -51,20 +51,20 @@ def agents_queue(monkeypatch):
     is copied into place.
     """
     cfg = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True, "queues": ["default", "agents"]}})
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: cfg)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: cfg)
     return cfg
 
 
 def test_agent_task_queue_follows_the_configured_queues(monkeypatch):
     """``agents`` when the worker claims it, the first configured queue otherwise."""
-    from deerflow.agents_registry.registry import agent_task_queue
+    from nova.agents_registry.registry import agent_task_queue
 
     listed = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True, "queues": ["default", "email", "agents"]}})
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: listed)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: listed)
     assert agent_task_queue() == "agents"
 
     unlisted = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True, "queues": ["default", "email"]}})
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: unlisted)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: unlisted)
     assert agent_task_queue() == "default"
 
 
@@ -85,7 +85,7 @@ async def test_delegate_enqueues_and_check_reports(repo, agents_queue):
 
 
 def test_tools_are_gated_by_config():
-    from deerflow.tools import get_available_tools
+    from nova.tools import get_available_tools
 
     off = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True}, "subagents": {"async_enabled": False}})
     names = {t.name for t in get_available_tools(subagent_enabled=True, include_mcp=False, app_config=off)}
@@ -100,12 +100,12 @@ def test_tools_are_gated_by_config():
 
 async def test_agent_task_job_runs_acp_and_writes_artifact(repo, monkeypatch, tmp_path):
     from app.jobs.handlers import agents as handler
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     fake_tool = SimpleNamespace(coroutine=lambda **kw: asyncio.sleep(0, result=f"done: {kw['prompt']}"))
-    monkeypatch.setattr("deerflow.tools.builtins.invoke_acp_agent_tool.build_invoke_acp_agent_tool", lambda agents: fake_tool)
-    monkeypatch.setattr("deerflow.config.acp_config.get_acp_agents", lambda: {"claude_code": SimpleNamespace(command="npx", description="cc")})
+    monkeypatch.setattr("nova.tools.builtins.invoke_acp_agent_tool.build_invoke_acp_agent_tool", lambda agents: fake_tool)
+    monkeypatch.setattr("nova.config.acp_config.get_acp_agents", lambda: {"claude_code": SimpleNamespace(command="npx", description="cc")})
     job_id = await JobQueue(repo).enqueue("agents.task", {"agent": "claude_code", "kind": "acp", "task": "list files"}, owner_user_id="u1", thread_id="00000000-0000-0000-0000-000000000001")
     ctx = JobContext(repo, await repo.get(job_id), worker_id="t", lease_ttl=timedelta(seconds=60))
     result = await handler.agent_task(ctx)
@@ -118,7 +118,7 @@ async def test_agent_task_job_runs_acp_and_writes_artifact(repo, monkeypatch, tm
 async def test_agent_task_job_rejects_unknown_kind_or_agent(repo, monkeypatch):
     from app.jobs.handlers import agents as handler
 
-    monkeypatch.setattr("deerflow.config.acp_config.get_acp_agents", lambda: {})
+    monkeypatch.setattr("nova.config.acp_config.get_acp_agents", lambda: {})
     job_id = await JobQueue(repo).enqueue("agents.task", {"agent": "ghost", "kind": "acp", "task": "x"})
     ctx = JobContext(repo, await repo.get(job_id), worker_id="t", lease_ttl=timedelta(seconds=60))
     with pytest.raises(RuntimeError, match="unknown ACP agent"):
@@ -129,7 +129,7 @@ def test_capability_delegate_resolves_registry_ids_to_a_kind():
     """Live 2026-09-22: Claude Code called `agents__delegate` with
     `acp:claude_code` (the id agents__registry gave it) and the job died with
     `unknown subagent 'claude_code'` — the capability enqueued no `kind`."""
-    from deerflow.capabilities.modules.agents import resolve_delegate_target
+    from nova.capabilities.modules.agents import resolve_delegate_target
 
     config = AppConfig.model_validate({"sandbox": SANDBOX, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
     assert resolve_delegate_target("acp:claude_code", config) == ("claude_code", "acp")
@@ -141,11 +141,11 @@ def test_capability_delegate_resolves_registry_ids_to_a_kind():
 
 
 async def test_capability_delegate_enqueues_kind_and_model(repo, monkeypatch):
-    from deerflow.capabilities.modules import agents as mod
-    from deerflow.capabilities.types import OpContext
+    from nova.capabilities.modules import agents as mod
+    from nova.capabilities.types import OpContext
 
     config = AppConfig.model_validate({"sandbox": SANDBOX, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: config)
     monkeypatch.setattr(mod, "jobs_repo", lambda: repo)
     ctx = OpContext(user_id="u1", is_admin=False, thread_id="t1", surface="mcp")
 
@@ -171,12 +171,12 @@ async def test_agent_task_job_passes_the_requested_model_to_the_subagent(repo, m
     class Result:
         status = handler_status = None
 
-    monkeypatch.setattr("deerflow.subagents.SubagentExecutor", FakeExecutor)
-    from deerflow.subagents.executor import SubagentStatus
+    monkeypatch.setattr("nova.subagents.SubagentExecutor", FakeExecutor)
+    from nova.subagents.executor import SubagentStatus
 
     done = SimpleNamespace(status=SubagentStatus.COMPLETED, result="ok", error=None, ai_messages=[])
-    monkeypatch.setattr("deerflow.subagents.executor.get_background_task_result", lambda task_id: done)
-    monkeypatch.setattr("deerflow.tools.get_available_tools", lambda **kw: [])
+    monkeypatch.setattr("nova.subagents.executor.get_background_task_result", lambda task_id: done)
+    monkeypatch.setattr("nova.tools.get_available_tools", lambda **kw: [])
 
     job_id = await JobQueue(repo).enqueue("agents.task", {"agent": "bash", "kind": "subagent", "task": "id", "model": "claude-sonnet-4-6"})
     ctx = JobContext(repo, await repo.get(job_id), worker_id="t", lease_ttl=timedelta(seconds=60))
@@ -186,11 +186,11 @@ async def test_agent_task_job_passes_the_requested_model_to_the_subagent(repo, m
 
 
 async def test_capability_delegate_from_a_runtime_uses_the_configured_delegate_model(repo, monkeypatch):
-    from deerflow.capabilities.modules import agents as mod
-    from deerflow.capabilities.types import OpContext
+    from nova.capabilities.modules import agents as mod
+    from nova.capabilities.types import OpContext
 
     config = AppConfig.model_validate({"sandbox": SANDBOX, "runtimes": {"enabled": True, "delegate_model": "claude-sonnet-4-6"}})
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: config)
     monkeypatch.setattr(mod, "jobs_repo", lambda: repo)
 
     # Over MCP (an ACP runtime's turn) the pinned model applies…
@@ -209,11 +209,11 @@ async def test_both_delegation_paths_enqueue_one_attempt_on_the_agents_queue(rep
     retry budget (5), so a side-effectful agent run could replay up to five
     times; ``delegate_async`` used one attempt on ``agents``. Both now go
     through ``enqueue_agent_task``."""
-    from deerflow.capabilities.modules import agents as mod
-    from deerflow.capabilities.types import OpContext
+    from nova.capabilities.modules import agents as mod
+    from nova.capabilities.types import OpContext
 
     config = AppConfig.model_validate({"sandbox": SANDBOX, "jobs": {"enabled": True}, "subagents": {"async_enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: config)
     monkeypatch.setattr(mod, "jobs_repo", lambda: repo)
     via_capability = (await mod._delegate(OpContext(user_id="u1"), mod.DelegateIn(agent="claude_code", task="a"))).job
     delegate, _ = build_delegate_tools(config, lambda: repo)
@@ -224,7 +224,7 @@ async def test_both_delegation_paths_enqueue_one_attempt_on_the_agents_queue(rep
 
 
 def test_async_delegation_enabled_needs_both_switches():
-    from deerflow.agents_registry.registry import async_delegation_enabled
+    from nova.agents_registry.registry import async_delegation_enabled
 
     def cfg(async_enabled: bool, jobs: bool) -> SimpleNamespace:
         return SimpleNamespace(subagents=SimpleNamespace(async_enabled=async_enabled), jobs=SimpleNamespace(enabled=jobs))

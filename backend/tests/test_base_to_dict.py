@@ -10,7 +10,7 @@ from __future__ import annotations
 from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from deerflow.persistence.base import Base, _column_keys
+from nova.persistence.base import Base, _column_keys
 
 
 class _Widget(Base):

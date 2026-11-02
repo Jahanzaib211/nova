@@ -15,8 +15,8 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.gateway.admin_ops import utc
-from deerflow.persistence.credit_request.model import CreditRequestRow
-from deerflow.persistence.engine import commit_with_lock_retry, get_session_factory
+from nova.persistence.credit_request.model import CreditRequestRow
+from nova.persistence.engine import commit_with_lock_retry, get_session_factory
 
 logger = logging.getLogger(__name__)
 

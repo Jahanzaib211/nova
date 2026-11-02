@@ -1,4 +1,4 @@
-"""Contract tests for ``deerflow.jobs.status``.
+"""Contract tests for ``nova.jobs.status``.
 
 The job runner's status and event vocabularies are shared with the frontend
 through ``contracts/job_status_contract.json``. Both sides load the same file,
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from deerflow.jobs.status import (
+from nova.jobs.status import (
     JOB_EVENT_TYPES,
     JOB_STATUSES,
     TERMINAL_JOB_STATUSES,

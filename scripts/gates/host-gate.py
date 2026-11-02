@@ -45,6 +45,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GREEN, YELLOW, RED = "green", "yellow", "red"
 
 
+
+def _data_home(repo_root: Path) -> Path:
+    """backend/.nova, or the pre-rename backend/.deer-flow while only that exists."""
+    backend = repo_root / "backend"
+    new, legacy = backend / ".nova", backend / ".deer-flow"
+    return legacy if not new.exists() and legacy.exists() else new
+
 def _default_status_path() -> Path:
     override = os.environ.get("NOVA_HOST_GATE_STATUS_PATH", "").strip()
     return Path(override) if override else Path.home() / ".nova" / "gates" / "host.json"
@@ -261,6 +268,18 @@ def _active_backend() -> tuple[str, str | None]:
     return backend, (url or os.environ.get("DATABASE_URL") or None)
 
 
+
+def _pg_containers() -> list[str]:
+    """Postgres container names to try: NOVA_PG_CONTAINER pins one; otherwise
+    nova-postgres, then the pre-rename deer-flow-postgres (so the gate keeps
+    working on a host that has not run scripts/migrate-deerflow-to-nova.sh)."""
+    pinned = os.environ.get("NOVA_PG_CONTAINER")
+    return [pinned] if pinned else ["nova-postgres", "deer-flow-postgres"]
+
+
+def _no_such_container(proc) -> bool:
+    return proc.returncode != 0 and "No such container" in (proc.stderr or "")
+
 def _psql(query: str, timeout_s: float = 30) -> str | None:
     """Run one query via the postgres container.
 
@@ -269,24 +288,27 @@ def _psql(query: str, timeout_s: float = 30) -> str | None:
     not importable. Shelling into the container keeps the gate dependency-free.
     """
     try:
-        out = subprocess.run(
-            [
-                "docker",
-                "exec",
-                os.environ.get("NOVA_PG_CONTAINER", "deer-flow-postgres"),
-                "psql",
-                "-U",
-                os.environ.get("NOVA_PG_USER", "nova"),
-                "-d",
-                os.environ.get("NOVA_PG_DB", "nova"),
-                "-tAc",
-                query,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            close_fds=False,
-        )
+        for container in _pg_containers():
+            out = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    container,
+                    "psql",
+                    "-U",
+                    os.environ.get("NOVA_PG_USER", "nova"),
+                    "-d",
+                    os.environ.get("NOVA_PG_DB", "nova"),
+                    "-tAc",
+                    query,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                close_fds=False,
+            )
+            if not _no_such_container(out):
+                break
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.strip() if out.returncode == 0 else None
@@ -319,7 +341,7 @@ def check_database() -> dict:
             detail += "  — run scripts/prune-checkpoints.py"
         return check("database_size", status, detail, bytes=size, backend="postgres")
 
-    db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
+    db = _data_home(REPO_ROOT) / "data" / "deerflow.db"
     if not db.exists():
         return check("database_size", GREEN, "sqlite not in use (postgres backend?)")
     size = db.stat().st_size
@@ -370,7 +392,7 @@ def check_checkpoint_count() -> dict:
         total_s, backlog_s = raw.split("|", 1)
         total, backlog = int(total_s or 0), int(backlog_s or 0)
     else:
-        db = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
+        db = _data_home(REPO_ROOT) / "data" / "deerflow.db"
         if not db.exists():
             return check("checkpoint_backlog", GREEN, "sqlite not in use")
         try:

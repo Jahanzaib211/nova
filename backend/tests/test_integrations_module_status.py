@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.integrations.health import IntegrationStatus
+from nova.integrations.health import IntegrationStatus
 
 
 def _status_of(result):
@@ -74,7 +74,7 @@ def _registry_with(results, services=None):
 
 @pytest.mark.asyncio
 async def test_a_required_degraded_integration_makes_the_module_unhealthy(monkeypatch):
-    from deerflow.capabilities.modules import integrations as mod
+    from nova.capabilities.modules import integrations as mod
 
     results = [
         _Result(IntegrationStatus.HEALTHY),
@@ -100,7 +100,7 @@ async def test_an_optional_degraded_integration_does_not_pin_the_gate(monkeypatc
     It still shows its real status on the card; it just cannot hold the whole
     module yellow forever, because a permanently-yellow gate stops being read.
     """
-    from deerflow.capabilities.modules import integrations as mod
+    from nova.capabilities.modules import integrations as mod
 
     results = [_Result(IntegrationStatus.HEALTHY), _Result(IntegrationStatus.DEGRADED)]
     results[0].id, results[1].id = "ok", "mailcow"
@@ -116,7 +116,7 @@ async def test_an_optional_degraded_integration_does_not_pin_the_gate(monkeypatc
 @pytest.mark.asyncio
 async def test_unknown_ids_default_to_required(monkeypatch):
     """Adapters (MCP servers, skills, ACP agents) are not in config.services."""
-    from deerflow.capabilities.modules import integrations as mod
+    from nova.capabilities.modules import integrations as mod
 
     results = [_Result(IntegrationStatus.DEGRADED)]
     results[0].id = "mcp:something"

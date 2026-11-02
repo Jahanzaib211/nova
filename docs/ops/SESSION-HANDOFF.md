@@ -138,7 +138,7 @@ Recovery now lives in `scripts/docker.sh` (called via `make docker-status` /
 `make docker-start`):
 
 - `start()` always appends `docker-compose.dood.yaml` when `sandbox.use`
-  resolves to `deerflow.community.aio_sandbox:AioSandboxProvider` and
+  resolves to `nova.community.aio_sandbox:AioSandboxProvider` and
   `provisioner_url` is empty. There is no longer a code path that brings the
   gateway up in `aio` mode without the socket bind.
 - `status()` (new) prints four signals in one shot: host socket present,
@@ -166,7 +166,7 @@ make docker-start     # idempotent: appends DooD overlay, force-recreates gatewa
 Three decisions worth keeping:
 
 - **Writes never touch `config.yaml`.** They go to
-  `$DEER_FLOW_HOME/voice-settings.yaml` and are layered over the `speech:`
+  `$NOVA_HOME/voice-settings.yaml` and are layered over the `speech:`
   section one level deep. Rewriting `config.yaml` would need either `yaml.dump`
   (destroys all comments) or a round-trip YAML dependency for one endpoint.
 - **`save_overrides()` calls `reset_engines()`.** Engines are process
@@ -260,15 +260,15 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 
 #### G3. `web_fetch` is on Jina, which 401s without a key
 
-- **Evidence:** `config.yaml:85` → `deerflow.community.jina_ai.tools:web_fetch_tool`.
+- **Evidence:** `config.yaml:85` → `nova.community.jina_ai.tools:web_fetch_tool`.
   This is the failure Nova reported in its **own self-audit** this session.
   A keyless fallback was added, but the primary is still a keyed cloud service.
 - **Fix:** point search/fetch at the running SearXNG. Nova already ships
-  `deerflow/community/searxng/` — this is config only.
+  `nova/community/searxng/` — this is config only.
 
   ```yaml
   # config.yaml:81-85
-  - use: deerflow.community.searxng.tools:web_search_tool
+  - use: nova.community.searxng.tools:web_search_tool
     # SEARXNG_BASE_URL=http://127.0.0.1:8090  (set in .env)
   ```
 
@@ -356,7 +356,7 @@ Ordered by dependency. **Tier N cannot start until Tier N−1 lands.**
 - `tests/test_replay_golden.py` is deterministic replay — it catches
   serialization drift, not answer quality. A prompt change can silently degrade
   the agent with every test still green.
-- **Fix:** Langfuse is **already wired** (`deerflow/tracing/`) and has datasets +
+- **Fix:** Langfuse is **already wired** (`nova/tracing/`) and has datasets +
   scoring. Largely wiring, not a new dependency. `promptfoo` if you want it in CI.
 
 #### G11. Artifacts on local disk only
@@ -420,7 +420,7 @@ helm template nova k8s/charts/nova -f k8s/charts/nova/values-staging.yaml >/dev/
 
 ### Environment traps that cost time this session
 
-- `.env` exports `DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH`
+- `.env` exports `NOVA_CONFIG_PATH` / `NOVA_EXTENSIONS_CONFIG_PATH`
   into every `uv run`. **These now hold HOST paths** (they were container paths
   when this was first written, hence the inverted advice that used to live
   here). Host-side `uv run` therefore works as-is; it is the *containers* that
@@ -430,14 +430,14 @@ helm template nova k8s/charts/nova -f k8s/charts/nova/values-staging.yaml >/dev/
   outage — see `docs/TROUBLESHOOTING.md`.
 
   The host paths are not incidental: `docker-compose.yaml` uses
-  `${DEER_FLOW_CONFIG_PATH}` as the *source* of a bind mount, so a container
+  `${NOVA_CONFIG_PATH}` as the *source* of a bind mount, so a container
   path in `.env` would break the prod stack. Don't "fix" `.env`; fix the
   compose service.
 - Playwright: port 3000 is taken by an unrelated project and
   `reuseExistingServer` will happily test *it*. Always `E2E_PORT=3111 CI=1`.
 - `nginx -t` in a bare container fails on a missing `/var/log/nova`; `mkdir -p`
   first or you get a false negative.
-- The gateway is a **container** (`deer-flow-gateway`); host `:8001` is not it.
+- The gateway is a **container** (`nova-gateway`); host `:8001` is not it.
   Use `docker exec … /app/backend/.venv/bin/python` for in-container checks.
 - Auth is **on** (production env), so `/api/*` returns 401 to plain curl.
 

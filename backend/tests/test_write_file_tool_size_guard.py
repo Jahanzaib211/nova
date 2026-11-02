@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.sandbox import tools as tools_module
-from deerflow.sandbox.tools import _split_utf8_safe, write_file_tool
+from nova.sandbox import tools as tools_module
+from nova.sandbox.tools import _split_utf8_safe, write_file_tool
 
 
 def _call_write_file(*, content: str, append: bool = False) -> tuple[str, MagicMock]:

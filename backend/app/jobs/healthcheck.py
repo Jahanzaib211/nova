@@ -11,9 +11,9 @@ import argparse
 import asyncio
 from datetime import UTC, datetime
 
-from deerflow.config.app_config import get_app_config
-from deerflow.persistence.engine import close_engine, get_session_factory, init_engine_from_config
-from deerflow.persistence.job.sql import JobRepository
+from nova.config.app_config import get_app_config
+from nova.persistence.engine import close_engine, get_session_factory, init_engine_from_config
+from nova.persistence.job.sql import JobRepository
 
 
 async def check(max_age: float) -> bool:

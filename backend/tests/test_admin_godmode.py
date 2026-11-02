@@ -27,7 +27,7 @@ _PASSWORD = "Tr0ub4dor3a"
 def app(tmp_path):
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/admin_godmode.db"
@@ -84,8 +84,8 @@ def test_recent_users_returns_per_user_activity(app):
 
 
 def _insert_run(app, *, user_id, tokens, when):
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.run.model import RunRow
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.run.model import RunRow
 
     async def _go():
         async with get_session_factory()() as session:
@@ -150,8 +150,8 @@ def test_audit_captures_actor_ip_and_user_agent(app):
     assert resp.status_code == 200
 
     # Check the audit trail saw the actor metadata.
-    from deerflow.persistence.admin_audit.model import AdminAuditRow
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.admin_audit.model import AdminAuditRow
+    from nova.persistence.engine import get_session_factory
 
     async def _rows():
         async with get_session_factory()() as session:

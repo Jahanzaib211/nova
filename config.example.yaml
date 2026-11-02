@@ -41,7 +41,7 @@ models:
   # Example: Volcengine (Doubao) model
   # - name: doubao-seed-1.8
   #   display_name: Doubao-Seed-1.8
-  #   use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+  #   use: nova.models.patched_deepseek:PatchedChatDeepSeek
   #   model: doubao-seed-1-8-251228
   #   api_base: https://ark.cn-beijing.volces.com/api/v3
   #   api_key: $VOLCENGINE_API_KEY
@@ -91,7 +91,7 @@ models:
   # into <think> tags or dropped entirely (ollama/ollama#15293). The native Ollama API
   # (/api/chat) correctly separates thinking from response content.
   #
-  # Install: cd backend && uv pip install 'deerflow-harness[ollama]'
+  # Install: cd backend && uv pip install 'nova-harness[ollama]'
   #
   # - name: qwen3-local
   #   display_name: Qwen3 32B (Ollama)
@@ -159,7 +159,7 @@ models:
   # https://docs.cloud.google.com/vertex-ai/generative-ai/docs/thought-signatures
   # - name: gemini-2.5-pro-thinking
   #   display_name: Gemini 2.5 Pro (Thinking)
-  #   use: deerflow.models.patched_openai:PatchedChatOpenAI
+  #   use: nova.models.patched_openai:PatchedChatOpenAI
   #   model: google/gemini-2.5-pro-preview   # model name as expected by your gateway
   #   api_key: $GEMINI_API_KEY
   #   base_url: https://<your-openai-compat-gateway>/v1
@@ -191,7 +191,7 @@ models:
   # See: https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content
   # - name: mimo-v2.5-pro
   #   display_name: MiMo V2.5 Pro
-  #   use: deerflow.models.patched_mimo:PatchedChatMiMo
+  #   use: nova.models.patched_mimo:PatchedChatMiMo
   #   model: mimo-v2.5-pro
   #   api_key: $MIMO_API_KEY
   #   base_url: https://api.xiaomimimo.com/v1
@@ -212,7 +212,7 @@ models:
   # Example: DeepSeek model (with thinking support)
   # - name: deepseek-v3
   #   display_name: DeepSeek V3 (Thinking)
-  #   use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+  #   use: nova.models.patched_deepseek:PatchedChatDeepSeek
   #   model: deepseek-reasoner
   #   api_key: $DEEPSEEK_API_KEY
   #   timeout: 600.0
@@ -232,7 +232,7 @@ models:
   # Example: Kimi K2.5 model
   # - name: kimi-k2.5
   #   display_name: Kimi K2.5
-  #   use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+  #   use: nova.models.patched_deepseek:PatchedChatDeepSeek
   #   model: kimi-k2.5
   #   api_base: https://api.moonshot.cn/v1
   #   api_key: $MOONSHOT_API_KEY
@@ -283,7 +283,7 @@ models:
   # Docs: https://platform.stepfun.com/docs/api-reference/chat-completions
   # - name: step-3.7-flash
   #   display_name: Step 3.7 Flash
-  #   use: deerflow.models.patched_stepfun:PatchedChatStepFun
+  #   use: nova.models.patched_stepfun:PatchedChatStepFun
   #   model: step-3.7-flash
   #   api_key: $STEPFUN_API_KEY
   #   base_url: https://api.stepfun.com/v1
@@ -305,7 +305,7 @@ models:
   # Docs: https://platform.minimax.io/docs/api-reference/text-openai-api
   # - name: minimax-m3
   #   display_name: MiniMax M3
-  #   use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  #   use: nova.models.patched_minimax:PatchedChatMiniMax
   #   model: MiniMax-M3
   #   api_key: $MINIMAX_API_KEY
   #   base_url: https://api.minimax.io/v1
@@ -346,7 +346,7 @@ models:
   # "user name must be consistent (2013)".
   # - name: minimax-m2.7
   #   display_name: MiniMax M2.7
-  #   use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  #   use: nova.models.patched_minimax:PatchedChatMiniMax
   #   model: MiniMax-M2.7
   #   api_key: $MINIMAX_API_KEY
   #   base_url: https://api.minimax.io/v1
@@ -359,7 +359,7 @@ models:
 
   # - name: minimax-m2.7-highspeed
   #   display_name: MiniMax M2.7 Highspeed
-  #   use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  #   use: nova.models.patched_minimax:PatchedChatMiniMax
   #   model: MiniMax-M2.7-highspeed
   #   api_key: $MINIMAX_API_KEY
   #   base_url: https://api.minimax.io/v1
@@ -375,7 +375,7 @@ models:
   # Docs: https://platform.minimaxi.com/docs/api-reference/text-openai-api
   # - name: minimax-m3
   #   display_name: MiniMax M3
-  #   use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  #   use: nova.models.patched_minimax:PatchedChatMiniMax
   #   model: MiniMax-M3
   #   api_key: $MINIMAX_API_KEY
   #   base_url: https://api.minimaxi.com/v1
@@ -410,7 +410,7 @@ models:
   # "user name must be consistent (2013)".
   # - name: minimax-m2.7
   #   display_name: MiniMax M2.7
-  #   use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  #   use: nova.models.patched_minimax:PatchedChatMiniMax
   #   model: MiniMax-M2.7
   #   api_key: $MINIMAX_API_KEY
   #   base_url: https://api.minimaxi.com/v1
@@ -423,7 +423,7 @@ models:
 
   # - name: minimax-m2.7-highspeed
   #   display_name: MiniMax M2.7 Highspeed
-  #   use: deerflow.models.patched_minimax:PatchedChatMiniMax
+  #   use: nova.models.patched_minimax:PatchedChatMiniMax
   #   model: MiniMax-M2.7-highspeed
   #   api_key: $MINIMAX_API_KEY
   #   base_url: https://api.minimaxi.com/v1
@@ -455,7 +455,7 @@ models:
   # `vllm serve ... --reasoning-parser <parser>`.
   # - name: qwen3-32b-vllm
   #   display_name: Qwen3 32B (vLLM)
-  #   use: deerflow.models.vllm_provider:VllmChatModel
+  #   use: nova.models.vllm_provider:VllmChatModel
   #   model: Qwen/Qwen3-32B
   #   api_key: $VLLM_API_KEY
   #   base_url: http://localhost:8000/v1
@@ -473,7 +473,7 @@ models:
   # Example: Qwen3-Coder deployed on MindIE Engine
   # - name: Qwen3_Coder_480B_MindIE
   #   display_name: Qwen3-Coder-480B (MindIE)
-  #   use: deerflow.models.mindie_provider:MindIEChatModel
+  #   use: nova.models.mindie_provider:MindIEChatModel
   #   model: Qwen3-Coder-480B-A35B-Instruct-Client
   #   base_url: http://localhost:8989/v1
   #   api_key: $OPENAI_API_KEY
@@ -511,7 +511,7 @@ models:
   # droplet, then point base_url at it. Gemma is side-prize eligible.
   # - name: amd-instinct-vllm
   #   display_name: AMD Instinct (vLLM/ROCm)
-  #   use: deerflow.models.vllm_provider:VllmChatModel
+  #   use: nova.models.vllm_provider:VllmChatModel
   #   model: google/gemma-3-27b-it
   #   base_url: http://<amd-droplet-ip>:8000/v1
   #   api_key: not-needed
@@ -549,7 +549,7 @@ tools:
   # Web search tool (uses DuckDuckGo, no API key required)
   - name: web_search
     group: web
-    use: deerflow.community.ddg_search.tools:web_search_tool
+    use: nova.community.ddg_search.tools:web_search_tool
     max_results: 5
     # backend: auto          # DDGS backend(s): auto, duckduckgo, brave, wikipedia, etc.
     # region: wt-wt          # wt-wt is normalized for Wikipedia when backend includes auto/all/wikipedia.
@@ -561,7 +561,7 @@ tools:
   # For Docker deployments, use the Docker service name instead of localhost.
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.searxng.tools:web_search_tool
+  #   use: nova.community.searxng.tools:web_search_tool
   #   base_url: http://localhost:8088   # SearXNG instance URL (default: :8088; Docker: http://searxng:8080)
   #   max_results: 5                     # Maximum number of search results
 
@@ -571,7 +571,7 @@ tools:
   # Avoid putting literal API keys in config.yaml; use the $VAR form instead.
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.serper.tools:web_search_tool
+  #   use: nova.community.serper.tools:web_search_tool
   #   max_results: 5   # capped at 10 by the Serper provider
   #   # api_key: $SERPER_API_KEY  # Optional explicit env-var reference
 
@@ -581,28 +581,28 @@ tools:
   # `backend: brave` option above, this calls the official Brave API directly.
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.brave.tools:web_search_tool
+  #   use: nova.community.brave.tools:web_search_tool
   #   max_results: 5                  # Capped at 20 by the Brave Search API
   #   # api_key: $BRAVE_SEARCH_API_KEY  # Optional if the env var is set
 
   # Web search tool (requires Tavily API key)
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.tavily.tools:web_search_tool
+  #   use: nova.community.tavily.tools:web_search_tool
   #   max_results: 5
   #   # api_key: $TAVILY_API_KEY  # Set if needed
 
   # Web search tool (uses InfoQuest, requires InfoQuest API key)
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.infoquest.tools:web_search_tool
+  #   use: nova.community.infoquest.tools:web_search_tool
   #   # Used to limit the scope of search results, only returns content within the specified time range. Set to -1 to disable time filtering
   #   search_time_range: 10
 
   # Web search tool (uses Exa, requires EXA_API_KEY)
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.exa.tools:web_search_tool
+  #   use: nova.community.exa.tools:web_search_tool
   #   max_results: 5
   #   search_type: auto  # Options: auto, neural, keyword
   #   contents_max_characters: 1000
@@ -611,7 +611,7 @@ tools:
   # Web search tool (uses Firecrawl, requires FIRECRAWL_API_KEY)
   # - name: web_search
   #   group: web
-  #   use: deerflow.community.firecrawl.tools:web_search_tool
+  #   use: nova.community.firecrawl.tools:web_search_tool
   #   max_results: 5
   #   # api_key: $FIRECRAWL_API_KEY
 
@@ -623,7 +623,7 @@ tools:
   # Comment out the Jina AI web_fetch entry below before enabling this one.
   # - name: web_fetch
   #   group: web
-  #   use: deerflow.community.browserless.tools:web_fetch_tool
+  #   use: nova.community.browserless.tools:web_fetch_tool
   #   base_url: http://localhost:3032    # Browserless instance URL (default: :3032; Docker: http://browserless:3000)
   #   # token: $BROWSERLESS_TOKEN        # API token (required for Browserless Cloud; optional for self-hosted)
   #   timeout_s: 30                       # Request timeout in seconds
@@ -636,13 +636,13 @@ tools:
   # Comment out the Jina AI web_fetch entry below before enabling this one.
   # - name: web_fetch
   #   group: web
-  #   use: deerflow.community.exa.tools:web_fetch_tool
+  #   use: nova.community.exa.tools:web_fetch_tool
   #   # api_key: $EXA_API_KEY
 
   # Web fetch tool (uses Jina AI reader)
   - name: web_fetch
     group: web
-    use: deerflow.community.jina_ai.tools:web_fetch_tool
+    use: nova.community.jina_ai.tools:web_fetch_tool
     timeout: 10
 
   # Crawl4AI, as batch page retrieval. Declared here — not only in a private
@@ -653,7 +653,7 @@ tools:
   # untrusted caller, so the tool is named for what it actually does.
   - name: web_fetch_many
     group: web
-    use: deerflow.community.crawl4ai.tools:web_fetch_many_tool
+    use: nova.community.crawl4ai.tools:web_fetch_many_tool
     base_url: http://crawl4ai:11235
     timeout_s: 90
 
@@ -662,7 +662,7 @@ tools:
   # crawl_tool.py rather than in a service that refuses to honour them.
   - name: web_crawl
     group: web
-    use: deerflow.community.crawl4ai.crawl_tool:web_crawl_tool
+    use: nova.community.crawl4ai.crawl_tool:web_crawl_tool
     base_url: http://crawl4ai:11235
     timeout_s: 60
     # Optional proxy for restricted networks / Docker / WSL.
@@ -673,7 +673,7 @@ tools:
   # Web fetch tool (uses InfoQuest)
   # - name: web_fetch
   #   group: web
-  #   use: deerflow.community.infoquest.tools:web_fetch_tool
+  #   use: nova.community.infoquest.tools:web_fetch_tool
   #   # Overall timeout for the entire crawling process (in seconds). Set to positive value to enable, -1 to disable
   #   timeout: 10
   #   # Waiting time after page loading (in seconds). Set to positive value to enable, -1 to disable
@@ -684,20 +684,20 @@ tools:
   # Web fetch tool (uses Firecrawl, requires FIRECRAWL_API_KEY)
   # - name: web_fetch
   #   group: web
-  #   use: deerflow.community.firecrawl.tools:web_fetch_tool
+  #   use: nova.community.firecrawl.tools:web_fetch_tool
   #   # api_key: $FIRECRAWL_API_KEY
 
   # Image search tool (uses DuckDuckGo)
   # Use this to find reference images before image generation
   - name: image_search
     group: web
-    use: deerflow.community.image_search.tools:image_search_tool
+    use: nova.community.image_search.tools:image_search_tool
     max_results: 5
 
   # Image search tool (uses InfoQuest)
   # - name: image_search
   #   group: web
-  #   use: deerflow.community.infoquest.tools:image_search_tool
+  #   use: nova.community.infoquest.tools:image_search_tool
   #   # Used to limit the scope of image search results, only returns content within the specified time range. Set to -1 to disable time filtering
   #   image_search_time_range: 10
   #   # Image size filter. Options: "l" (large), "m" (medium), "i" (icon).
@@ -709,43 +709,43 @@ tools:
   # Avoid putting literal API keys in config.yaml; use the $VAR form instead.
   # - name: image_search
   #   group: web
-  #   use: deerflow.community.serper.tools:image_search_tool
+  #   use: nova.community.serper.tools:image_search_tool
   #   max_results: 5   # capped at 10 by the Serper provider
   #   # api_key: $SERPER_API_KEY  # Optional explicit env-var reference
 
   # File operations tools
   - name: ls
     group: file:read
-    use: deerflow.sandbox.tools:ls_tool
+    use: nova.sandbox.tools:ls_tool
 
   - name: read_file
     group: file:read
-    use: deerflow.sandbox.tools:read_file_tool
+    use: nova.sandbox.tools:read_file_tool
 
   - name: glob
     group: file:read
-    use: deerflow.sandbox.tools:glob_tool
+    use: nova.sandbox.tools:glob_tool
     max_results: 200
 
   - name: grep
     group: file:read
-    use: deerflow.sandbox.tools:grep_tool
+    use: nova.sandbox.tools:grep_tool
     max_results: 100
 
   - name: write_file
     group: file:write
-    use: deerflow.sandbox.tools:write_file_tool
+    use: nova.sandbox.tools:write_file_tool
 
   - name: str_replace
     group: file:write
-    use: deerflow.sandbox.tools:str_replace_tool
+    use: nova.sandbox.tools:str_replace_tool
 
   # Bash execution tool
   # Active only when using an isolated shell sandbox or when
   # sandbox.allow_host_bash: true explicitly opts into host bash.
   - name: bash
     group: bash
-    use: deerflow.sandbox.tools:bash_tool
+    use: nova.sandbox.tools:bash_tool
 
   # Market data / trading tools.
   # Free and keyless: yfinance (equities, FX, futures) and ccxt public
@@ -756,16 +756,16 @@ tools:
   # pure Python).
   - name: get_ohlcv
     group: trading
-    use: deerflow.community.market_data.tools:get_ohlcv_tool
+    use: nova.community.market_data.tools:get_ohlcv_tool
     max_limit: 1000
 
   - name: compute_indicators
     group: trading
-    use: deerflow.community.market_data.tools:compute_indicators_tool
+    use: nova.community.market_data.tools:compute_indicators_tool
 
   - name: backtest_signals
     group: trading
-    use: deerflow.community.market_data.tools:backtest_signals_tool
+    use: nova.community.market_data.tools:backtest_signals_tool
 
 # ============================================================================
 # Tool Search Configuration (Deferred Tool Loading)
@@ -863,11 +863,11 @@ safety_finish_reason:
   # Example — extend the OpenAI-compatible detector for a Chinese provider
   # whose gateway uses a non-standard finish_reason token:
   # detectors:
-  #   - use: deerflow.agents.middlewares.safety_termination_detectors:OpenAICompatibleContentFilterDetector
+  #   - use: nova.agents.middlewares.safety_termination_detectors:OpenAICompatibleContentFilterDetector
   #     config:
   #       finish_reasons: ["content_filter", "sensitive", "risk_control"]
-  #   - use: deerflow.agents.middlewares.safety_termination_detectors:AnthropicRefusalDetector
-  #   - use: deerflow.agents.middlewares.safety_termination_detectors:GeminiSafetyDetector
+  #   - use: nova.agents.middlewares.safety_termination_detectors:AnthropicRefusalDetector
+  #   - use: nova.agents.middlewares.safety_termination_detectors:GeminiSafetyDetector
   #
   # Example — add a custom detector for an in-house provider:
   # detectors:
@@ -914,18 +914,18 @@ speech:
   stt:
     # faster-whisper (Whisper on CTranslate2): ~4x faster and far leaner than
     # openai-whisper for the same weights.
-    use: deerflow.speech.engines.faster_whisper_stt:FasterWhisperSTT
+    use: nova.speech.engines.faster_whisper_stt:FasterWhisperSTT
     model: base          # tiny | base | small | medium | large-v3
     compute_type: int8   # int8 is realtime on CPU; float32 is more accurate
     # language: en       # omit to auto-detect
   tts:
     # Kokoro-82M via ONNX — best quality-per-byte in open source, Apache-2.0.
-    use: deerflow.speech.engines.kokoro_tts:KokoroTTS
+    use: nova.speech.engines.kokoro_tts:KokoroTTS
     voice: af_heart
   # Engines that need no weights at all. Swap these in to exercise the whole
   # pipeline (capture, VAD, transport, playback) without downloading anything:
-  #   stt: { use: deerflow.speech.engines.null:ScriptedSTT }
-  #   tts: { use: deerflow.speech.engines.null:ToneTTS }
+  #   stt: { use: nova.speech.engines.null:ScriptedSTT }
+  #   tts: { use: nova.speech.engines.null:ToneTTS }
 
 sandbox:
   # Environment injected into every sandbox container. Values starting with $
@@ -943,7 +943,7 @@ sandbox:
   # not subscribe ignores by spec. Leave false unless the frontend serving this
   # deployment is built from source that understands it.
   stream_terminal_output: false
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is
   # not a secure isolation boundary for shell access. Enable only for fully
   # trusted, single-user local workflows.
@@ -983,7 +983,7 @@ sandbox:
 # On other platforms: Uses Docker
 # Uncomment to use:
 # sandbox:
-#   use: deerflow.community.aio_sandbox:AioSandboxProvider
+#   use: nova.community.aio_sandbox:AioSandboxProvider
 #
 #   # Optional: Container image to use (works with both Docker and Apple Container)
 #   # Default: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
@@ -1083,7 +1083,7 @@ sandbox:
 # Each sandbox_id gets a dedicated Pod in k3s, managed by the provisioner.
 # Recommended for production or advanced users who want better isolation and scalability.:
 # sandbox:
-#   use: deerflow.community.aio_sandbox:AioSandboxProvider
+#   use: nova.community.aio_sandbox:AioSandboxProvider
 #   provisioner_url: http://provisioner:8002
 #   # Note: provisioner-created Pods use the provisioner's SANDBOX_IMAGE
 #   # environment variable, not sandbox.image from this config file.
@@ -1117,6 +1117,19 @@ sandbox:
 #   # Default timeout (seconds) for built-in subagents (default: 1800 = 30 min).
 #   # Custom agents use their own timeout_seconds (default 900) unless overridden.
 #   timeout_seconds: 1800
+#   # Ceiling on the timeout the `task` tool may request for ONE task, through
+#   # its timeout_seconds argument. The model may ask for a longer budget than
+#   # the default (a deep research sweep legitimately needs more than 30 min);
+#   # a request above this ceiling is CLAMPED to it, never rejected, so a run
+#   # never fails because of a number the model chose. A value that is not a
+#   # positive number is ignored and the configured timeout is kept.
+#   # Keep this >= the effective timeout of the agents you want a model to be
+#   # able to extend; the effective ceiling is the greater of the two.
+#   # Keep it well BELOW the lead run's wall-clock deadline (NOVA_RUN_MAX_SECONDS,
+#   # default 7200 = 2 h): the deadline bounds the whole run, subagents included,
+#   # so at least two sequential max-length subagents (plus the lead agent's own
+#   # turns) must fit inside it, or the run times out mid-delegation.
+#   max_timeout_seconds: 1800
 #   # Optional global max-turn override for all subagents.
 #   # Built-in defaults: general-purpose=150, bash=60. Leave unset to keep them.
 #   # max_turns: 120
@@ -1124,7 +1137,7 @@ sandbox:
 #   # Optional per-agent overrides (applies to both built-in and custom agents)
 #   agents:
 #     general-purpose:
-#       timeout_seconds: 2700  # 45 minutes for very long deep-research tasks
+#       timeout_seconds: 1800  # per-agent default; a longer task opts in per call
 #       max_turns: 250         # raise above the 150 default for very deep tasks
 #       # model: qwen3:32b     # Use a specific model (default: inherit from lead agent)
 #       # skills:               # Skill whitelist (default: inherit all enabled skills)
@@ -1165,7 +1178,7 @@ sandbox:
 # Capabilities (declared once, reachable by the UI, the harness and MCP)
 # ============================================================================
 # Every feature declares its operations in the capability registry
-# (deerflow.capabilities). From that one declaration Nova derives the generic
+# (nova.capabilities). From that one declaration Nova derives the generic
 # `/api/capabilities/ops` API, the typed frontend client, lead-agent tools
 # (gated by `tool_groups` above) and its own MCP server, so an external
 # harness — Claude Code over ACP, OpenClaw, a script — can drive jobs,
@@ -1504,7 +1517,7 @@ database:
 #                 (2+ replicas) — see k8s/ARCHITECTURE.md for why the
 #                 in-memory backend is a hard architectural blocker to
 #                 that. Also needs the `redis` package extra:
-#                 pip install 'deerflow-harness[redis]'
+#                 pip install 'nova-harness[redis]'
 #
 # stream_bridge:
 #   type: redis
@@ -1711,7 +1724,7 @@ run_events:
 # guardrails:
 #   enabled: true
 #   provider:
-#     use: deerflow.guardrails.builtin:AllowlistProvider
+#     use: nova.guardrails.builtin:AllowlistProvider
 #     config:
 #       denied_tools: ["bash", "write_file"]
 

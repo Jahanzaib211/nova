@@ -17,9 +17,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.community.market_data import providers
-from deerflow.community.market_data.providers import MarketDataError, fetch_ohlcv, looks_like_crypto_pair, normalize_interval
-from deerflow.community.market_data.tools import (
+from nova.community.market_data import providers
+from nova.community.market_data.providers import MarketDataError, fetch_ohlcv, looks_like_crypto_pair, normalize_interval
+from nova.community.market_data.tools import (
     backtest_signals_tool,
     compute_indicators_tool,
     get_ohlcv_tool,
@@ -57,7 +57,7 @@ def stub_bars(monkeypatch: pytest.MonkeyPatch):
         captured.update(symbol=symbol, interval=interval, limit=limit, source=source, exchange=exchange)
         return _bars(limit if limit <= 200 else 200), "stub"
 
-    monkeypatch.setattr("deerflow.community.market_data.tools.fetch_ohlcv", fake_fetch)
+    monkeypatch.setattr("nova.community.market_data.tools.fetch_ohlcv", fake_fetch)
     return captured
 
 
@@ -98,7 +98,7 @@ class TestGetOhlcv:
         def boom(*args, **kwargs):
             raise MarketDataError("no data returned for 'XAUUSD'. Check the symbol (gold is 'GC=F' ...)")
 
-        monkeypatch.setattr("deerflow.community.market_data.tools.fetch_ohlcv", boom)
+        monkeypatch.setattr("nova.community.market_data.tools.fetch_ohlcv", boom)
         result = _call(get_ohlcv_tool, description="d", symbol="XAUUSD")
         assert result.startswith("Error:")
         assert "GC=F" in result
@@ -247,6 +247,16 @@ class TestYfinanceProvider:
         """Asking for more 1m history than Yahoo serves returns an empty frame,
         which is indistinguishable from a bad symbol — so clamp instead."""
         assert providers._yf_period_for("1m", 10000) == "7d"
+
+    @pytest.mark.parametrize(("interval", "limit"), [("15m", 40), ("1h", 5), ("5m", 10), ("1d", 3)])
+    def test_a_small_request_still_spans_a_long_weekend(self, interval: str, limit: int) -> None:
+        """Forty 15m bars is under a day of wall time, so the multiplier alone
+        asked Yahoo for "1d" -- which, on a Sunday or a holiday Monday, holds
+        no session at all and came back empty ("no data returned for 'GC=F'").
+        The latest N bars are on Friday; the window must reach them."""
+        period = providers._yf_period_for(interval, limit)
+        assert period.endswith("d")
+        assert int(period[:-1]) >= 5, f"{interval} x {limit} -> {period} cannot reach back over a 3-day weekend"
 
 
 class TestCcxtProvider:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -28,6 +29,73 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TUNNEL_UNITS = "cloudflared.service,cloudflared-nova.service"
 DEFAULT_TUNNEL_PM2_APPS = "tunnel-nova"
 DEFAULT_TUNNEL_METRICS_URLS = "http://127.0.0.1:20241/ready"
+
+
+# ── Compose project / container naming ────────────────────────────────────
+# The stack was renamed from `deer-flow-dev` / `deer-flow-<svc>` to `nova` /
+# `nova-<svc>` (scripts/migrate-deerflow-to-nova.sh does the operator-run
+# cutover). Producers must keep working on BOTH sides of that cutover — a gate
+# that goes red the moment the code lands, before the operator has migrated,
+# is a false alarm — so everything here tries the new name first and falls
+# back to the legacy one. NOVA_COMPOSE_PROJECT pins the project explicitly.
+COMPOSE_PROJECT = "nova"
+LEGACY_COMPOSE_PROJECT = "deer-flow-dev"
+CONTAINER_PREFIX = "nova-"
+LEGACY_CONTAINER_PREFIX = "deer-flow-"
+
+
+def compose_projects(env: Mapping[str, str] | None = None) -> list[str]:
+    """Candidate compose project names, preferred first."""
+    env = os.environ if env is None else env
+    explicit = (env.get("NOVA_COMPOSE_PROJECT") or "").strip()
+    if explicit:
+        return [explicit]
+    return [COMPOSE_PROJECT, LEGACY_COMPOSE_PROJECT]
+
+
+def container_candidates(name: str) -> list[str]:
+    """``gateway`` / ``nova-gateway`` / ``deer-flow-gateway`` → both container names, new first."""
+    service = name
+    for prefix in (CONTAINER_PREFIX, LEGACY_CONTAINER_PREFIX):
+        if name.startswith(prefix):
+            service = name[len(prefix) :]
+            break
+    return [CONTAINER_PREFIX + service, LEGACY_CONTAINER_PREFIX + service]
+
+
+def _docker_ok(cmd: list[str]) -> str | None:
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout if isinstance(proc.stdout, str) else ""
+
+
+def resolve_container(name: str) -> str:
+    """The container that actually exists for ``name`` (new name, else legacy).
+
+    Returns the new name when neither exists (or docker is unavailable), so
+    callers report the name the stack is supposed to use.
+    """
+    candidates = container_candidates(name)
+    for candidate in candidates:
+        if _docker_ok(["docker", "inspect", "--format", "{{.Name}}", candidate]) is not None:
+            return candidate
+    return candidates[0]
+
+
+def resolve_compose_project(env: Mapping[str, str] | None = None) -> str:
+    """The compose project that owns containers on this host (new, else legacy)."""
+    candidates = compose_projects(env)
+    if len(candidates) == 1:
+        return candidates[0]
+    for project in candidates:
+        out = _docker_ok(["docker", "ps", "-a", "-q", "--filter", f"label=com.docker.compose.project={project}"])
+        if out and out.strip():
+            return project
+    return candidates[0]
 
 
 def _csv(raw: str) -> list[str]:

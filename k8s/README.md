@@ -140,9 +140,9 @@ that "just hangs" or "just crashes" will save real time.
   was baked into the image there.
 - **SQLite was never actually being persisted to the PVC** —
   `DatabaseConfig._resolved_sqlite_dir` resolves relative to raw process
-  CWD, not `DEER_FLOW_HOME`. Two replicas of the "same" install can
+  CWD, not `NOVA_HOME`. Two replicas of the "same" install can
   silently have two disconnected databases. Fixed via
-  `DEER_FLOW_SQLITE_DIR` (`configmap-env.yaml`) — if you ever see a user
+  `NOVA_SQLITE_DIR` (`configmap-env.yaml`) — if you ever see a user
   registered on one replica come back "not found" on another, check this
   first, not the load balancer.
 - **redis-py's default `socket_timeout` races against `XREAD BLOCK` /

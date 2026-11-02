@@ -9,18 +9,19 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.gateway.auth_disabled import is_explicit_production_environment
-from deerflow.runtime.user_context import DEFAULT_USER_ID
+from nova.config.env import getenv_compat
+from nova.runtime.user_context import DEFAULT_USER_ID
 
 logger = logging.getLogger(__name__)
 
 INTERNAL_AUTH_HEADER_NAME = "X-DeerFlow-Internal-Token"
 INTERNAL_OWNER_USER_ID_HEADER_NAME = "X-DeerFlow-Owner-User-Id"
-INTERNAL_AUTH_ENV_VAR = "DEER_FLOW_INTERNAL_AUTH_TOKEN"
+INTERNAL_AUTH_ENV_VAR = "NOVA_INTERNAL_AUTH_TOKEN"  # legacy DEER_FLOW_INTERNAL_AUTH_TOKEN still honoured
 INTERNAL_SYSTEM_ROLE = "internal"
 
 
 def _load_internal_auth_token() -> str:
-    token = os.environ.get(INTERNAL_AUTH_ENV_VAR, "").strip()
+    token = (getenv_compat("INTERNAL_AUTH_TOKEN") or "").strip()
     if token:
         return token
 

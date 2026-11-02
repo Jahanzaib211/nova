@@ -9,7 +9,7 @@ import json
 import httpx
 import pytest
 
-from deerflow.email_marketing.bridges import ChatwootBridge, MailcowBridge, TwentyBridge
+from nova.email_marketing.bridges import ChatwootBridge, MailcowBridge, TwentyBridge
 
 pytestmark = pytest.mark.anyio
 

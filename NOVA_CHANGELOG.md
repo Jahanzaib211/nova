@@ -42,11 +42,19 @@
 - No new user-facing features until consolidated
 - No references to the local LLM gateway service name in code
 - No references to the model name it wraps in code (allowed only as literal model identifiers in config)
-- `deerflow` namespace is allowed (historical)
+- Package namespace is `nova`; `deerflow` remains a deprecated import alias for one release
 - TDD mandatory for all new features
 - All commits must pass self-test protocol
 
 ---
+
+## v9.25 — Nova by name: the deerflow → nova rename, with one release of compatibility (2026-11-02)
+
+- **What changed**: the Python package moved from `backend/packages/harness/deerflow/` to `backend/packages/harness/nova/` (distribution `deerflow-harness` → `nova-harness`). Imports are `from nova.…`, config class paths are `use: nova.x:Y`, and `DeerFlowClient` / `create_deerflow_agent` are now `NovaClient` / `create_nova_agent`. Environment variables are `NOVA_<X>` (was `DEER_FLOW_<X>`), the default data dir is `.nova` (was `.deer-flow`), the Compose project and network are `nova` (was `deer-flow-dev`), containers are `nova-<svc>` (was `deer-flow-<svc>`), the sandbox container prefix is `nova-sandbox`, and the PM2 launcher is `scripts/pm2-nova.sh` (was `scripts/pm2-deerflow.sh`). Docs now use the Nova names throughout.
+- **Compatibility fallbacks (one release)**: `deerflow` stays importable as a deprecated alias that resolves to the same `nova` module objects, so the old `deerflow.x:Y` paths in an existing `config.yaml` still resolve, and the old class/function names stay as aliases. Every `NOVA_<X>` falls back to `DEER_FLOW_<X>` when unset (Compose uses `${NOVA_X:-${DEER_FLOW_X:-default}}`). Data-dir resolution: `NOVA_HOME` / `DEER_FLOW_HOME`, else `.nova` if it exists, else a legacy `.deer-flow` if it exists, else a new `.nova` — code never moves user data on its own.
+- **What did not change**: Compose service names (`gateway`, `frontend`, `nginx`, `postgres`, …), the `192.168.200.0/24` subnet and every pinned IP, database tables and columns, Alembic revisions, the Kubernetes chart's names and the provisioner's namespace, the `deerflow.db` SQLite filename, and the `X-DeerFlow-*` internal headers. The upstream attribution to ByteDance DeerFlow (LICENSE, NOTICE.md, NOVA_VS_DEERFLOW.md) is untouched.
+- **Operator cutover**: a code upgrade alone keeps a running DeerFlow-named deployment working. Moving the infrastructure (Compose project, containers, network and volumes, the Postgres data volume and the model/cache volumes) is a separate step, run by `scripts/migrate-deerflow-to-nova.sh`. It is a dry run by default and prints its plan; when applied it takes a backup first and **copies** each volume into the new project, never deleting the old one. Rollback: stop the `nova` project and bring the old `deer-flow-dev` project up again; its volumes are still intact.
+- **Removal plan**: the `deerflow` alias, the `DEER_FLOW_*` fallbacks and the `.deer-flow` data-dir fallback are scheduled to go in the release after this one. Rename `.env` keys and `use:` paths before then.
 
 ## v9.20 — The Agent's Computer: Chromium's own sandbox vs. the hardened container (2026-10-31)
 

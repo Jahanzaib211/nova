@@ -3,7 +3,7 @@
 Two layers of defence against the synthetic error-fallback message
 contamination:
 
-  1. ``runtime.serialization.strip_deerflow_error_fallback_messages``
+  1. ``runtime.serialization.strip_nova_error_fallback_messages``
      — pure function that drops messages with
      ``additional_kwargs.deerflow_error_fallback == True``.
      Used on the UI/REST path (chat history, API responses).
@@ -23,12 +23,12 @@ from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from deerflow.agents.middlewares.strip_error_fallback_middleware import (
+from nova.agents.middlewares.strip_error_fallback_middleware import (
     StripErrorFallbackMiddleware,
 )
-from deerflow.runtime.serialization import (
+from nova.runtime.serialization import (
     serialize_channel_values_for_api,
-    strip_deerflow_error_fallback_messages,
+    strip_nova_error_fallback_messages,
 )
 
 
@@ -59,7 +59,7 @@ def _runtime(thread_id="t1", run_id="r1"):
 
 def test_serializer_drops_fallback_from_langchain_objects():
     msgs = [_normal_msg("hi"), _fallback_msg("oops"), _normal_msg("done")]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert len(out) == 2
     for m in out:
         assert getattr(m, "additional_kwargs", {}).get("deerflow_error_fallback") is not True
@@ -71,7 +71,7 @@ def test_serializer_drops_fallback_from_dicts():
         {"type": "ai", "content": "oops", "additional_kwargs": {"deerflow_error_fallback": True}},
         {"type": "ai", "content": "done", "additional_kwargs": {}},
     ]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert len(out) == 2
     for m in out:
         assert m.get("additional_kwargs", {}).get("deerflow_error_fallback") is not True
@@ -83,7 +83,7 @@ def test_serializer_handles_mixed_types():
         {"type": "ai", "content": "second", "additional_kwargs": {"deerflow_error_fallback": True}},
         _normal_msg("third"),
     ]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert len(out) == 2
 
 
@@ -93,7 +93,7 @@ def test_serializer_keeps_messages_with_no_additional_kwargs():
         _fallback_msg(),
         HumanMessage(content="more"),
     ]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert len(out) == 2
 
 
@@ -102,7 +102,7 @@ def test_serializer_keeps_message_when_fallback_flag_is_false():
         content="not a fallback",
         additional_kwargs={"deerflow_error_fallback": False},
     )
-    out = strip_deerflow_error_fallback_messages([msg])
+    out = strip_nova_error_fallback_messages([msg])
     assert len(out) == 1
 
 
@@ -113,7 +113,7 @@ def test_serializer_handles_all_message_types():
         ToolMessage(content="x", tool_call_id="t1", additional_kwargs={"deerflow_error_fallback": True}),
         _normal_msg("ok"),
     ]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert len(out) == 1
 
 
@@ -125,17 +125,17 @@ def test_serializer_preserves_ordering():
         _fallback_msg("drop2"),
         _normal_msg("c"),
     ]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert [getattr(m, "content", None) for m in out] == ["a", "b", "c"]
 
 
 def test_serializer_empty_list():
-    assert strip_deerflow_error_fallback_messages([]) == []
+    assert strip_nova_error_fallback_messages([]) == []
 
 
 def test_serializer_does_not_crash_on_garbage():
     msgs = [None, 42, "string", object()]
-    out = strip_deerflow_error_fallback_messages(msgs)
+    out = strip_nova_error_fallback_messages(msgs)
     assert out == msgs
 
 

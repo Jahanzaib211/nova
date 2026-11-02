@@ -1,8 +1,8 @@
 """Runs endpoints — create, stream, wait, cancel.
 
 Implements the LangGraph Platform runs API on top of
-:class:`deerflow.agents.runs.RunManager` and
-:class:`deerflow.agents.stream_bridge.StreamBridge`.
+:class:`nova.agents.runs.RunManager` and
+:class:`nova.agents.stream_bridge.StreamBridge`.
 
 SSE format is aligned with the LangGraph Platform protocol so that
 the ``useStream`` React hook from ``@langchain/langgraph-sdk/react``
@@ -23,7 +23,7 @@ from app.gateway.authz import require_permission
 from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_service, get_run_store, get_stream_bridge, require_admin_user
 from app.gateway.pagination import trim_run_message_page
 from app.gateway.services import SSE_HEADERS, format_sse, sse_consumer, start_run, wait_for_run_completion
-from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
+from nova.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["runs"])
@@ -63,7 +63,7 @@ class RunCreateRequest(BaseModel):
     command: dict[str, Any] | None = Field(default=None, description="LangGraph Command")
     metadata: dict[str, Any] | None = Field(default=None, description="Run metadata")
     config: dict[str, Any] | None = Field(default=None, description="RunnableConfig overrides")
-    context: dict[str, Any] | None = Field(default=None, description="DeerFlow context overrides (model_name, thinking_enabled, etc.)")
+    context: dict[str, Any] | None = Field(default=None, description="Nova context overrides (model_name, thinking_enabled, etc.)")
     webhook: str | None = Field(default=None, description="Completion callback URL")
     checkpoint_id: str | None = Field(default=None, description="Resume from checkpoint")
     checkpoint: dict[str, Any] | None = Field(default=None, description="Full checkpoint object")
@@ -85,6 +85,10 @@ class RunResponse(BaseModel):
     thread_id: str
     assistant_id: str | None = None
     status: str
+    # Phase C0 join key (``uuid4().hex``): the same value the SSE stream's first
+    # ``: correlation_id=`` comment frame carries and diagnostics records stamp.
+    # Empty for legacy rows written before the column existed.
+    correlation_id: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     kwargs: dict[str, Any] = Field(default_factory=dict)
     multitask_strategy: str = "reject"
@@ -98,6 +102,7 @@ class RunResponse(BaseModel):
     subagent_tokens: int = 0
     middleware_tokens: int = 0
     message_count: int = 0
+    token_usage_by_model: dict[str, Any] = Field(default_factory=dict)
 
 
 class ThreadTokenUsageModelBreakdown(BaseModel):
@@ -142,6 +147,7 @@ def _record_to_response(record: RunRecord) -> RunResponse:
         thread_id=record.thread_id,
         assistant_id=record.assistant_id,
         status=record.status.value,
+        correlation_id=record.correlation_id or "",
         metadata=record.metadata,
         kwargs=record.kwargs,
         multitask_strategy=record.multitask_strategy,
@@ -155,6 +161,7 @@ def _record_to_response(record: RunRecord) -> RunResponse:
         subagent_tokens=record.subagent_tokens,
         middleware_tokens=record.middleware_tokens,
         message_count=record.message_count,
+        token_usage_by_model=dict(record.token_usage_by_model or {}),
     )
 
 
@@ -171,6 +178,7 @@ def _service_to_response(detail: Any) -> RunResponse:
         thread_id=detail.thread_id,
         assistant_id=getattr(detail, "assistant_id", None),
         status=detail.status,
+        correlation_id=getattr(detail, "correlation_id", "") or "",
         created_at=getattr(detail, "created_at", "") or "",
         updated_at=getattr(detail, "updated_at", "") or "",
         total_input_tokens=getattr(detail, "total_input_tokens", 0),
@@ -181,6 +189,7 @@ def _service_to_response(detail: Any) -> RunResponse:
         subagent_tokens=getattr(detail, "subagent_tokens", 0),
         middleware_tokens=getattr(detail, "middleware_tokens", 0),
         message_count=getattr(detail, "message_count", 0),
+        token_usage_by_model=dict(getattr(detail, "token_usage_by_model", None) or {}),
     )
 
 
@@ -510,6 +519,6 @@ async def stream_trace_diagnostics(request: Request, limit: int = Query(default=
     """
     await require_admin_user(request, detail="Admin access required for stream diagnostics.")
 
-    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from nova.runtime.stream_bridge.diagnostics import read_recent_diagnostics
 
     return {"records": read_recent_diagnostics(limit=limit)}

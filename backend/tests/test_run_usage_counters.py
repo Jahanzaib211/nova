@@ -14,11 +14,11 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from app.gateway.routers.thread_runs import _service_to_response
-from deerflow.runtime import RunManager
-from deerflow.runtime.runs.manager import RunRecord
-from deerflow.runtime.runs.schemas import DisconnectMode, RunStatus
-from deerflow.services.implementations import RunServiceImpl
+from app.gateway.routers.thread_runs import _record_to_response, _service_to_response
+from nova.runtime import RunManager
+from nova.runtime.runs.manager import RunRecord
+from nova.runtime.runs.schemas import DisconnectMode, RunStatus
+from nova.services.implementations import RunServiceImpl
 
 
 def _record(**overrides) -> RunRecord:
@@ -121,3 +121,22 @@ def test_counters_survive_a_store_round_trip():
     hydrated = RunManager._record_from_store(row)
     assert hydrated.total_tokens == 1500
     assert hydrated.message_count == 7
+
+
+def test_wire_response_carries_correlation_id():
+    """The runs API exposes the record's correlation_id (Phase C0 join key).
+
+    ``RunSummary``/``RunDetail`` carried it, but ``RunResponse`` did not declare
+    it, so ``GET /api/threads/{id}/runs`` silently dropped it on the floor.
+    """
+    cid = "0123456789abcdef0123456789abcdef"
+    service = RunServiceImpl(_manager_returning(_record(correlation_id=cid)))
+
+    summary = asyncio.run(service.list_by_thread("thread-1"))[0]
+    assert _service_to_response(summary).correlation_id == cid
+
+    detail = asyncio.run(service.get("run-1"))
+    assert _service_to_response(detail).correlation_id == cid
+
+    assert _record_to_response(_record(correlation_id=cid)).correlation_id == cid
+    assert _record_to_response(_record()).correlation_id == ""

@@ -12,8 +12,8 @@ is None` -- the inflated value sat on disk and only surfaced as a jump when the
 next real command pushed a frame.
 """
 
-import deerflow.tools.builtins.workspace_tools  # noqa: F401  isort:skip
-from deerflow.sandbox.tools import is_command_line  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401  isort:skip
+from nova.sandbox.tools import is_command_line  # noqa: E402  isort:skip
 
 
 def _count_calls(calls):

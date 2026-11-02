@@ -23,7 +23,7 @@ import threading
 
 import pytest
 
-from deerflow.workspace.models.execution_plan import (
+from nova.workspace.models.execution_plan import (
     ExecutionPlan,
     ExecutionStep,
     RiskLevel,
@@ -53,7 +53,7 @@ def _plan(*steps, risk=RiskLevel.LOW):
 
 class TestRiskAnalyzerOrdering:
     def _analyzer(self):
-        from deerflow.workspace.planner.risk_analyzer import RiskAnalyzer
+        from nova.workspace.planner.risk_analyzer import RiskAnalyzer
 
         return RiskAnalyzer()
 
@@ -72,7 +72,7 @@ class TestRiskAnalyzerOrdering:
 
 class TestRiskAnalyzerTokenized:
     def _risk(self, argv, kind=StepKind.RUN_COMMAND):
-        from deerflow.workspace.planner.risk_analyzer import RiskAnalyzer
+        from nova.workspace.planner.risk_analyzer import RiskAnalyzer
 
         return RiskAnalyzer().analyze_step(_step(kind=kind, argv=argv))
 
@@ -128,7 +128,7 @@ class TestRiskAnalyzerTokenized:
 
 class TestPlanValidatorDependencies:
     def _validate(self, *steps):
-        from deerflow.workspace.planner.plan_validator import PlanValidator
+        from nova.workspace.planner.plan_validator import PlanValidator
 
         return PlanValidator().validate(_plan(*steps))
 
@@ -158,7 +158,7 @@ class TestPlanValidatorDependencies:
         assert result.is_valid is True
 
     def test_chain_deeper_than_max_depth_is_error(self):
-        from deerflow.workspace.planner.plan_validator import PlanValidator
+        from nova.workspace.planner.plan_validator import PlanValidator
 
         steps = [_step("s0")]
         for i in range(1, PlanValidator.MAX_DEPTH + 2):
@@ -168,7 +168,7 @@ class TestPlanValidatorDependencies:
         assert any("depth" in e.lower() for e in result.errors)
 
     def test_high_risk_plan_gets_warning(self):
-        from deerflow.workspace.planner.plan_validator import PlanValidator
+        from nova.workspace.planner.plan_validator import PlanValidator
 
         result = PlanValidator().validate(_plan(_step(kind=StepKind.DELETE, is_destructive=True)))
         assert result.is_valid is True
@@ -182,17 +182,17 @@ class TestPlanValidatorDependencies:
 
 class TestWorkspaceEventsAreDomainEvents:
     def test_workspace_event_subclasses_domain_event(self):
-        from deerflow.events.event import DomainEvent
-        from deerflow.workspace.events import CacheHit, PlanBuilt, WorkspaceEvent, WorkspaceScanned
+        from nova.events.event import DomainEvent
+        from nova.workspace.events import CacheHit, PlanBuilt, WorkspaceEvent, WorkspaceScanned
 
         assert issubclass(WorkspaceEvent, DomainEvent)
         for cls in (WorkspaceScanned, PlanBuilt, CacheHit):
             assert issubclass(cls, DomainEvent)
 
     def test_bus_base_subscribers_receive_workspace_events(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import DomainEvent
-        from deerflow.workspace.events import WorkspaceScanned
+        from nova.events.bus import EventBus
+        from nova.events.event import DomainEvent
+        from nova.workspace.events import WorkspaceScanned
 
         bus = EventBus()
         seen = []
@@ -202,7 +202,7 @@ class TestWorkspaceEventsAreDomainEvents:
         assert seen == [event]
 
     def test_workspace_event_keeps_occurred_at_and_root_path(self):
-        from deerflow.workspace.events import WorkspaceScanned
+        from nova.workspace.events import WorkspaceScanned
 
         event = WorkspaceScanned(root_path="/src", file_count=1)
         assert event.root_path == "/src"
@@ -216,14 +216,14 @@ class TestWorkspaceEventsAreDomainEvents:
 
 class TestCacheKeyStrength:
     def test_snapshot_key_uses_full_digest(self):
-        from deerflow.workspace.cache.cache_key import CacheKeyBuilder
+        from nova.workspace.cache.cache_key import CacheKeyBuilder
 
         key = CacheKeyBuilder().build_snapshot_key("/src", "backend", "python", 3, 100)
         digest = key.removeprefix("wik:")
         assert len(digest) == 64
 
     def test_file_and_symbol_keys_use_full_digest(self):
-        from deerflow.workspace.cache.cache_key import CacheKeyBuilder
+        from nova.workspace.cache.cache_key import CacheKeyBuilder
 
         b = CacheKeyBuilder()
         assert len(b.build_file_hash_key("a.py", "h1").rsplit(":", 1)[-1]) == 64
@@ -234,13 +234,13 @@ class TestSnapshotSerialization:
     def test_round_trip_through_json(self, tmp_path):
         import json
 
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         (tmp_path / "a.py").write_text("def f():\n    return 1\n\nclass C:\n    pass\n")
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'sample'\nversion = '0.1'\n")
 
         snap = WorkspaceIntelligenceServiceImpl().scan(str(tmp_path))
-        from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot
+        from nova.workspace.models.workspace_snapshot import WorkspaceSnapshot
 
         rebuilt = WorkspaceSnapshot.from_dict(json.loads(json.dumps(snap.to_dict())))
         assert rebuilt.thread_id == snap.thread_id
@@ -252,9 +252,9 @@ class TestSnapshotSerialization:
 
 class TestWorkspaceCacheLocking:
     def test_concurrent_set_and_get_do_not_corrupt(self, tmp_path):
-        from deerflow.workspace.cache.workspace_cache import WorkspaceCache
-        from deerflow.workspace.models.fingerprint import RepoKind, RepositoryFingerprint
-        from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot
+        from nova.workspace.cache.workspace_cache import WorkspaceCache
+        from nova.workspace.models.fingerprint import RepoKind, RepositoryFingerprint
+        from nova.workspace.models.workspace_snapshot import WorkspaceSnapshot
 
         cache = WorkspaceCache(cache_dir=tmp_path / "wc")
         fp = RepositoryFingerprint(kind=RepoKind.BACKEND, primary_language="python")
@@ -288,7 +288,7 @@ class TestWorkspaceCacheLocking:
         assert cache.size() == 80
 
     def test_cache_has_a_lock(self):
-        from deerflow.workspace.cache.workspace_cache import WorkspaceCache
+        from nova.workspace.cache.workspace_cache import WorkspaceCache
 
         cache = WorkspaceCache.__new__(WorkspaceCache)
         assert hasattr(type(cache), "__post_init__")
@@ -301,7 +301,7 @@ class TestWorkspaceCacheLocking:
 
 class TestScanAsyncAndCaching:
     def _svc(self):
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         return WorkspaceIntelligenceServiceImpl()
 
@@ -349,7 +349,7 @@ class TestScanAsyncAndCaching:
 
 class TestExecutePlanGate:
     def _svc(self):
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         return WorkspaceIntelligenceServiceImpl()
 
@@ -372,7 +372,7 @@ class TestExecutePlanGate:
 
     def test_step_kind_mapping_covers_real_members(self):
         svc = self._svc()
-        from deerflow.execution.models import ExecutionClass
+        from nova.execution.models import ExecutionClass
 
         for kind in StepKind:
             mapped = svc._step_kind_to_class(kind)

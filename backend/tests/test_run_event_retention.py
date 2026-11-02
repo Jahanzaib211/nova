@@ -17,13 +17,13 @@ import datetime as dt
 
 import pytest
 
-from deerflow.config.run_events_config import RunEventsConfig
-from deerflow.runtime.events.retention import (
+from nova.config.run_events_config import RunEventsConfig
+from nova.runtime.events.retention import (
     prune_once,
     start_run_event_pruner,
     stop_run_event_pruner,
 )
-from deerflow.runtime.events.store.base import RunEventStore
+from nova.runtime.events.store.base import RunEventStore
 
 
 class TestDefaultsAreSafe:

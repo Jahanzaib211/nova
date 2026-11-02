@@ -27,7 +27,7 @@ import pytest
 
 agent_sandbox = pytest.importorskip("agent_sandbox", reason="agent-sandbox SDK not installed")
 
-import deerflow.tools.builtins.workspace_tools as workspace_tools  # noqa: E402
+import nova.tools.builtins.workspace_tools as workspace_tools  # noqa: E402
 
 
 def _browser_page_calls() -> list[tuple[str, set[str], int]]:

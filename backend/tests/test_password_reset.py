@@ -23,8 +23,8 @@ from app.gateway.auth.local_provider import LocalAuthProvider
 from app.gateway.auth.password_reset import consume_token, create_reset_token
 from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
 from app.gateway.routers import auth as auth_router
-from deerflow.persistence.base import Base
-from deerflow.persistence.password_reset_token.model import PasswordResetTokenRow
+from nova.persistence.base import Base
+from nova.persistence.password_reset_token.model import PasswordResetTokenRow
 
 
 @pytest.fixture()
@@ -71,9 +71,9 @@ def _authed_app(sf, *, email_config: dict | None = None):
         "reset_link_base_url": "https://nova.test",
     }
     with (
-        patch("deerflow.config.app_config.get_app_config") as mock_get,
+        patch("nova.config.app_config.get_app_config") as mock_get,
         patch("app.gateway.routers.auth.get_local_provider", return_value=provider),
-        patch("deerflow.persistence.engine.get_session_factory", return_value=sf),
+        patch("nova.persistence.engine.get_session_factory", return_value=sf),
     ):
         mock_get.return_value = SimpleNamespace(email=SimpleNamespace(**config))
         yield app, provider

@@ -3,9 +3,9 @@ from types import SimpleNamespace  # noqa: F401 — kept for parity with sibling
 
 import pytest
 
-import deerflow.sandbox.local.local_sandbox as local_sandbox
-from deerflow.execution.testing import FakeExecutionKernel
-from deerflow.services.container import service_container
+import nova.sandbox.local.local_sandbox as local_sandbox
+from nova.execution.testing import FakeExecutionKernel
+from nova.services.container import service_container
 
 
 @pytest.fixture(autouse=True)

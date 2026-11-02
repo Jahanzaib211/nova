@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from deerflow.capabilities import CapabilityModule, CapabilityRegistry, ModuleStatus, OpContext, Operation
+from nova.capabilities import CapabilityModule, CapabilityRegistry, ModuleStatus, OpContext, Operation
 
 
 class In(BaseModel):
@@ -140,7 +140,7 @@ def test_unauthenticated_is_401(path):
 
 
 def test_conflicts_map_to_409_and_disabled_flags_to_403():
-    from deerflow.capabilities import OperationConflict
+    from nova.capabilities import OperationConflict
 
     async def _conflict(ctx, inp):
         raise OperationConflict("job is already cancelled")

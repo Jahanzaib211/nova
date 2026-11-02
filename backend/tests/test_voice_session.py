@@ -1,7 +1,7 @@
 """Voice: turn-taking, barge-in, and the engine registry.
 
 Everything here runs against the dependency-free engines in
-``deerflow.speech.engines.null`` — no model weights, no onnxruntime, no network.
+``nova.speech.engines.null`` — no model weights, no onnxruntime, no network.
 That is deliberate: a voice suite that skips when weights are absent stops
 protecting anything, and weights are exactly what CI will never have.
 """
@@ -12,10 +12,10 @@ import asyncio
 
 import pytest
 
-from deerflow.speech.base import AudioChunk, SpeechEngineUnavailable, SpeechToText, TextToSpeech, Transcript
-from deerflow.speech.engines.kokoro_tts import split_for_speech
-from deerflow.speech.engines.null import ScriptedSTT, SilentSTT, ToneTTS
-from deerflow.speech.vad import EnergyVad, VadConfig, VadEvent, frames_of
+from nova.speech.base import AudioChunk, SpeechEngineUnavailable, SpeechToText, TextToSpeech, Transcript
+from nova.speech.engines.kokoro_tts import split_for_speech
+from nova.speech.engines.null import ScriptedSTT, SilentSTT, ToneTTS
+from nova.speech.vad import EnergyVad, VadConfig, VadEvent, frames_of
 
 FRAME_BYTES = 16_000 * 2 * 20 // 1000  # 20 ms of 16 kHz PCM16
 
@@ -76,7 +76,7 @@ class TestSileroInputContract:
     @staticmethod
     def _vad_with_stub(monkeypatch, widths: list[int], prob: float = 0.9):
         np = pytest.importorskip("numpy")
-        from deerflow.speech import vad as vad_mod
+        from nova.speech import vad as vad_mod
 
         class StubSession:
             def run(self, _outputs, feeds):
@@ -124,7 +124,7 @@ class TestSileroInputContract:
         assert len(widths) == before, "no new inference should have run"
 
     def test_unsupported_sample_rate_falls_back_instead_of_guessing(self) -> None:
-        from deerflow.speech.vad import SileroVad
+        from nova.speech.vad import SileroVad
 
         vad = SileroVad(VadConfig(), sample_rate=44_100, model_path=__file__)
         vad._ensure_session()
@@ -355,21 +355,21 @@ class TestVoiceSession:
 class TestRegistry:
     def test_voice_is_off_unless_enabled(self, monkeypatch) -> None:
         """Absent config means off, not broken."""
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(registry, "_speech_config", lambda: {})
         assert registry.is_speech_enabled() is False
 
     def test_engines_are_built_from_config(self, monkeypatch) -> None:
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(
             registry,
             "_speech_config",
             lambda: {
                 "enabled": True,
-                "stt": {"use": "deerflow.speech.engines.null:ScriptedSTT"},
-                "tts": {"use": "deerflow.speech.engines.null:ToneTTS"},
+                "stt": {"use": "nova.speech.engines.null:ScriptedSTT"},
+                "tts": {"use": "nova.speech.engines.null:ToneTTS"},
             },
         )
         registry.reset_engines()
@@ -382,12 +382,12 @@ class TestRegistry:
 
     def test_engines_are_singletons(self, monkeypatch) -> None:
         """Weights are tens to hundreds of MB — never per-request."""
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(
             registry,
             "_speech_config",
-            lambda: {"enabled": True, "stt": {"use": "deerflow.speech.engines.null:ScriptedSTT"}},
+            lambda: {"enabled": True, "stt": {"use": "nova.speech.engines.null:ScriptedSTT"}},
         )
         registry.reset_engines()
         try:
@@ -396,12 +396,12 @@ class TestRegistry:
             registry.reset_engines()
 
     def test_a_bad_config_key_names_the_section(self, monkeypatch) -> None:
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(
             registry,
             "_speech_config",
-            lambda: {"enabled": True, "stt": {"use": "deerflow.speech.engines.null:ScriptedSTT", "nonsense": 1}},
+            lambda: {"enabled": True, "stt": {"use": "nova.speech.engines.null:ScriptedSTT", "nonsense": 1}},
         )
         registry.reset_engines()
         try:
@@ -412,7 +412,7 @@ class TestRegistry:
             registry.reset_engines()
 
     def test_set_engines_injects_directly(self) -> None:
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         stt = ScriptedSTT(["injected"])
         registry.set_engines(stt=stt)
@@ -564,7 +564,7 @@ class TestStatusProbeHonesty:
         import asyncio
 
         from app.gateway.routers import voice as voice_mod
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(registry, "is_speech_enabled", lambda: enabled)
         monkeypatch.setattr(voice_mod, "_readiness", None)
@@ -597,7 +597,7 @@ class TestStatusProbeHonesty:
         def _boom():
             raise AssertionError("engines must not be built when voice is disabled")
 
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(registry, "get_tts_engine", _boom)
         out = self._status(monkeypatch, enabled=False)
@@ -617,7 +617,7 @@ class TestOneShotSpeak:
         import asyncio
 
         from app.gateway.routers import voice as voice_mod
-        from deerflow.speech import registry
+        from nova.speech import registry
 
         monkeypatch.setattr(registry, "is_speech_enabled", lambda: enabled)
         if tts is not None:

@@ -33,7 +33,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_config
-from deerflow.config.app_config import AppConfig
+from nova.config.app_config import AppConfig
+from nova.config.env import getenv_compat
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class CapabilitiesResponse(BaseModel):
 def _safe_skills(config: AppConfig) -> list[SkillSummary]:
     """List loaded skills via the same path as /api/skills."""
     try:
-        from deerflow.skills.storage import get_or_new_skill_storage
+        from nova.skills.storage import get_or_new_skill_storage
 
         storage = get_or_new_skill_storage(app_config=config)
         skills = storage.load_skills(enabled_only=False) or []
@@ -179,10 +180,10 @@ def _safe_tools(config: AppConfig) -> list[ToolSummary]:
     ``skills:`` in its config may legitimately bind fewer.
     """
     try:
-        from deerflow.agents.lead_agent.agent import skills_for_tool_policy
-        from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
-        from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
-        from deerflow.tools.tools import get_available_tools
+        from nova.agents.lead_agent.agent import skills_for_tool_policy
+        from nova.agents.manifest import _TOOL_PURPOSE_OVERRIDES
+        from nova.skills.tool_policy import filter_tools_by_skill_allowed_tools
+        from nova.tools.tools import get_available_tools
 
         tools = get_available_tools(
             include_mcp=False,
@@ -235,7 +236,7 @@ def _safe_hooks(config: AppConfig) -> list[HookSummary]:
     the count wrong, so it should not be silent.
     """
     try:
-        from deerflow.agents.lead_agent.agent import build_middlewares
+        from nova.agents.lead_agent.agent import build_middlewares
 
         chain = build_middlewares({"configurable": {}}, None, app_config=config)
         names: list[str] = []
@@ -253,7 +254,7 @@ def _safe_hooks(config: AppConfig) -> list[HookSummary]:
 def _safe_subagents(config: AppConfig) -> list[SubagentSummary]:
     """List registered subagents via the same registry as the lead prompt."""
     try:
-        from deerflow.subagents import get_available_subagent_names
+        from nova.subagents import get_available_subagent_names
 
         names = get_available_subagent_names()
     except Exception as e:
@@ -262,7 +263,7 @@ def _safe_subagents(config: AppConfig) -> list[SubagentSummary]:
 
     out: list[SubagentSummary] = []
     try:
-        from deerflow.subagents.registry import get_subagent_config
+        from nova.subagents.registry import get_subagent_config
 
         for name in names:
             cfg = get_subagent_config(name)
@@ -285,7 +286,7 @@ def _safe_circuits(config: AppConfig, thread_id: str | None = None) -> list[Circ
     tests) still get the whole process-wide registry.
     """
     try:
-        from deerflow.sandbox import browser_circuit_breaker as cb
+        from nova.sandbox import browser_circuit_breaker as cb
 
         snap = cb.snapshot(thread_id)
         return [CircuitEntry(thread_id=tid, state=state) for tid, state in snap.items()]
@@ -298,11 +299,11 @@ def _safe_server_info(config: AppConfig) -> dict[str, Any]:
     """Lightweight server-side metadata for the UI footer."""
     info: dict[str, Any] = {
         "process": "deer-flow-gateway",
-        "version": os.environ.get("DEERFLOW_VERSION", "dev"),
+        "version": getenv_compat("VERSION", "dev"),
         "pid": os.getpid(),
     }
     try:
-        from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS
+        from nova.subagents.config import MAX_CONCURRENT_SUBAGENTS
 
         # The subagents pill shows "N types"; the tooltip needs the run
         # concurrency too, or users read "2" as the number of running tasks.
@@ -324,11 +325,11 @@ def _safe_server_info(config: AppConfig) -> dict[str, Any]:
 async def _safe_igino() -> IGINOSummary:
     """Read-only Recon status snapshot."""
     try:
-        enabled = os.environ.get("DEERFLOW_IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
+        enabled = getenv_compat("IGINO_ENABLED", "false").lower() in ("true", "1", "yes")
 
         searxng_healthy = False
         try:
-            from deerflow.community.searxng.searxng_client import SearxngClient
+            from nova.community.searxng.searxng_client import SearxngClient
 
             client = SearxngClient()
             # The same probe the Privacy panel uses, so the two cannot
@@ -341,14 +342,14 @@ async def _safe_igino() -> IGINOSummary:
             searxng_healthy = False
 
         try:
-            from deerflow.community.searxng.search_cache import get_search_cache
+            from nova.community.searxng.search_cache import get_search_cache
 
             cache_stats = get_search_cache().stats
         except Exception:
             cache_stats = {}
 
         try:
-            from deerflow.community.searxng.audit import get_audit_trail
+            from nova.community.searxng.audit import get_audit_trail
 
             audit_stats = get_audit_trail().get_stats()
         except Exception:
@@ -369,7 +370,7 @@ def _safe_features(config: AppConfig) -> FeatureFlags:
     """Flags from the one place that computes them (the ``features``
     capability module); a flag this response model does not declare is
     dropped, so the two lists are pinned together by test."""
-    from deerflow.capabilities.modules.features import compute_flags
+    from nova.capabilities.modules.features import compute_flags
 
     try:
         flags = compute_flags(config)

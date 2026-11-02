@@ -6,9 +6,10 @@ import logging
 import os
 from types import SimpleNamespace
 
-from deerflow.runtime.user_context import DEFAULT_USER_ID
+from nova.config.env import getenv_compat
+from nova.runtime.user_context import DEFAULT_USER_ID
 
-AUTH_DISABLED_ENV_VAR = "DEER_FLOW_AUTH_DISABLED"
+AUTH_DISABLED_ENV_VAR = "NOVA_AUTH_DISABLED"  # legacy DEER_FLOW_AUTH_DISABLED still honoured
 AUTH_DISABLED_USER_ID = DEFAULT_USER_ID
 AUTH_DISABLED_USER_EMAIL = "default@test.local"
 
@@ -18,7 +19,7 @@ AUTH_SOURCE_AUTH_DISABLED = "auth_disabled"
 # A signed, path-scoped capability on a sandbox proxy URL (app/gateway/preview_capability.py).
 AUTH_SOURCE_PREVIEW_CAPABILITY = "preview_capability"
 
-_PRODUCTION_ENV_VARS: tuple[str, ...] = ("DEER_FLOW_ENV", "ENVIRONMENT")
+_PRODUCTION_ENV_VARS: tuple[str, ...] = ("NOVA_ENV", "DEER_FLOW_ENV", "ENVIRONMENT")
 _PRODUCTION_ENV_VALUES: frozenset[str] = frozenset({"prod", "production"})
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def is_explicit_production_environment() -> bool:
 
 
 def is_auth_disabled_requested() -> bool:
-    return os.environ.get(AUTH_DISABLED_ENV_VAR) == "1"
+    return getenv_compat("AUTH_DISABLED") == "1"
 
 
 def is_auth_disabled() -> bool:

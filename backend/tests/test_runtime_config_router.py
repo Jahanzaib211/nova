@@ -106,7 +106,7 @@ def test_returns_guardrails_provider_class():
             fail_closed=False,
             passport="oap:abc123",
             provider=SimpleNamespace(
-                use="deerflow.guardrails.builtin:AllowlistProvider",
+                use="nova.guardrails.builtin:AllowlistProvider",
                 config={},
             ),
         )
@@ -116,7 +116,7 @@ def test_returns_guardrails_provider_class():
     assert body["guardrails"]["enabled"] is True
     assert body["guardrails"]["fail_closed"] is False
     assert body["guardrails"]["passport"] == "oap:abc123"
-    assert body["guardrails"]["provider_class"] == "deerflow.guardrails.builtin:AllowlistProvider"
+    assert body["guardrails"]["provider_class"] == "nova.guardrails.builtin:AllowlistProvider"
 
 
 def test_handles_missing_subagent_fields_gracefully():

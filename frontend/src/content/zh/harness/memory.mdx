@@ -1,6 +1,6 @@
 ---
 title: 记忆系统
-description: 记忆是 DeerFlow Harness 的一个运行时功能。它不是简单的对话日志，而是跨多个独立会话持久化、在未来对话中影响 Agent 行为的结构化事实和上下文摘要存储。
+description: 记忆是 Nova Harness 的一个运行时功能。它不是简单的对话日志，而是跨多个独立会话持久化、在未来对话中影响 Agent 行为的结构化事实和上下文摘要存储。
 ---
 
 import { Callout, Cards } from "nextra/components";
@@ -8,11 +8,11 @@ import { Callout, Cards } from "nextra/components";
 # 记忆系统
 
 <Callout type="info" emoji="💾">
-  记忆让 DeerFlow 在多个会话中保留有用信息。Agent
+  记忆让 Nova 在多个会话中保留有用信息。Agent
   记住用户偏好、项目背景和反复出现的事实，这样它可以在不每次从零开始的情况下给出更好的响应。
 </Callout>
 
-记忆是 DeerFlow Harness 的一个运行时功能。它不是简单的对话日志，而是跨多个独立会话持久化、在未来对话中影响 Agent 行为的结构化事实和上下文摘要存储。
+记忆是 Nova Harness 的一个运行时功能。它不是简单的对话日志，而是跨多个独立会话持久化、在未来对话中影响 Agent 行为的结构化事实和上下文摘要存储。
 
 ## 记忆存储什么
 
@@ -41,12 +41,12 @@ memory:
   enabled: true
 
   # 全局记忆文件的存储路径。
-  # 默认：{base_dir}/memory.json（解析为 backend/.deer-flow/memory.json）
+  # 默认：{base_dir}/memory.json（解析为 backend/.nova/memory.json）
   # 绝对路径按原样使用，相对路径相对于 base_dir 解析。
   storage_path: memory.json
 
   # 存储类（默认：基于文件的 JSON 存储）
-  storage_class: deerflow.agents.memory.storage.FileMemoryStorage
+  storage_class: nova.agents.memory.storage.FileMemoryStorage
 
   # 处理排队记忆更新前等待的秒数（防抖）
   debounce_seconds: 30
@@ -69,7 +69,7 @@ memory:
 
 ## 全局记忆与按 Agent 记忆
 
-DeerFlow 支持两级记忆：
+Nova 支持两级记忆：
 
 - **全局记忆**：存储在 `{base_dir}/memory.json`。在没有特定 Agent 激活或 Agent 没有按 Agent 记忆文件时使用。
 - **按 Agent 记忆**：存储在 `{base_dir}/agents/{agent_name}/memory.json`。当自定义 Agent 激活时使用，使该 Agent 学到的知识保持独立。
@@ -82,9 +82,9 @@ DeerFlow 支持两级记忆：
 
 默认情况下，记忆文件存储在后端基础目录下：
 
-- 基础目录：`backend/.deer-flow/`
-- 全局记忆：`backend/.deer-flow/memory.json`
-- 按 Agent 记忆：`backend/.deer-flow/agents/{agent_name}/memory.json`
+- 基础目录：`backend/.nova/`
+- 全局记忆：`backend/.nova/memory.json`
+- 按 Agent 记忆：`backend/.nova/agents/{agent_name}/memory.json`
 
 你可以用 `storage_path` 字段更改存储路径。相对路径相对于基础目录解析；使用绝对路径可以将记忆存储在自定义位置。
 

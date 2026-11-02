@@ -30,8 +30,9 @@ from typing import Any
 
 from fastapi import APIRouter, Response
 
-from deerflow.sandbox import browser_circuit_breaker as cb
-from deerflow.sandbox.metrics import render_metrics
+from nova.config.env import getenv_compat
+from nova.sandbox import browser_circuit_breaker as cb
+from nova.sandbox.metrics import render_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/api", tags=["health"])
 
 # Cap how many circuit states we include in the response — protects the
 # endpoint from huge payloads when many sandboxes are active.
-_MAX_CIRCUIT_STATES_IN_RESPONSE = int(os.environ.get("DEERFLOW_HEALTH_MAX_CIRCUITS", "100"))
+_MAX_CIRCUIT_STATES_IN_RESPONSE = int(getenv_compat("HEALTH_MAX_CIRCUITS", "100"))
 
 # Cache the last probe result so a dashboard refresh doesn't hammer CDP.
 # ``cdp_reachable`` is a tri-state bool|None:
@@ -74,7 +75,7 @@ def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool | None, float | None, 
     """
     start = time.monotonic()
     try:
-        from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+        from nova.sandbox.sandbox_provider import get_sandbox_provider
 
         provider = get_sandbox_provider()
         # Iterate registered sandboxes (cheap — provider exposes ._sandboxes).
@@ -92,7 +93,7 @@ def _probe_cdp_once(timeout_s: float = 1.0) -> tuple[bool | None, float | None, 
                 # address (true inside its own container), so probing it raw
                 # tested the *gateway's* own localhost in every deployment mode
                 # and reported healthy/unhealthy for the wrong process.
-                from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+                from nova.sandbox.browser_check import _cdp_url_for_gateway
 
                 cdp_url = _cdp_url_for_gateway(client, sandbox)
                 if not cdp_url:
@@ -204,7 +205,7 @@ async def browser_health(response: Response) -> dict[str, Any]:
 async def metrics() -> Response:
     """Prometheus-format metrics scrape endpoint.
 
-    Renders the in-process registry built by ``deerflow.sandbox.metrics``.
+    Renders the in-process registry built by ``nova.sandbox.metrics``.
     Kept here (not in the main ``/health``) so Prometheus scrapers can
     poll it on a different cadence than the health endpoint.
     """

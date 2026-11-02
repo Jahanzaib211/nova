@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deerflow.config import app_config as app_config_module
-from deerflow.config import extensions_config as extensions_config_module
-from deerflow.config import skills_config as skills_config_module
-from deerflow.config.app_config import AppConfig
-from deerflow.config.extensions_config import ExtensionsConfig
-from deerflow.config.paths import Paths
-from deerflow.config.runtime_paths import project_root
-from deerflow.config.skills_config import SkillsConfig
-from deerflow.skills.storage import get_or_new_skill_storage
+from nova.config import app_config as app_config_module
+from nova.config import extensions_config as extensions_config_module
+from nova.config import skills_config as skills_config_module
+from nova.config.app_config import AppConfig
+from nova.config.extensions_config import ExtensionsConfig
+from nova.config.paths import Paths
+from nova.config.runtime_paths import project_root
+from nova.config.skills_config import SkillsConfig
+from nova.skills.storage import get_or_new_skill_storage
 
 
 def _clear_path_env(monkeypatch):
@@ -25,6 +25,7 @@ def _clear_path_env(monkeypatch):
         "DEER_FLOW_SKILLS_PATH",
     ):
         monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv("NOVA_" + name[len("DEER_FLOW_") :], raising=False)
 
 
 def test_default_runtime_paths_resolve_from_current_project(tmp_path: Path, monkeypatch):
@@ -32,7 +33,7 @@ def test_default_runtime_paths_resolve_from_current_project(tmp_path: Path, monk
     monkeypatch.chdir(tmp_path)
 
     (tmp_path / "config.yaml").write_text(
-        yaml.safe_dump({"sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"}}),
+        yaml.safe_dump({"sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"}}),
         encoding="utf-8",
     )
     (tmp_path / "extensions_config.json").write_text('{"mcpServers": {}, "skills": {}}', encoding="utf-8")
@@ -40,7 +41,8 @@ def test_default_runtime_paths_resolve_from_current_project(tmp_path: Path, monk
 
     assert AppConfig.resolve_config_path() == tmp_path / "config.yaml"
     assert ExtensionsConfig.resolve_config_path() == tmp_path / "extensions_config.json"
-    assert Paths().base_dir == tmp_path / ".deer-flow"
+    # Neither state dir exists yet, so the new default name is chosen.
+    assert Paths().base_dir == tmp_path / ".nova"
     assert SkillsConfig().get_skills_path() == tmp_path / "skills"
     assert get_or_new_skill_storage(skills_path=SkillsConfig().get_skills_path()).get_skills_root_path() == tmp_path / "skills"
 
@@ -55,14 +57,14 @@ def test_deer_flow_project_root_overrides_current_directory(tmp_path: Path, monk
     monkeypatch.setenv("DEER_FLOW_PROJECT_ROOT", str(project_root))
 
     (project_root / "config.yaml").write_text(
-        yaml.safe_dump({"sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"}}),
+        yaml.safe_dump({"sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"}}),
         encoding="utf-8",
     )
     (project_root / "mcp_config.json").write_text('{"mcpServers": {}, "skills": {}}', encoding="utf-8")
 
     assert AppConfig.resolve_config_path() == project_root / "config.yaml"
     assert ExtensionsConfig.resolve_config_path() == project_root / "mcp_config.json"
-    assert Paths().base_dir == project_root / ".deer-flow"
+    assert Paths().base_dir == project_root / ".nova"
     assert SkillsConfig(path="custom-skills").get_skills_path() == project_root / "custom-skills"
 
 
@@ -108,7 +110,7 @@ def test_app_config_falls_back_to_legacy_when_project_root_lacks_config(tmp_path
     legacy_repo.mkdir()
     legacy_backend_config = legacy_backend / "config.yaml"
     legacy_backend_config.write_text(
-        yaml.safe_dump({"sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"}}),
+        yaml.safe_dump({"sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"}}),
         encoding="utf-8",
     )
     repo_root_config = legacy_repo / "config.yaml"
@@ -172,7 +174,7 @@ def test_extensions_config_falls_back_to_legacy_when_project_root_lacks_file(tmp
     legacy_extensions = fake_backend / "extensions_config.json"
     legacy_extensions.write_text('{"mcpServers": {}, "skills": {}}', encoding="utf-8")
 
-    fake_paths_module_file = fake_backend / "packages" / "harness" / "deerflow" / "config" / "extensions_config.py"
+    fake_paths_module_file = fake_backend / "packages" / "harness" / "nova" / "config" / "extensions_config.py"
     fake_paths_module_file.parent.mkdir(parents=True)
     fake_paths_module_file.write_text("", encoding="utf-8")
 

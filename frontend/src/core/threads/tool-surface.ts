@@ -131,7 +131,7 @@ export function isTerminalTool(name: string): boolean {
  * Terminal still renders file work, it just does not call it a command.
  *
  * This mirrors `COMMAND_TOOL_NAMES` / `is_command_line` in the backend
- * (`deerflow/sandbox/tools.py`), and it has to. The header shows the gateway's
+ * (`nova/sandbox/tools.py`), and it has to. The header shows the gateway's
  * deterministic total when the socket is up and falls back to counting local
  * events when it is not — and those two branches used to count different
  * populations, so one thread read "1 cmd" over the socket and "~3" without it,
@@ -169,7 +169,7 @@ export function isViewerTool(name: string): boolean {
  * tool calls: `acp_<kind>`, where kind is the ACP tool-call kind (read, edit,
  * delete, move, search, execute, fetch, think, other) or a permission
  * decision (`acp_permission_denied`). Written by
- * `deerflow.sandbox.tools.record_runtime_observation`. Activity surface —
+ * `nova.sandbox.tools.record_runtime_observation`. Activity surface —
  * they carry a title, never command output.
  */
 export const ACP_OBSERVATION_PREFIX = "acp_";

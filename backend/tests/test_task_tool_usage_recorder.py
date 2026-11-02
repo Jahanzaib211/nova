@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from langchain_core.callbacks import AsyncCallbackManager, CallbackManager
 
-from deerflow.tools.builtins.task_tool import _find_usage_recorder
+from nova.tools.builtins.task_tool import _find_usage_recorder
 
 
 class _RecorderHandler:

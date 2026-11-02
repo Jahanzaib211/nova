@@ -16,13 +16,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Make 'app' and 'deerflow' importable from any working directory
+# Make 'app' and 'nova' importable from any working directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+# Make the shared test helpers (``support``, ``_agent_e2e_helpers``) importable
+# from subdirectories such as ``tests/integration/`` too. pytest's default
+# rootdir-prepend import mode only puts a test module's *own* directory on
+# sys.path, so without this those imports resolved only when a module under
+# ``tests/`` happened to be collected first.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Neutralize deployment-specific environment: the repo-root .env pins the
 # deployment paths to their in-container locations (/app/...), which do not
-# exist on the host. load_dotenv() (called at deerflow.config.app_config
+# exist on the host. load_dotenv() (called at nova.config.app_config
 # import time) would inject them into every host-side test run, making
 # gateway config loading raise FileNotFoundError and every TestClient
 # request fail with 503 — and channel/paths code mkdir() under /app.
@@ -106,6 +112,29 @@ if _real_config.exists():
 os.environ.setdefault("DEER_FLOW_ENV", "")
 
 
+# Env names were renamed DEER_FLOW_<X> -> NOVA_<X>, and the code reads the
+# canonical name first (nova.config.env.getenv_compat). The pins above are on
+# the legacy names, so a canonical twin coming from the repo .env would shadow
+# them -- and every test that monkeypatches the legacy name. Load the .env now
+# (load_dotenv never overrides, so this is what nova.config.app_config would do
+# at import anyway) and drop any NOVA_<X> it introduced whose legacy twin is
+# already pinned. A NOVA_<X> exported in the shell is left alone, exactly like
+# the setdefault pins above.
+def _drop_dotenv_canonical_twins() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    before = set(os.environ)
+    load_dotenv()
+    for name in set(os.environ) - before:
+        if name.startswith("NOVA_") and f"DEER_FLOW_{name[len('NOVA_') :]}" in before:
+            os.environ.pop(name, None)
+
+
+_drop_dotenv_canonical_twins()
+
+
 @pytest.fixture(autouse=True)
 def _guard_process_managers_from_tests():
     """Interlock: no test may reach real ``pm2``/``systemctl`` via the DI kernel.
@@ -121,10 +150,10 @@ def _guard_process_managers_from_tests():
     exercise pm2/systemd behavior must override ``execution_kernel`` with
     a FakeExecutionKernel.
     """
-    from deerflow.execution import ExecutionKernel, PolicyEngine
-    from deerflow.execution.models import ExecutionClass
-    from deerflow.execution.policy import _DEFAULT_POLICIES, ClassPolicy
-    from deerflow.services.container import service_container
+    from nova.execution import ExecutionKernel, PolicyEngine
+    from nova.execution.models import ExecutionClass
+    from nova.execution.policy import _DEFAULT_POLICIES, ClassPolicy
+    from nova.services.container import service_container
 
     policies = dict(_DEFAULT_POLICIES)
     policies[ExecutionClass.PM2] = ClassPolicy(allowed_programs=("/pm2-denied-in-tests",))
@@ -170,7 +199,7 @@ def provisioner_module():
 # ---------------------------------------------------------------------------
 #
 # Repository methods read ``user_id`` from a contextvar by default
-# (see ``deerflow.runtime.user_context``). Without this fixture, every
+# (see ``nova.runtime.user_context``). Without this fixture, every
 # pre-existing persistence test would raise RuntimeError because the
 # contextvar is unset. The fixture sets a default test user on every
 # test; tests that explicitly want to verify behaviour *without* a user
@@ -181,7 +210,7 @@ def provisioner_module():
 def _reset_skill_storage_singleton():
     """Reset the SkillStorage singleton between tests to prevent cross-test contamination."""
     try:
-        from deerflow.skills.storage import reset_skill_storage
+        from nova.skills.storage import reset_skill_storage
     except ImportError:
         yield
         return
@@ -206,7 +235,7 @@ def _restore_title_config_singleton():
     independent regardless of order.
     """
     try:
-        from deerflow.config.title_config import reset_title_config
+        from nova.config.title_config import reset_title_config
     except ImportError:
         yield
         return
@@ -230,7 +259,7 @@ def _auto_user_context(request):
         return
 
     try:
-        from deerflow.runtime.user_context import (
+        from nova.runtime.user_context import (
             reset_current_user,
             set_current_user,
         )
@@ -258,7 +287,7 @@ def _isolate_dev_server_registry():
     clear-on-entry, so a module that legitimately pre-registers still works.
     """
     try:
-        import deerflow.sandbox.dev_server as ds
+        import nova.sandbox.dev_server as ds
     except ImportError:
         yield
         return
@@ -269,3 +298,33 @@ def _isolate_dev_server_registry():
     finally:
         ds._servers.clear()
         ds._servers.update(saved)
+
+
+# ---------------------------------------------------------------------------
+# Shared Gateway e2e harness (see tests/support/gateway_app.py).
+#
+# Defined here rather than in each e2e module so tests/ and tests/integration/
+# boot the app the same way. A module that needs a different staged config
+# overrides ``isolated_gateway_config_yaml``.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def isolated_gateway_config_yaml() -> str:
+    from support.gateway_app import MINIMAL_GATEWAY_CONFIG_YAML
+
+    return MINIMAL_GATEWAY_CONFIG_YAML
+
+
+@pytest.fixture
+def isolated_deer_flow_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_gateway_config_yaml: str) -> Path:
+    from support.gateway_app import stage_isolated_deer_flow_home
+
+    return stage_isolated_deer_flow_home(tmp_path, monkeypatch, config_yaml=isolated_gateway_config_yaml)
+
+
+@pytest.fixture
+def isolated_app(isolated_deer_flow_home: Path, monkeypatch: pytest.MonkeyPatch):
+    from support.gateway_app import build_isolated_app
+
+    return build_isolated_app(isolated_deer_flow_home, monkeypatch)

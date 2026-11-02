@@ -30,7 +30,7 @@ from typing import Annotated, TypedDict
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 
-from deerflow.runtime import RunManager, RunStatus
+from nova.runtime import RunManager, RunStatus
 
 
 # Module-level so langgraph's get_type_hints (which resolves annotations against
@@ -185,14 +185,14 @@ async def test_langgraph_runtime_drains_runs_before_closing_checkpointer(monkeyp
     async def spy_shutdown(self, *, timeout):  # noqa: ANN001
         events.append("runs_drained")
 
-    monkeypatch.setattr("deerflow.runtime.checkpointer.async_provider.make_checkpointer", probe_checkpointer)
-    monkeypatch.setattr("deerflow.runtime.make_stream_bridge", fake_stream_bridge)
-    monkeypatch.setattr("deerflow.runtime.make_store", fake_store)
-    monkeypatch.setattr("deerflow.persistence.engine.init_engine_from_config", fake_init_engine)
-    monkeypatch.setattr("deerflow.persistence.engine.close_engine", fake_close_engine)
-    monkeypatch.setattr("deerflow.persistence.engine.get_session_factory", lambda: None)
-    monkeypatch.setattr("deerflow.runtime.events.store.make_run_event_store", lambda _cfg: object())
-    monkeypatch.setattr("deerflow.persistence.thread_meta.make_thread_store", lambda _sf, _store: object())
+    monkeypatch.setattr("nova.runtime.checkpointer.async_provider.make_checkpointer", probe_checkpointer)
+    monkeypatch.setattr("nova.runtime.make_stream_bridge", fake_stream_bridge)
+    monkeypatch.setattr("nova.runtime.make_store", fake_store)
+    monkeypatch.setattr("nova.persistence.engine.init_engine_from_config", fake_init_engine)
+    monkeypatch.setattr("nova.persistence.engine.close_engine", fake_close_engine)
+    monkeypatch.setattr("nova.persistence.engine.get_session_factory", lambda: None)
+    monkeypatch.setattr("nova.runtime.events.store.make_run_event_store", lambda _cfg: object())
+    monkeypatch.setattr("nova.persistence.thread_meta.make_thread_store", lambda _sf, _store: object())
     monkeypatch.setattr(RunManager, "shutdown", spy_shutdown, raising=False)
 
     app = FastAPI()
@@ -284,7 +284,7 @@ async def test_shutdown_preserves_status_of_run_completed_during_drain():
     """A run that finishes (e.g. success) during the drain window must keep its
     real terminal status — shutdown must not blanket-overwrite it to
     ``interrupted`` in memory or in the store (Copilot review on PR #3381)."""
-    from deerflow.runtime.runs.store.memory import MemoryRunStore
+    from nova.runtime.runs.store.memory import MemoryRunStore
 
     store = MemoryRunStore()
     rm = RunManager(store=store)
@@ -324,7 +324,7 @@ async def test_shutdown_surfaces_failed_interrupted_persist(caplog):
     PR #3381)."""
     import logging
 
-    from deerflow.runtime.runs.store.memory import MemoryRunStore
+    from nova.runtime.runs.store.memory import MemoryRunStore
 
     class _FailingStore(MemoryRunStore):
         async def update_status(self, *args, **kwargs):
@@ -343,7 +343,7 @@ async def test_shutdown_surfaces_failed_interrupted_persist(caplog):
     record.task = asyncio.create_task(worker())
     try:
         await asyncio.wait_for(started.wait(), timeout=1.0)
-        with caplog.at_level(logging.WARNING, logger="deerflow.runtime.runs.manager"):
+        with caplog.at_level(logging.WARNING, logger="nova.runtime.runs.manager"):
             await rm.shutdown(timeout=5.0)
         assert "Could not persist interrupted status for run" in caplog.text, caplog.text
     finally:

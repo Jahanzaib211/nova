@@ -9,8 +9,8 @@ from uuid import uuid4
 
 import pytest
 
-from deerflow.runtime.events.store.memory import MemoryRunEventStore
-from deerflow.runtime.journal import RunJournal
+from nova.runtime.events.store.memory import MemoryRunEventStore
+from nova.runtime.journal import RunJournal
 
 
 @pytest.fixture

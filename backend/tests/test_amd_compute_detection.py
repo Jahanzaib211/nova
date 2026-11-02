@@ -16,8 +16,8 @@ from fastapi.testclient import TestClient
 
 from app.gateway.routers.models import detect_amd_compute
 from app.gateway.routers.models import router as models_router
-from deerflow.config.app_config import reset_app_config
-from deerflow.config.model_config import ModelConfig
+from nova.config.app_config import reset_app_config
+from nova.config.model_config import ModelConfig
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +50,7 @@ def test_explicit_true_gives_generic_label():
 
 def test_plain_vllm_is_not_auto_claimed():
     # vLLM also runs on non-AMD hardware — never assume AMD without opt-in.
-    m = _model(use="deerflow.models.vllm_provider:VllmChatModel", base_url="http://10.0.0.5:8000/v1")
+    m = _model(use="nova.models.vllm_provider:VllmChatModel", base_url="http://10.0.0.5:8000/v1")
     assert detect_amd_compute(m) is None
 
 
@@ -63,7 +63,7 @@ def _write_config(path: Path, models: list[dict]) -> None:
     path.write_text(
         yaml.safe_dump(
             {
-                "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
                 "models": models,
             }
         ),
@@ -86,7 +86,7 @@ def client(tmp_path, monkeypatch):
             },
             {
                 "name": "amd-vllm",
-                "use": "deerflow.models.vllm_provider:VllmChatModel",
+                "use": "nova.models.vllm_provider:VllmChatModel",
                 "model": "google/gemma-3-27b-it",
                 "base_url": "http://10.0.0.5:8000/v1",
                 "amd_compute": "AMD Instinct MI300X (vLLM/ROCm)",

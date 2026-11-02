@@ -18,10 +18,10 @@ import signal
 import socket
 from datetime import timedelta
 
-from deerflow.config.app_config import apply_logging_level, get_app_config
-from deerflow.jobs.worker import Worker, WorkerSettings
-from deerflow.persistence.engine import close_engine, get_session_factory, init_engine_from_config
-from deerflow.persistence.job.sql import JobRepository
+from nova.config.app_config import apply_logging_level, get_app_config
+from nova.jobs.worker import Worker, WorkerSettings
+from nova.persistence.engine import close_engine, get_session_factory, init_engine_from_config
+from nova.persistence.job.sql import JobRepository
 
 from .handlers import build_registry
 

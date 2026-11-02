@@ -1,8 +1,8 @@
-# DeerFlow — Docker-out-of-Docker (DooD) overlay (OPT-IN, NOT loaded by default)
+# Nova — Docker-out-of-Docker (DooD) overlay (OPT-IN, NOT loaded by default)
 #
 # Mounts the host Docker socket into the gateway container so that
 # AioSandboxProvider running in pure-Docker mode — config.yaml:
-#   sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider
+#   sandbox.use: nova.community.aio_sandbox:AioSandboxProvider
 # with NO provisioner_url — can start per-thread sandbox containers via the
 # host Docker daemon.
 #
@@ -19,8 +19,8 @@
 #
 # Compatible with both docker-compose.yaml (prod) and docker-compose-dev.yaml
 # (dev): both define a `gateway` service, and Compose merges this volume entry
-# onto it. DEER_FLOW_DOCKER_SOCKET defaults to /var/run/docker.sock.
+# onto it. NOVA_DOCKER_SOCKET (legacy DEER_FLOW_DOCKER_SOCKET) defaults to /var/run/docker.sock.
 services:
   gateway:
     volumes:
-      - ${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - ${NOVA_DOCKER_SOCKET:-${DEER_FLOW_DOCKER_SOCKET:-/var/run/docker.sock}}:/var/run/docker.sock

@@ -3,7 +3,7 @@
  *
  * Pinned to `contracts/email_marketing_events_contract.json` by
  * `tests/unit/contracts/email-marketing-events.contract.test.ts`; the
- * backend (`deerflow.email_marketing.events`) pins the same file.
+ * backend (`nova.email_marketing.events`) pins the same file.
  */
 
 export const EMAIL_EVENT_TYPES = [

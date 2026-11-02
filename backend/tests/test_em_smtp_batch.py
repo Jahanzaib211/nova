@@ -8,7 +8,7 @@ import smtplib
 
 import pytest
 
-from deerflow.email_marketing.smtp import DomainThrottle, OutboundMessage, SmtpSender, build_message
+from nova.email_marketing.smtp import DomainThrottle, OutboundMessage, SmtpSender, build_message
 
 
 class FakeSMTP:

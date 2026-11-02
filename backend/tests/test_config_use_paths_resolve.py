@@ -6,13 +6,16 @@ module, or a package rename does not fail at import or at startup -- it fails
 the first time that particular tool or provider is needed, which can be days
 later and far from the change that caused it.
 
-This is also the gate that has to be green before the ``deerflow`` package can
-be renamed: 19 of these paths name it, and the compiler cannot see any of them.
+The harness was renamed from ``deerflow`` to ``nova``. Live config files still
+carry legacy ``use: deerflow.x:Y`` paths, which must keep resolving through the
+compatibility alias -- ``test_legacy_deerflow_use_path_resolves`` pins that for
+every path either config declares, whichever spelling the file uses.
 """
 
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 
 import pytest
@@ -30,6 +33,11 @@ EXAMPLE_PATH = REPO_ROOT / "config.example.yaml"
 # dynamically-resolved kind this exists to catch. Reading both means the union
 # is checked wherever it runs.
 _CONFIG_PATHS = [CONFIG_PATH, EXAMPLE_PATH]
+# Plus whatever config the environment points the suite at (a worktree has no
+# config.yaml of its own), so the live file's legacy `use:` paths are covered.
+for _var in ("NOVA_CONFIG_PATH", "DEER_FLOW_CONFIG_PATH"):
+    if os.environ.get(_var):
+        _CONFIG_PATHS.append(Path(os.environ[_var]))
 
 
 def _use_paths() -> list[str]:
@@ -38,7 +46,7 @@ def _use_paths() -> list[str]:
         if not path.exists():
             continue
         loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        raw[path.name] = loaded
+        raw[str(path)] = loaded
 
     found: list[str] = []
 
@@ -69,11 +77,11 @@ def test_config_declares_use_paths() -> None:
 @pytest.mark.parametrize("dotted", _use_paths())
 def test_use_path_resolves(dotted: str) -> None:
     # Import the tool package first, as the running gateway does. Several
-    # deerflow modules are only importable once something else in their import
+    # nova modules are only importable once something else in their import
     # cycle has been loaded (see test_sandbox_tools_cold_import_is_fragile);
     # resolving from a bare interpreter would fail for reasons unrelated to
     # whether the path in config.yaml is correct, which is what this checks.
-    importlib.import_module("deerflow.tools")
+    importlib.import_module("nova.tools")
 
     module_name, _, symbol = dotted.partition(":")
     try:
@@ -84,26 +92,64 @@ def test_use_path_resolves(dotted: str) -> None:
         assert hasattr(module, symbol), f"config.yaml `use: {dotted}` — {module_name} has no attribute {symbol!r}"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Known latent import cycle, recorded rather than silently worked around. "
-        "deerflow.sandbox.tools imports deerflow.tools.types, which runs "
-        "deerflow.tools.__init__ -> tools.tools -> builtins.workspace_tools, "
-        "which imports back into the half-built deerflow.sandbox.tools. "
-        "Production never hits it because the tool registry is always imported "
-        "first. Deferring the import under TYPE_CHECKING does NOT fix it: "
-        "langchain's @tool decorator introspects real type hints to build its "
-        "schemas, so Runtime has to exist at runtime. The fix is to stop "
-        "deerflow.tools.__init__ importing the builtins eagerly."
-    ),
-    strict=True,
-)
-def test_sandbox_tools_cold_import_is_fragile() -> None:
+def _legacy_spellings() -> list[str]:
+    out: set[str] = set()
+    for dotted in _use_paths():
+        if dotted.startswith("nova."):
+            out.add("deerflow." + dotted[len("nova.") :])
+        elif dotted.startswith("deerflow."):
+            out.add(dotted)
+    return sorted(out)
+
+
+@pytest.mark.parametrize("legacy", _legacy_spellings())
+def test_legacy_deerflow_use_path_resolves(legacy: str) -> None:
+    """A ``use: deerflow.x:Y`` path resolves to the same object as ``nova.x:Y``.
+
+    Goes through ``resolve_variable`` -- the resolver the config loaders use --
+    rather than a bare import, so the whole lookup path is what is pinned.
+    """
+    from nova.reflection import resolve_variable
+
+    importlib.import_module("nova.tools")
+    current = "nova." + legacy[len("deerflow.") :]
+    if ":" not in legacy:
+        assert importlib.import_module(legacy) is importlib.import_module(current)
+        return
+    try:
+        expected = resolve_variable(current)
+    except ImportError as exc:  # optional extra not installed -- not what this checks
+        pytest.skip(f"{current}: {exc}")
+    assert resolve_variable(legacy) is expected
+
+
+def test_resolve_class_accepts_legacy_path() -> None:
+    from nova.reflection import resolve_class
+    from nova.sandbox.local import LocalSandboxProvider
+    from nova.sandbox.sandbox_provider import SandboxProvider
+
+    assert resolve_class("deerflow.sandbox.local:LocalSandboxProvider", SandboxProvider) is LocalSandboxProvider
+
+
+def test_sandbox_tools_cold_import_works() -> None:
+    # Was a known latent import cycle, recorded as xfail(strict) so it could
+    # not be silently "fixed" by accident:
+    #   nova.sandbox.tools -> nova.tools.types -> nova.tools.__init__
+    #   -> tools.tools -> builtins.workspace_tools -> nova.sandbox.tools
+    #   (a cycle back into a half-built module).
+    #
+    # Fixed by making `nova.tools.__init__` lazy: both exports resolve
+    # through module __getattr__, so importing a submodule no longer pulls
+    # the builtins in eagerly. Pinned by tests/test_import_hygiene.py.
+    #
+    # The marker was removed when the fix landed; this now asserts the
+    # cold import SUCCEEDS, so a regression that re-introduces the cycle
+    # fails loudly instead of quietly becoming an xfail again.
     import subprocess
     import sys
 
     result = subprocess.run(
-        [sys.executable, "-c", "import deerflow.sandbox.tools"],
+        [sys.executable, "-c", "import nova.sandbox.tools"],
         capture_output=True,
         text=True,
     )

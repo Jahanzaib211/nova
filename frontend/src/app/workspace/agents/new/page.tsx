@@ -37,6 +37,7 @@ import {
   checkAgentName,
   getAgent,
 } from "@/core/agents/api";
+import { getMigratedItem } from "@/core/compat/storage";
 import { useI18n } from "@/core/i18n/hooks";
 import { useThreadStream } from "@/core/threads/hooks";
 import { uuid } from "@/core/utils/uuid";
@@ -47,7 +48,7 @@ type Step = "name" | "chat";
 type SetupAgentStatus = "idle" | "requested" | "completed";
 
 const NAME_RE = /^[A-Za-z0-9-]+$/;
-const SAVE_HINT_STORAGE_KEY = "deerflow.agent-create.save-hint-seen";
+const SAVE_HINT_STORAGE_KEY = "nova.agent-create.save-hint-seen";
 const AGENT_READ_RETRY_DELAYS_MS = [200, 500, 1_000, 2_000];
 
 function wait(ms: number) {
@@ -115,7 +116,7 @@ export default function NewAgentPage() {
     if (typeof window === "undefined" || step !== "chat") {
       return;
     }
-    if (window.localStorage.getItem(SAVE_HINT_STORAGE_KEY) === "1") {
+    if (getMigratedItem(window.localStorage, SAVE_HINT_STORAGE_KEY) === "1") {
       return;
     }
     setShowSaveHint(true);

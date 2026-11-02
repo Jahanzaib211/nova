@@ -26,12 +26,12 @@ from pathlib import Path
 
 import pytest
 
-# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools` import
+# `nova.sandbox.tools` and `nova.tools.builtins.workspace_tools` import
 # each other, so importing the former *first* in a fresh interpreter raises
 # ImportError. Entering from the workspace_tools side is the order the
 # application itself uses (same note as tests/test_bash_streaming.py).
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
 
 COMMANDS = 200
 READERS = 8

@@ -22,19 +22,19 @@ The `NOTICE.md` file carves out the proprietary additions, and `LICENSE-COMMERCI
 
 Everything that originated from or is a direct contribution to the upstream DeerFlow agent harness:
 
-- LangGraph-based agent orchestration (`deerflow.agents.*`)
-- Subagent delegation system (`deerflow.subagents.*`)
-- Sandbox execution providers (Local, AIO/Docker) (`deerflow.sandbox.*`)
-- Tool registry + 26 builtin tools (`deerflow.tools.*`)
-- MCP integration (`deerflow.mcp.*`)
-- Skills discovery/loading (`deerflow.skills.*`)
-- Model factory with thinking/vision support (`deerflow.models.*`)
-- Configuration system (`deerflow.config.*`)
-- Memory extraction/storage (`deerflow.agents.memory.*`)
-- Tracing (LangSmith/Langfuse) (`deerflow.tracing.*`)
-- Reflection/dynamic loading (`deerflow.reflection.*`)
+- LangGraph-based agent orchestration (`nova.agents.*`)
+- Subagent delegation system (`nova.subagents.*`)
+- Sandbox execution providers (Local, AIO/Docker) (`nova.sandbox.*`)
+- Tool registry + 26 builtin tools (`nova.tools.*`)
+- MCP integration (`nova.mcp.*`)
+- Skills discovery/loading (`nova.skills.*`)
+- Model factory with thinking/vision support (`nova.models.*`)
+- Configuration system (`nova.config.*`)
+- Memory extraction/storage (`nova.agents.memory.*`)
+- Tracing (LangSmith/Langfuse) (`nova.tracing.*`)
+- Reflection/dynamic loading (`nova.reflection.*`)
 - Community tool providers (Tavily, Jina, Firecrawl, etc.)
-- Embedded Python client (`deerflow.client.*`)
+- Embedded Python client (`nova.client.*`)
 - All upstream tests and CI configurations
 
 **Nova-specific MIT contributions** (additions on top of DeerFlow that we release under MIT):
@@ -61,8 +61,8 @@ The following Nova-specific additions are **NOT licensed under MIT**. They are p
 | Component | Description | Location |
 |---|---|---|
 | **Agent's Computer UI** | 6-tab live panel (Terminal, Editor with red/green live diff, Browser preview, Activity timeline, Files, Review) streaming the agent's own computer in real time | `frontend/src/components/workspace/agent-computer/` |
-| **Per-thread container isolation** | Docker-per-thread sandbox with virtual path translation (`/mnt/user-data/{workspace,uploads,outputs}`) and ACP workspace mounting | `backend/packages/harness/deerflow/sandbox/` (AioSandboxProvider + path mappings) |
-| **Watchdog/Receipts/Self-improvement loop** | 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery, structured post-run receipts, autonomous improvement loop | `scripts/healthcheck-daemon.py`, `scripts/pm2-monitoring.sh`, `backend/packages/harness/deerflow/runtime/` |
+| **Per-thread container isolation** | Docker-per-thread sandbox with virtual path translation (`/mnt/user-data/{workspace,uploads,outputs}`) and ACP workspace mounting | `backend/packages/harness/nova/sandbox/` (AioSandboxProvider + path mappings) |
+| **Watchdog/Receipts/Self-improvement loop** | 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery, structured post-run receipts, autonomous improvement loop | `scripts/healthcheck-daemon.py`, `scripts/pm2-monitoring.sh`, `backend/packages/harness/nova/runtime/` |
 | **Nova branding** | "Nova — The Agent's Computer", "Made by Ali Technologies", logos, visual identity | `NOTICE.md`, `README.md` hero, UI strings |
 
 **Commercial license terms** are negotiated separately. Contact `alilabsx@gmail.com` for evaluation access or licensing.

@@ -18,9 +18,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
-from deerflow.execution.testing import FakeExecutionKernel
-from deerflow.services.container import service_container
+from nova.community.aio_sandbox.sandbox_info import SandboxInfo
+from nova.execution.testing import FakeExecutionKernel
+from nova.services.container import service_container
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,7 @@ def _install_fake_kernel(handler) -> FakeExecutionKernel:
 
 def test_backend_list_running_default_returns_empty():
     """Base SandboxBackend.list_running() returns empty list (backward compat for RemoteSandboxBackend)."""
-    from deerflow.community.aio_sandbox.backend import SandboxBackend
+    from nova.community.aio_sandbox.backend import SandboxBackend
 
     class StubBackend(SandboxBackend):
         def create(self, thread_id, sandbox_id, extra_mounts=None):
@@ -64,7 +64,7 @@ def test_backend_list_running_default_returns_empty():
 
 def _make_local_backend():
     """Create a LocalContainerBackend with minimal config."""
-    from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
+    from nova.community.aio_sandbox.local_backend import LocalContainerBackend
 
     return LocalContainerBackend(
         image="test-image:latest",
@@ -252,7 +252,7 @@ def test_list_running_uses_single_batch_inspect_call(monkeypatch):
 
 def test_parse_docker_timestamp_with_nanoseconds():
     """Should correctly parse Docker's ISO 8601 timestamp with nanoseconds."""
-    from deerflow.community.aio_sandbox.local_backend import _parse_docker_timestamp
+    from nova.community.aio_sandbox.local_backend import _parse_docker_timestamp
 
     ts = _parse_docker_timestamp("2026-04-08T01:22:50.123456789Z")
     assert ts > 0
@@ -262,7 +262,7 @@ def test_parse_docker_timestamp_with_nanoseconds():
 
 def test_parse_docker_timestamp_without_fractional_seconds():
     """Should parse plain ISO 8601 timestamps without fractional seconds."""
-    from deerflow.community.aio_sandbox.local_backend import _parse_docker_timestamp
+    from nova.community.aio_sandbox.local_backend import _parse_docker_timestamp
 
     ts = _parse_docker_timestamp("2026-04-08T01:22:50Z")
     expected = datetime(2026, 4, 8, 1, 22, 50, tzinfo=UTC).timestamp()
@@ -270,7 +270,7 @@ def test_parse_docker_timestamp_without_fractional_seconds():
 
 
 def test_parse_docker_timestamp_empty_returns_zero():
-    from deerflow.community.aio_sandbox.local_backend import _parse_docker_timestamp
+    from nova.community.aio_sandbox.local_backend import _parse_docker_timestamp
 
     assert _parse_docker_timestamp("") == 0.0
     assert _parse_docker_timestamp("not a timestamp") == 0.0
@@ -280,21 +280,21 @@ def test_parse_docker_timestamp_empty_returns_zero():
 
 
 def test_extract_host_port_returns_mapped_port():
-    from deerflow.community.aio_sandbox.local_backend import _extract_host_port
+    from nova.community.aio_sandbox.local_backend import _extract_host_port
 
     entry = {"NetworkSettings": {"Ports": {"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8081"}]}}}
     assert _extract_host_port(entry, 8080) == 8081
 
 
 def test_extract_host_port_returns_none_when_unmapped():
-    from deerflow.community.aio_sandbox.local_backend import _extract_host_port
+    from nova.community.aio_sandbox.local_backend import _extract_host_port
 
     entry = {"NetworkSettings": {"Ports": {}}}
     assert _extract_host_port(entry, 8080) is None
 
 
 def test_extract_host_port_handles_missing_fields():
-    from deerflow.community.aio_sandbox.local_backend import _extract_host_port
+    from nova.community.aio_sandbox.local_backend import _extract_host_port
 
     assert _extract_host_port({}, 8080) is None
     assert _extract_host_port({"NetworkSettings": None}, 8080) is None
@@ -314,7 +314,7 @@ def _make_provider_for_reconciliation():
     this helper must be updated in lockstep — otherwise tests will fail with a
     confusing ``AttributeError`` instead of a meaningful assertion failure.
     """
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
     provider._lock = threading.Lock()
     provider._sandboxes = {}
@@ -334,24 +334,72 @@ def _make_provider_for_reconciliation():
     return provider
 
 
-def test_reconcile_adopts_old_containers_into_warm_pool():
-    """All containers are adopted into warm pool regardless of age — idle checker handles cleanup."""
+def test_reconcile_destroys_containers_past_max_lifetime():
+    """A container older than ``max_lifetime`` is destroyed, not adopted.
+
+    ``max_lifetime`` bounds a sandbox's age however busy it is, so a
+    container past it is stale by definition, and destroying it at startup
+    frees its host port immediately (2026-11-01: a new sandbox retried 4
+    times against ports held by deer-flow-sandbox-3d21a09c).
+    """
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
     old_info = SandboxInfo(
         sandbox_id="old12345",
         sandbox_url="http://localhost:8081",
         container_name="deer-flow-sandbox-old12345",
-        created_at=now - 1200,  # 20 minutes old, > 600s idle_timeout
+        created_at=now - 7200,  # 2 hours old, > 3600s max_lifetime
     )
     provider._backend.list_running.return_value = [old_info]
 
     provider._reconcile_orphans()
 
-    # Should NOT destroy directly — let idle checker handle it
+    provider._backend.destroy.assert_called_once()
+    assert "old12345" not in provider._warm_pool
+
+
+def test_reconcile_adopts_container_older_than_idle_timeout():
+    """Age past ``idle_timeout`` is uptime, not inactivity: adopt, never destroy.
+
+    After a gateway restart the in-process maps are empty, so a sandbox the
+    user was working in two minutes ago looks exactly like this one: created
+    20 minutes ago, longer than the 10-minute idle timeout. Destroying it on
+    that basis killed live sandboxes on every restart. The idle checker
+    reaps it later if nobody re-acquires it.
+    """
+    provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
+    now = time.time()
+
+    info = SandboxInfo(
+        sandbox_id="active12",
+        sandbox_url="http://localhost:8081",
+        container_name="deer-flow-sandbox-active12",
+        created_at=now - 1200,  # 20 minutes old, > 600s idle_timeout
+    )
+    provider._backend.list_running.return_value = [info]
+
+    provider._reconcile_orphans()
+
     provider._backend.destroy.assert_not_called()
-    assert "old12345" in provider._warm_pool
+    assert "active12" in provider._warm_pool
+
+
+def test_reconcile_without_max_lifetime_destroys_nothing():
+    """No ``max_lifetime`` configured: even a very old container is adopted."""
+    provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = None
+    now = time.time()
+
+    info = SandboxInfo(sandbox_id="ancient1", sandbox_url="http://localhost:8081", created_at=now - 86400 * 3)
+    provider._backend.list_running.return_value = [info]
+
+    provider._reconcile_orphans()
+
+    provider._backend.destroy.assert_not_called()
+    assert "ancient1" in provider._warm_pool
 
 
 def test_reconcile_adopts_young_containers():
@@ -375,29 +423,31 @@ def test_reconcile_adopts_young_containers():
     assert adopted_info.sandbox_id == "young123"
 
 
-def test_reconcile_mixed_containers_all_adopted():
-    """All containers (old and young) are adopted into warm pool."""
+def test_reconcile_mixed_containers_stale_destroyed_young_adopted():
+    """Containers past max_lifetime are destroyed; younger ones are adopted for reuse."""
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
     old_info = SandboxInfo(
         sandbox_id="old_one",
         sandbox_url="http://localhost:8081",
         container_name="deer-flow-sandbox-old_one",
-        created_at=now - 1200,
+        created_at=now - 7200,
     )
     young_info = SandboxInfo(
         sandbox_id="young_one",
         sandbox_url="http://localhost:8082",
         container_name="deer-flow-sandbox-young_one",
-        created_at=now - 60,
+        created_at=now - 1200,  # past idle_timeout, within max_lifetime
     )
     provider._backend.list_running.return_value = [old_info, young_info]
 
     provider._reconcile_orphans()
 
-    provider._backend.destroy.assert_not_called()
-    assert "old_one" in provider._warm_pool
+    destroyed_ids = [call.args[0].sandbox_id for call in provider._backend.destroy.call_args_list]
+    assert destroyed_ids == ["old_one"]
+    assert "old_one" not in provider._warm_pool
     assert "young_one" in provider._warm_pool
 
 
@@ -410,8 +460,9 @@ def test_reconcile_skips_already_tracked_containers():
         sandbox_id="existing1",
         sandbox_url="http://localhost:8081",
         container_name="deer-flow-sandbox-existing1",
-        created_at=now - 1200,
+        created_at=now - 7200,
     )
+    provider._config["max_lifetime"] = 3600
     # Pre-populate _sandboxes to simulate already-tracked container
     provider._sandboxes["existing1"] = MagicMock()
     provider._backend.list_running.return_value = [existing_info]
@@ -446,25 +497,27 @@ def test_reconcile_no_running_containers():
 
 
 def test_reconcile_multiple_containers_all_adopted():
-    """Multiple containers should all be adopted into warm pool."""
+    """Multiple containers past max_lifetime are each destroyed (their ports freed)."""
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
-    info1 = SandboxInfo(sandbox_id="cont_one", sandbox_url="http://localhost:8081", created_at=now - 1200)
-    info2 = SandboxInfo(sandbox_id="cont_two", sandbox_url="http://localhost:8082", created_at=now - 1200)
+    info1 = SandboxInfo(sandbox_id="cont_one", sandbox_url="http://localhost:8081", created_at=now - 7200)
+    info2 = SandboxInfo(sandbox_id="cont_two", sandbox_url="http://localhost:8082", created_at=now - 7200)
 
     provider._backend.list_running.return_value = [info1, info2]
 
     provider._reconcile_orphans()
 
-    provider._backend.destroy.assert_not_called()
-    assert "cont_one" in provider._warm_pool
-    assert "cont_two" in provider._warm_pool
+    destroyed_ids = sorted(call.args[0].sandbox_id for call in provider._backend.destroy.call_args_list)
+    assert destroyed_ids == ["cont_one", "cont_two"]
+    assert provider._warm_pool == {}
 
 
 def test_reconcile_zero_created_at_adopted():
     """Containers with created_at=0 (unknown age) should still be adopted into warm pool."""
     provider = _make_provider_for_reconciliation()
+    provider._config["max_lifetime"] = 3600
 
     info = SandboxInfo(sandbox_id="unknown1", sandbox_url="http://localhost:8081", created_at=0.0)
     provider._backend.list_running.return_value = [info]
@@ -476,9 +529,10 @@ def test_reconcile_zero_created_at_adopted():
 
 
 def test_reconcile_idle_timeout_zero_adopts_all():
-    """When idle_timeout=0 (disabled), all containers are still adopted into warm pool."""
+    """When idle_timeout=0 (disabled), all containers are adopted, even past max_lifetime."""
     provider = _make_provider_for_reconciliation()
     provider._config["idle_timeout"] = 0
+    provider._config["max_lifetime"] = 3600
     now = time.time()
 
     old_info = SandboxInfo(sandbox_id="old_one", sandbox_url="http://localhost:8081", created_at=now - 7200)
@@ -507,7 +561,7 @@ def test_sighup_handler_registered():
     original_sigterm = signal.getsignal(signal.SIGTERM)
     original_sigint = signal.getsignal(signal.SIGINT)
     try:
-        aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+        aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
         provider._original_sighup = original_sighup
         provider._original_sigterm = original_sigterm
         provider._original_sigint = original_sigint
@@ -536,12 +590,12 @@ class TestPytestGuard:
     """
 
     def test_under_pytest_is_true_during_a_test(self):
-        from deerflow.community.aio_sandbox.aio_sandbox_provider import _under_pytest
+        from nova.community.aio_sandbox.aio_sandbox_provider import _under_pytest
 
         assert _under_pytest() is True
 
     def test_under_pytest_is_false_without_the_env_var(self, monkeypatch):
-        from deerflow.community.aio_sandbox.aio_sandbox_provider import _under_pytest
+        from nova.community.aio_sandbox.aio_sandbox_provider import _under_pytest
 
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
         assert _under_pytest() is False
@@ -549,7 +603,7 @@ class TestPytestGuard:
     def test_construction_skips_orphan_reconciliation_and_atexit(self, monkeypatch):
         import atexit
 
-        from deerflow.community.aio_sandbox import aio_sandbox_provider as mod
+        from nova.community.aio_sandbox import aio_sandbox_provider as mod
 
         registered: list = []
         monkeypatch.setattr(atexit, "register", lambda fn, *a, **k: registered.append(fn))

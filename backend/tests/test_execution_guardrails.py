@@ -3,12 +3,12 @@
 Phase C8 — the entire platform has exactly one execution architecture.
 This test scans production source (backend/packages + backend/app) for
 direct execution primitives and fails if any appear outside
-``deerflow/execution/``.
+``nova/execution/``.
 
 Allowed:
-    - deerflow/execution/kernel.py (subprocess.Popen — the one sanctioned site)
-    - deerflow/execution/supervisor.py (asyncio process types, termination)
-    - deerflow/execution/adapters/interactive_shell.py (PTY shell spawning — Phase C8)
+    - nova/execution/kernel.py (subprocess.Popen — the one sanctioned site)
+    - nova/execution/supervisor.py (asyncio process types, termination)
+    - nova/execution/adapters/interactive_shell.py (PTY shell spawning — Phase C8)
     - formatting-only helpers (subprocess.list2cmdline) — matched narrowly
 
 Run:
@@ -22,12 +22,12 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SCAN_ROOTS = [
-    BACKEND_ROOT / "packages" / "harness" / "deerflow",
+    BACKEND_ROOT / "packages" / "harness" / "nova",
     BACKEND_ROOT / "app",
 ]
 
 # The only directory allowed to touch execution primitives.
-KERNEL_PREFIX = str(Path("packages", "harness", "deerflow", "execution"))
+KERNEL_PREFIX = str(Path("packages", "harness", "nova", "execution"))
 
 FORBIDDEN = re.compile(
     r"subprocess\.(run|Popen|call|check_output|check_call)\s*\("
@@ -59,7 +59,7 @@ def test_no_direct_execution_outside_kernel():
                 continue
             if FORBIDDEN.search(line):
                 violations.append(f"{rel}:{lineno}: {stripped[:120]}")
-    assert not violations, "Direct process execution found outside the Execution Kernel (route it through deerflow.execution instead):\n" + "\n".join(violations)
+    assert not violations, "Direct process execution found outside the Execution Kernel (route it through nova.execution instead):\n" + "\n".join(violations)
 
 
 def test_kernel_package_is_the_only_popen_site():
@@ -67,7 +67,7 @@ def test_kernel_package_is_the_only_popen_site():
 
     Phase C8: interactive_shell.py is a sanctioned site for PTY shell spawning.
     """
-    kernel_dir = BACKEND_ROOT / "packages" / "harness" / "deerflow" / "execution"
+    kernel_dir = BACKEND_ROOT / "packages" / "harness" / "nova" / "execution"
     sanctioned_popen_files = {"kernel.py", "interactive_shell.py"}
     offenders = []
     for path in kernel_dir.rglob("*.py"):

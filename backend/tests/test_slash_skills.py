@@ -7,11 +7,11 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.channels.commands import KNOWN_CHANNEL_COMMANDS
-from deerflow.agents.middlewares import skill_activation_middleware as middleware_module
-from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware, is_slash_skill_activation_reminder
-from deerflow.skills.slash import RESERVED_SLASH_SKILL_NAMES, parse_slash_skill_reference, resolve_slash_skill
-from deerflow.skills.types import Skill, SkillCategory
-from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
+from nova.agents.middlewares import skill_activation_middleware as middleware_module
+from nova.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware, is_slash_skill_activation_reminder
+from nova.skills.slash import RESERVED_SLASH_SKILL_NAMES, parse_slash_skill_reference, resolve_slash_skill
+from nova.skills.types import Skill, SkillCategory
+from nova.utils.messages import ORIGINAL_USER_CONTENT_KEY
 
 
 def _make_skill(tmp_path: Path, name: str, content: str = "skill body") -> Skill:

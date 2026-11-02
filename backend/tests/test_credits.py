@@ -41,7 +41,7 @@ def test_daily_limit_for_plan():
 
 @pytest.fixture()
 def engine(tmp_path):
-    from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
+    from nova.persistence.engine import close_engine, get_session_factory, init_engine
 
     url = f"sqlite+aiosqlite:///{tmp_path}/credits.db"
     asyncio.run(init_engine("sqlite", url=url, sqlite_dir=str(tmp_path)))
@@ -52,7 +52,7 @@ def engine(tmp_path):
 
 
 def _insert_run(sf, *, run_id, user_id, tokens, created_at):
-    from deerflow.persistence.run.model import RunRow
+    from nova.persistence.run.model import RunRow
 
     async def _go():
         async with sf() as session:
@@ -152,7 +152,7 @@ def test_usage_reset_marker_restores_allowance(engine):
 def client(tmp_path):
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/credits_api.db"

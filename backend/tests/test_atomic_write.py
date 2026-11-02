@@ -6,7 +6,7 @@ import stat
 
 import pytest
 
-from deerflow.utils.atomic_write import atomic_write_text
+from nova.utils.atomic_write import atomic_write_text
 
 
 def test_writes_new_file(tmp_path):
@@ -54,7 +54,7 @@ def test_original_file_untouched_when_write_raises(tmp_path, monkeypatch):
         real.write = ExplodingFile.write.__get__(real)
         return real
 
-    monkeypatch.setattr("deerflow.utils.atomic_write.tempfile.NamedTemporaryFile", fake_named_temp_file)
+    monkeypatch.setattr("nova.utils.atomic_write.tempfile.NamedTemporaryFile", fake_named_temp_file)
 
     with pytest.raises(RuntimeError, match="simulated crash mid-write"):
         atomic_write_text(target, "new content that never lands")

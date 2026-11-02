@@ -28,7 +28,7 @@ from app.gateway.deps import (
 )
 from app.gateway.internal_auth import INTERNAL_SYSTEM_ROLE, get_trusted_internal_owner_user_id
 from app.gateway.utils import sanitize_log_param
-from deerflow.runtime import (
+from nova.runtime import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
     ConflictError,
@@ -40,14 +40,14 @@ from deerflow.runtime import (
     UnsupportedStrategyError,
     run_agent,
 )
-from deerflow.runtime.runs.naming import resolve_root_run_name
-from deerflow.runtime.stream_bridge.diagnostics import (
+from nova.runtime.runs.naming import resolve_root_run_name
+from nova.runtime.stream_bridge.diagnostics import (
     record_sse_consumer_disconnect,
     record_sse_consumer_loop_iter,
     record_sse_format,
 )
-from deerflow.runtime.user_context import reset_current_user, set_current_user
-from deerflow.services.protocols import ConfigurationService, RunService
+from nova.runtime.user_context import reset_current_user, set_current_user
+from nova.services.protocols import ConfigurationService, RunService
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ _CONTEXT_CONFIGURABLE_KEYS: frozenset[str] = frozenset(
         "is_bootstrap",
         # Runtime registry (P12): which runtime runs this chat, under which
         # account, with which permission preset. Read by
-        # deerflow.runtimes.middleware.RuntimeDispatchMiddleware.
+        # nova.runtimes.middleware.RuntimeDispatchMiddleware.
         "runtime",
         "runtime_account",
         "permission_mode",
@@ -245,7 +245,7 @@ def resolve_agent_factory(assistant_id: str | None):
     same factory; the routing happens inside ``make_lead_agent`` when it reads
     ``cfg["agent_name"]``.
     """
-    from deerflow.agents.lead_agent.agent import make_lead_agent
+    from nova.agents.lead_agent.agent import make_lead_agent
 
     return make_lead_agent
 
@@ -430,7 +430,7 @@ async def start_run(
                 # Set on this request task's context; asyncio.create_task
                 # (inside create_or_reject below) copies it into the run task,
                 # so the model factory uses the user's key for this run.
-                from deerflow.runtime.byok_context import set_byok_api_key
+                from nova.runtime.byok_context import set_byok_api_key
 
                 set_byok_api_key(key)
         elif _credits_enforced:

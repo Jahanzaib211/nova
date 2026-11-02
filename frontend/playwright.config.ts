@@ -68,13 +68,13 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       SKIP_ENV_VALIDATION: "1",
-      DEER_FLOW_AUTH_DISABLED: "1",
+      NOVA_AUTH_DISABLED: "1",
       // next.config.js bakes `/api/*` rewrites to this gateway at build time.
       // On a box where the real gateway is up (127.0.0.1:8001), unmocked
       // calls reached it, got 401 and the fetcher redirected to /login —
       // tests that pass in CI (no gateway, 404) failed locally. Point the
       // rewrites at a closed port so every unmocked call fails fast.
-      DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: "http://127.0.0.1:9",
+      NOVA_INTERNAL_GATEWAY_BASE_URL: "http://127.0.0.1:9",
     },
   },
 });

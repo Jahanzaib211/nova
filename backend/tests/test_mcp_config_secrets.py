@@ -27,7 +27,7 @@ from app.gateway.routers.mcp import (
     reset_mcp_tools_cache_endpoint,
     update_mcp_configuration,
 )
-from deerflow.config.extensions_config import ExtensionsConfig
+from nova.config.extensions_config import ExtensionsConfig
 
 # ---------------------------------------------------------------------------
 # _mask_server_config
@@ -419,7 +419,7 @@ async def test_update_mcp_configuration_resets_tools_cache(monkeypatch, tmp_path
 # file instead of the config that was there a moment ago. The write must use
 # the same temp-file + os.replace() pattern already used by every other
 # JSON-file store in this codebase (ChannelStore, ChannelRuntimeConfigStore,
-# DeerFlowClient._atomic_write_json, MemoryStorage, WeChatChannel).
+# NovaClient._atomic_write_json, MemoryStorage, WeChatChannel).
 # ---------------------------------------------------------------------------
 
 

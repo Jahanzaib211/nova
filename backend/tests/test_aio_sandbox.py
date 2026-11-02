@@ -10,8 +10,8 @@ import pytest
 @pytest.fixture()
 def sandbox():
     """Create an AioSandbox with a mocked client."""
-    with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-        from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+        from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
         sb = AioSandbox(id="test-sandbox", base_url="http://localhost:8080")
         return sb

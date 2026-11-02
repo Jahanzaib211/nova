@@ -251,10 +251,10 @@ test("injects scroll restoration at the start of the HTML head", () => {
     '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src \'none\'"></head><body><main>content</main></body></html>';
 
   expect(appendHtmlPreviewScrollRestoration(html, ARTIFACT_PATH)).toContain(
-    "<script data-deerflow-artifact-scroll-restoration>",
+    "<script data-nova-artifact-scroll-restoration>",
   );
   expect(appendHtmlPreviewScrollRestoration(html, ARTIFACT_PATH)).toContain(
-    "<head><script data-deerflow-artifact-scroll-restoration>",
+    "<head><script data-nova-artifact-scroll-restoration>",
   );
 });
 
@@ -273,9 +273,7 @@ test("preserves existing head elements when injecting scroll restoration", () =>
   expect(result).toContain(
     '<base href="http://localhost/threads/thread-1/user-data/outputs/">',
   );
-  expect(
-    result.indexOf("data-deerflow-artifact-scroll-restoration"),
-  ).toBeLessThan(
+  expect(result.indexOf("data-nova-artifact-scroll-restoration")).toBeLessThan(
     result.indexOf(
       '<base href="http://localhost/threads/thread-1/user-data/outputs/">',
     ),
@@ -289,7 +287,7 @@ test("does not duplicate HTML scroll restoration script", () => {
 
   expect(
     appendHtmlPreviewScrollRestoration(html).match(
-      /data-deerflow-artifact-scroll-restoration/g,
+      /data-nova-artifact-scroll-restoration/g,
     ),
   ).toHaveLength(1);
 });

@@ -19,9 +19,9 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.credit_grant.model import CreditGrantRow
-from deerflow.persistence.engine import get_session_factory
-from deerflow.persistence.run.model import RunRow
+from nova.persistence.credit_grant.model import CreditGrantRow
+from nova.persistence.engine import get_session_factory
+from nova.persistence.run.model import RunRow
 
 # Base daily token allowance per plan. "enterprise" is effectively uncapped
 # for practical single-tenant usage but stays finite to keep arithmetic sane.

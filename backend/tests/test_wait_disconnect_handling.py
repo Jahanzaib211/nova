@@ -19,9 +19,9 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from deerflow.runtime import RunManager, RunStatus
-from deerflow.runtime.runs.schemas import DisconnectMode
-from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+from nova.runtime import RunManager, RunStatus
+from nova.runtime.runs.schemas import DisconnectMode
+from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
 THREAD_ID = "thread-wait-3265"
 

@@ -4,7 +4,7 @@ Drives a real ``langchain.agents.create_agent`` graph against a real OpenAI-
 compatible LLM (one-api gateway), bound through ``DeferredToolFilterMiddleware``
 and the production ``get_available_tools`` pipeline. The only thing we mock is
 the MCP tool source — we hand-roll two ``@tool``s and inject them through
-``deerflow.mcp.cache.get_cached_mcp_tools``.
+``nova.mcp.cache.get_cached_mcp_tools``.
 
 The flow exercised:
   1. Turn 1: agent sees ``tool_search`` (plus a ``fake_subagent_trigger``
@@ -83,24 +83,24 @@ def fake_translator(text: str, target_lang: str) -> str:
 
 
 def _patch_mcp_pipeline(monkeypatch: pytest.MonkeyPatch, mcp_tools: list) -> None:
-    from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig
+    from nova.config.extensions_config import ExtensionsConfig, McpServerConfig
 
     real_ext = ExtensionsConfig(
         mcpServers={"fake-server": McpServerConfig(type="stdio", command="echo", enabled=True)},
     )
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: real_ext),
     )
-    monkeypatch.setattr("deerflow.mcp.cache.get_cached_mcp_tools", lambda: list(mcp_tools))
+    monkeypatch.setattr("nova.mcp.cache.get_cached_mcp_tools", lambda: list(mcp_tools))
 
 
 def _force_tool_search_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """Build a minimal mock AppConfig and patch the symbol — never call the
     real loader, which would trigger ``_apply_singleton_configs`` and
     permanently mutate cross-test singletons (memory, title, …)."""
-    from deerflow.config.app_config import AppConfig
-    from deerflow.config.tool_search_config import ToolSearchConfig
+    from nova.config.app_config import AppConfig
+    from nova.config.tool_search_config import ToolSearchConfig
 
     mock_cfg = AppConfig.model_construct(
         log_level="info",
@@ -110,7 +110,7 @@ def _force_tool_search_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
         sandbox=AppConfig.model_fields["sandbox"].annotation.model_construct(use="x"),
         tool_search=ToolSearchConfig(enabled=True),
     )
-    monkeypatch.setattr("deerflow.tools.tools.get_app_config", lambda: mock_cfg)
+    monkeypatch.setattr("nova.tools.tools.get_app_config", lambda: mock_cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -135,9 +135,9 @@ async def test_real_llm_promotes_then_invokes_with_subagent_reentry(monkeypatch:
     from langchain.agents import create_agent
     from langchain_openai import ChatOpenAI
 
-    from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
-    from deerflow.tools.builtins.tool_search import build_deferred_tool_setup
-    from deerflow.tools.tools import get_available_tools
+    from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+    from nova.tools.builtins.tool_search import build_deferred_tool_setup
+    from nova.tools.tools import get_available_tools
 
     _patch_mcp_pipeline(monkeypatch, [fake_calculator, fake_translator])
     _force_tool_search_enabled(monkeypatch)

@@ -31,10 +31,10 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 
-from deerflow.capabilities import CapabilityRegistry, OpContext, Operation, OperationNotFound
-from deerflow.capabilities.modules.features import compute_flags
-from deerflow.persistence.harness_token.sql import HarnessTokenRepository
-from deerflow.runtime.user_context import reset_current_user, set_current_user
+from nova.capabilities import CapabilityRegistry, OpContext, Operation, OperationNotFound
+from nova.capabilities.modules.features import compute_flags
+from nova.persistence.harness_token.sql import HarnessTokenRepository
+from nova.runtime.user_context import reset_current_user, set_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def mcp_server_enabled() -> bool:
     """``capabilities.mcp_server.enabled`` (default true), read per request so
     an edit to config.yaml takes effect without a restart. The flag existed
     and was read by nothing: the server was mounted and answered regardless."""
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     capabilities = getattr(get_app_config(), "capabilities", None)
     server = getattr(capabilities, "mcp_server", None)

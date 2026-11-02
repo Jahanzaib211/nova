@@ -33,7 +33,7 @@ os.environ.setdefault("AUTH_JWT_SECRET", "test-secret-key-audit-concurrency-32ch
 @pytest_asyncio.fixture
 async def audit_engine(tmp_path):
     """Stand up a real SQLite engine with the production-like settings."""
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     url = f"sqlite+aiosqlite:///{tmp_path}/audit_concurrency.db"
     await init_engine("sqlite", url=url, sqlite_dir=str(tmp_path))
@@ -49,8 +49,8 @@ async def test_concurrent_record_audit_does_not_lose_rows(audit_engine):
     from sqlalchemy import func, select
 
     from app.gateway.admin_ops import record_audit
-    from deerflow.persistence.admin_audit.model import AdminAuditRow
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.admin_audit.model import AdminAuditRow
+    from nova.persistence.engine import get_session_factory
 
     n = 32
     coros = [
@@ -132,7 +132,7 @@ async def test_engine_has_30s_busy_timeout(audit_engine):
     """Pins the engine-level timeout setting that buys time for the retry loop."""
     from sqlalchemy import text
 
-    from deerflow.persistence.engine import get_engine
+    from nova.persistence.engine import get_engine
 
     eng = get_engine()
     assert eng is not None

@@ -10,7 +10,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from deerflow.agents.middlewares.system_message_coalescing_middleware import (
+from nova.agents.middlewares.system_message_coalescing_middleware import (
     SystemMessageCoalescingMiddleware,
 )
 

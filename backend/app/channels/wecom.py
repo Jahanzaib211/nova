@@ -58,7 +58,7 @@ class WeComChannel(Channel):
         ws_manager = getattr(self._ws_client, "_ws_manager", None)
         send_reply = getattr(ws_manager, "send_reply", None)
         if not callable(send_reply):
-            raise RuntimeError("Installed wecom-aibot-python-sdk does not expose the WebSocket media upload API expected by DeerFlow. Use wecom-aibot-python-sdk==0.1.6 or update the adapter.")
+            raise RuntimeError("Installed wecom-aibot-python-sdk does not expose the WebSocket media upload API expected by Nova. Use wecom-aibot-python-sdk==0.1.6 or update the adapter.")
 
         send_reply_async = cast(Callable[[str, dict[str, Any], str], Awaitable[dict[str, Any]]], send_reply)
         return await send_reply_async(req_id, body, cmd)
@@ -387,7 +387,7 @@ class WeComChannel(Channel):
             },
             status="connected",
         )
-        await self._send_connection_reply(frame, "WeCom connected to DeerFlow.")
+        await self._send_connection_reply(frame, "WeCom connected to Nova.")
         return True
 
     async def _send_connection_reply(self, frame: dict[str, Any], text: str) -> None:

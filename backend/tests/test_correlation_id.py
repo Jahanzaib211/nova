@@ -17,8 +17,8 @@ import asyncio
 
 import pytest
 
-from deerflow.runtime.runs.manager import RunManager, RunStatus
-from deerflow.runtime.runs.store.memory import MemoryRunStore
+from nova.runtime.runs.manager import RunManager, RunStatus
+from nova.runtime.runs.store.memory import MemoryRunStore
 
 
 @pytest.mark.anyio

@@ -16,7 +16,7 @@ import asyncio
 
 import pytest
 
-from deerflow.runtimes.acp_transport import (
+from nova.runtimes.acp_transport import (
     ACP_STREAM_LIMIT,
     ACPFrameTooLarge,
     _descendants,
@@ -40,7 +40,7 @@ def test_a_bad_env_override_never_breaks_the_import(monkeypatch, bad):
     import importlib
 
     monkeypatch.setenv("NOVA_ACP_STREAM_LIMIT", bad)
-    from deerflow.runtimes import acp_transport
+    from nova.runtimes import acp_transport
 
     importlib.reload(acp_transport)  # must not raise
     try:
@@ -54,7 +54,7 @@ def test_stream_limit_is_env_overridable(monkeypatch):
     monkeypatch.setenv("NOVA_ACP_STREAM_LIMIT", "12345")
     import importlib
 
-    from deerflow.runtimes import acp_transport
+    from nova.runtimes import acp_transport
 
     importlib.reload(acp_transport)
     try:
@@ -147,8 +147,8 @@ async def test_run_acp_prompt_passes_the_limit_to_the_spawn(monkeypatch):
     import sys
     from types import SimpleNamespace
 
-    from deerflow.config.acp_config import ACPAgentConfig
-    from deerflow.runtimes.types import policy_for_mode
+    from nova.config.acp_config import ACPAgentConfig
+    from nova.runtimes.types import policy_for_mode
 
     captured: dict = {}
 
@@ -198,7 +198,7 @@ async def test_run_acp_prompt_passes_the_limit_to_the_spawn(monkeypatch):
         ),
     )
 
-    from deerflow.runtimes import acp_transport
+    from nova.runtimes import acp_transport
 
     await acp_transport.run_acp_prompt(
         ACPAgentConfig(command="npx", args=["-y", "pkg"], description="test adapter"),
@@ -308,8 +308,8 @@ async def test_only_agent_message_chunks_reach_the_answer(monkeypatch, update_ki
     import sys
     from types import SimpleNamespace
 
-    from deerflow.config.acp_config import ACPAgentConfig
-    from deerflow.runtimes.types import policy_for_mode
+    from nova.config.acp_config import ACPAgentConfig
+    from nova.runtimes.types import policy_for_mode
 
     class TextContentBlock:
         def __init__(self, text):
@@ -369,7 +369,7 @@ async def test_only_agent_message_chunks_reach_the_answer(monkeypatch, update_ki
         ),
     )
 
-    from deerflow.runtimes import acp_transport
+    from nova.runtimes import acp_transport
 
     statuses: list[str] = []
     answer = await acp_transport.run_acp_prompt(

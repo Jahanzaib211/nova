@@ -22,8 +22,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.sandbox.browser_circuit_breaker import reset_all_circuits
-from deerflow.sandbox.browser_errors import (
+from nova.sandbox.browser_circuit_breaker import reset_all_circuits
+from nova.sandbox.browser_errors import (
     BrowserConnectionError,
     BrowserError,
     BrowserTimeoutError,
@@ -146,7 +146,7 @@ def _make_fake_sync_playwright(*, fail_times: int = 0, error_factory=None):
 def test_cdp_browser_op_without_thread_id_does_not_retry():
     """No thread scope -> single unguarded attempt, identical to the
     pre-wiring behavior. A transient failure must surface immediately."""
-    from deerflow.tools.builtins import workspace_tools
+    from nova.tools.builtins import workspace_tools
 
     with _patch_playwright_error_types():
         fake_sync_playwright, call_count = _make_fake_sync_playwright(
@@ -154,7 +154,7 @@ def test_cdp_browser_op_without_thread_id_does_not_retry():
             error_factory=lambda: ConnectionError("connection refused"),
         )
         with (
-            patch("deerflow.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
+            patch("nova.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
             patch("playwright.sync_api.sync_playwright", fake_sync_playwright),
         ):
             # The raw ConnectionError is still classified into the typed
@@ -170,7 +170,7 @@ def test_cdp_browser_op_with_thread_id_retries_transient_failure_and_succeeds():
     """A thread_id present -> a transient connection failure on the first
     attempt is retried and the second attempt succeeds — proving the
     circuit breaker + retry wiring is actually live, not just imported."""
-    from deerflow.tools.builtins import workspace_tools
+    from nova.tools.builtins import workspace_tools
 
     with _patch_playwright_error_types():
         fake_sync_playwright, call_count = _make_fake_sync_playwright(
@@ -178,7 +178,7 @@ def test_cdp_browser_op_with_thread_id_retries_transient_failure_and_succeeds():
             error_factory=lambda: ConnectionError("connection refused"),
         )
         with (
-            patch("deerflow.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
+            patch("nova.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
             patch("playwright.sync_api.sync_playwright", fake_sync_playwright),
         ):
             result = workspace_tools._cdp_browser_op(client=MagicMock(), op=lambda page: "ok", thread_id="local:test-thread")
@@ -189,7 +189,7 @@ def test_cdp_browser_op_with_thread_id_retries_transient_failure_and_succeeds():
 def test_cdp_browser_op_with_thread_id_does_not_retry_permanent_error():
     """A page-level error (not connection-related) must fail on the first
     attempt even with a thread_id — retrying a bad selector wastes time."""
-    from deerflow.tools.builtins import workspace_tools
+    from nova.tools.builtins import workspace_tools
 
     with _patch_playwright_error_types():
 
@@ -198,7 +198,7 @@ def test_cdp_browser_op_with_thread_id_does_not_retry_permanent_error():
 
         fake_sync_playwright, call_count = _make_fake_sync_playwright(fail_times=0, error_factory=lambda: None)
         with (
-            patch("deerflow.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
+            patch("nova.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
             patch("playwright.sync_api.sync_playwright", fake_sync_playwright),
         ):
             with pytest.raises(_FakePlaywrightError):
@@ -215,7 +215,7 @@ def test_cdp_browser_op_does_not_rerun_op_when_close_fails():
     get retried as a brand new click/fill. This is a real double-submit
     risk for anything state-mutating, unlike navigate (which has its own
     idempotency cache)."""
-    from deerflow.tools.builtins import workspace_tools
+    from nova.tools.builtins import workspace_tools
 
     op_call_count = {"n": 0}
 
@@ -248,7 +248,7 @@ def test_cdp_browser_op_does_not_rerun_op_when_close_fails():
             return pw_cm
 
         with (
-            patch("deerflow.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
+            patch("nova.sandbox.browser_check._cdp_url_for_gateway", return_value="ws://fake-cdp"),
             patch("playwright.sync_api.sync_playwright", _sync_playwright),
         ):
             result = workspace_tools._cdp_browser_op(client=MagicMock(), op=_op, thread_id="local:test-thread")
@@ -263,7 +263,7 @@ def test_cdp_browser_op_does_not_rerun_op_when_close_fails():
 
 
 def test_run_targets_via_cdp_without_thread_id_does_not_retry():
-    from deerflow.sandbox import browser_check
+    from nova.sandbox import browser_check
 
     with _patch_playwright_error_types():
         fake_sync_playwright, call_count = _make_fake_sync_playwright(
@@ -277,7 +277,7 @@ def test_run_targets_via_cdp_without_thread_id_does_not_retry():
 
 
 def test_run_targets_via_cdp_with_thread_id_retries_connect_failure():
-    from deerflow.sandbox import browser_check
+    from nova.sandbox import browser_check
 
     with _patch_playwright_error_types():
         fake_sync_playwright, call_count = _make_fake_sync_playwright(
@@ -299,7 +299,7 @@ def test_run_targets_via_cdp_mid_loop_new_page_failure_does_not_discard_prior_re
     own claim that "a bad target never triggers a reconnect". Build 3
     targets where the middle one fails to get a page; the other two must
     still both be recorded, in a single call with no retry."""
-    from deerflow.sandbox import browser_check
+    from nova.sandbox import browser_check
 
     targets = [
         ("t1", "html", "<html>one</html>"),

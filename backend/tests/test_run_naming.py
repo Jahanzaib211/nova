@@ -1,4 +1,4 @@
-from deerflow.runtime.runs.naming import resolve_root_run_name
+from nova.runtime.runs.naming import resolve_root_run_name
 
 
 def test_resolve_root_run_name_from_context_agent_name():

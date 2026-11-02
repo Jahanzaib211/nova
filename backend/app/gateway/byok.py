@@ -22,8 +22,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.engine import get_session_factory
-from deerflow.persistence.user_api_key.model import UserApiKeyRow
+from nova.persistence.engine import get_session_factory
+from nova.persistence.user_api_key.model import UserApiKeyRow
 
 logger = logging.getLogger(__name__)
 

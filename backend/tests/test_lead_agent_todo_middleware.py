@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.agents.lead_agent import agent as lead_agent_module
+from nova.agents.lead_agent import agent as lead_agent_module
 
 
 @pytest.mark.parametrize("is_plan_mode", [True, False])

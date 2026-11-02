@@ -1,15 +1,15 @@
-"""Tests for deerflow.tracing.metadata.build_langfuse_trace_metadata."""
+"""Tests for nova.tracing.metadata.build_langfuse_trace_metadata."""
 
 from __future__ import annotations
 
 import pytest
 
-from deerflow.tracing import metadata as tracing_metadata
+from nova.tracing import metadata as tracing_metadata
 
 
 @pytest.fixture(autouse=True)
 def _clear_tracing_env(monkeypatch):
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     for name in (
         "LANGFUSE_TRACING",

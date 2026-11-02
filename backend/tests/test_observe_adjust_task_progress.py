@@ -30,7 +30,7 @@ def _build_middleware():
     (no-op in this test) and otherwise delegates to module-level helpers, so
     constructing it directly is fine."""
 
-    from deerflow.agents.middlewares.observe_adjust_middleware import (
+    from nova.agents.middlewares.observe_adjust_middleware import (
         ObserveAdjustMiddleware,
     )
 

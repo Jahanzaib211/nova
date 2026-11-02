@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.runtimes import (
+from nova.config.acp_config import ACPAgentConfig
+from nova.runtimes import (
     NATIVE,
     PERMISSION_MODES,
     RuntimeRegistry,
@@ -117,7 +117,7 @@ def test_transcript_for_prompt_keeps_last_turns_and_marks_the_request():
 
 @pytest.mark.anyio
 async def test_dispatch_middleware_routes_to_acp_and_streams(monkeypatch):
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     calls: dict = {}
 
@@ -162,7 +162,7 @@ async def test_dispatch_middleware_routes_to_acp_and_streams(monkeypatch):
 
 @pytest.mark.anyio
 async def test_dispatch_middleware_passes_through_for_native():
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     mw = RuntimeDispatchMiddleware(registry=RuntimeRegistry(acp_agents=_agents(), default="native"))
 
@@ -185,7 +185,7 @@ async def test_dispatch_middleware_falls_back_to_native_when_the_runtime_fails()
     3am (UTC)` five minutes into the turn and the user got that sentence as
     the reply. The same turn must instead run on the native agent — full
     tool suite — and say why in the stream and on the message."""
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     async def failing(*a, **k):
         raise RuntimeError("Internal error: You've hit your limit · resets 3am (UTC)")
@@ -218,7 +218,7 @@ async def test_dispatch_middleware_falls_back_to_native_when_the_runtime_fails()
 
 @pytest.mark.anyio
 async def test_dispatch_middleware_fallback_covers_the_turn_timeout():
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     async def slow(*a, **k):
         raise TimeoutError()
@@ -242,7 +242,7 @@ async def test_dispatch_middleware_fallback_covers_the_turn_timeout():
 
 @pytest.mark.anyio
 async def test_dispatch_middleware_reports_failures_as_a_message_when_fallback_is_off():
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     async def failing(*a, **k):
         raise RuntimeError("adapter exited 1")
@@ -272,7 +272,7 @@ def test_nova_mcp_tool_calls_are_judged_by_operation_kind_not_acp_kind():
     tools (`mcp__nova__<module>__<op>`) are judged by the operation's kind
     from the capability registry: reads everywhere, writes/executes in
     standard and full, never in plan."""
-    from deerflow.runtimes.acp_transport import nova_tool_decision
+    from nova.runtimes.acp_transport import nova_tool_decision
 
     kinds = {"jobs.list": "read", "jobs.enqueue": "execute", "jobs.cancel": "write", "secrets.set": "secret"}
     lookup = lambda name: kinds.get(name)  # noqa: E731
@@ -289,7 +289,7 @@ def test_nova_mcp_tool_calls_are_judged_by_operation_kind_not_acp_kind():
 
 
 def test_runtime_preamble_points_at_novas_sandbox_only_when_nova_is_mounted():
-    from deerflow.runtimes.transcript import SANDBOX_TOOL_NAMES, runtime_preamble
+    from nova.runtimes.transcript import SANDBOX_TOOL_NAMES, runtime_preamble
 
     text = runtime_preamble(["nova", "other"])
     for name in SANDBOX_TOOL_NAMES:
@@ -309,10 +309,10 @@ async def test_dispatch_middleware_briefs_the_runtime_and_mirrors_its_actions(tm
     (narration and Nova-tool echoes excluded)."""
     import json
 
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "_paths", None, raising=False)
     monkeypatch.setattr(paths_module, "_paths_singleton", None, raising=False)
@@ -353,7 +353,7 @@ async def test_dispatch_middleware_briefs_the_runtime_and_mirrors_its_actions(tm
     assert "`sandbox__bash`" in seen["prompt"]
     assert seen["prompt"].endswith("drive the sandbox")
 
-    from deerflow.config.paths import get_paths
+    from nova.config.paths import get_paths
 
     log = get_paths().sandbox_log_file(thread_id, user_id="u1") if hasattr(get_paths(), "sandbox_log_file") else None
     if log is None:

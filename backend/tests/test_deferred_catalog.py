@@ -1,7 +1,7 @@
 import pytest
 from langchain_core.tools import tool as as_tool
 
-from deerflow.tools.builtins.tool_search import DeferredToolCatalog
+from nova.tools.builtins.tool_search import DeferredToolCatalog
 
 
 @as_tool

@@ -13,16 +13,16 @@ import time
 
 import pytest
 
-from deerflow.execution import (
+from nova.execution import (
     ExecutionClass,
     ExecutionKernel,
     ExecutionRequest,
     ExecutionStatus,
     ResourceLimits,
 )
-from deerflow.execution.adapters.interactive_shell import InteractiveShellAdapter
-from deerflow.execution.pty_manager import PTYManager, TerminalSize
-from deerflow.execution.session_registry import (
+from nova.execution.adapters.interactive_shell import InteractiveShellAdapter
+from nova.execution.pty_manager import PTYManager, TerminalSize
+from nova.execution.session_registry import (
     SessionRegistry,
     SessionState,
 )

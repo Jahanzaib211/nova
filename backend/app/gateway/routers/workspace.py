@@ -37,10 +37,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
-from deerflow.config import get_app_config
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.services.container import service_container
+from nova.config import get_app_config
+from nova.config.paths import get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.services.container import service_container
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +281,7 @@ async def stream_workspace_events(thread_id: str, request: Request) -> Streaming
     _require_enabled()
     root = _workspace_root(thread_id)
 
-    from deerflow.workspace.events.bridge import get_workspace_event_bridge
+    from nova.workspace.events.bridge import get_workspace_event_bridge
 
     bridge = get_workspace_event_bridge()
     sub_id, queue = bridge.subscribe(root)

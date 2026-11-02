@@ -283,7 +283,11 @@ def test_host_url_translates_container_side_hosts(monkeypatch):
     assert inventory.host_url("http://host.docker.internal:18789/x") == "http://10.0.0.1:18789/x"
     assert inventory.host_url("http://127.0.0.1:8080") == "http://127.0.0.1:8080"
     assert inventory.host_url("http://searxng:8080") is None
-    assert inventory.compose_container("http://searxng:8080") == "deer-flow-searxng"
+    monkeypatch.delenv("NOVA_COMPOSE_CONTAINER_PREFIX", raising=False)
+    assert inventory.compose_container("http://searxng:8080") == "nova-searxng"
+    # A host that has not run the cutover still carries the pre-rename names.
+    assert inventory.LEGACY_COMPOSE_CONTAINER_PREFIX == "deer-flow-"
+    assert inventory._container_state({"deer-flow-searxng": {"state": "running"}}, "http://searxng:8080")[0] == "deer-flow-searxng"
 
 
 def test_disabled_service_is_reported_disabled_without_a_probe(monkeypatch):

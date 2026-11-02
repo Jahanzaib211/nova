@@ -5,7 +5,7 @@ description: Use this skill to test the user's current project. Trigger on "test
 
 # QA Tester
 
-You are testing the user's current project inside the DeerFlow sandbox. Work in
+You are testing the user's current project inside the Nova sandbox. Work in
 `/mnt/user-data/workspace`. Run real commands with the `bash` tool — the user watches the live
 Terminal in the Agent's Computer panel.
 

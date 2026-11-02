@@ -51,7 +51,7 @@ def _get_default_assistant() -> AssistantResponse:
         name="lead_agent",
         config={},
         metadata={"created_by": "system"},
-        description="DeerFlow lead agent",
+        description="Nova lead agent",
         created_at=now,
         updated_at=now,
         version=1,
@@ -64,7 +64,7 @@ def _list_assistants() -> list[AssistantResponse]:
 
     # Also include custom agents from config.yaml agents directory
     try:
-        from deerflow.config.agents_config import list_custom_agents
+        from nova.config.agents_config import list_custom_agents
 
         for agent_cfg in list_custom_agents():
             now = datetime.now(UTC).isoformat()

@@ -141,7 +141,7 @@ def _expected_tools() -> list[tuple[str, str]]:
 
 
 def test_manifest_contains_all_required_keywords():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     missing = [kw for kw in REQUIRED_KEYWORDS if kw not in manifest]
@@ -149,7 +149,7 @@ def test_manifest_contains_all_required_keywords():
 
 
 def test_manifest_lists_every_tool_name():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     missing = [name for name in TOOL_NAMES if f"`{name}`" not in manifest]
@@ -160,7 +160,7 @@ def test_manifest_lists_every_tool_name():
 
 
 def test_manifest_is_deterministic_across_calls():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     first = build_agent_manifest(_tools=_expected_tools())
     second = build_agent_manifest(_tools=_expected_tools())
@@ -169,7 +169,7 @@ def test_manifest_is_deterministic_across_calls():
 
 
 def test_manifest_has_agent_manifest_wrapper_tags():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     # The wrapper tags let the model locate the block as a discrete unit.
@@ -178,7 +178,7 @@ def test_manifest_has_agent_manifest_wrapper_tags():
 
 
 def test_manifest_includes_resolved_project_root():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     # The agent needs an absolute project root, not a placeholder.
@@ -189,7 +189,7 @@ def test_manifest_includes_resolved_project_root():
 
 
 def test_manifest_declares_search_discipline():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     # The dead-end-search-divergence loop detector needs a prompt anchor.
@@ -200,7 +200,7 @@ def test_manifest_declares_search_discipline():
 
 
 def test_manifest_contains_hard_rules():
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     for rule in ("additive", "reversible", "non-fatal", "harness boundary"):
@@ -214,7 +214,7 @@ def test_manifest_includes_gate_surfaces():
     enforced* rather than prompt-hoped. The model needs them visible so
     it doesn't try to re-implement or skip them.
     """
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     for gate in (
@@ -230,7 +230,7 @@ def test_manifest_includes_gate_surfaces():
 
 def test_manifest_mentions_reflect_fix_middleware():
     """v5 wires ReflectFixBudgetMiddleware; the manifest must surface it."""
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     manifest = build_agent_manifest(_tools=_expected_tools())
     assert "ReflectFixBudgetMiddleware" in manifest, "manifest must surface ReflectFixBudgetMiddleware so the agent knows the 'iterate at most twice' rule is runtime-enforced"
@@ -249,7 +249,7 @@ def test_manifest_is_pure_string_no_side_effects():
     # exception handler in _resolve_project_root.
     import inspect
 
-    from deerflow.agents import manifest as manifest_mod
+    from nova.agents import manifest as manifest_mod
 
     source = inspect.getsource(manifest_mod.build_agent_manifest)
     forbidden = ("open(", "Path.read_", "Path.write_", "requests.", "urllib.", "urlopen(")
@@ -264,7 +264,7 @@ def test_manifest_never_raises_on_normal_runtime():
     itself should be reliable enough that the wrapper never has to fire
     under normal conditions.
     """
-    from deerflow.agents.manifest import build_agent_manifest
+    from nova.agents.manifest import build_agent_manifest
 
     # None runtime (the canonical call from the injection point)
     assert isinstance(build_agent_manifest(None, _tools=_expected_tools()), str)
@@ -274,7 +274,7 @@ def test_manifest_never_raises_on_normal_runtime():
 
 def test_manifest_falls_back_to_cwd_on_project_root_failure(monkeypatch):
     """If project_root() raises, the manifest must still build (non-fatal)."""
-    from deerflow.agents import manifest as manifest_mod
+    from nova.agents import manifest as manifest_mod
 
     def _boom():
         raise RuntimeError("simulated project_root failure")
@@ -293,13 +293,13 @@ def test_manifest_falls_back_to_cwd_on_project_root_failure(monkeypatch):
 
 def test_collect_tools_returns_builtin_tools():
     """Without _tools override, _collect_tools pulls from BUILTIN_TOOLS + SUBAGENT_TOOLS + view_image."""
-    from deerflow.agents.manifest import _collect_tools
+    from nova.agents.manifest import _collect_tools
 
     tools = _collect_tools()
     assert len(tools) >= 20, f"auto-derived tools count regressed: {len(tools)}"
     names = [name for name, _purpose in tools]
     # Every name must appear in one of the agent's tool sources
-    from deerflow.tools.tools import BUILTIN_TOOLS, SUBAGENT_TOOLS, view_image_tool
+    from nova.tools.tools import BUILTIN_TOOLS, SUBAGENT_TOOLS, view_image_tool
 
     all_names = {getattr(t, "name", None) for t in (*BUILTIN_TOOLS, *SUBAGENT_TOOLS, view_image_tool)}
     all_names.discard(None)
@@ -309,7 +309,7 @@ def test_collect_tools_returns_builtin_tools():
 
 def test_collect_tools_is_sorted_alphabetically():
     """Tool inventory order is deterministic (alphabetical by name)."""
-    from deerflow.agents.manifest import _collect_tools
+    from nova.agents.manifest import _collect_tools
 
     tools = _collect_tools()
     names = [name for name, _purpose in tools]
@@ -318,7 +318,7 @@ def test_collect_tools_is_sorted_alphabetically():
 
 def test_collect_tools_no_duplicates():
     """No duplicate tool names in the inventory."""
-    from deerflow.agents.manifest import _collect_tools
+    from nova.agents.manifest import _collect_tools
 
     tools = _collect_tools()
     names = [name for name, _purpose in tools]
@@ -327,7 +327,7 @@ def test_collect_tools_no_duplicates():
 
 def test_collect_tools_falls_back_on_import_failure(monkeypatch):
     """If BUILTIN_TOOLS import fails, fall back to curated overrides."""
-    from deerflow.agents import manifest as manifest_mod
+    from nova.agents import manifest as manifest_mod
 
     # Force the import to fail by monkeypatching the module
     def _boom():
@@ -341,7 +341,7 @@ def _collect_tools_with_boom(_boom):
     try:
         _boom()
     except Exception:
-        from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES
+        from nova.agents.manifest import _TOOL_PURPOSE_OVERRIDES
 
         return sorted(_TOOL_PURPOSE_OVERRIDES.items())
     return []
@@ -349,7 +349,7 @@ def _collect_tools_with_boom(_boom):
 
 def test_collect_tools_dedupes_against_overrides(monkeypatch):
     """If BUILTIN_TOOLS contains a tool whose name is also in overrides, dedupe."""
-    from deerflow.agents import manifest as manifest_mod
+    from nova.agents import manifest as manifest_mod
 
     class _FakeTool:
         def __init__(self, name, desc):
@@ -362,7 +362,7 @@ def test_collect_tools_dedupes_against_overrides(monkeypatch):
 
 def _fake_collect(fake_tools):
     """Mirrors the real _collect_tools logic but with injected tools."""
-    from deerflow.agents.manifest import _TOOL_PURPOSE_OVERRIDES, _one_line_purpose
+    from nova.agents.manifest import _TOOL_PURPOSE_OVERRIDES, _one_line_purpose
 
     entries = []
     seen = set()
@@ -379,7 +379,7 @@ def _fake_collect(fake_tools):
 
 def test_one_line_purpose_truncates_long_descriptions():
     """Long descriptions are truncated to 140 chars with ellipsis."""
-    from deerflow.agents.manifest import _one_line_purpose
+    from nova.agents.manifest import _one_line_purpose
 
     long_desc = "x" * 200 + ". rest of sentence"
     result = _one_line_purpose(long_desc)
@@ -389,7 +389,7 @@ def test_one_line_purpose_truncates_long_descriptions():
 
 def test_one_line_purpose_handles_empty_description():
     """Empty/None descriptions get a sensible fallback."""
-    from deerflow.agents.manifest import _one_line_purpose
+    from nova.agents.manifest import _one_line_purpose
 
     assert _one_line_purpose(None) == "(no description)"
     assert _one_line_purpose("") == "(no description)"
@@ -398,7 +398,7 @@ def test_one_line_purpose_handles_empty_description():
 
 def test_one_line_purpose_takes_first_sentence():
     """Multi-sentence descriptions get truncated to the first sentence."""
-    from deerflow.agents.manifest import _one_line_purpose
+    from nova.agents.manifest import _one_line_purpose
 
     desc = "First sentence. Second sentence. Third."
     assert _one_line_purpose(desc) == "First sentence"

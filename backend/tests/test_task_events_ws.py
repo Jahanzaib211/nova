@@ -86,7 +86,7 @@ class TestTaskEventHub:
 
 class TestMirroringStreamBridge:
     def _wired(self):
-        from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+        from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
         hub = TaskEventHub()
         inner = MemoryStreamBridge()
@@ -217,7 +217,7 @@ class TestComputerWsMultiplex:
 
 class TestTodoIndexesExtraction:
     def test_in_progress_todos_are_bound(self) -> None:
-        from deerflow.tools.builtins.task_tool import _in_progress_todo_indexes
+        from nova.tools.builtins.task_tool import _in_progress_todo_indexes
 
         runtime = SimpleNamespace(
             state={
@@ -233,13 +233,13 @@ class TestTodoIndexesExtraction:
         assert _in_progress_todo_indexes(runtime) == [1]
 
     def test_no_todos_is_empty_not_error(self) -> None:
-        from deerflow.tools.builtins.task_tool import _in_progress_todo_indexes
+        from nova.tools.builtins.task_tool import _in_progress_todo_indexes
 
         runtime = SimpleNamespace(state={}, context=None, config={})
         assert _in_progress_todo_indexes(runtime) == []
 
     def test_garbage_todos_do_not_raise(self) -> None:
-        from deerflow.tools.builtins.task_tool import _in_progress_todo_indexes
+        from nova.tools.builtins.task_tool import _in_progress_todo_indexes
 
         runtime = SimpleNamespace(state={"todos": ["junk", None, {"status": 7}]}, context=None, config={})
         assert _in_progress_todo_indexes(runtime) == []
@@ -253,13 +253,13 @@ class TestTaskEventsCarryBinding:
     def wired_tool(self, monkeypatch):
         import importlib
 
-        import deerflow.tools.builtins as builtins_pkg
+        import nova.tools.builtins as builtins_pkg
 
-        # `import deerflow.tools.builtins.task_tool as tt` binds the *parent
+        # `import nova.tools.builtins.task_tool as tt` binds the *parent
         # attribute* — which is the re-exported StructuredTool, not the module
         # (the package's `from .task_tool import task_tool` shadows it). Go
         # through the import system explicitly.
-        tt = importlib.import_module("deerflow.tools.builtins.task_tool")
+        tt = importlib.import_module("nova.tools.builtins.task_tool")
         assert hasattr(tt, "get_stream_writer"), "module shadowed again"
         del builtins_pkg
 
@@ -283,7 +283,7 @@ class TestTaskEventsCarryBinding:
         # have been importlib.reload()ed by other suites), but the STATUS must
         # come from task_tool's own import — that is the object its
         # `result.status == SubagentStatus.COMPLETED` branch compares against.
-        import deerflow.subagents.executor as executor_module
+        import nova.subagents.executor as executor_module
 
         done = executor_module.SubagentResult(
             status=tt.SubagentStatus.COMPLETED,

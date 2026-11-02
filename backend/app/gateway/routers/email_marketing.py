@@ -18,13 +18,13 @@ from pydantic import BaseModel, Field
 from app.gateway.authz import require_auth
 from app.gateway.deps import authenticated_user_id as _user_id
 from app.gateway.deps import get_config, get_em_repo, get_jobs_repo
-from deerflow.email_marketing.bridge_factory import bridge_status, mailcow_bridge
-from deerflow.email_marketing.contacts_import import guess_mapping, parse_contacts_csv
-from deerflow.email_marketing.events import CONTACT_STATUSES, SUPPRESSION_REASONS
-from deerflow.email_marketing.pipeline import JOB_BATCH, JOB_IMPORT, JOB_START, QUEUE
-from deerflow.email_marketing.templates import TemplateError, render_template, validate_template
-from deerflow.email_marketing.tracking import TrackingLinks
-from deerflow.jobs.queue import JobQueue
+from nova.email_marketing.bridge_factory import bridge_status, mailcow_bridge
+from nova.email_marketing.contacts_import import guess_mapping, parse_contacts_csv
+from nova.email_marketing.events import CONTACT_STATUSES, SUPPRESSION_REASONS
+from nova.email_marketing.pipeline import JOB_BATCH, JOB_IMPORT, JOB_START, QUEUE
+from nova.email_marketing.templates import TemplateError, render_template, validate_template
+from nova.email_marketing.tracking import TrackingLinks
+from nova.jobs.queue import JobQueue
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +223,7 @@ async def create_contact(body: ContactCreate, request: Request) -> dict[str, Any
     _enabled()
     if body.status is not None and body.status not in CONTACT_STATUSES:
         raise HTTPException(status_code=422, detail=f"status must be one of {', '.join(CONTACT_STATUSES)}")
-    from deerflow.email_marketing.contacts_import import is_valid_email
+    from nova.email_marketing.contacts_import import is_valid_email
 
     if not is_valid_email(body.email.strip()):
         raise HTTPException(status_code=422, detail="Invalid email address")
@@ -519,7 +519,7 @@ async def test_send(campaign_id: str, body: TestSendRequest, request: Request) -
     _enabled()
     import asyncio
 
-    from deerflow.email_marketing.smtp import OutboundMessage, SmtpSender
+    from nova.email_marketing.smtp import OutboundMessage, SmtpSender
 
     repo = get_em_repo(request)
     owner = _user_id(request)

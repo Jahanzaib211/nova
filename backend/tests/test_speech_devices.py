@@ -15,7 +15,7 @@ import logging
 
 import pytest
 
-from deerflow.speech import devices
+from nova.speech import devices
 
 
 @pytest.fixture(autouse=True)
@@ -180,7 +180,7 @@ class TestHalfCudaSessionIsRejected:
         import sys
         import types
 
-        from deerflow.speech.engines import kokoro_tts
+        from nova.speech.engines import kokoro_tts
 
         built: list[list[str]] = []
 
@@ -223,14 +223,14 @@ class TestEnginesAcceptDevice:
     the settings panel will write to."""
 
     def test_kokoro_accepts_device(self) -> None:
-        from deerflow.speech.engines.kokoro_tts import KokoroTTS
+        from nova.speech.engines.kokoro_tts import KokoroTTS
 
         engine = KokoroTTS(device="cpu", model_path="/nope.onnx", voices_path="/nope.bin")
         assert engine.device == "cpu"
         assert engine.resolved_device == "cpu"
 
     def test_whisper_accepts_device(self) -> None:
-        from deerflow.speech.engines.faster_whisper_stt import FasterWhisperSTT
+        from nova.speech.engines.faster_whisper_stt import FasterWhisperSTT
 
         engine = FasterWhisperSTT(device="cuda", model="base")
         assert engine.device == "cuda"
@@ -239,7 +239,7 @@ class TestEnginesAcceptDevice:
         assert engine.resolved_device == "cpu"
 
     def test_whisper_defers_compute_type_to_the_device(self, monkeypatch) -> None:
-        from deerflow.speech.engines.faster_whisper_stt import FasterWhisperSTT
+        from nova.speech.engines.faster_whisper_stt import FasterWhisperSTT
 
         # Explicitly unset: these constructors read env as a fallback, and a
         # developer with DEERFLOW_STT_COMPUTE exported would otherwise see this
@@ -251,13 +251,13 @@ class TestEnginesAcceptDevice:
         assert FasterWhisperSTT(compute_type="float32")._configured_compute == "float32"
 
     def test_whisper_device_defaults_to_auto(self, monkeypatch) -> None:
-        from deerflow.speech.engines.faster_whisper_stt import FasterWhisperSTT
+        from nova.speech.engines.faster_whisper_stt import FasterWhisperSTT
 
         monkeypatch.delenv("DEERFLOW_STT_DEVICE", raising=False)
         assert FasterWhisperSTT().device == "auto", "auto is what makes one config work on GPU and k3s alike"
 
     def test_kokoro_device_defaults_to_auto(self, monkeypatch) -> None:
-        from deerflow.speech.engines.kokoro_tts import KokoroTTS
+        from nova.speech.engines.kokoro_tts import KokoroTTS
 
         monkeypatch.delenv("DEERFLOW_TTS_DEVICE", raising=False)
         assert KokoroTTS(model_path="/nope.onnx", voices_path="/nope.bin").device == "auto"

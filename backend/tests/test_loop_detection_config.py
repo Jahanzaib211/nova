@@ -2,7 +2,7 @@
 
 import pytest
 
-from deerflow.config.loop_detection_config import LoopDetectionConfig
+from nova.config.loop_detection_config import LoopDetectionConfig
 
 
 class TestLoopDetectionConfig:

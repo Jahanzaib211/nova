@@ -13,10 +13,10 @@ import json
 
 import pytest
 
-# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools` import
+# `nova.sandbox.tools` and `nova.tools.builtins.workspace_tools` import
 # each other; enter from the workspace_tools side, as the application does.
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.sandbox.tools import reconcile_terminal_stats  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.sandbox.tools import reconcile_terminal_stats  # noqa: E402  isort:skip
 
 
 def _cmd(i: int) -> str:

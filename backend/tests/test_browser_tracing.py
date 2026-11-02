@@ -13,8 +13,8 @@ import threading
 
 import pytest
 
-from deerflow.sandbox import browser_tracing as bt
-from deerflow.sandbox.browser_tracing import (
+from nova.sandbox import browser_tracing as bt
+from nova.sandbox.browser_tracing import (
     browser_log,
     browser_span,
     current_span,
@@ -158,7 +158,7 @@ class TestBrowserLog:
         handler = logging.StreamHandler(buf)
         handler.setFormatter(logging.Formatter("%(message)s"))
         handler.setLevel(logging.DEBUG)
-        logger = logging.getLogger("deerflow.sandbox.browser_tracing")
+        logger = logging.getLogger("nova.sandbox.browser_tracing")
         logger.addHandler(handler)
         old_level = logger.level
         logger.setLevel(logging.DEBUG)

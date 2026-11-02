@@ -67,7 +67,7 @@ def owned_thread(monkeypatch):
 
 @pytest.fixture
 def fake_provider(monkeypatch):
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     provider = _FakeProvider()
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
@@ -91,7 +91,7 @@ class _FakeProvider:
 @pytest.fixture
 def wired(monkeypatch):
     """Own-thread + fake provider + captured bridge."""
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     provider = _FakeProvider()
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)

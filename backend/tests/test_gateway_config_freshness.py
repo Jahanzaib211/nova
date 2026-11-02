@@ -22,14 +22,14 @@ from fastapi.testclient import TestClient
 
 from app.gateway import deps as gateway_deps
 from app.gateway.deps import get_config
-from deerflow.config.app_config import (
+from nova.config.app_config import (
     AppConfig,
     pop_current_app_config,
     push_current_app_config,
     reset_app_config,
     set_app_config,
 )
-from deerflow.config.sandbox_config import SandboxConfig
+from nova.config.sandbox_config import SandboxConfig
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +44,7 @@ def _write_config_yaml(path: Path, *, log_level: str) -> None:
     path.write_text(
         f"""
 sandbox:
-  use: deerflow.sandbox.local.provider:LocalSandboxProvider
+  use: nova.sandbox.local.provider:LocalSandboxProvider
 log_level: {log_level}
 """.strip()
         + "\n",

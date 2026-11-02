@@ -14,8 +14,8 @@ from app.channels.telegram import TelegramChannel
 
 @pytest.fixture
 async def repo(tmp_path: Path):
-    from deerflow.persistence.channel_connections import ChannelConnectionRepository, ChannelCredentialCipher
-    from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
+    from nova.persistence.channel_connections import ChannelConnectionRepository, ChannelCredentialCipher
+    from nova.persistence.engine import close_engine, get_session_factory, init_engine
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'telegram.db'}", sqlite_dir=str(tmp_path))
     try:

@@ -63,6 +63,7 @@ jobs:
         run: cd frontend && pnpm build
         env:
           SKIP_ENV_VALIDATION: "1"
+          NOVA_AUTH_DISABLED: "1"
           DEER_FLOW_AUTH_DISABLED: "1"
           NODE_OPTIONS: --max-old-space-size=4096
 
@@ -79,6 +80,7 @@ jobs:
           command: cd frontend && pnpm exec lhci autorun --config=./lighthouserc.cjs
         env:
           SKIP_ENV_VALIDATION: "1"
+          NOVA_AUTH_DISABLED: "1"
           DEER_FLOW_AUTH_DISABLED: "1"
 
       - name: Upload reports

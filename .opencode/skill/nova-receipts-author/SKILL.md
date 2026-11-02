@@ -1,6 +1,6 @@
 ---
 name: nova-receipts-author
-description: Author a typed post-run receipt for a new Nova agent run or a new tool. Use when adding observability for an end-to-end workflow, when a tool produces artifacts a judge could re-verify, or when the "code is the ultimate proof" thesis needs a new structured artifact. The `Receipt` class doesn't exist yet (no hit on `class Receipt` in `backend/`); today the closest analog is `RunEventStore` (JSONL of `message/trace/lifecycle` events) plus `BUILD_JOURNAL.md` (free-form text) plus `REVIEW.md` (deterministic code-review). The schema is Pydantic v2 in `backend/packages/harness/deerflow/receipts/types.py` (planned v7.4). Triggers on phrases like "make this verifiable", "replay this run", "what did the agent do", or before shipping any new end-to-end workflow.
+description: Author a typed post-run receipt for a new Nova agent run or a new tool. Use when adding observability for an end-to-end workflow, when a tool produces artifacts a judge could re-verify, or when the "code is the ultimate proof" thesis needs a new structured artifact. The `Receipt` class doesn't exist yet (no hit on `class Receipt` in `backend/`); today the closest analog is `RunEventStore` (JSONL of `message/trace/lifecycle` events) plus `BUILD_JOURNAL.md` (free-form text) plus `REVIEW.md` (deterministic code-review). The schema is Pydantic v2 in `backend/packages/harness/nova/receipts/types.py` (planned v7.4). Triggers on phrases like "make this verifiable", "replay this run", "what did the agent do", or before shipping any new end-to-end workflow.
 ---
 
 # nova-receipts-author
@@ -18,12 +18,12 @@ A `Receipt` is a post-run JSON artifact with:
 - `test_results` (`{passed, failed, duration_s}`)
 - `browser_check` (the `BrowserCheck` from `sandbox/browser_check.py:283`, when applicable)
 - `receipt_version` (integer; bump on schema change)
-- `signature` (HMAC-SHA256 of all preceding fields, keyed by `DEER_FLOW_RECEIPT_SIGNING_KEY`)
+- `signature` (HMAC-SHA256 of all preceding fields, keyed by `NOVA_RECEIPT_SIGNING_KEY`)
 
 ## Emit from a new tool
 
 ```python
-from deerflow.receipts import Receipt, emit_receipt
+from nova.receipts import Receipt, emit_receipt
 
 async def my_new_tool(thread_id: str, **kwargs) -> str:
     start = time.monotonic()
@@ -66,5 +66,5 @@ A receipt is **not** a record-and-replay artifact by itself (that's `RunEventSto
 ## Anti-patterns
 
 - ❌ **Don't** build a receipt that includes the full tool output (>1MB). Excerpt + checksum only.
-- ❌ **Don't** sign receipts with the model's API key — that's a credential leak. Use `DEER_FLOW_RECEIPT_SIGNING_KEY` (32+ bytes, rotated quarterly).
-- ❌ **Don't** store receipts inside the thread dir (use `RunEventStore` in `.deer-flow/threads/{tid}/runs/{rid}.jsonl` and have receipts reference the run_id).
+- ❌ **Don't** sign receipts with the model's API key — that's a credential leak. Use `NOVA_RECEIPT_SIGNING_KEY` (32+ bytes, rotated quarterly).
+- ❌ **Don't** store receipts inside the thread dir (use `RunEventStore` in `.nova/threads/{tid}/runs/{rid}.jsonl` and have receipts reference the run_id).

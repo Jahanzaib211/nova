@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 import requests
 
-from deerflow.community.aio_sandbox.remote_backend import RemoteSandboxBackend
-from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
+from nova.community.aio_sandbox.remote_backend import RemoteSandboxBackend
+from nova.community.aio_sandbox.sandbox_info import SandboxInfo
 
 
 class _StubResponse:

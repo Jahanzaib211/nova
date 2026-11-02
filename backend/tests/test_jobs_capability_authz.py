@@ -1,5 +1,5 @@
 """``jobs.*`` capability ops apply the same owner and state rules as
-``/api/jobs`` (both go through ``deerflow.jobs.service``).
+``/api/jobs`` (both go through ``nova.jobs.service``).
 
 Before the shared service the capability let any caller take over another
 owner's schedule by name, cancel/retry system jobs and delete system
@@ -16,17 +16,17 @@ from datetime import timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from deerflow.capabilities import CapabilityRegistry, OpContext, OperationConflict, OperationDenied
-from deerflow.capabilities.modules import jobs as jobs_module
-from deerflow.jobs.queue import JobQueue
-from deerflow.jobs.service import JobConflict, JobNotFound, JobService
-from deerflow.persistence.base import Base
-from deerflow.persistence.job.sql import JobRepository
+from nova.capabilities import CapabilityRegistry, OpContext, OperationConflict, OperationDenied
+from nova.capabilities.modules import jobs as jobs_module
+from nova.jobs.queue import JobQueue
+from nova.jobs.service import JobConflict, JobNotFound, JobService
+from nova.persistence.base import Base
+from nova.persistence.job.sql import JobRepository
 
 
 @pytest.fixture()
 def repo(monkeypatch):
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -145,7 +145,7 @@ def test_summary_stays_admin_only(repo):
 
 
 def test_agents_hold_enqueue_and_workers_tools():
-    from deerflow.tools.capability_tools import build_capability_tools
+    from nova.tools.capability_tools import build_capability_tools
 
     names = {t.name for t in build_capability_tools(_registry(), enabled_flags={"jobs"}, groups={"nova:jobs"})}
     assert {"jobs__enqueue", "jobs__workers"} <= names

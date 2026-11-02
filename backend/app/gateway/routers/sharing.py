@@ -28,8 +28,8 @@ from sqlalchemy import delete, select
 
 from app.gateway.authz import require_permission
 from app.gateway.deps import get_run_event_store, get_thread_store
-from deerflow.persistence.engine import get_session_factory
-from deerflow.persistence.shared_thread.model import SharedThreadRow
+from nova.persistence.engine import get_session_factory
+from nova.persistence.shared_thread.model import SharedThreadRow
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["sharing"])

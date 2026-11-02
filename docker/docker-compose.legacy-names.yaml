@@ -1,0 +1,23 @@
+# Nova — legacy-names overlay (pre-rename hosts only; TEMPORARY, one release)
+#
+# Appended by scripts/pm2-nova.sh ONLY while a host has not yet been through
+# scripts/migrate-deerflow-to-nova.sh, i.e. its data still lives in the
+# `deer-flow-dev_*` volumes. In that mode the launcher also runs the stack as
+# `-p deer-flow-dev` with NOVA_CONTAINER_PREFIX=deer-flow, so the volumes,
+# containers and images it attaches to are exactly the ones already on disk —
+# a `pm2 restart nova` that lands before the operator's cutover must never
+# come up on fresh, empty `nova_*` volumes.
+#
+# The network is the one piece that cannot be expressed through variables: the
+# base files key it `nova`, and Compose refuses to adopt an existing network
+# whose com.docker.compose.network label names a different key. So the legacy
+# network (`deer-flow-dev_deer-flow-dev`, subnet 192.168.200.0/24, same pinned
+# addresses) is attached as external — Compose neither recreates nor deletes it.
+#
+# Delete this file once every host has migrated.
+networks:
+  nova:
+    name: deer-flow-dev_deer-flow-dev
+    external: true
+    driver: !reset null
+    ipam: !reset {}

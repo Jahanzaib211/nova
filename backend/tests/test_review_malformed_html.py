@@ -7,7 +7,7 @@ maree.html, 3 writes, final file began at a JS function body while the run
 claimed "verified clean").
 """
 
-from deerflow.sandbox.review import FileChange, _scan_malformed_html_risks
+from nova.sandbox.review import FileChange, _scan_malformed_html_risks
 
 
 def _fc(path: str) -> FileChange:

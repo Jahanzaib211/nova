@@ -1,13 +1,13 @@
 ---
 title: Work with Memory
-description: This tutorial shows you how to enable and use DeerFlow's memory system so the agent remembers important information about you across multiple sessions.
+description: This tutorial shows you how to enable and use Nova's memory system so the agent remembers important information about you across multiple sessions.
 ---
 
 import { Callout } from "nextra/components";
 
 # Work with Memory
 
-This tutorial shows you how to enable and use DeerFlow's memory system so the agent remembers important information about you across multiple sessions.
+This tutorial shows you how to enable and use Nova's memory system so the agent remembers important information about you across multiple sessions.
 
 ## Enable memory
 
@@ -49,10 +49,10 @@ The agent will automatically produce FastAPI-style code with type annotations.
 
 ## Inspect memory
 
-Memory is stored in `backend/.deer-flow/memory.json`:
+Memory is stored in `backend/.nova/memory.json`:
 
 ```bash
-cat backend/.deer-flow/memory.json
+cat backend/.nova/memory.json
 ```
 
 ## Per-agent memory
@@ -60,12 +60,12 @@ cat backend/.deer-flow/memory.json
 When a custom agent is active, it maintains its own memory file at:
 
 ```
-backend/.deer-flow/agents/{agent_name}/memory.json
+backend/.nova/agents/{agent_name}/memory.json
 ```
 
 This keeps each agent's learned knowledge separate.
 
 ## Next steps
 
-- [Deploy Your Own DeerFlow](./deploy-your-own-deerflow)
+- [Deploy Your Own Nova](./deploy-your-own-nova)
 - [Memory System Reference](../harness/memory)

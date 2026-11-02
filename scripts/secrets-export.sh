@@ -38,9 +38,12 @@ umask 077   # anything created below is 0600 from birth, not chmod'd after
 
   # The JWT secret is a bare file, auto-generated once, and is the single copy
   # of the thing that keeps every user logged in.
-  if [ -f "$REPO_ROOT/backend/.deer-flow/.jwt_secret" ]; then
-    echo "# ── backend/.deer-flow/.jwt_secret (restore as that file, mode 0600) ──"
-    echo "# AUTH_JWT_SECRET_FILE_CONTENT=$(cat "$REPO_ROOT/backend/.deer-flow/.jwt_secret")"
+  # backend/.nova, or the pre-rename backend/.deer-flow (now a symlink to it).
+  _data_dir=".nova"
+  [ -f "$REPO_ROOT/backend/.nova/.jwt_secret" ] || _data_dir=".deer-flow"
+  if [ -f "$REPO_ROOT/backend/$_data_dir/.jwt_secret" ]; then
+    echo "# ── backend/$_data_dir/.jwt_secret (restore as that file, mode 0600) ──"
+    echo "# AUTH_JWT_SECRET_FILE_CONTENT=$(cat "$REPO_ROOT/backend/$_data_dir/.jwt_secret")"
     echo
   fi
 

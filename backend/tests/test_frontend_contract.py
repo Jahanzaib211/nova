@@ -20,9 +20,9 @@ import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOLS_PY = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "tools.py"
-WORKSPACE_TOOLS_PY = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "tools" / "builtins" / "workspace_tools.py"
-TASK_TOOL_PY = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "tools" / "builtins" / "task_tool.py"
+TOOLS_PY = REPO_ROOT / "backend" / "packages" / "harness" / "nova" / "sandbox" / "tools.py"
+WORKSPACE_TOOLS_PY = REPO_ROOT / "backend" / "packages" / "harness" / "nova" / "tools" / "builtins" / "workspace_tools.py"
+TASK_TOOL_PY = REPO_ROOT / "backend" / "packages" / "harness" / "nova" / "tools" / "builtins" / "task_tool.py"
 TOOL_SURFACE_TS = REPO_ROOT / "frontend" / "src" / "core" / "threads" / "tool-surface.ts"
 TASK_EVENTS_TS = REPO_ROOT / "frontend" / "src" / "core" / "threads" / "task-events-ws.ts"
 
@@ -107,7 +107,7 @@ class TestComputerWsChannelContract:
     """Channels the frontend routes must exist verbatim on both sides."""
 
     def test_terminal_stats_channel(self) -> None:
-        py = _read(REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "tools.py")
+        py = _read(REPO_ROOT / "backend" / "packages" / "harness" / "nova" / "sandbox" / "tools.py")
         ts = _read(TASK_EVENTS_TS)
         assert 'emit_channel(\n                        "terminal_stats"' in py or '"terminal_stats"' in py
         assert '"terminal-stats"' in ts or "TerminalStatsEvent" in ts
@@ -119,7 +119,7 @@ class TestComputerWsChannelContract:
         assert '"todos"' in ts
 
     def test_dev_server_channel(self) -> None:
-        dev = _read(REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "dev_server.py")
+        dev = _read(REPO_ROOT / "backend" / "packages" / "harness" / "nova" / "sandbox" / "dev_server.py")
         deps = _read(REPO_ROOT / "backend" / "app" / "gateway" / "deps.py")
         assert '"channel": "browser"' in deps, "gateway must tag dev-server events channel:browser"
         # Observation events now pass through the caller's channel instead of being
@@ -219,7 +219,7 @@ class TestDevServerSurfaceContract:
         assert "dev_server" not in match.group(1)
 
     def test_the_mirror_emits_that_type(self) -> None:
-        dev_server_py = REPO_ROOT / "backend" / "packages" / "harness" / "deerflow" / "sandbox" / "dev_server.py"
+        dev_server_py = REPO_ROOT / "backend" / "packages" / "harness" / "nova" / "sandbox" / "dev_server.py"
         text = _read(dev_server_py)
         assert '"dev_server"' in text, "the dev-log mirror no longer tags its lines"
         assert '"type": "bash"' not in text, "the mirror is hand-rolling a bash-tagged line again"

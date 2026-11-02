@@ -14,8 +14,8 @@ nothing here limits the rights that license grants.
 | Component | Location |
 |---|---|
 | Agent's Computer user interface | `frontend/src/components/workspace/agent-computer/` |
-| Per-thread container isolation tooling and orchestration | `backend/packages/harness/deerflow/sandbox/` (AioSandboxProvider and path mappings) |
-| Watchdogs, receipts and self-improvement loop | `scripts/healthcheck-daemon.py`, `scripts/pm2-monitoring.sh`, `backend/packages/harness/deerflow/runtime/` |
+| Per-thread container isolation tooling and orchestration | `backend/packages/harness/nova/sandbox/` (AioSandboxProvider and path mappings) |
+| Watchdogs, receipts and self-improvement loop | `scripts/healthcheck-daemon.py`, `scripts/pm2-monitoring.sh`, `backend/packages/harness/nova/runtime/` |
 | Nova branding: names, logos and visual identity | "Nova", "Nova — The Agent's Computer", "Made by Ali Technologies" |
 
 The full boundary is maintained in [OPEN_CORE.md](./OPEN_CORE.md).

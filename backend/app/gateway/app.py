@@ -58,18 +58,19 @@ from app.gateway.routers import (
 from app.gateway.routers import (
     voice as voice_router,
 )
-from deerflow.config import app_config as deerflow_app_config
-from deerflow.config.app_config import apply_logging_level
+from nova.config import app_config as nova_app_config
+from nova.config.app_config import apply_logging_level
+from nova.config.env import getenv_compat
 
 # Warm the lead-agent stack (and its enabled-skills cache) at process start,
-# before the event loop exists. deerflow/agents/__init__.py exports the stack
+# before the event loop exists. nova/agents/__init__.py exports the stack
 # lazily since the circular-import fix, so without this line the first run
 # request would pay the full module-import + skills filesystem scan on the
 # event loop inside resolve_agent_factory().
-import deerflow.agents.lead_agent  # noqa: F401, E402  isort: skip
+import nova.agents.lead_agent  # noqa: F401, E402  isort: skip
 
-AppConfig = deerflow_app_config.AppConfig
-get_app_config = deerflow_app_config.get_app_config
+AppConfig = nova_app_config.AppConfig
+get_app_config = nova_app_config.get_app_config
 
 # Default logging; lifespan overrides from config.yaml log_level.
 logging.basicConfig(
@@ -110,8 +111,8 @@ async def _ensure_admin_user(app: FastAPI) -> None:
     from sqlalchemy import select
 
     from app.gateway.deps import get_local_provider
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.user.model import UserRow
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.user.model import UserRow
 
     try:
         provider = get_local_provider()
@@ -228,7 +229,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("memory.token_counting='char'; skipping tiktoken warm-up (network-free token estimation)")
     else:
         try:
-            from deerflow.agents.memory.prompt import warm_tiktoken_cache
+            from nova.agents.memory.prompt import warm_tiktoken_cache
 
             warmed = await asyncio.wait_for(
                 asyncio.to_thread(warm_tiktoken_cache),
@@ -265,7 +266,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # (langgraph-sdk), so they have no reason to be colocated with the
         # scaled replicas at all — see deployment-channels.yaml, a
         # dedicated single-replica Deployment with this flag set to "1".
-        if os.environ.get("DEER_FLOW_RUN_CHANNELS", "1") != "0":
+        if getenv_compat("RUN_CHANNELS", "1") != "0":
             try:
                 from app.channels.service import start_channel_service
 
@@ -274,15 +275,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             except Exception:
                 logger.exception("No IM channels configured or channel service failed to start")
         else:
-            logger.info("Channel service disabled on this replica (DEER_FLOW_RUN_CHANNELS=0)")
+            logger.info("Channel service disabled on this replica (NOVA_RUN_CHANNELS=0)")
 
         # Nova's MCP server: bind the harness-token repository now that the
         # database is up, then run its session manager for the app's lifetime.
         mcp_server = getattr(app.state, "nova_mcp_server", None)
         if mcp_server is not None:
             try:
-                from deerflow.persistence.engine import get_session_factory
-                from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+                from nova.persistence.engine import get_session_factory
+                from nova.persistence.harness_token.sql import HarnessTokenRepository
 
                 sf = get_session_factory()
                 mcp_server.tokens = HarnessTokenRepository(sf) if sf is not None else None
@@ -340,7 +341,7 @@ def create_app() -> FastAPI:
     openapi_url = "/openapi.json" if config.enable_docs else None
 
     app = FastAPI(
-        title="DeerFlow API Gateway",
+        title="Nova API Gateway",
         default_response_class=ORJSONResponse,
         description="""
 ## DeerFlow API Gateway
@@ -393,7 +394,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
             },
             {
                 "name": "threads",
-                "description": "Manage DeerFlow thread-local filesystem data",
+                "description": "Manage Nova thread-local filesystem data",
             },
             {
                 "name": "agents",
@@ -579,7 +580,7 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
     from app.gateway.capabilities_modules import register_gateway_modules
     from app.gateway.mcp_server import NovaMcpServer
     from app.gateway.routers import capabilities_ops
-    from deerflow.capabilities import get_registry
+    from nova.capabilities import get_registry
 
     registry = get_registry()
     register_gateway_modules(registry)
@@ -607,9 +608,9 @@ app = create_app()
 # every app instantiation (including reloads in dev). Covers SIGTERM,
 # SIGINT, and normal interpreter shutdown via atexit.
 try:
-    from deerflow.sandbox.shutdown import install_shutdown_hooks
+    from nova.sandbox.shutdown import install_shutdown_hooks
 
     if install_shutdown_hooks():
-        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)", os.environ.get("DEERFLOW_SHUTDOWN_BUDGET_S", "5.0"))
+        logger.info("gateway: graceful shutdown hooks installed (budget=%ss)", getenv_compat("SHUTDOWN_BUDGET_S", "5.0"))
 except Exception as _install_err:  # pragma: no cover - defensive
     logger.warning("gateway: failed to install shutdown hooks: %s", _install_err)

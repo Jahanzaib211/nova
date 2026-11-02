@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from deerflow.jobs.registry import JobRegistry
+from nova.jobs.registry import JobRegistry
 
 from .agents import register as register_agents
 from .email_marketing import register as register_email_marketing

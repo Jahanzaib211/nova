@@ -15,9 +15,9 @@ import time
 
 import pytest
 
-from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.runtimes.acp_transport import ACPAdapterExited, run_acp_prompt
-from deerflow.runtimes.types import policy_for_mode
+from nova.config.acp_config import ACPAgentConfig
+from nova.runtimes.acp_transport import ACPAdapterExited, run_acp_prompt
+from nova.runtimes.types import policy_for_mode
 
 
 def _run(cfg: ACPAgentConfig, tmp_path) -> None:

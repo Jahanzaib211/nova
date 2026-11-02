@@ -27,14 +27,14 @@ class TestRecoveryPolicy:
     """Verify declarative recovery policy data objects."""
 
     def test_all_policies_registered(self):
-        from deerflow.services.recovery_policy import POLICIES, all_policies
+        from nova.services.recovery_policy import POLICIES, all_policies
 
         assert len(POLICIES) == 10
         policies = all_policies()
         assert len(policies) == 10
 
     def test_select_policy(self):
-        from deerflow.services.recovery_policy import select_policy
+        from nova.services.recovery_policy import select_policy
 
         p = select_policy("tunnel_disconnected")
         assert p is not None
@@ -43,12 +43,12 @@ class TestRecoveryPolicy:
         assert p.max_retries == 3
 
     def test_select_policy_not_found(self):
-        from deerflow.services.recovery_policy import select_policy
+        from nova.services.recovery_policy import select_policy
 
         assert select_policy("nonexistent") is None
 
     def test_policies_for_trigger(self):
-        from deerflow.services.recovery_policy import policies_for_trigger
+        from nova.services.recovery_policy import policies_for_trigger
 
         tunnel = policies_for_trigger("HealthChanged")
         assert len(tunnel) >= 1
@@ -56,12 +56,12 @@ class TestRecoveryPolicy:
         assert "tunnel_disconnected" in names
 
     def test_policies_for_trigger_empty(self):
-        from deerflow.services.recovery_policy import policies_for_trigger
+        from nova.services.recovery_policy import policies_for_trigger
 
         assert policies_for_trigger("NonexistentEvent") == []
 
     def test_policy_properties(self):
-        from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
+        from nova.services.recovery_policy import TUNNEL_DISCONNECTED
 
         assert TUNNEL_DISCONNECTED.name == "tunnel_disconnected"
         assert TUNNEL_DISCONNECTED.trigger_event == "HealthChanged"
@@ -73,7 +73,7 @@ class TestRetryStrategy:
     """Verify retry strategy delay computation."""
 
     def test_delay_increases(self):
-        from deerflow.services.recovery_policy import RetryStrategy
+        from nova.services.recovery_policy import RetryStrategy
 
         rs = RetryStrategy(max_retries=5, base_delay_ms=100, backoff_factor=2.0, jitter_fraction=0)
         d1 = rs.delay_for_attempt(1)
@@ -82,14 +82,14 @@ class TestRetryStrategy:
         assert d1 < d2 < d3
 
     def test_delay_caps_at_max(self):
-        from deerflow.services.recovery_policy import RetryStrategy
+        from nova.services.recovery_policy import RetryStrategy
 
         rs = RetryStrategy(max_retries=10, base_delay_ms=100, max_delay_ms=500, backoff_factor=3.0, jitter_fraction=0)
         d5 = rs.delay_for_attempt(5)
         assert d5 <= 500
 
     def test_delay_with_jitter(self):
-        from deerflow.services.recovery_policy import RetryStrategy
+        from nova.services.recovery_policy import RetryStrategy
 
         rs = RetryStrategy(base_delay_ms=100, jitter_fraction=0.5)
         # Run multiple times — jitter should produce varying results
@@ -106,7 +106,7 @@ class TestRecoveryEvents:
     """Verify recovery event creation and immutability."""
 
     def test_recovery_started(self):
-        from deerflow.events.event import RecoveryStarted
+        from nova.events.event import RecoveryStarted
 
         e = RecoveryStarted(run_id="r1", payload={"policy": "tunnel"})
         assert e.event_type == "RecoveryStarted"
@@ -114,44 +114,44 @@ class TestRecoveryEvents:
         assert e.payload["policy"] == "tunnel"
 
     def test_recovery_succeeded(self):
-        from deerflow.events.event import RecoverySucceeded
+        from nova.events.event import RecoverySucceeded
 
         e = RecoverySucceeded(correlation_id="c1", payload={"attempt": 1})
         assert e.event_type == "RecoverySucceeded"
         assert e.correlation_id == "c1"
 
     def test_recovery_failed(self):
-        from deerflow.events.event import RecoveryFailed
+        from nova.events.event import RecoveryFailed
 
         e = RecoveryFailed(payload={"last_error": "timeout"})
         assert e.event_type == "RecoveryFailed"
 
     def test_recovery_escalated(self):
-        from deerflow.events.event import RecoveryEscalated
+        from nova.events.event import RecoveryEscalated
 
         e = RecoveryEscalated(payload={"attempts": 3})
         assert e.event_type == "RecoveryEscalated"
 
     def test_recovery_cancelled(self):
-        from deerflow.events.event import RecoveryCancelled
+        from nova.events.event import RecoveryCancelled
 
         e = RecoveryCancelled()
         assert e.event_type == "RecoveryCancelled"
 
     def test_recovery_aborted(self):
-        from deerflow.events.event import RecoveryAborted
+        from nova.events.event import RecoveryAborted
 
         e = RecoveryAborted()
         assert e.event_type == "RecoveryAborted"
 
     def test_recovery_retry_scheduled(self):
-        from deerflow.events.event import RecoveryRetryScheduled
+        from nova.events.event import RecoveryRetryScheduled
 
         e = RecoveryRetryScheduled(payload={"delay_ms": 1000})
         assert e.event_type == "RecoveryRetryScheduled"
 
     def test_all_events_frozen(self):
-        from deerflow.events.event import (
+        from nova.events.event import (
             RecoveryAborted,
             RecoveryCancelled,
             RecoveryEscalated,
@@ -184,7 +184,7 @@ class TestRecoveryEventRegistry:
     """Verify recovery events are registered in the event registry."""
 
     def test_recovery_category(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         recovery = event_registry.list_by_category("recovery")
         assert "RecoveryStarted" in recovery
@@ -196,7 +196,7 @@ class TestRecoveryEventRegistry:
         assert "RecoveryRetryScheduled" in recovery
 
     def test_all_events_registered(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         all_events = event_registry.list_events()
         assert len(all_events) >= 24  # 17 C3 + 7 C4 recovery events
@@ -211,7 +211,7 @@ class TestRecoveryRecord:
     """Verify RecoveryRecord immutable dataclass."""
 
     def test_creation(self):
-        from deerflow.services.recovery_service import RecoveryRecord
+        from nova.services.recovery_service import RecoveryRecord
 
         r = RecoveryRecord(
             policy_name="tunnel_disconnected",
@@ -228,7 +228,7 @@ class TestRecoveryRecord:
         assert r.correlation_id == "c1"
 
     def test_frozen(self):
-        from deerflow.services.recovery_service import RecoveryRecord
+        from nova.services.recovery_service import RecoveryRecord
 
         r = RecoveryRecord(
             policy_name="test",
@@ -252,14 +252,14 @@ class TestRecoveryEngine:
     """Verify RecoveryEngine event-driven recovery orchestration."""
 
     def setup_method(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.bus import EventBus
+        from nova.services.recovery_service import RecoveryEngine
 
         self.bus = EventBus()
 
     @pytest.mark.asyncio
     async def test_engine_subscribes_to_bus(self):
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.services.recovery_service import RecoveryEngine
 
         engine = RecoveryEngine(event_bus=self.bus)
         engine.start()
@@ -268,8 +268,8 @@ class TestRecoveryEngine:
 
     @pytest.mark.asyncio
     async def test_engine_reacts_to_health_changed(self):
-        from deerflow.events.event import HealthChanged
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.event import HealthChanged
+        from nova.services.recovery_service import RecoveryEngine
 
         mock_action = AsyncMock(return_value=True)
         engine = RecoveryEngine(
@@ -295,8 +295,8 @@ class TestRecoveryEngine:
 
     @pytest.mark.asyncio
     async def test_recovery_success_emits_events(self):
-        from deerflow.events.event import HealthChanged, RecoveryStarted, RecoverySucceeded
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.event import HealthChanged, RecoveryStarted, RecoverySucceeded
+        from nova.services.recovery_service import RecoveryEngine
 
         mock_action = AsyncMock(return_value=True)
         engine = RecoveryEngine(
@@ -322,9 +322,9 @@ class TestRecoveryEngine:
 
     @pytest.mark.asyncio
     async def test_recovery_failure_retries(self):
-        from deerflow.events.event import HealthChanged, RecoveryRetryScheduled
-        from deerflow.services import recovery_policy
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.event import HealthChanged, RecoveryRetryScheduled
+        from nova.services import recovery_policy
+        from nova.services.recovery_service import RecoveryEngine
 
         # Override policy to have minimal delays for fast test
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
@@ -370,12 +370,12 @@ class TestRecoveryEngine:
 
     @pytest.mark.asyncio
     async def test_max_retries_escalates(self):
-        from deerflow.events.event import HealthChanged, RecoveryEscalated
+        from nova.events.event import HealthChanged, RecoveryEscalated
 
         # Override policy to have very few retries for fast test
-        from deerflow.services import recovery_policy
-        from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.services import recovery_policy
+        from nova.services.recovery_policy import TUNNEL_DISCONNECTED
+        from nova.services.recovery_service import RecoveryEngine
 
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
         recovery_policy.POLICIES["tunnel_disconnected"] = type(original)(
@@ -415,9 +415,9 @@ class TestRecoveryEngine:
 
     @pytest.mark.asyncio
     async def test_cancel_recovery(self):
-        from deerflow.events.event import HealthChanged, RecoveryCancelled
-        from deerflow.services import recovery_policy
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.event import HealthChanged, RecoveryCancelled
+        from nova.services import recovery_policy
+        from nova.services.recovery_service import RecoveryEngine
 
         # Override policy to have minimal delays
         original = recovery_policy.POLICIES.get("tunnel_disconnected")
@@ -463,7 +463,7 @@ class TestRecoveryEngine:
         engine.stop()
 
     def test_metrics(self):
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.services.recovery_service import RecoveryEngine
 
         engine = RecoveryEngine(event_bus=self.bus)
         snapshot = engine.metrics_snapshot()
@@ -471,20 +471,20 @@ class TestRecoveryEngine:
         assert snapshot["recoveries_successful"] == 0
 
     def test_history(self):
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.services.recovery_service import RecoveryEngine
 
         engine = RecoveryEngine(event_bus=self.bus)
         history = engine.get_history()
         assert history == []
 
     def test_stop_without_start(self):
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.services.recovery_service import RecoveryEngine
 
         engine = RecoveryEngine(event_bus=self.bus)
         engine.stop()  # should not raise
 
     def test_start_stop_idempotent(self):
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.services.recovery_service import RecoveryEngine
 
         engine = RecoveryEngine(event_bus=self.bus)
         engine.start()
@@ -502,14 +502,14 @@ class TestHealthRecoveryIntegration:
     """Verify HealthChanged events trigger RecoveryEngine."""
 
     def setup_method(self):
-        from deerflow.events.bus import EventBus
+        from nova.events.bus import EventBus
 
         self.bus = EventBus()
 
     @pytest.mark.asyncio
     async def test_health_degraded_triggers_investigation(self):
-        from deerflow.events.event import HealthChanged, RecoveryStarted
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.event import HealthChanged, RecoveryStarted
+        from nova.services.recovery_service import RecoveryEngine
 
         mock_action = AsyncMock(return_value=True)
         engine = RecoveryEngine(
@@ -542,7 +542,7 @@ class TestServiceContainerRecovery:
     """Verify ServiceContainer wires RecoveryEngine correctly."""
 
     def test_recovery_engine_singleton(self):
-        from deerflow.services.container import ServiceContainer
+        from nova.services.container import ServiceContainer
 
         container = ServiceContainer()
         engine1 = container.recovery_engine()
@@ -551,7 +551,7 @@ class TestServiceContainerRecovery:
         container.reset()
 
     def test_recovery_service_uses_engine(self):
-        from deerflow.services.container import ServiceContainer
+        from nova.services.container import ServiceContainer
 
         container = ServiceContainer()
         svc = container.recovery_service()
@@ -570,7 +570,7 @@ class TestDefaultActions:
     """Verify default recovery action handlers exist and are callable."""
 
     def test_all_default_actions_registered(self):
-        from deerflow.services.recovery_service import DEFAULT_ACTIONS
+        from nova.services.recovery_service import DEFAULT_ACTIONS
 
         expected = [
             "restart_tunnel",
@@ -592,10 +592,10 @@ class TestDefaultActions:
         reset-failed → restart → verify is-active, all via ``sudo -n systemctl``.
         A FakeExecutionKernel keeps the test hermetic — a previous version of
         this action's test leaked real systemctl restarts to the host."""
-        from deerflow.execution.testing import FakeExecutionKernel
-        from deerflow.services.container import service_container
-        from deerflow.services.recovery_policy import TUNNEL_DISCONNECTED
-        from deerflow.services.recovery_service import _recover_tunnel
+        from nova.execution.testing import FakeExecutionKernel
+        from nova.services.container import service_container
+        from nova.services.recovery_policy import TUNNEL_DISCONNECTED
+        from nova.services.recovery_service import _recover_tunnel
 
         def handler(request):
             if "is-active" in request.argv:
@@ -625,14 +625,14 @@ class TestCorrelationIdPropagation:
     """Verify correlation IDs flow through recovery pipeline."""
 
     def setup_method(self):
-        from deerflow.events.bus import EventBus
+        from nova.events.bus import EventBus
 
         self.bus = EventBus()
 
     @pytest.mark.asyncio
     async def test_correlation_id_preserved_in_events(self):
-        from deerflow.events.event import HealthChanged, RecoveryStarted
-        from deerflow.services.recovery_service import RecoveryEngine
+        from nova.events.event import HealthChanged, RecoveryStarted
+        from nova.services.recovery_service import RecoveryEngine
 
         mock_action = AsyncMock(return_value=True)
         engine = RecoveryEngine(

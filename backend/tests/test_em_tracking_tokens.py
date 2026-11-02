@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.email_marketing.tracking import (
+from nova.email_marketing.tracking import (
     TrackingLinks,
     make_token,
     sign_url,

@@ -12,7 +12,7 @@ exists to catch.
 Sections (each a check; red/yellow/green):
 
 - ``overlays``      compose overlays the PM2 chain must be running, from
-                    scripts/pm2-deerflow.sh's rules (.env NOVA_ACP_AGENTS,
+                    scripts/pm2-nova.sh's rules (.env NOVA_ACP_AGENTS,
                     config.yaml speech) vs the containers' config_files labels.
 - ``sandbox_image`` config.yaml `sandbox.image` exists on the daemon and boots;
                     its /etc/nova-sandbox.json manifest is readable.
@@ -173,8 +173,36 @@ def expected_overlays(text: str) -> set[str]:
     return expected
 
 
+#: Compose projects / container prefixes, new first. The legacy names are the
+#: pre-rename ones; scripts/migrate-deerflow-to-nova.sh moves a host across,
+#: and until it has, the gate must read the stack that is actually running.
+COMPOSE_PROJECTS = ("nova", "deer-flow-dev")
+CONTAINER_PREFIXES = ("nova-", "deer-flow-")
+
+
+def compose_project() -> str:
+    """NOVA_COMPOSE_PROJECT, else the first project with containers on this host."""
+    explicit = os.environ.get("NOVA_COMPOSE_PROJECT", "").strip()
+    if explicit:
+        return explicit
+    for project in COMPOSE_PROJECTS:
+        rc, out = run(["docker", "ps", "-a", "-q", "--filter", f"label=com.docker.compose.project={project}"], timeout=15)
+        if rc == 0 and out.strip():
+            return project
+    return COMPOSE_PROJECTS[0]
+
+
+def container(service: str) -> str:
+    """nova-<service> if it exists, else the legacy deer-flow-<service>."""
+    for prefix in CONTAINER_PREFIXES:
+        rc, _ = run(["docker", "inspect", "--format", "{{.Name}}", prefix + service], timeout=15)
+        if rc == 0:
+            return prefix + service
+    return CONTAINER_PREFIXES[0] + service
+
+
 def running_overlays() -> set[str]:
-    rc, out = run(["docker", "ps", "--filter", "label=com.docker.compose.project=deer-flow-dev", "--format", '{{.Label "com.docker.compose.project.config_files"}}'])
+    rc, out = run(["docker", "ps", "--filter", f"label=com.docker.compose.project={compose_project()}", "--format", '{{.Label "com.docker.compose.project.config_files"}}'])
     seen: set[str] = set()
     if rc == 0:
         for line in out.splitlines():
@@ -188,9 +216,9 @@ def running_overlays() -> set[str]:
 def evaluate_overlays(expected: set[str], seen: set[str]) -> dict:
     missing = sorted(expected - seen)
     if not seen:
-        return check("overlays", RED, "no deer-flow-dev containers running", expected=sorted(expected), seen=[])
+        return check("overlays", RED, "no nova stack containers running", expected=sorted(expected), seen=[])
     if missing:
-        return check("overlays", RED, "overlay(s) declared by scripts/pm2-deerflow.sh are not in the running chain: " + ", ".join(missing), expected=sorted(expected), seen=sorted(seen), missing=missing)
+        return check("overlays", RED, "overlay(s) declared by scripts/pm2-nova.sh are not in the running chain: " + ", ".join(missing), expected=sorted(expected), seen=sorted(seen), missing=missing)
     return check("overlays", GREEN, f"{len(expected)} overlay(s) running as declared", expected=sorted(expected), seen=sorted(seen), missing=[])
 
 
@@ -277,7 +305,7 @@ def evaluate_security_toolkit(path: str | None) -> dict:
 def gateway_import_failures(extras: dict[str, list[str]]) -> dict[str, list[str]]:
     mods = [m for ms in extras.values() for m in ms]
     code = "import importlib,sys\n" + "\n".join(f"\ntry:\n    importlib.import_module({m!r})\nexcept Exception as e:\n    print('FAIL:{m}')" for m in mods)
-    rc, out = run(["docker", "exec", "deer-flow-gateway", "/app/backend/.venv/bin/python", "-c", code], timeout=120)
+    rc, out = run(["docker", "exec", container("gateway"), "/app/backend/.venv/bin/python", "-c", code], timeout=120)
     if rc != 0 and "FAIL:" not in out:
         return {"_": ["gateway container unreachable"]}
     failed = {line.split(":", 1)[1] for line in out.splitlines() if line.startswith("FAIL:")}
@@ -538,12 +566,12 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
 
     checks.append(evaluate_backend_extras(gateway_import_failures(HARNESS_EXTRAS)))
 
-    rc, mounts = run(["docker", "inspect", "deer-flow-gateway", "--format", "{{range .Mounts}}{{.Destination}} {{end}}"], timeout=30)
+    rc, mounts = run(["docker", "inspect", container("gateway"), "--format", "{{range .Mounts}}{{.Destination}} {{end}}"], timeout=30)
     acp_mounts = rc == 0 and "/root/.claude" in mounts and "/run/nova/openclaw_token" in mounts
     runtimes = ops_call(base, "runtimes.list") or {}
     acp_ready = any(r.get("kind") == "acp" and r.get("binary_on_path") and any(a.get("available") for a in r.get("accounts", [])) for r in runtimes.get("runtimes", []))
     workers = ops_call(base, "jobs.workers") or {}
-    # Same rule as scripts/pm2-deerflow.sh: the voice overlay is added only
+    # Same rule as scripts/pm2-nova.sh: the voice overlay is added only
     # when these three weight files exist.
     voice_dir = Path(os.path.expanduser(read_env("DEERFLOW_VOICE_MODEL_DIR") or "~/.cache/nova/voice"))
     voice_ok = (voice_dir / "voices-v1.0.bin").is_file() and ((voice_dir / "kokoro-v1.0.onnx").is_file() or (voice_dir / "kokoro-v1.0.int8.onnx").is_file())
@@ -563,13 +591,17 @@ def collect(base: str) -> tuple[list[dict], dict[str, int]]:
     if not _local_llm_retired():
         endpoints["llama-server :8086"] = http_status("http://127.0.0.1:8086/v1/models")
     # By compose label, not by name: a recreate interrupted mid-way leaves the
-    # old container renamed (`<id>_deer-flow-frontend`) but still serving.
-    _, cid = run(["docker", "ps", "-q", "--filter", "label=com.docker.compose.project=deer-flow-dev", "--filter", "label=com.docker.compose.service=frontend"], timeout=30)
-    cid = cid.strip().splitlines()[0] if cid.strip() else "deer-flow-frontend"
+    # old container renamed (`<id>_nova-frontend`) but still serving.
+    _, cid = run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={compose_project()}", "--filter", "label=com.docker.compose.service=frontend"], timeout=30)
+    cid = cid.strip().splitlines()[0] if cid.strip() else container("frontend")
     _, served = run(["docker", "exec", cid, "cat", "/app/frontend/.next/BUILD_ID"], timeout=30)
     if "Error" in served or "No such" in served:
         served = ""
-    _, image_build = run(["docker", "run", "--rm", "--entrypoint", "cat", "deer-flow-dev-frontend:latest", "/app/frontend/.next/BUILD_ID"], timeout=60)
+    # The image the frontend container runs (nova-frontend:latest after the
+    # rename, deer-flow-dev-frontend:latest before it), not a hardcoded tag.
+    rc_img, frontend_image = run(["docker", "inspect", "--format", "{{.Config.Image}}", cid], timeout=30)
+    frontend_image = frontend_image.strip() if rc_img == 0 and frontend_image.strip() else "nova-frontend:latest"
+    _, image_build = run(["docker", "run", "--rm", "--entrypoint", "cat", frontend_image, "/app/frontend/.next/BUILD_ID"], timeout=60)
     tunnel = None if is_disabled("tunnel", disabled) else tunnel_connector()
     checks.append(evaluate_services(pm2_status(), endpoints, served.strip() or None, image_build.strip() or None, disabled=disabled, tunnel=tunnel))
 

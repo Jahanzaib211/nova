@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from deerflow.config.extensions_config import reset_extensions_config, set_mcp_server_enabled, set_skill_enabled, update_extensions_config_file
+from nova.config.extensions_config import reset_extensions_config, set_mcp_server_enabled, set_skill_enabled, update_extensions_config_file
 
 ORIGINAL = {
     "mcpServers": {
@@ -62,9 +62,9 @@ def test_mcp_toggle_keeps_placeholders_and_unknown_keys(config_file):
 def test_capability_ops_use_the_raw_writer(config_file, monkeypatch):
     from types import SimpleNamespace
 
-    from deerflow.capabilities import CapabilityRegistry, OpContext
-    from deerflow.capabilities.modules import mcp as mcp_module
-    from deerflow.capabilities.modules import skills as skills_module
+    from nova.capabilities import CapabilityRegistry, OpContext
+    from nova.capabilities.modules import mcp as mcp_module
+    from nova.capabilities.modules import skills as skills_module
 
     monkeypatch.setattr(skills_module, "_storage", lambda: SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="deep-research")]))
     reg = CapabilityRegistry(flags=lambda: {})

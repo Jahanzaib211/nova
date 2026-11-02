@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from deerflow.skills.validation import _validate_skill_frontmatter
+from nova.skills.validation import _validate_skill_frontmatter
 
 SKILLS_PUBLIC_DIR = Path(__file__).resolve().parents[2] / "skills" / "public"
 BUNDLED_SKILL_DIRS = sorted(p.parent for p in SKILLS_PUBLIC_DIR.rglob("SKILL.md"))

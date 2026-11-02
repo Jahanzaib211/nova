@@ -23,7 +23,7 @@ def _run(coro):
 # don't have config.yaml (it's gitignored); local devs do. This makes the
 # test hermetic and the suite CI-runnable.
 _EMPTY_CONFIG_PATCHER = patch(
-    "deerflow.config.app_config.get_app_config",
+    "nova.config.app_config.get_app_config",
     return_value=MagicMock(),
 )
 
@@ -81,10 +81,10 @@ class TestIGINOEndpoints(unittest.TestCase):
         from app.gateway.routers import igino as igino_router
 
         tools = {
-            "web_search": SimpleNamespace(use="deerflow.community.searxng.tools:web_search_tool", model_extra={}),
-            "web_fetch": SimpleNamespace(use="deerflow.community.browserless.tools:web_fetch_tool", model_extra={"base_url": "http://browserless:3000"}),
-            "web_fetch_many": SimpleNamespace(use="deerflow.community.crawl4ai.tools:web_fetch_many_tool", model_extra={"base_url": "http://crawl4ai:11235"}),
-            "web_crawl": SimpleNamespace(use="deerflow.community.crawl4ai.crawl_tool:web_crawl_tool", model_extra={"base_url": "http://crawl4ai:11235"}),
+            "web_search": SimpleNamespace(use="nova.community.searxng.tools:web_search_tool", model_extra={}),
+            "web_fetch": SimpleNamespace(use="nova.community.browserless.tools:web_fetch_tool", model_extra={"base_url": "http://browserless:3000"}),
+            "web_fetch_many": SimpleNamespace(use="nova.community.crawl4ai.tools:web_fetch_many_tool", model_extra={"base_url": "http://crawl4ai:11235"}),
+            "web_crawl": SimpleNamespace(use="nova.community.crawl4ai.crawl_tool:web_crawl_tool", model_extra={"base_url": "http://crawl4ai:11235"}),
         }
         config = SimpleNamespace(get_tool_config=tools.get)
         http = MagicMock()
@@ -96,7 +96,7 @@ class TestIGINOEndpoints(unittest.TestCase):
             patch.dict(os.environ, {"DEERFLOW_IGINO_ENABLED": "true"}, clear=False),
             patch.object(igino_router, "get_app_config", return_value=config),
             patch.object(igino_router.httpx, "AsyncClient", return_value=http),
-            patch("deerflow.community.searxng.searxng_client.SearxngClient.health", new=AsyncMock(return_value=True)),
+            patch("nova.community.searxng.searxng_client.SearxngClient.health", new=AsyncMock(return_value=True)),
         ):
             result = _run(igino_router.get_status())
 

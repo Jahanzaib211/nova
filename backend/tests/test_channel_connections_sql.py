@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from deerflow.persistence.base import Base
-from deerflow.persistence.channel_connections.sql import ChannelConnectionRepository
+from nova.persistence.base import Base
+from nova.persistence.channel_connections.sql import ChannelConnectionRepository
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ async def repo():
     from cryptography.fernet import Fernet
 
     cipher_key = Fernet.generate_key()
-    from deerflow.persistence.channel_connections.sql import ChannelCredentialCipher
+    from nova.persistence.channel_connections.sql import ChannelCredentialCipher
 
     cipher = ChannelCredentialCipher(Fernet(cipher_key))
     yield ChannelConnectionRepository(sf, cipher=cipher)
@@ -39,7 +39,7 @@ class TestChannelCredentialCipher:
     def test_round_trip(self):
         from cryptography.fernet import Fernet
 
-        from deerflow.persistence.channel_connections.sql import ChannelCredentialCipher
+        from nova.persistence.channel_connections.sql import ChannelCredentialCipher
 
         # Fernet.generate_key() returns raw bytes; the constructor expects
         # a Fernet INSTANCE (which wraps those bytes).
@@ -52,14 +52,14 @@ class TestChannelCredentialCipher:
     def test_encrypt_none_returns_none(self):
         from cryptography.fernet import Fernet
 
-        from deerflow.persistence.channel_connections.sql import ChannelCredentialCipher
+        from nova.persistence.channel_connections.sql import ChannelCredentialCipher
 
         cipher = ChannelCredentialCipher(Fernet(Fernet.generate_key()))
         assert cipher.encrypt_text(None) is None
         assert cipher.decrypt_text(None) is None
 
     def test_from_key_derives_fernet(self):
-        from deerflow.persistence.channel_connections.sql import ChannelCredentialCipher
+        from nova.persistence.channel_connections.sql import ChannelCredentialCipher
 
         c1 = ChannelCredentialCipher.from_key("any-input-string")
         c2 = ChannelCredentialCipher.from_key("any-input-string")

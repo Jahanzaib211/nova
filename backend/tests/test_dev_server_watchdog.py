@@ -26,7 +26,7 @@ if str(_BACKEND) not in sys.path:
 
 
 class _FakeSpawnedProcess:
-    """Minimal stand-in for ``deerflow.execution.supervisor.SpawnedProcess``."""
+    """Minimal stand-in for ``nova.execution.supervisor.SpawnedProcess``."""
 
     def __init__(self) -> None:
         self.returncode = None
@@ -55,8 +55,8 @@ class _FakeServiceContainer:
 def _patched_kernel(kernel: _FakeKernel):
     """Install a fake kernel + fake service_container.execution_kernel()."""
 
-    import deerflow.execution as execution_pkg
-    from deerflow.services import container as container_pkg
+    import nova.execution as execution_pkg
+    from nova.services import container as container_pkg
 
     real_kernel = getattr(execution_pkg, "ExecutionKernel", None)
     real_container = container_pkg.service_container
@@ -65,8 +65,8 @@ def _patched_kernel(kernel: _FakeKernel):
         pass
 
     container_pkg.service_container = _FakeServiceContainer(kernel)
-    # The spawn code does ``from deerflow.execution import ExecutionClass, ExecutionRequest, ResourceLimits``
-    # and ``from deerflow.services.container import service_container`` lazily; the patch above is enough.
+    # The spawn code does ``from nova.execution import ExecutionClass, ExecutionRequest, ResourceLimits``
+    # and ``from nova.services.container import service_container`` lazily; the patch above is enough.
 
     try:
         yield
@@ -86,7 +86,7 @@ def _free_port() -> int:
 def _restore_port_alive():
     """Save and restore ``dev_server.port_alive`` so monkey-patching in one test
     cannot bleed into another (port_alive is a module-level attribute)."""
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     original = ds.port_alive
     yield
@@ -100,7 +100,7 @@ async def test_local_handle_flips_to_crashed_when_nothing_binds_the_port(tmp_pat
     ``crashed`` within the readiness window so the panel can render the red
     ``Dev server crashed`` pill instead of an endless spinner."""
 
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     # Patch the watchdog timeout down to ~0.6 s so the test stays fast.
     ds._READINESS_TIMEOUT_S = 0.6
@@ -143,7 +143,7 @@ async def test_local_handle_flips_to_ready_when_port_binds(tmp_path):
     """Smoke-test the happy path: a real TCP listener on the handle's port
     causes the watchdog to mark the handle ``ready`` quickly."""
 
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     ds._READINESS_TIMEOUT_S = 5.0
 
@@ -176,7 +176,7 @@ async def test_stop_dev_server_cancels_watchdog(tmp_path):
     """``stop_dev_server`` must cancel the in-flight watchdog so it doesn't
     resurrect the handle after we deleted it."""
 
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     ds._READINESS_TIMEOUT_S = 10.0  # long; we cancel before it fires
 

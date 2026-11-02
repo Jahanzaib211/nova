@@ -312,12 +312,12 @@ Nova est agnostique au modèle — il fonctionne avec n'importe quel LLM implém
 
 ## Client Python Intégré
 
-Nova peut être utilisé comme bibliothèque Python intégrée sans exécuter les services HTTP complets. Le `DeerFlowClient` fournit un accès direct en-processus à toutes les capacités agent et Gateway, retournant les mêmes schémas de réponse que l'API HTTP Gateway :
+Nova peut être utilisé comme bibliothèque Python intégrée sans exécuter les services HTTP complets. Le `NovaClient` fournit un accès direct en-processus à toutes les capacités agent et Gateway, retournant les mêmes schémas de réponse que l'API HTTP Gateway :
 
 ```python
-from deerflow.client import DeerFlowClient
+from nova.client import NovaClient
 
-client = DeerFlowClient()
+client = NovaClient()
 
 # Chat
 response = client.chat("Analysez cet article pour moi", thread_id="my-thread")
@@ -334,7 +334,7 @@ client.update_skill("web-search", enabled=True)
 client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
 ```
 
-Voir `backend/packages/harness/deerflow/client.py` pour la documentation API complète.
+Voir `backend/packages/harness/nova/client.py` pour la documentation API complète.
 
 ## Documentation
 

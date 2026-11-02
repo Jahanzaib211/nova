@@ -24,8 +24,8 @@ from app.channels.message_bus import (
 )
 from app.channels.store import ChannelStore
 from app.channels.wecom import WeComChannel
-from deerflow.skills.types import Skill, SkillCategory
-from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
+from nova.skills.types import Skill, SkillCategory
+from nova.utils.messages import ORIGINAL_USER_CONTENT_KEY
 
 
 def test_known_channel_command_detection_only_matches_control_commands():
@@ -596,8 +596,8 @@ def _make_mock_langgraph_client(thread_id="test-thread-123", run_result=None):
 
 
 async def _make_channel_connection_repo(tmp_path: Path):
-    from deerflow.persistence.channel_connections import ChannelConnectionRepository, ChannelCredentialCipher
-    from deerflow.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.channel_connections import ChannelConnectionRepository, ChannelCredentialCipher
+    from nova.persistence.engine import get_session_factory, init_engine
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'channel-connections.db'}", sqlite_dir=str(tmp_path))
     return ChannelConnectionRepository(
@@ -794,10 +794,10 @@ class TestChannelManager:
 
     def test_ingest_inbound_files_uses_explicit_owner_bucket(self, tmp_path, monkeypatch):
         from app.channels.manager import INBOUND_FILE_READERS, _ingest_inbound_files
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(tmp_path)
-        monkeypatch.setattr("deerflow.uploads.manager.get_paths", lambda: paths)
+        monkeypatch.setattr("nova.uploads.manager.get_paths", lambda: paths)
 
         async def read_file(file_info, client):
             del file_info, client
@@ -2873,7 +2873,7 @@ class TestResolveRunParamsUserId:
         assert _owner_headers(msg) is None
 
     def test_unsafe_user_id_is_normalized_but_raw_preserved(self, monkeypatch):
-        from deerflow.config.paths import make_safe_user_id
+        from nova.config.paths import make_safe_user_id
 
         manager = self._manager()
         monkeypatch.delenv("DEER_FLOW_AUTH_DISABLED", raising=False)
@@ -2887,13 +2887,13 @@ class TestResolveRunParamsUserId:
         assert run_context["channel_user_id"] == raw
 
     def test_unsafe_user_id_migrates_unique_legacy_bucket(self, tmp_path, monkeypatch):
-        from deerflow.config.paths import Paths, make_safe_user_id
+        from nova.config.paths import Paths, make_safe_user_id
 
         paths = Paths(tmp_path)
         legacy_dir = paths.base_dir / "users" / "user-example-com-63a710569261a24b"
         legacy_dir.mkdir(parents=True)
         (legacy_dir / "memory.json").write_text('{"legacy": true}\n', encoding="utf-8")
-        monkeypatch.setattr("deerflow.config.paths.get_paths", lambda: paths)
+        monkeypatch.setattr("nova.config.paths.get_paths", lambda: paths)
 
         manager = self._manager()
         monkeypatch.delenv("DEER_FLOW_AUTH_DISABLED", raising=False)
@@ -3363,7 +3363,7 @@ class TestChannelManagerConnectionRouting:
     def test_connection_scoped_conversations_do_not_share_threads(self, tmp_path, monkeypatch):
         from app.channels.manager import ChannelManager
         from app.gateway.internal_auth import INTERNAL_OWNER_USER_ID_HEADER_NAME
-        from deerflow.persistence.engine import close_engine
+        from nova.persistence.engine import close_engine
 
         monkeypatch.delenv("DEER_FLOW_AUTH_DISABLED", raising=False)
 
@@ -3578,10 +3578,10 @@ class TestFormatArtifactText:
 class TestHandleChatWithArtifacts:
     def test_bound_owner_artifacts_resolve_from_owner_outputs_bucket(self, tmp_path, monkeypatch):
         from app.channels.manager import ChannelManager
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(tmp_path)
-        monkeypatch.setattr("deerflow.config.paths.get_paths", lambda: paths)
+        monkeypatch.setattr("nova.config.paths.get_paths", lambda: paths)
         outputs_dir = paths.sandbox_outputs_dir("test-thread-123", user_id="owner-1")
         outputs_dir.mkdir(parents=True)
         (outputs_dir / "report.md").write_text("owner report", encoding="utf-8")
@@ -4475,7 +4475,7 @@ class TestChannelService:
             }
         )
 
-        with patch("deerflow.config.app_config.get_app_config", side_effect=AssertionError("should not read global config")):
+        with patch("nova.config.app_config.get_app_config", side_effect=AssertionError("should not read global config")):
             service = ChannelService.from_app_config(app_config)
 
         assert service._config == {"telegram": {"enabled": False}}
@@ -4486,8 +4486,8 @@ class TestChannelService:
         tmp_path,
     ):
         from app.channels.service import ChannelService
-        from deerflow.config import paths as paths_module
-        from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+        from nova.config import paths as paths_module
+        from nova.config.channel_connections_config import ChannelConnectionsConfig
 
         monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
         monkeypatch.setattr(paths_module, "_paths", None)
@@ -4514,8 +4514,8 @@ class TestChannelService:
     ):
         from app.channels.runtime_config_store import ChannelRuntimeConfigStore
         from app.channels.service import ChannelService
-        from deerflow.config import paths as paths_module
-        from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+        from nova.config import paths as paths_module
+        from nova.config.channel_connections_config import ChannelConnectionsConfig
 
         monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
         monkeypatch.setattr(paths_module, "_paths", None)
@@ -4554,8 +4554,8 @@ class TestChannelService:
     def test_from_app_config_loads_persisted_runtime_channel_config(self, monkeypatch, tmp_path):
         from app.channels.runtime_config_store import ChannelRuntimeConfigStore
         from app.channels.service import ChannelService
-        from deerflow.config import paths as paths_module
-        from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+        from nova.config import paths as paths_module
+        from nova.config.channel_connections_config import ChannelConnectionsConfig
 
         monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
         monkeypatch.setattr(paths_module, "_paths", None)
@@ -4588,8 +4588,8 @@ class TestChannelService:
     def test_from_app_config_runtime_disconnect_suppresses_file_channel_config(self, monkeypatch, tmp_path):
         from app.channels.runtime_config_store import ChannelRuntimeConfigStore
         from app.channels.service import ChannelService
-        from deerflow.config import paths as paths_module
-        from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+        from nova.config import paths as paths_module
+        from nova.config.channel_connections_config import ChannelConnectionsConfig
 
         monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
         monkeypatch.setattr(paths_module, "_paths", None)
@@ -4642,7 +4642,7 @@ class TestChannelService:
                 return None
 
         monkeypatch.setattr(
-            "deerflow.reflection.resolve_class",
+            "nova.reflection.resolve_class",
             lambda import_path, base_class=None: FlakyReadyChannel,
         )
 
@@ -4776,7 +4776,7 @@ class TestChannelService:
         def mock_get_app_config():
             return SimpleNamespace(model_extra={"channels": updated_config})
 
-        monkeypatch.setattr("deerflow.config.app_config.get_app_config", mock_get_app_config)
+        monkeypatch.setattr("nova.config.app_config.get_app_config", mock_get_app_config)
 
         started_configs = {}
 
@@ -4808,7 +4808,7 @@ class TestChannelService:
         def fail_get_app_config():
             raise AssertionError("configure_channel must not reload file config")
 
-        monkeypatch.setattr("deerflow.config.app_config.get_app_config", fail_get_app_config)
+        monkeypatch.setattr("nova.config.app_config.get_app_config", fail_get_app_config)
 
         service = ChannelService(channels_config={})
         service._running = True
@@ -4835,8 +4835,8 @@ class TestChannelService:
         channels that have no config.yaml entry."""
         from app.channels.runtime_config_store import ChannelRuntimeConfigStore
         from app.channels.service import ChannelService
-        from deerflow.config import paths as paths_module
-        from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+        from nova.config import paths as paths_module
+        from nova.config.channel_connections_config import ChannelConnectionsConfig
 
         monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
         monkeypatch.setattr(paths_module, "_paths", None)
@@ -4851,7 +4851,7 @@ class TestChannelService:
                 channel_connections=ChannelConnectionsConfig.model_validate({"enabled": True, "telegram": {"enabled": True, "bot_username": "deerflow_bot"}}),
             )
 
-        monkeypatch.setattr("deerflow.config.app_config.get_app_config", mock_get_app_config)
+        monkeypatch.setattr("nova.config.app_config.get_app_config", mock_get_app_config)
 
         service = ChannelService(channels_config={})
 
@@ -4880,7 +4880,7 @@ class TestChannelService:
         def _raise():
             raise RuntimeError("config missing")
 
-        monkeypatch.setattr("deerflow.config.app_config.get_app_config", _raise)
+        monkeypatch.setattr("nova.config.app_config.get_app_config", _raise)
 
         started_configs = {}
 
@@ -4963,7 +4963,7 @@ class TestChannelService:
         def mock_get_app_config():
             return SimpleNamespace(model_extra={"channels": disabled_config})
 
-        monkeypatch.setattr("deerflow.config.app_config.get_app_config", mock_get_app_config)
+        monkeypatch.setattr("nova.config.app_config.get_app_config", mock_get_app_config)
 
         started = []
 

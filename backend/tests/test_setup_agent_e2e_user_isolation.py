@@ -9,7 +9,7 @@ We intentionally exercise the full pipeline:
 
     HTTP body shape (mimics LangGraph SDK wire format)
       -> app.gateway.services.start_run config-assembly chain
-      -> deerflow.runtime.runs.worker._build_runtime_context
+      -> nova.runtime.runs.worker._build_runtime_context
       -> langchain.agents.create_agent graph
       -> ToolNode dispatch
       -> setup_agent tool
@@ -39,7 +39,7 @@ from app.gateway.services import (
     inject_authenticated_user_context,
     merge_run_context_overrides,
 )
-from deerflow.runtime.runs.worker import _build_runtime_context, _install_runtime_context
+from nova.runtime.runs.worker import _build_runtime_context, _install_runtime_context
 
 # ---------------------------------------------------------------------------
 # Helpers — real production code paths
@@ -168,7 +168,7 @@ def _build_real_bootstrap_graph(authenticated_user_id: str):
     """
     from langchain.agents import create_agent
 
-    from deerflow.tools.builtins.setup_agent_tool import setup_agent
+    from nova.tools.builtins.setup_agent_tool import setup_agent
 
     # First model turn: emit a tool_call for setup_agent
     # Second model turn (after tool result): final answer (terminates the loop)
@@ -232,7 +232,7 @@ async def test_real_graph_real_setup_agent_writes_to_authenticated_user_dir(tmp_
 
     # Patch get_paths only (the file-system rooting); everything else is real
     with patch(
-        "deerflow.tools.builtins.setup_agent_tool.get_paths",
+        "nova.tools.builtins.setup_agent_tool.get_paths",
         return_value=_make_paths_mock(tmp_path),
     ):
         # Drive the real graph. This goes through real ToolNode + real Runtime merge.
@@ -281,7 +281,7 @@ async def test_inject_failure_falls_back_to_default_proving_test_is_load_bearing
     graph = _build_real_bootstrap_graph("does-not-matter")
 
     with patch(
-        "deerflow.tools.builtins.setup_agent_tool.get_paths",
+        "nova.tools.builtins.setup_agent_tool.get_paths",
         return_value=_make_paths_mock(tmp_path),
     ):
         await graph.ainvoke(
@@ -311,7 +311,7 @@ async def test_subgraph_invocation_preserves_user_id_in_runtime(tmp_path: Path):
     from langchain.agents import create_agent
     from langgraph.runtime import Runtime
 
-    from deerflow.tools.builtins.setup_agent_tool import setup_agent
+    from nova.tools.builtins.setup_agent_tool import setup_agent
 
     auth_uid = "deadbeef-0000-1111-2222-333344445555"
 
@@ -350,7 +350,7 @@ async def test_subgraph_invocation_preserves_user_id_in_runtime(tmp_path: Path):
     config.setdefault("configurable", {})["__pregel_runtime"] = runtime
 
     with patch(
-        "deerflow.tools.builtins.setup_agent_tool.get_paths",
+        "nova.tools.builtins.setup_agent_tool.get_paths",
         return_value=_make_paths_mock(tmp_path),
     ):
         # Direct sub-graph invoke (mimics what a subagent invocation looks like
@@ -380,7 +380,7 @@ def test_sync_tool_dispatch_through_thread_pool_uses_runtime_context(tmp_path: P
     from langchain.agents import create_agent
     from langgraph.runtime import Runtime
 
-    from deerflow.tools.builtins.setup_agent_tool import setup_agent
+    from nova.tools.builtins.setup_agent_tool import setup_agent
 
     auth_uid = "11112222-3333-4444-5555-666677778888"
 
@@ -414,7 +414,7 @@ def test_sync_tool_dispatch_through_thread_pool_uses_runtime_context(tmp_path: P
     config.setdefault("configurable", {})["__pregel_runtime"] = runtime
 
     with patch(
-        "deerflow.tools.builtins.setup_agent_tool.get_paths",
+        "nova.tools.builtins.setup_agent_tool.get_paths",
         return_value=_make_paths_mock(tmp_path),
     ):
         # Use SYNC invoke to hit the ContextThreadPoolExecutor path

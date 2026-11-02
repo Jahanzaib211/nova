@@ -2,14 +2,14 @@
 
 import pytest
 
-from deerflow.sandbox.dependency import (
+from nova.sandbox.dependency import (
     ToolContextProvider,
     clear_overrides,
     get_overridden_tool_context,
     get_tool_context,
     override_tool_context,
 )
-from deerflow.sandbox.tool_context import ToolContext, create_test_tool_context
+from nova.sandbox.tool_context import ToolContext, create_test_tool_context
 
 
 class TestGetToolContext:

@@ -4,15 +4,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.community.aio_sandbox.local_backend import (
+from nova.community.aio_sandbox.local_backend import (
     LocalContainerBackend,
     _format_container_command_for_log,
     _format_container_mount,
     _redact_container_command_for_log,
     _resolve_docker_bind_host,
 )
-from deerflow.execution.testing import FakeExecutionKernel, timeout_result
-from deerflow.services.container import service_container
+from nova.execution.testing import FakeExecutionKernel, timeout_result
+from nova.services.container import service_container
 
 
 @pytest.fixture(autouse=True)
@@ -203,7 +203,7 @@ def test_start_container_logs_redacted_env_values(monkeypatch, caplog):
 
     _install_fake_kernel(fake_exec)
 
-    with caplog.at_level(logging.INFO, logger="deerflow.community.aio_sandbox.local_backend"):
+    with caplog.at_level(logging.INFO, logger="nova.community.aio_sandbox.local_backend"):
         backend._start_container("sandbox-test", 18080)
 
     joined_cmd = " ".join(captured_cmd)
@@ -252,7 +252,7 @@ def test_resolve_docker_bind_host_uses_ipv6_loopback_for_ipv6_sandbox_host(monke
 
 
 def test_resolve_docker_bind_host_logs_selected_bind_reason(caplog):
-    with caplog.at_level(logging.DEBUG, logger="deerflow.community.aio_sandbox.local_backend"):
+    with caplog.at_level(logging.DEBUG, logger="nova.community.aio_sandbox.local_backend"):
         assert _resolve_docker_bind_host(sandbox_host="localhost", bind_host="") == "127.0.0.1"
 
     messages = "\n".join(record.getMessage() for record in caplog.records)
@@ -417,7 +417,7 @@ class TestPreviewPortCollisionQuarantine:
     """
 
     def test_create_survives_host_preview_port_collision(self, monkeypatch):
-        from deerflow.utils import network as network_module
+        from nova.utils import network as network_module
 
         allocator = network_module._global_port_allocator
         reserved_before = set(allocator._reserved_ports)
@@ -754,7 +754,7 @@ def _provider_backend_for(monkeypatch, **sandbox_overrides):
     """
     import importlib
 
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
 
     values = {
         "idle_timeout": 3600,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from deerflow.agents.middlewares.thread_data_middleware import (
+from nova.agents.middlewares.thread_data_middleware import (
     _MANIFEST_TAG,
     ThreadDataMiddleware,
 )
@@ -68,7 +68,7 @@ def test_manifest_injection_is_non_fatal_on_build_failure(monkeypatch):
         raise RuntimeError("simulated manifest failure")
 
     monkeypatch.setattr(
-        "deerflow.agents.middlewares.thread_data_middleware.build_agent_manifest",
+        "nova.agents.middlewares.thread_data_middleware.build_agent_manifest",
         _boom,
     )
     middleware = ThreadDataMiddleware()

@@ -1,1 +1,1 @@
-# DeerFlow Setup Wizard package
+# Nova Setup Wizard package

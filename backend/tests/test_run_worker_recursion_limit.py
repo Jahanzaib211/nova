@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock
 import pytest
 from langgraph.errors import GraphRecursionError
 
-from deerflow.runtime.runs.manager import RunManager
-from deerflow.runtime.runs.schemas import RunStatus
-from deerflow.runtime.runs.worker import RunContext, run_agent
+from nova.runtime.runs.manager import RunManager
+from nova.runtime.runs.schemas import RunStatus
+from nova.runtime.runs.worker import RunContext, run_agent
 
 pytestmark = pytest.mark.anyio
 

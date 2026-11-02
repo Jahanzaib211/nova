@@ -13,8 +13,8 @@ import json
 
 import pytest
 
-from deerflow.security import secure_ship
-from deerflow.security.secure_ship import (
+from nova.security import secure_ship
+from nova.security.secure_ship import (
     SECURITY_TOOL_COUNT,
     SECURITY_TOOL_DOMAINS,
     Finding,

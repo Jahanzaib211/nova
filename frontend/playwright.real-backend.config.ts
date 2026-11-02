@@ -48,13 +48,17 @@ export default defineConfig({
       // production app.
       env: {
         DEERFLOW_ENABLE_TEST_SEED: "1",
-        DEER_FLOW_AUTH_DISABLED: "1",
+        NOVA_AUTH_DISABLED: "1",
         // `is_auth_disabled()` deliberately refuses to honour
-        // DEER_FLOW_AUTH_DISABLED when the environment declares production —
+        // NOVA_AUTH_DISABLED when the environment declares production —
         // a good guard. But the gateway calls load_dotenv() at import, so an
-        // operator .env carrying DEER_FLOW_ENV=production (this box has one)
+        // operator .env carrying NOVA_ENV=production (this box has one)
         // silently re-enabled auth and made this suite 401 as though the app
         // had regressed. Declare the harness's own environment explicitly.
+        NOVA_ENV: "test",
+        // Legacy names, still read by the gateway as a fallback during the
+        // deerflow -> nova rename. Set both so either name wins over a .env.
+        DEER_FLOW_AUTH_DISABLED: "1",
         DEER_FLOW_ENV: "test",
       },
     },
@@ -65,13 +69,13 @@ export default defineConfig({
       timeout: 240_000,
       env: {
         SKIP_ENV_VALIDATION: "1",
-        DEER_FLOW_AUTH_DISABLED: "1",
+        NOVA_AUTH_DISABLED: "1",
         BETTER_AUTH_SECRET: "local-dev-secret",
         // Leave NEXT_PUBLIC_* unset so the frontend uses its built-in
         // next.config rewrites (same-origin proxy) instead of talking to the
         // gateway cross-origin — cross-origin fetches drop the auth cookies.
         // Just point that proxy at the replay gateway.
-        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
+        NOVA_INTERNAL_GATEWAY_BASE_URL: `http://127.0.0.1:${GATEWAY_PORT}`,
       },
     },
   ],

@@ -16,16 +16,16 @@ import time
 
 import pytest
 
-from deerflow.sandbox import browser_check as bc
-from deerflow.sandbox import browser_circuit_breaker as cb
-from deerflow.sandbox import shutdown
-from deerflow.sandbox.browser_check import BrowserCheck
-from deerflow.sandbox.shutdown import (
+from nova.sandbox import browser_check as bc
+from nova.sandbox import browser_circuit_breaker as cb
+from nova.sandbox import shutdown
+from nova.sandbox.browser_check import BrowserCheck
+from nova.sandbox.shutdown import (
     install_shutdown_hooks,
     reset_for_testing,
     run_shutdown,
 )
-from deerflow.tools.builtins.workspace_tools import (
+from nova.tools.builtins.workspace_tools import (
     _browser_navigate_idempotency,
 )
 
@@ -252,7 +252,7 @@ class TestBrowserCheckLastCleared:
         """High-level integration: get_last_browser_check returns None after shutdown."""
         from unittest.mock import MagicMock, patch
 
-        from deerflow.sandbox.browser_check import (
+        from nova.sandbox.browser_check import (
             BrowserCheck,
             get_last_browser_check,
             run_browser_check,
@@ -262,7 +262,7 @@ class TestBrowserCheckLastCleared:
             return BrowserCheck(ok=True, reason="ok")
 
         sandbox = MagicMock()
-        with patch("deerflow.sandbox.browser_check._run_browser_check_unlocked", side_effect=fake_unlocked):
+        with patch("nova.sandbox.browser_check._run_browser_check_unlocked", side_effect=fake_unlocked):
             run_browser_check("t-shutdown", sandbox)
         assert get_last_browser_check("t-shutdown") is not None
 

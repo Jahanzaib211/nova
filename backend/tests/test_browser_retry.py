@@ -11,18 +11,18 @@ import asyncio
 
 import pytest
 
-from deerflow.sandbox import browser_circuit_breaker as cb
-from deerflow.sandbox.browser_circuit_breaker import (
+from nova.sandbox import browser_circuit_breaker as cb
+from nova.sandbox.browser_circuit_breaker import (
     CircuitState,
     record_failure,
     reset_all_circuits,
 )
-from deerflow.sandbox.browser_errors import (
+from nova.sandbox.browser_errors import (
     BrowserCircuitOpenError,
     BrowserPermanentError,
     BrowserTransientError,
 )
-from deerflow.sandbox.browser_retry import (
+from nova.sandbox.browser_retry import (
     _compute_backoff_ms,
     retry_browser_call,
     retry_browser_call_async,
@@ -154,7 +154,7 @@ class TestCircuitIntegration:
 
 
 def get_circuit_state_for(tid: str) -> CircuitState:
-    from deerflow.sandbox.browser_circuit_breaker import get_circuit_state
+    from nova.sandbox.browser_circuit_breaker import get_circuit_state
 
     return get_circuit_state(tid)
 

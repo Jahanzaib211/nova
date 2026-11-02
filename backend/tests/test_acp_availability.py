@@ -1,4 +1,4 @@
-"""One ACP availability check (``deerflow.runtimes.registry.acp_binary_available``).
+"""One ACP availability check (``nova.runtimes.registry.acp_binary_available``).
 
 The runtimes registry, the ``acp.*`` capability and the integrations
 adapter each checked the launcher themselves, and the adapter alone took
@@ -12,8 +12,8 @@ import shutil
 
 import pytest
 
-from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.runtimes.registry import acp_binary_available
+from nova.config.acp_config import ACPAgentConfig
+from nova.runtimes.registry import acp_binary_available
 
 PRESENT = "sh"
 
@@ -31,10 +31,10 @@ def test_command_is_the_executable_not_a_command_line():
 
 
 def test_every_surface_agrees(monkeypatch):
-    from deerflow.capabilities.modules import acp as acp_module
-    from deerflow.integrations import adapters
-    from deerflow.integrations.health import IntegrationStatus
-    from deerflow.runtimes.registry import RuntimeRegistry
+    from nova.capabilities.modules import acp as acp_module
+    from nova.integrations import adapters
+    from nova.integrations.health import IntegrationStatus
+    from nova.runtimes.registry import RuntimeRegistry
 
     agents = {"good": ACPAgentConfig(command=PRESENT, description="d"), "split": ACPAgentConfig(command=f"{PRESENT} -c true", description="d")}
     monkeypatch.setattr(adapters, "_acp_agents", lambda: agents)

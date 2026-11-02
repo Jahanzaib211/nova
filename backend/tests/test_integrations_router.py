@@ -8,8 +8,8 @@ from _router_auth_helpers import make_authed_test_app
 from fastapi.testclient import TestClient
 
 from app.gateway.routers import integrations
-from deerflow.config.integrations_config import IntegrationsConfig, IntegrationServiceConfig
-from deerflow.integrations.registry import build_registry
+from nova.config.integrations_config import IntegrationsConfig, IntegrationServiceConfig
+from nova.integrations.registry import build_registry
 
 pytestmark = pytest.mark.no_auto_user
 

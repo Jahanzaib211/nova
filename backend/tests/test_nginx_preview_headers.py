@@ -139,7 +139,10 @@ class TestArtifactsLocation:
         text = _read(name)
         general = "location ~ ^/api/threads {"
         if general not in text:
-            pytest.skip(f"{name} has no general /api/threads regex location")
+            # Nothing to be shadowed by: without the general regex location,
+            # source order cannot make this block dead config. That is a pass,
+            # not a skip -- the property holds for this config.
+            return
         assert text.index(ARTIFACTS_LOCATION) < text.index(general), f"{name}: artifacts location must precede the general /api/threads location or it never matches"
 
 
@@ -174,7 +177,10 @@ class TestComputerWsLocation:
         text = _read(name)
         general = "location ~ ^/api/threads {"
         if general not in text:
-            pytest.skip(f"{name} has no general /api/threads regex location")
+            # Nothing to be shadowed by: without the general regex location,
+            # source order cannot make this block dead config. That is a pass,
+            # not a skip -- the property holds for this config.
+            return
         assert text.index(COMPUTER_WS_LOCATION) < text.index(general), f"{name}: computer-ws location must precede the general /api/threads location or it never matches"
 
     @pytest.mark.parametrize("name", ALL)

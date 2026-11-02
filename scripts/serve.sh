@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# serve.sh — Unified DeerFlow service launcher
+# serve.sh — Unified Nova service launcher
 #
 # Usage:
 #   ./scripts/serve.sh [--dev|--prod] [--daemon] [--stop|--restart]
@@ -262,7 +262,8 @@ stop_all() {
     _kill_repo_port 8001
     _kill_repo_port 3000
     _kill_repo_port 2026
-    ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true
+    ./scripts/cleanup-containers.sh nova-sandbox 2>/dev/null || true
+    ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true   # pre-rename prefix
     echo "✓ All services stopped"
 }
 
@@ -303,30 +304,38 @@ else
 fi
 
 # Runtime path defaults. Local `make dev` launches Gateway from `backend/`,
-# so pin DeerFlow-owned state to the expected backend runtime directory and
+# so pin Nova-owned state to the expected backend runtime directory and
 # create it before uvicorn builds its reload exclude filter.
-if [ -z "$DEER_FLOW_PROJECT_ROOT" ]; then
-    export DEER_FLOW_PROJECT_ROOT="$REPO_ROOT"
-fi
+#
+# NOVA_<X> wins; the legacy DEER_FLOW_<X> is honoured for one release, and both
+# are exported with the same value. The runtime dir is backend/.nova, or the
+# legacy backend/.deer-flow while that is the only one (never auto-moved here;
+# scripts/migrate-deerflow-to-nova.sh does that and leaves a symlink).
+NOVA_PROJECT_ROOT="${NOVA_PROJECT_ROOT:-${DEER_FLOW_PROJECT_ROOT:-$REPO_ROOT}}"
+DEER_FLOW_PROJECT_ROOT="$NOVA_PROJECT_ROOT"
+export NOVA_PROJECT_ROOT DEER_FLOW_PROJECT_ROOT
 
-BACKEND_RUNTIME_HOME="$REPO_ROOT/backend/.deer-flow"
-if [ -z "$DEER_FLOW_HOME" ]; then
-    export DEER_FLOW_HOME="$BACKEND_RUNTIME_HOME"
+if [ -e "$REPO_ROOT/backend/.nova" ] || [ ! -e "$REPO_ROOT/backend/.deer-flow" ]; then
+    BACKEND_RUNTIME_HOME="$REPO_ROOT/backend/.nova"
+else
+    BACKEND_RUNTIME_HOME="$REPO_ROOT/backend/.deer-flow"
 fi
+NOVA_HOME="${NOVA_HOME:-${DEER_FLOW_HOME:-$BACKEND_RUNTIME_HOME}}"
 
 # `backend/sandbox` is excluded from uvicorn's reload watcher below. uvicorn only
 # excludes an absolute path directly when it already exists as a directory;
 # otherwise it globs the pattern, and Python 3.12's pathlib rejects absolute glob
 # patterns with NotImplementedError, crashing `make dev` on a fresh checkout
 # (#3459 / #3454). Creating it here keeps every absolute exclude on the is_dir path.
-mkdir -p "$DEER_FLOW_HOME" "$BACKEND_RUNTIME_HOME" "$REPO_ROOT/backend/sandbox"
-DEER_FLOW_HOME="$(cd "$DEER_FLOW_HOME" && pwd -P)"
+mkdir -p "$NOVA_HOME" "$BACKEND_RUNTIME_HOME" "$REPO_ROOT/backend/sandbox"
+NOVA_HOME="$(cd "$NOVA_HOME" && pwd -P)"
 BACKEND_RUNTIME_HOME="$(cd "$BACKEND_RUNTIME_HOME" && pwd -P)"
-export DEER_FLOW_HOME
+DEER_FLOW_HOME="$NOVA_HOME"
+export NOVA_HOME DEER_FLOW_HOME
 
 # Extra flags for uvicorn
 if $DEV_MODE && ! $DAEMON_MODE; then
-    GATEWAY_EXTRA_FLAGS="--reload --reload-include='*.yaml' --reload-include='.env' --reload-exclude='*.pyc' --reload-exclude='__pycache__' --reload-exclude='$REPO_ROOT/backend/sandbox' --reload-exclude='$DEER_FLOW_HOME' --reload-exclude='$BACKEND_RUNTIME_HOME'"
+    GATEWAY_EXTRA_FLAGS="--reload --reload-include='*.yaml' --reload-include='.env' --reload-exclude='*.pyc' --reload-exclude='__pycache__' --reload-exclude='$REPO_ROOT/backend/sandbox' --reload-exclude='$NOVA_HOME' --reload-exclude='$BACKEND_RUNTIME_HOME'"
 else
     GATEWAY_EXTRA_FLAGS=""
 fi
@@ -341,11 +350,12 @@ fi
 # ── Config check ─────────────────────────────────────────────────────────────
 
 if ! { \
-        [ -n "$DEER_FLOW_CONFIG_PATH" ] && [ -f "$DEER_FLOW_CONFIG_PATH" ] || \
+        { [ -n "${NOVA_CONFIG_PATH:-}" ] && [ -f "$NOVA_CONFIG_PATH" ]; } || \
+        { [ -n "$DEER_FLOW_CONFIG_PATH" ] && [ -f "$DEER_FLOW_CONFIG_PATH" ]; } || \
         [ -f backend/config.yaml ] || \
         [ -f config.yaml ]; \
     }; then
-    echo "✗ No DeerFlow config file found."
+    echo "✗ No Nova config file found."
     echo "  Run 'make setup' (recommended) or 'make config' to generate config.yaml."
     exit 1
 fi
@@ -380,7 +390,7 @@ if ! $SKIP_INSTALL; then
     if [ -n "$UV_EXTRAS_FLAGS" ]; then
         echo "  • uv extras: $UV_EXTRAS_FLAGS"
     fi
-    # `--all-packages` propagates extras into workspace members (deerflow-harness
+    # `--all-packages` propagates extras into workspace members (nova-harness
     # in particular). Required for postgres extras — see PR #2584.
     # Intentionally unquoted to splat multiple `--extra X` pairs.
     (cd backend && uv sync --quiet --all-packages $UV_EXTRAS_FLAGS) || { echo "✗ Backend dependency install failed"; exit 1; }
@@ -394,7 +404,7 @@ fi
 
 echo ""
 echo "=========================================="
-echo "  Starting DeerFlow"
+echo "  Starting Nova"
 echo "=========================================="
 echo ""
 echo "  Mode: $MODE_LABEL"
@@ -474,7 +484,7 @@ run_service "Nginx" \
 
 echo ""
 echo "=========================================="
-echo "  ✓ DeerFlow is running!  [$MODE_LABEL]"
+echo "  ✓ Nova is running!  [$MODE_LABEL]"
 echo "=========================================="
 echo ""
 echo "  🌐 http://localhost:2026"

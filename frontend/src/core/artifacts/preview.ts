@@ -194,7 +194,7 @@ function escapeHtmlAttribute(value: string) {
 }
 
 export const HTML_PREVIEW_SCROLL_MESSAGE_SOURCE =
-  "deerflow-artifact-preview-scroll";
+  "nova-artifact-preview-scroll";
 
 export function createHtmlPreviewScrollKey(value: string) {
   let hash = 2166136261;
@@ -213,7 +213,7 @@ function escapeJavaScriptString(value: string) {
 }
 
 function htmlScrollRestorationScript(messageKey: string) {
-  return `<script data-deerflow-artifact-scroll-restoration>
+  return `<script data-nova-artifact-scroll-restoration>
 (() => {
   const source = ${escapeJavaScriptString(HTML_PREVIEW_SCROLL_MESSAGE_SOURCE)};
   const key = ${escapeJavaScriptString(messageKey)};
@@ -259,7 +259,11 @@ export function appendHtmlPreviewScrollRestoration(
   content: string,
   scrollKey = "default",
 ) {
-  if (content.includes("data-deerflow-artifact-scroll-restoration")) {
+  if (
+    content.includes("data-nova-artifact-scroll-restoration") ||
+    // Legacy marker from before the deerflow -> nova rename.
+    content.includes("data-deerflow-artifact-scroll-restoration")
+  ) {
     return content;
   }
   const script = htmlScrollRestorationScript(

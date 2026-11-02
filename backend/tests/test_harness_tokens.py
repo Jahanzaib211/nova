@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.persistence.harness_token.sql import HarnessTokenRepository, hash_token, is_token_shaped
+from nova.persistence.harness_token.sql import HarnessTokenRepository, hash_token, is_token_shaped
 
 pytestmark = pytest.mark.no_auto_user
 
 
 async def _repo(tmp_path) -> HarnessTokenRepository:
-    from deerflow.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.engine import get_session_factory, init_engine
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'ht.db'}", sqlite_dir=str(tmp_path))
     return HarnessTokenRepository(get_session_factory())
@@ -27,7 +27,7 @@ def _close_engine_after_test():
     yield
     import asyncio
 
-    from deerflow.persistence.engine import close_engine
+    from nova.persistence.engine import close_engine
 
     asyncio.run(close_engine())
 

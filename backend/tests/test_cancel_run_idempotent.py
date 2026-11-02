@@ -14,7 +14,7 @@ from _router_auth_helpers import make_authed_test_app
 from fastapi.testclient import TestClient
 
 from app.gateway.routers import thread_runs
-from deerflow.runtime import RunManager, RunStatus
+from nova.runtime import RunManager, RunStatus
 
 THREAD_ID = "thread-cancel-test"
 
@@ -30,7 +30,7 @@ def _make_app(mgr: RunManager) -> TestClient:
     app.state.run_manager = mgr
     # Phase C6 migrated the run endpoints from RunManager to RunService;
     # the test app must provide both, like the gateway lifespan does.
-    from deerflow.services.implementations import RunServiceImpl
+    from nova.services.implementations import RunServiceImpl
 
     app.state.run_service = RunServiceImpl(mgr)
     return TestClient(app, raise_server_exceptions=False)

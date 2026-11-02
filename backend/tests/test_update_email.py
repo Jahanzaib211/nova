@@ -24,7 +24,7 @@ _PASSWORD = "Tr0ub4dor3a"
 def _setup_auth(tmp_path):
     """Fresh SQLite engine + auth config + provider cache per test."""
     from app.gateway import deps
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/update_email.db"

@@ -1,6 +1,6 @@
 ---
 title: Agent 与线程
-description: 了解 DeerFlow 中 Agent 与线程的关系，以及如何管理自定义 Agent 和对话线程。
+description: 了解 Nova 中 Agent 与线程的关系，以及如何管理自定义 Agent 和对话线程。
 ---
 
 import { Callout, Cards, Steps } from "nextra/components";
@@ -14,7 +14,7 @@ import { Callout, Cards, Steps } from "nextra/components";
 
 ## 自定义 Agent
 
-DeerFlow 允许你创建多个具有不同专业领域的自定义 Agent。每个 Agent 使用 DeerFlow Harness 相同的 Lead Agent 运行时，但具有不同的：
+Nova 允许你创建多个具有不同专业领域的自定义 Agent。每个 Agent 使用 Nova Harness 相同的 Lead Agent 运行时，但具有不同的：
 
 - 模型（例如为一个 Agent 使用 GPT-4o，为另一个使用 Claude）
 - 系统提示和指令
@@ -27,7 +27,7 @@ DeerFlow 允许你创建多个具有不同专业领域的自定义 Agent。每�
 
 #### 通过界面
 
-1. 打开 DeerFlow 应用。
+1. 打开 Nova 应用。
 2. 点击侧边栏中的 **Agents**（Agent 管理）。
 3. 点击 **New Agent**（新建 Agent）。
 4. 填写名称、描述和配置。
@@ -74,7 +74,7 @@ curl -X POST http://localhost:8001/api/agents \
 
 ### 检查点和持久化
 
-DeerFlow 在每次 Agent 轮次后自动保存线程状态（如果配置了检查点器）。这允许：
+Nova 在每次 Agent 轮次后自动保存线程状态（如果配置了检查点器）。这允许：
 
 - 在服务器重启后恢复线程。
 - 在长时间间隔后继续对话。
@@ -85,7 +85,7 @@ DeerFlow 在每次 Agent 轮次后自动保存线程状态（如果配置了检�
 ```yaml
 checkpointer:
   type: sqlite
-  connection_string: .deer-flow/checkpoints.db
+  connection_string: .nova/checkpoints.db
 ```
 
 对于生产高负载环境使用 Redis：
@@ -98,10 +98,10 @@ checkpointer:
 
 ### 线程数据目录
 
-每个线程在 `.deer-flow/threads/{thread_id}/` 下有一个专用目录：
+每个线程在 `.nova/threads/{thread_id}/` 下有一个专用目录：
 
 ```
-.deer-flow/threads/{thread_id}/
+.nova/threads/{thread_id}/
   user-data/
     uploads/     ← 用户上传的文件
     outputs/     ← Agent 生成的产出物

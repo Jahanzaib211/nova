@@ -79,7 +79,7 @@ def _probe_engines() -> dict:
     constructed. They construct lazily, so it said yes with model paths that did
     not exist — the UI offered a mic that failed the moment you clicked it.
     """
-    from deerflow.speech.registry import get_stt_engine, get_tts_engine
+    from nova.speech.registry import get_stt_engine, get_tts_engine
 
     detail: dict = {}
     try:
@@ -106,7 +106,7 @@ async def voice_status(refresh: bool = False) -> dict:
     operator installs weights, without a gateway restart.
     """
     global _readiness
-    from deerflow.speech.registry import is_speech_enabled
+    from nova.speech.registry import is_speech_enabled
 
     enabled = is_speech_enabled()
     detail: dict = {"enabled": enabled, "sample_rate": CLIENT_SAMPLE_RATE}
@@ -124,7 +124,7 @@ async def voice_status(refresh: bool = False) -> dict:
 ENGINE_CATALOG: dict[str, list[dict]] = {
     "stt": [
         {
-            "use": "deerflow.speech.engines.faster_whisper_stt:FasterWhisperSTT",
+            "use": "nova.speech.engines.faster_whisper_stt:FasterWhisperSTT",
             "label": "Whisper (faster-whisper)",
             "languages": "99 languages, including Urdu, Hindi and Arabic, and it handles code-switching mid-sentence.",
             "models": ["tiny", "base", "small", "medium", "large-v3", "large-v3-turbo", "distil-large-v3"],
@@ -133,7 +133,7 @@ ENGINE_CATALOG: dict[str, list[dict]] = {
     ],
     "turn": [
         {
-            "use": "deerflow.speech.turn:SmartTurnV3",
+            "use": "nova.speech.turn:SmartTurnV3",
             "label": "Smart Turn v3",
             "note": (
                 "Judges whether you finished a *thought*, not just whether sound stopped — so Nova waits "
@@ -144,14 +144,14 @@ ENGINE_CATALOG: dict[str, list[dict]] = {
     ],
     "tts": [
         {
-            "use": "deerflow.speech.engines.kokoro_tts:KokoroTTS",
+            "use": "nova.speech.engines.kokoro_tts:KokoroTTS",
             "label": "Kokoro-82M",
             "note": "Apache-2.0. Use the fp32 weights — the int8 build is ~5.5x slower on the same hardware.",
             "voices": ["af_heart", "af_bella", "af_nicole", "af_sarah", "am_adam", "am_michael", "bf_emma", "bm_george"],
             "default": True,
         },
         {
-            "use": "deerflow.speech.engines.null:ToneTTS",
+            "use": "nova.speech.engines.null:ToneTTS",
             "label": "Test tone (no weights)",
             "note": "Synthesizes a tone instead of speech. For checking the audio path when weights are absent.",
         },
@@ -181,7 +181,7 @@ def _config_payload() -> dict:
     should describe it the same way; anything else pushes the difference onto
     every caller.
     """
-    from deerflow.speech import registry
+    from nova.speech import registry
 
     settings = registry._merged_config()
     payload: dict = {
@@ -217,7 +217,7 @@ async def put_voice_config(request: Request) -> dict:
     operator-owned and commented, and `yaml.dump` would strip every comment.
     """
     global _readiness
-    from deerflow.speech import registry
+    from nova.speech import registry
 
     body = await request.json()
     if not isinstance(body, dict):
@@ -228,8 +228,8 @@ async def put_voice_config(request: Request) -> dict:
     for section in ("stt", "tts"):
         cfg = body.get(section)
         if isinstance(cfg, dict) and cfg.get("use"):
-            from deerflow.reflection import resolve_class
-            from deerflow.speech.base import SpeechToText, TextToSpeech
+            from nova.reflection import resolve_class
+            from nova.speech.base import SpeechToText, TextToSpeech
 
             base = SpeechToText if section == "stt" else TextToSpeech
             try:
@@ -248,7 +248,7 @@ async def put_voice_config(request: Request) -> dict:
 async def reset_voice_config(request: Request) -> dict:
     """Drop the overrides and fall back to `config.yaml`."""
     global _readiness
-    from deerflow.speech import registry
+    from nova.speech import registry
 
     await asyncio.to_thread(registry.clear_overrides)
     _readiness = None
@@ -316,8 +316,8 @@ async def voice_transcribe(request: Request) -> dict:
     This is the one check that covers the whole capture path — permission,
     device, sample rate, worklet, and the STT engine — in a single action.
     """
-    from deerflow.speech.base import AudioChunk
-    from deerflow.speech.registry import get_stt_engine, is_speech_enabled
+    from nova.speech.base import AudioChunk
+    from nova.speech.registry import get_stt_engine, is_speech_enabled
 
     if not is_speech_enabled():
         raise HTTPException(status_code=503, detail="Voice is not enabled")
@@ -364,7 +364,7 @@ async def voice_speak(request: Request) -> Response:
     for microphone permission just to say hello, which is both rude and a
     reliable way to get the permission denied for good.
     """
-    from deerflow.speech.registry import get_tts_engine, is_speech_enabled
+    from nova.speech.registry import get_tts_engine, is_speech_enabled
 
     if not is_speech_enabled():
         raise HTTPException(status_code=503, detail="Voice is not enabled")
@@ -436,7 +436,7 @@ class VoiceSession:
 
         # Semantic endpointing. Absent, it degrades to exactly the VAD-only
         # behaviour, so turn detection can never be the reason voice breaks.
-        from deerflow.speech.turn import AlwaysComplete, TurnConfig
+        from nova.speech.turn import AlwaysComplete, TurnConfig
 
         self._turn = turn_detector or AlwaysComplete()
         self._turn_config = turn_config or TurnConfig()
@@ -459,7 +459,7 @@ class VoiceSession:
 
     async def on_audio(self, pcm: bytes) -> None:
         """Feed captured audio. Drives VAD, capture buffering and barge-in."""
-        from deerflow.speech.vad import VadEvent, frames_of
+        from nova.speech.vad import VadEvent, frames_of
 
         for frame in frames_of(pcm, CLIENT_SAMPLE_RATE):
             event = self._vad.accept(frame)
@@ -529,7 +529,7 @@ class VoiceSession:
         return ended
 
     async def _handle_utterance(self, pcm: bytes) -> None:
-        from deerflow.speech.base import AudioChunk
+        from nova.speech.base import AudioChunk
 
         if not pcm:
             return
@@ -632,11 +632,11 @@ async def _agent_responder(thread_id: str) -> Callable[[str], AsyncIterator[str]
     """
 
     def _drain(queue: queue_mod.Queue[str | None], text: str, cancel: threading.Event) -> None:
-        from deerflow.client import DeerFlowClient
-        from deerflow.speech.registry import voice_agent_settings
+        from nova.client import NovaClient
+        from nova.speech.registry import voice_agent_settings
 
         model_name, thinking_enabled = voice_agent_settings()
-        client = DeerFlowClient(model_name=model_name, thinking_enabled=thinking_enabled)
+        client = NovaClient(model_name=model_name, thinking_enabled=thinking_enabled)
         buffer = ""
         seen: dict[str, str] = {}
         stream = client.stream(text, thread_id=thread_id)
@@ -711,7 +711,7 @@ async def voice_session(websocket: WebSocket, thread_id: str) -> None:
     # before any ownership check — otherwise caller_owns_thread resolves to
     # DEFAULT_USER_ID and every real user is rejected.
     from app.gateway.ws_guards import ws_user
-    from deerflow.runtime.user_context import reset_current_user, set_current_user
+    from nova.runtime.user_context import reset_current_user, set_current_user
 
     user = await ws_user(websocket)
     if user is None:
@@ -733,7 +733,7 @@ async def _voice_session_after_auth(websocket: WebSocket, thread_id: str) -> Non
         await reject(websocket)
         return
 
-    from deerflow.speech.registry import get_stt_engine, get_tts_engine, is_speech_enabled
+    from nova.speech.registry import get_stt_engine, get_tts_engine, is_speech_enabled
 
     if not is_speech_enabled():
         await reject(websocket, code=1011)
@@ -747,9 +747,9 @@ async def _voice_session_after_auth(websocket: WebSocket, thread_id: str) -> Non
         await reject(websocket, code=1011)
         return
 
-    from deerflow.speech.registry import _merged_config
-    from deerflow.speech.turn import TurnConfig, get_turn_detector
-    from deerflow.speech.vad import SileroVad, VadConfig
+    from nova.speech.registry import _merged_config
+    from nova.speech.turn import TurnConfig, get_turn_detector
+    from nova.speech.vad import SileroVad, VadConfig
 
     # Semantic endpointing is opt-in and degrades to VAD-only when off or when
     # its weights are missing, so it can never be the reason a session fails.

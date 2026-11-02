@@ -11,6 +11,15 @@
 #   - Kubernetes cluster + kubeconfig are only required when using provisioner mode.
 #
 # Access: http://localhost:2026
+#
+# Naming (renamed from deer-flow-dev / deer-flow-<svc>): project `nova`,
+# containers `nova-<svc>`, network `nova`, volumes `nova_<key>`. Service names
+# are unchanged. scripts/pm2-nova.sh runs a host that has not yet been through
+# scripts/migrate-deerflow-to-nova.sh under its legacy names
+# (NOVA_CONTAINER_PREFIX=deer-flow, -p deer-flow-dev, and
+# docker-compose.legacy-names.yaml for the old network), so a restart before
+# the cutover never starts an empty database.
+name: ${NOVA_COMPOSE_PROJECT:-nova}
 
 services:
   # ── Sandbox Provisioner ────────────────────────────────────────────────
@@ -23,7 +32,7 @@ services:
       dockerfile: Dockerfile
       args:
         APT_MIRROR: ${APT_MIRROR:-}
-    container_name: deer-flow-provisioner
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-provisioner
     volumes:
       - ~/.kube/config:/root/.kube/config:ro
     environment:
@@ -33,8 +42,8 @@ services:
       # On Docker Desktop/OrbStack, use your actual host paths like /Users/username/...
       # Set these in your shell before running docker-compose:
       #   export DEER_FLOW_ROOT=/absolute/path/to/deer-flow
-      - SKILLS_HOST_PATH=${DEER_FLOW_ROOT}/skills
-      - THREADS_HOST_PATH=${DEER_FLOW_ROOT}/backend/.deer-flow/threads
+      - SKILLS_HOST_PATH=${NOVA_ROOT:-${DEER_FLOW_ROOT}}/skills
+      - THREADS_HOST_PATH=${NOVA_ROOT:-${DEER_FLOW_ROOT}}/backend/${NOVA_DATA_DIRNAME:-.nova}/threads
       # Production: use PVC instead of hostPath to avoid data loss on node failure.
       # When set, hostPath vars above are ignored for the corresponding volume.
       # USERDATA_PVC_NAME uses subPath (deer-flow/users/{user_id}/threads/{thread_id}/user-data) automatically.
@@ -50,7 +59,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - deer-flow-dev
+      - nova
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
@@ -63,7 +72,7 @@ services:
   # Routes API traffic to gateway and (optionally) provisioner.
   nginx:
     image: nginx:alpine
-    container_name: deer-flow-nginx
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-nginx
     ports:
       - "127.0.0.1:2026:2026"
     volumes:
@@ -83,7 +92,7 @@ services:
       - frontend
       - gateway
     networks:
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.2
     restart: unless-stopped
     # Audit P1: the proxy is the single public entrypoint — bound memory (the
@@ -128,7 +137,7 @@ services:
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
-    container_name: deer-flow-frontend
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-frontend
     command: sh -c "cd frontend && pnpm run dev >> /app/logs/frontend.log 2>&1"
     volumes:
       - ../frontend/src:/app/frontend/src
@@ -149,6 +158,7 @@ services:
       # rebuilt). The bridge IP is stable for the lifetime of the network
       # and matches the value pinned in nginx.conf (Batch 2A). For
       # production deployments behind a real LB, override via .env.
+      - NOVA_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
       - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
       # Heap ceiling deliberately *below* mem_limit (8 GiB, below). Without one
       # Node grows until the kernel OOM-kills it — abrupt, nothing in the log,
@@ -166,13 +176,18 @@ services:
       - NODE_OPTIONS=--max-old-space-size=4096
       # Match the gateway: dev mode skips the sign-in gate so the user
       # can interact with the app immediately. Production must set
-      # DEER_FLOW_AUTH_DISABLED=0 (or DEER_FLOW_ENV=prod).
-      - DEER_FLOW_AUTH_DISABLED=${DEER_FLOW_AUTH_DISABLED:-1}
+      # NOVA_AUTH_DISABLED=0 (or NOVA_ENV=prod).
+      - NOVA_AUTH_DISABLED=${NOVA_AUTH_DISABLED:-${DEER_FLOW_AUTH_DISABLED:-1}}
+      - DEER_FLOW_AUTH_DISABLED=${NOVA_AUTH_DISABLED:-${DEER_FLOW_AUTH_DISABLED:-1}}
     env_file:
       - ../frontend/.env
     networks:
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.4
+        # nginx.conf proxies to nova-frontend:3000. The alias keeps that name
+        # resolvable while a not-yet-migrated host still runs deer-flow-frontend.
+        aliases:
+          - nova-frontend
     restart: unless-stopped
     # Detect a hung-but-"Up" Next dev server the same way the gateway does
     # (uvicorn dead, container still Up, nginx upstream timing out → 502).
@@ -238,7 +253,7 @@ services:
         APT_MIRROR: ${APT_MIRROR:-}
         UV_IMAGE: ${UV_IMAGE:-ghcr.io/astral-sh/uv:0.7.20}
         UV_INDEX_URL: ${UV_INDEX_URL:-https://pypi.org/simple}
-    container_name: deer-flow-gateway
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-gateway
     ports:
       - "127.0.0.1:8001:8001"
     # Pin the IP so downstream services (nginx, frontend SSR) can pin to a
@@ -247,7 +262,7 @@ services:
     # service name 'gateway' after a network restart, and the assigned
     # bridge IP changes with each container recreation (Batch 2B.5/3).
     networks:
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.3
     depends_on:
       postgres:
@@ -328,7 +343,7 @@ services:
       # because that path does not exist inside the container. Use the
       # canonical command instead, or include the voice overlay explicitly:
       #
-      #   docker compose -p deer-flow-dev \
+      #   docker compose -p nova \
       #     -f docker/docker-compose-dev.yaml \
       #     -f docker/docker-compose.voice.yaml \
       #     up -d --force-recreate --no-deps gateway
@@ -337,14 +352,17 @@ services:
       - CI=true
       # Batch 3 final: enable auth-disabled mode by default in dev so the
       # user can immediately interact with the app without setting up an
-      # admin password. Production deployments must set DEER_FLOW_ENV=prod
-      # (or DEER_FLOW_AUTH_DISABLED=0) — the gateway refuses to start with
+      # admin password. Production deployments must set NOVA_ENV=prod
+      # (or NOVA_AUTH_DISABLED=0) — the gateway refuses to start with
       # auth disabled in an explicit production environment.
-      - DEER_FLOW_AUTH_DISABLED=${DEER_FLOW_AUTH_DISABLED:-1}
+      - NOVA_AUTH_DISABLED=${NOVA_AUTH_DISABLED:-${DEER_FLOW_AUTH_DISABLED:-1}}
+      - DEER_FLOW_AUTH_DISABLED=${NOVA_AUTH_DISABLED:-${DEER_FLOW_AUTH_DISABLED:-1}}
+      - NOVA_PROJECT_ROOT=/app
       - DEER_FLOW_PROJECT_ROOT=/app
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - NOVA_HOME=/app/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - DEER_FLOW_HOME=/app/backend/${NOVA_DATA_DIRNAME:-.nova}
       # These two MUST be pinned here. ../.env carries HOST paths — it has to,
-      # because docker-compose.yaml uses ${DEER_FLOW_CONFIG_PATH} as the *source*
+      # because docker-compose.yaml uses ${NOVA_CONFIG_PATH} as the *source*
       # of a bind mount — and env_file would otherwise leak them into the
       # container, where they do not exist. The gateway then dies at import with
       # FileNotFoundError from AppConfig.resolve_config_path(), uvicorn never
@@ -352,7 +370,9 @@ services:
       # SERVFAILs the name of a down container). Cost a full outage on 2026-08-17.
       # Mirrors docker-compose.yaml:138-139 — but note the dev mounts land at
       # /app/..., not /app/backend/... like prod.
+      - NOVA_CONFIG_PATH=/app/config.yaml
       - DEER_FLOW_CONFIG_PATH=/app/config.yaml
+      - NOVA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       # Database URL, built here rather than taken from ../.env so the host and
       # container forms cannot diverge: from inside the network the host is the
@@ -360,18 +380,24 @@ services:
       # config.yaml references this as $DATABASE_URL (see database_config.py's
       # $VAR convention). Pinned for the same reason as the config paths above.
       - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
-      - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}
-      - DEER_FLOW_CHANNELS_GATEWAY_URL=${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}
-      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}
-      - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
-      - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
+      - NOVA_CHANNELS_LANGGRAPH_URL=${NOVA_CHANNELS_LANGGRAPH_URL:-${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}}
+      - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${NOVA_CHANNELS_LANGGRAPH_URL:-${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}}
+      - NOVA_CHANNELS_GATEWAY_URL=${NOVA_CHANNELS_GATEWAY_URL:-${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}}
+      - DEER_FLOW_CHANNELS_GATEWAY_URL=${NOVA_CHANNELS_GATEWAY_URL:-${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}}
+      - NOVA_INTERNAL_AUTH_TOKEN=${NOVA_INTERNAL_AUTH_TOKEN:-${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}}
+      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${NOVA_INTERNAL_AUTH_TOKEN:-${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}}
+      - NOVA_HOST_BASE_DIR=${NOVA_ROOT:-${DEER_FLOW_ROOT}}/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - DEER_FLOW_HOST_BASE_DIR=${NOVA_ROOT:-${DEER_FLOW_ROOT}}/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - NOVA_HOST_SKILLS_PATH=${NOVA_ROOT:-${DEER_FLOW_ROOT}}/skills
+      - DEER_FLOW_HOST_SKILLS_PATH=${NOVA_ROOT:-${DEER_FLOW_ROOT}}/skills
+      - NOVA_SANDBOX_HOST=host.docker.internal
       - DEER_FLOW_SANDBOX_HOST=host.docker.internal
       # capabilities.py falls back to "dev" when this is unset, so the public
       # deployment was reporting itself as a dev build in /api/runtime/capabilities.
       - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-dev}
       # Publish sandbox ports on the Docker bridge, not on every interface.
       # _resolve_docker_bind_host falls through to 0.0.0.0 whenever
-      # DEER_FLOW_SANDBOX_HOST is non-loopback, which made the sandbox the only
+      # NOVA_SANDBOX_HOST is non-loopback, which made the sandbox the only
       # service reachable from the LAN -- while postgres, crawl4ai, browserless
       # and nginx are all on 127.0.0.1 -- and it is the one that runs
       # --privileged with ttyd and noVNC.
@@ -381,7 +407,8 @@ services:
       # loopback bind makes them unreachable and every sandbox times out
       # waiting to become ready. The bridge address is reachable from
       # containers and not published on enp4s0, which is the property we want.
-      - DEER_FLOW_SANDBOX_BIND_HOST=${DEER_FLOW_SANDBOX_BIND_HOST:-172.17.0.1}
+      - NOVA_SANDBOX_BIND_HOST=${NOVA_SANDBOX_BIND_HOST:-${DEER_FLOW_SANDBOX_BIND_HOST:-172.17.0.1}}
+      - DEER_FLOW_SANDBOX_BIND_HOST=${NOVA_SANDBOX_BIND_HOST:-${DEER_FLOW_SANDBOX_BIND_HOST:-172.17.0.1}}
       # Without this the auth rate limiter cannot see past nginx: _client_ip()
       # returns the peer, so every request shares one bucket and the 10
       # attempts/60s auth limit applies globally -- one person mistyping a
@@ -408,7 +435,7 @@ services:
     # real, zero-risk hardening (blocks setuid-binary privilege escalation
     # from agent-directed bash commands via LocalSandboxProvider) and needs
     # no capability grant. read_only is NOT set — this container writes
-    # runtime state to backend/.deer-flow via a live bind mount.
+    # runtime state to backend/.nova via a live bind mount.
     security_opt:
       - "no-new-privileges:true"
     pids_limit: 512
@@ -442,7 +469,7 @@ services:
   # unbounded growth is still unbounded growth.
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: deer-flow-postgres
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-postgres
     environment:
       - POSTGRES_DB=${NOVA_PG_DB:-nova}
       - POSTGRES_USER=${NOVA_PG_USER:-nova}
@@ -457,7 +484,7 @@ services:
     volumes:
       - nova-postgres-data:/var/lib/postgresql/data
     networks:
-      deer-flow-dev:
+      nova:
         # Pinned like the gateway (.3) and frontend (.4): Docker's embedded DNS
         # has SERVFAILed on service names after a container recreation on this
         # host (see the frontend's note), and a database the gateway cannot
@@ -495,7 +522,7 @@ services:
   browserless:
     # Digest-pinned; see the crawl4ai service below for the reasoning.
     image: ghcr.io/browserless/chromium@sha256:c0886239e4eaa102e214acbbde5345f5b2a55a7ccbb52456048afd374defbabb
-    container_name: deer-flow-browserless
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-browserless
     # Every other service in this file sets this. Without it these two stay
     # down after a host reboot or a dockerd restart while the rest come back,
     # so web_fetch / web_fetch_many / web_crawl silently fall through to their
@@ -513,7 +540,7 @@ services:
       # one -- which, while the gateway happened to be down, was the gateway's
       # own 192.168.200.3. The gateway then could not restart at all:
       # "failed to set up container networking: Address already in use".
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.7
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/pressure"]
@@ -544,7 +571,7 @@ services:
     # a week apart can differ with no change in this repo — the same
     # reproducibility hole Dockerfile.base closed for the sandbox.
     image: unclecode/crawl4ai@sha256:bd36741e7bdd35ddc1a05d9183e1d6d8cefb61dd640d944a25d026b76e917690
-    container_name: deer-flow-crawl4ai
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-crawl4ai
     # Every other service in this file sets this. Without it these two stay
     # down after a host reboot or a dockerd restart while the rest come back,
     # so web_fetch / web_fetch_many / web_crawl silently fall through to their
@@ -565,7 +592,7 @@ services:
       # Pinned like everything else here. An unpinned service takes the next
       # free address, and when the gateway was briefly down that was the
       # gateway's own .3 -- which then could not restart at all.
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.8
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:11235/health"]
@@ -586,7 +613,7 @@ services:
   searxng:
     # Digest-pinned; see the crawl4ai service above for the reasoning.
     image: searxng/searxng@sha256:f4c8e59de166ed71f6380c0847c312ca51f0d41996e31d0559163b6b09ecde52
-    container_name: deer-flow-searxng
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-searxng
     ports:
       - "127.0.0.1:8088:8080"
     volumes:
@@ -595,7 +622,7 @@ services:
       - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY:?Set SEARXNG_SECRET_KEY in .env}
       - SEARXNG_BASE_URL=http://searxng:8080
     networks:
-      deer-flow-dev:
+      nova:
         # Static, like every other service on this network. Without one, IPAM
         # allocated the lowest free address -- which was .2, nginx's static
         # address -- and nginx then died with "failed to set up container
@@ -647,10 +674,13 @@ services:
   # --reload or restart cannot kill an in-flight job. It reuses the gateway's
   # built image and .venv volume, so it never needs its own build; it waits
   # for a *healthy* gateway because that is what runs the schema step.
-  # Scale to zero with NOVA_JOBS_SCALE=0 (scripts/pm2-deerflow.sh).
+  # Scale to zero with NOVA_JOBS_SCALE=0 (scripts/pm2-nova.sh).
   jobs:
-    image: deer-flow-dev-gateway:latest
-    container_name: deer-flow-jobs
+    # The image the gateway service builds (compose names it
+    # <project>-gateway); scripts/pm2-nova.sh exports NOVA_GATEWAY_IMAGE for
+    # whichever project it runs.
+    image: ${NOVA_GATEWAY_IMAGE:-nova-gateway:latest}
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-jobs
     command: ["sh", "-c", "cd /app/backend && PYTHONPATH=. exec uv run --no-sync python -m app.jobs.worker"]
     depends_on:
       gateway:
@@ -659,17 +689,22 @@ services:
       # Pinned like every other service: after a reboot the jobs container came
       # up first, took the gateway's 192.168.200.3, and `pm2 restart nova`
       # looped on "Address already in use" until it was removed by hand.
-      deer-flow-dev:
+      nova:
         ipv4_address: 192.168.200.9
     env_file:
       - ../.env
     environment:
+      - NOVA_PROJECT_ROOT=/app
       - DEER_FLOW_PROJECT_ROOT=/app
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
+      - NOVA_HOME=/app/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - DEER_FLOW_HOME=/app/backend/${NOVA_DATA_DIRNAME:-.nova}
+      - NOVA_CONFIG_PATH=/app/config.yaml
       - DEER_FLOW_CONFIG_PATH=/app/config.yaml
+      - NOVA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
       - DATABASE_URL=postgresql://${NOVA_PG_USER:-nova}:${NOVA_PG_PASSWORD}@postgres:5432/${NOVA_PG_DB:-nova}
-      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}
+      - NOVA_INTERNAL_AUTH_TOKEN=${NOVA_INTERNAL_AUTH_TOKEN:-${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}}
+      - DEER_FLOW_INTERNAL_AUTH_TOKEN=${NOVA_INTERNAL_AUTH_TOKEN:-${DEER_FLOW_INTERNAL_AUTH_TOKEN:-}}
       - DEERFLOW_VERSION=${DEERFLOW_VERSION:-nova-dev}
       - NOVA_VERSION=${DEERFLOW_VERSION:-nova-dev}
       - NO_PROXY=${NO_PROXY:-}${NO_PROXY:+,}localhost,127.0.0.1,::1,gateway,postgres,host.docker.internal
@@ -698,7 +733,7 @@ services:
   autoheal:
     # Digest-pinned; see the crawl4ai service above for the reasoning.
     image: willfarrell/autoheal@sha256:2ae2ff2c4047be936db416005262978b0d20d98d8f8dbfd2bc8bb97bbfc1a7b5
-    container_name: deer-flow-autoheal
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-autoheal
     restart: unless-stopped
     environment:
       - AUTOHEAL_CONTAINER_LABEL=autoheal
@@ -731,11 +766,14 @@ volumes:
   gateway-venv:
   gateway-uv-cache:
   # Nova's database. A named volume, not a bind mount: the SQLite file lived
-  # under backend/.deer-flow and was one careless `git clean` from deletion.
+  # under backend/.nova and was one careless `git clean` from deletion.
   nova-postgres-data:
 
 networks:
-  deer-flow-dev:
+  # Explicit name so it is `nova`, not `nova_nova`. Subnet and every pinned
+  # ipv4_address above are unchanged from the deer-flow-dev network.
+  nova:
+    name: nova
     driver: bridge
     ipam:
       config:

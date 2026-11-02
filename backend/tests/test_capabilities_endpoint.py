@@ -16,11 +16,11 @@ from fastapi.testclient import TestClient
 
 # v7.3 (Nova rebrand): make this test CI-runnable without config.yaml.
 # The capabilities router imports `app.gateway.deps.get_config` which calls
-# `deerflow.config.app_config.get_app_config` which tries to read
+# `nova.config.app_config.get_app_config` which tries to read
 # config.yaml from disk. CI runners don't have config.yaml (gitignored);
 # local devs do. We pre-seed the module-level cache with a MagicMock so
 # the "no reload needed" branch in get_app_config() short-circuits.
-_APP_CONFIG_MODULE = "deerflow.config.app_config"
+_APP_CONFIG_MODULE = "nova.config.app_config"
 _HERMETIC_CONFIG = MagicMock(name="AppConfig")  # plays the role of a real AppConfig
 
 
@@ -115,11 +115,11 @@ class TestHooksInventory:
         removed in build_middlewares changes /api/runtime/capabilities or
         fails here.
         """
-        from deerflow.agents.lead_agent.agent import build_middlewares
-        from deerflow.config.app_config import AppConfig
-        from deerflow.config.sandbox_config import SandboxConfig
+        from nova.agents.lead_agent.agent import build_middlewares
+        from nova.config.app_config import AppConfig
+        from nova.config.sandbox_config import SandboxConfig
 
-        real_config = AppConfig(sandbox=SandboxConfig(use="deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"))
+        real_config = AppConfig(sandbox=SandboxConfig(use="nova.sandbox.local.local_sandbox:LocalSandboxProvider"))
 
         chain = build_middlewares({"configurable": {}}, None, app_config=real_config)
         expected = {cap._middleware_hook_name(type(m).__name__) for m in chain}
@@ -147,7 +147,7 @@ class TestSubagentsInventory:
 
 class TestCircuitsSnapshot:
     def test_empty_when_no_circuits_open(self) -> None:
-        from deerflow.sandbox import browser_circuit_breaker as cb
+        from nova.sandbox import browser_circuit_breaker as cb
 
         cb.reset_all_circuits()
         client = _make_test_client()
@@ -155,7 +155,7 @@ class TestCircuitsSnapshot:
         assert resp.json()["circuits"] == []
 
     def test_reflects_active_circuits(self) -> None:
-        from deerflow.sandbox import browser_circuit_breaker as cb
+        from nova.sandbox import browser_circuit_breaker as cb
 
         cb.reset_all_circuits()
         for _ in range(cb._FAILURE_THRESHOLD):
@@ -168,7 +168,7 @@ class TestCircuitsSnapshot:
 
     def test_endpoint_does_not_mutate_circuit_state(self) -> None:
         """The capabilities endpoint must be observability-only."""
-        from deerflow.sandbox import browser_circuit_breaker as cb
+        from nova.sandbox import browser_circuit_breaker as cb
 
         cb.reset_all_circuits()
         cb.record_failure("obs-test")
@@ -181,7 +181,7 @@ class TestCircuitsSnapshot:
 
     def test_thread_id_scopes_the_circuit_snapshot(self) -> None:
         """A per-chat bar must not be told another thread's breaker is open."""
-        from deerflow.sandbox import browser_circuit_breaker as cb
+        from nova.sandbox import browser_circuit_breaker as cb
 
         cb.reset_all_circuits()
         cb.force_circuit("thread-a", cb.CircuitState.OPEN)
@@ -214,7 +214,7 @@ class TestEmptyFallbacks:
 
     def test_skill_discovery_failure_returns_empty(self) -> None:
         with patch(
-            "deerflow.skills.storage.get_or_new_skill_storage",
+            "nova.skills.storage.get_or_new_skill_storage",
             side_effect=RuntimeError("simulated discovery crash"),
         ):
             client = _make_test_client()
@@ -224,7 +224,7 @@ class TestEmptyFallbacks:
 
     def test_subagent_registry_failure_returns_empty(self) -> None:
         with patch(
-            "deerflow.subagents.get_available_subagent_names",
+            "nova.subagents.get_available_subagent_names",
             side_effect=RuntimeError("simulated registry crash"),
         ):
             client = _make_test_client()
@@ -234,7 +234,7 @@ class TestEmptyFallbacks:
 
     def test_circuit_snapshot_failure_returns_empty(self) -> None:
         with patch(
-            "deerflow.sandbox.browser_circuit_breaker.snapshot",
+            "nova.sandbox.browser_circuit_breaker.snapshot",
             side_effect=RuntimeError("simulated circuit crash"),
         ):
             client = _make_test_client()
@@ -260,15 +260,15 @@ class TestReadOnlyContract:
 def test_features_reflect_config_sections():
     """Feature flags come from `<section>.enabled`; unknown/missing reads off."""
     from app.gateway.routers.capabilities import _safe_features
-    from deerflow.config.app_config import AppConfig
-    from deerflow.config.sandbox_config import SandboxConfig
+    from nova.config.app_config import AppConfig
+    from nova.config.sandbox_config import SandboxConfig
 
-    off = AppConfig(sandbox=SandboxConfig(use="deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"))
+    off = AppConfig(sandbox=SandboxConfig(use="nova.sandbox.local.local_sandbox:LocalSandboxProvider"))
     # `capabilities` is always on (the registry is not optional); everything
     # section-gated reads off.
     # `sandbox` is on whenever a provider is configured — it is what lets an
     # ACP runtime reach `sandbox__*` over Nova's MCP server.
     assert _safe_features(off).model_dump() == {"jobs": False, "integrations": False, "email_marketing": False, "acp_agents": False, "capabilities": True, "runtimes": False, "sandbox": True}
-    on = AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}, "jobs": {"enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
+    on = AppConfig.model_validate({"sandbox": {"use": "nova.sandbox.local.local_sandbox:LocalSandboxProvider"}, "jobs": {"enabled": True}, "acp_agents": {"claude_code": {"command": "npx", "description": "x"}}})
     flags = _safe_features(on)
     assert flags.jobs is True and flags.acp_agents is True and flags.integrations is False and flags.sandbox is True

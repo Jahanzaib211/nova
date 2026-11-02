@@ -10,7 +10,7 @@ import pytest
 from app.jobs.handlers import build_registry
 from app.jobs.worker import serve, settings_from_config
 
-_SANDBOX = {"use": "deerflow.sandbox.local:LocalSandboxProvider"}
+_SANDBOX = {"use": "nova.sandbox.local:LocalSandboxProvider"}
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +27,7 @@ def test_registry_has_the_smoke_test_handler():
 
 
 def test_settings_follow_config_and_cli_overrides(monkeypatch):
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
     cfg = AppConfig.model_validate({"sandbox": _SANDBOX, "jobs": {"enabled": True, "queues": ["default", "email"], "concurrency": 2, "lease_ttl_seconds": 45}})
     import app.jobs.worker as w
@@ -42,7 +42,7 @@ def test_settings_follow_config_and_cli_overrides(monkeypatch):
 @pytest.mark.anyio
 async def test_serve_refuses_when_disabled(monkeypatch):
     import app.jobs.worker as w
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
     monkeypatch.setattr(w, "get_app_config", lambda: AppConfig.model_validate({"sandbox": _SANDBOX}))
     rc = await serve(argparse.Namespace(queues=None, concurrency=None, worker_id=None, force=False))
@@ -54,7 +54,7 @@ async def test_serve_initialises_the_engine_from_the_database_section(monkeypatc
     """Regression: the first live start passed the whole AppConfig to
     init_engine_from_config, which wants the ``database`` sub-config."""
     import app.jobs.worker as w
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
     cfg = AppConfig.model_validate({"sandbox": _SANDBOX, "jobs": {"enabled": True}, "database": {"backend": "sqlite", "sqlite_dir": str(tmp_path)}})
     monkeypatch.setattr(w, "get_app_config", lambda: cfg)

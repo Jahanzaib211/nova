@@ -15,9 +15,9 @@ from types import SimpleNamespace
 import pytest
 from langchain_core.messages import AIMessage
 
-from deerflow.agents.middlewares.llm_error_handling_middleware import LLMErrorHandlingMiddleware
-from deerflow.config.app_config import AppConfig
-from deerflow.config.sandbox_config import SandboxConfig
+from nova.agents.middlewares.llm_error_handling_middleware import LLMErrorHandlingMiddleware
+from nova.config.app_config import AppConfig
+from nova.config.sandbox_config import SandboxConfig
 
 CLAUDE_DRY = "Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': \"You're out of extra usage. Add more at claude.ai/settings/usage and keep going.\"}}"
 MINIMAX_DRY = "Error code: 402 - {'type': 'error', 'error': {'type': 'insufficient_balance_error', 'message': 'insufficient balance (1008)', 'http_code': '402'}}"
@@ -47,7 +47,7 @@ class Request:
 
 
 def _middleware(fallbacks: list[str]) -> LLMErrorHandlingMiddleware:
-    from deerflow.config.model_config import ModelConfig
+    from nova.config.model_config import ModelConfig
 
     models = [ModelConfig(name=n, display_name=n, use="langchain_openai:ChatOpenAI", model=f"id-{n}") for n in ("primary", "backup", "last")]
     cfg = AppConfig(sandbox=SandboxConfig(use="test"), models=models, model_fallbacks=fallbacks)
@@ -59,7 +59,7 @@ def _middleware(fallbacks: list[str]) -> LLMErrorHandlingMiddleware:
 
 @pytest.fixture(autouse=True)
 def _factory(monkeypatch):
-    import deerflow.models as models_pkg
+    import nova.models as models_pkg
 
     built: list[str] = []
 

@@ -24,7 +24,7 @@ def app(tmp_path):
     """Fresh SQLite engine + auth config + a create_app() instance per test."""
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/admin_users.db"
@@ -134,8 +134,8 @@ def _register_get_id(app, email: str) -> str:
 
 def _insert_run(app, *, run_id, user_id, tokens, when):
     """Insert a RunRow directly so credit usage is non-zero."""
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.run.model import RunRow
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.run.model import RunRow
 
     async def _go():
         async with get_session_factory()() as session:
@@ -349,8 +349,8 @@ def test_controls_forbidden_for_regular_user(app):
 def _make_thread(app, *, thread_id, user_id, display_name):
     from datetime import UTC, datetime
 
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.thread_meta.model import ThreadMetaRow
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.thread_meta.model import ThreadMetaRow
 
     async def _go():
         async with get_session_factory()() as session:
@@ -370,8 +370,8 @@ def _make_thread(app, *, thread_id, user_id, display_name):
 
 
 def _write_message(app, *, thread_id, run_id, content, seq=1):
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.models.run_event import RunEventRow
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.models.run_event import RunEventRow
 
     async def _go():
         async with get_session_factory()() as session:
@@ -459,8 +459,8 @@ def test_conversation_access_is_audited(app):
 
 
 def _create_run(app, *, thread_id, user_id):
-    from deerflow.runtime import RunManager
-    from deerflow.services.implementations import RunServiceImpl
+    from nova.runtime import RunManager
+    from nova.services.implementations import RunServiceImpl
 
     if not hasattr(app.state, "run_manager"):
         app.state.run_manager = RunManager()
@@ -482,7 +482,7 @@ def test_admin_can_cancel_user_run(app):
     )
     assert resp.status_code == 200, resp.text
 
-    from deerflow.runtime import RunStatus
+    from nova.runtime import RunStatus
 
     record = asyncio.run(app.state.run_manager.get(run_id))
     assert record.status == RunStatus.interrupted
@@ -559,8 +559,8 @@ def _insert_run_persistent(app, *, run_id, thread_id, user_id, status="running",
     ``_create_run`` instantiates runs in the in-memory RunManager, which
     the new endpoint doesn't query — this writes the SQL row the new
     endpoint actually reads."""
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.run.model import RunRow
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.run.model import RunRow
 
     async def _go():
         async with get_session_factory()() as session:
@@ -647,14 +647,14 @@ def test_admin_thread_runs_rejects_unknown_status_filter(app):
 
 
 def _enable_channel_connections(app):
-    from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+    from nova.config.channel_connections_config import ChannelConnectionsConfig
 
     app.state.channel_connections_config = ChannelConnectionsConfig.model_validate({"enabled": True, "telegram": {"enabled": True, "bot_username": "deerflow_bot"}})
 
 
 def _create_connection(app, *, user_id, provider="telegram", external_account_id="ext-1"):
-    from deerflow.persistence.channel_connections import ChannelConnectionRepository
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.channel_connections import ChannelConnectionRepository
+    from nova.persistence.engine import get_session_factory
 
     repo = ChannelConnectionRepository(get_session_factory())
     row = asyncio.run(

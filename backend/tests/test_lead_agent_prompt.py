@@ -4,10 +4,10 @@ from typing import cast
 
 import anyio
 
-from deerflow.agents.lead_agent import prompt as prompt_module
-from deerflow.config.app_config import AppConfig
-from deerflow.config.subagents_config import CustomSubagentConfig, SubagentsAppConfig
-from deerflow.skills.types import Skill, SkillCategory
+from nova.agents.lead_agent import prompt as prompt_module
+from nova.config.app_config import AppConfig
+from nova.config.subagents_config import CustomSubagentConfig, SubagentsAppConfig
+from nova.skills.types import Skill, SkillCategory
 
 
 def _set_skills_cache_state(*, skills=None, active=False, version=0):
@@ -35,7 +35,7 @@ def test_build_self_update_section_present_for_custom_agent():
 
 def test_build_custom_mounts_section_returns_empty_when_no_mounts(monkeypatch):
     config = SimpleNamespace(sandbox=SimpleNamespace(mounts=[]))
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: config)
 
     assert prompt_module._build_custom_mounts_section() == ""
 
@@ -46,7 +46,7 @@ def test_build_custom_mounts_section_lists_configured_mounts(monkeypatch):
         SimpleNamespace(container_path="/mnt/reference", read_only=True),
     ]
     config = SimpleNamespace(sandbox=SimpleNamespace(mounts=mounts))
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: config)
 
     section = prompt_module._build_custom_mounts_section()
 
@@ -64,7 +64,7 @@ def test_build_custom_mounts_section_uses_explicit_app_config_without_global_rea
     def fail_get_app_config():
         raise AssertionError("ambient get_app_config() must not be used when app_config is explicit")
 
-    monkeypatch.setattr("deerflow.config.get_app_config", fail_get_app_config)
+    monkeypatch.setattr("nova.config.get_app_config", fail_get_app_config)
 
     section = prompt_module._build_custom_mounts_section(app_config=config)
 
@@ -78,7 +78,7 @@ def test_apply_prompt_template_includes_custom_mounts(monkeypatch):
         sandbox=SimpleNamespace(mounts=mounts),
         skills=SimpleNamespace(container_path="/mnt/skills"),
     )
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: config)
     monkeypatch.setattr(prompt_module, "_get_enabled_skills", lambda: [])
     monkeypatch.setattr(prompt_module, "get_deferred_tools_prompt_section", lambda **kwargs: "")
     monkeypatch.setattr(prompt_module, "_build_acp_section", lambda **kwargs: "")
@@ -96,7 +96,7 @@ def test_apply_prompt_template_includes_relative_path_guidance(monkeypatch):
         sandbox=SimpleNamespace(mounts=[]),
         skills=SimpleNamespace(container_path="/mnt/skills"),
     )
-    monkeypatch.setattr("deerflow.config.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.get_app_config", lambda: config)
     monkeypatch.setattr(prompt_module, "_get_enabled_skills", lambda: [])
     monkeypatch.setattr(prompt_module, "get_deferred_tools_prompt_section", lambda **kwargs: "")
     monkeypatch.setattr(prompt_module, "_build_acp_section", lambda **kwargs: "")
@@ -126,8 +126,8 @@ def test_apply_prompt_template_threads_explicit_app_config_without_global_config
     def fail_get_memory_config():
         raise AssertionError("ambient get_memory_config() must not be used when app_config is explicit")
 
-    monkeypatch.setattr("deerflow.config.get_app_config", fail_get_app_config)
-    monkeypatch.setattr("deerflow.config.memory_config.get_memory_config", fail_get_memory_config)
+    monkeypatch.setattr("nova.config.get_app_config", fail_get_app_config)
+    monkeypatch.setattr("nova.config.memory_config.get_memory_config", fail_get_memory_config)
     monkeypatch.setattr(prompt_module, "get_or_new_skill_storage", lambda app_config=None: SimpleNamespace(load_skills=lambda enabled_only=True: []))
     monkeypatch.setattr(prompt_module, "get_agent_soul", lambda agent_name=None: "")
 
@@ -140,7 +140,7 @@ def test_apply_prompt_template_threads_explicit_app_config_without_global_config
 def test_apply_prompt_template_threads_explicit_app_config_to_subagents_without_global_config(monkeypatch):
     explicit_config = SimpleNamespace(
         sandbox=SimpleNamespace(
-            use="deerflow.sandbox.local:LocalSandboxProvider",
+            use="nova.sandbox.local:LocalSandboxProvider",
             allow_host_bash=False,
             mounts=[],
         ),
@@ -165,8 +165,8 @@ def test_apply_prompt_template_threads_explicit_app_config_to_subagents_without_
     def fail_get_subagents_app_config():
         raise AssertionError("ambient get_subagents_app_config() must not be used when app_config is explicit")
 
-    monkeypatch.setattr("deerflow.config.get_app_config", fail_get_app_config)
-    monkeypatch.setattr("deerflow.config.subagents_config.get_subagents_app_config", fail_get_subagents_app_config)
+    monkeypatch.setattr("nova.config.get_app_config", fail_get_app_config)
+    monkeypatch.setattr("nova.config.subagents_config.get_subagents_app_config", fail_get_subagents_app_config)
     monkeypatch.setattr(prompt_module, "get_or_new_skill_storage", lambda app_config=None: SimpleNamespace(load_skills=lambda enabled_only=True: []))
     monkeypatch.setattr(prompt_module, "get_agent_soul", lambda agent_name=None: "")
 
@@ -182,7 +182,7 @@ def test_build_acp_section_uses_explicit_app_config_without_global_config(monkey
     def fail_get_acp_agents():
         raise AssertionError("ambient get_acp_agents() must not be used when app_config is explicit")
 
-    monkeypatch.setattr("deerflow.config.acp_config.get_acp_agents", fail_get_acp_agents)
+    monkeypatch.setattr("nova.config.acp_config.get_acp_agents", fail_get_acp_agents)
 
     section = prompt_module._build_acp_section(app_config=explicit_config)
 
@@ -210,10 +210,10 @@ def test_get_memory_context_uses_explicit_app_config_without_global_config(monke
         captured["use_tiktoken"] = use_tiktoken
         return "remember this"
 
-    monkeypatch.setattr("deerflow.config.memory_config.get_memory_config", fail_get_memory_config)
-    monkeypatch.setattr("deerflow.runtime.user_context.get_effective_user_id", lambda: "user-1")
-    monkeypatch.setattr("deerflow.agents.memory.get_memory_data", fake_get_memory_data)
-    monkeypatch.setattr("deerflow.agents.memory.format_memory_for_injection", fake_format_memory_for_injection)
+    monkeypatch.setattr("nova.config.memory_config.get_memory_config", fail_get_memory_config)
+    monkeypatch.setattr("nova.runtime.user_context.get_effective_user_id", lambda: "user-1")
+    monkeypatch.setattr("nova.agents.memory.get_memory_data", fake_get_memory_data)
+    monkeypatch.setattr("nova.agents.memory.format_memory_for_injection", fake_format_memory_for_injection)
 
     context = prompt_module._get_memory_context("agent-a", app_config=explicit_config)
 
@@ -422,7 +422,7 @@ def test_prompt_carries_tool_discipline_block():
     """The discipline rules exist because breaking them produced real
     failures (invisible raw-bash servers, stale file:// screenshots, missing
     todo lists). If the block is dropped, those regress silently."""
-    from deerflow.agents.lead_agent.prompt import apply_prompt_template
+    from nova.agents.lead_agent.prompt import apply_prompt_template
 
     text = apply_prompt_template()
     for needle in (

@@ -15,7 +15,7 @@ class AuthConfig(BaseModel):
     """JWT and auth-related configuration. Parsed once at startup.
 
     Note: the ``users`` table now lives in the shared persistence
-    database managed by ``deerflow.persistence.engine``. The old
+    database managed by ``nova.persistence.engine``. The old
     ``users_db_path`` config key has been removed — user storage is
     configured through ``config.database`` like every other table.
     """
@@ -37,7 +37,7 @@ _auth_config: AuthConfig | None = None
 
 def _load_or_create_secret() -> str:
     """Load persisted JWT secret from ``{base_dir}/.jwt_secret``, or generate and persist a new one."""
-    from deerflow.config.paths import get_paths
+    from nova.config.paths import get_paths
 
     paths = get_paths()
     secret_file = paths.base_dir / _SECRET_FILE
@@ -48,7 +48,7 @@ def _load_or_create_secret() -> str:
             if secret:
                 return secret
     except OSError as exc:
-        raise RuntimeError(f"Failed to read JWT secret from {secret_file}. Set AUTH_JWT_SECRET explicitly or fix DEER_FLOW_HOME/base directory permissions so DeerFlow can read its persisted auth secret.") from exc
+        raise RuntimeError(f"Failed to read JWT secret from {secret_file}. Set AUTH_JWT_SECRET explicitly or fix DEER_FLOW_HOME/base directory permissions so Nova can read its persisted auth secret.") from exc
 
     secret = secrets.token_urlsafe(32)
     try:
@@ -57,7 +57,7 @@ def _load_or_create_secret() -> str:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(secret)
     except OSError as exc:
-        raise RuntimeError(f"Failed to persist JWT secret to {secret_file}. Set AUTH_JWT_SECRET explicitly or fix DEER_FLOW_HOME/base directory permissions so DeerFlow can store a stable auth secret.") from exc
+        raise RuntimeError(f"Failed to persist JWT secret to {secret_file}. Set AUTH_JWT_SECRET explicitly or fix DEER_FLOW_HOME/base directory permissions so Nova can store a stable auth secret.") from exc
     return secret
 
 

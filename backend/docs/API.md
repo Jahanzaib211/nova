@@ -1,10 +1,10 @@
 # API Reference
 
-This document provides a complete reference for the DeerFlow backend APIs.
+This document provides a complete reference for the Nova backend APIs.
 
 ## Overview
 
-DeerFlow backend exposes two sets of APIs:
+Nova backend exposes two sets of APIs:
 
 1. **LangGraph-compatible API** - Agent interactions, threads, and streaming (`/api/langgraph/*`)
 2. **Gateway API** - Models, MCP, skills, uploads, and artifacts (`/api/*`)
@@ -270,7 +270,7 @@ Content-Type: application/json
 
 Requires an authenticated admin session. API-managed `stdio` MCP servers may
 only use allowed executable names for `command` (default: `npx`, `uvx`). Set
-`DEER_FLOW_MCP_STDIO_COMMAND_ALLOWLIST` to a comma-separated list when a
+`NOVA_MCP_STDIO_COMMAND_ALLOWLIST` to a comma-separated list when a
 deployment needs additional trusted launchers.
 
 **Request Body:**
@@ -469,11 +469,11 @@ Content-Type: multipart/form-data
     {
       "filename": "document.pdf",
       "size": 1234567,
-      "path": ".deer-flow/threads/abc123/user-data/uploads/document.pdf",
+      "path": ".nova/threads/abc123/user-data/uploads/document.pdf",
       "virtual_path": "/mnt/user-data/uploads/document.pdf",
       "artifact_url": "/api/threads/abc123/artifacts/mnt/user-data/uploads/document.pdf",
       "markdown_file": "document.md",
-      "markdown_path": ".deer-flow/threads/abc123/user-data/uploads/document.md",
+      "markdown_path": ".nova/threads/abc123/user-data/uploads/document.md",
       "markdown_virtual_path": "/mnt/user-data/uploads/document.md",
       "markdown_artifact_url": "/api/threads/abc123/artifacts/mnt/user-data/uploads/document.md"
     }
@@ -503,7 +503,7 @@ GET /api/threads/{thread_id}/uploads/list
     {
       "filename": "document.pdf",
       "size": 1234567,
-      "path": ".deer-flow/threads/abc123/user-data/uploads/document.pdf",
+      "path": ".nova/threads/abc123/user-data/uploads/document.pdf",
       "virtual_path": "/mnt/user-data/uploads/document.pdf",
       "artifact_url": "/api/threads/abc123/artifacts/mnt/user-data/uploads/document.pdf",
       "extension": ".pdf",
@@ -531,7 +531,7 @@ DELETE /api/threads/{thread_id}/uploads/{filename}
 
 ### Thread Cleanup
 
-Remove DeerFlow-managed local thread files under `.deer-flow/threads/{thread_id}` after the LangGraph thread itself has been deleted.
+Remove Nova-managed local thread files under `.nova/threads/{thread_id}` after the LangGraph thread itself has been deleted.
 
 ```http
 DELETE /api/threads/{thread_id}
@@ -595,7 +595,7 @@ All APIs return errors in a consistent format:
 
 ## Authentication
 
-DeerFlow enforces authentication for all non-public HTTP routes. Public routes are limited to health/docs metadata and these public auth endpoints:
+Nova enforces authentication for all non-public HTTP routes. Public routes are limited to health/docs metadata and these public auth endpoints:
 
 - `POST /api/v1/auth/initialize` creates the first admin account when no admin exists.
 - `POST /api/v1/auth/login/local` logs in with email/password and sets an HttpOnly `access_token` cookie.
@@ -616,7 +616,7 @@ User isolation is enforced from the authenticated user context:
 - Thread files live under `{base_dir}/users/{user_id}/threads/{thread_id}/user-data/` and are exposed inside the sandbox as `/mnt/user-data/`.
 - Memory and custom agents are stored under `{base_dir}/users/{user_id}/...`.
 
-Note: MCP outbound connections can still use OAuth for configured HTTP/SSE MCP servers; that is separate from DeerFlow API authentication.
+Note: MCP outbound connections can still use OAuth for configured HTTP/SSE MCP servers; that is separate from Nova API authentication.
 
 ---
 

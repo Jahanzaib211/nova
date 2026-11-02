@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.skills.security_scanner import _extract_json_object, scan_skill_content
+from nova.skills.security_scanner import _extract_json_object, scan_skill_content
 
 
 def _make_env(monkeypatch, response_content):
@@ -16,8 +16,8 @@ def _make_env(monkeypatch, response_content):
             return fake_response
 
     model = FakeModel()
-    monkeypatch.setattr("deerflow.skills.security_scanner.get_app_config", lambda: config)
-    monkeypatch.setattr("deerflow.skills.security_scanner.create_chat_model", lambda **kwargs: model)
+    monkeypatch.setattr("nova.skills.security_scanner.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.skills.security_scanner.create_chat_model", lambda **kwargs: model)
     return model
 
 
@@ -78,8 +78,8 @@ async def test_scan_skill_content_passes_run_name_to_model(monkeypatch):
 @pytest.mark.anyio
 async def test_scan_skill_content_blocks_when_model_unavailable(monkeypatch):
     config = SimpleNamespace(skill_evolution=SimpleNamespace(moderation_model_name=None))
-    monkeypatch.setattr("deerflow.skills.security_scanner.get_app_config", lambda: config)
-    monkeypatch.setattr("deerflow.skills.security_scanner.create_chat_model", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("nova.skills.security_scanner.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.skills.security_scanner.create_chat_model", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
 
     result = await scan_skill_content(SKILL_CONTENT, executable=False)
 

@@ -23,12 +23,12 @@ import threading
 
 import pytest
 
-# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools`
+# `nova.sandbox.tools` and `nova.tools.builtins.workspace_tools`
 # import each other; entering from the workspace_tools side is the order the
 # application itself uses (see test_bash_streaming.py for the same note).
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
-from deerflow.sandbox.exceptions import SandboxError  # noqa: E402
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+from nova.sandbox.exceptions import SandboxError  # noqa: E402
 
 
 class _FakeLog:
@@ -149,7 +149,7 @@ class TestReadoptReleasedProvider:
     would be worse than the error."""
 
     def _provider(self):
-        from deerflow.community.aio_sandbox.aio_sandbox_provider import AioSandboxProvider
+        from nova.community.aio_sandbox.aio_sandbox_provider import AioSandboxProvider
 
         provider = object.__new__(AioSandboxProvider)
         provider._lock = threading.Lock()

@@ -21,7 +21,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.sandbox.browser_check import (
+from nova.sandbox.browser_check import (
     _HIDDEN_AREA_FAIL_RATIO,
     _HIDDEN_AREA_JS,
     _record_console_error,

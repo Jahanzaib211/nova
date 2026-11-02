@@ -22,29 +22,29 @@ from pathlib import Path
 
 import pytest
 
-from deerflow.workspace.detectors import (
+from nova.workspace.detectors import (
     CommandDetector,
     FingerprintDetector,
     LanguageDetector,
     ProjectDetector,
 )
-from deerflow.workspace.graph import (
+from nova.workspace.graph import (
     CommandRegistry,
     DependencyGraph,
     SymbolIndex,
     WorkspaceGraph,
 )
-from deerflow.workspace.metrics import WIKMetrics
-from deerflow.workspace.models.command import Command, CommandKind
-from deerflow.workspace.models.dependency import Dependency, DepKind
-from deerflow.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel, StepKind
-from deerflow.workspace.models.fingerprint import RepoKind
-from deerflow.workspace.models.node import Edge, EdgeKind, Node, NodeKind
-from deerflow.workspace.models.project import Project, ProjectKind
-from deerflow.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
-from deerflow.workspace.parsers import JSParser, PythonParser
-from deerflow.workspace.planner import PlanValidator, RiskAnalyzer, WorkspacePlanner
-from deerflow.workspace.scanners import BoundedWalker, TraversalLimit
+from nova.workspace.metrics import WIKMetrics
+from nova.workspace.models.command import Command, CommandKind
+from nova.workspace.models.dependency import Dependency, DepKind
+from nova.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel, StepKind
+from nova.workspace.models.fingerprint import RepoKind
+from nova.workspace.models.node import Edge, EdgeKind, Node, NodeKind
+from nova.workspace.models.project import Project, ProjectKind
+from nova.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
+from nova.workspace.parsers import JSParser, PythonParser
+from nova.workspace.planner import PlanValidator, RiskAnalyzer, WorkspacePlanner
+from nova.workspace.scanners import BoundedWalker, TraversalLimit
 
 # =====================================================================
 # Models
@@ -515,7 +515,7 @@ class TestWIKMetrics:
 
 class TestWIKEvents:
     def test_workspace_scanned_event(self):
-        from deerflow.workspace.events import WorkspaceScanned
+        from nova.workspace.events import WorkspaceScanned
 
         e = WorkspaceScanned(
             root_path="/src",
@@ -528,7 +528,7 @@ class TestWIKEvents:
         assert e.file_count == 100
 
     def test_plan_built_event(self):
-        from deerflow.workspace.events import PlanBuilt
+        from nova.workspace.events import PlanBuilt
 
         e = PlanBuilt(
             root_path="/src",
@@ -542,7 +542,7 @@ class TestWIKEvents:
         assert e.step_count == 3
 
     def test_cache_events(self):
-        from deerflow.workspace.events import CacheHit, CacheMiss
+        from nova.workspace.events import CacheHit, CacheMiss
 
         hit = CacheHit(root_path="/src", cache_key="abc", hit_count=5)
         miss = CacheMiss(root_path="/src", cache_key="xyz")
@@ -557,7 +557,7 @@ class TestWIKEvents:
 
 class TestWorkspaceIntelligenceServiceImpl:
     def test_service_has_required_methods(self):
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         svc = WorkspaceIntelligenceServiceImpl()
         assert hasattr(svc, "scan")
@@ -569,7 +569,7 @@ class TestWorkspaceIntelligenceServiceImpl:
 
     def test_scan_increments_metrics(self, tmp_path):
         (tmp_path / "test.py").write_text("def foo(): pass\n")
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         svc = WorkspaceIntelligenceServiceImpl()
         snap = svc.scan(str(tmp_path))
@@ -579,7 +579,7 @@ class TestWorkspaceIntelligenceServiceImpl:
 
     def test_get_snapshot_after_scan(self, tmp_path):
         (tmp_path / "main.py").write_text("x = 1\n")
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         svc = WorkspaceIntelligenceServiceImpl()
         svc.scan(str(tmp_path))
@@ -589,7 +589,7 @@ class TestWorkspaceIntelligenceServiceImpl:
 
     def test_plan_search_records_metric(self, tmp_path):
         (tmp_path / "a.py").write_text("def foo(): pass\n")
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         svc = WorkspaceIntelligenceServiceImpl()
         svc.scan(str(tmp_path))
@@ -600,7 +600,7 @@ class TestWorkspaceIntelligenceServiceImpl:
 
     def test_plan_edit_valid(self, tmp_path):
         (tmp_path / "edit_me.py").write_text("x = 1\n")
-        from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+        from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
         svc = WorkspaceIntelligenceServiceImpl()
         svc.scan(str(tmp_path))

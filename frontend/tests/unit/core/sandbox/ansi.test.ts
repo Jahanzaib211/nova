@@ -5,7 +5,7 @@ import { parseAnsi, stripAnsi } from "@/core/sandbox/ansi";
 const ESC = "\x1b";
 
 /**
- * The backend keeps SGR and strips everything else (deerflow/utils/sanitize.py),
+ * The backend keeps SGR and strips everything else (nova/utils/sanitize.py),
  * so this parser only has to turn colour into spans. It must also stay safe on
  * rows written before that sanitiser existed, which still carry cursor codes and
  * would otherwise render as visible garbage — 39 such lines exist in the live

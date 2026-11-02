@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const ENV_KEYS = [
   "NODE_ENV",
+  "NOVA_INTERNAL_GATEWAY_BASE_URL",
+  "NOVA_TRUSTED_ORIGINS",
   "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL",
   "DEER_FLOW_TRUSTED_ORIGINS",
 ] as const;
@@ -45,6 +47,8 @@ describe("getGatewayConfig", () => {
 
   beforeEach(() => {
     saved = snapshotEnv();
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", undefined);
+    setEnv("NOVA_TRUSTED_ORIGINS", undefined);
     setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", undefined);
     setEnv("DEER_FLOW_TRUSTED_ORIGINS", undefined);
   });
@@ -53,36 +57,30 @@ describe("getGatewayConfig", () => {
     restoreEnv(saved);
   });
 
-  test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is missing (development)", async () => {
+  test("throws when NOVA_INTERNAL_GATEWAY_BASE_URL is missing (development)", async () => {
     setEnv("NODE_ENV", "development");
     const { getGatewayConfig } = await loadFreshConfig();
-    expect(() => getGatewayConfig()).toThrow(
-      /DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/,
-    );
+    expect(() => getGatewayConfig()).toThrow(/NOVA_INTERNAL_GATEWAY_BASE_URL/);
   });
 
-  test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is missing (production)", async () => {
+  test("throws when NOVA_INTERNAL_GATEWAY_BASE_URL is missing (production)", async () => {
     setEnv("NODE_ENV", "production");
     const { getGatewayConfig } = await loadFreshConfig();
-    expect(() => getGatewayConfig()).toThrow(
-      /DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/,
-    );
+    expect(() => getGatewayConfig()).toThrow(/NOVA_INTERNAL_GATEWAY_BASE_URL/);
   });
 
-  test("throws when DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is empty string", async () => {
+  test("throws when NOVA_INTERNAL_GATEWAY_BASE_URL is empty string", async () => {
     setEnv("NODE_ENV", "production");
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "   ");
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "   ");
     const { getGatewayConfig } = await loadFreshConfig();
-    expect(() => getGatewayConfig()).toThrow(
-      /DEER_FLOW_INTERNAL_GATEWAY_BASE_URL/,
-    );
+    expect(() => getGatewayConfig()).toThrow(/NOVA_INTERNAL_GATEWAY_BASE_URL/);
   });
 
   test("uses env values verbatim when set, regardless of NODE_ENV", async () => {
     setEnv("NODE_ENV", "production");
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "https://gw.example.com/");
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "https://gw.example.com/");
     setEnv(
-      "DEER_FLOW_TRUSTED_ORIGINS",
+      "NOVA_TRUSTED_ORIGINS",
       "https://app.example.com, https://admin.example.com",
     );
 
@@ -98,11 +96,8 @@ describe("getGatewayConfig", () => {
 
   test("trims and filters empty entries in trustedOrigins", async () => {
     setEnv("NODE_ENV", "production");
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "https://gw.example.com");
-    setEnv(
-      "DEER_FLOW_TRUSTED_ORIGINS",
-      " https://a.example , ,https://b.example ",
-    );
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "https://gw.example.com");
+    setEnv("NOVA_TRUSTED_ORIGINS", " https://a.example , ,https://b.example ");
 
     const { getGatewayConfig } = await loadFreshConfig();
     const cfg = getGatewayConfig();
@@ -114,8 +109,8 @@ describe("getGatewayConfig", () => {
   });
 
   test("pins the 'gateway' hostname to 192.168.200.3 (docker-compose default)", async () => {
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "http://gateway:8001");
-    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "http://localhost:3000");
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "http://gateway:8001");
+    setEnv("NOVA_TRUSTED_ORIGINS", "http://localhost:3000");
 
     const { getGatewayConfig } = await loadFreshConfig();
     const cfg = getGatewayConfig();
@@ -123,15 +118,40 @@ describe("getGatewayConfig", () => {
     expect(cfg.internalGatewayUrl).toBe("http://192.168.200.3:8001");
   });
 
-  test("respects DEER_FLOW_DEV_GATEWAY_IP override for the gateway hostname", async () => {
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "http://gateway:8001");
-    process.env.DEER_FLOW_DEV_GATEWAY_IP = "10.99.99.99";
-    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "http://localhost:3000");
+  test("respects NOVA_DEV_GATEWAY_IP override for the gateway hostname", async () => {
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "http://gateway:8001");
+    process.env.NOVA_DEV_GATEWAY_IP = "10.99.99.99";
+    setEnv("NOVA_TRUSTED_ORIGINS", "http://localhost:3000");
 
     const { getGatewayConfig } = await loadFreshConfig();
     const cfg = getGatewayConfig();
 
     expect(cfg.internalGatewayUrl).toBe("http://10.99.99.99:8001");
-    delete process.env.DEER_FLOW_DEV_GATEWAY_IP;
+    delete process.env.NOVA_DEV_GATEWAY_IP;
+  });
+
+  test("falls back to the legacy DEER_FLOW_* names", async () => {
+    setEnv(
+      "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL",
+      "https://legacy.example.com/",
+    );
+    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "https://legacy-app.example.com");
+
+    const { getGatewayConfig } = await loadFreshConfig();
+    const cfg = getGatewayConfig();
+
+    expect(cfg.internalGatewayUrl).toBe("https://legacy.example.com");
+    expect(cfg.trustedOrigins).toEqual(["https://legacy-app.example.com"]);
+  });
+
+  test("prefers NOVA_* over the legacy DEER_FLOW_* names", async () => {
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "https://new.example.com");
+    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "https://legacy.example.com");
+
+    const { getGatewayConfig } = await loadFreshConfig();
+
+    expect(getGatewayConfig().internalGatewayUrl).toBe(
+      "https://new.example.com",
+    );
   });
 });

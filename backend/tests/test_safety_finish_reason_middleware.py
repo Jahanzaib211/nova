@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
-from deerflow.agents.middlewares.safety_termination_detectors import (
+from nova.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
+from nova.agents.middlewares.safety_termination_detectors import (
     SafetyTermination,
 )
-from deerflow.config.safety_finish_reason_config import (
+from nova.config.safety_finish_reason_config import (
     SafetyDetectorConfig,
     SafetyFinishReasonConfig,
 )
@@ -424,7 +424,7 @@ class TestFromConfig:
         cfg = SafetyFinishReasonConfig(
             detectors=[
                 SafetyDetectorConfig(
-                    use="deerflow.agents.middlewares.safety_termination_detectors:OpenAICompatibleContentFilterDetector",
+                    use="nova.agents.middlewares.safety_termination_detectors:OpenAICompatibleContentFilterDetector",
                     config={"finish_reasons": ["custom_filter"]},
                 ),
             ]

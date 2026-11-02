@@ -30,7 +30,7 @@ class TestB3Migration:
         import sys
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "packages" / "harness"))
-        from deerflow.persistence.migrations.versions import b3_scoping_2026_07_17 as mig
+        from nova.persistence.migrations.versions import b3_scoping_2026_07_17 as mig
 
         old = os.environ.get("DEER_FLOW_HOME")
         os.environ["DEER_FLOW_HOME"] = str(home_path)
@@ -46,7 +46,7 @@ class TestB3Migration:
         import sys
 
         sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "packages" / "harness"))
-        from deerflow.persistence.migrations.versions import b3_scoping_2026_07_17 as mig
+        from nova.persistence.migrations.versions import b3_scoping_2026_07_17 as mig
 
         mig._downgrade_with_bind(engine)
 

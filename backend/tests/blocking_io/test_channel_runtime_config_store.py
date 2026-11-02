@@ -32,8 +32,8 @@ from app.gateway.routers.channel_connections import (
     configure_channel_provider_runtime,
     disconnect_channel_provider_runtime,
 )
-from deerflow.config.app_config import AppConfig, reset_app_config, set_app_config
-from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+from nova.config.app_config import AppConfig, reset_app_config, set_app_config
+from nova.config.channel_connections_config import ChannelConnectionsConfig
 
 # Pre-import: the handlers import this module lazily; the import's file IO
 # must happen at collection time, not on the event loop under the gate.
@@ -44,7 +44,7 @@ pytestmark = pytest.mark.asyncio
 
 @pytest.fixture(autouse=True)
 def _stub_app_config():
-    set_app_config(AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"}}))
+    set_app_config(AppConfig.model_validate({"sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"}}))
     yield
     reset_app_config()
 

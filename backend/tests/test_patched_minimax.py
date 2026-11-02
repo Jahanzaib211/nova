@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage
 
-from deerflow.models.patched_minimax import PatchedChatMiniMax
+from nova.models.patched_minimax import PatchedChatMiniMax
 
 
 def _make_model(**kwargs) -> PatchedChatMiniMax:

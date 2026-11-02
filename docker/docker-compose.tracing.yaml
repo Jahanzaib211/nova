@@ -1,0 +1,59 @@
+# Local trace collector — OPT-IN, off by default.
+#
+# Self-hosted tracing without a vendor account and without the 6-container
+# Langfuse stack: Jaeger's all-in-one image ingests OTLP over HTTP and
+# serves a trace UI. Nova's OTLP tracing provider (nova.tracing.otel)
+# speaks the same protocol, so this is the "point it somewhere local" end
+# of the pair.
+#
+#   docker compose -f docker/docker-compose.yaml \
+#                  -f docker/docker-compose-dev.yaml \
+#                  -f docker/docker-compose.tracing.yaml up -d jaeger
+#
+# Then point the gateway at it and restart it:
+#
+#   NOVA_OTEL_TRACING=1
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+#
+# The UI is published on 127.0.0.1 only (16686) — the same rule every
+# other local service in this stack follows (nginx :2026, the ops console).
+# Nothing about a trace is exposed on the LAN.
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: ${NOVA_CONTAINER_PREFIX:-nova}-jaeger
+    restart: unless-stopped
+    environment:
+      # OTLP is the protocol Nova's tracing provider speaks.
+      COLLECTOR_OTLP_ENABLED: "true"
+      # The UI's own telemetry off — a trace collector should not trace
+      # itself, and this keeps the container's CPU near zero when idle.
+      COLLECTOR_ZIPKIN_HOST_PORT: ""
+      SPAN_STORAGE_TYPE: memory
+    ports:
+      # UI: 127.0.0.1 only. The OTLP port is NOT published to the host —
+      # only containers on the compose network need it.
+      - "127.0.0.1:16686:16686"
+    networks:
+      # The dev stack's network (docker-compose-dev.yaml declares ``nova``,
+      # named explicitly so no project prefix is added). The collector joins
+      # it so the gateway can reach it by service name.
+      nova:
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  nova:
+    name: nova
+    driver: bridge

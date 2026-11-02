@@ -13,7 +13,7 @@ Allowed:
   - "DeerFlow" / "deer-flow" / "deerflow" — these are SELF references
     (Nova was renamed from DeerFlow); they're the project history,
     not a cross-project coupling.
-  - The `deerflow` Python package namespace (e.g. `from deerflow.x import
+  - The `deerflow` Python package namespace (e.g. `from nova.x import
     y`) — that's the package import path, not a project reference.
 """
 
@@ -86,7 +86,11 @@ def _gather_files() -> list[Path]:
         path = REPO_ROOT / line
         if not path.is_file():
             continue
-        if any(part.startswith(".") for part in path.parts):
+        # Judge dot-directories on the repo-relative path. The absolute path
+        # also holds the checkout's own location, and a checkout under any
+        # dot-directory (a git worktree in .claude/worktrees/, ~/.cache/...)
+        # skipped every file and still reported OK, "Scanned 0 files".
+        if any(part.startswith(".") for part in Path(line).parts):
             continue  # skip .git, .opencode, etc.
         rel = str(path.relative_to(REPO_ROOT))
         if rel in SKIP_FILES or rel.startswith(SKIP_PREFIXES):
@@ -151,6 +155,8 @@ def test_no_cross_references() -> None:
     instead of `main()`'s exit-code-only contract (which pytest can't collect:
     no `test_*` function meant this file silently collected zero tests)."""
     files = _gather_files()
+    # A guard that scans nothing passes everything; it did, from any worktree.
+    assert len(files) > 500, f"only {len(files)} files gathered from {REPO_ROOT} -- the scan is not looking at the repo"
     files_with_violations: dict[Path, list[tuple[int, str, str]]] = {}
     for path in files:
         violations = _scan_file(path)

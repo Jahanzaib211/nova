@@ -125,7 +125,7 @@ def _make_test_request_stub() -> Any:
     Used when decorated route handlers are invoked without FastAPI's
     request injection. Includes fields accessed by auth helpers.
     """
-    return SimpleNamespace(state=SimpleNamespace(), cookies={}, _deerflow_test_bypass_auth=True)
+    return SimpleNamespace(state=SimpleNamespace(), cookies={}, _nova_test_bypass_auth=True)
 
 
 async def _authenticate(request: Request) -> AuthContext:
@@ -179,13 +179,13 @@ def require_auth[**P, T](func: Callable[P, T]) -> Callable[P, T]:
                 raise ValueError("require_auth decorator requires 'request' parameter")
             request = kwargs["request"]
 
-        _test_bypass = getattr(request, "_deerflow_test_bypass_auth", False)
+        _test_bypass = getattr(request, "_nova_test_bypass_auth", False)
         from app.gateway.auth_disabled import is_auth_disabled as _is_auth_disabled
 
         _env_bypass = _is_auth_disabled()
 
         if _test_bypass or _env_bypass:
-            from deerflow.runtime.user_context import get_current_user
+            from nova.runtime.user_context import get_current_user
 
             existing_user = get_current_user()
             if existing_user is not None:
@@ -268,7 +268,7 @@ def require_permission(
                     return await func(*args, **kwargs)
                 request = kwargs["request"]
 
-            if getattr(request, "_deerflow_test_bypass_auth", False):
+            if getattr(request, "_nova_test_bypass_auth", False):
                 return await func(*args, **kwargs)
 
             auth: AuthContext = getattr(request.state, "auth", None)

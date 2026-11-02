@@ -5,7 +5,7 @@ import unittest
 
 class TestTorProxy(unittest.TestCase):
     def _make_proxy(self, **kwargs):
-        from deerflow.community.searxng.tor import TorProxy
+        from nova.community.searxng.tor import TorProxy
 
         return TorProxy(**kwargs)
 
@@ -28,7 +28,7 @@ class TestTorProxy(unittest.TestCase):
         self.assertIsNotNone(client)
 
     def test_singleton(self):
-        from deerflow.community.searxng.tor import get_tor_proxy
+        from nova.community.searxng.tor import get_tor_proxy
 
         p1 = get_tor_proxy()
         p2 = get_tor_proxy()

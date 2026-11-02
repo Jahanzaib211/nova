@@ -94,7 +94,7 @@ def _make_app():
     """Create a minimal FastAPI app with AuthMiddleware for testing."""
     from fastapi import FastAPI, Request
 
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.runtime.user_context import get_effective_user_id
 
     app = FastAPI()
     app.add_middleware(AuthMiddleware)
@@ -286,7 +286,7 @@ def test_auth_disabled_does_not_clobber_valid_session_cookie(monkeypatch):
 
 def test_auth_disabled_does_not_clobber_internal_auth_identity(monkeypatch):
     from app.gateway.internal_auth import create_internal_auth_headers
-    from deerflow.runtime.user_context import DEFAULT_USER_ID
+    from nova.runtime.user_context import DEFAULT_USER_ID
 
     monkeypatch.setenv("DEER_FLOW_AUTH_DISABLED", "1")
     client = TestClient(_make_app())

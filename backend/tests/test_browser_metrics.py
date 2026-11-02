@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.sandbox import metrics as m
-from deerflow.sandbox.metrics import (
+from nova.sandbox import metrics as m
+from nova.sandbox.metrics import (
     Counter,
     Gauge,
     Histogram,

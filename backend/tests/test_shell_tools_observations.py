@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import deerflow.tools.builtins.workspace_tools as wt
+import nova.tools.builtins.workspace_tools as wt
 
 
 @pytest.fixture(autouse=True)
@@ -120,7 +120,7 @@ class TestObservationFailureNeverBreaksTheTool:
     """
 
     def test_the_writer_never_raises_when_the_log_cannot_be_written(self, monkeypatch, tmp_path):
-        from deerflow.sandbox import tools as sandbox_tools
+        from nova.sandbox import tools as sandbox_tools
 
         monkeypatch.setattr(sandbox_tools, "_thread_id_for_observation", lambda sid: "t1")
 
@@ -128,13 +128,13 @@ class TestObservationFailureNeverBreaksTheTool:
             def thread_dir(self, thread_id, user_id=None):
                 raise OSError("read-only file system")
 
-        monkeypatch.setattr("deerflow.config.paths.get_paths", lambda: _Paths())
+        monkeypatch.setattr("nova.config.paths.get_paths", lambda: _Paths())
 
         # No exception, no return value -- it simply does nothing.
         assert sandbox_tools._write_sandbox_observation("sb", "shell_view", None, "x") is None
 
     def test_the_tool_still_returns_its_output_when_logging_is_impossible(self, monkeypatch, client):
-        from deerflow.sandbox import tools as sandbox_tools
+        from nova.sandbox import tools as sandbox_tools
 
         monkeypatch.setattr(wt, "_get_sandbox_id", lambda runtime: "sb-1")
         monkeypatch.setattr(sandbox_tools, "_thread_id_for_observation", lambda sid: None)
@@ -183,7 +183,7 @@ class TestShellViewOnlyRecordsRealChanges:
 class TestClosedIsAskedNotInferred:
     def test_the_base_contract_declares_closed(self):
         """Every backend answers `closed`, so callers never have to guess."""
-        from deerflow.sandbox.sandbox import Sandbox
+        from nova.sandbox.sandbox import Sandbox
 
         assert isinstance(Sandbox.closed, property)
 
@@ -202,8 +202,8 @@ class TestClosedIsAskedNotInferred:
     def test_a_released_aio_sandbox_reports_closed(self):
         from unittest.mock import patch
 
-        with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-            from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+        with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+            from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
             sb = AioSandbox(id="t", base_url="http://localhost:8080")
             assert sb.closed is False
@@ -215,10 +215,10 @@ class TestClosedIsAskedNotInferred:
 
         import pytest as _pytest
 
-        from deerflow.sandbox.exceptions import SandboxError
+        from nova.sandbox.exceptions import SandboxError
 
-        with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-            from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+        with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+            from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
             sb = AioSandbox(id="sb-9", base_url="http://localhost:8080")
             sb.close()

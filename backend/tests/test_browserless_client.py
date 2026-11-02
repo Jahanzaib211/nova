@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.community.browserless import tools
-from deerflow.community.browserless.browserless_client import BrowserlessClient
+from nova.community.browserless import tools
+from nova.community.browserless.browserless_client import BrowserlessClient
 
 
 class AsyncMock(MagicMock):
@@ -21,7 +21,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_success(self):
         """fetch_html returns HTML content on success."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
 
@@ -43,7 +43,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_empty_response(self):
         """fetch_html returns error for empty response."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
 
@@ -59,7 +59,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_http_error(self):
         """fetch_html returns error for non-200 status."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
 
@@ -75,7 +75,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_timeout(self):
         """fetch_html returns timeout error."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
             import httpx
@@ -88,7 +88,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_with_token(self):
         """fetch_html includes token in payload when set."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
 
@@ -106,7 +106,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_with_wait_for_selector(self):
         """fetch_html sends waitForSelector when selector is set."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
 
@@ -124,7 +124,7 @@ class TestBrowserlessClient:
 
     async def test_fetch_html_with_reject_params(self):
         """fetch_html sends reject params when set."""
-        with patch("deerflow.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
+        with patch("nova.community.browserless.browserless_client.httpx.AsyncClient") as mock_cls:
             mock_ctx = MagicMock()
             mock_cls.return_value.__aenter__.return_value = mock_ctx
 
@@ -150,38 +150,38 @@ class TestBrowserlessClient:
 class TestBrowserlessTools:
     """Tests for the Browserless tool functions."""
 
-    @patch("deerflow.community.browserless.tools._get_browserless_client")
+    @patch("nova.community.browserless.tools._get_browserless_client")
     async def test_web_fetch_tool_success(self, mock_get_client):
         """web_fetch_tool successfully fetches and extracts content."""
         mock_client = MagicMock()
         mock_client.fetch_html = AsyncMock(return_value="<html><body><article><h1>Title</h1><p>Content</p></article></body></html>")
         mock_get_client.return_value = mock_client
 
-        with patch("deerflow.community.browserless.tools._get_tool_config", return_value=None):
+        with patch("nova.community.browserless.tools._get_tool_config", return_value=None):
             result = await tools.web_fetch_tool.ainvoke("https://example.com/article")
 
         assert "Error:" not in result
 
-    @patch("deerflow.community.browserless.tools._get_browserless_client")
+    @patch("nova.community.browserless.tools._get_browserless_client")
     async def test_web_fetch_tool_error(self, mock_get_client):
         """web_fetch_tool returns error when fetch fails."""
         mock_client = MagicMock()
         mock_client.fetch_html = AsyncMock(return_value="Error: Browserless returned empty response")
         mock_get_client.return_value = mock_client
 
-        with patch("deerflow.community.browserless.tools._get_tool_config", return_value=None):
+        with patch("nova.community.browserless.tools._get_tool_config", return_value=None):
             result = await tools.web_fetch_tool.ainvoke("https://example.com")
 
         assert result.startswith("Error:")
 
-    @patch("deerflow.community.browserless.tools._get_browserless_client")
+    @patch("nova.community.browserless.tools._get_browserless_client")
     async def test_web_fetch_tool_exception(self, mock_get_client):
         """web_fetch_tool returns error when client raises exception."""
         mock_client = MagicMock()
         mock_client.fetch_html = AsyncMock(side_effect=Exception("Unexpected error"))
         mock_get_client.return_value = mock_client
 
-        with patch("deerflow.community.browserless.tools._get_tool_config", return_value=None):
+        with patch("nova.community.browserless.tools._get_tool_config", return_value=None):
             result = await tools.web_fetch_tool.ainvoke("https://example.com")
 
         assert result.startswith("Error:")

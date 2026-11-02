@@ -4,7 +4,7 @@ surface — pod/deployment/event listing, pod logs, and resource metrics.
 Powers the admin-only /api/v1/admin/infra/* proxy layer
 (routers/admin_infra.py), which nova-ops's dashboard reads through the
 existing BFF proxy. Mirrors the request shape of
-``deerflow.community.aio_sandbox.remote_backend.RemoteSandboxBackend``
+``nova.community.aio_sandbox.remote_backend.RemoteSandboxBackend``
 (the sandbox-lifecycle caller) but async, since this is app-layer FastAPI
 code, not harness code bound by the sync sandbox-provider interface.
 """

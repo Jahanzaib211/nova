@@ -16,8 +16,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.gateway.routers.models import router as models_router
-from deerflow.config.app_config import get_app_config, reset_app_config
-from deerflow.config.runtime_models import (
+from nova.config.app_config import get_app_config, reset_app_config
+from nova.config.runtime_models import (
     load_runtime_model_dicts,
     runtime_models_path,
     save_runtime_model_dicts,
@@ -35,7 +35,7 @@ def _write_config_yaml(path: Path) -> None:
     path.write_text(
         """
 sandbox:
-  use: deerflow.sandbox.local.provider:LocalSandboxProvider
+  use: nova.sandbox.local.provider:LocalSandboxProvider
 models:
   - name: config-model
     use: langchain_openai:ChatOpenAI

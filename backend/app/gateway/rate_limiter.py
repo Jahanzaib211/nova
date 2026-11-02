@@ -20,7 +20,7 @@ import uuid
 from collections import defaultdict, deque
 from typing import Any
 
-from deerflow.utils.redis_import import import_redis_asyncio
+from nova.utils.redis_import import import_redis_asyncio
 
 logger = logging.getLogger(__name__)
 

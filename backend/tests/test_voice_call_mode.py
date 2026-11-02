@@ -34,21 +34,21 @@ def test_speakable(raw, spoken):
 
 
 def test_voice_turns_default_to_no_thinking_and_the_deployment_model(monkeypatch):
-    from deerflow.speech import registry
+    from nova.speech import registry
 
     monkeypatch.setattr(registry, "_merged_config", lambda: {"enabled": True})
     assert registry.voice_agent_settings() == (None, False)
 
 
 def test_speech_agent_selects_the_voice_model(monkeypatch):
-    from deerflow.speech import registry
+    from nova.speech import registry
 
     monkeypatch.setattr(registry, "_merged_config", lambda: {"agent": {"model": "minimax-m3.1-flash", "thinking": True}})
     assert registry.voice_agent_settings() == ("minimax-m3.1-flash", True)
 
 
 def test_malformed_agent_section_falls_back(monkeypatch):
-    from deerflow.speech import registry
+    from nova.speech import registry
 
     monkeypatch.setattr(registry, "_merged_config", lambda: {"agent": "fast"})
     assert registry.voice_agent_settings() == (None, False)

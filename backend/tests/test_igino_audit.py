@@ -5,7 +5,7 @@ import unittest
 
 class TestAuditTrail(unittest.TestCase):
     def test_record_search(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=True)
         rec = trail.search(
@@ -24,7 +24,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertIn("search", rec.compliance_tags)
 
     def test_record_fetch(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=True)
         rec = trail.fetch(
@@ -39,7 +39,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertEqual(rec.results_succeeded, 1)
 
     def test_get_records(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=True)
         trail.search(thread_id="t1", query="q1", sources_searched=[], results_returned=0)
@@ -48,7 +48,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertEqual(len(records), 2)
 
     def test_get_stats(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=True)
         trail.search(thread_id="t1", query="q1", sources_searched=[], results_returned=0, tor_used=True)
@@ -60,7 +60,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertTrue(stats["enabled"])
 
     def test_disabled_is_noop(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=False)
         trail.search(thread_id="t1", query="q", sources_searched=[], results_returned=0)
@@ -68,7 +68,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertEqual(len(records), 0)
 
     def test_clear(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=True)
         trail.search(thread_id="t1", query="q", sources_searched=[], results_returned=0)
@@ -76,7 +76,7 @@ class TestAuditTrail(unittest.TestCase):
         self.assertEqual(len(trail.get_records()), 0)
 
     def test_max_records_rotation(self):
-        from deerflow.community.searxng.audit import AuditTrail
+        from nova.community.searxng.audit import AuditTrail
 
         trail = AuditTrail(enabled=True)
         trail._max_records = 5
@@ -88,20 +88,20 @@ class TestAuditTrail(unittest.TestCase):
 
 class TestAuditRecord(unittest.TestCase):
     def test_audit_record_id(self):
-        from deerflow.community.searxng.audit import AuditRecord
+        from nova.community.searxng.audit import AuditRecord
 
         rec = AuditRecord()
         self.assertIsNotNone(rec.audit_id)
         self.assertEqual(len(rec.audit_id), 16)
 
     def test_audit_record_timestamp(self):
-        from deerflow.community.searxng.audit import AuditRecord
+        from nova.community.searxng.audit import AuditRecord
 
         rec = AuditRecord()
         self.assertIn("T", rec.timestamp)
 
     def test_to_dict(self):
-        from deerflow.community.searxng.audit import AuditRecord
+        from nova.community.searxng.audit import AuditRecord
 
         rec = AuditRecord(query="test", thread_id="t1")
         d = rec.to_dict()
@@ -109,7 +109,7 @@ class TestAuditRecord(unittest.TestCase):
         self.assertEqual(d["thread_id"], "t1")
 
     def test_to_json(self):
-        from deerflow.community.searxng.audit import AuditRecord
+        from nova.community.searxng.audit import AuditRecord
 
         rec = AuditRecord(query="test")
         j = rec.to_json()
@@ -118,7 +118,7 @@ class TestAuditRecord(unittest.TestCase):
 
 class TestAuditSingleton(unittest.TestCase):
     def test_get_audit_trail(self):
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         t1 = get_audit_trail()
         t2 = get_audit_trail()

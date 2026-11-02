@@ -38,8 +38,8 @@ if _skip_reason is None:
 if _skip_reason:
     pytest.skip(_skip_reason, allow_module_level=True)
 
-from deerflow.community.market_data.providers import MarketDataError, fetch_ohlcv  # noqa: E402
-from deerflow.community.market_data.tools import (  # noqa: E402
+from nova.community.market_data.providers import MarketDataError, fetch_ohlcv  # noqa: E402
+from nova.community.market_data.tools import (  # noqa: E402
     backtest_signals_tool,
     compute_indicators_tool,
     get_ohlcv_tool,

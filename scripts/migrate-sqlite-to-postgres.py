@@ -51,7 +51,14 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SQLITE = REPO_ROOT / "backend" / ".deer-flow" / "data" / "deerflow.db"
+
+def _data_home(repo_root: Path) -> Path:
+    """backend/.nova, or the pre-rename backend/.deer-flow while only that exists."""
+    backend = repo_root / "backend"
+    new, legacy = backend / ".nova", backend / ".deer-flow"
+    return legacy if not new.exists() and legacy.exists() else new
+
+DEFAULT_SQLITE = _data_home(REPO_ROOT) / "data" / "deerflow.db"
 
 #: LangGraph owns these; see the module docstring.
 LANGGRAPH_TABLES = {"checkpoints", "writes"}

@@ -6,14 +6,14 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.email_marketing.templates import (
+from nova.email_marketing.templates import (
     TemplateError,
     html_to_text,
     render_template,
     rewrite_links,
     validate_template,
 )
-from deerflow.email_marketing.tracking import TrackingLinks
+from nova.email_marketing.tracking import TrackingLinks
 
 LINKS = TrackingLinks(base_url="https://nova.example.com", secret="k", send_id="s1")
 CONTACT = {"email": "ada@example.com", "first_name": "Ada", "last_name": "Lovelace", "attributes": {"tier": "gold"}}

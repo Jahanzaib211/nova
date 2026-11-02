@@ -3,8 +3,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from deerflow.config.skills_config import SkillsConfig
-from deerflow.skills.storage import get_or_new_skill_storage
+from nova.config.skills_config import SkillsConfig
+from nova.skills.storage import get_or_new_skill_storage
 
 
 def _write_skill(skill_dir: Path, name: str, description: str) -> None:

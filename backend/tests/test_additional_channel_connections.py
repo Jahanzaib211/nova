@@ -37,8 +37,8 @@ def test_pending_connect_code_is_none_when_connections_disabled():
 
 
 async def _make_repo(tmp_path, name: str):
-    from deerflow.persistence.channel_connections import ChannelConnectionRepository
-    from deerflow.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.channel_connections import ChannelConnectionRepository
+    from nova.persistence.engine import get_session_factory, init_engine
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / f'{name}.db'}", sqlite_dir=str(tmp_path))
     return ChannelConnectionRepository(get_session_factory())
@@ -81,7 +81,7 @@ def test_feishu_connect_command_binds_identity(tmp_path):
         assert connections[0]["provider"] == "feishu"
         assert connections[0]["external_account_id"] == "ou-user-1"
         assert connections[0]["workspace_id"] == "oc-chat-1"
-        channel._reply_card.assert_awaited_once_with("om-message-1", "Feishu connected to DeerFlow.")
+        channel._reply_card.assert_awaited_once_with("om-message-1", "Feishu connected to Nova.")
         await repo.close()
 
     anyio.run(go)
@@ -150,7 +150,7 @@ def test_wechat_connect_command_binds_identity(tmp_path):
         assert connections[0]["provider"] == "wechat"
         assert connections[0]["external_account_id"] == "wx-user-1"
         assert connections[0]["workspace_id"] == "wx-user-1"
-        channel._send_connection_reply.assert_awaited_once_with("wx-user-1", "ctx-1", "WeChat connected to DeerFlow.")
+        channel._send_connection_reply.assert_awaited_once_with("wx-user-1", "ctx-1", "WeChat connected to Nova.")
         await repo.close()
 
     anyio.run(go)
@@ -185,7 +185,7 @@ def test_wecom_connect_command_binds_identity(tmp_path):
         assert connections[0]["provider"] == "wecom"
         assert connections[0]["external_account_id"] == "wecom-user-1"
         assert connections[0]["workspace_id"] == "bot-1"
-        channel._ws_client.reply.assert_awaited_once_with(frame, {"msgtype": "text", "text": {"content": "WeCom connected to DeerFlow."}})
+        channel._ws_client.reply.assert_awaited_once_with(frame, {"msgtype": "text", "text": {"content": "WeCom connected to Nova."}})
         await repo.close()
 
     anyio.run(go)

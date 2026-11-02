@@ -11,8 +11,8 @@ from app.channels.message_bus import MessageBus, OutboundMessage
 
 
 async def _make_repo(tmp_path):
-    from deerflow.persistence.channel_connections import ChannelConnectionRepository, ChannelCredentialCipher
-    from deerflow.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.channel_connections import ChannelConnectionRepository, ChannelCredentialCipher
+    from nova.persistence.engine import get_session_factory, init_engine
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'slack.db'}", sqlite_dir=str(tmp_path))
     return ChannelConnectionRepository(

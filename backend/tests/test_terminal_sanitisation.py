@@ -21,9 +21,9 @@ import json
 
 import pytest
 
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
-from deerflow.utils.sanitize import sanitize_terminal_text, strip_all_ansi  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+from nova.utils.sanitize import sanitize_terminal_text, strip_all_ansi  # noqa: E402  isort:skip
 
 ESC = "\x1b"
 
@@ -115,7 +115,7 @@ class TestDevServerIsNotACommand:
 
     def test_the_mirror_writes_dev_server_not_bash(self, thread_log, monkeypatch) -> None:
         """The retag itself: the mirror must go through the shared writer."""
-        import deerflow.sandbox.dev_server as ds
+        import nova.sandbox.dev_server as ds
 
         monkeypatch.setattr(ds, "_sandbox_id_for_thread", lambda _tid: "local:t")
         ds._append_devlog_to_sandbox_log("t-dev", f"ready{ESC}[?25h\x00")
@@ -126,7 +126,7 @@ class TestDevServerIsNotACommand:
         assert sandbox_tools.is_command_line(rec) is False
 
     def test_dev_output_does_not_move_the_counter(self, thread_log, monkeypatch) -> None:
-        import deerflow.sandbox.dev_server as ds
+        import nova.sandbox.dev_server as ds
 
         monkeypatch.setattr(ds, "_sandbox_id_for_thread", lambda _tid: "local:t")
         sandbox_tools._write_sandbox_observation("local:t", "bash", None, "$ npm run dev")

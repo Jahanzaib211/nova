@@ -54,6 +54,10 @@ extensions_config.json
 coverage.xml
 coverage/
 .deer-flow/
+# Runtime data dir after the rename, and the compat symlink the cutover leaves
+# at the old path (a trailing-slash pattern matches directories, not symlinks).
+backend/.nova/
+backend/.deer-flow
 .claude/
 skills/custom/*
 logs/

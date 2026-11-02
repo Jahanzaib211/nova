@@ -143,7 +143,7 @@ def test_acp_gate_matches_the_live_config():
 
 
 def test_sweep_evicts_old_terminal_tasks():
-    from deerflow.subagents import executor as ex
+    from nova.subagents import executor as ex
 
     old = ex.SubagentResult(task_id="old", trace_id="t", status=ex.SubagentStatus.COMPLETED)
     old.completed_at = datetime.now(UTC) - timedelta(seconds=ex._BACKGROUND_TASK_TTL_SEC + 60)
@@ -164,7 +164,7 @@ def test_sweep_evicts_old_terminal_tasks():
 
 def test_sweep_survives_a_naive_completed_at():
     """BUG-001 territory: one naive stamp must not kill async subagents."""
-    from deerflow.subagents import executor as ex
+    from nova.subagents import executor as ex
 
     naive = ex.SubagentResult(task_id="naive", trace_id="t", status=ex.SubagentStatus.COMPLETED)
     naive.completed_at = datetime.now()  # noqa: DTZ005 - deliberately naive
@@ -180,7 +180,7 @@ def test_sweep_survives_a_naive_completed_at():
 
 
 def test_sweep_never_raises_on_a_hostile_entry():
-    from deerflow.subagents import executor as ex
+    from nova.subagents import executor as ex
 
     class Hostile:
         status = None

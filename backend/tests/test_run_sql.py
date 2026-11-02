@@ -21,8 +21,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from deerflow.persistence.base import Base
-from deerflow.persistence.run.sql import RunRepository
+from nova.persistence.base import Base
+from nova.persistence.run.sql import RunRepository
 
 
 @pytest.fixture

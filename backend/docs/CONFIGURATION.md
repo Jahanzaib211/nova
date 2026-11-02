@@ -37,9 +37,9 @@ models:
 - OpenAI (`langchain_openai:ChatOpenAI`)
 - Anthropic (`langchain_anthropic:ChatAnthropic`)
 - DeepSeek (`langchain_deepseek:ChatDeepSeek`)
-- Xiaomi MiMo (`deerflow.models.patched_mimo:PatchedChatMiMo`)
-- Claude Code OAuth (`deerflow.models.claude_provider:ClaudeChatModel`)
-- Codex CLI (`deerflow.models.openai_codex_provider:CodexChatModel`)
+- Xiaomi MiMo (`nova.models.patched_mimo:PatchedChatMiMo`)
+- Claude Code OAuth (`nova.models.claude_provider:ClaudeChatModel`)
+- Codex CLI (`nova.models.openai_codex_provider:CodexChatModel`)
 - Any LangChain-compatible provider
 
 CLI-backed provider examples:
@@ -48,14 +48,14 @@ CLI-backed provider examples:
 models:
   - name: gpt-5.4
     display_name: GPT-5.4 (Codex CLI)
-    use: deerflow.models.openai_codex_provider:CodexChatModel
+    use: nova.models.openai_codex_provider:CodexChatModel
     model: gpt-5.4
     supports_thinking: true
     supports_reasoning_effort: true
 
   - name: claude-sonnet-4.6
     display_name: Claude Sonnet 4.6 (Claude Code OAuth)
-    use: deerflow.models.claude_provider:ClaudeChatModel
+    use: nova.models.claude_provider:ClaudeChatModel
     model: claude-sonnet-4-6
     max_tokens: 4096
     supports_thinking: true
@@ -121,7 +121,7 @@ If your OpenRouter key lives in a different environment variable name, point `ap
 
 To route OpenAI models through `/v1/responses`, keep using `langchain_openai:ChatOpenAI` and set `use_responses_api: true` with `output_version: responses/v1`.
 
-For vLLM 0.19.0, use `deerflow.models.vllm_provider:VllmChatModel`; for Qwen-style parsers prefer `when_thinking_enabled.extra_body.chat_template_kwargs.enable_thinking`, and Nova will also normalize the older `thinking` alias.
+For vLLM 0.19.0, use `nova.models.vllm_provider:VllmChatModel`; for Qwen-style parsers prefer `when_thinking_enabled.extra_body.chat_template_kwargs.enable_thinking`, and Nova will also normalize the older `thinking` alias.
 
 ### Tool Groups
 
@@ -144,7 +144,7 @@ Configure specific tools available to the agent:
 tools:
   - name: web_search
     group: web
-    use: deerflow.community.tavily.tools:web_search_tool
+    use: nova.community.tavily.tools:web_search_tool
     max_results: 5
     # api_key: $TAVILY_API_KEY  # Optional
 ```
@@ -181,7 +181,7 @@ Nova supports multiple sandbox execution modes. Configure your preferred mode in
 
 ```yaml
 sandbox:
-   use: deerflow.sandbox.local:LocalSandboxProvider # Local execution
+   use: nova.sandbox.local:LocalSandboxProvider # Local execution
    allow_host_bash: false # default; host bash is disabled unless explicitly re-enabled
 ```
 
@@ -189,7 +189,7 @@ sandbox:
 
 ```yaml
 sandbox:
-   use: deerflow.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
+   use: nova.community.aio_sandbox:AioSandboxProvider # Docker-based sandbox
    image: nova-sandbox-android:latest   # built by `make sandbox-image`
    memory_limit: 8g                     # per-container --memory; null for unlimited
    pids_limit: 2048                     # per-container --pids-limit; null for unlimited
@@ -249,11 +249,11 @@ This mode runs each sandbox in an isolated Kubernetes Pod on your **host machine
 
 ```yaml
 sandbox:
-   use: deerflow.community.aio_sandbox:AioSandboxProvider
+   use: nova.community.aio_sandbox:AioSandboxProvider
    provisioner_url: http://provisioner:8002
 ```
 
-When using Docker development (`make docker-start`), DeerFlow starts the `provisioner` service only when this provisioner mode is configured. In Local/Docker modes, `provisioner` is not started.
+When using Docker development (`make docker-start`), Nova starts the `provisioner` service only when this provisioner mode is configured. In Local/Docker modes, `provisioner` is not started.
 
 **The Kubernetes path does not share the sandbox's environment.** A
 provisioner-created Pod is built by the provisioner, not by the gateway, so
@@ -282,7 +282,7 @@ for a worked example (`Dockerfile.android`).
 | Virtual Path | Physical Path |
 |-------------|---------------|
 | `/mnt/user-data/{workspace,uploads,outputs}` | `backend/.nova/users/{user_id}/threads/{thread_id}/user-data/...` |
-| `/mnt/skills` | `deer-flow/skills/` directory |
+| `/mnt/skills` | `skills/` directory |
 
 ### Skills
 
@@ -299,7 +299,7 @@ skills:
 
 **How Skills Work**:
 
-- Skills are stored in `deer-flow/skills/{public,custom}/`
+- Skills are stored in `skills/{public,custom}/`
 - Each skill has a `SKILL.md` file with metadata
 - Skills are automatically discovered and loaded
 - Available in both local and Docker sandbox via path mapping
@@ -330,7 +330,7 @@ The default GitHub API rate limits are quite restrictive. For frequent project r
 **Configuration Steps**:
 
 1. Uncomment the `GITHUB_TOKEN` line in the `.env` file and add your personal access token
-2. Restart the DeerFlow service to apply changes
+2. Restart the Nova service to apply changes
 
 ### LangSmith Tracing
 
@@ -377,26 +377,29 @@ If a provider is explicitly enabled but required credentials are missing, or the
 
 ## Configuration Location
 
-The configuration file should be placed in the **project root directory** (`nova/config.yaml`). Set `DEER_FLOW_PROJECT_ROOT` when the process may start from another working directory, or set `DEER_FLOW_CONFIG_PATH` to point at a specific file.
+The configuration file should be placed in the **project root directory** (`nova/config.yaml`). Set `NOVA_PROJECT_ROOT` when the process may start from another working directory, or set `NOVA_CONFIG_PATH` to point at a specific file.
 
-> The environment variables are `DEER_FLOW_*`, not `NOVA_*`. Earlier revisions of
-> this page said `NOVA_CONFIG_PATH` / `NOVA_PROJECT_ROOT`; no such names are read
-> anywhere in the codebase (`AppConfig.resolve_config_path()` reads
-> `DEER_FLOW_CONFIG_PATH`), so setting them silently does nothing.
+> **Environment variable names.** Every Nova setting is read as `NOVA_<X>`
+> (`NOVA_CONFIG_PATH`, `NOVA_PROJECT_ROOT`, `NOVA_HOME`, …). For one release the
+> old DeerFlow-era name `DEER_FLOW_<X>` is still read as a **fallback** when
+> `NOVA_<X>` is unset, so existing `.env` files keep working; rename them at your
+> convenience. If both are set, `NOVA_<X>` wins. The same applies to the data
+> directory: `.nova` is the default, and an existing `.deer-flow` directory is
+> used only when no `.nova` directory exists.
 
 ## Configuration Priority
 
-DeerFlow searches for configuration in this order:
+Nova searches for configuration in this order:
 
 1. Explicit `config_path` argument
-2. `DEER_FLOW_CONFIG_PATH` environment variable
-3. `config.yaml` under `DEER_FLOW_PROJECT_ROOT`, or under the current working directory when `DEER_FLOW_PROJECT_ROOT` is unset
+2. `NOVA_CONFIG_PATH` environment variable
+3. `config.yaml` under `NOVA_PROJECT_ROOT`, or under the current working directory when `NOVA_PROJECT_ROOT` is unset
 4. `config.yaml` in parent directory (project root - **recommended location**)
 
 Note that levels 1 and 2 are **strict**: if the path is set but does not exist,
 `resolve_config_path()` raises `FileNotFoundError` rather than falling through to
 the search. That is deliberate — a silent fallback to a different config is worse
-than a loud failure — but it means a wrong `DEER_FLOW_CONFIG_PATH` stops the
+than a loud failure — but it means a wrong `NOVA_CONFIG_PATH` stops the
 gateway at import time.
 
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
@@ -408,12 +411,12 @@ The repo-root `.env` is shared between host tooling and the Docker stacks, and i
 holds **host** paths:
 
 ```bash
-DEER_FLOW_CONFIG_PATH=/home/you/nova/config.yaml
-DEER_FLOW_EXTENSIONS_CONFIG_PATH=/home/you/nova/extensions_config.json
+NOVA_CONFIG_PATH=/home/you/nova/config.yaml
+NOVA_EXTENSIONS_CONFIG_PATH=/home/you/nova/extensions_config.json
 ```
 
 Those values are required there — `docker-compose.yaml` uses
-`${DEER_FLOW_CONFIG_PATH}` as the **source** of a bind mount, so a container path
+`${NOVA_CONFIG_PATH}` as the **source** of a bind mount, so a container path
 in `.env` would break the mount itself.
 
 Every compose service that loads `env_file: ../.env` therefore inherits host paths
@@ -422,10 +425,10 @@ that do not exist inside the container, and **must** override them in its own
 
 ```yaml
     environment:
-      - DEER_FLOW_PROJECT_ROOT=/app
-      - DEER_FLOW_HOME=/app/backend/.deer-flow
-      - DEER_FLOW_CONFIG_PATH=/app/config.yaml            # destination of the mount
-      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
+      - NOVA_PROJECT_ROOT=/app
+      - NOVA_HOME=/app/backend/.nova
+      - NOVA_CONFIG_PATH=/app/config.yaml            # destination of the mount
+      - NOVA_EXTENSIONS_CONFIG_PATH=/app/extensions_config.json
     env_file:
       - ../.env
 ```
@@ -440,14 +443,14 @@ starts, then the gateway dies at import with
 
 ```
 FileNotFoundError: Config file specified by environment variable
-`DEER_FLOW_CONFIG_PATH` not found at /home/you/nova/config.yaml
+`NOVA_CONFIG_PATH` not found at /home/you/nova/config.yaml
 ```
 
 and — because uvicorn never binds 8001 — nginx reports
 `gateway could not be resolved`, which reads like a DNS fault rather than a config
-one. This took the public deployment down on 2026-08-17. Not all `DEER_FLOW_*`
-path variables want container paths: `DEER_FLOW_HOST_BASE_DIR` and
-`DEER_FLOW_HOST_SKILLS_PATH` are deliberately *host* paths, because the DooD
+one. This took the public deployment down on 2026-08-17. Not all `NOVA_*`
+path variables want container paths: `NOVA_HOST_BASE_DIR` and
+`NOVA_HOST_SKILLS_PATH` are deliberately *host* paths, because the DooD
 sandbox provider passes them to the host Docker daemon when mounting volumes into
 sibling containers.
 
@@ -477,8 +480,8 @@ before exposing an instance to untrusted input.
 
 | Mode | `config.yaml` | Host Docker socket | Isolation |
 |------|---------------|--------------------|-----------|
-| `local` (default) | `deerflow.sandbox.local:LocalSandboxProvider` | Not mounted | Commands run **inside the gateway container** on its filesystem. Not a strong boundary — `allow_host_bash` is `false` by default and should stay off for untrusted workloads. |
-| `aio` (pure DooD) | `deerflow.community.aio_sandbox:AioSandboxProvider` (no `provisioner_url`) | **Mounted** (opt-in overlay) | Sandbox containers are started via the host Docker daemon. |
+| `local` (default) | `nova.sandbox.local:LocalSandboxProvider` | Not mounted | Commands run **inside the gateway container** on its filesystem. Not a strong boundary — `allow_host_bash` is `false` by default and should stay off for untrusted workloads. |
+| `aio` (pure DooD) | `nova.community.aio_sandbox:AioSandboxProvider` (no `provisioner_url`) | **Mounted** (opt-in overlay) | Sandbox containers are started via the host Docker daemon. |
 | `provisioner` (Kubernetes) | `AioSandboxProvider` + `provisioner_url` | Not mounted | Sandbox pods are created through the provisioner's K8s API over HTTP. Strongest isolation. |
 
 #### The Docker socket is host root
@@ -562,7 +565,7 @@ genuinely reads the full CLI config directory.
 
 ### "Skills not loading"
 
-- Check that `deer-flow/skills/` directory exists
+- Check that `skills/` directory exists
 - Verify skills have valid `SKILL.md` files
 - Check `skills.path` or `NOVA_SKILLS_PATH` if using a custom path
 

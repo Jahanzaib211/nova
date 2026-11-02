@@ -8,12 +8,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 
-import deerflow.runtime as runtime_module
+import nova.runtime as runtime_module
 from app.gateway import deps as gateway_deps
-from deerflow.persistence import engine as engine_module
-from deerflow.persistence import thread_meta as thread_meta_module
-from deerflow.runtime.checkpointer import async_provider as checkpointer_module
-from deerflow.runtime.events import store as event_store_module
+from nova.persistence import engine as engine_module
+from nova.persistence import thread_meta as thread_meta_module
+from nova.runtime.checkpointer import async_provider as checkpointer_module
+from nova.runtime.events import store as event_store_module
 
 
 @asynccontextmanager

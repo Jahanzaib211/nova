@@ -136,7 +136,7 @@ def app(tmp_path, monkeypatch):
     monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/billing.db"

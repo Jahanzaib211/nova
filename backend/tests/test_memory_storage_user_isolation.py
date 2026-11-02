@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from deerflow.agents.memory.storage import FileMemoryStorage, create_empty_memory
+from nova.agents.memory.storage import FileMemoryStorage, create_empty_memory
 
 
 @pytest.fixture
@@ -20,10 +20,10 @@ def storage() -> FileMemoryStorage:
 
 class TestUserIsolatedStorage:
     def test_save_and_load_per_user(self, storage: FileMemoryStorage, base_dir: Path):
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
             memory_a = create_empty_memory()
             memory_a["user"]["workContext"]["summary"] = "User A context"
             storage.save(memory_a, user_id="alice")
@@ -39,10 +39,10 @@ class TestUserIsolatedStorage:
             assert loaded_b["user"]["workContext"]["summary"] == "User B context"
 
     def test_user_memory_file_location(self, base_dir: Path):
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
             s = FileMemoryStorage()
             memory = create_empty_memory()
             s.save(memory, user_id="alice")
@@ -50,10 +50,10 @@ class TestUserIsolatedStorage:
             assert expected_path.exists()
 
     def test_cache_isolated_per_user(self, base_dir: Path):
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
             s = FileMemoryStorage()
             memory_a = create_empty_memory()
             memory_a["user"]["workContext"]["summary"] = "A"
@@ -67,12 +67,12 @@ class TestUserIsolatedStorage:
             assert loaded_a["user"]["workContext"]["summary"] == "A"
 
     def test_no_user_id_uses_legacy_path(self, base_dir: Path):
-        from deerflow.config.memory_config import MemoryConfig
-        from deerflow.config.paths import Paths
+        from nova.config.memory_config import MemoryConfig
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 s = FileMemoryStorage()
                 memory = create_empty_memory()
                 s.save(memory, user_id=None)
@@ -81,12 +81,12 @@ class TestUserIsolatedStorage:
 
     def test_user_and_legacy_do_not_interfere(self, base_dir: Path):
         """user_id=None (legacy) and user_id='alice' must use different files and caches."""
-        from deerflow.config.memory_config import MemoryConfig
-        from deerflow.config.paths import Paths
+        from nova.config.memory_config import MemoryConfig
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 s = FileMemoryStorage()
 
                 legacy_mem = create_empty_memory()
@@ -102,10 +102,10 @@ class TestUserIsolatedStorage:
 
     def test_user_agent_memory_file_location(self, base_dir: Path):
         """Per-user per-agent memory uses the user_agent_memory_file path."""
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
             s = FileMemoryStorage()
             memory = create_empty_memory()
             memory["user"]["workContext"]["summary"] = "agent scoped"
@@ -115,10 +115,10 @@ class TestUserIsolatedStorage:
 
     def test_cache_key_is_user_agent_tuple(self, base_dir: Path):
         """Cache keys must be (user_id, agent_name) tuples, not bare agent names."""
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
             s = FileMemoryStorage()
             memory = create_empty_memory()
             s.save(memory, user_id="alice")
@@ -127,10 +127,10 @@ class TestUserIsolatedStorage:
 
     def test_reload_with_user_id(self, base_dir: Path):
         """reload() with user_id should force re-read from the user-scoped file."""
-        from deerflow.config.paths import Paths
+        from nova.config.paths import Paths
 
         paths = Paths(base_dir)
-        with patch("deerflow.agents.memory.storage.get_paths", return_value=paths):
+        with patch("nova.agents.memory.storage.get_paths", return_value=paths):
             s = FileMemoryStorage()
             memory = create_empty_memory()
             memory["user"]["workContext"]["summary"] = "initial"

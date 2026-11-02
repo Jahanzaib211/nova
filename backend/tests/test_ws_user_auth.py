@@ -19,7 +19,7 @@ from fastapi import HTTPException
 
 from app.gateway import ws_guards
 from app.gateway.ws_guards import ws_user
-from deerflow.runtime.user_context import get_effective_user_id, reset_current_user, set_current_user
+from nova.runtime.user_context import get_effective_user_id, reset_current_user, set_current_user
 
 
 class _FakeWebSocket:

@@ -8,7 +8,7 @@ rather than being a tool the built-in agent calls.
 
 ## Selection
 
-Precedence, highest first (`deerflow.runtimes.RuntimeRegistry.select`):
+Precedence, highest first (`nova.runtimes.RuntimeRegistry.select`):
 
 1. **Chat** — the run context keys `runtime`, `runtime_account`,
    `permission_mode` (the model picker's "Account for this chat" and the
@@ -32,7 +32,7 @@ ACP runtime it:
    revoked when the turn ends.
 2. Turns the conversation into one prompt (`transcript_for_prompt`: the
    last six exchanges as text, then the request).
-3. Runs it through `deerflow.runtimes.acp_transport.run_acp_prompt` (shared
+3. Runs it through `nova.runtimes.acp_transport.run_acp_prompt` (shared
    with the `invoke_acp_agent` tool) in the thread's ACP workspace, with the
    permission preset below.
 4. Streams every text chunk and tool/permission decision as `acp_update`

@@ -21,10 +21,10 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import ToolMessage
 
-from deerflow.agents.middlewares.tool_error_handling_middleware import (
+from nova.agents.middlewares.tool_error_handling_middleware import (
     ToolErrorHandlingMiddleware,
 )
-from deerflow.subagents.status_contract import (
+from nova.subagents.status_contract import (
     SUBAGENT_ERROR_KEY,
     SUBAGENT_STATUS_KEY,
 )

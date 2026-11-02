@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# One-shot setup to make the Nova/DeerFlow stack reboot-survivable.
+# One-shot setup to make the Nova stack reboot-survivable.
 #
 # What this does (each step is idempotent):
 #   1. Drops a systemd unit override on pm2-jahanzaib.service so PM2 only
 #      starts after Docker is up. Without this, on a fresh boot PM2 resurrects
-#      the `deerflow` app BEFORE dockerd is ready, `docker compose up` fails,
+#      the `nova` app BEFORE dockerd is ready, `docker compose up` fails,
 #      and PM2 crash-loops until Docker comes up (was: 923k+ restarts).
 #   2. Re-enables pm2-jahanzaib.service so the override takes effect.
 #   3. Re-saves the current PM2 process list so a reboot resurrects the
-#      llama-bridge + healthcheck + (newly clean) deerflow apps.
+#      llama-bridge + healthcheck + (newly clean) nova apps.
 #
 # Run once: sudo bash setup-reboot-persistence.sh
 set -euo pipefail
@@ -26,13 +26,15 @@ mkdir -p "$OVERRIDE_DIR"
 cat > "$OVERRIDE_FILE" <<'UNIT_EOF'
 [Unit]
 # Wait for Docker daemon (and the network it depends on) before PM2 resurrects
-# the deerflow app. Without this, `docker compose up` runs before dockerd is
+# the nova app. Without this, `docker compose up` runs before dockerd is
 # ready and PM2 crash-loops until Docker comes up.
 After=docker.service network-online.target
 Wants=docker.service
 
 [Service]
-# Explicit DEER_FLOW_ROOT for the deerflow PM2 app's docker-compose invocation.
+# Explicit NOVA_ROOT (and the legacy DEER_FLOW_ROOT, same value, for one
+# release) for the nova PM2 app's docker-compose invocation.
+Environment=NOVA_ROOT=/home/jahanzaib/Desktop/nova
 Environment=DEER_FLOW_ROOT=/home/jahanzaib/Desktop/nova
 UNIT_EOF
 

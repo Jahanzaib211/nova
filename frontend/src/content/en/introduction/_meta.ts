@@ -4,7 +4,7 @@ const meta: MetaRecord = {
   index: {
     title: "Overview",
   },
-  "why-deerflow": {
+  "why-nova": {
     title: "Why Nova",
   },
   "core-concepts": {

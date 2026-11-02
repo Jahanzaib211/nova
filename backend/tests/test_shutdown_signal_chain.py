@@ -12,7 +12,7 @@ import signal
 
 import pytest
 
-from deerflow.sandbox import shutdown as shutdown_mod
+from nova.sandbox import shutdown as shutdown_mod
 
 
 @pytest.fixture()

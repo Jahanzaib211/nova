@@ -123,7 +123,7 @@ class TestBackgroundTasksTTL:
 
     def test_sweep_removes_old_completed_tasks(self):
         """Tasks completed > TTL ago should be evicted."""
-        from deerflow.subagents.executor import (
+        from nova.subagents.executor import (
             SubagentResult,
             SubagentStatus,
             _background_tasks,
@@ -168,7 +168,7 @@ class TestTimeoutStatusFix:
 
     def test_timeout_sets_timed_out_status(self):
         """Timeout exception should set status to TIMED_OUT, not FAILED."""
-        from deerflow.subagents.executor import SubagentResult, SubagentStatus
+        from nova.subagents.executor import SubagentResult, SubagentStatus
 
         result = SubagentResult(task_id="timeout-test", trace_id="trace-timeout", status=SubagentStatus.TIMED_OUT)
         result.error = "Execution timed out after 1800 seconds"
