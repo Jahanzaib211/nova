@@ -40,7 +40,7 @@ different temp dirs. The same ``hash_messages`` is used by the recorder
 (``scripts/record_gateway.py``) and here, so record and replay agree by
 construction.
 
-This lives in ``tests/`` (not in the publishable ``deerflow-harness`` package),
+This lives in ``tests/`` (not in the publishable ``nova-harness`` package),
 matching the repo convention for test-only fakes (cf. ``FakeToolCallingModel`` in
 ``_agent_e2e_helpers.py``). In-process tests get ``tests/`` on ``sys.path`` for
 free via pytest; a standalone replay gateway just needs ``PYTHONPATH`` to include

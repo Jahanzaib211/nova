@@ -5,7 +5,7 @@ description = "LangGraph-based AI agent system with sandbox execution capabiliti
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "deerflow-harness",
+    "nova-harness",
     "fastapi>=0.115.0",
     "orjson>=3.10.0",
     "httpx>=0.28.1",
@@ -26,14 +26,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-postgres = ["deerflow-harness[postgres]"]
+postgres = ["nova-harness[postgres]"]
 discord = ["discord.py>=2.7.0"]
-trading = ["deerflow-harness[trading]"]
+trading = ["nova-harness[trading]"]
 # Self-hosted voice (STT/TTS). Forwarded from the harness, same as trading.
-voice = ["deerflow-harness[voice]"]
+voice = ["nova-harness[voice]"]
 # Forwarded like `voice` — an extra declared only on the harness is not
 # reachable as `uv sync --extra voice-gpu` from the root workspace.
-voice-gpu = ["deerflow-harness[voice-gpu]"]
+voice-gpu = ["nova-harness[voice-gpu]"]
 
 [dependency-groups]
 dev = [
@@ -65,7 +65,7 @@ index-url = "https://pypi.org/simple"
 members = ["packages/harness"]
 
 [tool.uv.sources]
-deerflow-harness = { workspace = true }
+nova-harness = { workspace = true }
 
 # v7.3 (Nova rebrand): scoped lint suppressions for PRE-EXISTING technical
 # debt that has been failing the lint-check job for ~6 consecutive runs

@@ -240,7 +240,7 @@ async def test_maxlen_bounds_history(bridge: RedisStreamBridge):
 
 def test_import_hygiene_no_top_level_redis_import():
     """redis_provider.py must not import redis at module load time — it's
-    an optional extra (pip install 'deerflow-harness[redis]'), and the
+    an optional extra (pip install 'nova-harness[redis]'), and the
     'memory' stream bridge type must keep working without it installed."""
     import ast
     from pathlib import Path

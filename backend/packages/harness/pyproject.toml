@@ -1,7 +1,7 @@
 [project]
-name = "deerflow-harness"
+name = "nova-harness"
 version = "2.1.0"
-description = "DeerFlow agent harness framework"
+description = "Nova agent harness framework (forked from DeerFlow)"
 requires-python = ">=3.12"
 dependencies = [
     # Declared explicitly, not left transitive. The gateway's WebSocket bridges

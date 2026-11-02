@@ -91,7 +91,7 @@ models:
   # into <think> tags or dropped entirely (ollama/ollama#15293). The native Ollama API
   # (/api/chat) correctly separates thinking from response content.
   #
-  # Install: cd backend && uv pip install 'deerflow-harness[ollama]'
+  # Install: cd backend && uv pip install 'nova-harness[ollama]'
   #
   # - name: qwen3-local
   #   display_name: Qwen3 32B (Ollama)
@@ -1517,7 +1517,7 @@ database:
 #                 (2+ replicas) — see k8s/ARCHITECTURE.md for why the
 #                 in-memory backend is a hard architectural blocker to
 #                 that. Also needs the `redis` package extra:
-#                 pip install 'deerflow-harness[redis]'
+#                 pip install 'nova-harness[redis]'
 #
 # stream_bridge:
 #   type: redis

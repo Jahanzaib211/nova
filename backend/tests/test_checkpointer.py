@@ -203,11 +203,11 @@ class TestHarnessPackaging:
         data = tomllib.loads(pyproject_path.read_text())
 
         optional_dependencies = data["project"]["optional-dependencies"]
-        assert optional_dependencies["postgres"] == ["deerflow-harness[postgres]"]
+        assert optional_dependencies["postgres"] == ["nova-harness[postgres]"]
 
     def test_postgres_missing_dependency_messages_recommend_package_extra(self):
-        assert "deerflow-harness[postgres]" in POSTGRES_INSTALL
-        assert "deerflow-harness[postgres]" in POSTGRES_STORE_INSTALL
+        assert "nova-harness[postgres]" in POSTGRES_INSTALL
+        assert "nova-harness[postgres]" in POSTGRES_STORE_INSTALL
         assert "uv sync --all-packages --extra postgres" in POSTGRES_INSTALL
         assert "uv sync --all-packages --extra postgres" in POSTGRES_STORE_INSTALL
 

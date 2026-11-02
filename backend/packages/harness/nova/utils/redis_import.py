@@ -11,7 +11,7 @@ from typing import Any
 
 
 def redis_install_hint(component: str) -> str:
-    return f"redis is required for the redis {component}. Install the package extra with: pip install 'deerflow-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
+    return f"redis is required for the redis {component}. Install the package extra with: pip install 'nova-harness[redis]' (or: uv sync --all-packages --extra redis when developing locally)"
 
 
 def import_redis_asyncio(component: str) -> Any:

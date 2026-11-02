@@ -12,8 +12,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "deerflow-harness",
     "nova",
+    "nova-harness",
 ]
 
 [[package]]
@@ -1029,154 +1029,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/c9/f2/aa1f5af106ea0ef03
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4f/a0/c0b568acd6ec819ec94ecfd4eebd00edc855efab06e589ad17d0412ff4ce/ddgs-9.14.1-py3-none-any.whl", hash = "sha256:e6b853be092532add9c0d611c4b121f0b27092de66756401057c2100f6b1ab44", size = 67019, upload-time = "2026-04-20T12:09:19.867Z" },
 ]
-
-[[package]]
-name = "deerflow-harness"
-version = "2.1.0"
-source = { editable = "packages/harness" }
-dependencies = [
-    { name = "agent-client-protocol" },
-    { name = "agent-sandbox" },
-    { name = "aiosqlite" },
-    { name = "alembic" },
-    { name = "croniter" },
-    { name = "cryptography" },
-    { name = "ddgs" },
-    { name = "dotenv" },
-    { name = "duckdb" },
-    { name = "exa-py" },
-    { name = "firecrawl-py" },
-    { name = "httpx" },
-    { name = "httpx-socks" },
-    { name = "jinja2" },
-    { name = "kubernetes" },
-    { name = "langchain" },
-    { name = "langchain-anthropic" },
-    { name = "langchain-deepseek" },
-    { name = "langchain-google-genai" },
-    { name = "langchain-mcp-adapters" },
-    { name = "langchain-openai" },
-    { name = "langfuse" },
-    { name = "langgraph" },
-    { name = "langgraph-api" },
-    { name = "langgraph-checkpoint-sqlite" },
-    { name = "langgraph-cli" },
-    { name = "langgraph-runtime-inmem" },
-    { name = "langgraph-sdk" },
-    { name = "markdownify" },
-    { name = "markitdown", extra = ["all", "xlsx"] },
-    { name = "playwright" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "readabilipy" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "tavily-python" },
-    { name = "tiktoken" },
-    { name = "websockets" },
-]
-
-[package.optional-dependencies]
-ollama = [
-    { name = "langchain-ollama" },
-]
-postgres = [
-    { name = "asyncpg" },
-    { name = "langgraph-checkpoint-postgres" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "psycopg-pool" },
-]
-pymupdf = [
-    { name = "pymupdf4llm" },
-]
-redis = [
-    { name = "redis", extra = ["hiredis"] },
-]
-trading = [
-    { name = "ccxt" },
-    { name = "yfinance" },
-]
-voice = [
-    { name = "faster-whisper" },
-    { name = "kokoro-onnx" },
-    { name = "numpy" },
-    { name = "onnxruntime" },
-]
-voice-gpu = [
-    { name = "faster-whisper" },
-    { name = "kokoro-onnx" },
-    { name = "numpy" },
-    { name = "nvidia-cublas-cu12" },
-    { name = "nvidia-cuda-runtime-cu12" },
-    { name = "nvidia-cudnn-cu12" },
-    { name = "nvidia-cufft-cu12" },
-    { name = "nvidia-curand-cu12" },
-    { name = "onnxruntime-gpu" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agent-client-protocol", specifier = ">=0.4.0" },
-    { name = "agent-sandbox", specifier = ">=0.0.19" },
-    { name = "aiosqlite", specifier = ">=0.19" },
-    { name = "alembic", specifier = ">=1.13" },
-    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.29" },
-    { name = "ccxt", marker = "extra == 'trading'", specifier = ">=4.4.0" },
-    { name = "croniter", specifier = ">=6" },
-    { name = "cryptography", specifier = ">=43.0.0" },
-    { name = "ddgs", specifier = ">=9.10.0" },
-    { name = "dotenv", specifier = ">=0.9.9" },
-    { name = "duckdb", specifier = ">=1.4.4" },
-    { name = "exa-py", specifier = ">=1.0.0" },
-    { name = "faster-whisper", marker = "extra == 'voice'", specifier = ">=1.1.0" },
-    { name = "faster-whisper", marker = "extra == 'voice-gpu'", specifier = ">=1.1.0" },
-    { name = "firecrawl-py", specifier = ">=1.15.0" },
-    { name = "httpx", specifier = ">=0.28.0" },
-    { name = "httpx-socks", specifier = ">=0.11.0" },
-    { name = "jinja2", specifier = ">=3.1" },
-    { name = "kokoro-onnx", marker = "extra == 'voice'", specifier = ">=0.4.0" },
-    { name = "kokoro-onnx", marker = "extra == 'voice-gpu'", specifier = ">=0.4.0" },
-    { name = "kubernetes", specifier = ">=30.0.0" },
-    { name = "langchain", specifier = ">=1.2.15" },
-    { name = "langchain-anthropic", specifier = ">=1.4.1" },
-    { name = "langchain-deepseek", specifier = ">=1.0.1" },
-    { name = "langchain-google-genai", specifier = ">=4.2.1" },
-    { name = "langchain-mcp-adapters", specifier = ">=0.2.2" },
-    { name = "langchain-ollama", marker = "extra == 'ollama'", specifier = ">=0.3.0" },
-    { name = "langchain-openai", specifier = ">=1.2.1" },
-    { name = "langfuse", specifier = ">=3.4.1" },
-    { name = "langgraph", specifier = ">=1.1.9" },
-    { name = "langgraph-api", specifier = ">=0.8.1" },
-    { name = "langgraph-checkpoint-postgres", marker = "extra == 'postgres'", specifier = ">=3.0.5" },
-    { name = "langgraph-checkpoint-sqlite", specifier = ">=3.0.3" },
-    { name = "langgraph-cli", specifier = ">=0.4.24" },
-    { name = "langgraph-runtime-inmem", specifier = ">=0.28.0" },
-    { name = "langgraph-sdk", specifier = ">=0.1.51" },
-    { name = "markdownify", specifier = ">=1.2.2" },
-    { name = "markitdown", extras = ["all", "xlsx"], specifier = ">=0.0.1a2" },
-    { name = "numpy", marker = "extra == 'voice'", specifier = ">=1.26.0" },
-    { name = "numpy", marker = "extra == 'voice-gpu'", specifier = ">=1.26.0" },
-    { name = "nvidia-cublas-cu12", marker = "extra == 'voice-gpu'" },
-    { name = "nvidia-cuda-runtime-cu12", marker = "extra == 'voice-gpu'" },
-    { name = "nvidia-cudnn-cu12", marker = "extra == 'voice-gpu'" },
-    { name = "nvidia-cufft-cu12", marker = "extra == 'voice-gpu'" },
-    { name = "nvidia-curand-cu12", marker = "extra == 'voice-gpu'" },
-    { name = "onnxruntime", marker = "extra == 'voice'", specifier = ">=1.20.0" },
-    { name = "onnxruntime-gpu", marker = "extra == 'voice-gpu'", specifier = ">=1.21.0,<1.27" },
-    { name = "playwright", specifier = ">=1.40.0" },
-    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.3.3" },
-    { name = "psycopg-pool", marker = "extra == 'postgres'", specifier = ">=3.3.0" },
-    { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pymupdf4llm", marker = "extra == 'pymupdf'", specifier = ">=0.0.17" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "readabilipy", specifier = ">=0.3.0" },
-    { name = "redis", extras = ["hiredis"], marker = "extra == 'redis'", specifier = ">=5.0.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3.0" },
-    { name = "tavily-python", specifier = ">=0.7.17" },
-    { name = "tiktoken", specifier = ">=0.8.0" },
-    { name = "websockets", specifier = ">=15.0.1,<16" },
-    { name = "yfinance", marker = "extra == 'trading'", specifier = ">=0.2.51" },
-]
-provides-extras = ["voice", "voice-gpu", "ollama", "postgres", "pymupdf", "redis", "trading"]
 
 [[package]]
 name = "defusedxml"
@@ -3041,7 +2893,6 @@ version = "2.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "bcrypt" },
-    { name = "deerflow-harness" },
     { name = "dingtalk-stream" },
     { name = "email-validator" },
     { name = "fastapi" },
@@ -3049,6 +2900,7 @@ dependencies = [
     { name = "langgraph-sdk" },
     { name = "lark-oapi" },
     { name = "markdown-to-mrkdwn" },
+    { name = "nova-harness" },
     { name = "orjson" },
     { name = "pyjwt" },
     { name = "python-multipart" },
@@ -3065,16 +2917,16 @@ discord = [
     { name = "discord-py" },
 ]
 postgres = [
-    { name = "deerflow-harness", extra = ["postgres"] },
+    { name = "nova-harness", extra = ["postgres"] },
 ]
 trading = [
-    { name = "deerflow-harness", extra = ["trading"] },
+    { name = "nova-harness", extra = ["trading"] },
 ]
 voice = [
-    { name = "deerflow-harness", extra = ["voice"] },
+    { name = "nova-harness", extra = ["voice"] },
 ]
 voice-gpu = [
-    { name = "deerflow-harness", extra = ["voice-gpu"] },
+    { name = "nova-harness", extra = ["voice-gpu"] },
 ]
 
 [package.dev-dependencies]
@@ -3092,11 +2944,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bcrypt", specifier = ">=4.0.0" },
-    { name = "deerflow-harness", editable = "packages/harness" },
-    { name = "deerflow-harness", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/harness" },
-    { name = "deerflow-harness", extras = ["trading"], marker = "extra == 'trading'", editable = "packages/harness" },
-    { name = "deerflow-harness", extras = ["voice"], marker = "extra == 'voice'", editable = "packages/harness" },
-    { name = "deerflow-harness", extras = ["voice-gpu"], marker = "extra == 'voice-gpu'", editable = "packages/harness" },
     { name = "dingtalk-stream", specifier = ">=0.24.3" },
     { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.7.0" },
     { name = "email-validator", specifier = ">=2.0.0" },
@@ -3105,6 +2952,11 @@ requires-dist = [
     { name = "langgraph-sdk", specifier = ">=0.1.51" },
     { name = "lark-oapi", specifier = ">=1.4.0" },
     { name = "markdown-to-mrkdwn", specifier = ">=0.3.1" },
+    { name = "nova-harness", editable = "packages/harness" },
+    { name = "nova-harness", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/harness" },
+    { name = "nova-harness", extras = ["trading"], marker = "extra == 'trading'", editable = "packages/harness" },
+    { name = "nova-harness", extras = ["voice"], marker = "extra == 'voice'", editable = "packages/harness" },
+    { name = "nova-harness", extras = ["voice-gpu"], marker = "extra == 'voice-gpu'", editable = "packages/harness" },
     { name = "orjson", specifier = ">=3.10.0" },
     { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "python-multipart", specifier = ">=0.0.31" },
@@ -3128,6 +2980,154 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.14.11" },
 ]
+
+[[package]]
+name = "nova-harness"
+version = "2.1.0"
+source = { editable = "packages/harness" }
+dependencies = [
+    { name = "agent-client-protocol" },
+    { name = "agent-sandbox" },
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "croniter" },
+    { name = "cryptography" },
+    { name = "ddgs" },
+    { name = "dotenv" },
+    { name = "duckdb" },
+    { name = "exa-py" },
+    { name = "firecrawl-py" },
+    { name = "httpx" },
+    { name = "httpx-socks" },
+    { name = "jinja2" },
+    { name = "kubernetes" },
+    { name = "langchain" },
+    { name = "langchain-anthropic" },
+    { name = "langchain-deepseek" },
+    { name = "langchain-google-genai" },
+    { name = "langchain-mcp-adapters" },
+    { name = "langchain-openai" },
+    { name = "langfuse" },
+    { name = "langgraph" },
+    { name = "langgraph-api" },
+    { name = "langgraph-checkpoint-sqlite" },
+    { name = "langgraph-cli" },
+    { name = "langgraph-runtime-inmem" },
+    { name = "langgraph-sdk" },
+    { name = "markdownify" },
+    { name = "markitdown", extra = ["all", "xlsx"] },
+    { name = "playwright" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "readabilipy" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tavily-python" },
+    { name = "tiktoken" },
+    { name = "websockets" },
+]
+
+[package.optional-dependencies]
+ollama = [
+    { name = "langchain-ollama" },
+]
+postgres = [
+    { name = "asyncpg" },
+    { name = "langgraph-checkpoint-postgres" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
+]
+pymupdf = [
+    { name = "pymupdf4llm" },
+]
+redis = [
+    { name = "redis", extra = ["hiredis"] },
+]
+trading = [
+    { name = "ccxt" },
+    { name = "yfinance" },
+]
+voice = [
+    { name = "faster-whisper" },
+    { name = "kokoro-onnx" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+]
+voice-gpu = [
+    { name = "faster-whisper" },
+    { name = "kokoro-onnx" },
+    { name = "numpy" },
+    { name = "nvidia-cublas-cu12" },
+    { name = "nvidia-cuda-runtime-cu12" },
+    { name = "nvidia-cudnn-cu12" },
+    { name = "nvidia-cufft-cu12" },
+    { name = "nvidia-curand-cu12" },
+    { name = "onnxruntime-gpu" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-client-protocol", specifier = ">=0.4.0" },
+    { name = "agent-sandbox", specifier = ">=0.0.19" },
+    { name = "aiosqlite", specifier = ">=0.19" },
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.29" },
+    { name = "ccxt", marker = "extra == 'trading'", specifier = ">=4.4.0" },
+    { name = "croniter", specifier = ">=6" },
+    { name = "cryptography", specifier = ">=43.0.0" },
+    { name = "ddgs", specifier = ">=9.10.0" },
+    { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "duckdb", specifier = ">=1.4.4" },
+    { name = "exa-py", specifier = ">=1.0.0" },
+    { name = "faster-whisper", marker = "extra == 'voice'", specifier = ">=1.1.0" },
+    { name = "faster-whisper", marker = "extra == 'voice-gpu'", specifier = ">=1.1.0" },
+    { name = "firecrawl-py", specifier = ">=1.15.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
+    { name = "httpx-socks", specifier = ">=0.11.0" },
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "kokoro-onnx", marker = "extra == 'voice'", specifier = ">=0.4.0" },
+    { name = "kokoro-onnx", marker = "extra == 'voice-gpu'", specifier = ">=0.4.0" },
+    { name = "kubernetes", specifier = ">=30.0.0" },
+    { name = "langchain", specifier = ">=1.2.15" },
+    { name = "langchain-anthropic", specifier = ">=1.4.1" },
+    { name = "langchain-deepseek", specifier = ">=1.0.1" },
+    { name = "langchain-google-genai", specifier = ">=4.2.1" },
+    { name = "langchain-mcp-adapters", specifier = ">=0.2.2" },
+    { name = "langchain-ollama", marker = "extra == 'ollama'", specifier = ">=0.3.0" },
+    { name = "langchain-openai", specifier = ">=1.2.1" },
+    { name = "langfuse", specifier = ">=3.4.1" },
+    { name = "langgraph", specifier = ">=1.1.9" },
+    { name = "langgraph-api", specifier = ">=0.8.1" },
+    { name = "langgraph-checkpoint-postgres", marker = "extra == 'postgres'", specifier = ">=3.0.5" },
+    { name = "langgraph-checkpoint-sqlite", specifier = ">=3.0.3" },
+    { name = "langgraph-cli", specifier = ">=0.4.24" },
+    { name = "langgraph-runtime-inmem", specifier = ">=0.28.0" },
+    { name = "langgraph-sdk", specifier = ">=0.1.51" },
+    { name = "markdownify", specifier = ">=1.2.2" },
+    { name = "markitdown", extras = ["all", "xlsx"], specifier = ">=0.0.1a2" },
+    { name = "numpy", marker = "extra == 'voice'", specifier = ">=1.26.0" },
+    { name = "numpy", marker = "extra == 'voice-gpu'", specifier = ">=1.26.0" },
+    { name = "nvidia-cublas-cu12", marker = "extra == 'voice-gpu'" },
+    { name = "nvidia-cuda-runtime-cu12", marker = "extra == 'voice-gpu'" },
+    { name = "nvidia-cudnn-cu12", marker = "extra == 'voice-gpu'" },
+    { name = "nvidia-cufft-cu12", marker = "extra == 'voice-gpu'" },
+    { name = "nvidia-curand-cu12", marker = "extra == 'voice-gpu'" },
+    { name = "onnxruntime", marker = "extra == 'voice'", specifier = ">=1.20.0" },
+    { name = "onnxruntime-gpu", marker = "extra == 'voice-gpu'", specifier = ">=1.21.0,<1.27" },
+    { name = "playwright", specifier = ">=1.40.0" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.3.3" },
+    { name = "psycopg-pool", marker = "extra == 'postgres'", specifier = ">=3.3.0" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pymupdf4llm", marker = "extra == 'pymupdf'", specifier = ">=0.0.17" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "readabilipy", specifier = ">=0.3.0" },
+    { name = "redis", extras = ["hiredis"], marker = "extra == 'redis'", specifier = ">=5.0.0" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3.0" },
+    { name = "tavily-python", specifier = ">=0.7.17" },
+    { name = "tiktoken", specifier = ">=0.8.0" },
+    { name = "websockets", specifier = ">=15.0.1,<16" },
+    { name = "yfinance", marker = "extra == 'trading'", specifier = ">=0.2.51" },
+]
+provides-extras = ["voice", "voice-gpu", "ollama", "postgres", "pymupdf", "redis", "trading"]
 
 [[package]]
 name = "numpy"

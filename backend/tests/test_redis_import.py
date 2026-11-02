@@ -18,7 +18,7 @@ def test_missing_redis_names_the_component_and_the_extra(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _no_redis)
-    with pytest.raises(ImportError, match=r"redis cancel signal.*deerflow-harness\[redis\]"):
+    with pytest.raises(ImportError, match=r"redis cancel signal.*nova-harness\[redis\]"):
         import_redis_asyncio("cancel signal")
 
 
