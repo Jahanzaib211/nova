@@ -8,8 +8,8 @@ from typing import Protocol
 
 import httpx
 
-from deerflow.config.integrations_config import IntegrationServiceConfig
-from deerflow.integrations.health import HealthResult, IntegrationKind, IntegrationStatus
+from nova.config.integrations_config import IntegrationServiceConfig
+from nova.integrations.health import HealthResult, IntegrationKind, IntegrationStatus
 
 
 def now_iso() -> str:

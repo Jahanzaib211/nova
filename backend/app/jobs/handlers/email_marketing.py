@@ -9,16 +9,16 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
-from deerflow.config.app_config import get_app_config
-from deerflow.email_marketing.bridge_factory import chatwoot_bridge, twenty_bridge
-from deerflow.email_marketing.contacts_import import parse_contacts_csv
-from deerflow.email_marketing.imap import BouncePoller
-from deerflow.email_marketing.pipeline import JOB_BATCH, JOB_BOUNCE_POLL, JOB_IMPORT, JOB_START, CampaignPipeline, PipelineDeps
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.queue import JobQueue
-from deerflow.jobs.registry import JobRegistry
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
-from deerflow.persistence.engine import get_session_factory
+from nova.config.app_config import get_app_config
+from nova.email_marketing.bridge_factory import chatwoot_bridge, twenty_bridge
+from nova.email_marketing.contacts_import import parse_contacts_csv
+from nova.email_marketing.imap import BouncePoller
+from nova.email_marketing.pipeline import JOB_BATCH, JOB_BOUNCE_POLL, JOB_IMPORT, JOB_START, CampaignPipeline, PipelineDeps
+from nova.jobs.context import JobContext
+from nova.jobs.queue import JobQueue
+from nova.jobs.registry import JobRegistry
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.persistence.engine import get_session_factory
 
 logger = logging.getLogger(__name__)
 

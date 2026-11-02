@@ -6,9 +6,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items, Ok, jobs_repo, section_enabled
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation, OperationConflict
-from deerflow.jobs.service import USER_SCHEDULABLE_JOB_TYPES, JobConflict, JobService
+from nova.capabilities.modules._common import Empty, Items, Ok, jobs_repo, section_enabled
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation, OperationConflict
+from nova.jobs.service import USER_SCHEDULABLE_JOB_TYPES, JobConflict, JobService
 
 
 class ListJobsIn(BaseModel):
@@ -64,7 +64,7 @@ def _service() -> JobService:
 
 
 async def _owned(ctx: OpContext, job_id: str) -> dict[str, Any]:
-    # Same rules as /api/jobs (deerflow.jobs.service): a system job
+    # Same rules as /api/jobs (nova.jobs.service): a system job
     # (owner None) is visible to admins only.
     return await _service().owned_job(job_id, user_id=ctx.user_id, is_admin=ctx.is_admin)
 
@@ -100,7 +100,7 @@ async def _retry(ctx: OpContext, inp: JobIdIn) -> Ok:
 async def _enqueue(ctx: OpContext, inp: EnqueueIn) -> JobOut:
     from datetime import UTC, datetime, timedelta
 
-    from deerflow.jobs.queue import JobQueue
+    from nova.jobs.queue import JobQueue
 
     # Agents never run as admin, so the schedule allowlist bounds what they
     # can enqueue (an admin-only enqueue left every agent without the tool).

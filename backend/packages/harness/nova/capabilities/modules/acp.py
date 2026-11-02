@@ -6,18 +6,18 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from deerflow.capabilities.modules._common import Empty, Items
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _agents() -> dict[str, Any]:
-    from deerflow.config.acp_config import get_acp_agents
+    from nova.config.acp_config import get_acp_agents
 
     return get_acp_agents() or {}
 
 
 def _describe(name: str, cfg: Any) -> dict[str, Any]:
-    from deerflow.runtimes.registry import acp_binary_available
+    from nova.runtimes.registry import acp_binary_available
 
     binary = getattr(cfg, "command", None)
     command = [binary, *(getattr(cfg, "args", []) or [])] if binary else []

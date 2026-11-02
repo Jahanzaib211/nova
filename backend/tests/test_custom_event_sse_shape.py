@@ -63,7 +63,7 @@ def test_bridge_publish_routes_custom_payload_to_sse_consumer():
     by the first two tests in this file; this one pins the bridge side.)
     """
 
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     async def _drive():
         bridge = MemoryStreamBridge()

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from deerflow.runtime.events.store.jsonl import JsonlRunEventStore
+from nova.runtime.events.store.jsonl import JsonlRunEventStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -209,7 +209,7 @@ async def test_db_put_batch_rejects_mixed_thread_ids():
     """DbRunEventStore.put_batch must raise ValueError for cross-thread batches."""
     from unittest.mock import MagicMock
 
-    from deerflow.runtime.events.store.db import DbRunEventStore
+    from nova.runtime.events.store.db import DbRunEventStore
 
     mock_sf = MagicMock()
     store = DbRunEventStore(session_factory=mock_sf)

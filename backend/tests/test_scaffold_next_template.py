@@ -26,7 +26,7 @@ if str(_BACKEND) not in sys.path:
 def templates():
     """The ``_TEMPLATES`` dict from ``workspace_tools.py``."""
 
-    from deerflow.tools.builtins import workspace_tools
+    from nova.tools.builtins import workspace_tools
 
     return workspace_tools._TEMPLATES
 

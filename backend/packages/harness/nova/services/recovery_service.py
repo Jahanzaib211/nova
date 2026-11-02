@@ -10,7 +10,7 @@ in DiagnosticsService.  Retry state is held in-memory per policy.
 
 Usage::
 
-    from deerflow.services.recovery_service import RecoveryEngine
+    from nova.services.recovery_service import RecoveryEngine
 
     engine = RecoveryEngine(event_bus=bus, recovery_actions=my_actions)
     engine.start()  # subscribes to EventBus
@@ -28,12 +28,12 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.events.bus import EventBus
-from deerflow.events.event import (
+from nova.events.bus import EventBus
+from nova.events.event import (
     DomainEvent,
     HealthChanged,
 )
-from deerflow.services.recovery_policy import (
+from nova.services.recovery_policy import (
     RecoveryPolicy,
     policies_for_trigger,
 )
@@ -85,8 +85,8 @@ async def _recover_tunnel(policy: RecoveryPolicy) -> bool:
     unit subsequently crashes).
     """
     try:
-        from deerflow.execution.adapters import SystemdAdapter
-        from deerflow.services.container import service_container
+        from nova.execution.adapters import SystemdAdapter
+        from nova.services.container import service_container
 
         adapter = SystemdAdapter(service_container.execution_kernel())
         unit = "cloudflared-nova.service"
@@ -125,8 +125,8 @@ async def _recover_tunnel(policy: RecoveryPolicy) -> bool:
 async def _recover_gateway(policy: RecoveryPolicy) -> bool:
     """Restart the gateway via the Execution Kernel's PM2 adapter (Phase C7)."""
     try:
-        from deerflow.execution.adapters import Pm2Adapter
-        from deerflow.services.container import service_container
+        from nova.execution.adapters import Pm2Adapter
+        from nova.services.container import service_container
 
         adapter = Pm2Adapter(service_container.execution_kernel())
         result = await asyncio.to_thread(adapter.restart, "deerflow", timeout=30)
@@ -175,8 +175,8 @@ async def _recover_stream(policy: RecoveryPolicy) -> bool:
 async def _recover_container(policy: RecoveryPolicy) -> bool:
     """Container recovery — PM2 restart through the Execution Kernel (Phase C7)."""
     try:
-        from deerflow.execution.adapters import Pm2Adapter
-        from deerflow.services.container import service_container
+        from nova.execution.adapters import Pm2Adapter
+        from nova.services.container import service_container
 
         adapter = Pm2Adapter(service_container.execution_kernel())
         result = await asyncio.to_thread(adapter.restart, "deerflow", timeout=30)
@@ -345,7 +345,7 @@ class RecoveryEngine:
         state: _AttemptState,
     ) -> None:
         """Execute recovery with retry/backoff."""
-        from deerflow.events.event import (
+        from nova.events.event import (
             RecoveryAborted,
             RecoveryEscalated,
             RecoveryFailed,

@@ -1,7 +1,7 @@
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
-from deerflow.utils.readability import ReadabilityExtractor
+from nova.config import get_app_config
+from nova.utils.readability import ReadabilityExtractor
 
 from .infoquest_client import InfoQuestClient
 

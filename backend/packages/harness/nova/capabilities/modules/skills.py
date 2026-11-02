@@ -6,13 +6,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items, Ok
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items, Ok
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _storage():
-    from deerflow.config.app_config import get_app_config
-    from deerflow.skills.storage import get_or_new_skill_storage
+    from nova.config.app_config import get_app_config
+    from nova.skills.storage import get_or_new_skill_storage
 
     return get_or_new_skill_storage(app_config=get_app_config())
 
@@ -39,14 +39,14 @@ class ToggleIn(BaseModel):
 
 
 async def _toggle(ctx: OpContext, inp: ToggleIn) -> Ok:
-    from deerflow.config.extensions_config import set_skill_enabled
+    from nova.config.extensions_config import set_skill_enabled
 
     known = {s.name for s in _storage().load_skills(enabled_only=False)}
     if inp.name not in known:
         raise LookupError(f"skill {inp.name!r} not found")
     set_skill_enabled(inp.name, inp.enabled)
     try:
-        from deerflow.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
+        from nova.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
 
         await refresh_skills_system_prompt_cache_async()
     except Exception:  # prompt cache is an optimisation; the file is the truth

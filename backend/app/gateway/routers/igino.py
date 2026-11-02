@@ -21,7 +21,7 @@ from pydantic import BaseModel
 
 from app.gateway.auth_disabled import is_auth_disabled
 from app.gateway.deps import get_optional_user_from_request
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class ResearchRequest(BaseModel):
 def _provider_from_use(use: str) -> str:
     """The package behind a ``use:`` string.
 
-    ``deerflow.community.searxng.tools:web_search_tool`` -> ``searxng``. The
+    ``nova.community.searxng.tools:web_search_tool`` -> ``searxng``. The
     last module segment is almost always ``tools``, so the provider is the
     package containing it.
     """
@@ -183,9 +183,9 @@ async def get_status() -> dict[str, Any]:
     if not _is_enabled():
         return {"enabled": False}
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
-        from deerflow.community.searxng.search_cache import get_search_cache
-        from deerflow.community.searxng.searxng_client import SearxngClient
+        from nova.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.search_cache import get_search_cache
+        from nova.community.searxng.searxng_client import SearxngClient
 
         client = SearxngClient()
         cache = get_search_cache()
@@ -257,7 +257,7 @@ async def test_capability(tool: str, user: Any | None = Depends(get_optional_use
 
     try:
         if tool == "web_search":
-            from deerflow.community.searxng.tools import web_search_tool
+            from nova.community.searxng.tools import web_search_tool
 
             out = await web_search_tool.ainvoke({"query": "nova self test"})
             payload = json.loads(out) if out.strip().startswith("{") else {}
@@ -269,19 +269,19 @@ async def test_capability(tool: str, user: Any | None = Depends(get_optional_use
             ok = count > 0 and source == "searxng"
             detail = f"{count} result(s) via {source or 'unknown'}"
         elif tool == "web_fetch":
-            from deerflow.community.browserless.tools import web_fetch_tool
+            from nova.community.browserless.tools import web_fetch_tool
 
             out = await web_fetch_tool.ainvoke({"url": probe_url})
             ok = bool(out) and not out.startswith("Error:")
             detail = f"{len(out)} chars" if ok else out[:120]
         elif tool == "web_fetch_many":
-            from deerflow.community.crawl4ai.tools import web_fetch_many_tool
+            from nova.community.crawl4ai.tools import web_fetch_many_tool
 
             out = await web_fetch_many_tool.ainvoke({"urls": [probe_url], "max_pages": 1})
             ok = bool(out) and not out.startswith("Error:")
             detail = f"{len(out)} chars" if ok else out[:120]
         elif tool == "web_crawl":
-            from deerflow.community.crawl4ai.crawl_tool import crawl_site
+            from nova.community.crawl4ai.crawl_tool import crawl_site
 
             # crawl_site rather than the tool wrapper: the wrapper returns
             # markdown, and "1200 chars" is exactly the kind of number that
@@ -313,7 +313,7 @@ async def test_capability(tool: str, user: Any | None = Depends(get_optional_use
 async def run_research(req: ResearchRequest, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
     _require_enabled_and_user(user)
     try:
-        from deerflow.tools.builtins.igino_research_tool import igino_research_tool
+        from nova.tools.builtins.igino_research_tool import igino_research_tool
 
         result = await igino_research_tool.ainvoke(
             {
@@ -338,7 +338,7 @@ async def get_cache_stats() -> dict[str, Any]:
     if not _is_enabled():
         return {"enabled": False}
     try:
-        from deerflow.community.searxng.search_cache import get_search_cache
+        from nova.community.searxng.search_cache import get_search_cache
 
         return get_search_cache().stats
     except Exception as exc:
@@ -349,7 +349,7 @@ async def get_cache_stats() -> dict[str, Any]:
 async def get_audit_records(limit: int = 100, user: Any | None = Depends(get_optional_user_from_request)) -> dict[str, Any]:
     _require_enabled_and_user(user)
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         trail = get_audit_trail()
         return {"records": trail.get_records(limit=limit), "stats": trail.get_stats()}

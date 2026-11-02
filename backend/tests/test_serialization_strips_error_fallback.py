@@ -23,10 +23,10 @@ from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from deerflow.agents.middlewares.strip_error_fallback_middleware import (
+from nova.agents.middlewares.strip_error_fallback_middleware import (
     StripErrorFallbackMiddleware,
 )
-from deerflow.runtime.serialization import (
+from nova.runtime.serialization import (
     serialize_channel_values_for_api,
     strip_deerflow_error_fallback_messages,
 )

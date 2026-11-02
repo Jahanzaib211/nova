@@ -19,15 +19,15 @@ from pathlib import Path
 
 from langchain.tools import tool
 
-from deerflow.sandbox.sandbox_provider import get_sandbox_provider
-from deerflow.sandbox.tools import (
+from nova.sandbox.sandbox_provider import get_sandbox_provider
+from nova.sandbox.tools import (
     _extract_thread_id_from_thread_data,
     _write_sandbox_observation,
     ensure_sandbox_initialized,
     get_thread_data,
     is_local_sandbox,
 )
-from deerflow.tools.types import Runtime
+from nova.tools.types import Runtime
 
 _VIRTUAL_WORKSPACE = "/mnt/user-data/workspace"
 _MAX_SEARCH_RESULTS = 100
@@ -307,8 +307,8 @@ async def start_dev_server_tool(
             Leave as "app" for a single server. Each label gets its own preview in the Browser tab.
     """
     try:
-        from deerflow.sandbox.dev_server import allocate_container_port
-        from deerflow.sandbox.dev_server import start_dev_server as _start
+        from nova.sandbox.dev_server import allocate_container_port
+        from nova.sandbox.dev_server import start_dev_server as _start
 
         sandbox_id = _get_sandbox_id(runtime)
         label = label or "app"
@@ -515,7 +515,7 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
     double-submit risk for anything state-mutating, unlike ``navigate``
     which already has its own idempotency cache.
     """
-    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+    from nova.sandbox.browser_check import _cdp_url_for_gateway
 
     cdp_url = _cdp_url_for_gateway(client)
     if not cdp_url:
@@ -527,7 +527,7 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
         try:
             return pw.chromium.connect_over_cdp(cdp_url, timeout=15000)
         except Exception as e:
-            from deerflow.sandbox.browser_errors import classify_playwright_exception
+            from nova.sandbox.browser_errors import classify_playwright_exception
 
             classified = classify_playwright_exception(e)
             if classified is e:
@@ -536,7 +536,7 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
 
     with sync_playwright() as pw:
         if thread_id:
-            from deerflow.sandbox.browser_retry import retry_browser_call
+            from nova.sandbox.browser_retry import retry_browser_call
 
             browser = retry_browser_call(thread_id, _connect, pw, operation="cdp_connect")
         else:
@@ -550,7 +550,7 @@ def _cdp_browser_op(client, op, *, thread_id: str | None = None):
             # `op` still runs at most once (see the invariant above); this
             # only means a page-op failure is reported in the same vocabulary
             # as a connect failure instead of leaking a raw Playwright dump.
-            from deerflow.sandbox.browser_errors import classify_playwright_exception
+            from nova.sandbox.browser_errors import classify_playwright_exception
 
             classified = classify_playwright_exception(op_exc)
             if classified is op_exc:
@@ -1113,7 +1113,7 @@ def screenshot_tool(
             agent context window. Returns an error string in that case.
     """
     # Metric: count the attempt before we do anything.
-    from deerflow.sandbox.metrics import screenshot_total
+    from nova.sandbox.metrics import screenshot_total
 
     client, _tid, err = _aio_client_and_thread(runtime)
     if err:
@@ -1124,7 +1124,7 @@ def screenshot_tool(
         # to the SDK HTTP API. We don't go through the circuit breaker here —
         # a screenshot is observational, not a tool the agent relies on for
         # control flow, so transient failures are best surfaced as errors.
-        from deerflow.sandbox.browser_check import (
+        from nova.sandbox.browser_check import (
             _cdp_url_for_gateway,
             scroll_through,
         )
@@ -1199,7 +1199,7 @@ async def deploy_expose_tool(runtime: Runtime, description: str, port: int) -> s
     if err:
         return err
     try:
-        from deerflow.sandbox.dev_server import (
+        from nova.sandbox.dev_server import (
             DEFAULT_LABEL,
             probe_container_port,
             register_external_dev_server,
@@ -1312,8 +1312,8 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
         run_tests: Run the detected test suite (default true). Set false to skip slow tests.
     """
     try:
-        from deerflow.runtime.user_context import get_effective_user_id
-        from deerflow.sandbox.review import build_review
+        from nova.runtime.user_context import get_effective_user_id
+        from nova.sandbox.review import build_review
 
         sandbox = ensure_sandbox_initialized(runtime)
         sandbox_id = _get_sandbox_id(runtime)
@@ -1349,7 +1349,7 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
 
         # 2) Browser self-test (running app or present_files HTML).
         try:
-            from deerflow.sandbox.browser_check import run_browser_check
+            from nova.sandbox.browser_check import run_browser_check
 
             if not is_local_sandbox(runtime):
                 # Capture a screenshot so a vision-capable model can SEE the build
@@ -1361,7 +1361,7 @@ def dev_verify_tool(runtime: Runtime, description: str, run_tests: bool = True) 
                     lines.append(f"- {r.route} [{r.status}]" + (f" — {r.notes}" if r.notes else ""))
                 lines.append("")
                 try:
-                    from deerflow.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
+                    from nova.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
 
                     stash_verify_screenshot(thread_id, _first_route_screenshot(chk))
                 except Exception:
@@ -1400,8 +1400,8 @@ def code_review_tool(
         description: Why you are reviewing. ALWAYS PROVIDE THIS FIRST.
     """
     try:
-        from deerflow.runtime.user_context import get_effective_user_id
-        from deerflow.sandbox.review import build_review
+        from nova.runtime.user_context import get_effective_user_id
+        from nova.sandbox.review import build_review
 
         sandbox_id = _get_sandbox_id(runtime)
         thread_id = _thread_id_from_sandbox_id(sandbox_id)
@@ -1446,8 +1446,8 @@ async def save_skill_tool(
         path: Workspace dir holding the skill's SKILL.md. Defaults to /mnt/user-data/workspace/<name>.
     """
     try:
-        from deerflow.runtime.user_context import get_effective_user_id
-        from deerflow.skills.promote import promote_skill_to_global
+        from nova.runtime.user_context import get_effective_user_id
+        from nova.skills.promote import promote_skill_to_global
 
         sandbox_id = _get_sandbox_id(runtime)
         thread_id = _thread_id_from_sandbox_id(sandbox_id) or _extract_thread_id_from_thread_data(get_thread_data(runtime))
@@ -1458,7 +1458,7 @@ async def save_skill_tool(
         if is_local_sandbox(runtime):
             host_root = _resolve_workspace_host_path(runtime)
         else:
-            from deerflow.config.paths import get_paths
+            from nova.config.paths import get_paths
 
             try:
                 user_id = get_effective_user_id()
@@ -1501,7 +1501,7 @@ def browser_check_tool(
         routes: Comma-separated routes to check, e.g. "/, /about, /dashboard". Defaults to "/".
     """
     try:
-        from deerflow.sandbox.browser_check import run_browser_check
+        from nova.sandbox.browser_check import run_browser_check
 
         if is_local_sandbox(runtime):
             return "Error: browser self-test requires the container (AIO) sandbox."
@@ -1539,7 +1539,7 @@ async def stop_dev_server_tool(
         label: Which server to stop when running more than one (default "app").
     """
     try:
-        from deerflow.sandbox.dev_server import stop_dev_server as _stop
+        from nova.sandbox.dev_server import stop_dev_server as _stop
 
         sandbox_id = _get_sandbox_id(runtime)
         if is_local_sandbox(runtime):
@@ -1585,11 +1585,11 @@ async def register_external_dev_server_tool(
     try:
         import socket as _socket
 
-        from deerflow.sandbox.dev_server import (
+        from nova.sandbox.dev_server import (
             DEFAULT_LABEL,
             probe_container_port,
         )
-        from deerflow.sandbox.dev_server import (
+        from nova.sandbox.dev_server import (
             register_external_dev_server as _register,
         )
 

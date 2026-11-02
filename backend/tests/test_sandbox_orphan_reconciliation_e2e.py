@@ -120,7 +120,7 @@ class TestOrphanReconciliationE2E:
             assert _container_running(container_name), "Test container should be running"
 
             # Step 2: Create backend and list running containers
-            from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
+            from nova.community.aio_sandbox.local_backend import LocalContainerBackend
 
             backend = LocalContainerBackend(
                 image=E2E_TEST_IMAGE,
@@ -165,7 +165,7 @@ class TestOrphanReconciliationE2E:
                 assert result.returncode == 0, f"Failed to start {name}: {result.stderr}"
                 containers.append(name)
 
-            from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
+            from nova.community.aio_sandbox.local_backend import LocalContainerBackend
 
             backend = LocalContainerBackend(
                 image=E2E_TEST_IMAGE,
@@ -213,7 +213,7 @@ class TestOrphanReconciliationE2E:
                 timeout=_DOCKER_TIMEOUT_S,
             )
 
-            from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
+            from nova.community.aio_sandbox.local_backend import LocalContainerBackend
 
             backend = LocalContainerBackend(
                 image=E2E_TEST_IMAGE,

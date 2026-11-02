@@ -16,7 +16,7 @@ import socket
 
 import pytest
 
-import deerflow.sandbox.dev_server as ds
+import nova.sandbox.dev_server as ds
 
 _THREAD = "thread-disc-1"
 
@@ -81,7 +81,7 @@ class _EndpointProvider:
 
 @pytest.mark.anyio
 async def test_discover_picks_first_live_published_port(monkeypatch) -> None:
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     provider = _EndpointProvider({4100: ("host.docker.internal", 4101), 4101: ("host.docker.internal", 4102)})
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
@@ -97,7 +97,7 @@ async def test_discover_picks_first_live_published_port(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_discover_skips_dead_ports(monkeypatch) -> None:
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     provider = _EndpointProvider({4100: ("h", 9001), 4101: ("h", 9002), 4102: ("h", 9003)})
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
@@ -113,7 +113,7 @@ async def test_discover_skips_dead_ports(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_discover_returns_none_when_nothing_listens(monkeypatch) -> None:
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     provider = _EndpointProvider({4100: ("h", 1), 4101: None})
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: provider)
@@ -127,7 +127,7 @@ async def test_discover_returns_none_when_nothing_listens(monkeypatch) -> None:
 
 @pytest.mark.anyio
 async def test_discover_no_provider_degrades_to_none(monkeypatch) -> None:
-    import deerflow.sandbox as sandbox_pkg
+    import nova.sandbox as sandbox_pkg
 
     monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: object())
     assert await ds.discover_live_preview(_THREAD) is None

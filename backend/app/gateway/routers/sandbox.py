@@ -31,9 +31,9 @@ from app.gateway.deps import get_checkpointer
 from app.gateway.preview_capability import absproxy_segment, preview_segment, thread_of
 from app.gateway.services import SSE_HEADERS
 from app.gateway.utils import sanitize_log_param
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_current_user, get_effective_user_id, reset_current_user, set_current_user
-from deerflow.sandbox.dev_server import (
+from nova.config.paths import get_paths
+from nova.runtime.user_context import get_current_user, get_effective_user_id, reset_current_user, set_current_user
+from nova.sandbox.dev_server import (
     DEFAULT_LABEL,
     adopt_handle,
     discover_live_preview,
@@ -858,7 +858,7 @@ def _mark_sandbox_active(thread_id: str) -> None:
     whose timer is only bumped by acquire/get otherwise.
     """
     try:
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         mark = getattr(get_sandbox_provider(), "mark_active", None)
         if mark is not None:
@@ -890,7 +890,7 @@ async def terminal_stats(thread_id: str, request: Request) -> dict:
     user_id = get_effective_user_id()
     log_path = _sandbox_log_path(thread_id, user_id=user_id)
 
-    from deerflow.sandbox.tools import reconcile_terminal_stats
+    from nova.sandbox.tools import reconcile_terminal_stats
 
     # Reconcile on read, so a thread whose counter was damaged by the old
     # unlocked increment repairs itself the first time the panel asks -- rather
@@ -992,8 +992,8 @@ async def dev_start(thread_id: str, request: Request, label: str = DEFAULT_LABEL
     if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
-        from deerflow.sandbox import get_sandbox_provider
-        from deerflow.sandbox.dev_server import run_preview_pipeline
+        from nova.sandbox import get_sandbox_provider
+        from nova.sandbox.dev_server import run_preview_pipeline
 
         provider = get_sandbox_provider()
         if not hasattr(provider, "get_preview_endpoint"):
@@ -1122,7 +1122,7 @@ async def sandbox_review(thread_id: str, request: Request, download: bool = Fals
         user_id = get_effective_user_id()
     except Exception:
         user_id = None
-    from deerflow.sandbox.review import build_review
+    from nova.sandbox.review import build_review
 
     review = await asyncio.to_thread(build_review, thread_id, user_id)
     if download:
@@ -1152,8 +1152,8 @@ async def browser_check(thread_id: str, request: Request, label: str = DEFAULT_L
     if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
-        from deerflow.sandbox import get_sandbox_provider
-        from deerflow.sandbox.browser_check import run_browser_check
+        from nova.sandbox import get_sandbox_provider
+        from nova.sandbox.browser_check import run_browser_check
 
         provider = get_sandbox_provider()
         if not hasattr(provider, "get_preview_endpoint"):
@@ -1176,7 +1176,7 @@ async def browser_check_last(thread_id: str, request: Request):
     so the Browser tab can show it without re-running."""
     if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
-    from deerflow.sandbox.browser_check import get_last_browser_check
+    from nova.sandbox.browser_check import get_last_browser_check
 
     check = get_last_browser_check(thread_id)
     if check is None:
@@ -1205,7 +1205,7 @@ async def save_skill(thread_id: str, name: str, path: str = ""):
         user_id = get_effective_user_id()
     except Exception:
         user_id = None
-    from deerflow.skills.promote import promote_skill_to_global
+    from nova.skills.promote import promote_skill_to_global
 
     rel = (path or f"/mnt/user-data/workspace/{name}").replace("/mnt/user-data/workspace", "").strip("/")
     work_dir = get_paths().sandbox_work_dir(thread_id, user_id=user_id)
@@ -1244,7 +1244,7 @@ async def terminal_url(thread_id: str):
     try:
         from urllib.parse import urlparse
 
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         provider = get_sandbox_provider()
         if not hasattr(provider, "get_preview_endpoint"):
@@ -1296,7 +1296,7 @@ async def _absproxy_impl(thread_id: str, port: int, path: str, request: Request)
     if not await _owns_thread_or_fresh(thread_id, request):
         raise HTTPException(status_code=404, detail="Not found")
     try:
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         provider = get_sandbox_provider()
         if not hasattr(provider, "get_preview_endpoint"):
@@ -1415,7 +1415,7 @@ def _appview_prefix(thread_id: str) -> str:
 
 async def _sandbox_base_url(thread_id: str) -> str:
     """Resolve the per-thread sandbox container's base URL, or raise HTTPException."""
-    from deerflow.sandbox import get_sandbox_provider
+    from nova.sandbox import get_sandbox_provider
 
     provider = get_sandbox_provider()
     if not hasattr(provider, "get_preview_endpoint"):

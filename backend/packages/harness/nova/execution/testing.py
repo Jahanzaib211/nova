@@ -7,8 +7,8 @@ Every request is recorded on ``.requests`` for assertions.
 
 Usage::
 
-    from deerflow.execution.testing import FakeExecutionKernel
-    from deerflow.services.container import service_container
+    from nova.execution.testing import FakeExecutionKernel
+    from nova.services.container import service_container
 
     fake = FakeExecutionKernel(lambda req: (0, "ok", ""))
     service_container.override(execution_kernel=fake)
@@ -22,9 +22,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from deerflow.execution.audit import AuditEngine
-from deerflow.execution.metrics import ExecutionMetrics
-from deerflow.execution.models import (
+from nova.execution.audit import AuditEngine
+from nova.execution.metrics import ExecutionMetrics
+from nova.execution.models import (
     ExecutionRequest,
     ExecutionResult,
     ExecutionStatus,

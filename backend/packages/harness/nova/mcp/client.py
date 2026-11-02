@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig
+from nova.config.extensions_config import ExtensionsConfig, McpServerConfig
 
 logger = logging.getLogger(__name__)
 

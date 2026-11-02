@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from deerflow.workspace.models.dependency import Dependency, DepKind
+from nova.workspace.models.dependency import Dependency, DepKind
 
 
 @dataclass

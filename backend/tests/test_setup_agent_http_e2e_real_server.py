@@ -69,7 +69,7 @@ models:
     api_key: $OPENAI_API_KEY
     base_url: $OPENAI_API_BASE
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
 agents_api:
   enabled: true
 database:
@@ -145,18 +145,18 @@ def test_real_http_create_agent_lands_in_authenticated_user_dir(
     4. Assert SOUL.md exists under users/<authenticated_uid>/agents/<name>/.
     5. Assert NOTHING exists under users/default/agents/<name>/.
     """
-    # ``deerflow.agents.lead_agent.agent`` imports ``create_chat_model`` with
-    # ``from deerflow.models import create_chat_model`` at module load time,
+    # ``nova.agents.lead_agent.agent`` imports ``create_chat_model`` with
+    # ``from nova.models import create_chat_model`` at module load time,
     # rebinding the symbol into its own namespace. So the only patch that
     # intercepts the call is the bound name on ``lead_agent.agent`` — patching
-    # ``deerflow.models.create_chat_model`` would be too late.
+    # ``nova.models.create_chat_model`` would be too late.
     agent_name = "real-http-agent"
 
     from starlette.testclient import TestClient
 
     with (
         patch(
-            "deerflow.agents.lead_agent.agent.create_chat_model",
+            "nova.agents.lead_agent.agent.create_chat_model",
             new=_build_fake_create_chat_model(agent_name),
         ),
         TestClient(isolated_app) as client,

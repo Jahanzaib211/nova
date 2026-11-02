@@ -14,7 +14,7 @@ Usage
 -----
 ::
 
-    from deerflow.sandbox.browser_retry import retry_browser_call
+    from nova.sandbox.browser_retry import retry_browser_call
 
     result = retry_browser_call(
         thread_id=thread_id,
@@ -53,16 +53,16 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
-from deerflow.sandbox.browser_circuit_breaker import (
+from nova.sandbox.browser_circuit_breaker import (
     get_circuit_state,
     guard_browser_call,
 )
-from deerflow.sandbox.browser_errors import (
+from nova.sandbox.browser_errors import (
     BrowserCircuitOpenError,
     BrowserError,
     is_permanent,
 )
-from deerflow.sandbox.metrics import retry_attempts_total
+from nova.sandbox.metrics import retry_attempts_total
 
 logger = logging.getLogger(__name__)
 

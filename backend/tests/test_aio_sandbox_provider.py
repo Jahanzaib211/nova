@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.config.paths import Paths, join_host_path
-from deerflow.runtime.user_context import reset_current_user, set_current_user
+from nova.config.paths import Paths, join_host_path
+from nova.runtime.user_context import reset_current_user, set_current_user
 
 # ── ensure_thread_dirs ───────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ def test_host_thread_dir_rejects_invalid_thread_id(tmp_path):
 
 def _make_provider(tmp_path):
     """Build a minimal AioSandboxProvider instance without starting the idle checker."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     with patch.object(aio_mod.AioSandboxProvider, "_start_idle_checker"):
         provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
         provider._config = {}
@@ -58,7 +58,7 @@ def _make_provider(tmp_path):
 
 def test_get_thread_mounts_includes_acp_workspace(tmp_path, monkeypatch):
     """_get_thread_mounts must include /mnt/acp-workspace (read-only) for docker sandbox."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     monkeypatch.setattr(aio_mod, "get_paths", lambda: Paths(base_dir=tmp_path))
     monkeypatch.setattr(aio_mod, "get_effective_user_id", lambda: None)
 
@@ -75,7 +75,7 @@ def test_get_thread_mounts_includes_acp_workspace(tmp_path, monkeypatch):
 
 def test_get_thread_mounts_includes_user_data_dirs(tmp_path, monkeypatch):
     """Baseline: user-data mounts must still be present after the ACP workspace change."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     monkeypatch.setattr(aio_mod, "get_paths", lambda: Paths(base_dir=tmp_path))
 
     mounts = aio_mod.AioSandboxProvider._get_thread_mounts("thread-4")
@@ -96,7 +96,7 @@ def test_join_host_path_preserves_windows_drive_letter_style():
 
 def test_get_thread_mounts_preserves_windows_host_path_style(tmp_path, monkeypatch):
     """Docker bind mount sources must keep Windows-style paths intact."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     monkeypatch.setenv("DEER_FLOW_HOST_BASE_DIR", r"C:\Users\sample\deer-flow\backend\.deer-flow")
     monkeypatch.setattr(aio_mod, "get_paths", lambda: Paths(base_dir=tmp_path))
     monkeypatch.setattr(aio_mod, "get_effective_user_id", lambda: None)
@@ -113,7 +113,7 @@ def test_get_thread_mounts_preserves_windows_host_path_style(tmp_path, monkeypat
 
 def test_discover_or_create_only_unlocks_when_lock_succeeds(tmp_path, monkeypatch):
     """Unlock should not run if exclusive locking itself fails."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._discover_or_create_with_lock = aio_mod.AioSandboxProvider._discover_or_create_with_lock.__get__(
         provider,
@@ -144,7 +144,7 @@ def test_discover_or_create_only_unlocks_when_lock_succeeds(tmp_path, monkeypatc
 @pytest.mark.anyio
 async def test_acquire_async_uses_async_readiness_polling(monkeypatch):
     """AioSandboxProvider async creation must not use sync readiness polling."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(None)
     provider._config = {"replicas": 3}
     provider._thread_locks = {}
@@ -189,7 +189,7 @@ async def test_acquire_async_uses_async_readiness_polling(monkeypatch):
 @pytest.mark.anyio
 async def test_discover_or_create_with_lock_async_offloads_lock_file_open_and_close(tmp_path, monkeypatch):
     """Async lock path must not open or close lock files on the event loop."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._discover_or_create_with_lock_async = aio_mod.AioSandboxProvider._discover_or_create_with_lock_async.__get__(
         provider,
@@ -226,7 +226,7 @@ async def test_discover_or_create_with_lock_async_offloads_lock_file_open_and_cl
 @pytest.mark.anyio
 async def test_acquire_thread_lock_async_uses_dedicated_executor(monkeypatch):
     """Per-thread lock waits should not consume the default asyncio.to_thread pool."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     lock = aio_mod.threading.Lock()
 
     async def fail_to_thread(*_args, **_kwargs):
@@ -244,7 +244,7 @@ async def test_acquire_thread_lock_async_uses_dedicated_executor(monkeypatch):
 @pytest.mark.anyio
 async def test_acquire_async_cancellation_does_not_leak_thread_lock(tmp_path):
     """Cancelled async lock waiters must not leave the per-thread lock held."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._thread_locks = {}
     provider._warm_pool = {}
@@ -283,7 +283,7 @@ async def test_acquire_async_cancellation_does_not_leak_thread_lock(tmp_path):
 @pytest.mark.anyio
 async def test_acquire_async_cancelled_waiter_does_not_block_successor(tmp_path, monkeypatch):
     """A cancelled waiter must not prevent the next live waiter from acquiring."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._thread_locks = {}
     provider._warm_pool = {}
@@ -332,7 +332,7 @@ async def test_acquire_async_cancelled_waiter_does_not_block_successor(tmp_path,
 @pytest.mark.anyio
 async def test_acquire_internal_async_offloads_cached_reuse_health_check(tmp_path, monkeypatch):
     """Async cached reuse must keep backend health checks off the event loop."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider, _sandbox, _ = _make_provider_with_active_sandbox(tmp_path, "sandbox-cached-async")
     provider._thread_sandboxes = {"thread-cached-async": "sandbox-cached-async"}
     provider._backend.is_alive = MagicMock(return_value=True)
@@ -353,7 +353,7 @@ async def test_acquire_internal_async_offloads_cached_reuse_health_check(tmp_pat
 
 def test_remote_backend_create_forwards_effective_user_id(monkeypatch):
     """Provisioner mode must receive user_id so PVC subPath matches user isolation."""
-    remote_mod = importlib.import_module("deerflow.community.aio_sandbox.remote_backend")
+    remote_mod = importlib.import_module("nova.community.aio_sandbox.remote_backend")
     backend = remote_mod.RemoteSandboxBackend("http://provisioner:8002")
     token = set_current_user(SimpleNamespace(id="user-7"))
     posted: dict = {}
@@ -389,7 +389,7 @@ def test_remote_backend_create_forwards_effective_user_id(monkeypatch):
 
 def _make_provider_with_active_sandbox(tmp_path, sandbox_id: str):
     """Build a provider with one active sandbox suitable for release/destroy/shutdown tests."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._lock = aio_mod.threading.Lock()
     provider._warm_pool = {}
@@ -470,7 +470,7 @@ def test_get_uses_in_memory_registry_only(tmp_path):
 
 def test_acquire_drops_dead_cached_sandbox(tmp_path, monkeypatch):
     """acquire() must replace a stale active cache entry after its container dies."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider, sandbox, _ = _make_provider_with_active_sandbox(tmp_path, "sandbox-dead")
     provider._thread_locks = {}
     provider._thread_sandboxes = {"thread-dead": "sandbox-dead"}
@@ -518,7 +518,7 @@ def test_acquire_keeps_cached_sandbox_when_health_check_errors(tmp_path):
 
 def test_drop_unhealthy_sandbox_skips_recreated_entry(tmp_path):
     """A stale health-check result must not delete a newly registered sandbox."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._lock = aio_mod.threading.Lock()
     provider._warm_pool = {}
@@ -542,7 +542,7 @@ def test_drop_unhealthy_sandbox_skips_recreated_entry(tmp_path):
 
 def test_acquire_skips_dead_warm_pool_sandbox(tmp_path, monkeypatch):
     """acquire() must create a fresh sandbox when the warm-pool entry died."""
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = _make_provider(tmp_path)
     provider._lock = aio_mod.threading.Lock()
     provider._thread_locks = {}
@@ -611,7 +611,7 @@ def _make_provider_for_idle():
     """Minimal AioSandboxProvider with real registries and lock (no __init__)."""
     import threading
 
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
     provider._lock = threading.Lock()
     provider._sandboxes = {}
@@ -690,9 +690,9 @@ def test_thread_has_live_dev_server_consults_registry(monkeypatch):
     import types
 
     # Point the lazy import inside _thread_has_live_dev_server at a fake module.
-    fake_mod = types.ModuleType("deerflow.sandbox.dev_server")
+    fake_mod = types.ModuleType("nova.sandbox.dev_server")
     fake_mod.has_live_dev_server = lambda tid: tid == "thread-2"
-    monkeypatch.setitem(sys.modules, "deerflow.sandbox.dev_server", fake_mod)
+    monkeypatch.setitem(sys.modules, "nova.sandbox.dev_server", fake_mod)
 
     assert provider._thread_has_live_dev_server("sandbox-1") is False
     assert provider._thread_has_live_dev_server("sandbox-2") is True
@@ -709,7 +709,7 @@ def test_thread_has_live_dev_server_consults_registry(monkeypatch):
 
 def _provider_with_lifetime(max_lifetime):
     """A provider with its __init__ bypassed, carrying just the reaper's state."""
-    from deerflow.community.aio_sandbox.aio_sandbox_provider import AioSandboxProvider
+    from nova.community.aio_sandbox.aio_sandbox_provider import AioSandboxProvider
 
     provider = AioSandboxProvider.__new__(AioSandboxProvider)
     provider._config = {"max_lifetime": max_lifetime}
@@ -846,7 +846,7 @@ def test_reaper_destroys_it_once_the_command_finishes():
     # so the sandbox has to go idle again on its own terms before it is reaped.
     provider._track_busy("sandbox-1", -1)
     provider._last_activity["sandbox-1"] = 0.0
-    from deerflow.community.aio_sandbox.aio_sandbox_provider import _SHARED_ACTIVITY
+    from nova.community.aio_sandbox.aio_sandbox_provider import _SHARED_ACTIVITY
 
     _SHARED_ACTIVITY._last["sandbox-1"] = 0.0
 
@@ -892,7 +892,7 @@ def _sandbox_config_stub(**overrides):
 
 
 def _load_config_with(monkeypatch, sandbox_config):
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
     monkeypatch.setattr(
         aio_mod,

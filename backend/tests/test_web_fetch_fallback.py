@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.community.jina_ai import tools as web_fetch_mod
+from nova.community.jina_ai import tools as web_fetch_mod
 
 _PAGE = """<html><head><title>Hello</title></head>
 <body><article><h1>Hello</h1><p>Real content from the origin server.</p></article></body></html>"""

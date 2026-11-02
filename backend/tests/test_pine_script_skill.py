@@ -55,7 +55,7 @@ class TestSkillLayout:
 
     def test_frontmatter_keys_are_all_allowed(self) -> None:
         """An unknown frontmatter key fails skill validation at load time."""
-        from deerflow.skills.validation import ALLOWED_FRONTMATTER_PROPERTIES
+        from nova.skills.validation import ALLOWED_FRONTMATTER_PROPERTIES
 
         text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         block = text.split("---", 2)[1]
@@ -63,8 +63,8 @@ class TestSkillLayout:
         assert keys <= set(ALLOWED_FRONTMATTER_PROPERTIES), f"disallowed frontmatter keys: {keys - set(ALLOWED_FRONTMATTER_PROPERTIES)}"
 
     def test_parses_as_a_real_skill(self) -> None:
-        from deerflow.skills.parser import parse_skill_file
-        from deerflow.skills.types import SkillCategory
+        from nova.skills.parser import parse_skill_file
+        from nova.skills.types import SkillCategory
 
         skill = parse_skill_file(SKILL_DIR / "SKILL.md", SkillCategory.PUBLIC)
         assert skill is not None, "SKILL.md failed to parse — the skill would be invisible to the agent"

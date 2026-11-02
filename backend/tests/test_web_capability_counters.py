@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.community.searxng.audit import AuditTrail
-from deerflow.community.searxng.search_cache import CacheKey, SearchCache
+from nova.community.searxng.audit import AuditTrail
+from nova.community.searxng.search_cache import CacheKey, SearchCache
 
 
 @pytest.fixture

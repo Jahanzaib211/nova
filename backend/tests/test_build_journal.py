@@ -11,8 +11,8 @@ from collections import deque
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from deerflow.agents.middlewares import observe_adjust_middleware as oam
-from deerflow.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
+from nova.agents.middlewares import observe_adjust_middleware as oam
+from nova.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
 
 
 def _cycle(tool_name: str, *, args: dict, content: str = "ok", tool_call_id: str = "c1") -> list:

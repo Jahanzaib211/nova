@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 
-from deerflow.config.paths import resolve_path
+from nova.config.paths import resolve_path
 
 
 def resolve_sqlite_conn_str(raw: str) -> str:

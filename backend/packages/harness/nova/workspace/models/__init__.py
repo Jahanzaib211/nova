@@ -6,14 +6,14 @@ All models are immutable.  Use ``replace()`` to create modified copies.
 
 from __future__ import annotations
 
-from deerflow.workspace.models.command import Command, CommandKind
-from deerflow.workspace.models.dependency import Dependency, DepKind
-from deerflow.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel
-from deerflow.workspace.models.fingerprint import RepoKind, RepositoryFingerprint
-from deerflow.workspace.models.node import Edge, Node, NodeKind
-from deerflow.workspace.models.project import Module, Package, PackageKind, Project, ProjectKind
-from deerflow.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
-from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot
+from nova.workspace.models.command import Command, CommandKind
+from nova.workspace.models.dependency import Dependency, DepKind
+from nova.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel
+from nova.workspace.models.fingerprint import RepoKind, RepositoryFingerprint
+from nova.workspace.models.node import Edge, Node, NodeKind
+from nova.workspace.models.project import Module, Package, PackageKind, Project, ProjectKind
+from nova.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
+from nova.workspace.models.workspace_snapshot import WorkspaceSnapshot
 
 __all__ = [
     "NodeKind",

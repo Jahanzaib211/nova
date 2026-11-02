@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from deerflow.models.assistant_payload_replay import (
+from nova.models.assistant_payload_replay import (
     restore_additional_kwargs_field,
     restore_assistant_payloads,
     restore_reasoning_content,

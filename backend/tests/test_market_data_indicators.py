@@ -17,7 +17,7 @@ import random
 
 import pytest
 
-from deerflow.community.market_data import indicators as ind
+from nova.community.market_data import indicators as ind
 
 
 @pytest.fixture(scope="module")

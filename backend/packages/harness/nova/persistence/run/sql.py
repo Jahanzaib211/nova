@@ -14,10 +14,10 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.run.model import RunRow
-from deerflow.runtime.runs.store.base import RunStore
-from deerflow.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
-from deerflow.utils.time import coerce_iso
+from nova.persistence.run.model import RunRow
+from nova.runtime.runs.store.base import RunStore
+from nova.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
+from nova.utils.time import coerce_iso
 
 
 class RunRepository(RunStore):

@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from deerflow.community.searxng import tools
-from deerflow.community.searxng.searxng_client import SearxngClient
+from nova.community.searxng import tools
+from nova.community.searxng.searxng_client import SearxngClient
 
 
 def _make_httpx_mock(
@@ -55,7 +55,7 @@ class TestSearxngClient:
         }
 
         mock_client = _make_httpx_mock(status_code=200, body=results_data)
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             result = await client.search("test query", max_results=5)
 
@@ -66,7 +66,7 @@ class TestSearxngClient:
     async def test_search_empty_results(self):
         """Search returns empty list when no results."""
         mock_client = _make_httpx_mock(status_code=200, body={"results": []})
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             result = await client.search("empty query")
             assert result == []
@@ -76,10 +76,10 @@ class TestSearxngClient:
         # The client converts 4xx into SearchPermanentError before
         # raise_for_status() is reached (see searxng_client.py status
         # handling); we assert that wrapper instead of raw HTTPStatusError.
-        from deerflow.community.searxng.search_errors import SearchPermanentError
+        from nova.community.searxng.search_errors import SearchPermanentError
 
         mock_client = _make_httpx_mock(status_code=403)
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             with pytest.raises(SearchPermanentError):
                 await client.search("blocked query")
@@ -90,10 +90,10 @@ class TestSearxngClient:
         mock_client.get = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             # ConnectError is retried 3x then surfaces as SearchConnectionError.
-            from deerflow.community.searxng.search_errors import SearchConnectionError
+            from nova.community.searxng.search_errors import SearchConnectionError
 
             with pytest.raises(SearchConnectionError):
                 await client.search("unreachable query")
@@ -101,7 +101,7 @@ class TestSearxngClient:
     async def test_search_with_categories(self):
         """Search passes categories parameter to SearXNG."""
         mock_client = _make_httpx_mock(status_code=200, body={"results": []})
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             client = SearxngClient(base_url="http://searxng:8080")
             await client.search("test", categories=["news", "science"])
 
@@ -122,7 +122,7 @@ class TestSearxngTools:
             ]
         )
 
-        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), patch("deerflow.community.searxng.tools._get_tool_config", return_value=None):
+        with patch("nova.community.searxng.tools._get_searxng_client", return_value=mock_client), patch("nova.community.searxng.tools._get_tool_config", return_value=None):
             result = await tools.web_search_tool.ainvoke({"query": "test query"})
 
         data = json.loads(result)
@@ -138,9 +138,9 @@ class TestSearxngTools:
         mock_searxng.search = AsyncMock(side_effect=Exception("API error"))
 
         with (
-            patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_searxng),
-            patch("deerflow.community.searxng.tools._get_tool_config", return_value=None),
-            patch("deerflow.community.ddg_search.tools.web_search_tool") as mock_ddg,
+            patch("nova.community.searxng.tools._get_searxng_client", return_value=mock_searxng),
+            patch("nova.community.searxng.tools._get_tool_config", return_value=None),
+            patch("nova.community.ddg_search.tools.web_search_tool") as mock_ddg,
         ):
             # Make the DDG tool's ainvoke raise too.
             mock_ddg.ainvoke = AsyncMock(side_effect=Exception("DDG also failed"))
@@ -158,7 +158,7 @@ class TestSearxngTools:
         mock_client = MagicMock()
         mock_client.search = AsyncMock(return_value=[{"title": f"R{i}", "url": f"https://example.com/{i}", "content": f"D{i}"} for i in range(10)])
 
-        with patch("deerflow.community.searxng.tools._get_searxng_client", return_value=mock_client), patch("deerflow.community.searxng.tools._get_tool_config", return_value={"max_results": "3"}):
+        with patch("nova.community.searxng.tools._get_searxng_client", return_value=mock_client), patch("nova.community.searxng.tools._get_tool_config", return_value={"max_results": "3"}):
             await tools.web_search_tool.ainvoke({"query": "test query"})
 
         mock_client.search.assert_called_once()
@@ -176,7 +176,7 @@ class TestHealth:
     """
 
     async def test_probe_health_is_gone(self):
-        from deerflow.community.searxng.searxng_client import SearxngClient
+        from nova.community.searxng.searxng_client import SearxngClient
 
         assert not hasattr(SearxngClient, "probe_health")
 
@@ -185,29 +185,29 @@ class TestHealth:
         redirects are followed and the final status must be 2xx."""
         client = await self._client()
         mock = _make_httpx_mock(status_code=302)
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock):
             assert await client.health() is False
         assert all(call.kwargs.get("follow_redirects") is True for call in mock.get.await_args_list)
 
     async def test_goes_through_tor_when_searches_do(self):
-        from deerflow.community.searxng.searxng_client import SearxngClient
+        from nova.community.searxng.searxng_client import SearxngClient
 
         tor = MagicMock()
         tor.get_async_client = MagicMock(return_value=_make_httpx_mock(status_code=200))
-        with patch("deerflow.community.searxng.searxng_client.get_tor_proxy", return_value=tor):
+        with patch("nova.community.searxng.searxng_client.get_tor_proxy", return_value=tor):
             client = SearxngClient(base_url="http://searxng:8080", tor_enabled=True)
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", side_effect=AssertionError("must not bypass Tor")):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", side_effect=AssertionError("must not bypass Tor")):
             assert await client.health() is True
         tor.get_async_client.assert_called_once_with(timeout=SearxngClient.HEALTH_TIMEOUT_S)
 
     async def _client(self):
-        from deerflow.community.searxng.searxng_client import SearxngClient
+        from nova.community.searxng.searxng_client import SearxngClient
 
         return SearxngClient(base_url="http://searxng:8080")
 
     async def test_healthz_ok_is_healthy(self):
         client = await self._client()
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=200)):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=200)):
             assert await client.health() is True
 
     async def test_falls_back_to_root_when_healthz_404s(self):
@@ -220,7 +220,7 @@ class TestHealth:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             assert await client.health() is True
         assert mock_client.get.await_count == 2, "the root fallback should have been tried"
 
@@ -231,11 +231,11 @@ class TestHealth:
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=mock_client):
             assert await client.health() is False
         assert mock_client.get.await_count == 2
 
     async def test_server_error_on_both_paths_is_unhealthy(self):
         client = await self._client()
-        with patch("deerflow.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=502)):
+        with patch("nova.community.searxng.searxng_client.httpx.AsyncClient", return_value=_make_httpx_mock(status_code=502)):
             assert await client.health() is False

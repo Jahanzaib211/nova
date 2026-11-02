@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import JSON, DateTime, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from deerflow.persistence.base import Base
+from nova.persistence.base import Base
 
 
 class AdminAuditRow(Base):

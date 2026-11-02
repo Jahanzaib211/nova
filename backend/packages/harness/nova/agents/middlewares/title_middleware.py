@@ -9,9 +9,9 @@ from langchain.agents.middleware import AgentMiddleware
 from langgraph.config import get_config
 from langgraph.runtime import Runtime
 
-from deerflow.agents.middlewares.dynamic_context_middleware import is_dynamic_context_reminder
-from deerflow.config.title_config import get_title_config
-from deerflow.models import create_chat_model
+from nova.agents.middlewares.dynamic_context_middleware import is_dynamic_context_reminder
+from nova.config.title_config import get_title_config
+from nova.models import create_chat_model
 
 logger = logging.getLogger(__name__)
 

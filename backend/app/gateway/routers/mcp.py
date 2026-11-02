@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import require_admin_user
-from deerflow.config.extensions_config import get_extensions_config, reload_extensions_config, update_extensions_config_file
-from deerflow.mcp.cache import reset_mcp_tools_cache
+from nova.config.extensions_config import get_extensions_config, reload_extensions_config, update_extensions_config_file
+from nova.mcp.cache import reset_mcp_tools_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["mcp"])

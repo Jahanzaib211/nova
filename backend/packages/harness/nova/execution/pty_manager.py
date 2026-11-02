@@ -15,7 +15,7 @@ Design notes:
 
 Usage::
 
-    from deerflow.execution.pty_manager import PTYManager
+    from nova.execution.pty_manager import PTYManager
 
     mgr = PTYManager()
     master_fd, slave_fd = mgr.open()

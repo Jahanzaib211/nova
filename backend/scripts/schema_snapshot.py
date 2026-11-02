@@ -16,8 +16,8 @@ import sys
 
 
 def build_schema_document() -> dict:
-    import deerflow.persistence.models  # noqa: F401 - registers every model
-    from deerflow.persistence.base import Base
+    import nova.persistence.models  # noqa: F401 - registers every model
+    from nova.persistence.base import Base
 
     tables = {}
     for name, table in sorted(Base.metadata.tables.items()):

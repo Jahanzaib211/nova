@@ -9,8 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from deerflow.workspace.models.fingerprint import Confidence, RepoKind, RepositoryFingerprint
-from deerflow.workspace.scanners.ignore import should_ignore_name
+from nova.workspace.models.fingerprint import Confidence, RepoKind, RepositoryFingerprint
+from nova.workspace.scanners.ignore import should_ignore_name
 
 
 @dataclass

@@ -14,10 +14,10 @@ from fastapi import Depends, Request
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.config.model_config import ModelConfig
-from deerflow.config.runtime_models import load_runtime_model_dicts, runtime_model_names, save_runtime_model_dicts
-from deerflow.persistence.engine import get_session_factory
-from deerflow.persistence.models.model_config_row import ModelConfigRow
+from nova.config.model_config import ModelConfig
+from nova.config.runtime_models import load_runtime_model_dicts, runtime_model_names, save_runtime_model_dicts
+from nova.persistence.engine import get_session_factory
+from nova.persistence.models.model_config_row import ModelConfigRow
 
 logger = logging.getLogger(__name__)
 

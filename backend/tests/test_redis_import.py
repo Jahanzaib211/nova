@@ -6,7 +6,7 @@ import builtins
 
 import pytest
 
-from deerflow.utils.redis_import import import_redis_asyncio, redis_install_hint
+from nova.utils.redis_import import import_redis_asyncio, redis_install_hint
 
 
 def test_missing_redis_names_the_component_and_the_extra(monkeypatch):
@@ -28,7 +28,7 @@ def test_hint_keeps_the_component_specific_wording():
 
 @pytest.mark.parametrize(
     "module",
-    ["app.gateway.rate_limiter", "deerflow.runtime.stream_bridge.redis_provider", "deerflow.runtime.runs.cancel_signal", "deerflow.runtime.runs.distributed_lock"],
+    ["app.gateway.rate_limiter", "nova.runtime.stream_bridge.redis_provider", "nova.runtime.runs.cancel_signal", "nova.runtime.runs.distributed_lock"],
 )
 def test_no_component_keeps_its_own_copy(module):
     import importlib

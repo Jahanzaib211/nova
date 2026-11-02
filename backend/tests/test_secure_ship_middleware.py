@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from deerflow.agents.middlewares import secure_ship_middleware
-from deerflow.agents.middlewares.secure_ship_middleware import SecureShipMiddleware
+from nova.agents.middlewares import secure_ship_middleware
+from nova.agents.middlewares.secure_ship_middleware import SecureShipMiddleware
 
 # ---------------------------------------------------------------------------
 # Helpers

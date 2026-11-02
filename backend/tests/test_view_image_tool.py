@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.tools.builtins.view_image_tool import view_image_tool
+from nova.tools.builtins.view_image_tool import view_image_tool
 
-view_image_module = importlib.import_module("deerflow.tools.builtins.view_image_tool")
+view_image_module = importlib.import_module("nova.tools.builtins.view_image_tool")
 
 PNG_BYTES = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
 

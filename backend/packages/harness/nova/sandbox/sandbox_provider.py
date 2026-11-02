@@ -2,9 +2,9 @@ import asyncio
 import threading
 from abc import ABC, abstractmethod
 
-from deerflow.config import get_app_config
-from deerflow.reflection import resolve_class
-from deerflow.sandbox.sandbox import Sandbox
+from nova.config import get_app_config
+from nova.reflection import resolve_class
+from nova.sandbox.sandbox import Sandbox
 
 
 class SandboxProvider(ABC):

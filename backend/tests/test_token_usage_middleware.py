@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from deerflow.agents.middlewares.token_usage_middleware import (
+from nova.agents.middlewares.token_usage_middleware import (
     TOKEN_USAGE_ATTRIBUTION_KEY,
     TokenUsageMiddleware,
 )
@@ -41,7 +41,7 @@ class TestTokenUsageMiddleware:
 
         with caplog.at_level(
             logging.INFO,
-            logger="deerflow.agents.middlewares.token_usage_middleware",
+            logger="nova.agents.middlewares.token_usage_middleware",
         ):
             result = middleware.after_model({"messages": [message]}, _make_runtime())
 
@@ -64,7 +64,7 @@ class TestTokenUsageMiddleware:
 
         with caplog.at_level(
             logging.INFO,
-            logger="deerflow.agents.middlewares.token_usage_middleware",
+            logger="nova.agents.middlewares.token_usage_middleware",
         ):
             result = middleware.after_model({"messages": [message]}, _make_runtime())
 
@@ -88,7 +88,7 @@ class TestTokenUsageMiddleware:
 
         with caplog.at_level(
             logging.INFO,
-            logger="deerflow.agents.middlewares.token_usage_middleware",
+            logger="nova.agents.middlewares.token_usage_middleware",
         ):
             result = middleware.after_model({"messages": [message]}, _make_runtime())
 
@@ -260,7 +260,7 @@ class TestTokenUsageMiddleware:
             "task:second-b": {"input_tokens": 20, "output_tokens": 7, "total_tokens": 27},
         }
 
-        task_tool_module = importlib.import_module("deerflow.tools.builtins.task_tool")
+        task_tool_module = importlib.import_module("nova.tools.builtins.task_tool")
         monkeypatch.setattr(
             task_tool_module,
             "pop_cached_subagent_usage",

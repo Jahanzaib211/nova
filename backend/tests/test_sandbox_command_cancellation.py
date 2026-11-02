@@ -19,9 +19,9 @@ import threading
 
 import pytest
 
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.community.aio_sandbox.aio_sandbox import _is_set  # noqa: E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.community.aio_sandbox.aio_sandbox import _is_set  # noqa: E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
 
 pytestmark = pytest.mark.anyio
 
@@ -123,7 +123,7 @@ async def test_abort_event_is_read_from_the_runtime_context() -> None:
 
 async def test_streaming_loop_stops_when_cancelled() -> None:
     """The loop must break out of its poll and mark the output as cancelled."""
-    from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
     sandbox = AioSandbox.__new__(AioSandbox)  # no client needed: we stub below
     sandbox._lock = threading.RLock()
@@ -173,7 +173,7 @@ async def test_streaming_loop_stops_when_cancelled() -> None:
 
 
 async def test_streaming_loop_runs_to_completion_without_cancellation() -> None:
-    from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
     sandbox = AioSandbox.__new__(AioSandbox)
     sandbox._lock = threading.RLock()

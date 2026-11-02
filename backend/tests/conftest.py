@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Make 'app' and 'deerflow' importable from any working directory
+# Make 'app' and 'nova' importable from any working directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 # Make the shared test helpers (``support``, ``_agent_e2e_helpers``) importable
@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Neutralize deployment-specific environment: the repo-root .env pins the
 # deployment paths to their in-container locations (/app/...), which do not
-# exist on the host. load_dotenv() (called at deerflow.config.app_config
+# exist on the host. load_dotenv() (called at nova.config.app_config
 # import time) would inject them into every host-side test run, making
 # gateway config loading raise FileNotFoundError and every TestClient
 # request fail with 503 — and channel/paths code mkdir() under /app.
@@ -127,10 +127,10 @@ def _guard_process_managers_from_tests():
     exercise pm2/systemd behavior must override ``execution_kernel`` with
     a FakeExecutionKernel.
     """
-    from deerflow.execution import ExecutionKernel, PolicyEngine
-    from deerflow.execution.models import ExecutionClass
-    from deerflow.execution.policy import _DEFAULT_POLICIES, ClassPolicy
-    from deerflow.services.container import service_container
+    from nova.execution import ExecutionKernel, PolicyEngine
+    from nova.execution.models import ExecutionClass
+    from nova.execution.policy import _DEFAULT_POLICIES, ClassPolicy
+    from nova.services.container import service_container
 
     policies = dict(_DEFAULT_POLICIES)
     policies[ExecutionClass.PM2] = ClassPolicy(allowed_programs=("/pm2-denied-in-tests",))
@@ -176,7 +176,7 @@ def provisioner_module():
 # ---------------------------------------------------------------------------
 #
 # Repository methods read ``user_id`` from a contextvar by default
-# (see ``deerflow.runtime.user_context``). Without this fixture, every
+# (see ``nova.runtime.user_context``). Without this fixture, every
 # pre-existing persistence test would raise RuntimeError because the
 # contextvar is unset. The fixture sets a default test user on every
 # test; tests that explicitly want to verify behaviour *without* a user
@@ -187,7 +187,7 @@ def provisioner_module():
 def _reset_skill_storage_singleton():
     """Reset the SkillStorage singleton between tests to prevent cross-test contamination."""
     try:
-        from deerflow.skills.storage import reset_skill_storage
+        from nova.skills.storage import reset_skill_storage
     except ImportError:
         yield
         return
@@ -212,7 +212,7 @@ def _restore_title_config_singleton():
     independent regardless of order.
     """
     try:
-        from deerflow.config.title_config import reset_title_config
+        from nova.config.title_config import reset_title_config
     except ImportError:
         yield
         return
@@ -236,7 +236,7 @@ def _auto_user_context(request):
         return
 
     try:
-        from deerflow.runtime.user_context import (
+        from nova.runtime.user_context import (
             reset_current_user,
             set_current_user,
         )
@@ -264,7 +264,7 @@ def _isolate_dev_server_registry():
     clear-on-entry, so a module that legitimately pre-registers still works.
     """
     try:
-        import deerflow.sandbox.dev_server as ds
+        import nova.sandbox.dev_server as ds
     except ImportError:
         yield
         return

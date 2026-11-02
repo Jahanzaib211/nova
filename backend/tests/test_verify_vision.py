@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 
 from langchain_core.messages import HumanMessage
 
-from deerflow.agents.middlewares import verify_vision as vv
-from deerflow.agents.middlewares.view_image_middleware import ViewImageMiddleware
+from nova.agents.middlewares import verify_vision as vv
+from nova.agents.middlewares.view_image_middleware import ViewImageMiddleware
 
 
 def test_stash_and_pop_is_one_shot():

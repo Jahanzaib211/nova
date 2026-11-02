@@ -59,7 +59,7 @@ def _agent_factory(*, config):
 def test_create_run_assigns_correlation_id(isolated_app, monkeypatch: pytest.MonkeyPatch):
     from starlette.testclient import TestClient
 
-    from deerflow.runtime.stream_bridge import diagnostics as diagnostics_module
+    from nova.runtime.stream_bridge import diagnostics as diagnostics_module
 
     with (
         patch("app.gateway.services.resolve_agent_factory", return_value=_agent_factory),
@@ -121,7 +121,7 @@ async def test_correlation_id_is_uuid_v4_format():
     (32 lowercase hex). This test guards the contract directly against
     the manager, for both creation paths.
     """
-    from deerflow.runtime.runs.manager import RunManager
+    from nova.runtime.runs.manager import RunManager
 
     mgr = RunManager()
     record = await mgr.create("thread-a", assistant_id="lead_agent")

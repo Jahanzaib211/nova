@@ -1,6 +1,6 @@
 """General-purpose subagent configuration."""
 
-from deerflow.subagents.config import SubagentConfig
+from nova.subagents.config import SubagentConfig
 
 GENERAL_PURPOSE_CONFIG = SubagentConfig(
     name="general-purpose",

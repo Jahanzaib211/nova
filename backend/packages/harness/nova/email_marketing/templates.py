@@ -14,7 +14,7 @@ from html import unescape
 from html.parser import HTMLParser
 from typing import Any
 
-from deerflow.email_marketing.tracking import TrackingLinks
+from nova.email_marketing.tracking import TrackingLinks
 
 
 class TemplateError(ValueError):

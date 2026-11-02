@@ -6,7 +6,7 @@ what is about to be shipped is *safe* to ship: a hard-coded API key in
 ``config.py`` travels inside the delivered files, and the deliverable is
 already public by the time anyone notices.
 
-The gate engine (:mod:`deerflow.security.secure_ship`) scans a thread's
+The gate engine (:mod:`nova.security.secure_ship`) scans a thread's
 workspace and returns a verdict -- ``pass``, ``warn`` or ``block`` -- with the
 findings behind it. This module is the registry's view of that engine: one
 declaration, reachable from the lead agent, the UI and an external harness
@@ -27,8 +27,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # gate engine is unavailable, and an operation that cannot run says so (a
 # ValueError, i.e. HTTP 422) instead of taking the whole surface down.
 try:  # pragma: no cover - exercised through the module's own handlers
-    from deerflow.security.secure_ship import default_policy, run_gate, toolkit_manifest
+    from nova.security.secure_ship import default_policy, run_gate, toolkit_manifest
 except Exception as _engine_import_error:  # noqa: BLE001 - any import failure is "engine missing"
     default_policy = None  # type: ignore[assignment]
     run_gate = None  # type: ignore[assignment]
@@ -159,7 +159,7 @@ def _report_dict(report: Any) -> dict:
 def _workspace_dirs(thread_id: str, user_id: str | None) -> list[Path]:
     """Where the thread's build files live (workspace first, then outputs)."""
     try:
-        from deerflow.config.paths import get_paths
+        from nova.config.paths import get_paths
 
         paths = get_paths()
         dirs = [paths.sandbox_work_dir(thread_id, user_id=user_id), paths.sandbox_outputs_dir(thread_id, user_id=user_id)]

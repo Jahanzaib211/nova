@@ -28,11 +28,11 @@ except ImportError:  # pragma: no cover - Windows fallback
     fcntl = None  # type: ignore[assignment]
     import msvcrt
 
-from deerflow.config import get_app_config
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.sandbox_provider import SandboxProvider
+from nova.config import get_app_config
+from nova.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.sandbox.sandbox import Sandbox
+from nova.sandbox.sandbox_provider import SandboxProvider
 
 from .aio_sandbox import AioSandbox
 from .backend import SandboxBackend, wait_for_sandbox_ready, wait_for_sandbox_ready_async
@@ -188,7 +188,7 @@ class AioSandboxProvider(SandboxProvider):
         - Remote/K8s mode (connect to pre-existing sandbox URL)
 
     Configuration options in config.yaml under sandbox:
-        use: deerflow.community.aio_sandbox:AioSandboxProvider
+        use: nova.community.aio_sandbox:AioSandboxProvider
         image: <container image>
         port: 8080                      # Base port for local containers
         container_prefix: deer-flow-sandbox
@@ -709,7 +709,7 @@ class AioSandboxProvider(SandboxProvider):
         if not thread_ids:
             return False
         try:
-            from deerflow.sandbox.dev_server import has_live_dev_server
+            from nova.sandbox.dev_server import has_live_dev_server
 
             return any(has_live_dev_server(tid) for tid in thread_ids)
         except Exception:
@@ -1011,7 +1011,7 @@ class AioSandboxProvider(SandboxProvider):
     def _startup_timeout(self) -> int:
         """Seconds to allow a new sandbox to answer on its port."""
         try:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             configured = getattr(getattr(get_app_config(), "sandbox", None), "startup_timeout", None)
         except Exception:  # noqa: BLE001 - never fail a start over reading a knob

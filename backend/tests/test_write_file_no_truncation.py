@@ -41,7 +41,7 @@ _VIRTUAL_OUT = "/mnt/user-data/workspace/out.txt"
 
 @pytest.fixture
 def workspace(tmp_path):
-    paths_module = sys.modules["deerflow.config.paths"]
+    paths_module = sys.modules["nova.config.paths"]
     fake = type("P", (), {})()
     fake.thread_dir = lambda tid, user_id=None: tmp_path / f"users/{user_id or 'default'}/threads/{tid}/user-data"
     fake.workspace_dir = lambda tid, user_id=None: fake.thread_dir(tid, user_id) / "workspace"
@@ -51,7 +51,7 @@ def workspace(tmp_path):
 
 @pytest.fixture
 def local_sandbox(workspace):
-    from deerflow.sandbox.local.local_sandbox import LocalSandbox, PathMapping
+    from nova.sandbox.local.local_sandbox import LocalSandbox, PathMapping
 
     ws = workspace / _THREAD_DIR / "workspace"
     ws.mkdir(parents=True, exist_ok=True)

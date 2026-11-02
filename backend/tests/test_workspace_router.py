@@ -23,7 +23,7 @@ THREAD_ID = "thread-ws-1"
 
 def _make_app(monkeypatch, tmp_path, *, enabled=True, owner_check_passes=True, create_dir=True):
     from app.gateway.routers import workspace as workspace_router
-    from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+    from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
     workspace_dir = tmp_path / "threads" / THREAD_ID / "user-data" / "workspace"
     if create_dir:

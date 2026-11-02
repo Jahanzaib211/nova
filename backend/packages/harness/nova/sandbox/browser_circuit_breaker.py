@@ -59,7 +59,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
 
-from deerflow.sandbox.browser_errors import BrowserCircuitOpenError
+from nova.sandbox.browser_errors import BrowserCircuitOpenError
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ def _transition(br: _BreakerState, new_state: CircuitState, reason: str) -> None
     # Uses late-bound import so this module stays usable without the registry
     # already initialised (registry is process-wide singleton so it is by D1).
     try:
-        from deerflow.sandbox.metrics import circuit_state_transitions_total
+        from nova.sandbox.metrics import circuit_state_transitions_total
 
         circuit_state_transitions_total.inc(br.state.value, new_state.value)
     except Exception:  # never let observability errors break the breaker

@@ -8,8 +8,8 @@ from langchain.agents.middleware.types import ModelCallResult, ModelRequest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.runtime import Runtime
 
-from deerflow.agents.middlewares.verify_vision import pop_verify_screenshot
-from deerflow.agents.thread_state import ThreadState
+from nova.agents.middlewares.verify_vision import pop_verify_screenshot
+from nova.agents.thread_state import ThreadState
 
 logger = logging.getLogger(__name__)
 

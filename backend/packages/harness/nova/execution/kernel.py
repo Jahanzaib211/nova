@@ -33,7 +33,7 @@ Design notes:
 
 Usage::
 
-    from deerflow.execution import ExecutionKernel, ExecutionRequest, ExecutionClass
+    from nova.execution import ExecutionKernel, ExecutionRequest, ExecutionClass
 
     kernel = ExecutionKernel()
     result = kernel.execute_sync(
@@ -54,20 +54,20 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
-from deerflow.events.bus import EventBus
-from deerflow.execution.audit import AuditEngine
-from deerflow.execution.metrics import ExecutionMetrics
-from deerflow.execution.models import (
+from nova.events.bus import EventBus
+from nova.execution.audit import AuditEngine
+from nova.execution.metrics import ExecutionMetrics
+from nova.execution.models import (
     ExecutionClass,
     ExecutionRequest,
     ExecutionResult,
     ExecutionStatus,
     now_iso,
 )
-from deerflow.execution.policy import PolicyEngine
-from deerflow.execution.resources import ResourceManager
-from deerflow.execution.scheduler import Admission, Scheduler
-from deerflow.execution.supervisor import ProcessHeartbeat, SpawnedProcess, Supervisor
+from nova.execution.policy import PolicyEngine
+from nova.execution.resources import ResourceManager
+from nova.execution.scheduler import Admission, Scheduler
+from nova.execution.supervisor import ProcessHeartbeat, SpawnedProcess, Supervisor
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +413,7 @@ class ExecutionKernel:
         if self._bus is None:
             return
         try:
-            from deerflow.events import event as events_mod
+            from nova.events import event as events_mod
 
             event_cls = getattr(events_mod, event_name, None)
             if event_cls is None:

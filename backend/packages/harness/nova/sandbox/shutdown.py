@@ -15,7 +15,7 @@ running.
 
 Install with::
 
-    from deerflow.sandbox.shutdown import install_shutdown_hooks
+    from nova.sandbox.shutdown import install_shutdown_hooks
     install_shutdown_hooks()
 
 The installer is idempotent — calling it twice is a no-op.
@@ -55,7 +55,7 @@ def _drain_browser_check_semaphore(budget_s: float) -> None:
     or the budget elapses.
     """
     try:
-        from deerflow.sandbox.browser_check_concurrency import (
+        from nova.sandbox.browser_check_concurrency import (
             MAX_CONCURRENT_BROWSER_CHECKS,
             get_browser_check_semaphore,
         )
@@ -103,7 +103,7 @@ def _reset_browser_state() -> None:
     all in-memory state that has no business surviving a process restart.
     """
     try:
-        from deerflow.tools.builtins.workspace_tools import (
+        from nova.tools.builtins.workspace_tools import (
             _browser_navigate_idempotency,
         )
 
@@ -113,7 +113,7 @@ def _reset_browser_state() -> None:
         pass
 
     try:
-        from deerflow.sandbox import browser_circuit_breaker as cb
+        from nova.sandbox import browser_circuit_breaker as cb
 
         cb.reset_all_circuits()
         logger.info("shutdown: reset all circuit breakers")
@@ -121,7 +121,7 @@ def _reset_browser_state() -> None:
         pass
 
     try:
-        from deerflow.sandbox import browser_check as bc
+        from nova.sandbox import browser_check as bc
 
         with bc._LAST_CHECKS_LOCK:
             bc._last_checks.clear()

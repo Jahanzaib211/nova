@@ -4,7 +4,7 @@
 missing, except ``get_store`` which returns ``None``.
 
 ``AppConfig`` is intentionally *not* cached on ``app.state``. Routers and the
-run path resolve it through :func:`deerflow.config.app_config.get_app_config`,
+run path resolve it through :func:`nova.config.app_config.get_app_config`,
 which performs mtime-based hot reload, so edits to ``config.yaml`` take
 effect on the next request without a process restart. The engines created in
 :func:`langgraph_runtime` (stream bridge, persistence, checkpointer, store,
@@ -26,9 +26,9 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from fastapi import FastAPI, HTTPException, Request
 from langgraph.types import Checkpointer
 
-from deerflow.config.app_config import AppConfig, get_app_config
-from deerflow.persistence.feedback import FeedbackRepository
-from deerflow.runtime import (
+from nova.config.app_config import AppConfig, get_app_config
+from nova.persistence.feedback import FeedbackRepository
+from nova.runtime import (
     CancelSignal,
     DistributedLock,
     NoopCancelSignal,
@@ -39,10 +39,10 @@ from deerflow.runtime import (
     RunManager,
     StreamBridge,
 )
-from deerflow.runtime.events.store.base import RunEventStore
-from deerflow.runtime.runs.store.base import RunStore
-from deerflow.services.container import service_container
-from deerflow.services.protocols import (
+from nova.runtime.events.store.base import RunEventStore
+from nova.runtime.runs.store.base import RunStore
+from nova.services.container import service_container
+from nova.services.protocols import (
     ArtifactService,
     BrowserService,
     ConfigurationService,
@@ -97,9 +97,9 @@ async def _drain_inflight_runs(run_manager: RunManager) -> None:
 if TYPE_CHECKING:
     from app.gateway.auth.local_provider import LocalAuthProvider
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
-    from deerflow.persistence.job.sql import JobRepository
-    from deerflow.persistence.thread_meta.base import ThreadMetaStore
-    from deerflow.runtime import RunRecord
+    from nova.persistence.job.sql import JobRepository
+    from nova.persistence.thread_meta.base import ThreadMetaStore
+    from nova.runtime import RunRecord
 
 
 T = TypeVar("T")
@@ -132,7 +132,7 @@ async def _mark_latest_recovered_threads_error(
 def get_config() -> AppConfig:
     """Return the freshest ``AppConfig`` for the current request.
 
-    Routes through :func:`deerflow.config.app_config.get_app_config`, which
+    Routes through :func:`nova.config.app_config.get_app_config`, which
     honours runtime ``ContextVar`` overrides and reloads ``config.yaml`` from
     disk when its mtime changes. ``AppConfig`` is not cached on ``app.state``
     at all — the only startup-time snapshot lives as a local
@@ -146,7 +146,7 @@ def get_config() -> AppConfig:
     Hot-reload boundary: fields backed by startup-time singletons
     (engines, sandbox provider, IM channels, logging handler) require a
     process restart to change at runtime. The authoritative list lives in
-    :mod:`deerflow.config.reload_boundary` and is mirrored by the
+    :mod:`nova.config.reload_boundary` and is mirrored by the
     standardised ``"startup-only:"`` prefix on the matching
     ``Field(description=...)`` in :class:`AppConfig` — IDE hover on those
     fields will surface the boundary inline. See
@@ -190,11 +190,11 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         async with langgraph_runtime(app, startup_config):
             yield
     """
-    from deerflow.persistence.engine import close_engine, get_session_factory, init_engine_from_config
-    from deerflow.runtime import make_store, make_stream_bridge
-    from deerflow.runtime.checkpointer.async_provider import make_checkpointer
-    from deerflow.runtime.events.retention import start_run_event_pruner, stop_run_event_pruner
-    from deerflow.runtime.events.store import make_run_event_store
+    from nova.persistence.engine import close_engine, get_session_factory, init_engine_from_config
+    from nova.runtime import make_store, make_stream_bridge
+    from nova.runtime.checkpointer.async_provider import make_checkpointer
+    from nova.runtime.events.retention import start_run_event_pruner, stop_run_event_pruner
+    from nova.runtime.events.store import make_run_event_store
 
     async with AsyncExitStack() as stack:
         config = startup_config
@@ -236,21 +236,21 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # Initialize repositories — one get_session_factory() call for all.
         sf = get_session_factory()
         if sf is not None:
-            from deerflow.persistence.feedback import FeedbackRepository
-            from deerflow.persistence.job.sql import JobRepository
-            from deerflow.persistence.run import RunRepository
+            from nova.persistence.feedback import FeedbackRepository
+            from nova.persistence.job.sql import JobRepository
+            from nova.persistence.run import RunRepository
 
             app.state.run_store = RunRepository(sf)
             app.state.feedback_repo = FeedbackRepository(sf)
             # Job runner read/enqueue side; the worker process runs the jobs.
             app.state.jobs_repo = JobRepository(sf)
         else:
-            from deerflow.runtime.runs.store.memory import MemoryRunStore
+            from nova.runtime.runs.store.memory import MemoryRunStore
 
             app.state.run_store = MemoryRunStore()
             app.state.feedback_repo = None
 
-        from deerflow.persistence.thread_meta import make_thread_store
+        from nova.persistence.thread_meta import make_thread_store
 
         app.state.thread_store = make_thread_store(sf, app.state.store)
 
@@ -279,7 +279,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # construction in tests never stacks duplicates.
         import asyncio as _asyncio
 
-        from deerflow.sandbox.computer_events import (
+        from nova.sandbox.computer_events import (
             add_dev_server_listener,
             add_observation_listener,
             remove_dev_server_listener,
@@ -354,8 +354,8 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # NOWHERE: its HealthChanged policies include restart_gateway /
         # restart_tunnel (destructive auto-recovery from inside the process
         # being restarted) — an explicit operator opt-in, not a default.
-        from deerflow.events.bus import event_bus as _domain_event_bus
-        from deerflow.services.implementations import (
+        from nova.events.bus import event_bus as _domain_event_bus
+        from nova.services.implementations import (
             ArtifactServiceImpl,
             BrowserServiceImpl,
             ConfigurationServiceImpl,
@@ -367,7 +367,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             TerminalServiceImpl,
             WorkspaceServiceImpl,
         )
-        from deerflow.services.protocols import RunService
+        from nova.services.protocols import RunService
 
         app.state.run_service: RunService = RunServiceImpl(app.state.run_manager, event_bus=_domain_event_bus)
         app.state.configuration_service = ConfigurationServiceImpl()
@@ -382,7 +382,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # Wire real probes. Constructed bare, HealthServiceImpl iterates an
         # empty dict and reports healthy=True/probe_count=0 — a report that
         # cannot fail, which is worse than none because it reads as evidence.
-        from deerflow.services.health_probes import default_probes
+        from nova.services.health_probes import default_probes
 
         app.state.health_service = HealthServiceImpl(probes=default_probes(app.state), event_bus=_domain_event_bus)
         app.state.recovery_service = RecoveryServiceImpl()
@@ -425,7 +425,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # Replicas are what make the sweep unsafe (a peer may still own a run),
         # and a distributed lock is exactly the signal for that.
         if isinstance(distributed_lock, NoopDistributedLock):
-            from deerflow.utils.time import now_iso
+            from nova.utils.time import now_iso
 
             # Clean shutdowns return no active rows and the thread-status
             # update below becomes a no-op.
@@ -477,12 +477,12 @@ get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_
 
 def get_em_repo(request: Request):
     """Email-marketing repository, built lazily on the app's session factory."""
-    from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+    from nova.persistence.email_marketing.sql import EmailMarketingRepository
 
     state = request.app.state
     repo = getattr(state, "em_repo", None)
     if repo is None:
-        from deerflow.persistence.engine import get_session_factory
+        from nova.persistence.engine import get_session_factory
 
         sf = get_session_factory()
         if sf is None:
@@ -493,11 +493,11 @@ def get_em_repo(request: Request):
 
 
 def get_integrations_registry(request: Request):
-    """The process-wide integrations registry (``deerflow.integrations``),
+    """The process-wide integrations registry (``nova.integrations``),
     shared with the ``integrations.*`` capability operations so both read one
     probe cache. A registry a test placed on ``app.state`` is used as-is.
     """
-    from deerflow.integrations.registry import get_integrations_registry as shared_registry
+    from nova.integrations.registry import get_integrations_registry as shared_registry
 
     override = getattr(request.app.state, "integrations_registry", None)
     if override is not None:
@@ -509,7 +509,7 @@ get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store"
 get_jobs_repo: Callable[[Request], JobRepository] = _require("jobs_repo", "Job runner")
 
 # Typed service getters — gateway routers should use these instead of
-# importing from deerflow.* directly (Phase C6 platform decoupling).
+# importing from nova.* directly (Phase C6 platform decoupling).
 get_configuration_service: Callable[[Request], ConfigurationService] = _require("configuration_service", "Configuration service")
 get_diagnostics_service: Callable[[Request], DiagnosticsService] = _require("diagnostics_service", "Diagnostics service")
 get_workspace_service: Callable[[Request], WorkspaceService] = _require("workspace_service", "Workspace service")
@@ -571,7 +571,7 @@ def get_local_provider() -> LocalAuthProvider:
     global _cached_local_provider, _cached_repo
     if _cached_repo is None:
         from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
-        from deerflow.persistence.engine import get_session_factory
+        from nova.persistence.engine import get_session_factory
 
         sf = get_session_factory()
         if sf is None:

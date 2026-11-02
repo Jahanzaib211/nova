@@ -11,8 +11,8 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from deerflow.config.app_config import AppConfig
-from deerflow.subagents.status_contract import (
+from nova.config.app_config import AppConfig
+from nova.subagents.status_contract import (
     extract_subagent_status,
     make_subagent_additional_kwargs,
 )
@@ -131,10 +131,10 @@ def _build_runtime_middlewares(
     lazy_init: bool = True,
 ) -> list[AgentMiddleware]:
     """Build shared base middlewares for agent execution."""
-    from deerflow.agents.middlewares.llm_error_handling_middleware import LLMErrorHandlingMiddleware
-    from deerflow.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
-    from deerflow.agents.middlewares.tool_output_budget_middleware import ToolOutputBudgetMiddleware
-    from deerflow.sandbox.middleware import SandboxMiddleware
+    from nova.agents.middlewares.llm_error_handling_middleware import LLMErrorHandlingMiddleware
+    from nova.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
+    from nova.agents.middlewares.tool_output_budget_middleware import ToolOutputBudgetMiddleware
+    from nova.sandbox.middleware import SandboxMiddleware
 
     middlewares: list[AgentMiddleware] = [
         ToolOutputBudgetMiddleware.from_app_config(app_config),
@@ -143,12 +143,12 @@ def _build_runtime_middlewares(
     ]
 
     if include_uploads:
-        from deerflow.agents.middlewares.uploads_middleware import UploadsMiddleware
+        from nova.agents.middlewares.uploads_middleware import UploadsMiddleware
 
         middlewares.insert(2, UploadsMiddleware())
 
     if include_dangling_tool_call_patch:
-        from deerflow.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
+        from nova.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
 
         middlewares.append(DanglingToolCallMiddleware())
 
@@ -159,8 +159,8 @@ def _build_runtime_middlewares(
     if guardrails_config.enabled and guardrails_config.provider:
         import inspect
 
-        from deerflow.guardrails.middleware import GuardrailMiddleware
-        from deerflow.reflection import resolve_variable
+        from nova.guardrails.middleware import GuardrailMiddleware
+        from nova.reflection import resolve_variable
 
         provider_cls = resolve_variable(guardrails_config.provider.use)
         provider_kwargs = dict(guardrails_config.provider.config) if guardrails_config.provider.config else {}
@@ -177,8 +177,8 @@ def _build_runtime_middlewares(
         provider = provider_cls(**provider_kwargs)
         middlewares.append(GuardrailMiddleware(provider, fail_closed=guardrails_config.fail_closed, passport=guardrails_config.passport))
 
-    from deerflow.agents.middlewares.sandbox_audit_middleware import SandboxAuditMiddleware
-    from deerflow.agents.middlewares.secure_ship_middleware import SecureShipMiddleware
+    from nova.agents.middlewares.sandbox_audit_middleware import SandboxAuditMiddleware
+    from nova.agents.middlewares.secure_ship_middleware import SecureShipMiddleware
 
     # Secure-Ship is the OUTERMOST of the security middlewares: `wrap_tool_call`
     # dispatch is "first in list = outermost", so it sees a delivery call before
@@ -209,7 +209,7 @@ def build_subagent_runtime_middlewares(
 ) -> list[AgentMiddleware]:
     """Middlewares shared by subagent runtime before subagent-only middlewares."""
     if app_config is None:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         app_config = get_app_config()
 
@@ -225,7 +225,7 @@ def build_subagent_runtime_middlewares(
 
     model_config = app_config.get_model_config(model_name) if model_name else None
     if model_config is not None and model_config.supports_vision:
-        from deerflow.agents.middlewares.view_image_middleware import ViewImageMiddleware
+        from nova.agents.middlewares.view_image_middleware import ViewImageMiddleware
 
         middlewares.append(ViewImageMiddleware())
 
@@ -235,7 +235,7 @@ def build_subagent_runtime_middlewares(
     # tool-policy filtering); promotion is read from graph state. Empty/None
     # setup (deferral disabled or no MCP tool survived) is a pure no-op.
     if deferred_setup is not None and deferred_setup.deferred_names:
-        from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+        from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
 
         middlewares.append(DeferredToolFilterMiddleware(deferred_setup.deferred_names, deferred_setup.catalog_hash))
 
@@ -245,7 +245,7 @@ def build_subagent_runtime_middlewares(
     # propagate back to the lead agent via the task tool result.
     safety_config = app_config.safety_finish_reason
     if safety_config.enabled:
-        from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
+        from nova.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
 
         middlewares.append(SafetyFinishReasonMiddleware.from_config(safety_config))
 

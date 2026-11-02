@@ -17,8 +17,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items, Ok
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items, Ok
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 _NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")
 
@@ -29,7 +29,7 @@ def secrets_dir() -> Path:
 
 def _known_env_names() -> list[str]:
     """Env var names config.yaml points at (never their values)."""
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     names: set[str] = set()
     integ = getattr(get_app_config(), "integrations", None)

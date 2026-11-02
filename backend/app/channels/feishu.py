@@ -22,9 +22,9 @@ from app.channels.message_bus import (
     OutboundMessage,
     ResolvedAttachment,
 )
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+from nova.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.sandbox.sandbox_provider import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 PENDING_CLARIFICATION_TTL_SECONDS = 30 * 60

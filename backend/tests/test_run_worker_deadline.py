@@ -18,9 +18,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from deerflow.runtime.runs.manager import RunManager
-from deerflow.runtime.runs.schemas import RunStatus
-from deerflow.runtime.runs.worker import DEFAULT_MAX_RUN_SECONDS, RunContext, resolve_max_run_seconds, run_agent
+from nova.runtime.runs.manager import RunManager
+from nova.runtime.runs.schemas import RunStatus
+from nova.runtime.runs.worker import DEFAULT_MAX_RUN_SECONDS, RunContext, resolve_max_run_seconds, run_agent
 
 pytestmark = pytest.mark.anyio
 

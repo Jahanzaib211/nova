@@ -17,7 +17,7 @@ import threading
 from collections import deque
 from dataclasses import replace
 
-from deerflow.execution.models import ExecutionRecord, ExecutionRequest, ExecutionResult
+from nova.execution.models import ExecutionRecord, ExecutionRequest, ExecutionResult
 
 logger = logging.getLogger(__name__)
 

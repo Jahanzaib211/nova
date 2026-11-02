@@ -51,7 +51,7 @@ class SandboxConfig(BaseModel):
 
     use: str = Field(
         ...,
-        description="Class path of the sandbox provider (e.g. deerflow.sandbox.local:LocalSandboxProvider)",
+        description="Class path of the sandbox provider (e.g. nova.sandbox.local:LocalSandboxProvider)",
     )
     allow_host_bash: bool = Field(
         default=False,

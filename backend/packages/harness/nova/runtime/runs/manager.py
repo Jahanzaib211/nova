@@ -10,16 +10,16 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from deerflow.runtime.stream_bridge.diagnostics import register_correlation_id
-from deerflow.utils.time import now_iso as _now_iso
+from nova.runtime.stream_bridge.diagnostics import register_correlation_id
+from nova.utils.time import now_iso as _now_iso
 
 from .cancel_signal import CancelSignal, NoopCancelSignal
 from .distributed_lock import DistributedLock, NoopDistributedLock
 from .schemas import DisconnectMode, RunStatus
 
 if TYPE_CHECKING:
-    from deerflow.execution.supervisor import Supervisor
-    from deerflow.runtime.runs.store.base import RunStore
+    from nova.execution.supervisor import Supervisor
+    from nova.runtime.runs.store.base import RunStore
 
 logger = logging.getLogger(__name__)
 

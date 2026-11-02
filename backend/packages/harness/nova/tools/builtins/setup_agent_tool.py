@@ -5,11 +5,11 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from langgraph.types import Command
 
-from deerflow.config.agents_config import validate_agent_name
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import resolve_runtime_user_id
-from deerflow.tools.types import Runtime
-from deerflow.utils.atomic_write import atomic_write_text
+from nova.config.agents_config import validate_agent_name
+from nova.config.paths import get_paths
+from nova.runtime.user_context import resolve_runtime_user_id
+from nova.tools.types import Runtime
+from nova.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 

@@ -22,14 +22,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from deerflow.config.email_config import EmailConfig
-from deerflow.config.email_marketing_config import EmailMarketingConfig
-from deerflow.email_marketing.smtp import DomainThrottle, OutboundMessage, SendResult, SmtpSender
-from deerflow.email_marketing.templates import TemplateError, render_template
-from deerflow.email_marketing.tracking import TrackingLinks
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.queue import JobQueue
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.config.email_config import EmailConfig
+from nova.config.email_marketing_config import EmailMarketingConfig
+from nova.email_marketing.smtp import DomainThrottle, OutboundMessage, SendResult, SmtpSender
+from nova.email_marketing.templates import TemplateError, render_template
+from nova.email_marketing.tracking import TrackingLinks
+from nova.jobs.context import JobContext
+from nova.jobs.queue import JobQueue
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
 
 logger = logging.getLogger(__name__)
 

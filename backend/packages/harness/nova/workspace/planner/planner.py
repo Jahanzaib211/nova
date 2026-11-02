@@ -14,13 +14,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from deerflow.workspace.graph.command_registry import CommandRegistry
-from deerflow.workspace.graph.dependency_graph import DependencyGraph
-from deerflow.workspace.graph.symbol_index import SymbolIndex
-from deerflow.workspace.graph.workspace_graph import WorkspaceGraph
-from deerflow.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel, StepKind
-from deerflow.workspace.planner.plan_validator import PlanValidationResult, PlanValidator
-from deerflow.workspace.planner.risk_analyzer import RiskAnalyzer
+from nova.workspace.graph.command_registry import CommandRegistry
+from nova.workspace.graph.dependency_graph import DependencyGraph
+from nova.workspace.graph.symbol_index import SymbolIndex
+from nova.workspace.graph.workspace_graph import WorkspaceGraph
+from nova.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel, StepKind
+from nova.workspace.planner.plan_validator import PlanValidationResult, PlanValidator
+from nova.workspace.planner.risk_analyzer import RiskAnalyzer
 
 
 @dataclass

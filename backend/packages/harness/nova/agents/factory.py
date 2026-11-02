@@ -18,12 +18,12 @@ from typing import TYPE_CHECKING
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware
 
-from deerflow.agents.features import RuntimeFeatures
-from deerflow.agents.middlewares.clarification_middleware import ClarificationMiddleware
-from deerflow.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
-from deerflow.agents.middlewares.tool_error_handling_middleware import ToolErrorHandlingMiddleware
-from deerflow.agents.thread_state import ThreadState
-from deerflow.tools.builtins import ask_clarification_tool
+from nova.agents.features import RuntimeFeatures
+from nova.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from nova.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
+from nova.agents.middlewares.tool_error_handling_middleware import ToolErrorHandlingMiddleware
+from nova.agents.thread_state import ThreadState
+from nova.tools.builtins import ask_clarification_tool
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -194,9 +194,9 @@ def _assemble_from_features(
         if isinstance(feat.sandbox, AgentMiddleware):
             chain.append(feat.sandbox)
         else:
-            from deerflow.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
-            from deerflow.agents.middlewares.uploads_middleware import UploadsMiddleware
-            from deerflow.sandbox.middleware import SandboxMiddleware
+            from nova.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
+            from nova.agents.middlewares.uploads_middleware import UploadsMiddleware
+            from nova.sandbox.middleware import SandboxMiddleware
 
             chain.append(ThreadDataMiddleware(lazy_init=True))
             chain.append(UploadsMiddleware())
@@ -224,7 +224,7 @@ def _assemble_from_features(
 
     # --- [7] TodoMiddleware (plan_mode) ---
     if plan_mode:
-        from deerflow.agents.middlewares.todo_middleware import TodoMiddleware
+        from nova.agents.middlewares.todo_middleware import TodoMiddleware
 
         chain.append(TodoMiddleware(system_prompt=_TODO_SYSTEM_PROMPT, tool_description=_TODO_TOOL_DESCRIPTION))
 
@@ -233,7 +233,7 @@ def _assemble_from_features(
         if isinstance(feat.auto_title, AgentMiddleware):
             chain.append(feat.auto_title)
         else:
-            from deerflow.agents.middlewares.title_middleware import TitleMiddleware
+            from nova.agents.middlewares.title_middleware import TitleMiddleware
 
             chain.append(TitleMiddleware())
 
@@ -242,7 +242,7 @@ def _assemble_from_features(
         if isinstance(feat.memory, AgentMiddleware):
             chain.append(feat.memory)
         else:
-            from deerflow.agents.middlewares.memory_middleware import MemoryMiddleware
+            from nova.agents.middlewares.memory_middleware import MemoryMiddleware
 
             chain.append(MemoryMiddleware(agent_name=name))
 
@@ -251,12 +251,12 @@ def _assemble_from_features(
         if isinstance(feat.vision, AgentMiddleware):
             chain.append(feat.vision)
         else:
-            from deerflow.agents.middlewares.view_image_middleware import ViewImageMiddleware
+            from nova.agents.middlewares.view_image_middleware import ViewImageMiddleware
 
             chain.append(ViewImageMiddleware())
 
         if feat.sandbox is not False:
-            from deerflow.tools.builtins import view_image_tool
+            from nova.tools.builtins import view_image_tool
 
             extra_tools.append(view_image_tool)
 
@@ -265,10 +265,10 @@ def _assemble_from_features(
         if isinstance(feat.subagent, AgentMiddleware):
             chain.append(feat.subagent)
         else:
-            from deerflow.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
+            from nova.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
 
             chain.append(SubagentLimitMiddleware())
-        from deerflow.tools.builtins import task_tool
+        from nova.tools.builtins import task_tool
 
         extra_tools.append(task_tool)
 
@@ -277,8 +277,8 @@ def _assemble_from_features(
         if isinstance(feat.loop_detection, AgentMiddleware):
             chain.append(feat.loop_detection)
         else:
-            from deerflow.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
-            from deerflow.config.loop_detection_config import LoopDetectionConfig
+            from nova.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
+            from nova.config.loop_detection_config import LoopDetectionConfig
 
             chain.append(LoopDetectionMiddleware.from_config(LoopDetectionConfig()))
 

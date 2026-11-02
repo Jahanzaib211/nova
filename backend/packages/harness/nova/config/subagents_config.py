@@ -146,9 +146,9 @@ class SubagentsAppConfig(BaseModel):
         description="Optional default max-turn override for all subagents (None = keep builtin defaults)",
     )
     max_concurrent: int = Field(
-        # Literal, not an import of MAX_CONCURRENT_SUBAGENTS. deerflow.config
-        # importing deerflow.subagents.config re-enters the executor's own
-        # import of deerflow.config and breaks the module graph -- the exact
+        # Literal, not an import of MAX_CONCURRENT_SUBAGENTS. nova.config
+        # importing nova.subagents.config re-enters the executor's own
+        # import of nova.config and breaks the module graph -- the exact
         # cycle that file's header warns about and test_import_hygiene.py
         # guards. Keep the two in step by hand; they are both 3.
         default=3,

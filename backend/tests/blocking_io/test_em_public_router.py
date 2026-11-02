@@ -9,23 +9,23 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.gateway.routers import email_marketing_public
-from deerflow.config.app_config import AppConfig
-from deerflow.email_marketing.tracking import TrackingLinks
-from deerflow.persistence.base import Base
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.config.app_config import AppConfig
+from nova.email_marketing.tracking import TrackingLinks
+from nova.persistence.base import Base
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
 
 pytestmark = pytest.mark.anyio
 
 
 async def test_open_and_click_do_no_blocking_io(monkeypatch):
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     em = EmailMarketingRepository(sf)
-    cfg = AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}, "email_marketing": {"enabled": True, "public_base_url": "https://n.example", "tracking_secret": "k"}})
+    cfg = AppConfig.model_validate({"sandbox": {"use": "nova.sandbox.local.local_sandbox:LocalSandboxProvider"}, "email_marketing": {"enabled": True, "public_base_url": "https://n.example", "tracking_secret": "k"}})
     monkeypatch.setattr(email_marketing_public, "get_config", lambda: cfg)
     lst = await em.create_list("o", name="L")
     tpl = await em.create_template("o", name="T", subject="s", html="h")

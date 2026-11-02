@@ -6,7 +6,7 @@ for full traceability.
 
 Usage::
 
-    from deerflow.events.event import RunCreated, DomainEvent
+    from nova.events.event import RunCreated, DomainEvent
 
     event = RunCreated(
         run_id="abc123",

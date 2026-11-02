@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from deerflow.config.acp_config import ACPAgentConfig
+from nova.config.acp_config import ACPAgentConfig
 
 pytestmark = pytest.mark.anyio
 
@@ -35,9 +35,9 @@ class _RecordingRepo:
 
 @pytest.fixture
 def mint_env(monkeypatch: pytest.MonkeyPatch) -> list[_RecordingRepo]:
-    from deerflow.config import app_config as app_config_module
-    from deerflow.persistence import engine as engine_module
-    from deerflow.persistence.harness_token import sql as token_sql
+    from nova.config import app_config as app_config_module
+    from nova.persistence import engine as engine_module
+    from nova.persistence.harness_token import sql as token_sql
 
     repos: list[_RecordingRepo] = []
 
@@ -53,8 +53,8 @@ def mint_env(monkeypatch: pytest.MonkeyPatch) -> list[_RecordingRepo]:
 
 
 async def test_delegate_token_is_scoped_to_the_sandbox_module(mint_env) -> None:
-    from deerflow.runtimes.session import DELEGATE_SCOPES, default_nova_mcp
-    from deerflow.runtimes.transcript import DELEGATE_ROLE
+    from nova.runtimes.session import DELEGATE_SCOPES, default_nova_mcp
+    from nova.runtimes.transcript import DELEGATE_ROLE
 
     server, _ = default_nova_mcp("u1", "thread-1", role=DELEGATE_ROLE)
     await server["__mint__"]()
@@ -63,7 +63,7 @@ async def test_delegate_token_is_scoped_to_the_sandbox_module(mint_env) -> None:
 
 
 async def test_chat_runtime_token_keeps_every_module(mint_env) -> None:
-    from deerflow.runtimes.session import default_nova_mcp
+    from nova.runtimes.session import default_nova_mcp
 
     server, _ = default_nova_mcp("u1", "thread-1")
     await server["__mint__"]()
@@ -71,8 +71,8 @@ async def test_chat_runtime_token_keeps_every_module(mint_env) -> None:
 
 
 async def test_delegate_without_a_thread_gets_no_token(mint_env) -> None:
-    from deerflow.runtimes.session import default_nova_mcp
-    from deerflow.runtimes.transcript import DELEGATE_ROLE
+    from nova.runtimes.session import default_nova_mcp
+    from nova.runtimes.transcript import DELEGATE_ROLE
 
     server, cleanup = default_nova_mcp("u1", None, role=DELEGATE_ROLE)
     assert server is None
@@ -81,8 +81,8 @@ async def test_delegate_without_a_thread_gets_no_token(mint_env) -> None:
 
 
 async def test_the_delegate_tool_mints_with_the_delegate_role(mint_env) -> None:
-    from deerflow.runtimes.session import DELEGATE_SCOPES
-    from deerflow.tools.builtins.invoke_acp_agent_tool import _nova_mcp
+    from nova.runtimes.session import DELEGATE_SCOPES
+    from nova.tools.builtins.invoke_acp_agent_tool import _nova_mcp
 
     server, _ = _nova_mcp("u1", "thread-9")
     await server["__mint__"]()
@@ -98,9 +98,9 @@ def test_delegate_scopes_admit_every_sandbox_op_and_nothing_else() -> None:
     ``tools/call``; that path is exercised end to end by
     ``test_acp_runtime_drives_sandbox_e2e``.
     """
-    from deerflow.capabilities import CapabilityRegistry
-    from deerflow.capabilities.modules import register_builtin_modules
-    from deerflow.runtimes.session import DELEGATE_SCOPES
+    from nova.capabilities import CapabilityRegistry
+    from nova.capabilities.modules import register_builtin_modules
+    from nova.runtimes.session import DELEGATE_SCOPES
 
     registry = CapabilityRegistry()
     register_builtin_modules(registry)
@@ -119,7 +119,7 @@ def test_delegate_scopes_admit_every_sandbox_op_and_nothing_else() -> None:
 async def test_revoke_survives_a_second_cancellation() -> None:
     """The session is cancelled, and then the revoke in its ``finally`` is
     cancelled again: the token must still end up revoked."""
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     revoke_started = asyncio.Event()
     release = asyncio.Event()
@@ -160,7 +160,7 @@ async def test_revoke_survives_a_second_cancellation() -> None:
 
 
 async def test_a_failed_revoke_is_logged_at_warning(caplog) -> None:
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     class BrokenRepo:
         async def revoke(self, token_id, *, owner_user_id):
@@ -172,7 +172,7 @@ async def test_a_failed_revoke_is_logged_at_warning(caplog) -> None:
 
         return {"__mint__": _mint, "url": "http://gw", "repo": BrokenRepo()}, lambda: None
 
-    caplog.set_level(logging.WARNING, logger="deerflow.runtimes.session")
+    caplog.set_level(logging.WARNING, logger="nova.runtimes.session")
     async with open_acp_session(agent="claude_code", user_id="u1", thread_id="t1", nova_mcp=factory, client_servers=lambda: []):
         pass
     records = [r for r in caplog.records if "tok-1" in r.getMessage()]
@@ -191,19 +191,19 @@ class _RecordingStore:
 
 
 def _usage(total: int = 300):
-    from deerflow.runtimes.acp_transport import ACPTurnUsage
+    from nova.runtimes.acp_transport import ACPTurnUsage
 
     return ACPTurnUsage.from_acp(SimpleNamespace(input_tokens=total - 50, output_tokens=50, total_tokens=total))
 
 
 async def test_delegated_turn_usage_lands_in_the_subagent_bucket(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    from deerflow.runtime.journal import RunJournal
-    from deerflow.runtimes import acp_transport
-    from deerflow.runtimes.acp_transport import ACPText
-    from deerflow.tools.builtins import invoke_acp_agent_tool as tool_module
+    from nova.runtime.journal import RunJournal
+    from nova.runtimes import acp_transport
+    from nova.runtimes.acp_transport import ACPText
+    from nova.tools.builtins import invoke_acp_agent_tool as tool_module
 
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "_paths", None, raising=False)
     monkeypatch.setattr(tool_module, "_nova_mcp", lambda u, t: (None, lambda: None))
@@ -229,8 +229,8 @@ async def test_delegated_turn_usage_lands_in_the_subagent_bucket(monkeypatch: py
 
 
 async def test_delegated_usage_is_found_through_the_callbacks_too() -> None:
-    from deerflow.runtimes.acp_transport import ACPText
-    from deerflow.tools.builtins.invoke_acp_agent_tool import _record_delegated_usage
+    from nova.runtimes.acp_transport import ACPText
+    from nova.tools.builtins.invoke_acp_agent_tool import _record_delegated_usage
 
     class Journal:
         def __init__(self) -> None:
@@ -255,8 +255,8 @@ async def test_delegated_usage_is_found_through_the_callbacks_too() -> None:
 
 
 async def test_chat_runtime_usage_without_session_id_never_collides() -> None:
-    from deerflow.runtimes.acp_transport import ACPText
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.acp_transport import ACPText
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     class Journal:
         def __init__(self) -> None:

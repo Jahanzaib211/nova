@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.gateway.auth_disabled import is_explicit_production_environment
-from deerflow.runtime.user_context import DEFAULT_USER_ID
+from nova.runtime.user_context import DEFAULT_USER_ID
 
 logger = logging.getLogger(__name__)
 

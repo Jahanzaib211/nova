@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from deerflow.persistence.base import Base
-from deerflow.persistence.models.agent_config_row import AgentConfigRow
+from nova.persistence.base import Base
+from nova.persistence.models.agent_config_row import AgentConfigRow
 
 
 @pytest.fixture

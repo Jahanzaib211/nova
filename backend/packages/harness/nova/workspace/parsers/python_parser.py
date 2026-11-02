@@ -13,7 +13,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from deerflow.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
+from nova.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
 
 
 class PythonParseError(Exception):

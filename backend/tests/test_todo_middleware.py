@@ -9,14 +9,14 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import PrivateAttr
 
-from deerflow.agents.middlewares.todo_middleware import (
+from nova.agents.middlewares.todo_middleware import (
     TodoMiddleware,
     _format_todos,
     _has_tool_call_intent_or_error,
     _reminder_in_messages,
     _todos_in_messages,
 )
-from deerflow.agents.thread_state import ThreadState
+from nova.agents.thread_state import ThreadState
 
 
 def _ai_with_write_todos():

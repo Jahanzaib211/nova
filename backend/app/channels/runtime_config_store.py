@@ -24,7 +24,7 @@ class ChannelRuntimeConfigStore:
 
     def __init__(self, path: str | Path | None = None) -> None:
         if path is None:
-            from deerflow.config.paths import get_paths
+            from nova.config.paths import get_paths
 
             path = Path(get_paths().base_dir) / "channels" / "runtime-config.json"
         self._path = Path(path)

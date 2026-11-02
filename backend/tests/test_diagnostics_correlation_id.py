@@ -17,8 +17,8 @@ import os
 
 import pytest
 
-from deerflow.runtime.stream_bridge import diagnostics
-from deerflow.runtime.stream_bridge.diagnostics import (
+from nova.runtime.stream_bridge import diagnostics
+from nova.runtime.stream_bridge.diagnostics import (
     _Diagnostics,
     lookup_correlation_id,
     register_correlation_id,
@@ -38,7 +38,7 @@ def fresh_diagnostics(monkeypatch):
     fake._sink = lambda line: sink.write(line + "\n")
     monkeypatch.setattr(diagnostics, "diagnostics", fake)
     # Also reset the correlation registry maps (process-scoped).
-    import deerflow.runtime.stream_bridge.diagnostics as mod
+    import nova.runtime.stream_bridge.diagnostics as mod
 
     mod._correlation_by_thread.clear()
     mod._correlation_by_run.clear()

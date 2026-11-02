@@ -30,7 +30,7 @@ models:
     api_key: $OPENAI_API_KEY
     base_url: $OPENAI_API_BASE
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
 agents_api:
   enabled: true
 title:
@@ -90,10 +90,10 @@ def reset_process_singletons(monkeypatch: pytest.MonkeyPatch) -> None:
     incompatibility loudly.
     """
     from app.gateway import deps as deps_module
-    from deerflow.config import app_config as app_config_module
-    from deerflow.config import extensions_config as extensions_config_module
-    from deerflow.config import paths as paths_module
-    from deerflow.persistence import engine as engine_module
+    from nova.config import app_config as app_config_module
+    from nova.config import extensions_config as extensions_config_module
+    from nova.config import paths as paths_module
+    from nova.persistence import engine as engine_module
 
     for module, attr, value in (
         (app_config_module, "_app_config", None),
@@ -120,7 +120,7 @@ def preserve_process_config_singletons(monkeypatch: pytest.MonkeyPatch) -> None:
     ``monkeypatch`` lets pytest restore the pre-test values during teardown, so
     loading the isolated test config does not leak into later tests.
     """
-    from deerflow.config import (
+    from nova.config import (
         acp_config,
         agents_api_config,
         checkpointer_config,
@@ -153,7 +153,7 @@ def build_isolated_app(isolated_deer_flow_home: Path, monkeypatch: pytest.Monkey
     preserve_process_config_singletons(monkeypatch)
     reset_process_singletons(monkeypatch)
 
-    from deerflow.config import app_config as app_config_module
+    from nova.config import app_config as app_config_module
 
     cfg = app_config_module.get_app_config()
     cfg.database.sqlite_dir = str(isolated_deer_flow_home / "db")

@@ -6,12 +6,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items, Ok
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items, Ok
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _servers() -> dict[str, Any]:
-    from deerflow.config.extensions_config import get_extensions_config
+    from nova.config.extensions_config import get_extensions_config
 
     return get_extensions_config().mcp_servers
 
@@ -20,7 +20,7 @@ def _tool_counts() -> dict[str, int]:
     # Same counter as the integrations registry (by ``<server>_`` name
     # prefix). This used to read ``metadata["mcp_server"]``, which the MCP
     # adapter never sets, so every server reported 0 tools.
-    from deerflow.mcp.cache import tool_counts_by_server
+    from nova.mcp.cache import tool_counts_by_server
 
     return tool_counts_by_server(_servers())
 
@@ -43,7 +43,7 @@ async def _list(ctx: OpContext, inp: Empty) -> Items:
 
 
 async def _tools(ctx: OpContext, inp: Empty) -> Items:
-    from deerflow.mcp.cache import get_cached_mcp_tools, server_for_tool
+    from nova.mcp.cache import get_cached_mcp_tools, server_for_tool
 
     servers = list(_servers())
     items = [{"name": t.name, "description": (t.description or "")[:200], "server": server_for_tool(t.name, servers)} for t in get_cached_mcp_tools()]
@@ -56,11 +56,11 @@ class ToggleIn(BaseModel):
 
 
 async def _toggle(ctx: OpContext, inp: ToggleIn) -> Ok:
-    from deerflow.config.extensions_config import set_mcp_server_enabled
+    from nova.config.extensions_config import set_mcp_server_enabled
 
     set_mcp_server_enabled(inp.name, inp.enabled)
     try:
-        from deerflow.mcp.cache import reset_mcp_tools_cache
+        from nova.mcp.cache import reset_mcp_tools_cache
 
         reset_mcp_tools_cache()
     except Exception:

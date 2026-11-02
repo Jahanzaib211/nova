@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities import (
+from nova.capabilities import (
     CapabilityModule,
     CapabilityRegistry,
     ModuleStatus,
@@ -154,7 +154,7 @@ async def test_module_status_is_collected_per_module():
 
 
 def test_harness_tools_are_derived_only_for_harness_ops_and_allowed_kinds():
-    from deerflow.tools.capability_tools import build_capability_tools
+    from nova.tools.capability_tools import build_capability_tools
 
     async def _h(ctx: OpContext, inp: EchoIn) -> EchoOut:
         return EchoOut(text=inp.text)
@@ -173,9 +173,9 @@ def test_harness_tools_are_derived_only_for_harness_ops_and_allowed_kinds():
 
 @pytest.mark.asyncio
 async def test_harness_tool_invocation_uses_effective_user_context(monkeypatch):
-    from deerflow.tools.capability_tools import build_capability_tools
+    from nova.tools.capability_tools import build_capability_tools
 
-    monkeypatch.setattr("deerflow.tools.capability_tools.get_effective_user_id", lambda: "harness-user")
+    monkeypatch.setattr("nova.tools.capability_tools.get_effective_user_id", lambda: "harness-user")
     reg = CapabilityRegistry()
     reg.register(_module())
     who = next(t for t in build_capability_tools(reg, enabled_flags=set(), groups={"nova:echo"}) if t.name == "echo__whoami")
@@ -186,9 +186,9 @@ async def test_harness_tool_invocation_uses_effective_user_context(monkeypatch):
 def test_get_available_tools_includes_capability_tools_only_for_configured_groups(monkeypatch):
     """`tool_groups: [{name: nova:jobs}]` in config.yaml turns the jobs
     operations into lead-agent tools; without it nothing leaks in."""
-    from deerflow.config.app_config import get_app_config
-    from deerflow.config.tool_config import ToolGroupConfig
-    from deerflow.tools.tools import get_available_tools
+    from nova.config.app_config import get_app_config
+    from nova.config.tool_config import ToolGroupConfig
+    from nova.tools.tools import get_available_tools
 
     base = get_app_config()
     without = base.model_copy(update={"tool_groups": [g for g in base.tool_groups if not g.name.startswith("nova:")], "tools": []})
@@ -212,7 +212,7 @@ def test_feature_flag_keys_are_pinned_on_both_sides():
     from pathlib import Path
 
     from app.gateway.routers.capabilities import FeatureFlags
-    from deerflow.capabilities.modules.features import FLAG_KEYS
+    from nova.capabilities.modules.features import FLAG_KEYS
 
     assert set(FeatureFlags.model_fields) == set(FLAG_KEYS)
     types_ts = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / "types.ts").read_text(encoding="utf-8")
@@ -228,8 +228,8 @@ def test_builtin_registry_snapshot_matches_contract():
     from pathlib import Path
 
     from app.gateway.capabilities_modules import register_gateway_modules
-    from deerflow.capabilities import CapabilityRegistry
-    from deerflow.capabilities.modules import register_builtin_modules
+    from nova.capabilities import CapabilityRegistry
+    from nova.capabilities.modules import register_builtin_modules
 
     reg = CapabilityRegistry()
     register_builtin_modules(reg)

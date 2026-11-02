@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 
 from app.gateway.auth.models import User
 from app.gateway.routers import thread_runs
-from deerflow.runtime import RunManager
-from deerflow.runtime.runs.store.memory import MemoryRunStore
+from nova.runtime import RunManager
+from nova.runtime.runs.store.memory import MemoryRunStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,7 +38,7 @@ def _make_app(event_store=None, run_manager=None):
         app.state.run_manager = run_manager
         # Phase C6 migrated the run endpoints from RunManager to RunService;
         # the test app must provide both, like the gateway lifespan does.
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.services.implementations import RunServiceImpl
 
         app.state.run_service = RunServiceImpl(run_manager)
 

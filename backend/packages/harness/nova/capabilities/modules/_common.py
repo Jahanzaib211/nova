@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from deerflow.capabilities.types import ModuleStatus
+from nova.capabilities.types import ModuleStatus
 
 
 class Empty(BaseModel):
@@ -24,7 +24,7 @@ class Items(BaseModel):
 
 
 def config_section(name: str) -> Any:
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     return getattr(get_app_config(), name, None)
 
@@ -41,8 +41,8 @@ def status_from_flag(name: str, *, healthy_detail: str = "configured", off_detai
 
 def jobs_repo():
     """The job repository, or ``None`` when no database is configured."""
-    from deerflow.persistence.engine import get_session_factory
-    from deerflow.persistence.job.sql import JobRepository
+    from nova.persistence.engine import get_session_factory
+    from nova.persistence.job.sql import JobRepository
 
     sf = get_session_factory()
     return JobRepository(sf) if sf is not None else None

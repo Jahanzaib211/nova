@@ -14,19 +14,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.gateway.auth_middleware import _is_public as is_public_path
 from app.gateway.csrf_middleware import CSRFMiddleware
 from app.gateway.routers import email_marketing_public
-from deerflow.config.app_config import AppConfig
-from deerflow.email_marketing.tracking import TrackingLinks, make_token
-from deerflow.persistence.base import Base
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.config.app_config import AppConfig
+from nova.email_marketing.tracking import TrackingLinks, make_token
+from nova.persistence.base import Base
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
 
 pytestmark = pytest.mark.no_auto_user
-SANDBOX = {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}
+SANDBOX = {"use": "nova.sandbox.local.local_sandbox:LocalSandboxProvider"}
 SECRET = "k"
 
 
 @pytest.fixture()
 def world(monkeypatch):
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

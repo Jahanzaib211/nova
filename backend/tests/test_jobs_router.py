@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.gateway.auth.models import User
 from app.gateway.routers import jobs
-from deerflow.jobs.queue import JobQueue
-from deerflow.persistence.base import Base
-from deerflow.persistence.job.sql import JobRepository
+from nova.jobs.queue import JobQueue
+from nova.persistence.base import Base
+from nova.persistence.job.sql import JobRepository
 
 pytestmark = pytest.mark.no_auto_user
 
@@ -27,7 +27,7 @@ def _user(email: str) -> User:
 
 @pytest.fixture()
 def repo():
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

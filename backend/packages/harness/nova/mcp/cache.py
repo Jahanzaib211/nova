@@ -21,7 +21,7 @@ def _get_config_mtime() -> float | None:
     Returns:
         The modification time as a float, or None if the file doesn't exist.
     """
-    from deerflow.config.extensions_config import ExtensionsConfig
+    from nova.config.extensions_config import ExtensionsConfig
 
     config_path = ExtensionsConfig.resolve_config_path()
     if config_path and config_path.exists():
@@ -69,7 +69,7 @@ async def initialize_mcp_tools() -> list[BaseTool]:
             logger.info("MCP tools already initialized")
             return _mcp_tools_cache or []
 
-        from deerflow.mcp.tools import get_mcp_tools
+        from nova.mcp.tools import get_mcp_tools
 
         logger.info("Initializing MCP tools...")
         _mcp_tools_cache = await get_mcp_tools()
@@ -186,13 +186,13 @@ def reset_mcp_tools_cache() -> None:
     # loop to finish teardown here: that is a self-deadlock (the loop can only
     # run the teardown after this synchronous call returns control to it).
     try:
-        from deerflow.mcp.session_pool import get_session_pool
+        from nova.mcp.session_pool import get_session_pool
 
         get_session_pool().close_all_sync()
     except Exception:
         logger.debug("Could not close MCP session pool on cache reset", exc_info=True)
 
-    from deerflow.mcp.session_pool import reset_session_pool
+    from nova.mcp.session_pool import reset_session_pool
 
     reset_session_pool()
     logger.info("MCP tools cache reset")

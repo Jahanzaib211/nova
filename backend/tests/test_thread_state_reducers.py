@@ -9,7 +9,7 @@ from typing import get_type_hints
 
 import pytest
 
-from deerflow.agents.thread_state import (
+from nova.agents.thread_state import (
     ThreadState,
     merge_artifacts,
     merge_sandbox,

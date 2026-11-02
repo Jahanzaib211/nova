@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from deerflow.workspace.models.execution_plan import ExecutionPlan, RiskLevel
+from nova.workspace.models.execution_plan import ExecutionPlan, RiskLevel
 
 
 @dataclass
@@ -112,7 +112,7 @@ class PlanValidator:
         return errors
 
     def _risk_warnings(self, plan: ExecutionPlan) -> list[str]:
-        from deerflow.workspace.planner.risk_analyzer import RiskAnalyzer
+        from nova.workspace.planner.risk_analyzer import RiskAnalyzer
 
         analyzed = RiskAnalyzer().analyze_plan(plan)
         if analyzed.order > RiskLevel.MEDIUM.order:

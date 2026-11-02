@@ -6,8 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _describe(m: Any, *, default: bool) -> dict[str, Any]:
@@ -22,14 +22,14 @@ def _describe(m: Any, *, default: bool) -> dict[str, Any]:
         "supports_vision": bool(getattr(m, "supports_vision", False)),
         "max_input_tokens": getattr(m, "max_input_tokens", None),
         # `runtime: claude_code` on a model routes chats using it to that
-        # runtime (deerflow.runtimes); absent means native.
+        # runtime (nova.runtimes); absent means native.
         "runtime": getattr(m, "runtime", None),
         "base_url": getattr(m, "base_url", None) or (getattr(m, "extra", {}) or {}).get("base_url"),
     }
 
 
 async def _list(ctx: OpContext, inp: Empty) -> Items:
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     models = get_app_config().models
     items = [_describe(m, default=i == 0) for i, m in enumerate(models)]
@@ -51,14 +51,14 @@ async def _probe(ctx: OpContext, inp: ProbeIn) -> ProbeOut:
     """One tiny completion — "Check model" — so a misconfigured key or a
     stopped local server is reported here and not on the user's first message.
     Same probe (timeout, no tracing) as ``POST /api/models/{name}/test``."""
-    from deerflow.models.probe import probe_model
+    from nova.models.probe import probe_model
 
     result = await probe_model(inp.name)
     return ProbeOut(name=inp.name, ok=result.ok, latency_ms=result.latency_ms, detail=result.detail[:80] if result.ok else result.detail[:300])
 
 
 async def _status() -> ModuleStatus:
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     n = len(get_app_config().models)
     return ModuleStatus(configured=n > 0, healthy=n > 0, detail=f"{n} model(s) configured")

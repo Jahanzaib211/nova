@@ -18,9 +18,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.gateway.routers import sharing
-from deerflow.persistence.base import Base
-from deerflow.persistence.shared_thread.model import SharedThreadRow
-from deerflow.runtime.events.store.memory import MemoryRunEventStore
+from nova.persistence.base import Base
+from nova.persistence.shared_thread.model import SharedThreadRow
+from nova.runtime.events.store.memory import MemoryRunEventStore
 
 ALLOWED_KEYS = {"event_type", "content", "created_at", "seq", "run_id"}
 

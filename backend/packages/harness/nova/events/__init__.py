@@ -4,8 +4,8 @@ Phase C3+C4 — typed, synchronous event bus with domain events.
 
 Usage::
 
-    from deerflow.events import event_bus, EventPublisher, EventSubscriber
-    from deerflow.events.event import RunCreated
+    from nova.events import event_bus, EventPublisher, EventSubscriber
+    from nova.events.event import RunCreated
 
     # Publish an event
     publisher = EventPublisher()
@@ -25,8 +25,8 @@ Usage::
     event_bus.publish(RunCreated(run_id="abc", thread_id="t1"))
 """
 
-from deerflow.events.bus import EventBus, event_bus
-from deerflow.events.event import (
+from nova.events.bus import EventBus, event_bus
+from nova.events.event import (
     ArtifactCreated,
     BrowserStarted,
     BrowserStopped,
@@ -63,9 +63,9 @@ from deerflow.events.event import (
     WorkspaceMounted,
     WorkspaceReleased,
 )
-from deerflow.events.publisher import EventPublisher
-from deerflow.events.registry import EventRegistry, event_registry
-from deerflow.events.subscriber import EventSubscriber
+from nova.events.publisher import EventPublisher
+from nova.events.registry import EventRegistry, event_registry
+from nova.events.subscriber import EventSubscriber
 
 __all__ = [
     # Bus

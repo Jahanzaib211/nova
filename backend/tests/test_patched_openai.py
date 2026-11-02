@@ -1,4 +1,4 @@
-"""Tests for deerflow.models.patched_openai.PatchedChatOpenAI.
+"""Tests for nova.models.patched_openai.PatchedChatOpenAI.
 
 These tests verify that _restore_tool_call_signatures correctly re-injects
 ``thought_signature`` onto tool-call objects stored in
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from deerflow.models.patched_openai import _restore_tool_call_signatures
+from nova.models.patched_openai import _restore_tool_call_signatures
 
 # ---------------------------------------------------------------------------
 # Helpers

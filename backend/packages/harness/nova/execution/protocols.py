@@ -1,7 +1,7 @@
 """Protocol interfaces for the Nova Execution Kernel.
 
 Phase C7 — structural typing for the kernel surface, following the same
-``typing.Protocol`` pattern as ``deerflow.services.protocols`` (Phase C1).
+``typing.Protocol`` pattern as ``nova.services.protocols`` (Phase C1).
 Callers depend on these protocols, never on concrete classes.
 """
 
@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from deerflow.execution.models import (
+from nova.execution.models import (
     ExecutionRequest,
     ExecutionResult,
 )
-from deerflow.execution.supervisor import SpawnedProcess
+from nova.execution.supervisor import SpawnedProcess
 
 
 @runtime_checkable

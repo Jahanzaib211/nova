@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import httpx
 
-from deerflow.integrations.base import HttpIntegration
-from deerflow.integrations.health import HealthResult, IntegrationStatus
+from nova.integrations.base import HttpIntegration
+from nova.integrations.health import HealthResult, IntegrationStatus
 
 
 class OllamaIntegration(HttpIntegration):

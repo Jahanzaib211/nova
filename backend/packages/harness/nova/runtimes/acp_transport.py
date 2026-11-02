@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.runtimes.types import PermissionPreset
+from nova.config.acp_config import ACPAgentConfig
+from nova.runtimes.types import PermissionPreset
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,7 @@ class ACPText(str):
 
 def build_acp_mcp_servers() -> list[dict[str, Any]]:
     """Nova's enabled MCP *client* servers in ACP ``new_session`` wire format."""
-    from deerflow.config.extensions_config import ExtensionsConfig
+    from nova.config.extensions_config import ExtensionsConfig
 
     enabled = ExtensionsConfig.from_file().get_enabled_mcp_servers()
     out: list[dict[str, Any]] = []
@@ -238,7 +238,7 @@ def nova_tool_decision(title: str | None, mode: str, kind_of: Callable[[str], st
 
 def _registry_kind(op_name: str) -> str | None:
     try:
-        from deerflow.capabilities import get_registry
+        from nova.capabilities import get_registry
 
         return get_registry().get(op_name).kind
     except Exception:
@@ -259,7 +259,7 @@ def _run_scope_suffix() -> str:
     multiple runtimes mounted, attribution was guesswork.
     """
     try:
-        from deerflow.runtime.run_context import format_scope
+        from nova.runtime.run_context import format_scope
 
         text = format_scope()
         return f" ({text})" if text else ""

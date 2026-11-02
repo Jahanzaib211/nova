@@ -6,8 +6,8 @@ in the bus itself; the module-level ``event_bus`` singleton is opt-in).
 
 Usage::
 
-    from deerflow.events.bus import EventBus
-    from deerflow.events.event import RunCreated
+    from nova.events.bus import EventBus
+    from nova.events.event import RunCreated
 
     bus = EventBus()
 
@@ -26,7 +26,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-from deerflow.events.event import DomainEvent
+from nova.events.event import DomainEvent
 
 logger = logging.getLogger(__name__)
 

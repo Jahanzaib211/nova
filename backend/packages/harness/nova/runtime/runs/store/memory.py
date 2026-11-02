@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from deerflow.runtime.runs.store.base import RunStore
+from nova.runtime.runs.store.base import RunStore
 
 
 class MemoryRunStore(RunStore):

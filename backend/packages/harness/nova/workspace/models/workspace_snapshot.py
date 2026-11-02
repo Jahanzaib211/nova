@@ -9,12 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.workspace.models.command import Command
-from deerflow.workspace.models.dependency import Dependency
-from deerflow.workspace.models.fingerprint import RepositoryFingerprint
-from deerflow.workspace.models.node import Edge, Node
-from deerflow.workspace.models.project import Module, Package, Project
-from deerflow.workspace.models.symbol import Symbol
+from nova.workspace.models.command import Command
+from nova.workspace.models.dependency import Dependency
+from nova.workspace.models.fingerprint import RepositoryFingerprint
+from nova.workspace.models.node import Edge, Node
+from nova.workspace.models.project import Module, Package, Project
+from nova.workspace.models.symbol import Symbol
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ class WorkspaceSnapshot:
         """
         from dataclasses import fields as dc_fields
 
-        from deerflow.workspace.models.symbol import SymbolLocation
+        from nova.workspace.models.symbol import SymbolLocation
 
         def build(item_cls, payload: dict[str, Any]):
             names = {f.name for f in dc_fields(item_cls)}

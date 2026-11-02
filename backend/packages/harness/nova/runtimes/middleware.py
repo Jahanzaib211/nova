@@ -28,10 +28,10 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from deerflow.runtimes.registry import RuntimeRegistry, get_runtime_registry
-from deerflow.runtimes.session import NARRATION_PREFIXES, NovaMcpFactory, default_nova_mcp, mirror_runtime_action, open_acp_session
-from deerflow.runtimes.transcript import transcript_for_prompt
-from deerflow.runtimes.types import NATIVE, policy_for_mode
+from nova.runtimes.registry import RuntimeRegistry, get_runtime_registry
+from nova.runtimes.session import NARRATION_PREFIXES, NovaMcpFactory, default_nova_mcp, mirror_runtime_action, open_acp_session
+from nova.runtimes.transcript import transcript_for_prompt
+from nova.runtimes.types import NATIVE, policy_for_mode
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +160,7 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
         user_id = ctx.get("user_id")
         if not user_id:
             try:
-                from deerflow.runtime.user_context import get_effective_user_id
+                from nova.runtime.user_context import get_effective_user_id
 
                 user_id = get_effective_user_id()
             except Exception:
@@ -183,7 +183,7 @@ class RuntimeDispatchMiddleware(AgentMiddleware):
             async with open_acp_session(agent=selection.runtime, user_id=user_id, thread_id=thread_id, nova_mcp=self._nova_mcp, turn_timeout=self._turn_timeout) as session:
                 run = self._run_prompt
                 if run is None:
-                    from deerflow.runtimes.acp_transport import run_acp_prompt
+                    from nova.runtimes.acp_transport import run_acp_prompt
 
                     run = run_acp_prompt
                 cwd = _work_dir(thread_id)
@@ -244,7 +244,7 @@ def _mark_fallback(result: Any, runtime: str, reason: str) -> None:
 
 def _work_dir(thread_id: str | None) -> str:
     try:
-        from deerflow.tools.builtins.invoke_acp_agent_tool import _get_work_dir
+        from nova.tools.builtins.invoke_acp_agent_tool import _get_work_dir
 
         return _get_work_dir(thread_id)
     except Exception:

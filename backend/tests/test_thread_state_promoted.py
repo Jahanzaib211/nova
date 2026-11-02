@@ -1,4 +1,4 @@
-from deerflow.agents.thread_state import merge_promoted
+from nova.agents.thread_state import merge_promoted
 
 
 def test_merge_promoted_preserves_existing_when_new_is_none():

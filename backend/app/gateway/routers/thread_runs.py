@@ -1,8 +1,8 @@
 """Runs endpoints — create, stream, wait, cancel.
 
 Implements the LangGraph Platform runs API on top of
-:class:`deerflow.agents.runs.RunManager` and
-:class:`deerflow.agents.stream_bridge.StreamBridge`.
+:class:`nova.agents.runs.RunManager` and
+:class:`nova.agents.stream_bridge.StreamBridge`.
 
 SSE format is aligned with the LangGraph Platform protocol so that
 the ``useStream`` React hook from ``@langchain/langgraph-sdk/react``
@@ -23,7 +23,7 @@ from app.gateway.authz import require_permission
 from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_service, get_run_store, get_stream_bridge, require_admin_user
 from app.gateway.pagination import trim_run_message_page
 from app.gateway.services import SSE_HEADERS, format_sse, sse_consumer, start_run, wait_for_run_completion
-from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
+from nova.runtime import RunRecord, RunStatus, serialize_channel_values_for_api
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["runs"])
@@ -519,6 +519,6 @@ async def stream_trace_diagnostics(request: Request, limit: int = Query(default=
     """
     await require_admin_user(request, detail="Admin access required for stream diagnostics.")
 
-    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from nova.runtime.stream_bridge.diagnostics import read_recent_diagnostics
 
     return {"records": read_recent_diagnostics(limit=limit)}

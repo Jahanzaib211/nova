@@ -17,8 +17,8 @@ import asyncio
 
 import pytest
 
-from deerflow.speech import registry
-from deerflow.speech.engines.null import ScriptedSTT, ToneTTS
+from nova.speech import registry
+from nova.speech.engines.null import ScriptedSTT, ToneTTS
 
 
 @pytest.fixture(autouse=True)
@@ -96,7 +96,7 @@ class TestSavingDropsCachedEngines:
         registry.set_engines(tts=ToneTTS())
         assert registry.get_tts_engine().name == "tone"
 
-        registry.save_overrides({"enabled": True, "tts": {"use": "deerflow.speech.engines.null:ToneTTS", "sample_rate": 8000}})
+        registry.save_overrides({"enabled": True, "tts": {"use": "nova.speech.engines.null:ToneTTS", "sample_rate": 8000}})
         rebuilt = registry.get_tts_engine()
         assert rebuilt.sample_rate == 8000, "the rebuilt engine ignored the new settings"
 
@@ -170,7 +170,7 @@ class TestConfigEndpoints:
         from app.gateway.routers import voice as voice_mod
 
         with pytest.raises(HTTPException) as e:
-            self._call(voice_mod.put_voice_config, {"tts": {"use": "deerflow.speech.engines.null:NoSuchEngine"}})
+            self._call(voice_mod.put_voice_config, {"tts": {"use": "nova.speech.engines.null:NoSuchEngine"}})
         assert e.value.status_code == 400
         assert "speech.tts.use" in str(e.value.detail)
 

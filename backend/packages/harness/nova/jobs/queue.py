@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from deerflow.persistence.job.sql import JobRepository
+    from nova.persistence.job.sql import JobRepository
 
 
 class JobQueue:

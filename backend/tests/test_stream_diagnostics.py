@@ -61,11 +61,11 @@ def _diagnostics_file(tmp_path, monkeypatch):
     """
     trace_file = tmp_path / "stream-trace.ndjson"
     mods = [
-        "deerflow.runtime.stream_bridge.diagnostics",
-        "deerflow.runtime.stream_bridge.memory",
-        "deerflow.runtime.stream_bridge.base",
-        "deerflow.runtime.stream_bridge",
-        "deerflow.runtime",
+        "nova.runtime.stream_bridge.diagnostics",
+        "nova.runtime.stream_bridge.memory",
+        "nova.runtime.stream_bridge.base",
+        "nova.runtime.stream_bridge",
+        "nova.runtime",
         "app.gateway.services",
         "app.gateway",
     ]
@@ -84,10 +84,10 @@ def _diagnostics_file(tmp_path, monkeypatch):
     # Importing a submodule binds it as an attribute on whichever parent
     # module object was live at import time. Re-bind in both directions:
     # (1) every restored module onto ITS parent package (re-importing
-    # deerflow.runtime pointed `deerflow.runtime` at an orphan object on
+    # nova.runtime pointed `nova.runtime` at an orphan object on
     # the top-level `deerflow` package), and (2) every surviving child
     # submodule onto the restored parents — so attribute paths like
-    # ``deerflow.runtime.runs.worker`` stay resolvable for monkeypatch
+    # ``nova.runtime.runs.worker`` stay resolvable for monkeypatch
     # in later test modules.
     for name in mods:
         module = sys.modules.get(name)
@@ -114,14 +114,14 @@ async def test_diagnostic_recorder_captures_publish_boundary(_diagnostics_file):
     """
     # Re-import after the env vars have been set by the fixture so the
     # bridge module picks up the new diagnostics reference.
-    sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.diagnostics import (
+    sys.modules.pop("nova.runtime.stream_bridge.memory", None)
+    sys.modules.pop("nova.runtime.stream_bridge", None)
+    sys.modules.pop("nova.runtime.stream_bridge.diagnostics", None)
+    from nova.runtime.stream_bridge.diagnostics import (
         diagnostics,
         read_recent_diagnostics,
     )
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     assert diagnostics.enabled is True, "DEER_FLOW_STREAM_TRACE=1 must enable the recorder"
 
@@ -146,12 +146,12 @@ async def test_diagnostic_recorder_captures_subscribe_lifecycle(_diagnostics_fil
     ``bridge.subscribe.yield`` per entry then ``bridge.subscribe.close``
     with a meaningful reason.
     """
-    sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.base import END_SENTINEL
-    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    sys.modules.pop("nova.runtime.stream_bridge.memory", None)
+    sys.modules.pop("nova.runtime.stream_bridge", None)
+    sys.modules.pop("nova.runtime.stream_bridge.diagnostics", None)
+    from nova.runtime.stream_bridge.base import END_SENTINEL
+    from nova.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     bridge = MemoryStreamBridge(queue_maxsize=4)
     run_id = "trace-subscribe-test"
@@ -200,12 +200,12 @@ async def test_diagnostic_recorder_captures_cancellation_reason(_diagnostics_fil
     ``cancelled``, not ``end_sentinel``. This distinguishes the
     "client went away" case from "run finished naturally".
     """
-    sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.base import HEARTBEAT_SENTINEL
-    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    sys.modules.pop("nova.runtime.stream_bridge.memory", None)
+    sys.modules.pop("nova.runtime.stream_bridge", None)
+    sys.modules.pop("nova.runtime.stream_bridge.diagnostics", None)
+    from nova.runtime.stream_bridge.base import HEARTBEAT_SENTINEL
+    from nova.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     bridge = MemoryStreamBridge(queue_maxsize=4)
     run_id = "trace-cancel-test"
@@ -241,7 +241,7 @@ async def test_diagnostic_recorder_captures_cancellation_reason(_diagnostics_fil
 async def _drain_until_heartbeat(bridge, run_id):
     # Import inside the helper so the fixture-driven reimport dance is
     # honoured on every call.
-    from deerflow.runtime.stream_bridge.base import HEARTBEAT_SENTINEL
+    from nova.runtime.stream_bridge.base import HEARTBEAT_SENTINEL
 
     async for entry in bridge.subscribe(run_id, heartbeat_interval=0.05):
         if entry is HEARTBEAT_SENTINEL:
@@ -260,11 +260,11 @@ async def test_bridge_drop_event_under_load(_diagnostics_file):
     recorder — this is the signal that we can use in production to
     decide whether the buffer overflow hypothesis is real.
     """
-    sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    sys.modules.pop("nova.runtime.stream_bridge.memory", None)
+    sys.modules.pop("nova.runtime.stream_bridge", None)
+    sys.modules.pop("nova.runtime.stream_bridge.diagnostics", None)
+    from nova.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     bridge = MemoryStreamBridge(queue_maxsize=3)
     run_id = "trace-overflow-test"
@@ -290,15 +290,15 @@ async def test_sse_consumer_loop_iter_records_disconnect_flag(_diagnostics_file,
     iteration and record the result. This is the only signal we have
     that the gateway noticed the client was gone.
     """
-    sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
+    sys.modules.pop("nova.runtime.stream_bridge.memory", None)
+    sys.modules.pop("nova.runtime.stream_bridge", None)
+    sys.modules.pop("nova.runtime.stream_bridge.diagnostics", None)
     sys.modules.pop("app.gateway.services", None)
     sys.modules.pop("app.gateway", None)
 
     from app.gateway.services import sse_consumer
-    from deerflow.runtime.stream_bridge.diagnostics import read_recent_diagnostics
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    from nova.runtime.stream_bridge.diagnostics import read_recent_diagnostics
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     # Build a fake Request whose is_disconnected returns True on the
     # second call. This simulates a client that closes the TCP
@@ -369,17 +369,17 @@ async def test_diagnostic_recorder_disabled_by_default(monkeypatch):
     """Without the env flag the recorder must be a complete no-op. This
     is the production-no-noise guarantee required by Phase 2.
     """
-    sys.modules.pop("deerflow.runtime.stream_bridge.diagnostics", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge", None)
-    sys.modules.pop("deerflow.runtime.stream_bridge.memory", None)
+    sys.modules.pop("nova.runtime.stream_bridge.diagnostics", None)
+    sys.modules.pop("nova.runtime.stream_bridge", None)
+    sys.modules.pop("nova.runtime.stream_bridge.memory", None)
     monkeypatch.delenv("DEER_FLOW_STREAM_TRACE", raising=False)
     monkeypatch.delenv("DEER_FLOW_STREAM_TRACE_FILE", raising=False)
 
-    from deerflow.runtime.stream_bridge.diagnostics import (
+    from nova.runtime.stream_bridge.diagnostics import (
         diagnostics,
         read_recent_diagnostics,
     )
-    from deerflow.runtime.stream_bridge.memory import MemoryStreamBridge
+    from nova.runtime.stream_bridge.memory import MemoryStreamBridge
 
     assert diagnostics.enabled is False
     bridge = MemoryStreamBridge(queue_maxsize=4)

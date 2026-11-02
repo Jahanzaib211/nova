@@ -25,15 +25,15 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
 
 DEADLOCK_BUDGET_S = 5.0
 
 
 @pytest.fixture()
 def sandbox():
-    with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-        from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+        from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
         sb = AioSandbox(id="7ea3700c", base_url="http://localhost:8080")
         sb._STREAM_POLL_INTERVAL = 0

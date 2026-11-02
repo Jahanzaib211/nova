@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from deerflow.config.runtime_paths import existing_project_file
+from nova.config.runtime_paths import existing_project_file
 
 
 class McpOAuthConfig(BaseModel):
@@ -245,7 +245,7 @@ def update_extensions_config_file(mutate: Callable[[dict[str, Any]], None], conf
     interceptors. The write is temp-file + replace because the file is read
     on every agent run (2026-07 audit C4). Callers reload the cache.
     """
-    from deerflow.utils.atomic_write import atomic_write_text
+    from nova.utils.atomic_write import atomic_write_text
 
     path = extensions_config_write_path(config_path)
     raw: dict[str, Any] = {}

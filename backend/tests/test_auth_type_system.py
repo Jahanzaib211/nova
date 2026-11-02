@@ -44,7 +44,7 @@ def _persistence_engine(tmp_path):
     import asyncio
 
     from app.gateway import deps
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     url = f"sqlite+aiosqlite:///{tmp_path}/auth_types.db"
     asyncio.run(init_engine("sqlite", url=url, sqlite_dir=str(tmp_path)))

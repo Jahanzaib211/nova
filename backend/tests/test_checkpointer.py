@@ -9,18 +9,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import deerflow.config.app_config as app_config_module
-from deerflow.config.checkpointer_config import (
+import nova.config.app_config as app_config_module
+from nova.config.checkpointer_config import (
     CheckpointerConfig,
     ensure_config_loaded,
     get_checkpointer_config,
     load_checkpointer_config_from_dict,
     set_checkpointer_config,
 )
-from deerflow.runtime.checkpointer import get_checkpointer, reset_checkpointer
-from deerflow.runtime.checkpointer.provider import POSTGRES_INSTALL
-from deerflow.runtime.store import get_store, reset_store
-from deerflow.runtime.store.provider import POSTGRES_STORE_INSTALL
+from nova.runtime.checkpointer import get_checkpointer, reset_checkpointer
+from nova.runtime.checkpointer.provider import POSTGRES_INSTALL
+from nova.runtime.store import get_store, reset_store
+from nova.runtime.store.provider import POSTGRES_STORE_INSTALL
 
 
 @pytest.fixture(autouse=True)
@@ -155,7 +155,7 @@ class TestCheckpointerConfig:
         def fake_get_app_config():
             load_checkpointer_config_from_dict({"type": "memory"})
 
-        with patch("deerflow.config.app_config.get_app_config", side_effect=fake_get_app_config) as mock_get_app_config:
+        with patch("nova.config.app_config.get_app_config", side_effect=fake_get_app_config) as mock_get_app_config:
             ensure_config_loaded()
 
         mock_get_app_config.assert_called_once()
@@ -166,7 +166,7 @@ class TestCheckpointerConfig:
     def test_ensure_config_loaded_skips_explicit_config(self):
         load_checkpointer_config_from_dict({"type": "memory"})
 
-        with patch("deerflow.config.app_config.get_app_config") as mock_get_app_config:
+        with patch("nova.config.app_config.get_app_config") as mock_get_app_config:
             ensure_config_loaded()
 
         mock_get_app_config.assert_not_called()
@@ -222,7 +222,7 @@ class TestGetCheckpointer:
         """get_checkpointer should return InMemorySaver when not configured."""
         from langgraph.checkpoint.memory import InMemorySaver
 
-        with patch("deerflow.config.app_config.get_app_config", side_effect=FileNotFoundError):
+        with patch("nova.config.app_config.get_app_config", side_effect=FileNotFoundError):
             cp = get_checkpointer()
         assert cp is not None
         assert isinstance(cp, InMemorySaver)
@@ -318,9 +318,9 @@ class TestGetCheckpointer:
 
         with (
             patch.dict(sys.modules, {"langgraph.checkpoint.sqlite": mock_module}),
-            patch("deerflow.runtime.checkpointer.provider.ensure_sqlite_parent_dir") as mock_ensure,
+            patch("nova.runtime.checkpointer.provider.ensure_sqlite_parent_dir") as mock_ensure,
             patch(
-                "deerflow.runtime.checkpointer.provider.resolve_sqlite_conn_str",
+                "nova.runtime.checkpointer.provider.resolve_sqlite_conn_str",
                 return_value="/tmp/resolved/relative/test.db",
             ),
         ):
@@ -354,11 +354,11 @@ class TestGetCheckpointer:
         with (
             patch.dict(sys.modules, {"langgraph.checkpoint.sqlite": mock_module}),
             patch(
-                "deerflow.runtime.checkpointer.provider.ensure_sqlite_parent_dir",
+                "nova.runtime.checkpointer.provider.ensure_sqlite_parent_dir",
                 side_effect=record_ensure,
             ),
             patch(
-                "deerflow.runtime.checkpointer.provider.resolve_sqlite_conn_str",
+                "nova.runtime.checkpointer.provider.resolve_sqlite_conn_str",
                 return_value="/tmp/resolved/relative/test.db",
             ),
         ):
@@ -403,7 +403,7 @@ class TestSyncSingletonThreadSafety:
         load_checkpointer_config_from_dict({"type": "memory"})
         factory = _BlockingSingletonFactory()
 
-        with patch("deerflow.runtime.checkpointer.provider._sync_checkpointer_cm", side_effect=factory.context_manager):
+        with patch("nova.runtime.checkpointer.provider._sync_checkpointer_cm", side_effect=factory.context_manager):
             futures_started = ThreadPoolExecutor(max_workers=1)
             try:
                 result_future = futures_started.submit(_call_getter_concurrently, get_checkpointer)
@@ -421,7 +421,7 @@ class TestSyncSingletonThreadSafety:
         load_checkpointer_config_from_dict({"type": "memory"})
         factory = _BlockingSingletonFactory()
 
-        with patch("deerflow.runtime.store.provider._sync_store_cm", side_effect=factory.context_manager):
+        with patch("nova.runtime.store.provider._sync_store_cm", side_effect=factory.context_manager):
             futures_started = ThreadPoolExecutor(max_workers=1)
             try:
                 result_future = futures_started.submit(_call_getter_concurrently, get_store)
@@ -443,8 +443,8 @@ class TestSyncSingletonThreadSafety:
             load_checkpointer_config_from_dict({"type": "memory"})
 
         with (
-            patch("deerflow.runtime.checkpointer.provider._checkpointer_lock", tracking_lock),
-            patch("deerflow.runtime.checkpointer.provider.ensure_config_loaded", side_effect=fake_ensure_config_loaded),
+            patch("nova.runtime.checkpointer.provider._checkpointer_lock", tracking_lock),
+            patch("nova.runtime.checkpointer.provider.ensure_config_loaded", side_effect=fake_ensure_config_loaded),
         ):
             checkpointer = get_checkpointer()
 
@@ -459,8 +459,8 @@ class TestSyncSingletonThreadSafety:
             load_checkpointer_config_from_dict({"type": "memory"})
 
         with (
-            patch("deerflow.runtime.store.provider._store_lock", tracking_lock),
-            patch("deerflow.runtime.store.provider.ensure_config_loaded", side_effect=fake_ensure_config_loaded),
+            patch("nova.runtime.store.provider._store_lock", tracking_lock),
+            patch("nova.runtime.store.provider.ensure_config_loaded", side_effect=fake_ensure_config_loaded),
         ):
             store = get_store()
 
@@ -472,7 +472,7 @@ class TestSyncSingletonThreadSafety:
         factory = _BlockingSingletonFactory()
 
         with (
-            patch("deerflow.runtime.checkpointer.provider._sync_checkpointer_cm", side_effect=factory.context_manager),
+            patch("nova.runtime.checkpointer.provider._sync_checkpointer_cm", side_effect=factory.context_manager),
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
             get_future = executor.submit(get_checkpointer)
@@ -502,7 +502,7 @@ class TestSyncSingletonThreadSafety:
         factory = _BlockingSingletonFactory()
 
         with (
-            patch("deerflow.runtime.store.provider._sync_store_cm", side_effect=factory.context_manager),
+            patch("nova.runtime.store.provider._sync_store_cm", side_effect=factory.context_manager),
             ThreadPoolExecutor(max_workers=2) as executor,
         ):
             get_future = executor.submit(get_store)
@@ -532,7 +532,7 @@ class TestAsyncCheckpointer:
     @pytest.mark.anyio
     async def test_sqlite_creates_parent_dir_via_to_thread(self):
         """Async SQLite setup should move mkdir off the event loop."""
-        from deerflow.runtime.checkpointer.async_provider import _prepare_sqlite_checkpointer_path, make_checkpointer
+        from nova.runtime.checkpointer.async_provider import _prepare_sqlite_checkpointer_path, make_checkpointer
 
         mock_config = MagicMock()
         mock_config.checkpointer = CheckpointerConfig(type="sqlite", connection_string="relative/test.db")
@@ -549,10 +549,10 @@ class TestAsyncCheckpointer:
         mock_module.AsyncSqliteSaver = mock_saver_cls
 
         with (
-            patch("deerflow.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
+            patch("nova.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
             patch.dict(sys.modules, {"langgraph.checkpoint.sqlite.aio": mock_module}),
             patch(
-                "deerflow.runtime.checkpointer.async_provider.asyncio.to_thread",
+                "nova.runtime.checkpointer.async_provider.asyncio.to_thread",
                 new_callable=AsyncMock,
                 return_value="/tmp/resolved/test.db",
             ) as mock_to_thread,
@@ -570,7 +570,7 @@ class TestAsyncCheckpointer:
     @pytest.mark.anyio
     async def test_postgres_uses_connection_pool(self):
         """Async postgres checkpointer should use AsyncConnectionPool, not a single connection."""
-        from deerflow.runtime.checkpointer.async_provider import make_checkpointer
+        from nova.runtime.checkpointer.async_provider import make_checkpointer
 
         mock_config = MagicMock()
         mock_config.checkpointer = CheckpointerConfig(type="postgres", connection_string="postgresql://localhost/db")
@@ -594,7 +594,7 @@ class TestAsyncCheckpointer:
         mock_psycopg_rows.dict_row = mock_dict_row
 
         with (
-            patch("deerflow.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
+            patch("nova.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
             patch.dict(sys.modules, {"langgraph.checkpoint.postgres.aio": mock_pg_module}),
             patch.dict(sys.modules, {"psycopg.rows": mock_psycopg_rows}),
             patch.dict(sys.modules, {"psycopg_pool": MagicMock(AsyncConnectionPool=mock_pool_cls)}),
@@ -617,8 +617,8 @@ class TestAsyncCheckpointer:
     @pytest.mark.anyio
     async def test_database_postgres_uses_connection_pool(self):
         """Unified database postgres path should use AsyncConnectionPool with keepalive."""
-        from deerflow.config.database_config import DatabaseConfig
-        from deerflow.runtime.checkpointer.async_provider import make_checkpointer
+        from nova.config.database_config import DatabaseConfig
+        from nova.runtime.checkpointer.async_provider import make_checkpointer
 
         db_config = DatabaseConfig(backend="postgres", postgres_url="postgresql://localhost/db")
         mock_config = MagicMock()
@@ -644,7 +644,7 @@ class TestAsyncCheckpointer:
         mock_psycopg_rows.dict_row = mock_dict_row
 
         with (
-            patch("deerflow.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
+            patch("nova.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
             patch.dict(sys.modules, {"langgraph.checkpoint.postgres.aio": mock_pg_module}),
             patch.dict(sys.modules, {"psycopg.rows": mock_psycopg_rows}),
             patch.dict(sys.modules, {"psycopg_pool": MagicMock(AsyncConnectionPool=mock_pool_cls)}),
@@ -663,8 +663,8 @@ class TestAsyncCheckpointer:
     @pytest.mark.anyio
     async def test_database_sqlite_creates_parent_dir_via_to_thread(self):
         """Unified database SQLite setup should also move path IO off the event loop."""
-        from deerflow.config.database_config import DatabaseConfig
-        from deerflow.runtime.checkpointer.async_provider import _prepare_database_sqlite_checkpointer_path, make_checkpointer
+        from nova.config.database_config import DatabaseConfig
+        from nova.runtime.checkpointer.async_provider import _prepare_database_sqlite_checkpointer_path, make_checkpointer
 
         db_config = DatabaseConfig(backend="sqlite", sqlite_dir="relative-data")
         mock_config = MagicMock()
@@ -683,10 +683,10 @@ class TestAsyncCheckpointer:
         mock_module.AsyncSqliteSaver = mock_saver_cls
 
         with (
-            patch("deerflow.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
+            patch("nova.runtime.checkpointer.async_provider.get_app_config", return_value=mock_config),
             patch.dict(sys.modules, {"langgraph.checkpoint.sqlite.aio": mock_module}),
             patch(
-                "deerflow.runtime.checkpointer.async_provider.asyncio.to_thread",
+                "nova.runtime.checkpointer.async_provider.asyncio.to_thread",
                 new_callable=AsyncMock,
                 return_value="/tmp/data/deerflow.db",
             ) as mock_to_thread,
@@ -727,7 +727,7 @@ class TestClientCheckpointerFallback:
         """DeerFlowClient._ensure_agent falls back to get_checkpointer() when checkpointer=None."""
         from langgraph.checkpoint.memory import InMemorySaver
 
-        from deerflow.client import DeerFlowClient
+        from nova.client import DeerFlowClient
 
         load_checkpointer_config_from_dict({"type": "memory"})
 
@@ -744,12 +744,12 @@ class TestClientCheckpointerFallback:
         config_mock.checkpointer = None
 
         with (
-            patch("deerflow.client.get_app_config", return_value=config_mock),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client.create_chat_model", return_value=MagicMock()),
-            patch("deerflow.client.build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value=""),
-            patch("deerflow.client.DeerFlowClient._get_tools", return_value=[]),
+            patch("nova.client.get_app_config", return_value=config_mock),
+            patch("nova.client.create_agent", side_effect=fake_create_agent),
+            patch("nova.client.create_chat_model", return_value=MagicMock()),
+            patch("nova.client.build_middlewares", return_value=[]),
+            patch("nova.client.apply_prompt_template", return_value=""),
+            patch("nova.client.DeerFlowClient._get_tools", return_value=[]),
         ):
             client = DeerFlowClient(checkpointer=None)
             config = client._get_runnable_config("test-thread")
@@ -760,7 +760,7 @@ class TestClientCheckpointerFallback:
 
     def test_client_explicit_checkpointer_takes_precedence(self):
         """An explicitly provided checkpointer is used even when config checkpointer is set."""
-        from deerflow.client import DeerFlowClient
+        from nova.client import DeerFlowClient
 
         load_checkpointer_config_from_dict({"type": "memory"})
 
@@ -778,12 +778,12 @@ class TestClientCheckpointerFallback:
         config_mock.checkpointer = None
 
         with (
-            patch("deerflow.client.get_app_config", return_value=config_mock),
-            patch("deerflow.client.create_agent", side_effect=fake_create_agent),
-            patch("deerflow.client.create_chat_model", return_value=MagicMock()),
-            patch("deerflow.client.build_middlewares", return_value=[]),
-            patch("deerflow.client.apply_prompt_template", return_value=""),
-            patch("deerflow.client.DeerFlowClient._get_tools", return_value=[]),
+            patch("nova.client.get_app_config", return_value=config_mock),
+            patch("nova.client.create_agent", side_effect=fake_create_agent),
+            patch("nova.client.create_chat_model", return_value=MagicMock()),
+            patch("nova.client.build_middlewares", return_value=[]),
+            patch("nova.client.apply_prompt_template", return_value=""),
+            patch("nova.client.DeerFlowClient._get_tools", return_value=[]),
         ):
             client = DeerFlowClient(checkpointer=explicit_cp)
             config = client._get_runnable_config("test-thread")

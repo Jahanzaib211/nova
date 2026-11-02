@@ -6,7 +6,7 @@ are created on first access and cached for the process lifetime.
 
 Usage::
 
-    from deerflow.services.container import service_container
+    from nova.services.container import service_container
 
     run_svc = service_container.run_service()
     detail = await run_svc.get("run-123")
@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from deerflow.services.protocols import (
+from nova.services.protocols import (
     ArtifactService,
     BrowserService,
     ConfigurationService,
@@ -77,10 +77,10 @@ class ServiceContainer:
         if "run_service" in self._overrides:
             return self._overrides["run_service"]
         if "run_service" not in self._singletons:
-            from deerflow.services.implementations import RunServiceImpl
+            from nova.services.implementations import RunServiceImpl
 
             manager = self._get_run_manager()
-            from deerflow.events.bus import event_bus as _event_bus
+            from nova.events.bus import event_bus as _event_bus
 
             self._singletons["run_service"] = RunServiceImpl(manager, event_bus=_event_bus)
         return self._singletons["run_service"]
@@ -90,7 +90,7 @@ class ServiceContainer:
         if "workspace_service" in self._overrides:
             return self._overrides["workspace_service"]
         if "workspace_service" not in self._singletons:
-            from deerflow.services.implementations import WorkspaceServiceImpl
+            from nova.services.implementations import WorkspaceServiceImpl
 
             self._singletons["workspace_service"] = WorkspaceServiceImpl()
         return self._singletons["workspace_service"]
@@ -100,7 +100,7 @@ class ServiceContainer:
         if "repository_service" in self._overrides:
             return self._overrides["repository_service"]
         if "repository_service" not in self._singletons:
-            from deerflow.services.implementations import RepositoryServiceImpl
+            from nova.services.implementations import RepositoryServiceImpl
 
             store = self._get_run_store()
             self._singletons["repository_service"] = RepositoryServiceImpl(store)
@@ -111,7 +111,7 @@ class ServiceContainer:
         if "browser_service" in self._overrides:
             return self._overrides["browser_service"]
         if "browser_service" not in self._singletons:
-            from deerflow.services.implementations import BrowserServiceImpl
+            from nova.services.implementations import BrowserServiceImpl
 
             self._singletons["browser_service"] = BrowserServiceImpl()
         return self._singletons["browser_service"]
@@ -121,7 +121,7 @@ class ServiceContainer:
         if "terminal_service" in self._overrides:
             return self._overrides["terminal_service"]
         if "terminal_service" not in self._singletons:
-            from deerflow.services.implementations import TerminalServiceImpl
+            from nova.services.implementations import TerminalServiceImpl
 
             self._singletons["terminal_service"] = TerminalServiceImpl()
         return self._singletons["terminal_service"]
@@ -131,7 +131,7 @@ class ServiceContainer:
         if "artifact_service" in self._overrides:
             return self._overrides["artifact_service"]
         if "artifact_service" not in self._singletons:
-            from deerflow.services.implementations import ArtifactServiceImpl
+            from nova.services.implementations import ArtifactServiceImpl
 
             self._singletons["artifact_service"] = ArtifactServiceImpl()
         return self._singletons["artifact_service"]
@@ -141,7 +141,7 @@ class ServiceContainer:
         if "health_service" in self._overrides:
             return self._overrides["health_service"]
         if "health_service" not in self._singletons:
-            from deerflow.services.implementations import HealthServiceImpl
+            from nova.services.implementations import HealthServiceImpl
 
             self._singletons["health_service"] = HealthServiceImpl()
         return self._singletons["health_service"]
@@ -151,7 +151,7 @@ class ServiceContainer:
         if "recovery_service" in self._overrides:
             return self._overrides["recovery_service"]
         if "recovery_service" not in self._singletons:
-            from deerflow.services.implementations import RecoveryServiceImpl
+            from nova.services.implementations import RecoveryServiceImpl
 
             engine = self.recovery_engine()
             self._singletons["recovery_service"] = RecoveryServiceImpl(engine=engine)
@@ -165,8 +165,8 @@ class ServiceContainer:
         if "recovery_engine" in self._overrides:
             return self._overrides["recovery_engine"]
         if "recovery_engine" not in self._singletons:
-            from deerflow.events.bus import event_bus as _event_bus
-            from deerflow.services.recovery_service import RecoveryEngine
+            from nova.events.bus import event_bus as _event_bus
+            from nova.services.recovery_service import RecoveryEngine
 
             engine = RecoveryEngine(event_bus=_event_bus)
             engine.start()
@@ -178,7 +178,7 @@ class ServiceContainer:
         if "configuration_service" in self._overrides:
             return self._overrides["configuration_service"]
         if "configuration_service" not in self._singletons:
-            from deerflow.services.implementations import ConfigurationServiceImpl
+            from nova.services.implementations import ConfigurationServiceImpl
 
             self._singletons["configuration_service"] = ConfigurationServiceImpl()
         return self._singletons["configuration_service"]
@@ -188,7 +188,7 @@ class ServiceContainer:
         if "diagnostics_service" in self._overrides:
             return self._overrides["diagnostics_service"]
         if "diagnostics_service" not in self._singletons:
-            from deerflow.services.implementations import DiagnosticsServiceImpl
+            from nova.services.implementations import DiagnosticsServiceImpl
 
             self._singletons["diagnostics_service"] = DiagnosticsServiceImpl()
         return self._singletons["diagnostics_service"]
@@ -198,7 +198,7 @@ class ServiceContainer:
         if "workspace_intelligence_service" in self._overrides:
             return self._overrides["workspace_intelligence_service"]
         if "workspace_intelligence_service" not in self._singletons:
-            from deerflow.services.implementations import WorkspaceIntelligenceServiceImpl
+            from nova.services.implementations import WorkspaceIntelligenceServiceImpl
 
             self._singletons["workspace_intelligence_service"] = WorkspaceIntelligenceServiceImpl()
         return self._singletons["workspace_intelligence_service"]
@@ -208,13 +208,13 @@ class ServiceContainer:
 
         Typed ``Any`` at the container boundary to keep the execution
         package import lazy; the returned object satisfies
-        ``deerflow.execution.ExecutionKernelProtocol``.
+        ``nova.execution.ExecutionKernelProtocol``.
         """
         if "execution_kernel" in self._overrides:
             return self._overrides["execution_kernel"]
         if "execution_kernel" not in self._singletons:
-            from deerflow.events.bus import event_bus as _event_bus
-            from deerflow.execution import ExecutionKernel
+            from nova.events.bus import event_bus as _event_bus
+            from nova.execution import ExecutionKernel
 
             self._singletons["execution_kernel"] = ExecutionKernel(event_bus=_event_bus)
         return self._singletons["execution_kernel"]
@@ -226,25 +226,25 @@ class ServiceContainer:
     def _get_run_manager(self) -> Any:
         """Get the RunManager from app.state or create a fallback."""
         try:
-            from deerflow.services.container import _app_state_run_manager
+            from nova.services.container import _app_state_run_manager
 
             return _app_state_run_manager()
         except Exception:
             pass
         # Fallback: create a fresh RunManager (for embedded/test usage)
-        from deerflow.runtime.runs.manager import RunManager
+        from nova.runtime.runs.manager import RunManager
 
         return RunManager()
 
     def _get_run_store(self) -> Any:
         """Get the RunStore from app.state or create a fallback."""
         try:
-            from deerflow.services.container import _app_state_run_store
+            from nova.services.container import _app_state_run_store
 
             return _app_state_run_store()
         except Exception:
             pass
-        from deerflow.runtime.runs.store.memory import MemoryRunStore
+        from nova.runtime.runs.store.memory import MemoryRunStore
 
         return MemoryRunStore()
 

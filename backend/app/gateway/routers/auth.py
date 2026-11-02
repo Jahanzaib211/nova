@@ -680,8 +680,8 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest) -> Mess
     """
     from app.gateway.auth.password_reset import create_reset_token
     from app.gateway.email import EmailNotConfiguredError, send_email
-    from deerflow.config.app_config import get_app_config
-    from deerflow.persistence.engine import get_session_factory
+    from nova.config.app_config import get_app_config
+    from nova.persistence.engine import get_session_factory
 
     email_config = get_app_config().email
     if not email_config.enabled:
@@ -771,7 +771,7 @@ async def reset_password(request: Request, body: ResetPasswordRequest) -> Messag
     """
     from app.gateway.auth.password import hash_password_async
     from app.gateway.auth.password_reset import consume_token
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.engine import get_session_factory
 
     sf = get_session_factory()
     if sf is None:

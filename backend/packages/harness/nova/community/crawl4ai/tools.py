@@ -32,7 +32,7 @@ from typing import Any
 
 from langchain.tools import tool
 
-from deerflow.community._tool_config import tool_config_extras as _get_tool_config
+from nova.community._tool_config import tool_config_extras as _get_tool_config
 
 from .crawl4ai_client import DEFAULT_BASE_URL, Crawl4aiClient
 
@@ -56,7 +56,7 @@ def _get_client() -> Crawl4aiClient:
 def _record(url: str, *, pages: int, success: bool, duration_ms: float, error: str | None = None) -> None:
     """Record the crawl in the shared audit trail. Never fatal."""
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         get_audit_trail().fetch(
             url=url,

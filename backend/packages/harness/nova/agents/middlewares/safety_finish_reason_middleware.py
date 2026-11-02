@@ -42,15 +42,15 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 from langgraph.runtime import Runtime
 
-from deerflow.agents.middlewares.safety_termination_detectors import (
+from nova.agents.middlewares.safety_termination_detectors import (
     SafetyTermination,
     SafetyTerminationDetector,
     default_detectors,
 )
-from deerflow.agents.middlewares.tool_call_metadata import clone_ai_message_with_tool_calls
+from nova.agents.middlewares.tool_call_metadata import clone_ai_message_with_tool_calls
 
 if TYPE_CHECKING:
-    from deerflow.config.safety_finish_reason_config import SafetyFinishReasonConfig
+    from nova.config.safety_finish_reason_config import SafetyFinishReasonConfig
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class SafetyFinishReasonMiddleware(AgentMiddleware[AgentState]):
         if not config.detectors:
             raise ValueError("safety_finish_reason.detectors must be omitted (use built-ins) or contain at least one entry; use enabled=false to disable the middleware entirely.")
 
-        from deerflow.reflection import resolve_variable
+        from nova.reflection import resolve_variable
 
         detectors: list[SafetyTerminationDetector] = []
         for entry in config.detectors:

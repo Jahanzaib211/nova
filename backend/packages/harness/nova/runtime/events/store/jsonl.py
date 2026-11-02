@@ -29,7 +29,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from deerflow.runtime.events.store.base import RunEventStore
+from nova.runtime.events.store.base import RunEventStore
 
 logger = logging.getLogger(__name__)
 

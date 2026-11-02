@@ -12,14 +12,14 @@ global ``local`` sandbox (must be skipped), and AIO via the provider's
 **This file used to test a stub.** It ``exec()``d a hand-written
 reimplementation of the writer — one that had no ``obs_id``/``state``/``delta``/
 ``replace`` parameters and never touched ``terminal_stats.json`` — on the
-grounds that importing ``deerflow.sandbox.tools`` hit a circular import. So it
+grounds that importing ``nova.sandbox.tools`` hit a circular import. So it
 could pass while the shipped writer was broken, and it provided no cover at all
 for the half of the function that maintains the command counter. That is the
 same trap that let a wrong ``is_command_line`` ship green, and the same one that
 hid the skill tool-policy bug.
 
 The cycle is real but is an *ordering* problem, not a wall: importing
-``deerflow.tools.builtins.workspace_tools`` first is the order the application
+``nova.tools.builtins.workspace_tools`` first is the order the application
 itself uses, and several sibling tests already do exactly that. So these tests
 now drive the real function.
 """
@@ -30,12 +30,12 @@ import json
 
 import pytest
 
-# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools` import
+# `nova.sandbox.tools` and `nova.tools.builtins.workspace_tools` import
 # each other, so importing the former *first* in a fresh interpreter raises
 # ImportError. Entering from the workspace_tools side is the order the
 # application itself uses (same note as tests/test_terminal_stats_concurrency.py).
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
 
 
 @pytest.fixture

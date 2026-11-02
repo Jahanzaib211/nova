@@ -18,10 +18,10 @@ dependencies = [
     "websockets>=15.0.1,<16",
     "agent-client-protocol>=0.4.0",
     "agent-sandbox>=0.0.19",
-    # Job runner schedules (deerflow.jobs.scheduler). Was only transitive via
+    # Job runner schedules (nova.jobs.scheduler). Was only transitive via
     # langgraph-runtime-inmem; a floor pin so it cannot vanish underneath us.
     "croniter>=6",
-    # Email-marketing templates (deerflow.email_marketing.templates): sandboxed
+    # Email-marketing templates (nova.email_marketing.templates): sandboxed
     # rendering of user-authored HTML with an allowlisted context.
     "jinja2>=3.1",
     "dotenv>=0.9.9",
@@ -80,7 +80,7 @@ voice = [
 # `libcublas.so.13`/`libcudart.so.13`, found none, and silently put Kokoro on
 # the CPU at RTF ~1.0 (4 s before the first word of a reply). 1.21-1.26 are the
 # CUDA 12.8 builds, which also need cudart, cufft and curand from the same line.
-# `onnxruntime.preload_dlls()` / `deerflow.speech.devices.preload_cuda_libraries()`
+# `onnxruntime.preload_dlls()` / `nova.speech.devices.preload_cuda_libraries()`
 # make the wheels loadable without `LD_LIBRARY_PATH`.
 #
 # Measured on an RTX 3060: Whisper RTF 0.632 -> 0.021, Kokoro first-audio
@@ -120,6 +120,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 # `nova` is the implementation; `deerflow` is the deprecated compatibility alias
-# (deerflow/__init__.py) that resolves `deerflow.X` to the very same module
+# (deerflow/__init__.py) that resolves `nova.X` to the very same module
 # objects as `nova.X`. Both ship so legacy `use:` paths keep resolving.
 packages = ["nova", "deerflow"]

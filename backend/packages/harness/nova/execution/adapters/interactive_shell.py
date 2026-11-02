@@ -13,8 +13,8 @@ Design notes:
 
 Usage::
 
-    from deerflow.execution.adapters.interactive_shell import InteractiveShellAdapter
-    from deerflow.execution.session_registry import SessionRegistry
+    from nova.execution.adapters.interactive_shell import InteractiveShellAdapter
+    from nova.execution.session_registry import SessionRegistry
 
     registry = SessionRegistry()
     adapter = InteractiveShellAdapter(registry=registry)
@@ -39,9 +39,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.execution.models import ExecutionClass, ExecutionRequest
-from deerflow.execution.pty_manager import PTYManager, TerminalSize
-from deerflow.execution.session_registry import SessionRegistry, SessionState, ShellSession
+from nova.execution.models import ExecutionClass, ExecutionRequest
+from nova.execution.pty_manager import PTYManager, TerminalSize
+from nova.execution.session_registry import SessionRegistry, SessionState, ShellSession
 
 logger = logging.getLogger(__name__)
 

@@ -3,9 +3,9 @@ import threading
 from collections import OrderedDict
 from pathlib import Path
 
-from deerflow.sandbox.local.local_sandbox import LocalSandbox, PathMapping
-from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.sandbox_provider import SandboxProvider
+from nova.sandbox.local.local_sandbox import LocalSandbox, PathMapping
+from nova.sandbox.sandbox import Sandbox
+from nova.sandbox.sandbox_provider import SandboxProvider
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class LocalSandboxProvider(SandboxProvider):
 
         # Map skills container path to local skills directory
         try:
-            from deerflow.config import get_app_config
+            from nova.config import get_app_config
 
             config = get_app_config()
             skills_path = config.skills.get_skills_path()
@@ -192,8 +192,8 @@ class LocalSandboxProvider(SandboxProvider):
         :class:`AioSandboxProvider` uses) and ensures the backing host
         directories exist before they are mapped into the sandbox view.
         """
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         paths = get_paths()
         user_id = get_effective_user_id()

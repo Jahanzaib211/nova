@@ -28,7 +28,7 @@ from langchain_core.tools import InjectedToolCallId, tool
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langgraph.types import Command
 
-from deerflow.tools.mcp_metadata import is_mcp_tool
+from nova.tools.mcp_metadata import is_mcp_tool
 
 logger = logging.getLogger(__name__)
 

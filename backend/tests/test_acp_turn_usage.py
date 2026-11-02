@@ -38,7 +38,7 @@ class _PromptResult:
 
 
 def test_usage_is_parsed_from_the_acp_payload() -> None:
-    from deerflow.runtimes.acp_transport import ACPTurnUsage
+    from nova.runtimes.acp_transport import ACPTurnUsage
 
     usage = ACPTurnUsage.from_acp(_Usage())
     assert usage is not None
@@ -48,7 +48,7 @@ def test_usage_is_parsed_from_the_acp_payload() -> None:
 
 
 def test_missing_total_is_computed_from_input_and_output() -> None:
-    from deerflow.runtimes.acp_transport import ACPTurnUsage
+    from nova.runtimes.acp_transport import ACPTurnUsage
 
     usage = ACPTurnUsage.from_acp(_Usage(total_tokens=0))
     assert usage is not None
@@ -56,14 +56,14 @@ def test_missing_total_is_computed_from_input_and_output() -> None:
 
 
 def test_absent_or_empty_usage_yields_none() -> None:
-    from deerflow.runtimes.acp_transport import ACPTurnUsage
+    from nova.runtimes.acp_transport import ACPTurnUsage
 
     assert ACPTurnUsage.from_acp(None) is None
     assert ACPTurnUsage.from_acp(_Usage(input_tokens=0, output_tokens=0, total_tokens=0)) is None
 
 
 def test_malformed_usage_never_raises() -> None:
-    from deerflow.runtimes.acp_transport import ACPTurnUsage
+    from nova.runtimes.acp_transport import ACPTurnUsage
 
     class Broken:
         @property
@@ -74,7 +74,7 @@ def test_malformed_usage_never_raises() -> None:
 
 
 def test_acp_text_is_a_str_carrying_the_usage() -> None:
-    from deerflow.runtimes.acp_transport import ACPText, ACPTurnUsage
+    from nova.runtimes.acp_transport import ACPText, ACPTurnUsage
 
     usage = ACPTurnUsage.from_acp(_Usage())
     text = ACPText("hello", usage=usage, session_id="s1")
@@ -87,8 +87,8 @@ def test_acp_text_is_a_str_carrying_the_usage() -> None:
 
 
 async def test_middleware_records_the_turn_usage_on_the_journal() -> None:
-    from deerflow.runtimes.acp_transport import ACPText, ACPTurnUsage
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.acp_transport import ACPText, ACPTurnUsage
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     class FakeJournal:
         def __init__(self) -> None:
@@ -116,8 +116,8 @@ async def test_middleware_records_the_turn_usage_on_the_journal() -> None:
 
 
 async def test_middleware_without_journal_or_usage_does_nothing() -> None:
-    from deerflow.runtimes.acp_transport import ACPText, ACPTurnUsage
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.acp_transport import ACPText, ACPTurnUsage
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     class FakeJournal:
         def __init__(self) -> None:
@@ -138,8 +138,8 @@ async def test_middleware_without_journal_or_usage_does_nothing() -> None:
 
 
 async def test_middleware_usage_recording_never_raises() -> None:
-    from deerflow.runtimes.acp_transport import ACPText, ACPTurnUsage
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.acp_transport import ACPText, ACPTurnUsage
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
     class BrokenJournal:
         def record_external_llm_usage_records(self, records: list[dict]) -> None:
@@ -152,8 +152,8 @@ async def test_middleware_usage_recording_never_raises() -> None:
 
 
 async def test_usage_metadata_helper_shape() -> None:
-    from deerflow.runtimes.acp_transport import ACPText, ACPTurnUsage
-    from deerflow.runtimes.middleware import _usage_metadata_for
+    from nova.runtimes.acp_transport import ACPText, ACPTurnUsage
+    from nova.runtimes.middleware import _usage_metadata_for
 
     usage = ACPTurnUsage.from_acp(_Usage())
     assert _usage_metadata_for(ACPText("x", usage=usage, session_id="s")) == {

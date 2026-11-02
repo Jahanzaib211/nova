@@ -11,8 +11,8 @@ pin the actionable error contract and guard the normal text path.
 from pathlib import Path
 from types import SimpleNamespace
 
-from deerflow.sandbox.local.local_sandbox import LocalSandbox
-from deerflow.sandbox.tools import read_file_tool
+from nova.sandbox.local.local_sandbox import LocalSandbox
+from nova.sandbox.tools import read_file_tool
 
 
 def _local_runtime(tmp_path: Path) -> SimpleNamespace:
@@ -34,8 +34,8 @@ def test_read_file_tool_binary_file_returns_actionable_hint(tmp_path, monkeypatc
     # .xlsx is a zip container: header bytes PK\x03\x04 plus a non-UTF-8 byte 0x82
     # that makes strict UTF-8 decoding fail (the exact byte seen in the field logs).
     (tmp_path / "uploads" / "data.xlsx").write_bytes(b"PK\x03\x04\x14\x00\x00\x00\x08\x00\x82\x6a\xb1\x55")
-    monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox("t1"))
-    monkeypatch.setattr("deerflow.sandbox.tools.ensure_thread_directories_exist", lambda runtime: None)
+    monkeypatch.setattr("nova.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox("t1"))
+    monkeypatch.setattr("nova.sandbox.tools.ensure_thread_directories_exist", lambda runtime: None)
 
     result = read_file_tool.func(
         runtime=runtime,
@@ -52,8 +52,8 @@ def test_read_file_tool_binary_file_returns_actionable_hint(tmp_path, monkeypatc
 def test_read_file_tool_text_file_unaffected(tmp_path, monkeypatch) -> None:
     runtime = _local_runtime(tmp_path)
     (tmp_path / "uploads" / "notes.txt").write_text("hello 你好\nsecond line", encoding="utf-8")
-    monkeypatch.setattr("deerflow.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox("t1"))
-    monkeypatch.setattr("deerflow.sandbox.tools.ensure_thread_directories_exist", lambda runtime: None)
+    monkeypatch.setattr("nova.sandbox.tools.ensure_sandbox_initialized", lambda runtime: LocalSandbox("t1"))
+    monkeypatch.setattr("nova.sandbox.tools.ensure_thread_directories_exist", lambda runtime: None)
 
     result = read_file_tool.func(
         runtime=runtime,

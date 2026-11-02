@@ -16,8 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from deerflow.execution.audit import AuditEngine
-from deerflow.execution.models import (
+from nova.execution.audit import AuditEngine
+from nova.execution.models import (
     ExecutionClass,
     ExecutionRequest,
     ExecutionResult,

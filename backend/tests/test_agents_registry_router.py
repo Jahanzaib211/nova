@@ -12,18 +12,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.gateway.auth.models import User
 from app.gateway.routers import agents_registry
-from deerflow.config.app_config import AppConfig
-from deerflow.jobs.queue import JobQueue
-from deerflow.persistence.base import Base
-from deerflow.persistence.job.sql import JobRepository
+from nova.config.app_config import AppConfig
+from nova.jobs.queue import JobQueue
+from nova.persistence.base import Base
+from nova.persistence.job.sql import JobRepository
 
 pytestmark = pytest.mark.no_auto_user
-SANDBOX = {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}
+SANDBOX = {"use": "nova.sandbox.local.local_sandbox:LocalSandboxProvider"}
 
 
 @pytest.fixture()
 def repo():
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -48,7 +48,7 @@ def test_registry_lists_every_kind_with_counts(repo, monkeypatch):
         }
     )
     monkeypatch.setattr(agents_registry, "get_config", lambda: cfg)
-    monkeypatch.setattr("deerflow.config.agents_config.list_custom_agents", lambda *, user_id=None: [])
+    monkeypatch.setattr("nova.config.agents_config.list_custom_agents", lambda *, user_id=None: [])
     asyncio.run(JobQueue(repo).enqueue("agents.task", {"agent": "general-purpose", "kind": "subagent", "task": "t"}, owner_user_id=str(user.id)))
     asyncio.run(JobQueue(repo).enqueue("agents.task", {"agent": "claude_code", "kind": "acp", "task": "t"}, owner_user_id="someone-else"))
     app = make_authed_test_app(user_factory=lambda: user)
@@ -69,7 +69,7 @@ def test_registry_without_async_marks_gateway_runner(repo, monkeypatch):
     user = User(email="a@x.y", password_hash="x", system_role="user", id=uuid4())
     cfg = AppConfig.model_validate({"sandbox": SANDBOX})
     monkeypatch.setattr(agents_registry, "get_config", lambda: cfg)
-    monkeypatch.setattr("deerflow.config.agents_config.list_custom_agents", lambda *, user_id=None: [])
+    monkeypatch.setattr("nova.config.agents_config.list_custom_agents", lambda *, user_id=None: [])
     app = make_authed_test_app(user_factory=lambda: user)
     app.include_router(agents_registry.router)
     body = TestClient(app).get("/api/agents/registry").json()

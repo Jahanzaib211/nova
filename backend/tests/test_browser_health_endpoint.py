@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.gateway.routers import browser_health as bh
-from deerflow.sandbox import browser_circuit_breaker as cb
+from nova.sandbox import browser_circuit_breaker as cb
 
 
 @pytest.fixture(autouse=True)
@@ -226,7 +226,7 @@ class TestProbeCdpOnce:
         NOT ``(False, None, None)`` (broken). Distinguishes the two so
         dashboards / runtime capability bars don't flag idle as red.
         """
-        with patch("deerflow.sandbox.sandbox_provider.get_sandbox_provider") as mock_provider:
+        with patch("nova.sandbox.sandbox_provider.get_sandbox_provider") as mock_provider:
             mock_provider.return_value._sandboxes = {}
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
         assert reachable is None
@@ -235,7 +235,7 @@ class TestProbeCdpOnce:
 
     def test_probe_handles_provider_exception(self) -> None:
         with patch(
-            "deerflow.sandbox.sandbox_provider.get_sandbox_provider",
+            "nova.sandbox.sandbox_provider.get_sandbox_provider",
             side_effect=RuntimeError("provider dead"),
         ):
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
@@ -247,7 +247,7 @@ class TestProbeCdpOnce:
     def test_probe_handles_sandbox_without_cdp_url(self) -> None:
         sandbox = type("S", (), {"_client": None})()
         provider = type("P", (), {"_sandboxes": {"t1": sandbox}})()
-        with patch("deerflow.sandbox.sandbox_provider.get_sandbox_provider", return_value=provider):
+        with patch("nova.sandbox.sandbox_provider.get_sandbox_provider", return_value=provider):
             reachable, latency, cdp_url = bh._probe_cdp_once(timeout_s=0.1)
         # Sandbox registered but no usable CDP URL → idle tri-state.
         assert reachable is None
@@ -268,7 +268,7 @@ class TestMetricsEndpoint:
         assert "# TYPE browser_circuit_state_transitions_total counter" in body
 
     def test_metrics_increments_visible(self) -> None:
-        from deerflow.sandbox.metrics import browser_check_total
+        from nova.sandbox.metrics import browser_check_total
 
         before = browser_check_total.get("ok")
         browser_check_total.inc("ok", n=5)

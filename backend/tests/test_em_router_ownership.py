@@ -12,13 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.gateway.auth.models import User
 from app.gateway.routers import email_marketing
-from deerflow.config.app_config import AppConfig
-from deerflow.persistence.base import Base
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
-from deerflow.persistence.job.sql import JobRepository
+from nova.config.app_config import AppConfig
+from nova.persistence.base import Base
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.persistence.job.sql import JobRepository
 
 pytestmark = pytest.mark.no_auto_user
-SANDBOX = {"use": "deerflow.sandbox.local.local_sandbox:LocalSandboxProvider"}
+SANDBOX = {"use": "nova.sandbox.local.local_sandbox:LocalSandboxProvider"}
 
 
 def _user(email: str) -> User:
@@ -27,7 +27,7 @@ def _user(email: str) -> User:
 
 @pytest.fixture()
 def world(monkeypatch):
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

@@ -38,7 +38,7 @@ def _fake_sandbox(base_url: str | None):
 
 
 def test_loopback_host_is_rewritten_to_sandbox_base_url():
-    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+    from nova.sandbox.browser_check import _cdp_url_for_gateway
 
     client = _fake_client("ws://127.0.0.1:8080/chromium")
     sandbox = _fake_sandbox("http://192.168.200.2:4100")
@@ -47,7 +47,7 @@ def test_loopback_host_is_rewritten_to_sandbox_base_url():
 
 
 def test_routable_host_is_passed_through():
-    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+    from nova.sandbox.browser_check import _cdp_url_for_gateway
 
     client = _fake_client("ws://browser.internal:9222/devtools/browser")
     sandbox = _fake_sandbox("http://192.168.200.2:4100")
@@ -56,7 +56,7 @@ def test_routable_host_is_passed_through():
 
 
 def test_loopback_falls_back_to_deer_flow_sandbox_host_env(monkeypatch):
-    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+    from nova.sandbox.browser_check import _cdp_url_for_gateway
 
     monkeypatch.setenv("DEER_FLOW_SANDBOX_HOST", "k3s-runtime.internal")
     client = _fake_client("ws://localhost:9222/devtools")
@@ -66,14 +66,14 @@ def test_loopback_falls_back_to_deer_flow_sandbox_host_env(monkeypatch):
 
 
 def test_missing_cdp_url_returns_none():
-    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+    from nova.sandbox.browser_check import _cdp_url_for_gateway
 
     client = _fake_client(None)
     assert _cdp_url_for_gateway(client, _fake_sandbox("http://10.0.0.1:9000")) is None
 
 
 def test_get_info_failure_returns_none():
-    from deerflow.sandbox.browser_check import _cdp_url_for_gateway
+    from nova.sandbox.browser_check import _cdp_url_for_gateway
 
     client = MagicMock()
     client.browser.get_info.side_effect = RuntimeError("boom")

@@ -24,8 +24,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Items, section_enabled
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Items, section_enabled
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 class _ThreadScoped(BaseModel):
@@ -103,7 +103,7 @@ def _thread(ctx: OpContext, inp: _ThreadScoped) -> str:
     return thread_id
 
 
-#: Capability op -> the module-level symbol in ``deerflow.sandbox.tools``.
+#: Capability op -> the module-level symbol in ``nova.sandbox.tools``.
 #: The decorator names ("bash") and the Python names ("bash_tool") differ, and
 #: only the latter can be resolved with getattr.
 _TOOL_SYMBOLS = {
@@ -125,7 +125,7 @@ _WORKSPACE_TOOL_SYMBOLS = {
 def _thread_data(thread_id: str, user_id: str | None) -> dict[str, str]:
     """The thread's data directories, created if absent -- the same three
     paths ``ThreadDataMiddleware`` computes for the lead agent."""
-    from deerflow.config.paths import get_paths
+    from nova.config.paths import get_paths
 
     paths = get_paths()
     paths.ensure_thread_dirs(thread_id, user_id=user_id)
@@ -183,9 +183,9 @@ async def _invoke(tool_name: str, thread_id: str, payload: dict[str, Any]) -> st
     import asyncio
     import inspect
 
-    from deerflow.runtime.user_context import get_effective_user_id
-    from deerflow.sandbox import tools as sandbox_tools
-    from deerflow.tools.builtins import workspace_tools
+    from nova.runtime.user_context import get_effective_user_id
+    from nova.sandbox import tools as sandbox_tools
+    from nova.tools.builtins import workspace_tools
 
     if tool_name in _WORKSPACE_TOOL_SYMBOLS:
         source, symbol = workspace_tools, _WORKSPACE_TOOL_SYMBOLS[tool_name]
@@ -276,7 +276,7 @@ async def _status() -> ModuleStatus:
     if not section_enabled("sandbox"):
         return ModuleStatus(configured=False, healthy=False, detail="sandbox section is disabled")
     try:
-        from deerflow.config.app_config import get_app_config
+        from nova.config.app_config import get_app_config
 
         image = getattr(getattr(get_app_config(), "sandbox", None), "image", "") or ""
     except Exception as exc:  # noqa: BLE001 - status must never raise

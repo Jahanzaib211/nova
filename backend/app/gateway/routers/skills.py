@@ -5,14 +5,14 @@ from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_config, require_admin_user
 from app.gateway.path_utils import resolve_thread_virtual_path
-from deerflow.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
-from deerflow.config.app_config import AppConfig
-from deerflow.config.extensions_config import reload_extensions_config, set_skill_enabled
-from deerflow.skills import Skill
-from deerflow.skills.installer import SkillAlreadyExistsError
-from deerflow.skills.security_scanner import scan_skill_content
-from deerflow.skills.storage import get_or_new_skill_storage
-from deerflow.skills.types import SKILL_MD_FILE, SkillCategory
+from nova.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
+from nova.config.app_config import AppConfig
+from nova.config.extensions_config import reload_extensions_config, set_skill_enabled
+from nova.skills import Skill
+from nova.skills.installer import SkillAlreadyExistsError
+from nova.skills.security_scanner import scan_skill_content
+from nova.skills.storage import get_or_new_skill_storage
+from nova.skills.types import SKILL_MD_FILE, SkillCategory
 
 logger = logging.getLogger(__name__)
 

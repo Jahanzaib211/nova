@@ -11,12 +11,12 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from deerflow.agents.thread_state import ThreadState
-from deerflow.sandbox.middleware import SandboxMiddleware, SandboxMiddlewareState
-from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.sandbox_provider import SandboxProvider, reset_sandbox_provider, set_sandbox_provider
-from deerflow.sandbox.search import GrepMatch
-from deerflow.sandbox.tools import ls_tool
+from nova.agents.thread_state import ThreadState
+from nova.sandbox.middleware import SandboxMiddleware, SandboxMiddlewareState
+from nova.sandbox.sandbox import Sandbox
+from nova.sandbox.sandbox_provider import SandboxProvider, reset_sandbox_provider, set_sandbox_provider
+from nova.sandbox.search import GrepMatch
+from nova.sandbox.tools import ls_tool
 
 
 class _SyncProvider(SandboxProvider):

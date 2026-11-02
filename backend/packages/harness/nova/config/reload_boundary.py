@@ -51,9 +51,7 @@ STARTUP_ONLY_FIELDS: dict[str, str] = {
         "The job worker (app.jobs.worker) reads queues, concurrency and the lease/reaper/scheduler cadence once at process start; the gateway's /api/jobs surface is gated by jobs.enabled at import of the router. Restart the jobs container after editing."
     ),
     "sandbox": ("get_sandbox_provider() caches the provider singleton (``_default_sandbox_provider``); a different ``sandbox.use`` class path only takes effect on next process start."),
-    "log_level": (
-        "apply_logging_level() runs only during app.py startup; it sets the deerflow/app logger levels and may lower root handler thresholds so configured messages can propagate. A freshly reloaded AppConfig does not retrigger it."
-    ),
+    "log_level": ("apply_logging_level() runs only during app.py startup; it sets the nova/app logger levels and may lower root handler thresholds so configured messages can propagate. A freshly reloaded AppConfig does not retrigger it."),
     # Not part of the AppConfig Pydantic schema — channel credentials are
     # consumed directly by ``start_channel_service()`` once at lifespan
     # startup and the live channel clients are not rebuilt on

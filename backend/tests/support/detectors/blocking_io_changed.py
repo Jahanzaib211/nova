@@ -28,7 +28,7 @@ from support.detectors.repo_root import resolve_repo_root
 REPO_ROOT = resolve_repo_root(Path(__file__))
 SCAN_ROOTS = (
     "backend/app",
-    "backend/packages/harness/deerflow",
+    "backend/packages/harness/nova",
     "backend/scripts",
 )
 

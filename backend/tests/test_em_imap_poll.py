@@ -10,10 +10,10 @@ from email.message import EmailMessage
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from deerflow.config.email_marketing_config import BounceMailboxConfig
-from deerflow.email_marketing.imap import BouncePoller, fetch_new_messages
-from deerflow.persistence.base import Base
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.config.email_marketing_config import BounceMailboxConfig
+from nova.email_marketing.imap import BouncePoller, fetch_new_messages
+from nova.persistence.base import Base
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
 
 pytestmark = pytest.mark.anyio
 
@@ -92,7 +92,7 @@ def _unsub(send_id: str) -> bytes:
 
 @pytest.fixture()
 def repo():
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

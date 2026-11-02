@@ -52,7 +52,7 @@ class TestWriteFileAdversarial:
     def test_write_path_traversal(self, tmp_path):
         """Path traversal attempts should be rejected or sandboxed."""
         # Verify the path validation logic exists in tools.py
-        from deerflow.sandbox.tools import replace_virtual_path
+        from nova.sandbox.tools import replace_virtual_path
 
         # replace_virtual_path with thread_data=None should not crash
         result = replace_virtual_path("../../../etc/passwd", None)
@@ -102,7 +102,7 @@ class TestWriteFileAdversarial:
 
     def test_write_max_content_size(self, tmp_path):
         """Test the 2MB hard ceiling is respected."""
-        from deerflow.sandbox.tools import _WRITE_FILE_HARD_MAX_BYTES
+        from nova.sandbox.tools import _WRITE_FILE_HARD_MAX_BYTES
 
         assert _WRITE_FILE_HARD_MAX_BYTES == 2 * 1024 * 1024
 
@@ -214,7 +214,7 @@ class TestPathTraversal:
 
     def test_virtual_path_replacement(self):
         """Virtual paths should resolve to sandbox-local paths."""
-        from deerflow.sandbox.tools import replace_virtual_path
+        from nova.sandbox.tools import replace_virtual_path
 
         # These should all stay within sandbox bounds
         paths = [
@@ -229,7 +229,7 @@ class TestPathTraversal:
 
     def test_dots_in_path(self):
         """Path with .. should be normalized."""
-        from deerflow.sandbox.tools import replace_virtual_path
+        from nova.sandbox.tools import replace_virtual_path
 
         malicious = "/mnt/user-data/../../etc/passwd"
         result = replace_virtual_path(malicious, None)
@@ -245,7 +245,7 @@ class TestThreadSafetyStress:
 
     def test_concurrent_sandbox_acquire_release(self, tmp_path):
         """Multiple threads accessing the provider concurrently should not crash."""
-        from deerflow.sandbox.local import LocalSandboxProvider
+        from nova.sandbox.local import LocalSandboxProvider
 
         provider = LocalSandboxProvider()
         results = []
@@ -276,7 +276,7 @@ class TestThreadSafetyStress:
         """_background_tasks should not grow unbounded after TTL sweep."""
         from datetime import UTC, datetime, timedelta
 
-        from deerflow.subagents.executor import (
+        from nova.subagents.executor import (
             SubagentResult,
             SubagentStatus,
             _background_tasks,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from deerflow.agents.middlewares import observe_adjust_middleware as oam
-from deerflow.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
+from nova.agents.middlewares import observe_adjust_middleware as oam
+from nova.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
 
 
 def _state(artifacts=None, sandbox_id="aio-thread-xyz"):

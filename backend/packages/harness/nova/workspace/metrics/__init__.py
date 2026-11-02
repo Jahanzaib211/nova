@@ -5,7 +5,7 @@ Thread-safe.  Metrics reset on process restart.
 
 Usage::
 
-    from deerflow.workspace.metrics import WIKMetrics
+    from nova.workspace.metrics import WIKMetrics
 
     metrics = WIKMetrics()
     metrics.record_scan(file_count=761, project_count=3, symbol_count=17394, duration_ms=850.0)

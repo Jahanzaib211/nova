@@ -14,10 +14,10 @@ from typing import Any
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.models.run_event import RunEventRow
-from deerflow.runtime.events.store.base import RunEventStore
-from deerflow.runtime.user_context import AUTO, _AutoSentinel, get_current_user, resolve_user_id
-from deerflow.utils.time import coerce_iso
+from nova.persistence.models.run_event import RunEventRow
+from nova.runtime.events.store.base import RunEventStore
+from nova.runtime.user_context import AUTO, _AutoSentinel, get_current_user, resolve_user_id
+from nova.utils.time import coerce_iso
 
 logger = logging.getLogger(__name__)
 

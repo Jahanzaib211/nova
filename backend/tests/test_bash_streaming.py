@@ -30,18 +30,18 @@ from unittest.mock import patch
 
 import pytest
 
-# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools` import
+# `nova.sandbox.tools` and `nova.tools.builtins.workspace_tools` import
 # each other, so importing the former *first* in a fresh interpreter raises
 # ImportError. Pre-existing, and unrelated to streaming -- entering from the
 # workspace_tools side is the order the application itself uses.
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
 
 
 @pytest.fixture()
 def sandbox():
-    with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-        from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+        from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
         sb = AioSandbox(id="test-sandbox", base_url="http://localhost:8080")
         # Polling delay is real time; the fake frames below are already ready.
@@ -211,7 +211,7 @@ class TestItStillBehavesLikeExecuteCommand:
         assert sandbox.execute_command_streaming("true", lambda t, r: None) == "(no output)"
 
     def test_error_observation_falls_back_to_the_retrying_path(self, sandbox):
-        from deerflow.community.aio_sandbox.aio_sandbox import _ERROR_OBSERVATION_SIGNATURE
+        from nova.community.aio_sandbox.aio_sandbox import _ERROR_OBSERVATION_SIGNATURE
 
         _stream(sandbox, [(f"Command failed: {_ERROR_OBSERVATION_SIGNATURE}", "completed")])
         with patch.object(type(sandbox), "_execute_command_locked", return_value="recovered"):
@@ -271,7 +271,7 @@ class TestItStillBehavesLikeExecuteCommand:
 
 class TestNonStreamingBackendsAreUnaffected:
     def test_the_base_class_does_not_claim_to_stream(self):
-        from deerflow.sandbox.sandbox import Sandbox
+        from nova.sandbox.sandbox import Sandbox
 
         assert Sandbox.supports_streaming is False
 
@@ -373,8 +373,8 @@ class TestObservationTruncation:
             def thread_dir(self, thread_id, user_id=None):
                 return tmp_path
 
-        monkeypatch.setattr("deerflow.config.paths.get_paths", lambda: _Paths())
-        monkeypatch.setattr("deerflow.runtime.user_context.get_effective_user_id", lambda: None)
+        monkeypatch.setattr("nova.config.paths.get_paths", lambda: _Paths())
+        monkeypatch.setattr("nova.runtime.user_context.get_effective_user_id", lambda: None)
 
         sandbox_tools._write_sandbox_observation("sb", "bash", None, "$ x", "A" * 5000)
 
@@ -383,7 +383,7 @@ class TestObservationTruncation:
         assert "truncated" in record["output"], "a silent cut is what this replaces"
 
     def test_the_limit_comes_from_config_not_a_literal(self):
-        from deerflow.config.sandbox_config import SandboxConfig
+        from nova.config.sandbox_config import SandboxConfig
 
         assert SandboxConfig(use="test").observation_max_chars == 20000, "must match bash_output_max_chars, not the old 2000"
 
@@ -395,8 +395,8 @@ class TestObservationTruncation:
             def thread_dir(self, thread_id, user_id=None):
                 return tmp_path
 
-        monkeypatch.setattr("deerflow.config.paths.get_paths", lambda: _Paths())
-        monkeypatch.setattr("deerflow.runtime.user_context.get_effective_user_id", lambda: None)
+        monkeypatch.setattr("nova.config.paths.get_paths", lambda: _Paths())
+        monkeypatch.setattr("nova.runtime.user_context.get_effective_user_id", lambda: None)
 
         sandbox_tools._write_sandbox_observation("sb", "write_file", "/mnt/x", "Wrote 3 bytes", "abc")
 

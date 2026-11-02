@@ -96,12 +96,12 @@ class TestScreenshotToolContract:
     def test_tool_name_is_screenshot(self) -> None:
         # The Python tool is named "screenshot" via @tool("screenshot").
         # The manifest entry MUST be the same name for the UI branch to fire.
-        from deerflow.tools.builtins.workspace_tools import screenshot_tool
+        from nova.tools.builtins.workspace_tools import screenshot_tool
 
         assert screenshot_tool.name == "screenshot"
 
     def test_tool_registered_in_builtin_list(self) -> None:
-        from deerflow.tools.tools import BUILTIN_TOOLS
+        from nova.tools.tools import BUILTIN_TOOLS
 
         names = [t.name for t in BUILTIN_TOOLS]
         assert "screenshot" in names
@@ -111,7 +111,7 @@ class TestScreenshotToolContract:
         # We don't depend on the exact var name (it was renamed during
         # the v7 hardening); instead scan for any dict that contains
         # the 'screenshot' key.
-        import deerflow.agents.manifest as m
+        import nova.agents.manifest as m
 
         candidate = None
         for name in dir(m):

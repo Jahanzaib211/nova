@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from email.message import EmailMessage
 
-from deerflow.email_marketing.bounces import classify_bounce, parse_bounce, send_id_from_message
+from nova.email_marketing.bounces import classify_bounce, parse_bounce, send_id_from_message
 
 
 def _dsn(status: str, action: str = "failed", original_headers: str = "") -> bytes:

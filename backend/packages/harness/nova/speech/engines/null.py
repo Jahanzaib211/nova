@@ -12,7 +12,7 @@ import math
 import struct
 from collections.abc import AsyncIterator
 
-from deerflow.speech.base import AudioChunk, SpeechToText, TextToSpeech, Transcript
+from nova.speech.base import AudioChunk, SpeechToText, TextToSpeech, Transcript
 
 
 class ScriptedSTT(SpeechToText):

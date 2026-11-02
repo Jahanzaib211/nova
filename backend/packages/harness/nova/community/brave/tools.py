@@ -17,7 +17,7 @@ import os
 import httpx
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 logger = logging.getLogger(__name__)
 

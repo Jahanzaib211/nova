@@ -24,8 +24,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.sandbox import browser_check as bc
-from deerflow.sandbox.browser_check import (
+from nova.sandbox import browser_check as bc
+from nova.sandbox.browser_check import (
     _DEFAULT_RENDER_BUDGET_MS,
     _LAST_CHECKS_LOCK,
     _MAX_RENDER_BUDGET_MS,
@@ -596,7 +596,7 @@ class TestUnlockedNoClient:
         sandbox = MagicMock()
         sandbox._client = MagicMock()  # non-None, but unused since no dev server
 
-        from deerflow.sandbox import dev_server as ds_mod
+        from nova.sandbox import dev_server as ds_mod
 
         # Stub get_dev_server to return None (no dev server running).
         with patch.object(ds_mod, "get_dev_server", return_value=None):

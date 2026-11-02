@@ -1,5 +1,5 @@
-from deerflow.capabilities.registry import CapabilityRegistry, get_registry, reset_registry
-from deerflow.capabilities.types import (
+from nova.capabilities.registry import CapabilityRegistry, get_registry, reset_registry
+from nova.capabilities.types import (
     HARNESS_TOOL_KINDS,
     CapabilityModule,
     ModuleStatus,

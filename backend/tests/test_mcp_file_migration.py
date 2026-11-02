@@ -12,8 +12,8 @@ from unittest.mock import patch
 import pytest
 from mcp.types import CallToolResult, ResourceLink, TextContent
 
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, Paths
-from deerflow.mcp import tools as mcp_tools
+from nova.config.paths import VIRTUAL_PATH_PREFIX, Paths
+from nova.mcp import tools as mcp_tools
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def paths(tmp_path: Path) -> Paths:
 
 
 def _patch_paths(paths: Paths):
-    return patch("deerflow.mcp.tools.get_paths", return_value=paths)
+    return patch("nova.mcp.tools.get_paths", return_value=paths)
 
 
 def _workspace_file(paths: Paths, relative_path: str, *, content: bytes = b"data") -> Path:

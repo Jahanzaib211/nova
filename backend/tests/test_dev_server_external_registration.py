@@ -44,7 +44,7 @@ def _temp_listener(host: str = "127.0.0.1"):
 
 
 def test_register_external_dev_server_creates_ready_handle():
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     with _temp_listener() as (host, port):
         handle = ds.register_external_dev_server("t-ext", port, host=host)
@@ -60,7 +60,7 @@ def test_register_external_dev_server_creates_ready_handle():
 
 
 def test_register_external_dev_server_is_idempotent():
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     with _temp_listener() as (host, port):
         first = ds.register_external_dev_server("t-idem", port, host=host)
@@ -112,7 +112,7 @@ def _make_client(monkeypatch):
 
 
 def test_dev_external_endpoint_registers_and_returns_handles(monkeypatch):
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     client = _make_client(monkeypatch)
     with _temp_listener() as (host, port):
@@ -133,7 +133,7 @@ def test_dev_external_endpoint_registers_and_returns_handles(monkeypatch):
 
 
 def test_dev_external_endpoint_refuses_unreachable_port(monkeypatch):
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
     from app.gateway.routers import sandbox as sandbox_module
 
     client = _make_client(monkeypatch)
@@ -159,7 +159,7 @@ class TestExternalRegistrationToolIsReachable:
     `register_external_dev_server_tool` was fully implemented (port validation,
     a liveness probe that refuses to advertise a phantom server) and documented
     in backend/CLAUDE.md as "the agent-facing tool" -- but it was never imported
-    into `deerflow.tools.tools` and never added to `BUILTIN_TOOLS`, so it was
+    into `nova.tools.tools` and never added to `BUILTIN_TOOLS`, so it was
     unreachable dead code.
 
     The cost is not theoretical. A dev server started outside the pipeline (raw
@@ -171,14 +171,14 @@ class TestExternalRegistrationToolIsReachable:
     """
 
     def test_tool_is_in_the_builtin_registry(self):
-        from deerflow.tools.tools import BUILTIN_TOOLS
+        from nova.tools.tools import BUILTIN_TOOLS
 
         names = {getattr(t, "name", None) for t in BUILTIN_TOOLS}
         assert "register_external_dev_server" in names, f"register_external_dev_server is implemented but not bound; BUILTIN_TOOLS exposes {sorted(n for n in names if n)}"
 
     def test_the_port_discovery_gap_it_covers_is_real(self):
         """Pin the reason the tool must exist: discovery is a 3-port probe."""
-        from deerflow.sandbox.dev_server import _PREVIEW_CONTAINER_PORTS
+        from nova.sandbox.dev_server import _PREVIEW_CONTAINER_PORTS
 
         assert 8787 not in _PREVIEW_CONTAINER_PORTS
         assert len(_PREVIEW_CONTAINER_PORTS) == 3

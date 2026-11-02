@@ -16,14 +16,14 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage
 
-from deerflow.skills.slash import parse_slash_skill_reference, resolve_slash_skill
-from deerflow.skills.storage import get_or_new_skill_storage
-from deerflow.skills.storage.skill_storage import SkillStorage
-from deerflow.skills.types import SKILL_MD_FILE
-from deerflow.utils.messages import get_original_user_content_text
+from nova.skills.slash import parse_slash_skill_reference, resolve_slash_skill
+from nova.skills.storage import get_or_new_skill_storage
+from nova.skills.storage.skill_storage import SkillStorage
+from nova.skills.types import SKILL_MD_FILE
+from nova.utils.messages import get_original_user_content_text
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 

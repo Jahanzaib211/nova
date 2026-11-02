@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request
 
 from app.gateway.authz import AuthContext, require_auth
 from app.gateway.deps import get_config
-from deerflow.agents_registry.registry import async_delegation_enabled, build_registry, live_counts
+from nova.agents_registry.registry import async_delegation_enabled, build_registry, live_counts
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ async def agents_registry(request: Request) -> dict[str, Any]:
     config = get_config()
     custom: list[Any] = []
     try:
-        from deerflow.config.agents_config import list_custom_agents
+        from nova.config.agents_config import list_custom_agents
 
         custom = list_custom_agents(user_id=owner)
     except Exception as exc:

@@ -11,10 +11,10 @@ from typing import Any
 import httpx
 from agent_sandbox import Sandbox as AioSandboxClient
 
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX
-from deerflow.sandbox.exceptions import SandboxError
-from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.search import GrepMatch, path_matches, should_ignore_path, truncate_line
+from nova.config.paths import VIRTUAL_PATH_PREFIX
+from nova.sandbox.exceptions import SandboxError
+from nova.sandbox.sandbox import Sandbox
+from nova.sandbox.search import GrepMatch, path_matches, should_ignore_path, truncate_line
 
 logger = logging.getLogger(__name__)
 

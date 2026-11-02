@@ -34,7 +34,7 @@ from urllib.robotparser import RobotFileParser
 import httpx
 from langchain.tools import tool
 
-from deerflow.community._tool_config import tool_config_extras as _get_tool_config
+from nova.community._tool_config import tool_config_extras as _get_tool_config
 
 from .crawl4ai_client import DEFAULT_BASE_URL, Crawl4aiClient
 
@@ -255,7 +255,7 @@ class _RobotsGate:
 def _record(url: str, *, success: bool, duration_ms: float, error: str | None = None) -> None:
     """One audit record per page, so the panel's counters count pages crawled."""
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         get_audit_trail().fetch(
             url=url,

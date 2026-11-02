@@ -12,15 +12,15 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from deerflow.config.email_config import EmailConfig
-from deerflow.config.email_marketing_config import EmailMarketingConfig
-from deerflow.email_marketing.pipeline import CampaignPipeline, PipelineDeps
-from deerflow.email_marketing.smtp import OutboundMessage, SendResult
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.queue import JobQueue
-from deerflow.persistence.base import Base
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
-from deerflow.persistence.job.sql import JobRepository
+from nova.config.email_config import EmailConfig
+from nova.config.email_marketing_config import EmailMarketingConfig
+from nova.email_marketing.pipeline import CampaignPipeline, PipelineDeps
+from nova.email_marketing.smtp import OutboundMessage, SendResult
+from nova.jobs.context import JobContext
+from nova.jobs.queue import JobQueue
+from nova.persistence.base import Base
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.persistence.job.sql import JobRepository
 
 pytestmark = pytest.mark.anyio
 
@@ -41,7 +41,7 @@ class FakeSender:
 
 @pytest.fixture()
 def world():
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     engine = create_async_engine("sqlite+aiosqlite://")
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

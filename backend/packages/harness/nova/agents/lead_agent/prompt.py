@@ -6,14 +6,14 @@ import threading
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from deerflow.config.agents_config import load_agent_soul
-from deerflow.skills.storage import get_or_new_skill_storage
-from deerflow.skills.types import Skill, SkillCategory
-from deerflow.subagents.registry import get_available_subagent_names
-from deerflow.tools.builtins.tool_search import get_deferred_tools_prompt_section
+from nova.config.agents_config import load_agent_soul
+from nova.skills.storage import get_or_new_skill_storage
+from nova.skills.types import Skill, SkillCategory
+from nova.subagents.registry import get_available_subagent_names
+from nova.tools.builtins.tool_search import get_deferred_tools_prompt_section
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def _load_enabled_skills_sync() -> list[Skill]:
 def _start_enabled_skills_refresh_thread() -> None:
     threading.Thread(
         target=_refresh_enabled_skills_cache_worker,
-        name="deerflow-enabled-skills-loader",
+        name="nova-enabled-skills-loader",
         daemon=True,
     ).start()
 
@@ -196,7 +196,7 @@ def _build_available_subagents_description(available_names: list[str], bash_avai
     }
 
     # Lazy import moved outside loop to avoid repeated import overhead
-    from deerflow.subagents.registry import get_subagent_config
+    from nova.subagents.registry import get_subagent_config
 
     lines = []
     for name in available_names:
@@ -696,11 +696,11 @@ def _get_memory_context(agent_name: str | None = None, *, app_config: AppConfig 
         Formatted memory context string wrapped in XML tags, or empty string if disabled.
     """
     try:
-        from deerflow.agents.memory import format_memory_for_injection, get_memory_data
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.agents.memory import format_memory_for_injection, get_memory_data
+        from nova.runtime.user_context import get_effective_user_id
 
         if app_config is None:
-            from deerflow.config.memory_config import get_memory_config
+            from nova.config.memory_config import get_memory_config
 
             config = get_memory_config()
         else:
@@ -771,7 +771,7 @@ def get_skills_prompt_section(available_skills: set[str] | None = None, *, app_c
 
     if app_config is None:
         try:
-            from deerflow.config import get_app_config
+            from nova.config import get_app_config
 
             config = get_app_config()
             container_base_path = config.skills.container_path
@@ -831,7 +831,7 @@ def _build_acp_section(*, app_config: AppConfig | None = None) -> str:
     """Build the ACP agent prompt section, only if ACP agents are configured."""
     if app_config is None:
         try:
-            from deerflow.config.acp_config import get_acp_agents
+            from nova.config.acp_config import get_acp_agents
 
             agents = get_acp_agents()
         except Exception:
@@ -855,7 +855,7 @@ def _build_custom_mounts_section(*, app_config: AppConfig | None = None) -> str:
     """Build a prompt section for explicitly configured sandbox mounts."""
     if app_config is None:
         try:
-            from deerflow.config import get_app_config
+            from nova.config import get_app_config
 
             config = get_app_config()
         except Exception:

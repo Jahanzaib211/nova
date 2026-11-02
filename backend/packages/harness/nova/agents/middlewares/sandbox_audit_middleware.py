@@ -13,7 +13,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from deerflow.agents.thread_state import ThreadState
+from nova.agents.thread_state import ThreadState
 
 logger = logging.getLogger(__name__)
 

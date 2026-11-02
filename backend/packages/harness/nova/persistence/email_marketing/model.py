@@ -2,7 +2,7 @@
 
 Every row is owner-scoped (``owner_user_id``) like ``jobs`` and ``runs``.
 Statuses and event types are pinned to
-``contracts/email_marketing_events_contract.json`` (``deerflow.email_marketing.events``).
+``contracts/email_marketing_events_contract.json`` (``nova.email_marketing.events``).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from deerflow.persistence.base import Base
+from nova.persistence.base import Base
 
 
 def _now() -> datetime:

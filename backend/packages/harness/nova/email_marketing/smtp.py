@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 
-from deerflow.email_marketing.bounces import classify_bounce
+from nova.email_marketing.bounces import classify_bounce
 
 logger = logging.getLogger(__name__)
 

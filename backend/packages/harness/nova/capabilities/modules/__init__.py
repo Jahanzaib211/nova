@@ -8,11 +8,11 @@ is registered by ``app.gateway.capabilities_modules`` because it needs
 
 from __future__ import annotations
 
-from deerflow.capabilities.registry import CapabilityRegistry
+from nova.capabilities.registry import CapabilityRegistry
 
 
 def register_builtin_modules(registry: CapabilityRegistry) -> None:
-    from deerflow.capabilities.modules import (
+    from nova.capabilities.modules import (
         acp,
         agents,
         features,

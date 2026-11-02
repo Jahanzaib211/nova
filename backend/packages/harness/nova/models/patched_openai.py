@@ -27,7 +27,7 @@ from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
-from deerflow.models.assistant_payload_replay import restore_assistant_payloads
+from nova.models.assistant_payload_replay import restore_assistant_payloads
 
 
 class PatchedChatOpenAI(ChatOpenAI):
@@ -43,7 +43,7 @@ class PatchedChatOpenAI(ChatOpenAI):
 
         - name: gemini-2.5-pro-thinking
           display_name: Gemini 2.5 Pro (Thinking)
-          use: deerflow.models.patched_openai:PatchedChatOpenAI
+          use: nova.models.patched_openai:PatchedChatOpenAI
           model: google/gemini-2.5-pro-preview
           api_key: $GEMINI_API_KEY
           base_url: https://<your-openai-compat-gateway>/v1

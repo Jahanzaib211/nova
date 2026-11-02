@@ -3,7 +3,7 @@
 Rejects unauthenticated requests to non-public paths with 401. When a
 request passes the cookie check, resolves the JWT payload to a real
 ``User`` object and stamps it into both ``request.state.user`` and the
-``deerflow.runtime.user_context`` contextvar so that repository-layer
+``nova.runtime.user_context`` contextvar so that repository-layer
 owner filtering works automatically via the sentinel pattern.
 
 Fine-grained permission checks remain in authz.py decorators.
@@ -30,7 +30,7 @@ from app.gateway.authz import _ALL_PERMISSIONS, AuthContext
 from app.gateway.internal_auth import INTERNAL_AUTH_HEADER_NAME, get_internal_user, is_valid_internal_auth_token
 from app.gateway.ops_auth import OPS_AUTH_HEADER_NAME, get_ops_user, is_valid_ops_token
 from app.gateway.preview_capability import capability_in_path, resolve_capability
-from deerflow.runtime.user_context import reset_current_user, set_current_user
+from nova.runtime.user_context import reset_current_user, set_current_user
 
 # Paths that never require authentication.
 _PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
@@ -89,7 +89,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
        signed user does not exist / is stale
 
     On success, stamps ``request.state.user`` and the
-    ``deerflow.runtime.user_context`` contextvar so that repository-layer
+    ``nova.runtime.user_context`` contextvar so that repository-layer
     owner filters work downstream without every route needing a
     ``@require_auth`` decorator. Routes that need per-resource
     authorization (e.g. "user A cannot read user B's thread by guessing

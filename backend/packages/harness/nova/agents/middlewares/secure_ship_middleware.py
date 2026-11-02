@@ -29,7 +29,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from deerflow.agents.thread_state import ThreadState
+from nova.agents.thread_state import ThreadState
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # fail: an absent engine means the gate cannot run, and an absent gate means
 # the delivery is not blocked (fail open, with a note).
 try:  # pragma: no cover - exercised through the middleware's own paths
-    from deerflow.security.secure_ship import run_gate
+    from nova.security.secure_ship import run_gate
 except Exception as _engine_import_error:  # noqa: BLE001 - any import failure is "engine missing"
     run_gate = None  # type: ignore[assignment]
     logger.debug("Secure-Ship gate engine unavailable: %s", _engine_import_error)
@@ -220,7 +220,7 @@ def _resolve_run_gate() -> Any:
     if run_gate is not None:
         return run_gate
     try:  # pragma: no cover - only when the engine landed after import
-        from deerflow.security.secure_ship import run_gate as engine_run_gate
+        from nova.security.secure_ship import run_gate as engine_run_gate
 
         return engine_run_gate
     except Exception:  # noqa: BLE001

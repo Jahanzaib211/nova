@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
-from deerflow.sandbox.search import GrepMatch
+from nova.sandbox.search import GrepMatch
 
 
 class Sandbox(ABC):

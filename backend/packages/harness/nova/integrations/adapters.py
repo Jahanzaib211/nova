@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from deerflow.integrations.base import now_iso
-from deerflow.integrations.health import HealthResult, IntegrationKind, IntegrationStatus
+from nova.integrations.base import now_iso
+from nova.integrations.health import HealthResult, IntegrationKind, IntegrationStatus
 
 Adapter = Callable[[], Iterable[HealthResult]]
 
 
 def _mcp_servers() -> dict[str, dict]:
-    from deerflow.config.extensions_config import ExtensionsConfig
+    from nova.config.extensions_config import ExtensionsConfig
 
     cfg = ExtensionsConfig.from_file()
     return {name: {"enabled": bool(server.enabled), "type": server.type} for name, server in cfg.mcp_servers.items()}
@@ -24,21 +24,21 @@ def _mcp_servers() -> dict[str, dict]:
 
 def _mcp_tool_counts(servers: dict[str, dict]) -> tuple[dict[str, int], bool]:
     """Tools per server from the cache; ``initialised`` False until startup loaded it."""
-    from deerflow.mcp.cache import mcp_tools_loaded, tool_counts_by_server
+    from nova.mcp.cache import mcp_tools_loaded, tool_counts_by_server
 
     return tool_counts_by_server(servers), mcp_tools_loaded()
 
 
 def _skills() -> list[tuple[str, bool]]:
-    from deerflow.config.app_config import get_app_config
-    from deerflow.skills.storage import get_or_new_skill_storage
+    from nova.config.app_config import get_app_config
+    from nova.skills.storage import get_or_new_skill_storage
 
     storage = get_or_new_skill_storage(app_config=get_app_config())
     return [(skill.name, bool(getattr(skill, "enabled", True))) for skill in storage.load_skills(enabled_only=False) or []]
 
 
 def _acp_agents() -> dict:
-    from deerflow.config.acp_config import get_acp_agents
+    from nova.config.acp_config import get_acp_agents
 
     return dict(get_acp_agents())
 
@@ -68,7 +68,7 @@ def skills_adapter() -> list[HealthResult]:
 
 
 def acp_adapter() -> list[HealthResult]:
-    from deerflow.runtimes.registry import acp_binary_available
+    from nova.runtimes.registry import acp_binary_available
 
     out: list[HealthResult] = []
     for name, agent in sorted(_acp_agents().items()):

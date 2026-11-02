@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from deerflow.sandbox.local.local_sandbox import LocalSandbox, PathMapping
+from nova.sandbox.local.local_sandbox import LocalSandbox, PathMapping
 
 
 def _make_sandbox(tmp_path: Path) -> LocalSandbox:

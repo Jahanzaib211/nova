@@ -31,7 +31,7 @@ ignore = [
 "**/tests/**/*.py" = ["E402", "E741", "F841", "F401"]
 
 [lint.isort]
-known-first-party = ["deerflow", "app"]
+known-first-party = ["nova", "deerflow", "app"]
 
 [format]
 quote-style = "double"

@@ -255,7 +255,7 @@ class OTelTracingHandler(BaseCallbackHandler):
     @staticmethod
     def _run_attributes() -> dict[str, Any]:
         try:
-            from deerflow.runtime.run_context import current_run_fields
+            from nova.runtime.run_context import current_run_fields
 
             return current_run_fields()
         except Exception:

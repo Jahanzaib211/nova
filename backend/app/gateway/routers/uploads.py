@@ -9,11 +9,11 @@ from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
 from app.gateway.deps import get_config
-from deerflow.config.app_config import AppConfig
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.sandbox.sandbox_provider import SandboxProvider, get_sandbox_provider
-from deerflow.uploads.manager import (
+from nova.config.app_config import AppConfig
+from nova.config.paths import get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.sandbox.sandbox_provider import SandboxProvider, get_sandbox_provider
+from nova.uploads.manager import (
     PathTraversalError,
     UnsafeUploadPathError,
     claim_unique_filename,
@@ -27,7 +27,7 @@ from deerflow.uploads.manager import (
     upload_artifact_url,
     upload_virtual_path,
 )
-from deerflow.utils.file_conversion import CONVERTIBLE_EXTENSIONS, convert_file_to_markdown
+from nova.utils.file_conversion import CONVERTIBLE_EXTENSIONS, convert_file_to_markdown
 
 logger = logging.getLogger(__name__)
 

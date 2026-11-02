@@ -11,9 +11,9 @@ from typing import Any
 
 from langgraph.store.base import BaseStore
 
-from deerflow.persistence.thread_meta.base import ThreadMetaStore
-from deerflow.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
-from deerflow.utils.time import coerce_iso, now_iso
+from nova.persistence.thread_meta.base import ThreadMetaStore
+from nova.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
+from nova.utils.time import coerce_iso, now_iso
 
 THREADS_NS: tuple[str, ...] = ("threads",)
 

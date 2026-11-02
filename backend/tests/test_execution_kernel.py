@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from deerflow.events.bus import EventBus
-from deerflow.execution import (
+from nova.events.bus import EventBus
+from nova.execution import (
     ExecutionClass,
     ExecutionDeniedError,
     ExecutionKernel,
@@ -24,7 +24,7 @@ from deerflow.execution import (
     ResourceLimits,
     ResourceManager,
 )
-from deerflow.execution.adapters import (
+from nova.execution.adapters import (
     DockerAdapter,
     GitAdapter,
     Pm2Adapter,
@@ -32,7 +32,7 @@ from deerflow.execution.adapters import (
     ShellAdapter,
     SystemdAdapter,
 )
-from deerflow.execution.policy import ClassPolicy
+from nova.execution.policy import ClassPolicy
 
 # ── Kernel core ──────────────────────────────────────────────────────────────
 
@@ -393,7 +393,7 @@ def test_python_adapter_run_code():
 
 
 def test_docker_adapter_builds_runtime_argv():
-    from deerflow.execution.testing import FakeExecutionKernel
+    from nova.execution.testing import FakeExecutionKernel
 
     fake = FakeExecutionKernel(lambda r: (0, "", ""))
     adapter = DockerAdapter(fake, runtime="docker")
@@ -406,7 +406,7 @@ def test_docker_adapter_builds_runtime_argv():
 
 
 def test_pm2_adapter_argv_and_policy():
-    from deerflow.execution.testing import FakeExecutionKernel
+    from nova.execution.testing import FakeExecutionKernel
 
     fake = FakeExecutionKernel(lambda r: (0, "", ""))
     adapter = Pm2Adapter(fake)
@@ -416,7 +416,7 @@ def test_pm2_adapter_argv_and_policy():
 
 
 def test_systemd_adapter_uses_noninteractive_sudo():
-    from deerflow.execution.testing import FakeExecutionKernel
+    from nova.execution.testing import FakeExecutionKernel
 
     fake = FakeExecutionKernel(lambda r: (0, "active\n", ""))
     adapter = SystemdAdapter(fake)
@@ -434,8 +434,8 @@ def test_systemd_adapter_uses_noninteractive_sudo():
 
 
 def test_container_returns_singleton_kernel_and_override_works():
-    from deerflow.execution.testing import FakeExecutionKernel
-    from deerflow.services.container import service_container
+    from nova.execution.testing import FakeExecutionKernel
+    from nova.services.container import service_container
 
     service_container.reset()
     try:
@@ -452,8 +452,8 @@ def test_container_returns_singleton_kernel_and_override_works():
 
 
 def test_container_kernel_publishes_to_global_event_bus():
-    from deerflow.events.bus import event_bus
-    from deerflow.services.container import service_container
+    from nova.events.bus import event_bus
+    from nova.services.container import service_container
 
     service_container.reset()
     try:
@@ -471,7 +471,7 @@ def test_kernel_never_uses_shell_true():
     import ast
     import inspect
 
-    import deerflow.execution.kernel as kernel_mod
+    import nova.execution.kernel as kernel_mod
 
     tree = ast.parse(inspect.getsource(kernel_mod))
     for node in ast.walk(tree):

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, DateTime, Index, Integer, String, false, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from deerflow.persistence.base import Base
+from nova.persistence.base import Base
 
 
 class UserRow(Base):

@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from deerflow.config.paths import get_paths
+from nova.config.paths import get_paths
 
 _SKIP_DIRS = {"node_modules", ".git", "__pycache__", ".venv", ".cache", "dist", ".next", ".turbo"}
 _REVIEW_FILENAME = "REVIEW.md"
@@ -90,8 +90,8 @@ class Review:
 
 def _git(work_dir: Path, *args: str, timeout: float = 8.0) -> tuple[int, str]:
     # All git plumbing flows through the Execution Kernel (Phase C7).
-    from deerflow.execution.adapters import GitAdapter
-    from deerflow.services.container import service_container
+    from nova.execution.adapters import GitAdapter
+    from nova.services.container import service_container
 
     adapter = GitAdapter(service_container.execution_kernel())
     return adapter.run_capture(work_dir, *args, timeout=timeout)

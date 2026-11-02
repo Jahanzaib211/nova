@@ -8,7 +8,7 @@ __all__ = [
     "BASH_AGENT_CONFIG",
 ]
 
-# Registry of built-in subagents — imported by deerflow.subagents.registry
+# Registry of built-in subagents — imported by nova.subagents.registry
 # noinspection PyUnusedLocal
 BUILTIN_SUBAGENTS = {
     "general-purpose": GENERAL_PURPOSE_CONFIG,

@@ -13,15 +13,15 @@ from urllib.parse import unquote, urlparse
 from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.config import get_config
 
-from deerflow.config.extensions_config import ExtensionsConfig
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, Paths, get_paths
-from deerflow.mcp.client import build_servers_config
-from deerflow.mcp.oauth import build_oauth_tool_interceptor, get_initial_oauth_headers
-from deerflow.mcp.session_pool import get_session_pool
-from deerflow.reflection import resolve_variable
-from deerflow.runtime.user_context import resolve_runtime_user_id
-from deerflow.tools.sync import make_sync_tool_wrapper
-from deerflow.tools.types import Runtime
+from nova.config.extensions_config import ExtensionsConfig
+from nova.config.paths import VIRTUAL_PATH_PREFIX, Paths, get_paths
+from nova.mcp.client import build_servers_config
+from nova.mcp.oauth import build_oauth_tool_interceptor, get_initial_oauth_headers
+from nova.mcp.session_pool import get_session_pool
+from nova.reflection import resolve_variable
+from nova.runtime.user_context import resolve_runtime_user_id
+from nova.tools.sync import make_sync_tool_wrapper
+from nova.tools.types import Runtime
 
 logger = logging.getLogger(__name__)
 
@@ -641,7 +641,7 @@ async def get_mcp_tools() -> list[BaseTool]:
             else:
                 wrapped_tools.append(tool)
 
-        # Patch tools to support sync invocation, as deerflow client streams synchronously
+        # Patch tools to support sync invocation, as the embedded Nova client streams synchronously
         for tool in wrapped_tools:
             if getattr(tool, "func", None) is None and getattr(tool, "coroutine", None) is not None:
                 tool.func = make_sync_tool_wrapper(tool.coroutine, tool.name)

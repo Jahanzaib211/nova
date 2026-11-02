@@ -1,7 +1,7 @@
 """Bridges WorkspaceEvent publications to per-connection async queues for SSE.
 
 The WIK emits domain events through the synchronous, thread-agnostic
-``EventBus`` (``deerflow.events.bus``). ``scan_async`` runs the actual scan
+``EventBus`` (``nova.events.bus``). ``scan_async`` runs the actual scan
 off the event loop via ``asyncio.to_thread``, so ``EventBus.publish`` can
 fire from a worker thread while every SSE consumer lives on the request's
 event loop. ``WorkspaceEventBridge`` hands each matching event to the
@@ -22,9 +22,9 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from deerflow.events.bus import EventBus
-from deerflow.events.event import DomainEvent
-from deerflow.workspace.events import WorkspaceEvent
+from nova.events.bus import EventBus
+from nova.events.event import DomainEvent
+from nova.workspace.events import WorkspaceEvent
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def get_workspace_event_bridge() -> WorkspaceEventBridge:
     """Return the process-wide bridge, bound to the global event_bus."""
     global _bridge
     if _bridge is None:
-        from deerflow.events.bus import event_bus
+        from nova.events.bus import event_bus
 
         _bridge = WorkspaceEventBridge(event_bus)
     return _bridge

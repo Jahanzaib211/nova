@@ -156,8 +156,8 @@ def _write_journal_file(thread_id: str, lines: list[str]) -> None:
     ``todo.md`` convention.
     """
     try:
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         try:
             user_id = get_effective_user_id()
@@ -204,9 +204,9 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
     correctness gate.
     """
     try:
-        from deerflow.sandbox.browser_check import run_browser_check
-        from deerflow.sandbox.dev_server import _append_devlog_to_sandbox_log
-        from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+        from nova.sandbox.browser_check import run_browser_check
+        from nova.sandbox.dev_server import _append_devlog_to_sandbox_log
+        from nova.sandbox.sandbox_provider import get_sandbox_provider
 
         sandbox = get_sandbox_provider().get(sandbox_id)
         if sandbox is None or getattr(sandbox, "_client", None) is None:
@@ -228,7 +228,7 @@ async def _auto_verify_present_files(thread_id: str, sandbox_id: str, writer=Non
 
         # Hand the rendered screenshot to a vision-capable model (ViewImageMiddleware
         # injects it next turn) so the agent can SEE the delivered build.
-        from deerflow.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
+        from nova.agents.middlewares.verify_vision import _first_route_screenshot, stash_verify_screenshot
 
         shot_b64 = _first_route_screenshot(check)
         stash_verify_screenshot(thread_id, shot_b64)
@@ -304,8 +304,8 @@ def _write_todo_md_file(todos: list, state: Any, thread_id: str | None = None) -
         if not thread_id:
             return
 
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         try:
             user_id = get_effective_user_id()

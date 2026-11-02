@@ -11,11 +11,11 @@ import time
 
 import httpx
 
-from deerflow.config.integrations_config import IntegrationsConfig
-from deerflow.integrations.adapters import Adapter, default_adapters
-from deerflow.integrations.base import HttpIntegration, IntegrationClient, now_iso
-from deerflow.integrations.clients import CLIENTS
-from deerflow.integrations.health import HealthResult, IntegrationStatus
+from nova.config.integrations_config import IntegrationsConfig
+from nova.integrations.adapters import Adapter, default_adapters
+from nova.integrations.base import HttpIntegration, IntegrationClient, now_iso
+from nova.integrations.clients import CLIENTS
+from nova.integrations.health import HealthResult, IntegrationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ def get_integrations_registry(config: IntegrationsConfig | None = None) -> Integ
     """
     global _shared
     if config is None:
-        from deerflow.config.app_config import get_app_config
+        from nova.config.app_config import get_app_config
 
         config = get_app_config().integrations
     source = config.model_dump_json()

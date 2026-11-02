@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from deerflow.config.extensions_config import ExtensionsConfig, McpOAuthConfig
+from nova.config.extensions_config import ExtensionsConfig, McpOAuthConfig
 
 logger = logging.getLogger(__name__)
 

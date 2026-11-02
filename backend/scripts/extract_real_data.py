@@ -25,11 +25,11 @@ def _parse_dt(v):
 
 
 async def main() -> None:
-    from deerflow.config import get_app_config
-    from deerflow.persistence.base import Base
-    from deerflow.persistence.engine import close_engine, get_engine, get_session_factory, init_engine_from_config
-    from deerflow.persistence.run.model import RunRow
-    from deerflow.persistence.user.model import UserRow
+    from nova.config import get_app_config
+    from nova.persistence.base import Base
+    from nova.persistence.engine import close_engine, get_engine, get_session_factory, init_engine_from_config
+    from nova.persistence.run.model import RunRow
+    from nova.persistence.user.model import UserRow
 
     # Read the real production DB immutably (never written to).
     real = sqlite3.connect("file:.deer-flow/data/deerflow.db?immutable=1", uri=True)

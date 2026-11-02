@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.events.event import DomainEvent
+from nova.events.event import DomainEvent
 
 
 @dataclass
@@ -61,7 +61,7 @@ class EventRegistry:
 event_registry = EventRegistry()
 
 # Auto-register all event types from the event module
-from deerflow.events import event as _event_module
+from nova.events import event as _event_module
 
 for _name in dir(_event_module):
     _cls = getattr(_event_module, _name)

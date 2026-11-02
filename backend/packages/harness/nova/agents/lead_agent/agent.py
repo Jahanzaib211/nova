@@ -26,30 +26,30 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.runnables import RunnableConfig
 
-from deerflow.agents.lead_agent.prompt import apply_prompt_template
-from deerflow.agents.memory.summarization_hook import memory_flush_hook
-from deerflow.agents.middlewares.clarification_middleware import ClarificationMiddleware
-from deerflow.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
-from deerflow.agents.middlewares.memory_middleware import MemoryMiddleware
-from deerflow.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
-from deerflow.agents.middlewares.preflight_quota_middleware import PreflightQuotaMiddleware
-from deerflow.agents.middlewares.reflect_fix_middleware import ReflectFixBudgetMiddleware
-from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
-from deerflow.agents.middlewares.strip_error_fallback_middleware import StripErrorFallbackMiddleware
-from deerflow.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
-from deerflow.agents.middlewares.summarization_middleware import BeforeSummarizationHook, DeerFlowSummarizationMiddleware
-from deerflow.agents.middlewares.title_middleware import TitleMiddleware
-from deerflow.agents.middlewares.todo_middleware import TodoMiddleware
-from deerflow.agents.middlewares.token_usage_middleware import TokenUsageMiddleware
-from deerflow.agents.middlewares.tool_error_handling_middleware import build_lead_runtime_middlewares
-from deerflow.agents.middlewares.view_image_middleware import ViewImageMiddleware
-from deerflow.agents.thread_state import ThreadState
-from deerflow.config.agents_config import load_agent_config, validate_agent_name
-from deerflow.config.app_config import AppConfig, get_app_config
-from deerflow.models import create_chat_model
-from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
-from deerflow.skills.types import Skill
-from deerflow.tracing import build_tracing_callbacks
+from nova.agents.lead_agent.prompt import apply_prompt_template
+from nova.agents.memory.summarization_hook import memory_flush_hook
+from nova.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from nova.agents.middlewares.loop_detection_middleware import LoopDetectionMiddleware
+from nova.agents.middlewares.memory_middleware import MemoryMiddleware
+from nova.agents.middlewares.observe_adjust_middleware import ObserveAdjustMiddleware
+from nova.agents.middlewares.preflight_quota_middleware import PreflightQuotaMiddleware
+from nova.agents.middlewares.reflect_fix_middleware import ReflectFixBudgetMiddleware
+from nova.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
+from nova.agents.middlewares.strip_error_fallback_middleware import StripErrorFallbackMiddleware
+from nova.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
+from nova.agents.middlewares.summarization_middleware import BeforeSummarizationHook, DeerFlowSummarizationMiddleware
+from nova.agents.middlewares.title_middleware import TitleMiddleware
+from nova.agents.middlewares.todo_middleware import TodoMiddleware
+from nova.agents.middlewares.token_usage_middleware import TokenUsageMiddleware
+from nova.agents.middlewares.tool_error_handling_middleware import build_lead_runtime_middlewares
+from nova.agents.middlewares.view_image_middleware import ViewImageMiddleware
+from nova.agents.thread_state import ThreadState
+from nova.config.agents_config import load_agent_config, validate_agent_name
+from nova.config.app_config import AppConfig, get_app_config
+from nova.models import create_chat_model
+from nova.skills.tool_policy import filter_tools_by_skill_allowed_tools
+from nova.skills.types import Skill
+from nova.tracing import build_tracing_callbacks
 
 logger = logging.getLogger(__name__)
 
@@ -248,14 +248,14 @@ def build_middlewares(
 
     # Always inject current date (and optionally memory) as <system-reminder> into the
     # first HumanMessage to keep the system prompt fully static for prefix-cache reuse.
-    from deerflow.agents.middlewares.dynamic_context_middleware import DynamicContextMiddleware
+    from nova.agents.middlewares.dynamic_context_middleware import DynamicContextMiddleware
 
     middlewares.append(DynamicContextMiddleware(agent_name=agent_name, app_config=resolved_app_config))
 
     # Deterministically load a full SKILL.md when the user starts the turn with
     # /skill-name. This keeps the base system prompt metadata-only while giving
     # explicit user activation priority over model-side relevance guessing.
-    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+    from nova.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
 
     middlewares.append(SkillActivationMiddleware(available_skills=available_skills, app_config=resolved_app_config))
 
@@ -290,7 +290,7 @@ def build_middlewares(
     # The deferred set + catalog hash come from the build-time setup (assembled
     # after tool-policy filtering); promotion is read from graph state.
     if deferred_setup is not None and deferred_setup.deferred_names:
-        from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+        from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
 
         middlewares.append(DeferredToolFilterMiddleware(deferred_setup.deferred_names, deferred_setup.catalog_hash))
 
@@ -334,7 +334,7 @@ def build_middlewares(
     # here so every earlier middleware still shapes the messages it sees.
     runtimes_config = getattr(resolved_app_config, "runtimes", None)
     if runtimes_config is not None and getattr(runtimes_config, "enabled", False):
-        from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
+        from nova.runtimes.middleware import RuntimeDispatchMiddleware
 
         runtime_model_config = resolved_app_config.get_model_config(model_name) if model_name else None
         model_runtime = getattr(runtime_model_config, "runtime", None) if runtime_model_config is not None else None
@@ -374,7 +374,7 @@ def build_middlewares(
     # single leading system message; strict llama.cpp chat templates 400 on
     # system messages at position > 0 ("System message must be at the
     # beginning"), hosted providers are unaffected by the merge.
-    from deerflow.agents.middlewares.system_message_coalescing_middleware import SystemMessageCoalescingMiddleware
+    from nova.agents.middlewares.system_message_coalescing_middleware import SystemMessageCoalescingMiddleware
 
     middlewares.append(SystemMessageCoalescingMiddleware())
     return middlewares
@@ -417,7 +417,7 @@ def skills_for_tool_policy(available_skills: set[str] | None, *, app_config: App
         return []
 
     try:
-        from deerflow.agents.lead_agent.prompt import get_enabled_skills_for_config
+        from nova.agents.lead_agent.prompt import get_enabled_skills_for_config
 
         skills = get_enabled_skills_for_config(app_config)
     except Exception:
@@ -436,9 +436,9 @@ def make_lead_agent(config: RunnableConfig):
 
 def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
     # Lazy import to avoid circular dependency
-    from deerflow.tools import get_available_tools
-    from deerflow.tools.builtins import setup_agent, update_agent
-    from deerflow.tools.builtins.tool_search import assemble_deferred_tools
+    from nova.tools import get_available_tools
+    from nova.tools.builtins import setup_agent, update_agent
+    from nova.tools.builtins.tool_search import assemble_deferred_tools
 
     cfg = _get_runtime_config(config)
     resolved_app_config = app_config

@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, select
 
-from deerflow.persistence.password_reset_token.model import PasswordResetTokenRow
+from nova.persistence.password_reset_token.model import PasswordResetTokenRow
 
 RESET_TOKEN_TTL = timedelta(minutes=30)
 

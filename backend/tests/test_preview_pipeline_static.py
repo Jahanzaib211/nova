@@ -13,7 +13,7 @@ import asyncio
 
 import pytest
 
-from deerflow.sandbox import dev_server
+from nova.sandbox import dev_server
 
 
 class _Sandbox:

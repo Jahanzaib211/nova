@@ -11,9 +11,9 @@ import re
 import fakeredis
 import pytest
 
-from deerflow.config.app_config import AppConfig
-from deerflow.config.stream_bridge_config import StreamBridgeConfig
-from deerflow.runtime.stream_bridge import END_SENTINEL, HEARTBEAT_SENTINEL, RedisStreamBridge, make_stream_bridge
+from nova.config.app_config import AppConfig
+from nova.config.stream_bridge_config import StreamBridgeConfig
+from nova.runtime.stream_bridge import END_SENTINEL, HEARTBEAT_SENTINEL, RedisStreamBridge, make_stream_bridge
 
 # ---------------------------------------------------------------------------
 # Unit tests for RedisStreamBridge
@@ -245,7 +245,7 @@ def test_import_hygiene_no_top_level_redis_import():
     import ast
     from pathlib import Path
 
-    source_path = Path(__file__).parent.parent / "packages" / "harness" / "deerflow" / "runtime" / "stream_bridge" / "redis_provider.py"
+    source_path = Path(__file__).parent.parent / "packages" / "harness" / "nova" / "runtime" / "stream_bridge" / "redis_provider.py"
     tree = ast.parse(source_path.read_text())
     top_level_imports = {alias.name.split(".")[0] for node in tree.body if isinstance(node, ast.Import) for alias in node.names} | {node.module.split(".")[0] for node in tree.body if isinstance(node, ast.ImportFrom) and node.module}
     assert "redis" not in top_level_imports

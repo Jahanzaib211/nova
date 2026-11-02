@@ -23,8 +23,8 @@ from pydantic import BaseModel, Field
 from app.gateway.authz import require_auth
 from app.gateway.deps import authenticated_user_id as _user_id
 from app.gateway.deps import get_jobs_repo, is_admin
-from deerflow.jobs.service import JobConflict, JobNotFound, JobService, first_run_at
-from deerflow.jobs.status import JOB_STATUSES, JobStatus, is_terminal
+from nova.jobs.service import JobConflict, JobNotFound, JobService, first_run_at
+from nova.jobs.status import JOB_STATUSES, JobStatus, is_terminal
 
 logger = logging.getLogger(__name__)
 

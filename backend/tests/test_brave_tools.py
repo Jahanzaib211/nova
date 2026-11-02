@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def reset_api_key_warned():
     """Reset the module-level warning flag before each test."""
-    from deerflow.community.brave import tools as brave_mod
+    from nova.community.brave import tools as brave_mod
 
     brave_mod._api_key_warned = False
     yield
@@ -19,7 +19,7 @@ def reset_api_key_warned():
 
 @pytest.fixture
 def mock_config_with_key():
-    with patch("deerflow.community.brave.tools.get_app_config") as mock:
+    with patch("nova.community.brave.tools.get_app_config") as mock:
         tool_config = MagicMock()
         tool_config.model_extra = {"api_key": "test-brave-key", "max_results": 5}
         mock.return_value.get_tool_config.return_value = tool_config
@@ -28,7 +28,7 @@ def mock_config_with_key():
 
 @pytest.fixture
 def mock_config_no_key():
-    with patch("deerflow.community.brave.tools.get_app_config") as mock:
+    with patch("nova.community.brave.tools.get_app_config") as mock:
         tool_config = MagicMock()
         tool_config.model_extra = {}
         mock.return_value.get_tool_config.return_value = tool_config
@@ -54,56 +54,56 @@ def _count_aware_get(results: list):
 
 class TestGetApiKey:
     def test_returns_config_key_when_present(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             tool_config = MagicMock()
             tool_config.model_extra = {"api_key": "from-config"}
             mock.return_value.get_tool_config.return_value = tool_config
 
-            from deerflow.community.brave.tools import _get_api_key
+            from nova.community.brave.tools import _get_api_key
 
             assert _get_api_key() == "from-config"
 
     def test_falls_back_to_env_when_config_key_empty(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             tool_config = MagicMock()
             tool_config.model_extra = {"api_key": "   "}
             mock.return_value.get_tool_config.return_value = tool_config
             with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "env-key"}, clear=True):
-                from deerflow.community.brave.tools import _get_api_key
+                from nova.community.brave.tools import _get_api_key
 
                 assert _get_api_key() == "env-key"
 
     def test_falls_back_to_env_when_no_config(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             mock.return_value.get_tool_config.return_value = None
             with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "env-only"}, clear=True):
-                from deerflow.community.brave.tools import _get_api_key
+                from nova.community.brave.tools import _get_api_key
 
                 assert _get_api_key() == "env-only"
 
     def test_ignores_legacy_brave_api_key(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             mock.return_value.get_tool_config.return_value = None
             with patch.dict("os.environ", {"BRAVE_API_KEY": "legacy"}, clear=True):
-                from deerflow.community.brave.tools import _get_api_key
+                from nova.community.brave.tools import _get_api_key
 
                 assert _get_api_key() is None
 
     def test_returns_none_when_no_key_anywhere(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             mock.return_value.get_tool_config.return_value = None
             with patch.dict("os.environ", {}, clear=True):
-                from deerflow.community.brave.tools import _get_api_key
+                from nova.community.brave.tools import _get_api_key
 
                 assert _get_api_key() is None
 
     def test_model_extra_none_does_not_crash(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             tool_config = MagicMock()
             tool_config.model_extra = None
             mock.return_value.get_tool_config.return_value = tool_config
             with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "env-key"}, clear=True):
-                from deerflow.community.brave.tools import _get_api_key
+                from nova.community.brave.tools import _get_api_key
 
                 assert _get_api_key() == "env-key"
 
@@ -116,10 +116,10 @@ class TestWebSearchTool:
         ]
         mock_resp = _make_brave_response(results)
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "python tutorial"})
             parsed = json.loads(result)
@@ -137,10 +137,10 @@ class TestWebSearchTool:
         }
         results = [{"title": f"R{i}", "url": f"https://x.com/{i}", "description": f"D{i}"} for i in range(10)]
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.side_effect = _count_aware_get(results)
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "test"})
             parsed = json.loads(result)
@@ -153,10 +153,10 @@ class TestWebSearchTool:
         results = [{"title": f"R{i}", "url": f"https://x.com/{i}", "description": f"D{i}"} for i in range(10)]
 
         with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "env-key"}, clear=True):
-            with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+            with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
                 mock_client_cls.return_value.__enter__.return_value.get.side_effect = _count_aware_get(results)
 
-                from deerflow.community.brave.tools import web_search_tool
+                from nova.community.brave.tools import web_search_tool
 
                 result = web_search_tool.invoke({"query": "test", "max_results": 2})
                 parsed = json.loads(result)
@@ -164,17 +164,17 @@ class TestWebSearchTool:
         assert parsed["total_results"] == 2
 
     def test_config_max_results_overrides_parameter(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             tool_config = MagicMock()
             tool_config.model_extra = {"api_key": "test-key", "max_results": 3}
             mock.return_value.get_tool_config.return_value = tool_config
 
             results = [{"title": f"R{i}", "url": f"https://x.com/{i}", "description": f"D{i}"} for i in range(10)]
 
-            with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+            with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
                 mock_client_cls.return_value.__enter__.return_value.get.side_effect = _count_aware_get(results)
 
-                from deerflow.community.brave.tools import web_search_tool
+                from nova.community.brave.tools import web_search_tool
 
                 result = web_search_tool.invoke({"query": "test", "max_results": 8})
                 parsed = json.loads(result)
@@ -183,18 +183,18 @@ class TestWebSearchTool:
 
     def test_max_results_string_from_env_is_coerced_and_clamped(self):
         """Env-sourced max_results is a string and must be coerced and clamped to 20."""
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             tool_config = MagicMock()
             tool_config.model_extra = {"api_key": "test-key", "max_results": "50"}
             mock.return_value.get_tool_config.return_value = tool_config
 
             results = [{"title": f"R{i}", "url": f"https://x.com/{i}", "description": f"D{i}"} for i in range(30)]
 
-            with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+            with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
                 mock_get = mock_client_cls.return_value.__enter__.return_value.get
                 mock_get.side_effect = _count_aware_get(results)
 
-                from deerflow.community.brave.tools import web_search_tool
+                from nova.community.brave.tools import web_search_tool
 
                 result = web_search_tool.invoke({"query": "test"})
                 parsed = json.loads(result)
@@ -204,20 +204,20 @@ class TestWebSearchTool:
         assert parsed["total_results"] == 20
 
     def test_invalid_max_results_falls_back_to_default(self, caplog):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             tool_config = MagicMock()
             tool_config.model_extra = {"api_key": "test-key", "max_results": "abc"}
             mock.return_value.get_tool_config.return_value = tool_config
 
             results = [{"title": f"R{i}", "url": f"https://x.com/{i}", "description": f"D{i}"} for i in range(10)]
 
-            with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+            with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
                 mock_get = mock_client_cls.return_value.__enter__.return_value.get
                 mock_get.side_effect = _count_aware_get(results)
 
-                from deerflow.community.brave.tools import web_search_tool
+                from nova.community.brave.tools import web_search_tool
 
-                with caplog.at_level("WARNING", logger="deerflow.community.brave.tools"):
+                with caplog.at_level("WARNING", logger="nova.community.brave.tools"):
                     result = web_search_tool.invoke({"query": "test"})
                 parsed = json.loads(result)
                 params = mock_get.call_args.kwargs["params"]
@@ -229,10 +229,10 @@ class TestWebSearchTool:
     def test_empty_results_returns_error_json(self, mock_config_with_key):
         mock_resp = _make_brave_response([])
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "no results"})
             parsed = json.loads(result)
@@ -246,10 +246,10 @@ class TestWebSearchTool:
         mock_resp.json.return_value = {}
         mock_resp.raise_for_status = MagicMock()
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "test"})
             parsed = json.loads(result)
@@ -258,7 +258,7 @@ class TestWebSearchTool:
 
     def test_missing_api_key_returns_error_json(self, mock_config_no_key):
         with patch.dict("os.environ", {}, clear=True):
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "test"})
             parsed = json.loads(result)
@@ -270,9 +270,9 @@ class TestWebSearchTool:
         import logging
 
         with patch.dict("os.environ", {}, clear=True):
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
-            with caplog.at_level(logging.WARNING, logger="deerflow.community.brave.tools"):
+            with caplog.at_level(logging.WARNING, logger="nova.community.brave.tools"):
                 web_search_tool.invoke({"query": "q1"})
                 web_search_tool.invoke({"query": "q2"})
 
@@ -284,10 +284,10 @@ class TestWebSearchTool:
         mock_error_response.status_code = 403
         mock_error_response.text = "Forbidden"
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.side_effect = httpx.HTTPStatusError("403", request=MagicMock(), response=mock_error_response)
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "test"})
             parsed = json.loads(result)
@@ -296,10 +296,10 @@ class TestWebSearchTool:
         assert "403" in parsed["error"]
 
     def test_network_exception_returns_error_json(self, mock_config_with_key):
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.side_effect = Exception("timeout")
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "test"})
             parsed = json.loads(result)
@@ -310,11 +310,11 @@ class TestWebSearchTool:
         results = [{"title": "T", "url": "https://x.com", "description": "D"}]
         mock_resp = _make_brave_response(results)
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_get = mock_client_cls.return_value.__enter__.return_value.get
             mock_get.return_value = mock_resp
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             web_search_tool.invoke({"query": "hello world"})
 
@@ -327,17 +327,17 @@ class TestWebSearchTool:
         assert params["count"] == 5
 
     def test_uses_env_key_when_config_absent(self):
-        with patch("deerflow.community.brave.tools.get_app_config") as mock:
+        with patch("nova.community.brave.tools.get_app_config") as mock:
             mock.return_value.get_tool_config.return_value = None
             with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "env-only-key"}, clear=True):
                 results = [{"title": "T", "url": "https://x.com", "description": "D"}]
                 mock_resp = _make_brave_response(results)
 
-                with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+                with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
                     mock_get = mock_client_cls.return_value.__enter__.return_value.get
                     mock_get.return_value = mock_resp
 
-                    from deerflow.community.brave.tools import web_search_tool
+                    from nova.community.brave.tools import web_search_tool
 
                     web_search_tool.invoke({"query": "env key test"})
                     headers = mock_get.call_args.kwargs["headers"]
@@ -349,10 +349,10 @@ class TestWebSearchTool:
         results = [{}]
         mock_resp = _make_brave_response(results)
 
-        with patch("deerflow.community.brave.tools.httpx.Client") as mock_client_cls:
+        with patch("nova.community.brave.tools.httpx.Client") as mock_client_cls:
             mock_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-            from deerflow.community.brave.tools import web_search_tool
+            from nova.community.brave.tools import web_search_tool
 
             result = web_search_tool.invoke({"query": "test"})
             parsed = json.loads(result)

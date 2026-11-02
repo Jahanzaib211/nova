@@ -9,7 +9,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from deerflow.config.agents_api_config import AgentsApiConfig, get_agents_api_config, set_agents_api_config
+from nova.config.agents_api_config import AgentsApiConfig, get_agents_api_config, set_agents_api_config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -18,7 +18,7 @@ from deerflow.config.agents_api_config import AgentsApiConfig, get_agents_api_co
 
 def _make_paths(base_dir: Path):
     """Return a Paths instance pointing to base_dir."""
-    from deerflow.config.paths import Paths
+    from nova.config.paths import Paths
 
     return Paths(base_dir=base_dir)
 
@@ -74,7 +74,7 @@ class TestPaths:
 
 class TestAgentConfig:
     def test_minimal_config(self):
-        from deerflow.config.agents_config import AgentConfig
+        from nova.config.agents_config import AgentConfig
 
         cfg = AgentConfig(name="my-agent")
         assert cfg.name == "my-agent"
@@ -83,7 +83,7 @@ class TestAgentConfig:
         assert cfg.tool_groups is None
 
     def test_full_config(self):
-        from deerflow.config.agents_config import AgentConfig
+        from nova.config.agents_config import AgentConfig
 
         cfg = AgentConfig(
             name="code-reviewer",
@@ -96,7 +96,7 @@ class TestAgentConfig:
         assert cfg.tool_groups == ["file:read", "bash"]
 
     def test_config_from_dict(self):
-        from deerflow.config.agents_config import AgentConfig
+        from nova.config.agents_config import AgentConfig
 
         data = {"name": "test-agent", "description": "A test", "model": "gpt-4"}
         cfg = AgentConfig(**data)
@@ -115,8 +115,8 @@ class TestLoadAgentConfig:
         config_dict = {"name": "code-reviewer", "description": "Code review agent", "model": "deepseek-v3"}
         _write_agent(tmp_path, "code-reviewer", config_dict)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("code-reviewer")
 
@@ -125,8 +125,8 @@ class TestLoadAgentConfig:
         assert cfg.model == "deepseek-v3"
 
     def test_load_missing_agent_raises(self, tmp_path):
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             with pytest.raises(FileNotFoundError):
                 load_agent_config("nonexistent-agent")
@@ -135,8 +135,8 @@ class TestLoadAgentConfig:
         # Create directory without config.yaml
         (tmp_path / "agents" / "broken-agent").mkdir(parents=True)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             with pytest.raises(FileNotFoundError):
                 load_agent_config("broken-agent")
@@ -148,8 +148,8 @@ class TestLoadAgentConfig:
         (agent_dir / "config.yaml").write_text("description: My agent\n")
         (agent_dir / "SOUL.md").write_text("Hello")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("inferred-name")
 
@@ -159,8 +159,8 @@ class TestLoadAgentConfig:
         config_dict = {"name": "restricted", "tool_groups": ["file:read", "file:write"]}
         _write_agent(tmp_path, "restricted", config_dict)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("restricted")
 
@@ -170,8 +170,8 @@ class TestLoadAgentConfig:
         config_dict = {"name": "no-skills-agent", "skills": []}
         _write_agent(tmp_path, "no-skills-agent", config_dict)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("no-skills-agent")
 
@@ -181,8 +181,8 @@ class TestLoadAgentConfig:
         config_dict = {"name": "default-skills-agent"}
         _write_agent(tmp_path, "default-skills-agent", config_dict)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("default-skills-agent")
 
@@ -195,8 +195,8 @@ class TestLoadAgentConfig:
         (agent_dir / "config.yaml").write_text("name: legacy-agent\nprompt_file: system.md\n")
         (agent_dir / "SOUL.md").write_text("Soul content")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("legacy-agent")
 
@@ -219,7 +219,7 @@ class TestResolveAgentDirMemoryOnlyFallback:
 
     def test_user_dir_with_only_memory_falls_back_to_legacy(self, tmp_path):
         """User dir has memory.json but no config.yaml → use legacy dir."""
-        from deerflow.config.agents_config import resolve_agent_dir
+        from nova.config.agents_config import resolve_agent_dir
 
         # Legacy agent with full config
         legacy_dir = tmp_path / "agents" / "my-agent"
@@ -232,14 +232,14 @@ class TestResolveAgentDirMemoryOnlyFallback:
         user_dir.mkdir(parents=True)
         (user_dir / "memory.json").write_text("{}", encoding="utf-8")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)), patch("deerflow.config.agents_config.get_effective_user_id", return_value="u1"):
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)), patch("nova.config.agents_config.get_effective_user_id", return_value="u1"):
             result = resolve_agent_dir("my-agent", user_id="u1")
 
         assert result == legacy_dir
 
     def test_user_dir_with_config_takes_priority(self, tmp_path):
         """User dir with config.yaml should still win over legacy."""
-        from deerflow.config.agents_config import resolve_agent_dir
+        from nova.config.agents_config import resolve_agent_dir
 
         # Legacy
         legacy_dir = tmp_path / "agents" / "my-agent"
@@ -252,7 +252,7 @@ class TestResolveAgentDirMemoryOnlyFallback:
         (user_dir / "config.yaml").write_text("name: my-agent\nmodel: gpt-4\n", encoding="utf-8")
         (user_dir / "memory.json").write_text("{}", encoding="utf-8")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)), patch("deerflow.config.agents_config.get_effective_user_id", return_value="u1"):
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)), patch("nova.config.agents_config.get_effective_user_id", return_value="u1"):
             result = resolve_agent_dir("my-agent", user_id="u1")
 
         assert result == user_dir
@@ -267,8 +267,8 @@ class TestResolveAgentDirMemoryOnlyFallback:
         user_dir.mkdir(parents=True)
         (user_dir / "memory.json").write_text("{}", encoding="utf-8")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)), patch("deerflow.config.agents_config.get_effective_user_id", return_value="u1"):
-            from deerflow.config.agents_config import load_agent_config
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)), patch("nova.config.agents_config.get_effective_user_id", return_value="u1"):
+            from nova.config.agents_config import load_agent_config
 
             cfg = load_agent_config("my-agent", user_id="u1")
 
@@ -286,8 +286,8 @@ class TestLoadAgentSoul:
         expected_soul = "You are a specialized code review expert."
         _write_agent(tmp_path, "code-reviewer", {"name": "code-reviewer"}, soul=expected_soul)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import AgentConfig, load_agent_soul
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import AgentConfig, load_agent_soul
 
             cfg = AgentConfig(name="code-reviewer")
             soul = load_agent_soul(cfg.name)
@@ -300,8 +300,8 @@ class TestLoadAgentSoul:
         (agent_dir / "config.yaml").write_text("name: no-soul\n")
         # No SOUL.md created
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import AgentConfig, load_agent_soul
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import AgentConfig, load_agent_soul
 
             cfg = AgentConfig(name="no-soul")
             soul = load_agent_soul(cfg.name)
@@ -314,8 +314,8 @@ class TestLoadAgentSoul:
         (agent_dir / "config.yaml").write_text("name: empty-soul\n")
         (agent_dir / "SOUL.md").write_text("   \n   ")
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import AgentConfig, load_agent_soul
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import AgentConfig, load_agent_soul
 
             cfg = AgentConfig(name="empty-soul")
             soul = load_agent_soul(cfg.name)
@@ -330,8 +330,8 @@ class TestLoadAgentSoul:
 
 class TestListCustomAgents:
     def test_empty_when_no_agents_dir(self, tmp_path):
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import list_custom_agents
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
 
@@ -341,8 +341,8 @@ class TestListCustomAgents:
         _write_agent(tmp_path, "agent-a", {"name": "agent-a"})
         _write_agent(tmp_path, "agent-b", {"name": "agent-b", "description": "B"})
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import list_custom_agents
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
 
@@ -356,8 +356,8 @@ class TestListCustomAgents:
         # Invalid dir (no config.yaml)
         (tmp_path / "agents" / "invalid-dir").mkdir(parents=True)
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import list_custom_agents
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
 
@@ -371,8 +371,8 @@ class TestListCustomAgents:
         (agents_dir / "not-a-dir.txt").write_text("hello")
         _write_agent(tmp_path, "real-agent", {"name": "real-agent"})
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import list_custom_agents
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
 
@@ -384,8 +384,8 @@ class TestListCustomAgents:
         _write_agent(tmp_path, "a-agent", {"name": "a-agent"})
         _write_agent(tmp_path, "m-agent", {"name": "m-agent"})
 
-        with patch("deerflow.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
-            from deerflow.config.agents_config import list_custom_agents
+        with patch("nova.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
+            from nova.config.agents_config import list_custom_agents
 
             agents = list_custom_agents()
 
@@ -401,12 +401,12 @@ class TestListCustomAgents:
 class TestMemoryFilePath:
     def test_global_memory_path(self, tmp_path):
         """None agent_name should return global memory file."""
-        from deerflow.agents.memory.storage import FileMemoryStorage
-        from deerflow.config.memory_config import MemoryConfig
+        from nova.agents.memory.storage import FileMemoryStorage
+        from nova.config.memory_config import MemoryConfig
 
         with (
-            patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
-            patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")),
+            patch("nova.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
+            patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")),
         ):
             storage = FileMemoryStorage()
             path = storage._get_memory_file_path(None)
@@ -414,24 +414,24 @@ class TestMemoryFilePath:
 
     def test_agent_memory_path(self, tmp_path):
         """Providing agent_name should return per-agent memory file."""
-        from deerflow.agents.memory.storage import FileMemoryStorage
-        from deerflow.config.memory_config import MemoryConfig
+        from nova.agents.memory.storage import FileMemoryStorage
+        from nova.config.memory_config import MemoryConfig
 
         with (
-            patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
-            patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")),
+            patch("nova.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
+            patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")),
         ):
             storage = FileMemoryStorage()
             path = storage._get_memory_file_path("code-reviewer")
         assert path == tmp_path / "agents" / "code-reviewer" / "memory.json"
 
     def test_different_paths_for_different_agents(self, tmp_path):
-        from deerflow.agents.memory.storage import FileMemoryStorage
-        from deerflow.config.memory_config import MemoryConfig
+        from nova.agents.memory.storage import FileMemoryStorage
+        from nova.config.memory_config import MemoryConfig
 
         with (
-            patch("deerflow.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
-            patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")),
+            patch("nova.agents.memory.storage.get_paths", return_value=_make_paths(tmp_path)),
+            patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")),
         ):
             storage = FileMemoryStorage()
             path_global = storage._get_memory_file_path(None)
@@ -479,7 +479,7 @@ def agent_client(tmp_path, monkeypatch):
     class AuthBypassMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED
-            from deerflow.runtime.user_context import get_current_user, set_current_user
+            from nova.runtime.user_context import get_current_user, set_current_user
 
             existing_user = get_current_user()
             if existing_user is not None:
@@ -493,7 +493,7 @@ def agent_client(tmp_path, monkeypatch):
             try:
                 return await call_next(request)
             finally:
-                from deerflow.runtime.user_context import reset_current_user
+                from nova.runtime.user_context import reset_current_user
 
                 reset_current_user(token)
 
@@ -502,7 +502,7 @@ def agent_client(tmp_path, monkeypatch):
     paths_instance = _make_paths(tmp_path)
     previous_config = AgentsApiConfig(**get_agents_api_config().model_dump())
 
-    with patch("deerflow.config.agents_config.get_paths", return_value=paths_instance), patch.object(agents_router, "get_paths", return_value=paths_instance):
+    with patch("nova.config.agents_config.get_paths", return_value=paths_instance), patch.object(agents_router, "get_paths", return_value=paths_instance):
         set_agents_api_config(AgentsApiConfig(enabled=True))
         try:
             app = _make_test_app(tmp_path)
@@ -534,7 +534,7 @@ def disabled_agent_client(tmp_path, monkeypatch):
     class AuthBypassMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             from app.gateway.auth_disabled import AUTH_SOURCE_AUTH_DISABLED
-            from deerflow.runtime.user_context import get_current_user, set_current_user
+            from nova.runtime.user_context import get_current_user, set_current_user
 
             existing_user = get_current_user()
             if existing_user is not None:
@@ -548,7 +548,7 @@ def disabled_agent_client(tmp_path, monkeypatch):
             try:
                 return await call_next(request)
             finally:
-                from deerflow.runtime.user_context import reset_current_user
+                from nova.runtime.user_context import reset_current_user
 
                 reset_current_user(token)
 
@@ -557,7 +557,7 @@ def disabled_agent_client(tmp_path, monkeypatch):
     paths_instance = _make_paths(tmp_path)
     previous_config = AgentsApiConfig(**get_agents_api_config().model_dump())
 
-    with patch("deerflow.config.agents_config.get_paths", return_value=paths_instance), patch.object(agents_router, "get_paths", return_value=paths_instance):
+    with patch("nova.config.agents_config.get_paths", return_value=paths_instance), patch.object(agents_router, "get_paths", return_value=paths_instance):
         set_agents_api_config(AgentsApiConfig(enabled=False))
         try:
             app = _make_test_app(tmp_path)

@@ -44,7 +44,7 @@ models:
     api_key: $OPENAI_API_KEY
     base_url: $OPENAI_API_BASE
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
   # Host bash is opt-in on the local provider; the test runs inside a tmp dir.
   allow_host_bash: true
 title:
@@ -75,11 +75,11 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     ext.write_text('{"mcpServers": {}, "skills": {}}', encoding="utf-8")
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(ext))
 
-    from deerflow.config import app_config as app_config_module
-    from deerflow.config import extensions_config as extensions_config_module
-    from deerflow.config import paths as paths_module
-    from deerflow.persistence import engine as engine_module
-    from deerflow.sandbox import sandbox_provider as provider_module
+    from nova.config import app_config as app_config_module
+    from nova.config import extensions_config as extensions_config_module
+    from nova.config import paths as paths_module
+    from nova.persistence import engine as engine_module
+    from nova.sandbox import sandbox_provider as provider_module
 
     for module, attr, value in (
         (app_config_module, "_app_config", None),
@@ -97,7 +97,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     yield home
     import asyncio
 
-    from deerflow.persistence.engine import close_engine
+    from nova.persistence.engine import close_engine
 
     asyncio.run(close_engine())
 
@@ -108,11 +108,11 @@ async def _gateway(tmp_path: Path):
     ``compute_flags()`` had no sandbox key at all, so production never listed
     ``sandbox__*`` to Claude Code while this test stayed green."""
     from app.gateway.mcp_server import NovaMcpServer
-    from deerflow.capabilities import CapabilityRegistry
-    from deerflow.capabilities.modules import register_builtin_modules
-    from deerflow.capabilities.modules.features import compute_flags
-    from deerflow.persistence.engine import get_session_factory, init_engine
-    from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+    from nova.capabilities import CapabilityRegistry
+    from nova.capabilities.modules import register_builtin_modules
+    from nova.capabilities.modules.features import compute_flags
+    from nova.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.harness_token.sql import HarnessTokenRepository
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'mcp.db'}", sqlite_dir=str(tmp_path))
     tokens = HarnessTokenRepository(get_session_factory())
@@ -210,9 +210,9 @@ async def test_token_without_a_thread_cannot_touch_any_sandbox(home: Path, tmp_p
 @pytest.mark.anyio
 async def test_runtime_turn_mints_token_and_the_runtime_edits_the_sandbox(home: Path, tmp_path: Path):
     """The whole turn: middleware -> token -> adapter -> Nova MCP -> sandbox -> AIMessage."""
-    from deerflow.config.acp_config import ACPAgentConfig
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
-    from deerflow.runtimes.registry import RuntimeRegistry
+    from nova.config.acp_config import ACPAgentConfig
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.registry import RuntimeRegistry
 
     app, server, tokens = await _gateway(tmp_path)
     try:
@@ -277,7 +277,7 @@ async def test_runtime_can_show_a_sandbox_server_in_the_browser_tab(home: Path, 
     """
     import socket
 
-    from deerflow.sandbox.dev_server import get_dev_server
+    from nova.sandbox.dev_server import get_dev_server
 
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
@@ -322,10 +322,10 @@ async def test_delegated_agent_drives_the_users_sandbox_over_mcp(home: Path, tmp
     """
     from types import SimpleNamespace
 
-    from deerflow.config.acp_config import ACPAgentConfig
-    from deerflow.runtime.user_context import reset_current_user, set_current_user
-    from deerflow.runtimes import acp_transport
-    from deerflow.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
+    from nova.config.acp_config import ACPAgentConfig
+    from nova.runtime.user_context import reset_current_user, set_current_user
+    from nova.runtimes import acp_transport
+    from nova.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
 
     cfg = tmp_path / "config.yaml"
     cfg.write_text(_CONFIG_YAML + "runtimes:\n  nova_mcp_url: http://nova/api/mcp/nova\n", encoding="utf-8")

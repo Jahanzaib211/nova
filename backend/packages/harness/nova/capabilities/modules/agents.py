@@ -6,8 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items, jobs_repo
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items, jobs_repo
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 class DelegateIn(BaseModel):
@@ -21,13 +21,13 @@ class JobOut(BaseModel):
 
 
 async def _registry(ctx: OpContext, inp: Empty) -> Items:
-    from deerflow.agents_registry.registry import build_registry, live_counts
-    from deerflow.config.app_config import get_app_config
+    from nova.agents_registry.registry import build_registry, live_counts
+    from nova.config.app_config import get_app_config
 
     config = get_app_config()
     custom: list[Any] = []
     try:
-        from deerflow.config.agents_config import list_custom_agents
+        from nova.config.agents_config import list_custom_agents
 
         custom = list_custom_agents(user_id=ctx.user_id)
     except Exception:
@@ -45,7 +45,7 @@ def resolve_delegate_target(agent: str, config: Any) -> tuple[str, str]:
     job was enqueued without a ``kind`` at all, so the worker treated every
     target as a subagent and answered ``unknown subagent 'claude_code'``.
     """
-    from deerflow.tools.builtins.delegate_async_tool import _known_agents
+    from nova.tools.builtins.delegate_async_tool import _known_agents
 
     known = _known_agents(config)
     name = agent.strip()
@@ -73,8 +73,8 @@ def delegate_model_for_runtime(config: Any) -> str | None:
 
 
 async def _delegate(ctx: OpContext, inp: DelegateIn) -> JobOut:
-    from deerflow.agents_registry.registry import enqueue_agent_task
-    from deerflow.config.app_config import get_app_config
+    from nova.agents_registry.registry import enqueue_agent_task
+    from nova.config.app_config import get_app_config
 
     repo = jobs_repo()
     if repo is None:
@@ -87,8 +87,8 @@ async def _delegate(ctx: OpContext, inp: DelegateIn) -> JobOut:
 
 
 async def _status() -> ModuleStatus:
-    from deerflow.agents_registry.registry import async_delegation_enabled
-    from deerflow.config.app_config import get_app_config
+    from nova.agents_registry.registry import async_delegation_enabled
+    from nova.config.app_config import get_app_config
 
     async_on = async_delegation_enabled(get_app_config())
     return ModuleStatus(configured=True, healthy=True, detail="async delegation on" if async_on else "async delegation off (subagents.async_enabled)")

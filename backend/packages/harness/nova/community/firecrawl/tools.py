@@ -3,7 +3,7 @@ import json
 from firecrawl import FirecrawlApp
 from langchain.tools import tool
 
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 
 def _get_firecrawl_client(tool_name: str = "web_search") -> FirecrawlApp:

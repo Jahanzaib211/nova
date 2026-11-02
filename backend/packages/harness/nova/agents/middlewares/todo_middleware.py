@@ -26,8 +26,8 @@ from langchain.agents.middleware.types import ModelCallResult, ModelRequest, Mod
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.runtime import Runtime
 
-from deerflow.agents.thread_state import ThreadState
-from deerflow.sandbox.computer_events import emit_channel
+from nova.agents.thread_state import ThreadState
+from nova.sandbox.computer_events import emit_channel
 
 
 def _todos_in_messages(messages: list[Any]) -> bool:
@@ -395,7 +395,7 @@ class TodoMiddleware(TodoListMiddleware):
         later. Non-fatal by contract.
         """
         try:
-            from deerflow.sandbox.computer_events import emit_channel
+            from nova.sandbox.computer_events import emit_channel
 
             messages = getattr(request, "state", None) and getattr(request.state, "messages", None)
             if not messages:

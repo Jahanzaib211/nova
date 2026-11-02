@@ -22,7 +22,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from deerflow.models.credential_loader import CodexCliCredential, load_codex_cli_credential
+from nova.models.credential_loader import CodexCliCredential, load_codex_cli_credential
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class CodexChatModel(BaseChatModel):
 
     Config example:
         - name: gpt-5.4
-          use: deerflow.models.openai_codex_provider:CodexChatModel
+          use: nova.models.openai_codex_provider:CodexChatModel
           model: gpt-5.4
           reasoning_effort: medium
     """

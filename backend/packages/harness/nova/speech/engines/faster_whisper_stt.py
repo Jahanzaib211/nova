@@ -18,7 +18,7 @@ import os
 import threading
 import wave
 
-from deerflow.speech.base import AudioChunk, SpeechEngineUnavailable, SpeechToText, Transcript
+from nova.speech.base import AudioChunk, SpeechEngineUnavailable, SpeechToText, Transcript
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class FasterWhisperSTT(SpeechToText):
                 from faster_whisper import WhisperModel
             except ImportError as e:
                 raise SpeechEngineUnavailable("faster-whisper is not installed. Install it with:\n    cd backend && uv sync --extra voice") from e
-            from deerflow.speech.devices import default_compute_type, resolve_ct2_device
+            from nova.speech.devices import default_compute_type, resolve_ct2_device
 
             device = resolve_ct2_device(self.device, subsystem="faster-whisper")
             compute = default_compute_type(device, self._configured_compute)

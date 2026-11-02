@@ -3,7 +3,7 @@ import json
 from langchain.tools import tool
 from tavily import TavilyClient
 
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 
 def _get_tavily_client() -> TavilyClient:

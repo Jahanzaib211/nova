@@ -3,7 +3,7 @@
 
 Today AIO sandbox already accepts /mnt/user-data/... paths directly because the
 container has those paths bind-mounted per-thread. LocalSandbox, however,
-externalises that translation to ``deerflow.sandbox.tools`` via ``thread_data``,
+externalises that translation to ``nova.sandbox.tools`` via ``thread_data``,
 so any caller that bypasses tools.py (e.g. ``uploads.py`` syncing files into a
 remote sandbox via ``sandbox.update_file(virtual_path, ...)``) sees inconsistent
 behaviour.
@@ -23,8 +23,8 @@ from unittest.mock import patch
 
 import pytest
 
-from deerflow.config.sandbox_config import SandboxConfig
-from deerflow.sandbox.local.local_sandbox_provider import LocalSandboxProvider
+from nova.config.sandbox_config import SandboxConfig
+from nova.sandbox.local.local_sandbox_provider import LocalSandboxProvider
 
 
 def _build_config(skills_dir: Path) -> SimpleNamespace:
@@ -33,9 +33,9 @@ def _build_config(skills_dir: Path) -> SimpleNamespace:
         skills=SimpleNamespace(
             container_path="/mnt/skills",
             get_skills_path=lambda: skills_dir,
-            use="deerflow.skills.storage.local_skill_storage:LocalSkillStorage",
+            use="nova.skills.storage.local_skill_storage:LocalSkillStorage",
         ),
-        sandbox=SandboxConfig(use="deerflow.sandbox.local:LocalSandboxProvider", mounts=[]),
+        sandbox=SandboxConfig(use="nova.sandbox.local:LocalSandboxProvider", mounts=[]),
     )
 
 
@@ -47,7 +47,7 @@ def isolated_paths(monkeypatch, tmp_path):
     real ``.deer-flow/`` tree.
     """
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "_paths", None)
     yield tmp_path
@@ -60,7 +60,7 @@ def provider(isolated_paths, tmp_path):
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
     cfg = _build_config(skills_dir)
-    with patch("deerflow.config.get_app_config", return_value=cfg):
+    with patch("nova.config.get_app_config", return_value=cfg):
         yield LocalSandboxProvider()
 
 
@@ -233,7 +233,7 @@ def test_reset_clears_both_generic_and_per_thread_caches(provider):
 
 
 def test_is_local_sandbox_accepts_both_id_formats():
-    from deerflow.sandbox.tools import is_local_sandbox
+    from nova.sandbox.tools import is_local_sandbox
 
     legacy = SimpleNamespace(state={"sandbox": {"sandbox_id": "local"}}, context={})
     per_thread = SimpleNamespace(state={"sandbox": {"sandbox_id": "local:alpha"}}, context={})
@@ -262,7 +262,7 @@ def test_concurrent_acquire_same_thread_yields_single_instance(provider):
     import threading
     import time
 
-    from deerflow.sandbox.local import local_sandbox as local_sandbox_module
+    from nova.sandbox.local import local_sandbox as local_sandbox_module
 
     # Force a wide race window by slowing the LocalSandbox constructor down.
     original_init = local_sandbox_module.LocalSandbox.__init__
@@ -332,7 +332,7 @@ def test_thread_sandbox_cache_is_bounded(isolated_paths, tmp_path):
     skills_dir.mkdir()
     cfg = _build_config(skills_dir)
 
-    with patch("deerflow.config.get_app_config", return_value=cfg):
+    with patch("nova.config.get_app_config", return_value=cfg):
         provider = LocalSandboxProvider(max_cached_threads=3)
 
     for i in range(5):
@@ -351,7 +351,7 @@ def test_lru_promotes_recently_used_thread(isolated_paths, tmp_path):
     skills_dir.mkdir()
     cfg = _build_config(skills_dir)
 
-    with patch("deerflow.config.get_app_config", return_value=cfg):
+    with patch("nova.config.get_app_config", return_value=cfg):
         provider = LocalSandboxProvider(max_cached_threads=3)
 
     for name in ["a", "b", "c"]:

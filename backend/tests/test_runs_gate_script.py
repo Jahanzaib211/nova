@@ -373,7 +373,7 @@ def _ago(seconds: int) -> str:
 def test_orphan_error_matches_what_the_reaper_writes(gate):
     """The gate matches the reaper's text, so it must be the reaper's text."""
     root = Path(__file__).resolve().parents[1]
-    for source in (root / "app" / "gateway" / "deps.py", root / "packages" / "harness" / "deerflow" / "runtime" / "runs" / "manager.py"):
+    for source in (root / "app" / "gateway" / "deps.py", root / "packages" / "harness" / "nova" / "runtime" / "runs" / "manager.py"):
         assert gate.ORPHAN_ERROR in source.read_text(), source
 
 

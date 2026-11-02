@@ -1,6 +1,6 @@
 """Tests for the Secure-Ship capability module.
 
-The gate engine itself lives in ``deerflow.security.secure_ship`` and is
+The gate engine itself lives in ``nova.security.secure_ship`` and is
 tested there. What is pinned here is this module's contract with the rest of
 Nova: the module registers exactly once, its four operations carry the kinds
 and surfaces the registry derives tools and MCP listings from, and the
@@ -13,12 +13,12 @@ import json
 
 import pytest
 
-from deerflow.capabilities.modules import register_builtin_modules
-from deerflow.capabilities.modules import secure_ship as secure_ship_module
-from deerflow.capabilities.modules._common import Empty
-from deerflow.capabilities.modules.secure_ship import MODULE, ScanIn, ThreadScoped
-from deerflow.capabilities.registry import CapabilityRegistry, surface_allows
-from deerflow.capabilities.types import OpContext
+from nova.capabilities.modules import register_builtin_modules
+from nova.capabilities.modules import secure_ship as secure_ship_module
+from nova.capabilities.modules._common import Empty
+from nova.capabilities.modules.secure_ship import MODULE, ScanIn, ThreadScoped
+from nova.capabilities.registry import CapabilityRegistry, surface_allows
+from nova.capabilities.types import OpContext
 
 # ---------------------------------------------------------------------------
 # Helpers

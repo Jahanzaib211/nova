@@ -5,7 +5,7 @@ All events carry workspace root and timestamp for traceability.
 
 Usage::
 
-    from deerflow.workspace.events import WorkspaceScanned, PlanBuilt
+    from nova.workspace.events import WorkspaceScanned, PlanBuilt
 
     event = WorkspaceScanned(
         root_path="/home/jahanzaib/Desktop/nova/backend",
@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from deerflow.events.event import DomainEvent
+from nova.events.event import DomainEvent
 
 
 def _now_iso() -> str:

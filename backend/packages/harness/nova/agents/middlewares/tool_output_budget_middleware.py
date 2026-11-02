@@ -24,11 +24,11 @@ from langchain_core.messages import ToolMessage
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from deerflow.config.tool_output_config import ToolOutputConfig
-from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+from nova.config.tool_output_config import ToolOutputConfig
+from nova.sandbox.sandbox_provider import get_sandbox_provider
 
 if TYPE_CHECKING:
-    from deerflow.sandbox.sandbox import Sandbox
+    from nova.sandbox.sandbox import Sandbox
 
 logger = logging.getLogger(__name__)
 

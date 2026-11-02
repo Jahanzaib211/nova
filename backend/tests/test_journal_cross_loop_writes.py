@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import threading
 
-from deerflow.runtime.journal import RunJournal
+from nova.runtime.journal import RunJournal
 
 
 class _LoopRecordingStore:

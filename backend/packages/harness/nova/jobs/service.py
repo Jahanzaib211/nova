@@ -1,7 +1,7 @@
 """Owner-checked job and schedule actions, shared by every surface.
 
 ``/api/jobs`` and the ``jobs.*`` capability operations both sit on
-:class:`~deerflow.persistence.job.sql.JobRepository`. They used to apply
+:class:`~nova.persistence.job.sql.JobRepository`. They used to apply
 their own ownership and state rules, and drifted: the capability let any
 caller overwrite another owner's schedule by name, cancel or retry system
 jobs (``owner_user_id`` ``None``), and left queued jobs waiting on a worker
@@ -15,8 +15,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from deerflow.jobs.scheduler import next_run_at
-from deerflow.jobs.status import JobStatus, is_terminal
+from nova.jobs.scheduler import next_run_at
+from nova.jobs.status import JobStatus, is_terminal
 
 #: Statuses a retry may start from; anything else is a conflict.
 RETRYABLE_STATUSES: frozenset[str] = frozenset({JobStatus.FAILED.value, JobStatus.DEAD_LETTER.value})

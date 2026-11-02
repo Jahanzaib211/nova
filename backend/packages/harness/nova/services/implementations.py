@@ -16,7 +16,7 @@ import threading
 import time
 from typing import Any
 
-from deerflow.services.protocols import (
+from nova.services.protocols import (
     ArtifactService,
     BrowserService,
     ConfigurationService,
@@ -28,7 +28,7 @@ from deerflow.services.protocols import (
     TerminalService,
     WorkspaceService,
 )
-from deerflow.services.types import (
+from nova.services.types import (
     DiagnosticsRecord,
     HealthReport,
     ProbeResult,
@@ -86,7 +86,7 @@ class RunServiceImpl:
     def _publish(self, event_class: type, **kwargs: Any) -> None:
         """Publish a lifecycle event if an event bus is configured."""
         if self._event_bus is not None:
-            from deerflow.events.event import DomainEvent
+            from nova.events.event import DomainEvent
 
             event = event_class(**kwargs)
             self._event_bus.publish(event)
@@ -109,7 +109,7 @@ class RunServiceImpl:
             multitask_strategy=multitask_strategy,
             **(kwargs or {}),
         )
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         self._publish(
             RunCreated,
@@ -187,7 +187,7 @@ class RunServiceImpl:
         model_name: str | None = None,
         user_id: str | None = None,
     ) -> RunDetail:
-        from deerflow.runtime.runs.schemas import DisconnectMode
+        from nova.runtime.runs.schemas import DisconnectMode
 
         disconnect = DisconnectMode.cancel if on_disconnect == "cancel" else DisconnectMode.continue_
         record = await self._manager.create_or_reject(
@@ -200,7 +200,7 @@ class RunServiceImpl:
             model_name=model_name,
             user_id=user_id,
         )
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         self._publish(
             RunCreated,
@@ -232,7 +232,7 @@ class RunServiceImpl:
     ) -> bool:
         result = await self._manager.cancel(run_id, action=action)
         if result:
-            from deerflow.events.event import RunCancelled
+            from nova.events.event import RunCancelled
 
             self._publish(RunCancelled, run_id=run_id, payload={"action": action})
         return result
@@ -244,14 +244,14 @@ class RunServiceImpl:
         *,
         error: str | None = None,
     ) -> None:
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
-        from deerflow.runtime.runs.schemas import RunStatus
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.runs.schemas import RunStatus
 
         run_status = RunStatus(status) if status in [s.value for s in RunStatus] else RunStatus.PENDING
         await self._manager.set_status(run_id, run_status, error=error)
 
         lifecycle = adapt_run_status(status)
-        from deerflow.events import event as event_mod
+        from nova.events import event as event_mod
 
         event_map = {
             RunLifecycleStatus.CREATED: event_mod.RunCreated,
@@ -375,7 +375,7 @@ class BrowserServiceImpl:
 
         start = time.monotonic()
         try:
-            from deerflow.sandbox.browser_check import check_browser_preview
+            from nova.sandbox.browser_check import check_browser_preview
 
             result = await check_browser_preview(url, timeout=timeout)
             latency = (time.monotonic() - start) * 1000
@@ -422,7 +422,7 @@ class TerminalServiceImpl:
         user_id: str | None = None,
         timeout: float = 30.0,
     ) -> dict[str, Any]:
-        from deerflow.sandbox.tools import bash as sandbox_bash
+        from nova.sandbox.tools import bash as sandbox_bash
 
         result = await sandbox_bash(command, thread_id=thread_id, user_id=user_id, timeout=timeout)
         return {
@@ -535,7 +535,7 @@ class HealthServiceImpl:
         )
         # Publish HealthChanged if overall state transitioned
         if self._event_bus is not None and self._last_healthy != report.healthy:
-            from deerflow.events.event import HealthChanged
+            from nova.events.event import HealthChanged
 
             self._event_bus.publish(
                 HealthChanged(
@@ -628,7 +628,7 @@ class ConfigurationServiceImpl:
         pass
 
     def get_config(self) -> Any:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         return get_app_config()
 
@@ -667,7 +667,7 @@ class DiagnosticsServiceImpl:
 
     def subscribe_to_events(self, bus: Any) -> None:
         """Subscribe to all DomainEvent subclasses and record them."""
-        from deerflow.events.event import DomainEvent
+        from nova.events.event import DomainEvent
 
         def _on_event(event: DomainEvent) -> None:
             self.record(
@@ -694,7 +694,7 @@ class DiagnosticsServiceImpl:
         # EventBus swallows handler exceptions, so every subscribed run event
         # was silently dropped. Empty ids go in as None so the recorder neither
         # stamps "" onto the record nor skips its correlation-id fallback.
-        from deerflow.runtime.stream_bridge.diagnostics import diagnostics
+        from nova.runtime.stream_bridge.diagnostics import diagnostics
 
         diagnostics.record(
             stage,
@@ -708,7 +708,7 @@ class DiagnosticsServiceImpl:
         self,
         limit: int = 100,
     ) -> list[DiagnosticsRecord]:
-        from deerflow.runtime.stream_bridge.diagnostics import diagnostics
+        from nova.runtime.stream_bridge.diagnostics import diagnostics
 
         # The recorder's ring holds plain dicts; absent keys mean "not set".
         records = diagnostics.read_recent(limit)
@@ -731,7 +731,7 @@ class DiagnosticsServiceImpl:
         run_id: str,
         correlation_id: str,
     ) -> None:
-        from deerflow.runtime.stream_bridge.diagnostics import register_correlation_id
+        from nova.runtime.stream_bridge.diagnostics import register_correlation_id
 
         # Keyword-only upstream (def register_correlation_id(*, ...)): passing
         # positionally raised TypeError on every call, so the mapping never got
@@ -742,7 +742,7 @@ class DiagnosticsServiceImpl:
         self,
         thread_id: str,
     ) -> str:
-        from deerflow.runtime.stream_bridge.diagnostics import lookup_correlation_id
+        from nova.runtime.stream_bridge.diagnostics import lookup_correlation_id
 
         return lookup_correlation_id(thread_id=thread_id) or ""
 
@@ -783,7 +783,7 @@ class WorkspaceIntelligenceServiceImpl:
     def _get_event_bus(self):
         if self._event_bus is None:
             try:
-                from deerflow.events.bus import event_bus as _eb
+                from nova.events.bus import event_bus as _eb
 
                 self._event_bus = _eb
             except Exception:
@@ -791,7 +791,7 @@ class WorkspaceIntelligenceServiceImpl:
         return self._event_bus
 
     def _make_metrics(self):
-        from deerflow.workspace.metrics import WIKMetrics
+        from nova.workspace.metrics import WIKMetrics
 
         return WIKMetrics()
 
@@ -805,7 +805,7 @@ class WorkspaceIntelligenceServiceImpl:
 
     def _record_scan(self, root_path, file_count, project_count, symbol_count, command_count, duration_ms, language_distribution=None):
         self._metrics.record_scan(file_count, project_count, symbol_count, duration_ms, language_distribution)
-        from deerflow.workspace.events import WorkspaceScanned
+        from nova.workspace.events import WorkspaceScanned
 
         self._emit(
             WorkspaceScanned(
@@ -822,7 +822,7 @@ class WorkspaceIntelligenceServiceImpl:
     def _record_plan_built(self, plan, symbols_found):
         if plan:
             self._metrics.record_plan_built(len(plan.steps), True)
-            from deerflow.workspace.events import PlanBuilt
+            from nova.workspace.events import PlanBuilt
 
             self._emit(
                 PlanBuilt(
@@ -838,13 +838,13 @@ class WorkspaceIntelligenceServiceImpl:
 
     def _record_cache_hit(self, root_path: str = ""):
         self._metrics.record_cache_hit()
-        from deerflow.workspace.events import CacheHit
+        from nova.workspace.events import CacheHit
 
         self._emit(CacheHit(root_path=root_path, cache_key="", hit_count=self._metrics._cache_hits))
 
     def _record_cache_miss(self, root_path: str = ""):
         self._metrics.record_cache_miss()
-        from deerflow.workspace.events import CacheMiss
+        from nova.workspace.events import CacheMiss
 
         self._emit(CacheMiss(root_path=root_path, cache_key=""))
 
@@ -858,16 +858,16 @@ class WorkspaceIntelligenceServiceImpl:
         """
         from pathlib import Path
 
-        from deerflow.workspace.detectors import (
+        from nova.workspace.detectors import (
             CommandDetector,
             FingerprintDetector,
             LanguageDetector,
             ProjectDetector,
         )
-        from deerflow.workspace.graph import CommandRegistry, DependencyGraph, SymbolIndex, WorkspaceGraph
-        from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot
-        from deerflow.workspace.parsers import JSParser, PythonParser
-        from deerflow.workspace.scanners import BoundedWalker, TraversalLimit
+        from nova.workspace.graph import CommandRegistry, DependencyGraph, SymbolIndex, WorkspaceGraph
+        from nova.workspace.models.workspace_snapshot import WorkspaceSnapshot
+        from nova.workspace.parsers import JSParser, PythonParser
+        from nova.workspace.scanners import BoundedWalker, TraversalLimit
 
         root = Path(root_path)
 
@@ -956,8 +956,8 @@ class WorkspaceIntelligenceServiceImpl:
         file_pattern: str | None = None,
     ) -> PlannerResult:
         """Build an execution plan for a search query."""
-        from deerflow.workspace.graph import CommandRegistry, DependencyGraph, SymbolIndex, WorkspaceGraph
-        from deerflow.workspace.planner import WorkspacePlanner
+        from nova.workspace.graph import CommandRegistry, DependencyGraph, SymbolIndex, WorkspaceGraph
+        from nova.workspace.planner import WorkspacePlanner
 
         graph = WorkspaceGraph()
         symbols = SymbolIndex()
@@ -990,8 +990,8 @@ class WorkspaceIntelligenceServiceImpl:
         new_string: str,
     ) -> PlannerResult:
         """Build an execution plan for a file edit."""
-        from deerflow.workspace.graph import DependencyGraph, WorkspaceGraph
-        from deerflow.workspace.planner import WorkspacePlanner
+        from nova.workspace.graph import DependencyGraph, WorkspaceGraph
+        from nova.workspace.planner import WorkspacePlanner
 
         deps = DependencyGraph()
         graph = WorkspaceGraph()
@@ -1016,8 +1016,8 @@ class WorkspaceIntelligenceServiceImpl:
         project_id: str | None = None,
     ) -> PlannerResult:
         """Build an execution plan for a named command."""
-        from deerflow.workspace.graph import CommandRegistry, DependencyGraph, WorkspaceGraph
-        from deerflow.workspace.planner import WorkspacePlanner
+        from nova.workspace.graph import CommandRegistry, DependencyGraph, WorkspaceGraph
+        from nova.workspace.planner import WorkspacePlanner
 
         cmd_reg = CommandRegistry()
         for snap in self._snapshots.values():
@@ -1036,7 +1036,7 @@ class WorkspaceIntelligenceServiceImpl:
         return result
 
     def _get_symbol_index(self) -> SymbolIndex:
-        from deerflow.workspace.graph import SymbolIndex
+        from nova.workspace.graph import SymbolIndex
 
         symbols = SymbolIndex()
         for snap in self._snapshots.values():
@@ -1045,7 +1045,7 @@ class WorkspaceIntelligenceServiceImpl:
         return symbols
 
     def _get_command_registry(self) -> CommandRegistry:
-        from deerflow.workspace.graph import CommandRegistry
+        from nova.workspace.graph import CommandRegistry
 
         cmd_reg = CommandRegistry()
         for snap in self._snapshots.values():
@@ -1064,12 +1064,12 @@ class WorkspaceIntelligenceServiceImpl:
         Converts WIK ExecutionSteps to ExecutionRequests and executes
         them sequentially through the Phase C8 ExecutionKernel.
         """
-        from deerflow.events.bus import event_bus
-        from deerflow.execution import ExecutionKernel
-        from deerflow.execution.models import ExecutionClass, ExecutionRequest, ResourceLimits
-        from deerflow.workspace.models.execution_plan import RiskLevel, StepKind
-        from deerflow.workspace.planner.plan_validator import PlanValidator
-        from deerflow.workspace.planner.risk_analyzer import RiskAnalyzer
+        from nova.events.bus import event_bus
+        from nova.execution import ExecutionKernel
+        from nova.execution.models import ExecutionClass, ExecutionRequest, ResourceLimits
+        from nova.workspace.models.execution_plan import RiskLevel, StepKind
+        from nova.workspace.planner.plan_validator import PlanValidator
+        from nova.workspace.planner.risk_analyzer import RiskAnalyzer
 
         validation = PlanValidator().validate(plan)
         if not validation.is_valid:
@@ -1082,7 +1082,7 @@ class WorkspaceIntelligenceServiceImpl:
             raise PermissionError(f"Plan '{plan.plan_id}' is {risk.value} risk and requires explicit approval")
 
         if not plan.steps:
-            from deerflow.execution.models import ExecutionResult
+            from nova.execution.models import ExecutionResult
 
             return ExecutionResult(
                 execution_id="",
@@ -1111,7 +1111,7 @@ class WorkspaceIntelligenceServiceImpl:
         return last_result
 
     def _step_kind_to_class(self, kind: StepKind, argv: tuple[str, ...] = ()) -> ExecutionClass:
-        from deerflow.execution.models import ExecutionClass
+        from nova.execution.models import ExecutionClass
 
         program = str(argv[0]).rsplit("/", 1)[-1] if argv else ""
         if program == "git":

@@ -32,7 +32,7 @@ _PASSWORD = "Tr0ub4dor3a"
 def app(tmp_path):
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/admin_infra.db"

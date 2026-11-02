@@ -1,7 +1,7 @@
 import threading
 import weakref
 
-from deerflow.sandbox.sandbox import Sandbox
+from nova.sandbox.sandbox import Sandbox
 
 # Use WeakValueDictionary to prevent memory leak in long-running processes.
 # Locks are automatically removed when no longer referenced by any thread.

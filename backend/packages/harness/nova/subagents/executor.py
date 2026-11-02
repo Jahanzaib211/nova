@@ -21,22 +21,22 @@ from langchain.tools import BaseTool
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from deerflow.agents.thread_state import SandboxState, ThreadDataState, ThreadState
-from deerflow.config import get_app_config
-from deerflow.config.app_config import AppConfig
-from deerflow.models import create_chat_model
-from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
-from deerflow.skills.types import Skill
-from deerflow.subagents.config import MAX_CONCURRENT_SUBAGENTS, SubagentConfig, resolve_subagent_model_name
-from deerflow.subagents.token_collector import SubagentTokenCollector
-from deerflow.tracing import build_tracing_callbacks, inject_langfuse_metadata
+from nova.agents.thread_state import SandboxState, ThreadDataState, ThreadState
+from nova.config import get_app_config
+from nova.config.app_config import AppConfig
+from nova.models import create_chat_model
+from nova.skills.tool_policy import filter_tools_by_skill_allowed_tools
+from nova.skills.types import Skill
+from nova.subagents.config import MAX_CONCURRENT_SUBAGENTS, SubagentConfig, resolve_subagent_model_name
+from nova.subagents.token_collector import SubagentTokenCollector
+from nova.tracing import build_tracing_callbacks, inject_langfuse_metadata
 
 if TYPE_CHECKING:
     # Imported lazily at runtime inside _build_initial_state: importing
     # tool_search eagerly would run tools/builtins/__init__ -> task_tool ->
-    # `from deerflow.subagents import SubagentExecutor`, which re-enters this
+    # `from nova.subagents import SubagentExecutor`, which re-enters this
     # still-initializing package. Type-only here keeps the annotation precise.
-    from deerflow.tools.builtins.tool_search import DeferredToolSetup
+    from nova.tools.builtins.tool_search import DeferredToolSetup
 
 logger = logging.getLogger(__name__)
 
@@ -396,7 +396,7 @@ class SubagentExecutor:
             self.model_name = resolve_subagent_model_name(self.config, self.parent_model, app_config=app_config)
         model = create_chat_model(name=self.model_name, thinking_enabled=False, app_config=app_config, attach_tracing=False)
 
-        from deerflow.agents.middlewares.tool_error_handling_middleware import build_subagent_runtime_middlewares
+        from nova.agents.middlewares.tool_error_handling_middleware import build_subagent_runtime_middlewares
 
         # Reuse shared middleware composition with lead agent.
         middlewares = build_subagent_runtime_middlewares(app_config=app_config, model_name=self.model_name, lazy_init=True, deferred_setup=deferred_setup)
@@ -419,7 +419,7 @@ class SubagentExecutor:
             return []
 
         try:
-            from deerflow.skills.storage import get_or_new_skill_storage
+            from nova.skills.storage import get_or_new_skill_storage
 
             storage_kwargs = {"app_config": self.app_config} if self.app_config is not None else {}
             storage = await asyncio.to_thread(get_or_new_skill_storage, **storage_kwargs)
@@ -490,7 +490,7 @@ class SubagentExecutor:
         # Lazy import: see the TYPE_CHECKING note at the top of this module -
         # importing tool_search runs tools/builtins/__init__, which would
         # re-enter this package during its own initialization.
-        from deerflow.tools.builtins.tool_search import assemble_deferred_tools, get_deferred_tools_prompt_section
+        from nova.tools.builtins.tool_search import assemble_deferred_tools, get_deferred_tools_prompt_section
 
         # Load skills as conversation items (Codex pattern)
         skills = await self._load_skills()
@@ -949,9 +949,9 @@ class SubagentExecutor:
 
 def _current_run_id() -> str | None:
     """The run id of the current run scope, or None outside a stamped run."""
-    # Imported lazily: ``deerflow.runtime`` pulls in the run worker, which
+    # Imported lazily: ``nova.runtime`` pulls in the run worker, which
     # imports this module.
-    from deerflow.runtime.run_context import current_run_scope
+    from nova.runtime.run_context import current_run_scope
 
     scope = current_run_scope()
     return scope.run_id if scope is not None else None

@@ -6,15 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig, set_extensions_config
-from deerflow.tools.builtins.invoke_acp_agent_tool import (
+from nova.config.acp_config import ACPAgentConfig
+from nova.config.extensions_config import ExtensionsConfig, McpServerConfig, set_extensions_config
+from nova.tools.builtins.invoke_acp_agent_tool import (
     _build_acp_mcp_servers,
     _build_permission_response,
     _get_work_dir,
     build_invoke_acp_agent_tool,
 )
-from deerflow.tools.tools import get_available_tools
+from nova.tools.tools import get_available_tools
 
 
 class _FakeACPProcess:
@@ -49,7 +49,7 @@ def test_build_acp_mcp_servers_formats_list_payload():
     )
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: fresh_config),
     )
 
@@ -135,7 +135,7 @@ async def test_build_invoke_tool_description_and_unknown_agent_error():
 
 def test_get_work_dir_uses_base_dir_when_no_thread_id(monkeypatch, tmp_path):
     """_get_work_dir(None) uses {base_dir}/acp-workspace/ (global fallback)."""
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     result = _get_work_dir(None)
@@ -146,8 +146,8 @@ def test_get_work_dir_uses_base_dir_when_no_thread_id(monkeypatch, tmp_path):
 
 def test_get_work_dir_uses_per_thread_path_when_thread_id_given(monkeypatch, tmp_path):
     """P1.1: _get_work_dir(thread_id) uses {base_dir}/threads/{thread_id}/acp-workspace/."""
-    from deerflow.config import paths as paths_module
-    from deerflow.runtime import user_context as uc_module
+    from nova.config import paths as paths_module
+    from nova.runtime import user_context as uc_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(uc_module, "get_effective_user_id", lambda: None)
@@ -159,7 +159,7 @@ def test_get_work_dir_uses_per_thread_path_when_thread_id_given(monkeypatch, tmp
 
 def test_get_work_dir_falls_back_to_global_for_invalid_thread_id(monkeypatch, tmp_path):
     """P1.1: Invalid thread_id (e.g. path traversal chars) falls back to global workspace."""
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     result = _get_work_dir("../../evil")
@@ -171,12 +171,12 @@ def test_get_work_dir_falls_back_to_global_for_invalid_thread_id(monkeypatch, tm
 @pytest.mark.anyio
 async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
     """ACP agent uses {base_dir}/acp-workspace/ when no thread_id is available (no config)."""
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
 
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(
             lambda cls: ExtensionsConfig(
                 mcp_servers={"github": McpServerConfig(enabled=True, type="stdio", command="npx", args=["github-mcp"])},
@@ -309,14 +309,14 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
 @pytest.mark.anyio
 async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_config(monkeypatch, tmp_path):
     """P1.1: When thread_id is in the RunnableConfig, ACP agent uses per-thread workspace."""
-    from deerflow.config import paths as paths_module
-    from deerflow.runtime import user_context as uc_module
+    from nova.config import paths as paths_module
+    from nova.runtime import user_context as uc_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(uc_module, "get_effective_user_id", lambda: None)
 
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
 
@@ -404,11 +404,11 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
 @pytest.mark.anyio
 async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
     """env map in ACPAgentConfig is passed to spawn_agent_process; $VAR values are resolved."""
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
     monkeypatch.setenv("TEST_OPENAI_KEY", "sk-from-env")
@@ -497,11 +497,11 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
 @pytest.mark.anyio
 async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path, caplog):
     """Invalid MCP config should be logged and skipped instead of failing ACP invocation."""
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(
-        "deerflow.tools.builtins.invoke_acp_agent_tool._build_acp_mcp_servers",
+        "nova.tools.builtins.invoke_acp_agent_tool._build_acp_mcp_servers",
         lambda: (_ for _ in ()).throw(ValueError("missing command")),
     )
 
@@ -585,11 +585,11 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
 @pytest.mark.anyio
 async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch, tmp_path):
     """When env is empty, None is passed to spawn_agent_process (subprocess inherits parent env)."""
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
 
@@ -667,7 +667,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
 
 
 def test_get_available_tools_includes_invoke_acp_agent_when_agents_configured(monkeypatch):
-    from deerflow.config.acp_config import load_acp_config_from_dict
+    from nova.config.acp_config import load_acp_config_from_dict
 
     load_acp_config_from_dict(
         {
@@ -685,9 +685,9 @@ def test_get_available_tools_includes_invoke_acp_agent_when_agents_configured(mo
         tool_search=SimpleNamespace(enabled=False),
         get_model_config=lambda name: None,
     )
-    monkeypatch.setattr("deerflow.tools.tools.get_app_config", lambda: fake_config)
+    monkeypatch.setattr("nova.tools.tools.get_app_config", lambda: fake_config)
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
 
@@ -698,16 +698,16 @@ def test_get_available_tools_includes_invoke_acp_agent_when_agents_configured(mo
 
 
 def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(monkeypatch, tmp_path):
-    from deerflow.config import paths as paths_module
-    from deerflow.runtime import user_context as uc_module
+    from nova.config import paths as paths_module
+    from nova.runtime import user_context as uc_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(uc_module, "get_effective_user_id", lambda: None)
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
-    monkeypatch.setattr("deerflow.tools.tools.is_host_bash_allowed", lambda config=None: True)
+    monkeypatch.setattr("nova.tools.tools.is_host_bash_allowed", lambda config=None: True)
 
     captured: dict[str, object] = {}
 
@@ -803,9 +803,9 @@ def test_get_available_tools_uses_explicit_app_config_for_acp_agents(monkeypatch
         captured["agents"] = agents
         return sentinel_tool
 
-    monkeypatch.setattr("deerflow.tools.tools.is_host_bash_allowed", lambda config=None: True)
-    monkeypatch.setattr("deerflow.config.acp_config.get_acp_agents", fail_get_acp_agents)
-    monkeypatch.setattr("deerflow.tools.builtins.invoke_acp_agent_tool.build_invoke_acp_agent_tool", fake_build_invoke_acp_agent_tool)
+    monkeypatch.setattr("nova.tools.tools.is_host_bash_allowed", lambda config=None: True)
+    monkeypatch.setattr("nova.config.acp_config.get_acp_agents", fail_get_acp_agents)
+    monkeypatch.setattr("nova.tools.builtins.invoke_acp_agent_tool.build_invoke_acp_agent_tool", fake_build_invoke_acp_agent_tool)
 
     tools = get_available_tools(include_mcp=False, subagent_enabled=False, app_config=explicit_config)
 
@@ -820,7 +820,7 @@ def test_get_available_tools_uses_explicit_app_config_for_acp_agents(monkeypatch
 
 def test_build_permission_response_honours_policy_kind():
     """A read is approved by policy even with auto_approve off; an execute is not."""
-    from deerflow.config.acp_config import ACPPermissionPolicy
+    from nova.config.acp_config import ACPPermissionPolicy
 
     policy = ACPPermissionPolicy(allow_kinds=["read"])
     options = [SimpleNamespace(kind="allow_once", optionId="once")]
@@ -835,12 +835,12 @@ async def test_invoke_acp_agent_streams_acp_update_events(monkeypatch, tmp_path)
     """Every agent text chunk is mirrored to the run's custom stream as an
     ``acp_update`` (contract-pinned) so the UI can show a live transcript
     instead of a spinner until the final answer."""
-    from deerflow.config import paths as paths_module
-    from deerflow.tools.builtins import invoke_acp_agent_tool as mod
+    from nova.config import paths as paths_module
+    from nova.tools.builtins import invoke_acp_agent_tool as mod
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
     monkeypatch.setattr(
-        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        "nova.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
     events: list[dict] = []

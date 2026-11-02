@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from croniter import croniter
 
 if TYPE_CHECKING:
-    from deerflow.persistence.job.sql import JobRepository
+    from nova.persistence.job.sql import JobRepository
 
 
 def next_run_at(cron: str, after: datetime, *, timezone: str = "UTC") -> datetime:

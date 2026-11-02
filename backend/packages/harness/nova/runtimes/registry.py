@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from deerflow.config.acp_config import ACPAgentConfig
-from deerflow.runtimes.types import (
+from nova.config.acp_config import ACPAgentConfig
+from nova.runtimes.types import (
     DEFAULT_MODE,
     NATIVE,
     PERMISSION_MODES,
@@ -149,8 +149,8 @@ class RuntimeRegistry:
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=False, detail=f"{cfg.command} not on PATH", checked_at=now)
         if not account.available:
             return RuntimeHealth(runtime=runtime_id, account=account.id, ok=False, detail=account.detail, checked_at=now)
-        from deerflow.models.probe import PROBE_PROMPT
-        from deerflow.runtimes.acp_transport import run_acp_prompt
+        from nova.models.probe import PROBE_PROMPT
+        from nova.runtimes.acp_transport import run_acp_prompt
 
         try:
             text = await run_acp_prompt(cfg, PROBE_PROMPT, cwd=cwd or os.getcwd(), mcp_servers=[], permission=policy_for_mode("plan"), on_text=lambda _sid, _t: None, on_status=lambda _sid, _s: None, timeout=timeout)
@@ -166,8 +166,8 @@ _registry_source: str | None = None
 def get_runtime_registry() -> RuntimeRegistry:
     """Registry for the current config (rebuilt when ``acp_agents``/``runtimes`` change)."""
     global _registry, _registry_source
-    from deerflow.config.acp_config import get_acp_agents
-    from deerflow.config.app_config import get_app_config
+    from nova.config.acp_config import get_acp_agents
+    from nova.config.app_config import get_app_config
 
     cfg = get_app_config()
     rt = getattr(cfg, "runtimes", None)

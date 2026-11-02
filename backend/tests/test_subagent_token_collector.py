@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from deerflow.subagents.token_collector import SubagentTokenCollector
+from nova.subagents.token_collector import SubagentTokenCollector
 
 
 def _make_llm_response(content="Hello", usage=None, response_metadata=None):

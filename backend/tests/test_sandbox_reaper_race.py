@@ -28,8 +28,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
-provider_mod = importlib.import_module("deerflow.sandbox.sandbox_provider")
+aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
+provider_mod = importlib.import_module("nova.sandbox.sandbox_provider")
 
 DEADLOCK_BUDGET_S = 5.0
 
@@ -206,8 +206,8 @@ def test_destroy_forgets_the_shared_activity():
 
 @pytest.fixture()
 def sandbox():
-    with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-        from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+        from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
         sb = AioSandbox(id="7ea3700c", base_url="http://localhost:8080")
         sb._STREAM_POLL_INTERVAL = 0
@@ -242,7 +242,7 @@ def test_a_streaming_start_failure_falls_back_without_deadlocking(sandbox):
 
 
 def test_the_error_observation_backstop_does_not_deadlock(sandbox):
-    from deerflow.community.aio_sandbox.aio_sandbox import _ERROR_OBSERVATION_SIGNATURE
+    from nova.community.aio_sandbox.aio_sandbox import _ERROR_OBSERVATION_SIGNATURE
 
     sandbox._client.file.read_file.return_value = SimpleNamespace(data=SimpleNamespace(content=f"Command failed: {_ERROR_OBSERVATION_SIGNATURE}"))
     sandbox._client.shell.view.return_value = SimpleNamespace(data=SimpleNamespace(status="completed"))

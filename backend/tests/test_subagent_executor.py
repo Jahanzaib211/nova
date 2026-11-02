@@ -27,7 +27,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.skills.types import Skill
+from nova.skills.types import Skill
 
 
 def _default_app_config():
@@ -44,10 +44,10 @@ def _setup_executor_classes(monkeypatch):
     """Yield the real executor classes with hermetic config/skills seams."""
     from langchain_core.messages import AIMessage, HumanMessage
 
-    import deerflow.skills.storage as skills_storage
-    import deerflow.subagents.executor as executor_module
-    from deerflow.subagents.config import SubagentConfig
-    from deerflow.subagents.executor import (
+    import nova.skills.storage as skills_storage
+    import nova.subagents.executor as executor_module
+    from nova.subagents.config import SubagentConfig
+    from nova.subagents.executor import (
         SubagentExecutor,
         SubagentResult,
         SubagentStatus,
@@ -203,8 +203,8 @@ class TestAgentConstruction:
         monkeypatch: pytest.MonkeyPatch,
     ):
         """Explicit app_config must flow into both model and middleware factories."""
-        import deerflow.config as config_module
-        from deerflow.subagents import executor as executor_module
+        import nova.config as config_module
+        from nova.subagents import executor as executor_module
 
         SubagentExecutor = classes["SubagentExecutor"]
 
@@ -238,9 +238,9 @@ class TestAgentConstruction:
         monkeypatch.setattr(executor_module, "create_agent", fake_create_agent)
         monkeypatch.setitem(
             sys.modules,
-            "deerflow.agents.middlewares.tool_error_handling_middleware",
+            "nova.agents.middlewares.tool_error_handling_middleware",
             _module(
-                "deerflow.agents.middlewares.tool_error_handling_middleware",
+                "nova.agents.middlewares.tool_error_handling_middleware",
                 build_subagent_runtime_middlewares=fake_build_subagent_runtime_middlewares,
             ),
         )
@@ -298,7 +298,7 @@ class TestAgentConstruction:
             captured["app_config"] = app_config
             return SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="example-skill", skill_file=skill_file)])
 
-        monkeypatch.setattr(sys.modules["deerflow.skills.storage"], "get_or_new_skill_storage", fake_get_or_new_skill_storage)
+        monkeypatch.setattr(sys.modules["nova.skills.storage"], "get_or_new_skill_storage", fake_get_or_new_skill_storage)
 
         executor = SubagentExecutor(
             config=base_config,
@@ -331,7 +331,7 @@ class TestAgentConstruction:
         skill_file.write_text("Skill instructions here", encoding="utf-8")
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="my-skill", skill_file=skill_file, allowed_tools=None)]),
         )
@@ -369,7 +369,7 @@ class TestAgentConstruction:
         SubagentExecutor = classes["SubagentExecutor"]
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: []),
         )
@@ -414,7 +414,7 @@ class TestAgentConstruction:
         skill_file.write_text("Skill content", encoding="utf-8")
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="my-skill", skill_file=skill_file, allowed_tools=None)]),
         )
@@ -444,13 +444,13 @@ class TestAgentConstruction:
         <available-deferred-tools> section into the SystemMessage."""
         from langchain_core.tools import tool as as_tool
 
-        from deerflow.subagents import executor as executor_module
-        from deerflow.tools.mcp_metadata import tag_mcp_tool
+        from nova.subagents import executor as executor_module
+        from nova.tools.mcp_metadata import tag_mcp_tool
 
         SubagentExecutor = classes["SubagentExecutor"]
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: []),
         )
@@ -485,13 +485,13 @@ class TestAgentConstruction:
         with an MCP-tagged tool present."""
         from langchain_core.tools import tool as as_tool
 
-        from deerflow.subagents import executor as executor_module
-        from deerflow.tools.mcp_metadata import tag_mcp_tool
+        from nova.subagents import executor as executor_module
+        from nova.tools.mcp_metadata import tag_mcp_tool
 
         SubagentExecutor = classes["SubagentExecutor"]
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: []),
         )
@@ -529,14 +529,14 @@ class TestAgentConstruction:
         """
         from langchain_core.tools import tool as as_tool
 
-        from deerflow.subagents import executor as executor_module
-        from deerflow.tools.mcp_metadata import tag_mcp_tool
+        from nova.subagents import executor as executor_module
+        from nova.tools.mcp_metadata import tag_mcp_tool
 
         SubagentConfig = classes["SubagentConfig"]
         SubagentExecutor = classes["SubagentExecutor"]
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: []),
         )
@@ -589,8 +589,8 @@ class TestAgentConstruction:
     ):
         """A deferred setup passed to _create_agent flows into the subagent
         middleware factory (so DeferredToolFilterMiddleware can attach)."""
-        from deerflow.subagents import executor as executor_module
-        from deerflow.tools.builtins.tool_search import DeferredToolSetup
+        from nova.subagents import executor as executor_module
+        from nova.tools.builtins.tool_search import DeferredToolSetup
 
         SubagentExecutor = classes["SubagentExecutor"]
         app_config = SimpleNamespace(models=[SimpleNamespace(name="default-model")])
@@ -604,9 +604,9 @@ class TestAgentConstruction:
         monkeypatch.setattr(executor_module, "create_agent", lambda **kwargs: object())
         monkeypatch.setitem(
             sys.modules,
-            "deerflow.agents.middlewares.tool_error_handling_middleware",
+            "nova.agents.middlewares.tool_error_handling_middleware",
             _module(
-                "deerflow.agents.middlewares.tool_error_handling_middleware",
+                "nova.agents.middlewares.tool_error_handling_middleware",
                 build_subagent_runtime_middlewares=fake_build_subagent_runtime_middlewares,
             ),
         )
@@ -829,7 +829,7 @@ class TestAsyncExecutionPath:
         (skill_dir / "SKILL.md").write_text("Skill instruction text", encoding="utf-8")
 
         monkeypatch.setattr(
-            sys.modules["deerflow.skills.storage"],
+            sys.modules["nova.skills.storage"],
             "get_or_new_skill_storage",
             lambda *, app_config=None: SimpleNamespace(load_skills=lambda *, enabled_only: [SimpleNamespace(name="regression-skill", skill_file=skill_dir / "SKILL.md", allowed_tools=None)]),
         )
@@ -1052,7 +1052,7 @@ class TestSyncExecutionPath:
     @pytest.mark.anyio
     async def test_execute_in_running_event_loop_calls_isolated_loop_directly(self, classes, base_config, mock_agent, msg):
         """Test that execute() calls the isolated-loop helper directly in a running loop."""
-        from deerflow.runtime.user_context import (
+        from nova.runtime.user_context import (
             get_effective_user_id,
             reset_current_user,
             set_current_user,
@@ -1297,7 +1297,7 @@ class TestThreadSafety:
     @pytest.fixture
     def executor_module(self, _setup_executor_classes):
         """Import the executor module with real classes."""
-        executor = importlib.import_module("deerflow.subagents.executor")
+        executor = importlib.import_module("nova.subagents.executor")
 
         return _patch_default_get_app_config(importlib.reload(executor))
 
@@ -1421,7 +1421,7 @@ class TestCleanupBackgroundTask:
     def executor_module(self, _setup_executor_classes):
         """Import the executor module with real classes."""
         # Re-import to get the real module with cleanup_background_task
-        executor = importlib.import_module("deerflow.subagents.executor")
+        executor = importlib.import_module("nova.subagents.executor")
 
         return _patch_default_get_app_config(importlib.reload(executor))
 
@@ -1564,7 +1564,7 @@ class TestCooperativeCancellation:
     @pytest.fixture
     def executor_module(self, _setup_executor_classes):
         """Import the executor module with real classes."""
-        executor = importlib.import_module("deerflow.subagents.executor")
+        executor = importlib.import_module("nova.subagents.executor")
 
         return _patch_default_get_app_config(importlib.reload(executor))
 
@@ -1722,7 +1722,7 @@ class TestCooperativeCancellation:
         """Regression: background subagent execution must keep request user context."""
         from concurrent.futures import ThreadPoolExecutor
 
-        from deerflow.runtime.user_context import (
+        from nova.runtime.user_context import (
             get_effective_user_id,
             reset_current_user,
             set_current_user,
@@ -1963,7 +1963,7 @@ class TestSubagentTracingWiring:
 
     @pytest.fixture
     def executor_module(self, _setup_executor_classes):
-        executor = importlib.import_module("deerflow.subagents.executor")
+        executor = importlib.import_module("nova.subagents.executor")
         return _patch_default_get_app_config(importlib.reload(executor))
 
     @pytest.fixture(autouse=True)
@@ -1971,7 +1971,7 @@ class TestSubagentTracingWiring:
         """Reset tracing config and env between tests so monkeypatched env
         vars do not leak across tests in this class or the rest of the suite.
         """
-        from deerflow.config.tracing_config import reset_tracing_config
+        from nova.config.tracing_config import reset_tracing_config
 
         for name in ("LANGFUSE_TRACING", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"):
             monkeypatch.delenv(name, raising=False)
@@ -2043,7 +2043,7 @@ class TestSubagentTracingWiring:
         monkeypatch.setenv("LANGFUSE_TRACING", "true")
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-        from deerflow.config.tracing_config import reset_tracing_config
+        from nova.config.tracing_config import reset_tracing_config
 
         reset_tracing_config()
 
@@ -2107,7 +2107,7 @@ class TestSubagentTracingWiring:
         monkeypatch.setenv("LANGFUSE_TRACING", "true")
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-        from deerflow.config.tracing_config import reset_tracing_config
+        from nova.config.tracing_config import reset_tracing_config
 
         reset_tracing_config()
         monkeypatch.setattr(executor_module, "build_tracing_callbacks", lambda: [object()])
@@ -2120,7 +2120,7 @@ class TestSubagentTracingWiring:
         await executor._aexecute("do something")
 
         metadata = (fake_agent.captured_config or {}).get("metadata") or {}
-        # DEFAULT_USER_ID is "default" (see deerflow.runtime.user_context).
+        # DEFAULT_USER_ID is "default" (see nova.runtime.user_context).
         assert metadata.get("langfuse_user_id") == "default"
 
     @pytest.mark.anyio
@@ -2136,7 +2136,7 @@ class TestSubagentTracingWiring:
         monkeypatch.setenv("LANGFUSE_TRACING", "true")
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-        from deerflow.config.tracing_config import reset_tracing_config
+        from nova.config.tracing_config import reset_tracing_config
 
         reset_tracing_config()
         monkeypatch.setattr(executor_module, "build_tracing_callbacks", lambda: [object()])
@@ -2179,7 +2179,7 @@ class TestSubagentTracingWiring:
         monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
         monkeypatch.setenv("DEER_FLOW_ENV", "staging")
-        from deerflow.config.tracing_config import reset_tracing_config
+        from nova.config.tracing_config import reset_tracing_config
 
         reset_tracing_config()
         monkeypatch.setattr(executor_module, "build_tracing_callbacks", lambda: [object()])
@@ -2215,7 +2215,7 @@ class TestDispatchDeadline:
     """
 
     def _run_queued(self, monkeypatch, classes, base_config, queued_for: float):
-        from deerflow.subagents import executor as executor_module
+        from nova.subagents import executor as executor_module
 
         clock = {"t": 1000.0}
         monkeypatch.setattr(executor_module.time, "monotonic", lambda: clock["t"])

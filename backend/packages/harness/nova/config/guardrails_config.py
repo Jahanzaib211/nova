@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class GuardrailProviderConfig(BaseModel):
     """Configuration for a guardrail provider."""
 
-    use: str = Field(description="Class path (e.g. 'deerflow.guardrails.builtin:AllowlistProvider')")
+    use: str = Field(description="Class path (e.g. 'nova.guardrails.builtin:AllowlistProvider')")
     config: dict = Field(default_factory=dict, description="Provider-specific settings passed as kwargs")
 
 

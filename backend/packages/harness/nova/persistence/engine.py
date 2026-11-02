@@ -17,7 +17,7 @@ the common case via lock-wait, but a 30 s wait is still too short when
 two writes collide back-to-back across separate request handlers. This
 helper adds the small bounded retry on top — used by both
 ``app.gateway.admin_ops.record_audit`` and
-``deerflow.persistence.thread_meta.sql.ThreadMetaRepository`` so all
+``nova.persistence.thread_meta.sql.ThreadMetaRepository`` so all
 SQL writes share the same resilience contract.
 """
 
@@ -179,16 +179,16 @@ async def init_engine(
     _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
 
     # Auto-create tables (dev convenience). Production should use Alembic.
-    from deerflow.persistence.base import Base
+    from nova.persistence.base import Base
 
     # Import all models so Base.metadata discovers them.
     # When no models exist yet (scaffolding phase), this is a no-op.
     try:
-        import deerflow.persistence.models  # noqa: F401
+        import nova.persistence.models  # noqa: F401
     except ImportError:
         # Models package not yet available — tables won't be auto-created.
         # This is expected during initial scaffolding or minimal installs.
-        logger.debug("deerflow.persistence.models not found; skipping auto-create tables")
+        logger.debug("nova.persistence.models not found; skipping auto-create tables")
 
     try:
         async with _engine.begin() as conn:

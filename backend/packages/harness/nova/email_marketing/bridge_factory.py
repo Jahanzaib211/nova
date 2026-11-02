@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from deerflow.config.email_marketing_config import EmailMarketingConfig
-from deerflow.config.integrations_config import IntegrationsConfig
-from deerflow.email_marketing.bridges import ChatwootBridge, MailcowBridge, TwentyBridge
+from nova.config.email_marketing_config import EmailMarketingConfig
+from nova.config.integrations_config import IntegrationsConfig
+from nova.email_marketing.bridges import ChatwootBridge, MailcowBridge, TwentyBridge
 
 
 def bridge_status(em: EmailMarketingConfig, integrations: IntegrationsConfig) -> dict[str, dict[str, Any]]:

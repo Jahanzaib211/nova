@@ -10,8 +10,8 @@ import re
 import uuid
 from pathlib import Path
 
-from deerflow.workspace.models.command import Command, CommandKind
-from deerflow.workspace.models.project import Project, ProjectKind
+from nova.workspace.models.command import Command, CommandKind
+from nova.workspace.models.project import Project, ProjectKind
 
 # Literal make target at line start: `name:` or `name: deps`, not `name := value`
 # (assignment) and not indented recipe lines.

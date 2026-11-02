@@ -60,7 +60,7 @@ def _make_client(monkeypatch):
 
 
 def test_dev_status_includes_host_and_absproxy_when_running(monkeypatch):
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     client = _make_client(monkeypatch)
     with _temp_listener() as (host, port):
@@ -84,7 +84,7 @@ def test_dev_status_includes_host_and_absproxy_when_running(monkeypatch):
 
 
 def test_dev_status_returns_nulls_when_no_server_running(monkeypatch):
-    import deerflow.sandbox.dev_server as ds
+    import nova.sandbox.dev_server as ds
 
     client = _make_client(monkeypatch)
     resp = client.get("/api/sandbox/dev-status", params={"thread_id": "t-status"})

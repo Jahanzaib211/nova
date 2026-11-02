@@ -8,8 +8,8 @@ element of ``[shell, "-c", command]``; the kernel itself never uses
 
 from __future__ import annotations
 
-from deerflow.execution.adapters.base import BaseAdapter
-from deerflow.execution.models import ExecutionClass, ExecutionResult
+from nova.execution.adapters.base import BaseAdapter
+from nova.execution.models import ExecutionClass, ExecutionResult
 
 
 class ShellAdapter(BaseAdapter):

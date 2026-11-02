@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from deerflow.config.acp_config import ACPAgentConfig
+from nova.config.acp_config import ACPAgentConfig
 
 
 def _nova_factory(log: list[str], *, fail_mint: bool = False):
@@ -45,7 +45,7 @@ def _nova_factory(log: list[str], *, fail_mint: bool = False):
 @pytest.fixture
 def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
-    from deerflow.config import paths as paths_module
+    from nova.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "_paths", None, raising=False)
     monkeypatch.setattr(paths_module, "_paths_singleton", None, raising=False)
@@ -63,7 +63,7 @@ def _log_lines(home: Path) -> list[dict[str, Any]]:
 
 @pytest.mark.anyio
 async def test_session_mounts_nova_first_then_client_servers_and_revokes_after():
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     log: list[str] = []
     client = [{"name": "github", "type": "http", "url": "http://mcp/github", "headers": []}]
@@ -77,7 +77,7 @@ async def test_session_mounts_nova_first_then_client_servers_and_revokes_after()
 
 @pytest.mark.anyio
 async def test_session_revokes_the_token_even_when_the_turn_raises():
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     log: list[str] = []
     with pytest.raises(ValueError, match="boom"):
@@ -88,7 +88,7 @@ async def test_session_revokes_the_token_even_when_the_turn_raises():
 
 @pytest.mark.anyio
 async def test_invalid_client_servers_are_logged_and_skipped(caplog):
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     def broken():
         raise ValueError("missing command")
@@ -101,7 +101,7 @@ async def test_invalid_client_servers_are_logged_and_skipped(caplog):
 
 @pytest.mark.anyio
 async def test_a_failed_mount_raises_unless_the_caller_degrades():
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     with pytest.raises(RuntimeError, match="token store unavailable"):
         async with open_acp_session(agent="claude_code", user_id="u1", thread_id="t1", nova_mcp=_nova_factory([], fail_mint=True), client_servers=lambda: []):
@@ -116,7 +116,7 @@ async def test_a_failed_mount_raises_unless_the_caller_degrades():
 
 
 def test_permission_contract_is_sent_with_and_without_nova():
-    from deerflow.runtimes.transcript import permission_contract
+    from nova.runtimes.transcript import permission_contract
 
     with_nova = permission_contract(nova_mounted=True)
     without = permission_contract(nova_mounted=False)
@@ -130,7 +130,7 @@ def test_permission_contract_is_sent_with_and_without_nova():
 
 @pytest.mark.anyio
 async def test_briefing_names_the_sandbox_and_the_permission_contract():
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     async with open_acp_session(agent="claude_code", user_id="u1", thread_id="t1", nova_mcp=_nova_factory([]), client_servers=lambda: []) as session:
         briefed = session.brief("build the site")
@@ -142,7 +142,7 @@ async def test_briefing_names_the_sandbox_and_the_permission_contract():
 
 @pytest.mark.anyio
 async def test_briefing_without_nova_still_carries_the_permission_contract():
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     async with open_acp_session(agent="claude_code", user_id="u1", thread_id="t1", nova_mcp=lambda u, t: (None, lambda: None), client_servers=lambda: []) as session:
         briefed = session.brief("build the site")
@@ -156,7 +156,7 @@ async def test_briefing_without_nova_still_carries_the_permission_contract():
 
 @pytest.mark.anyio
 async def test_session_mirror_writes_actions_under_the_agents_name(home: Path):
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     async with open_acp_session(agent="claude_code", user_id="u1", thread_id="thread-m", nova_mcp=lambda u, t: (None, lambda: None), client_servers=lambda: []) as session:
         session.mirror("thinking: hmm")
@@ -175,8 +175,8 @@ async def test_session_mirror_writes_actions_under_the_agents_name(home: Path):
 async def test_delegated_agent_gets_nova_the_briefing_and_the_mirror(home: Path, monkeypatch: pytest.MonkeyPatch):
     """The car-dealership regression: a delegated Claude Code must get the
     same hands as a chat on the claude_code runtime."""
-    from deerflow.runtimes import acp_transport
-    from deerflow.tools.builtins import invoke_acp_agent_tool as tool_module
+    from nova.runtimes import acp_transport
+    from nova.tools.builtins import invoke_acp_agent_tool as tool_module
 
     log: list[str] = []
     monkeypatch.setattr(tool_module, "_nova_mcp", _nova_factory(log))
@@ -205,7 +205,7 @@ async def test_delegated_agent_gets_nova_the_briefing_and_the_mirror(home: Path,
     # Nova's own write/execute ops are judged by operation kind in "standard",
     # so the sandbox tools work while Claude Code's private Write stays denied.
     assert seen["permission"].mode == "standard"
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.runtime.user_context import get_effective_user_id
 
     owner = get_effective_user_id()
     assert log[0] == f"mint:{owner}:thread-d" and f"revoke:tok-1:{owner}" in log
@@ -217,8 +217,8 @@ async def test_delegated_agent_gets_nova_the_briefing_and_the_mirror(home: Path,
 
 @pytest.mark.anyio
 async def test_delegation_degrades_to_its_own_workspace_when_nova_cannot_mount(home: Path, monkeypatch: pytest.MonkeyPatch):
-    from deerflow.runtimes import acp_transport
-    from deerflow.tools.builtins import invoke_acp_agent_tool as tool_module
+    from nova.runtimes import acp_transport
+    from nova.tools.builtins import invoke_acp_agent_tool as tool_module
 
     monkeypatch.setattr(tool_module, "_nova_mcp", _nova_factory([], fail_mint=True))
     monkeypatch.setattr(tool_module, "_build_acp_mcp_servers", lambda: [])
@@ -238,7 +238,7 @@ async def test_delegation_degrades_to_its_own_workspace_when_nova_cannot_mount(h
 
 
 def test_tool_description_is_accurate_with_and_without_the_sandbox():
-    from deerflow.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
+    from nova.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
 
     description = build_invoke_acp_agent_tool({"claude_code": ACPAgentConfig(command="npx", description="Claude Code")}).description
     assert "/mnt/user-data" in description
@@ -251,7 +251,7 @@ def test_tool_description_is_accurate_with_and_without_the_sandbox():
 
 @pytest.mark.anyio
 async def test_session_passes_its_turn_budget_to_the_adapter():
-    from deerflow.runtimes.session import open_acp_session
+    from nova.runtimes.session import open_acp_session
 
     seen: dict[str, Any] = {}
 
@@ -270,8 +270,8 @@ async def test_session_passes_its_turn_budget_to_the_adapter():
 def test_turn_budget_defaults_to_the_configured_runtime_budget(monkeypatch: pytest.MonkeyPatch):
     from types import SimpleNamespace
 
-    from deerflow.config import app_config as app_config_module
-    from deerflow.runtimes import session as session_module
+    from nova.config import app_config as app_config_module
+    from nova.runtimes import session as session_module
 
     monkeypatch.setattr(app_config_module, "get_app_config", lambda: SimpleNamespace(runtimes=SimpleNamespace(turn_timeout_seconds=900.0)))
     assert session_module.default_turn_timeout() == 900.0
@@ -291,9 +291,9 @@ async def test_a_hung_delegated_agent_ends_with_a_clear_timeout_error(home: Path
     its own ``timeout`` argument."""
     import asyncio
 
-    from deerflow.runtimes import acp_transport
-    from deerflow.runtimes import session as session_module
-    from deerflow.tools.builtins import invoke_acp_agent_tool as tool_module
+    from nova.runtimes import acp_transport
+    from nova.runtimes import session as session_module
+    from nova.tools.builtins import invoke_acp_agent_tool as tool_module
 
     monkeypatch.setattr(session_module, "default_turn_timeout", lambda: 0.2)
     monkeypatch.setattr(session_module, "TIMEOUT_GRACE_S", 0.1)
@@ -318,9 +318,9 @@ async def test_a_hung_delegated_agent_ends_with_a_clear_timeout_error(home: Path
 async def test_the_chat_path_turn_timeout_still_falls_back_to_native():
     from langchain_core.messages import AIMessage, HumanMessage
 
-    from deerflow.runtimes.middleware import RuntimeDispatchMiddleware
-    from deerflow.runtimes.registry import RuntimeRegistry
-    from deerflow.runtimes.session import ACPTurnTimeout
+    from nova.runtimes.middleware import RuntimeDispatchMiddleware
+    from nova.runtimes.registry import RuntimeRegistry
+    from nova.runtimes.session import ACPTurnTimeout
 
     seen: dict[str, Any] = {}
 

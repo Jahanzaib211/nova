@@ -31,8 +31,8 @@ from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from deerflow.config.paths import get_paths
-from deerflow.sandbox import get_sandbox_provider
+from nova.config.paths import get_paths
+from nova.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 

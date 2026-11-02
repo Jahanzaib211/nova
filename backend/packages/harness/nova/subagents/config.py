@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
 # Lives here (a leaf module) rather than in executor.py so that agents-side
 # middleware can read it without importing the executor — that import re-enters
@@ -61,7 +61,7 @@ def resolve_subagent_model_name(config: SubagentConfig, parent_model: str | None
         return parent_model
 
     if app_config is None:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         app_config = get_app_config()
     return _default_model_name(app_config)

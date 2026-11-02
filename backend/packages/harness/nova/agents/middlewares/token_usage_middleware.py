@@ -281,7 +281,7 @@ class TokenUsageMiddleware(AgentMiddleware):
         # written back to the same dispatch message (merging into one update).
         state_updates: dict[int, AIMessage] = {}
         if len(messages) >= 2:
-            from deerflow.tools.builtins.task_tool import pop_cached_subagent_usage
+            from nova.tools.builtins.task_tool import pop_cached_subagent_usage
 
             idx = len(messages) - 2
             while idx >= 0:
@@ -339,7 +339,7 @@ class TokenUsageMiddleware(AgentMiddleware):
             response_meta = getattr(last, "response_metadata", None) or {}
             actual_model = (response_meta.get("model_name") if isinstance(response_meta, Mapping) else None) or (response_meta.get("model") if isinstance(response_meta, Mapping) else None)
             try:
-                from deerflow.runtime.run_context import current_run_fields, format_scope
+                from nova.runtime.run_context import current_run_fields, format_scope
 
                 run_suffix = f" ({format_scope()})" if current_run_fields() else ""
             except Exception:

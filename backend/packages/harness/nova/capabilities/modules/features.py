@@ -7,8 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from deerflow.capabilities.modules._common import Empty
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 #: Every flag the platform knows. Frontend ``FeatureFlagKey`` mirrors this list
 #: (pinned by the contract test on both sides).
@@ -22,8 +22,8 @@ def compute_flags(config: Any | None = None) -> dict[str, bool]:
     file) unless the caller's config carries its own ``acp_agents`` mapping,
     so a router that already resolved a config gets flags for *that* config.
     """
-    from deerflow.config.acp_config import get_acp_agents
-    from deerflow.config.app_config import get_app_config
+    from nova.config.acp_config import get_acp_agents
+    from nova.config.app_config import get_app_config
 
     cfg = config if config is not None else get_app_config()
 

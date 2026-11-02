@@ -15,10 +15,10 @@ from uuid import uuid4
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.admin_audit.model import AdminAuditRow
-from deerflow.persistence.engine import commit_with_lock_retry, get_session_factory
-from deerflow.persistence.run.model import RunRow
-from deerflow.persistence.user.model import UserRow
+from nova.persistence.admin_audit.model import AdminAuditRow
+from nova.persistence.engine import commit_with_lock_retry, get_session_factory
+from nova.persistence.run.model import RunRow
+from nova.persistence.user.model import UserRow
 
 if TYPE_CHECKING:
     from fastapi import Request

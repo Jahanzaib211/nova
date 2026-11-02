@@ -8,13 +8,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Items, section_enabled
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Items, section_enabled
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _registry():
     """The shared registry (same instance and probe cache as ``/api/integrations``)."""
-    from deerflow.integrations.registry import get_integrations_registry
+    from nova.integrations.registry import get_integrations_registry
 
     return get_integrations_registry()
 

@@ -1,4 +1,4 @@
-"""Tests for deerflow.models.openai_codex_provider.CodexChatModel.
+"""Tests for nova.models.openai_codex_provider.CodexChatModel.
 
 Covers:
 - LangChain serialization: is_lc_serializable, to_json kwargs, no token leakage
@@ -15,14 +15,14 @@ from unittest.mock import patch
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from deerflow.models.credential_loader import CodexCliCredential
+from nova.models.credential_loader import CodexCliCredential
 
 
 def _make_model(**kwargs):
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     cred = CodexCliCredential(access_token="tok-test", account_id="acc-test")
-    with patch("deerflow.models.openai_codex_provider.load_codex_cli_credential", return_value=cred):
+    with patch("nova.models.openai_codex_provider.load_codex_cli_credential", return_value=cred):
         return CodexChatModel(model="gpt-5.4", reasoning_effort="medium", **kwargs)
 
 
@@ -32,7 +32,7 @@ def _make_model(**kwargs):
 
 
 def test_is_lc_serializable_returns_true():
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     assert CodexChatModel.is_lc_serializable() is True
 
@@ -217,7 +217,7 @@ def test_convert_messages_tool_message():
 
 
 def test_parse_sse_data_line_valid():
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     data = {"type": "response.completed", "response": {}}
     line = "data: " + json.dumps(data)
@@ -225,19 +225,19 @@ def test_parse_sse_data_line_valid():
 
 
 def test_parse_sse_data_line_done_returns_none():
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     assert CodexChatModel._parse_sse_data_line("data: [DONE]") is None
 
 
 def test_parse_sse_data_line_non_data_returns_none():
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     assert CodexChatModel._parse_sse_data_line("event: ping") is None
 
 
 def test_parse_sse_data_line_invalid_json_returns_none():
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     assert CodexChatModel._parse_sse_data_line("data: {bad json}") is None
 

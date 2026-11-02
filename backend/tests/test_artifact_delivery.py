@@ -42,7 +42,7 @@ class TestArtifactDeliveryResolve:
 
     def test_resolve_attachments_rejects_non_outputs_path(self, artifact_delivery):
         """Should reject paths not under /mnt/user-data/outputs/."""
-        with patch("deerflow.config.paths.get_paths") as mock_paths, patch("deerflow.runtime.user_context.get_effective_user_id") as mock_user_id:
+        with patch("nova.config.paths.get_paths") as mock_paths, patch("nova.runtime.user_context.get_effective_user_id") as mock_user_id:
             mock_user_id.return_value = "test-user"
             mock_paths_instance = MagicMock()
             mock_paths.return_value = mock_paths_instance
@@ -62,7 +62,7 @@ class TestArtifactDeliveryResolve:
         test_file = output_dir / "report.pdf"
         test_file.write_text("test content")
 
-        with patch("deerflow.config.paths.get_paths") as mock_paths, patch("deerflow.runtime.user_context.get_effective_user_id") as mock_user_id:
+        with patch("nova.config.paths.get_paths") as mock_paths, patch("nova.runtime.user_context.get_effective_user_id") as mock_user_id:
             mock_user_id.return_value = "test-user"
             mock_paths_instance = MagicMock()
             mock_paths_instance.sandbox_outputs_dir.return_value = output_dir

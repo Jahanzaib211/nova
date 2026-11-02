@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from deerflow.capabilities.types import (
+from nova.capabilities.types import (
     HARNESS_TOOL_KINDS,
     CapabilityModule,
     ModuleStatus,
@@ -40,7 +40,7 @@ def surface_allows(op: Operation, surface: str) -> bool:
 
 
 def _default_flags() -> dict[str, bool]:
-    from deerflow.capabilities.modules.features import compute_flags
+    from nova.capabilities.modules.features import compute_flags
 
     return compute_flags()
 
@@ -191,7 +191,7 @@ def get_registry() -> CapabilityRegistry:
     global _registry
     if _registry is None:
         _registry = CapabilityRegistry()
-        from deerflow.capabilities.modules import register_builtin_modules
+        from nova.capabilities.modules import register_builtin_modules
 
         register_builtin_modules(_registry)
     return _registry

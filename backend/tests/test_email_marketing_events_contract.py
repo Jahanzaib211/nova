@@ -1,4 +1,4 @@
-"""Contract tests for ``deerflow.email_marketing.events``.
+"""Contract tests for ``nova.email_marketing.events``.
 
 Event, campaign-status, contact-status and suppression vocabularies are shared
 with the frontend through ``contracts/email_marketing_events_contract.json``.
@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from deerflow.email_marketing.events import (
+from nova.email_marketing.events import (
     CAMPAIGN_STATUSES,
     CONTACT_STATUSES,
     EMAIL_EVENT_TYPES,

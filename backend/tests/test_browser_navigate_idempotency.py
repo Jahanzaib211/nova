@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from deerflow.tools.builtins.workspace_tools import (
+from nova.tools.builtins.workspace_tools import (
     _browser_navigate_idempotency,
     _BrowserNavigateIdempotency,
 )
@@ -80,7 +80,7 @@ class TestEvictionCap:
         # Use many distinct keys to ensure put() doesn't just overwrite.
         # The default cap (256) means after we write 300 entries, the cache
         # must have evicted at least 44 of them.
-        from deerflow.tools.builtins.workspace_tools import (
+        from nova.tools.builtins.workspace_tools import (
             _NAVIGATE_IDEMPOTENCY_MAX_ENTRIES,
         )
 
@@ -157,10 +157,10 @@ class TestContractForBrowserNavigateTool:
 
     def test_cache_is_module_level_singleton(self) -> None:
         """All callers share one cache so duplicate navigate_ids collide."""
-        from deerflow.tools.builtins.workspace_tools import (
+        from nova.tools.builtins.workspace_tools import (
             _browser_navigate_idempotency as cache1,
         )
-        from deerflow.tools.builtins.workspace_tools import (
+        from nova.tools.builtins.workspace_tools import (
             _browser_navigate_idempotency as cache2,
         )
 

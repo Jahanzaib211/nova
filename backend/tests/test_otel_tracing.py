@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from deerflow.config.tracing_config import (
+from nova.config.tracing_config import (
     get_tracing_config,
     reset_tracing_config,
 )
@@ -42,7 +42,7 @@ def _clean_tracing_env(monkeypatch):
 
 
 def test_otel_is_off_by_default() -> None:
-    from deerflow.tracing.otel import otel_tracing_enabled
+    from nova.tracing.otel import otel_tracing_enabled
 
     assert otel_tracing_enabled() is False
     assert get_tracing_config().otel.enabled is False
@@ -50,7 +50,7 @@ def test_otel_is_off_by_default() -> None:
 
 
 def test_flag_without_endpoint_does_not_enable_tracing(monkeypatch) -> None:
-    from deerflow.tracing.otel import otel_tracing_enabled
+    from nova.tracing.otel import otel_tracing_enabled
 
     # The dangerous half-configured state: a flag with nowhere to send the
     # spans would look like tracing works while collecting nothing.
@@ -73,7 +73,7 @@ def test_flag_without_endpoint_never_raises_during_validation(monkeypatch) -> No
     "tracing switched on, collector not set up yet" — it must degrade to
     "no spans", never stop the agent from starting.
     """
-    from deerflow.config.tracing_config import validate_enabled_tracing_providers
+    from nova.config.tracing_config import validate_enabled_tracing_providers
 
     monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
@@ -82,7 +82,7 @@ def test_flag_without_endpoint_never_raises_during_validation(monkeypatch) -> No
 
 
 def test_flag_and_endpoint_enable_tracing(monkeypatch) -> None:
-    from deerflow.tracing.otel import otel_tracing_enabled
+    from nova.tracing.otel import otel_tracing_enabled
 
     monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318/v1/traces")
@@ -93,7 +93,7 @@ def test_flag_and_endpoint_enable_tracing(monkeypatch) -> None:
 
 
 def test_factory_builds_the_otel_handler(monkeypatch) -> None:
-    from deerflow.tracing.factory import build_tracing_callbacks
+    from nova.tracing.factory import build_tracing_callbacks
 
     monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318/v1/traces")
@@ -104,13 +104,13 @@ def test_factory_builds_the_otel_handler(monkeypatch) -> None:
 
 
 def test_factory_returns_nothing_when_tracing_is_off() -> None:
-    from deerflow.tracing.factory import build_tracing_callbacks
+    from nova.tracing.factory import build_tracing_callbacks
 
     assert build_tracing_callbacks() == []
 
 
 def test_headers_are_parsed_and_malformed_entries_skipped() -> None:
-    from deerflow.tracing.otel import _parse_headers
+    from nova.tracing.otel import _parse_headers
 
     assert _parse_headers("a=1,b=2") == {"a": "1", "b": "2"}
     assert _parse_headers("a=1,broken,b=2") == {"a": "1", "b": "2"}
@@ -119,7 +119,7 @@ def test_headers_are_parsed_and_malformed_entries_skipped() -> None:
 
 def test_handler_never_raises_without_the_otel_sdk(monkeypatch) -> None:
     """A deployment without the OpenTelemetry packages must still work."""
-    from deerflow.tracing.otel import OTelTracingHandler
+    from nova.tracing.otel import OTelTracingHandler
 
     handler = OTelTracingHandler()
     # No endpoint configured and no SDK: every hook must be a no-op.
@@ -133,8 +133,8 @@ def test_handler_never_raises_without_the_otel_sdk(monkeypatch) -> None:
 
 def test_handler_stamps_the_run_identity(monkeypatch) -> None:
     """The span must carry the run's ids — the whole point of local traces."""
-    from deerflow.runtime.run_context import reset_run_scope, set_run_scope
-    from deerflow.tracing.otel import OTelTracingHandler
+    from nova.runtime.run_context import reset_run_scope, set_run_scope
+    from nova.tracing.otel import OTelTracingHandler
 
     captured: dict = {}
 
@@ -177,7 +177,7 @@ def test_handler_stamps_the_run_identity(monkeypatch) -> None:
 
 
 def test_llm_end_records_token_usage(monkeypatch) -> None:
-    from deerflow.tracing.otel import OTelTracingHandler
+    from nova.tracing.otel import OTelTracingHandler
 
     captured: dict = {}
 
@@ -245,7 +245,7 @@ def test_real_sdk_records_spans_with_parents_and_error_status() -> None:
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
     from opentelemetry.trace import StatusCode
 
-    from deerflow.tracing.otel import OTelTracingHandler
+    from nova.tracing.otel import OTelTracingHandler
 
     exporter = InMemorySpanExporter()
     handler = OTelTracingHandler(service_name="nova-test", span_exporter=exporter)
@@ -281,7 +281,7 @@ def test_chain_and_llm_errors_are_recorded_too() -> None:
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
     from opentelemetry.trace import StatusCode
 
-    from deerflow.tracing.otel import OTelTracingHandler
+    from nova.tracing.otel import OTelTracingHandler
 
     exporter = InMemorySpanExporter()
     handler = OTelTracingHandler(span_exporter=exporter)
@@ -301,7 +301,7 @@ def test_enabled_handler_gets_a_recording_tracer_from_the_owned_provider(monkeyp
     regression was a tracer from the API's default (no-op) provider."""
     import atexit
 
-    from deerflow.tracing import otel
+    from nova.tracing import otel
 
     monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:9/v1/traces")
@@ -323,7 +323,7 @@ def test_enabled_handler_gets_a_recording_tracer_from_the_owned_provider(monkeyp
 
 
 def test_no_endpoint_means_no_tracer_even_with_the_sdk(monkeypatch) -> None:
-    from deerflow.tracing import otel
+    from nova.tracing import otel
 
     monkeypatch.setattr(otel, "_provider", None)
     assert otel.OTelTracingHandler()._get_tracer() is None
@@ -334,7 +334,7 @@ def test_missing_sdk_warns_once_when_tracing_is_enabled(monkeypatch, caplog) -> 
     import logging
     import sys
 
-    from deerflow.tracing import otel
+    from nova.tracing import otel
 
     monkeypatch.setenv("NOVA_OTEL_TRACING", "1")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:9/v1/traces")
@@ -342,7 +342,7 @@ def test_missing_sdk_warns_once_when_tracing_is_enabled(monkeypatch, caplog) -> 
     monkeypatch.setattr(otel, "_sdk_missing_warned", False)
     monkeypatch.setitem(sys.modules, "opentelemetry.sdk.trace", None)
 
-    caplog.set_level(logging.WARNING, logger="deerflow.tracing.otel")
+    caplog.set_level(logging.WARNING, logger="nova.tracing.otel")
     for _ in range(3):
         handler = otel.OTelTracingHandler()
         handler.on_chain_start({"name": "x"}, {}, run_id="r")

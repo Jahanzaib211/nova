@@ -1,7 +1,7 @@
 """``/api/em/t/*`` and ``/api/em/u/*`` — public tracking and unsubscribe.
 
 No session: the HMAC token in the path is the credential (see
-``deerflow.email_marketing.tracking``). Registered as public paths in the
+``nova.email_marketing.tracking``). Registered as public paths in the
 auth middleware and exempt from CSRF so a mail provider's one-click
 ``POST`` (RFC 8058) works with no cookie and no origin.
 """
@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from app.gateway.deps import get_config, get_em_repo
-from deerflow.email_marketing.tracking import verify_token, verify_url
+from nova.email_marketing.tracking import verify_token, verify_url
 
 logger = logging.getLogger(__name__)
 

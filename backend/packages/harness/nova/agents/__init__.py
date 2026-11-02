@@ -9,16 +9,16 @@ if TYPE_CHECKING:
     from .lead_agent.prompt import prime_enabled_skills_cache
 
 # The lead-agent stack (factory, lead_agent, its middlewares) is imported
-# lazily via PEP 562. Eager imports here made every `deerflow.agents.*`
+# lazily via PEP 562. Eager imports here made every `nova.agents.*`
 # submodule import (e.g. `agents.thread_state` from subagents/executor.py)
-# pull the full lead-agent graph, which re-enters deerflow.subagents while it
+# pull the full lead-agent graph, which re-enters nova.subagents while it
 # is still initializing (see tests/test_import_hygiene.py). Skills-cache
 # priming moved to lead_agent/__init__, so it still runs when LangGraph
 # resolves make_lead_agent for graph registration.
 _LAZY_EXPORTS = {
-    "create_deerflow_agent": ("deerflow.agents.factory", "create_deerflow_agent"),
-    "make_lead_agent": ("deerflow.agents.lead_agent", "make_lead_agent"),
-    "prime_enabled_skills_cache": ("deerflow.agents.lead_agent.prompt", "prime_enabled_skills_cache"),
+    "create_deerflow_agent": ("nova.agents.factory", "create_deerflow_agent"),
+    "make_lead_agent": ("nova.agents.lead_agent", "make_lead_agent"),
+    "prime_enabled_skills_cache": ("nova.agents.lead_agent.prompt", "prime_enabled_skills_cache"),
 }
 
 __all__ = [

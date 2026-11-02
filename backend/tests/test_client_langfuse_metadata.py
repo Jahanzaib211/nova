@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from deerflow.client import DeerFlowClient
+from nova.client import DeerFlowClient
 
 
 class _FakeAgent:
@@ -32,7 +32,7 @@ class _FakeAgent:
 
 @pytest.fixture(autouse=True)
 def _clear_langfuse_env(monkeypatch):
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     for name in ("LANGFUSE_TRACING", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
@@ -82,7 +82,7 @@ def test_stream_injects_langfuse_metadata_when_enabled(monkeypatch):
     monkeypatch.setenv("LANGFUSE_TRACING", "true")
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     reset_tracing_config()
 
@@ -90,7 +90,7 @@ def test_stream_injects_langfuse_metadata_when_enabled(monkeypatch):
         pass
 
     sentinel = _SentinelHandler()
-    monkeypatch.setattr("deerflow.client.build_tracing_callbacks", lambda: [sentinel])
+    monkeypatch.setattr("nova.client.build_tracing_callbacks", lambda: [sentinel])
 
     fake_agent = _FakeAgent()
     captured = _stub_agent_creation(monkeypatch, fake_agent)
@@ -109,7 +109,7 @@ def test_stream_injects_langfuse_metadata_when_enabled(monkeypatch):
 
 
 def test_stream_is_inert_when_langfuse_disabled(monkeypatch):
-    monkeypatch.setattr("deerflow.client.build_tracing_callbacks", lambda: [])
+    monkeypatch.setattr("nova.client.build_tracing_callbacks", lambda: [])
 
     fake_agent = _FakeAgent()
     captured = _stub_agent_creation(monkeypatch, fake_agent)
@@ -128,10 +128,10 @@ def test_stream_preserves_caller_metadata_overrides(monkeypatch):
     monkeypatch.setenv("LANGFUSE_TRACING", "true")
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-lf-test")
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-lf-test")
-    from deerflow.config.tracing_config import reset_tracing_config
+    from nova.config.tracing_config import reset_tracing_config
 
     reset_tracing_config()
-    monkeypatch.setattr("deerflow.client.build_tracing_callbacks", lambda: [])
+    monkeypatch.setattr("nova.client.build_tracing_callbacks", lambda: [])
 
     fake_agent = _FakeAgent()
     captured = _stub_agent_creation(monkeypatch, fake_agent)

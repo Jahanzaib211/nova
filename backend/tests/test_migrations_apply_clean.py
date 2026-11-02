@@ -28,13 +28,13 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine
 
-from deerflow.persistence.base import Base
+from nova.persistence.base import Base
 
-_MIGRATIONS = Path(__file__).resolve().parents[1] / "packages" / "harness" / "deerflow" / "persistence" / "migrations"
+_MIGRATIONS = Path(__file__).resolve().parents[1] / "packages" / "harness" / "nova" / "persistence" / "migrations"
 
 
 def _create_all(db_path: Path) -> None:
-    import deerflow.persistence.models  # noqa: F401 - registers every model
+    import nova.persistence.models  # noqa: F401 - registers every model
 
     engine = create_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(engine)
@@ -49,7 +49,7 @@ def _upgrade_head(db_path: Path, monkeypatch) -> None:
 
 
 def _diff(db_path: Path) -> list:
-    import deerflow.persistence.models  # noqa: F401 - registers every model
+    import nova.persistence.models  # noqa: F401 - registers every model
 
     engine = create_engine(f"sqlite:///{db_path}")
     with engine.connect() as conn:
@@ -117,7 +117,7 @@ def test_new_tables_are_created_by_their_migration_alone(tmp_path, monkeypatch):
     everything *except* the newest feature's tables first."""
     from sqlalchemy import MetaData
 
-    import deerflow.persistence.models  # noqa: F401
+    import nova.persistence.models  # noqa: F401
 
     db = tmp_path / "older.db"
     engine = create_engine(f"sqlite:///{db}")

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from deerflow.workspace.models.node import Edge, EdgeKind, Node, NodeKind
-from deerflow.workspace.models.project import Project
+from nova.workspace.models.node import Edge, EdgeKind, Node, NodeKind
+from nova.workspace.models.project import Project
 
 
 @dataclass

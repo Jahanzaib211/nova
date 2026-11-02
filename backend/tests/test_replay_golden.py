@@ -28,9 +28,9 @@ def _reset_process_singletons(monkeypatch: pytest.MonkeyPatch) -> None:
 
     Same set the real-server e2e resets (see test_setup_agent_http_e2e_real_server).
     """
-    from deerflow.config import app_config as app_config_module
-    from deerflow.config import paths as paths_module
-    from deerflow.persistence import engine as engine_module
+    from nova.config import app_config as app_config_module
+    from nova.config import paths as paths_module
+    from nova.persistence import engine as engine_module
 
     for module, attr in (
         (app_config_module, "_app_config"),
@@ -61,7 +61,7 @@ def test_replay_write_read_file_ultra_matches_golden(tmp_path: Path, monkeypatch
     monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(prepare_hermetic_extras(home)))
 
     _reset_process_singletons(monkeypatch)
-    from deerflow.config import app_config as app_config_module
+    from nova.config import app_config as app_config_module
 
     cfg = app_config_module.get_app_config()
     cfg.database.sqlite_dir = str(home / "db")

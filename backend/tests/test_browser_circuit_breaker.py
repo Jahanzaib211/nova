@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deerflow.sandbox import browser_circuit_breaker as cb
-from deerflow.sandbox.browser_circuit_breaker import (
+from nova.sandbox import browser_circuit_breaker as cb
+from nova.sandbox.browser_circuit_breaker import (
     CircuitState,
     force_circuit,
     get_circuit_state,
@@ -23,7 +23,7 @@ from deerflow.sandbox.browser_circuit_breaker import (
     reset_all_circuits,
     snapshot,
 )
-from deerflow.sandbox.browser_errors import BrowserCircuitOpenError
+from nova.sandbox.browser_errors import BrowserCircuitOpenError
 
 
 @pytest.fixture(autouse=True)

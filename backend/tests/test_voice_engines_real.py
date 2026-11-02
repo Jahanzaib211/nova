@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from deerflow.speech.base import STT_SAMPLE_RATE, AudioChunk
+from nova.speech.base import STT_SAMPLE_RATE, AudioChunk
 
 MODEL_DIR = Path(os.environ.get("DEERFLOW_VOICE_MODEL_DIR", Path.home() / ".cache/nova/voice"))
 # fp32 first: it is the fetch script's default and is measurably ~5.5x faster
@@ -73,7 +73,7 @@ def _rms(pcm: bytes) -> float:
 # Session-scoped so the (expensive) model load happens once for the whole file.
 @pytest.fixture(scope="module")
 def tts():
-    from deerflow.speech.engines.kokoro_tts import KokoroTTS
+    from nova.speech.engines.kokoro_tts import KokoroTTS
 
     engine = KokoroTTS(model_path=str(KOKORO_MODEL), voices_path=str(KOKORO_VOICES))
     engine.warmup()
@@ -83,7 +83,7 @@ def tts():
 
 @pytest.fixture(scope="module")
 def stt():
-    from deerflow.speech.engines.faster_whisper_stt import FasterWhisperSTT
+    from nova.speech.engines.faster_whisper_stt import FasterWhisperSTT
 
     engine = FasterWhisperSTT(model="base", compute_type="int8", download_root=str(MODEL_DIR))
     engine.warmup()
@@ -209,7 +209,7 @@ class TestRealVad:
     def test_detects_real_speech_and_its_end(self, tts) -> None:
         import asyncio
 
-        from deerflow.speech.vad import SileroVad, VadConfig, VadEvent, frames_of
+        from nova.speech.vad import SileroVad, VadConfig, VadEvent, frames_of
 
         spoken = _resample_to_16k(asyncio.run(_synthesize(tts, "Hello Nova, can you hear me clearly?")))
         vad = SileroVad(VadConfig(speech_ms=100, silence_ms=300), sample_rate=STT_SAMPLE_RATE, model_path=str(SILERO_VAD))
@@ -228,7 +228,7 @@ class TestRealVadAlone:
     """VAD checks that need no TTS, so they run as soon as the 2 MB model lands."""
 
     def test_silence_alone_never_starts_an_utterance(self) -> None:
-        from deerflow.speech.vad import SileroVad, VadConfig, VadEvent
+        from nova.speech.vad import SileroVad, VadConfig, VadEvent
 
         vad = SileroVad(VadConfig(speech_ms=100), sample_rate=STT_SAMPLE_RATE, model_path=str(SILERO_VAD))
         frame = b"\x00\x00" * (STT_SAMPLE_RATE * 20 // 1000)
@@ -239,7 +239,7 @@ class TestRealVadAlone:
         """Guard the guard: SileroVad silently falls back to energy VAD when the
         model is missing, which would let every VAD test here pass without ever
         exercising the real thing."""
-        from deerflow.speech.vad import SileroVad, VadConfig
+        from nova.speech.vad import SileroVad, VadConfig
 
         vad = SileroVad(VadConfig(), sample_rate=STT_SAMPLE_RATE, model_path=str(SILERO_VAD))
         vad.accept(b"\x00\x00" * (STT_SAMPLE_RATE * 20 // 1000))
@@ -250,7 +250,7 @@ class TestRealVadAlone:
         the same as speech, and an energy VAD cannot tell the difference."""
         import numpy as np
 
-        from deerflow.speech.vad import EnergyVad, SileroVad, VadConfig, VadEvent
+        from nova.speech.vad import EnergyVad, SileroVad, VadConfig, VadEvent
 
         rng = np.random.default_rng(1234)
         frame_samples = STT_SAMPLE_RATE * 20 // 1000

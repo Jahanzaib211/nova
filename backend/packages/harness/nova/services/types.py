@@ -6,7 +6,7 @@ Existing ``RunRecord`` (mutable, in-memory) remains for backward compat;
 
 Usage::
 
-    from deerflow.services.types import RunState, RunDetail
+    from nova.services.types import RunState, RunDetail
 
     state = RunState(run_id="abc", thread_id="t1", status="running")
     detail = RunDetail(run_id="abc", thread_id="t1", assistant_id="lead-agent", status="pending")

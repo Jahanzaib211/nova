@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import pytest
 
-import deerflow.tools.builtins.workspace_tools  # noqa: F401  isort:skip
-from deerflow.sandbox import dev_server  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401  isort:skip
+from nova.sandbox import dev_server  # noqa: E402  isort:skip
 
 
 class TestParseListeningPorts:
@@ -144,7 +144,7 @@ class TestDiscoveryReachesBeyondThePublishedPorts:
             def get_preview_endpoint(self, *a, **k):
                 return None
 
-        import deerflow.sandbox as sandbox_pkg
+        import nova.sandbox as sandbox_pkg
 
         monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: _Provider())
 
@@ -166,7 +166,7 @@ class TestDiscoveryReachesBeyondThePublishedPorts:
             def get_preview_endpoint(self, *a, **k):
                 return None
 
-        import deerflow.sandbox as sandbox_pkg
+        import nova.sandbox as sandbox_pkg
 
         monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: _Provider())
         monkeypatch.setattr(dev_server, "_sandbox_for_thread", lambda _tid: _FakeSandbox(listening={8080}))
@@ -190,7 +190,7 @@ class TestDiscoveryReachesBeyondThePublishedPorts:
             def get_preview_endpoint(self, *a, **k):
                 return None
 
-        import deerflow.sandbox as sandbox_pkg
+        import nova.sandbox as sandbox_pkg
 
         monkeypatch.setattr(sandbox_pkg, "get_sandbox_provider", lambda: _Provider())
         image_services = {5900, 6080, 8080, 8088, 8091, 8100, 8200, 8888, 9222}

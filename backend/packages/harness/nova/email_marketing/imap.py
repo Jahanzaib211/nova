@@ -20,9 +20,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.config.email_marketing_config import BounceMailboxConfig
-from deerflow.email_marketing.bounces import parse_bounce, send_id_from_message
-from deerflow.persistence.email_marketing.sql import EmailMarketingRepository
+from nova.config.email_marketing_config import BounceMailboxConfig
+from nova.email_marketing.bounces import parse_bounce, send_id_from_message
+from nova.persistence.email_marketing.sql import EmailMarketingRepository
 
 logger = logging.getLogger(__name__)
 

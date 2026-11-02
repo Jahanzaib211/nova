@@ -34,7 +34,7 @@ def runtime_models_path(config_path: Path | str | None = None) -> Path:
     if home:
         return Path(home) / RUNTIME_MODELS_FILENAME
     if config_path is None:
-        from deerflow.config.app_config import AppConfig
+        from nova.config.app_config import AppConfig
 
         config_path = AppConfig.resolve_config_path()
     return Path(config_path).parent / RUNTIME_MODELS_FILENAME

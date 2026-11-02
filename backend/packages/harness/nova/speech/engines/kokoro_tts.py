@@ -19,7 +19,7 @@ import re
 import threading
 from collections.abc import AsyncIterator
 
-from deerflow.speech.base import AudioChunk, SpeechEngineUnavailable, TextToSpeech
+from nova.speech.base import AudioChunk, SpeechEngineUnavailable, TextToSpeech
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class KokoroTTS(TextToSpeech):
         """
         import onnxruntime as ort
 
-        from deerflow.speech.devices import CPU_PROVIDER, CUDA_PROVIDER, resolve_onnx_providers
+        from nova.speech.devices import CPU_PROVIDER, CUDA_PROVIDER, resolve_onnx_providers
 
         providers, resolved = resolve_onnx_providers(self.device, subsystem="kokoro-tts")
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from deerflow.workspace.models.command import Command, CommandKind
+from nova.workspace.models.command import Command, CommandKind
 
 
 @dataclass

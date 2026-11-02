@@ -15,10 +15,10 @@ import asyncio
 from types import SimpleNamespace
 
 from app.gateway.routers.thread_runs import _record_to_response, _service_to_response
-from deerflow.runtime import RunManager
-from deerflow.runtime.runs.manager import RunRecord
-from deerflow.runtime.runs.schemas import DisconnectMode, RunStatus
-from deerflow.services.implementations import RunServiceImpl
+from nova.runtime import RunManager
+from nova.runtime.runs.manager import RunRecord
+from nova.runtime.runs.schemas import DisconnectMode, RunStatus
+from nova.services.implementations import RunServiceImpl
 
 
 def _record(**overrides) -> RunRecord:

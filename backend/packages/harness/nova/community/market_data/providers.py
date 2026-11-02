@@ -3,7 +3,7 @@
 Both are optional dependencies (``uv sync --extra trading``). They are
 imported lazily so a default Nova install is unaffected and so a missing
 package produces an actionable hint rather than an ImportError traceback
-at module load — the same convention ``deerflow.reflection`` uses for
+at module load — the same convention ``nova.reflection`` uses for
 optional model providers.
 
 No API keys anywhere. yfinance covers equities, FX, and futures (including

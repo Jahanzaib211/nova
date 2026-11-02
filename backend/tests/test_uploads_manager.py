@@ -1,4 +1,4 @@
-"""Tests for deerflow.uploads.manager — shared upload management logic."""
+"""Tests for nova.uploads.manager — shared upload management logic."""
 
 import errno
 import os
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from deerflow.uploads.manager import (
+from nova.uploads.manager import (
     PathTraversalError,
     UnsafeUploadPathError,
     claim_unique_filename,
@@ -147,7 +147,7 @@ class TestWriteUploadFileNoSymlink:
     def test_open_uses_nonblocking_flag_when_available(self, tmp_path):
         if not hasattr(os, "O_NONBLOCK"):
             pytest.skip("O_NONBLOCK not available on this platform")
-        with patch("deerflow.uploads.manager.os.open", side_effect=OSError(errno.ENXIO, "no reader")) as open_mock:
+        with patch("nova.uploads.manager.os.open", side_effect=OSError(errno.ENXIO, "no reader")) as open_mock:
             with pytest.raises(UnsafeUploadPathError, match="Unsafe upload destination"):
                 write_upload_file_no_symlink(tmp_path, "pipe.txt", b"hello")
 
@@ -158,7 +158,7 @@ class TestWriteUploadFileNoSymlink:
     def test_nonblocking_special_file_open_errors_are_unsafe(self, tmp_path, open_errno):
         if not hasattr(os, "O_NONBLOCK"):
             pytest.skip("O_NONBLOCK not available on this platform")
-        with patch("deerflow.uploads.manager.os.open", side_effect=OSError(open_errno, "would block")):
+        with patch("nova.uploads.manager.os.open", side_effect=OSError(open_errno, "would block")):
             with pytest.raises(UnsafeUploadPathError, match="Unsafe upload destination"):
                 write_upload_file_no_symlink(tmp_path, "pipe.txt", b"hello")
 

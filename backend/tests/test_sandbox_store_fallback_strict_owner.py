@@ -18,8 +18,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.gateway.routers import sandbox as sandbox_router
-from deerflow.persistence.thread_meta.memory import MemoryThreadMetaStore
-from deerflow.runtime.user_context import DEFAULT_USER_ID, reset_current_user, set_current_user
+from nova.persistence.thread_meta.memory import MemoryThreadMetaStore
+from nova.runtime.user_context import DEFAULT_USER_ID, reset_current_user, set_current_user
 
 
 @pytest.fixture(autouse=True)

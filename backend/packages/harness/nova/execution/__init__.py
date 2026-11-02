@@ -19,14 +19,14 @@ Layout:
 - ``adapters``     — Shell, Docker, Git, Browser, Python, PM2, Systemd
 """
 
-from deerflow.execution.audit import AuditEngine
-from deerflow.execution.kernel import (
+from nova.execution.audit import AuditEngine
+from nova.execution.kernel import (
     ExecutionDeniedError,
     ExecutionKernel,
     request_with_context,
 )
-from deerflow.execution.metrics import ExecutionMetrics
-from deerflow.execution.models import (
+from nova.execution.metrics import ExecutionMetrics
+from nova.execution.models import (
     ExecutionClass,
     ExecutionRecord,
     ExecutionRequest,
@@ -35,15 +35,15 @@ from deerflow.execution.models import (
     PolicyDecision,
     ResourceLimits,
 )
-from deerflow.execution.policy import ClassPolicy, PolicyEngine
-from deerflow.execution.protocols import (
+from nova.execution.policy import ClassPolicy, PolicyEngine
+from nova.execution.protocols import (
     ExecutionAdapterProtocol,
     ExecutionKernelProtocol,
 )
-from deerflow.execution.replay import ReplayEngine
-from deerflow.execution.resources import ResourceManager
-from deerflow.execution.scheduler import Admission, Scheduler
-from deerflow.execution.supervisor import SpawnedProcess, Supervisor
+from nova.execution.replay import ReplayEngine
+from nova.execution.resources import ResourceManager
+from nova.execution.scheduler import Admission, Scheduler
+from nova.execution.supervisor import SpawnedProcess, Supervisor
 
 __all__ = [
     "Admission",

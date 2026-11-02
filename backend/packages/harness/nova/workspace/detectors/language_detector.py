@@ -10,8 +10,8 @@ import uuid
 from pathlib import Path
 from typing import NamedTuple
 
-from deerflow.workspace.models.symbol import SymbolKind
-from deerflow.workspace.scanners.walker import BoundedWalker, TraversalLimit
+from nova.workspace.models.symbol import SymbolKind
+from nova.workspace.scanners.walker import BoundedWalker, TraversalLimit
 
 LANGUAGE_SIGNATURES: dict[str, tuple[tuple[str, ...], float]] = {
     "python": (("*.py",), 0.9),

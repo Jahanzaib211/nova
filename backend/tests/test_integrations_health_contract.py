@@ -1,4 +1,4 @@
-"""Contract tests for ``deerflow.integrations.health``.
+"""Contract tests for ``nova.integrations.health``.
 
 The integrations status/kind vocabulary and the health item shape are shared
 with the frontend (Settings > Integrations) and with ``scripts/inventory.py``
@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from deerflow.integrations.health import (
+from nova.integrations.health import (
     INTEGRATION_KINDS,
     INTEGRATION_STATUSES,
     HealthResult,

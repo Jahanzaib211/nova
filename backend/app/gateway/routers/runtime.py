@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_config
-from deerflow.config.app_config import AppConfig
+from nova.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 

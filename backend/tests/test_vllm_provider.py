@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
-from deerflow.models.vllm_provider import VllmChatModel
+from nova.models.vllm_provider import VllmChatModel
 
 
 def _make_model() -> VllmChatModel:

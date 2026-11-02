@@ -13,7 +13,7 @@ Allowed:
   - "DeerFlow" / "deer-flow" / "deerflow" — these are SELF references
     (Nova was renamed from DeerFlow); they're the project history,
     not a cross-project coupling.
-  - The `deerflow` Python package namespace (e.g. `from deerflow.x import
+  - The `deerflow` Python package namespace (e.g. `from nova.x import
     y`) — that's the package import path, not a project reference.
 """
 

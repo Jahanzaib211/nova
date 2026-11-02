@@ -23,10 +23,10 @@ from uuid import uuid4
 
 import pytest
 
-from deerflow.persistence.run import RunRepository
-from deerflow.runtime.events.store.memory import MemoryRunEventStore
-from deerflow.runtime.journal import RunJournal
-from deerflow.runtime.runs.store.memory import MemoryRunStore
+from nova.persistence.run import RunRepository
+from nova.runtime.events.store.memory import MemoryRunEventStore
+from nova.runtime.journal import RunJournal
+from nova.runtime.runs.store.memory import MemoryRunStore
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -359,7 +359,7 @@ async def test_memory_store_by_model_invariant_and_fallback():
 
 
 async def _make_sql_repo(tmp_path):
-    from deerflow.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.engine import get_session_factory, init_engine
 
     url = f"sqlite+aiosqlite:///{tmp_path / 'by-model.db'}"
     await init_engine("sqlite", url=url, sqlite_dir=str(tmp_path))
@@ -367,7 +367,7 @@ async def _make_sql_repo(tmp_path):
 
 
 async def _close_sql_engine() -> None:
-    from deerflow.persistence.engine import close_engine
+    from nova.persistence.engine import close_engine
 
     await close_engine()
 

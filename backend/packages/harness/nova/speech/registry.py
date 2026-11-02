@@ -11,11 +11,11 @@ Config shape (``config.yaml``):
 speech:
   enabled: true
   stt:
-    use: deerflow.speech.engines.faster_whisper_stt:FasterWhisperSTT
+    use: nova.speech.engines.faster_whisper_stt:FasterWhisperSTT
     model: base
     compute_type: int8
   tts:
-    use: deerflow.speech.engines.kokoro_tts:KokoroTTS
+    use: nova.speech.engines.kokoro_tts:KokoroTTS
     voice: af_heart
 ```
 
@@ -33,13 +33,13 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from deerflow.reflection import resolve_class
-from deerflow.speech.base import SpeechEngineUnavailable, SpeechToText, TextToSpeech
+from nova.reflection import resolve_class
+from nova.speech.base import SpeechEngineUnavailable, SpeechToText, TextToSpeech
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_STT = "deerflow.speech.engines.faster_whisper_stt:FasterWhisperSTT"
-DEFAULT_TTS = "deerflow.speech.engines.kokoro_tts:KokoroTTS"
+DEFAULT_STT = "nova.speech.engines.faster_whisper_stt:FasterWhisperSTT"
+DEFAULT_TTS = "nova.speech.engines.kokoro_tts:KokoroTTS"
 
 # Engines hold model weights — tens to hundreds of MB — so they are process
 # singletons rather than per-request. Guarded because WebSocket sessions arrive
@@ -51,7 +51,7 @@ _tts: TextToSpeech | None = None
 
 def _speech_config() -> dict[str, Any]:
     try:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         raw = getattr(get_app_config(), "speech", None)
     except Exception:
@@ -120,7 +120,7 @@ def save_overrides(settings: dict[str, Any]) -> Path:
     """
     import yaml
 
-    from deerflow.utils.atomic_write import atomic_write_text
+    from nova.utils.atomic_write import atomic_write_text
 
     path = overrides_path()
     path.parent.mkdir(parents=True, exist_ok=True)

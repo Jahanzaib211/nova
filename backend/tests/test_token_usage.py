@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from deerflow.client import DeerFlowClient
+from nova.client import DeerFlowClient
 
 # ---------------------------------------------------------------------------
 # _serialize_message — usage_metadata passthrough
@@ -154,7 +154,7 @@ class TestStreamUsageIntegration:
     """Test that stream() emits usage_metadata in messages-tuple and end events."""
 
     def _make_client(self):
-        with patch("deerflow.client.get_app_config", return_value=_mock_app_config()):
+        with patch("nova.client.get_app_config", return_value=_mock_app_config()):
             return DeerFlowClient()
 
     def test_stream_emits_usage_in_messages_tuple(self):

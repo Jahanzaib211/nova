@@ -2,13 +2,13 @@ import logging
 
 from langchain.tools import BaseTool
 
-from deerflow.config import get_app_config
-from deerflow.config.app_config import AppConfig
-from deerflow.reflection import resolve_variable
-from deerflow.sandbox.security import is_host_bash_allowed
-from deerflow.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
-from deerflow.tools.builtins.igino_research_tool import igino_research_tool
-from deerflow.tools.builtins.workspace_tools import (
+from nova.config import get_app_config
+from nova.config.app_config import AppConfig
+from nova.reflection import resolve_variable
+from nova.sandbox.security import is_host_bash_allowed
+from nova.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
+from nova.tools.builtins.igino_research_tool import igino_research_tool
+from nova.tools.builtins.workspace_tools import (
     agent_notify_tool,
     browser_check_tool,
     browser_click_tool,
@@ -34,8 +34,8 @@ from deerflow.tools.builtins.workspace_tools import (
     stop_dev_server_tool,
     system_probe_tool,
 )
-from deerflow.tools.mcp_metadata import tag_mcp_tool
-from deerflow.tools.sync import make_sync_tool_wrapper
+from nova.tools.mcp_metadata import tag_mcp_tool
+from nova.tools.sync import make_sync_tool_wrapper
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ def _is_host_bash_tool(tool: object) -> bool:
     use = getattr(tool, "use", None)
     if group == "bash":
         return True
-    if use == "deerflow.sandbox.tools:bash_tool":
+    if use == "nova.sandbox.tools:bash_tool":
         return True
     return False
 
@@ -116,7 +116,7 @@ def get_available_tools(
     """Get all available tools from config.
 
     Note: MCP tools should be initialized at application startup using
-    `initialize_mcp_tools()` from deerflow.mcp module.
+    `initialize_mcp_tools()` from nova.mcp module.
 
     Args:
         groups: Optional list of tool groups to filter by.
@@ -155,7 +155,7 @@ def get_available_tools(
     builtin_tools = BUILTIN_TOOLS.copy()
     skill_evolution_config = getattr(config, "skill_evolution", None)
     if getattr(skill_evolution_config, "enabled", False):
-        from deerflow.tools.skill_manage_tool import skill_manage_tool
+        from nova.tools.skill_manage_tool import skill_manage_tool
 
         builtin_tools.append(skill_manage_tool)
 
@@ -163,12 +163,12 @@ def get_available_tools(
     if subagent_enabled:
         builtin_tools.extend(SUBAGENT_TOOLS)
         logger.info("Including subagent tools (task)")
-        from deerflow.agents_registry.registry import async_delegation_enabled
+        from nova.agents_registry.registry import async_delegation_enabled
 
         if async_delegation_enabled(config):
-            from deerflow.persistence.engine import get_session_factory
-            from deerflow.persistence.job.sql import JobRepository
-            from deerflow.tools.builtins.delegate_async_tool import build_delegate_tools
+            from nova.persistence.engine import get_session_factory
+            from nova.persistence.job.sql import JobRepository
+            from nova.tools.builtins.delegate_async_tool import build_delegate_tools
 
             def _jobs_repo():
                 sf = get_session_factory()
@@ -195,8 +195,8 @@ def get_available_tools(
     mcp_tools = []
     if include_mcp:
         try:
-            from deerflow.config.extensions_config import ExtensionsConfig
-            from deerflow.mcp.cache import get_cached_mcp_tools
+            from nova.config.extensions_config import ExtensionsConfig
+            from nova.mcp.cache import get_cached_mcp_tools
 
             extensions_config = ExtensionsConfig.from_file()
             if extensions_config.get_enabled_mcp_servers():
@@ -219,10 +219,10 @@ def get_available_tools(
     # Add invoke_acp_agent tool if any ACP agents are configured
     acp_tools: list[BaseTool] = []
     try:
-        from deerflow.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
+        from nova.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
 
         if app_config is None:
-            from deerflow.config.acp_config import get_acp_agents
+            from nova.config.acp_config import get_acp_agents
 
             acp_agents = get_acp_agents()
         else:
@@ -239,9 +239,9 @@ def get_available_tools(
     # module's operations; an agent's own `tool_groups` list narrows further.
     capability_tools: list[BaseTool] = []
     try:
-        from deerflow.capabilities import get_registry
-        from deerflow.capabilities.modules.features import compute_flags
-        from deerflow.tools.capability_tools import GROUP_PREFIX, build_capability_tools
+        from nova.capabilities import get_registry
+        from nova.capabilities.modules.features import compute_flags
+        from nova.tools.capability_tools import GROUP_PREFIX, build_capability_tools
 
         configured_groups = {g.name for g in config.tool_groups if g.name.startswith(GROUP_PREFIX)}
         if groups is not None:

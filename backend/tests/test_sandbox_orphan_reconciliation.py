@@ -18,9 +18,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
-from deerflow.execution.testing import FakeExecutionKernel
-from deerflow.services.container import service_container
+from nova.community.aio_sandbox.sandbox_info import SandboxInfo
+from nova.execution.testing import FakeExecutionKernel
+from nova.services.container import service_container
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,7 @@ def _install_fake_kernel(handler) -> FakeExecutionKernel:
 
 def test_backend_list_running_default_returns_empty():
     """Base SandboxBackend.list_running() returns empty list (backward compat for RemoteSandboxBackend)."""
-    from deerflow.community.aio_sandbox.backend import SandboxBackend
+    from nova.community.aio_sandbox.backend import SandboxBackend
 
     class StubBackend(SandboxBackend):
         def create(self, thread_id, sandbox_id, extra_mounts=None):
@@ -64,7 +64,7 @@ def test_backend_list_running_default_returns_empty():
 
 def _make_local_backend():
     """Create a LocalContainerBackend with minimal config."""
-    from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
+    from nova.community.aio_sandbox.local_backend import LocalContainerBackend
 
     return LocalContainerBackend(
         image="test-image:latest",
@@ -252,7 +252,7 @@ def test_list_running_uses_single_batch_inspect_call(monkeypatch):
 
 def test_parse_docker_timestamp_with_nanoseconds():
     """Should correctly parse Docker's ISO 8601 timestamp with nanoseconds."""
-    from deerflow.community.aio_sandbox.local_backend import _parse_docker_timestamp
+    from nova.community.aio_sandbox.local_backend import _parse_docker_timestamp
 
     ts = _parse_docker_timestamp("2026-04-08T01:22:50.123456789Z")
     assert ts > 0
@@ -262,7 +262,7 @@ def test_parse_docker_timestamp_with_nanoseconds():
 
 def test_parse_docker_timestamp_without_fractional_seconds():
     """Should parse plain ISO 8601 timestamps without fractional seconds."""
-    from deerflow.community.aio_sandbox.local_backend import _parse_docker_timestamp
+    from nova.community.aio_sandbox.local_backend import _parse_docker_timestamp
 
     ts = _parse_docker_timestamp("2026-04-08T01:22:50Z")
     expected = datetime(2026, 4, 8, 1, 22, 50, tzinfo=UTC).timestamp()
@@ -270,7 +270,7 @@ def test_parse_docker_timestamp_without_fractional_seconds():
 
 
 def test_parse_docker_timestamp_empty_returns_zero():
-    from deerflow.community.aio_sandbox.local_backend import _parse_docker_timestamp
+    from nova.community.aio_sandbox.local_backend import _parse_docker_timestamp
 
     assert _parse_docker_timestamp("") == 0.0
     assert _parse_docker_timestamp("not a timestamp") == 0.0
@@ -280,21 +280,21 @@ def test_parse_docker_timestamp_empty_returns_zero():
 
 
 def test_extract_host_port_returns_mapped_port():
-    from deerflow.community.aio_sandbox.local_backend import _extract_host_port
+    from nova.community.aio_sandbox.local_backend import _extract_host_port
 
     entry = {"NetworkSettings": {"Ports": {"8080/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8081"}]}}}
     assert _extract_host_port(entry, 8080) == 8081
 
 
 def test_extract_host_port_returns_none_when_unmapped():
-    from deerflow.community.aio_sandbox.local_backend import _extract_host_port
+    from nova.community.aio_sandbox.local_backend import _extract_host_port
 
     entry = {"NetworkSettings": {"Ports": {}}}
     assert _extract_host_port(entry, 8080) is None
 
 
 def test_extract_host_port_handles_missing_fields():
-    from deerflow.community.aio_sandbox.local_backend import _extract_host_port
+    from nova.community.aio_sandbox.local_backend import _extract_host_port
 
     assert _extract_host_port({}, 8080) is None
     assert _extract_host_port({"NetworkSettings": None}, 8080) is None
@@ -314,7 +314,7 @@ def _make_provider_for_reconciliation():
     this helper must be updated in lockstep — otherwise tests will fail with a
     confusing ``AttributeError`` instead of a meaningful assertion failure.
     """
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
     provider._lock = threading.Lock()
     provider._sandboxes = {}
@@ -561,7 +561,7 @@ def test_sighup_handler_registered():
     original_sigterm = signal.getsignal(signal.SIGTERM)
     original_sigint = signal.getsignal(signal.SIGINT)
     try:
-        aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+        aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
         provider._original_sighup = original_sighup
         provider._original_sigterm = original_sigterm
         provider._original_sigint = original_sigint
@@ -590,12 +590,12 @@ class TestPytestGuard:
     """
 
     def test_under_pytest_is_true_during_a_test(self):
-        from deerflow.community.aio_sandbox.aio_sandbox_provider import _under_pytest
+        from nova.community.aio_sandbox.aio_sandbox_provider import _under_pytest
 
         assert _under_pytest() is True
 
     def test_under_pytest_is_false_without_the_env_var(self, monkeypatch):
-        from deerflow.community.aio_sandbox.aio_sandbox_provider import _under_pytest
+        from nova.community.aio_sandbox.aio_sandbox_provider import _under_pytest
 
         monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
         assert _under_pytest() is False
@@ -603,7 +603,7 @@ class TestPytestGuard:
     def test_construction_skips_orphan_reconciliation_and_atexit(self, monkeypatch):
         import atexit
 
-        from deerflow.community.aio_sandbox import aio_sandbox_provider as mod
+        from nova.community.aio_sandbox import aio_sandbox_provider as mod
 
         registered: list = []
         monkeypatch.setattr(atexit, "register", lambda fn, *a, **k: registered.append(fn))

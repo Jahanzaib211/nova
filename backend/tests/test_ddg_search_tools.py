@@ -5,7 +5,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from deerflow.community.ddg_search import tools
+from nova.community.ddg_search import tools
 
 
 def test_resolve_ddgs_region_maps_worldwide_chinese_query_for_wikipedia() -> None:
@@ -49,7 +49,7 @@ def test_search_text_passes_wikipedia_safe_region_to_ddgs(monkeypatch) -> None:
 
 
 def test_web_search_tool_reads_ddgs_options_from_config() -> None:
-    with patch("deerflow.community.ddg_search.tools.get_app_config") as mock_config:
+    with patch("nova.community.ddg_search.tools.get_app_config") as mock_config:
         tool_config = MagicMock()
         tool_config.model_extra = {
             "max_results": 3,
@@ -59,7 +59,7 @@ def test_web_search_tool_reads_ddgs_options_from_config() -> None:
         }
         mock_config.return_value.get_tool_config.return_value = tool_config
 
-        with patch("deerflow.community.ddg_search.tools._search_text") as mock_search:
+        with patch("nova.community.ddg_search.tools._search_text") as mock_search:
             mock_search.return_value = [{"title": "Result", "href": "https://example.com", "body": "Snippet"}]
 
             result = tools.web_search_tool.invoke({"query": "latest news", "max_results": 8})

@@ -7,7 +7,7 @@ representation used by the event bus and service layer.
 
 Usage::
 
-    from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+    from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
     # Create from existing RunStatus
     lifecycle = adapt_run_status(run_status)

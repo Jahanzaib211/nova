@@ -4,16 +4,16 @@ import logging
 from dataclasses import replace
 from typing import Any
 
-from deerflow.sandbox.security import is_host_bash_allowed
-from deerflow.subagents.builtins import BUILTIN_SUBAGENTS
-from deerflow.subagents.config import SubagentConfig
+from nova.sandbox.security import is_host_bash_allowed
+from nova.subagents.builtins import BUILTIN_SUBAGENTS
+from nova.subagents.config import SubagentConfig
 
 logger = logging.getLogger(__name__)
 
 
 def _resolve_subagents_app_config(app_config: Any | None = None):
     if app_config is None:
-        from deerflow.config.subagents_config import get_subagents_app_config
+        from nova.config.subagents_config import get_subagents_app_config
 
         return get_subagents_app_config()
     return getattr(app_config, "subagents", app_config)
@@ -130,7 +130,7 @@ def get_subagent_config(name: str, *, app_config: Any | None = None, timeout_sec
     # maximum. The clamp exists to stop a model from inventing a number,
     # not to shorten the operator's decision.
     if timeout_seconds is not None:
-        from deerflow.config.subagents_config import DEFAULT_MAX_TIMEOUT_SECONDS, clamp_task_timeout
+        from nova.config.subagents_config import DEFAULT_MAX_TIMEOUT_SECONDS, clamp_task_timeout
 
         effective_timeout = overrides.get("timeout_seconds", config.timeout_seconds)
         max_timeout = getattr(subagents_config, "max_timeout_seconds", None) or DEFAULT_MAX_TIMEOUT_SECONDS

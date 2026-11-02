@@ -5,7 +5,7 @@ sandbox, and reconstructing which run wrote which line required guesswork:
 sandbox.log JSON lines, ACP transport logs and the token middleware carried
 no run identity. These tests pin the fix from both ends:
 
-* :mod:`deerflow.runtime.run_context` — the task-scoped frame (set/reset,
+* :mod:`nova.runtime.run_context` — the task-scoped frame (set/reset,
   field omission) and its helpers.
 * the consumers — ``sandbox.log`` lines only gain keys when a scope is set,
   and the token-usage middleware's log line names the model that actually
@@ -19,12 +19,12 @@ import json
 
 import pytest
 
-# `deerflow.sandbox.tools` and `deerflow.tools.builtins.workspace_tools` import
+# `nova.sandbox.tools` and `nova.tools.builtins.workspace_tools` import
 # each other; entering from the workspace_tools side is the order the
 # application itself uses (see tests/test_sandbox_observation_writer.py).
-import deerflow.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
-from deerflow.runtime import run_context as rc  # noqa: E402  isort:skip
-from deerflow.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
+import nova.tools.builtins.workspace_tools  # noqa: F401,E402  isort:skip
+from nova.runtime import run_context as rc  # noqa: E402  isort:skip
+from nova.sandbox import tools as sandbox_tools  # noqa: E402  isort:skip
 
 pytestmark = pytest.mark.anyio
 
@@ -124,7 +124,7 @@ async def test_sandbox_log_is_byte_identical_without_scope(thread_log) -> None:
 
 
 def _usage_middleware():
-    from deerflow.agents.middlewares.token_usage_middleware import TokenUsageMiddleware
+    from nova.agents.middlewares.token_usage_middleware import TokenUsageMiddleware
 
     return TokenUsageMiddleware()
 
@@ -149,7 +149,7 @@ async def test_token_usage_log_line_names_model_and_run(caplog) -> None:
     state = {"messages": [message], "todos": []}
     scope = rc.set_run_scope(run_id="r-att", thread_id="t-att")
     try:
-        with caplog.at_level(logging.INFO, logger="deerflow.agents.middlewares.token_usage_middleware"):
+        with caplog.at_level(logging.INFO, logger="nova.agents.middlewares.token_usage_middleware"):
             mw.after_model(state, _runtime())
     finally:
         rc.reset_run_scope(scope)
@@ -173,7 +173,7 @@ async def test_token_usage_log_line_omits_scope_when_unset(caplog) -> None:
         response_metadata={"model_name": "m2"},
     )
     state = {"messages": [message], "todos": []}
-    with caplog.at_level(logging.INFO, logger="deerflow.agents.middlewares.token_usage_middleware"):
+    with caplog.at_level(logging.INFO, logger="nova.agents.middlewares.token_usage_middleware"):
         mw.after_model(state, _runtime())
 
     matching = [r for r in caplog.records if "LLM token usage" in r.getMessage()]
@@ -191,8 +191,8 @@ async def test_token_usage_log_line_omits_scope_when_unset(caplog) -> None:
 async def test_cancel_background_tasks_for_thread_is_thread_scoped() -> None:
     import threading
 
-    from deerflow.subagents import executor
-    from deerflow.subagents.executor import SubagentResult, SubagentStatus, cancel_background_tasks_for_thread
+    from nova.subagents import executor
+    from nova.subagents.executor import SubagentResult, SubagentStatus, cancel_background_tasks_for_thread
 
     def make(task_id: str, thread_id: str, terminal: bool) -> SubagentResult:
         result = SubagentResult(task_id=task_id, trace_id="tr", status=SubagentStatus.PENDING, thread_id=thread_id)

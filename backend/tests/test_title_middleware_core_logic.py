@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from deerflow.agents.middlewares import title_middleware as title_middleware_module
-from deerflow.agents.middlewares.dynamic_context_middleware import _DYNAMIC_CONTEXT_REMINDER_KEY
-from deerflow.agents.middlewares.title_middleware import TitleMiddleware
-from deerflow.config.title_config import TitleConfig, get_title_config, set_title_config
+from nova.agents.middlewares import title_middleware as title_middleware_module
+from nova.agents.middlewares.dynamic_context_middleware import _DYNAMIC_CONTEXT_REMINDER_KEY
+from nova.agents.middlewares.title_middleware import TitleMiddleware
+from nova.config.title_config import TitleConfig, get_title_config, set_title_config
 
 
 def _clone_title_config(config: TitleConfig) -> TitleConfig:

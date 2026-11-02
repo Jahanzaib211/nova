@@ -5,7 +5,7 @@ import re
 import shutil
 from pathlib import Path, PureWindowsPath
 
-from deerflow.config.runtime_paths import runtime_home
+from nova.config.runtime_paths import runtime_home
 
 # Virtual path prefix seen by agents inside the sandbox
 VIRTUAL_PATH_PREFIX = "/mnt/user-data"

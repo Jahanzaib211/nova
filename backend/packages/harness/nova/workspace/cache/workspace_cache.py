@@ -14,12 +14,12 @@ import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from deerflow.workspace.cache.cache_key import CacheKeyBuilder
-from deerflow.workspace.graph.command_registry import CommandRegistry
-from deerflow.workspace.graph.dependency_graph import DependencyGraph
-from deerflow.workspace.graph.symbol_index import SymbolIndex
-from deerflow.workspace.graph.workspace_graph import WorkspaceGraph
-from deerflow.workspace.models.workspace_snapshot import WorkspaceSnapshot
+from nova.workspace.cache.cache_key import CacheKeyBuilder
+from nova.workspace.graph.command_registry import CommandRegistry
+from nova.workspace.graph.dependency_graph import DependencyGraph
+from nova.workspace.graph.symbol_index import SymbolIndex
+from nova.workspace.graph.workspace_graph import WorkspaceGraph
+from nova.workspace.models.workspace_snapshot import WorkspaceSnapshot
 
 
 @dataclass

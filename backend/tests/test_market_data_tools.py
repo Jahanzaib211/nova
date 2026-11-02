@@ -17,9 +17,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.community.market_data import providers
-from deerflow.community.market_data.providers import MarketDataError, fetch_ohlcv, looks_like_crypto_pair, normalize_interval
-from deerflow.community.market_data.tools import (
+from nova.community.market_data import providers
+from nova.community.market_data.providers import MarketDataError, fetch_ohlcv, looks_like_crypto_pair, normalize_interval
+from nova.community.market_data.tools import (
     backtest_signals_tool,
     compute_indicators_tool,
     get_ohlcv_tool,
@@ -57,7 +57,7 @@ def stub_bars(monkeypatch: pytest.MonkeyPatch):
         captured.update(symbol=symbol, interval=interval, limit=limit, source=source, exchange=exchange)
         return _bars(limit if limit <= 200 else 200), "stub"
 
-    monkeypatch.setattr("deerflow.community.market_data.tools.fetch_ohlcv", fake_fetch)
+    monkeypatch.setattr("nova.community.market_data.tools.fetch_ohlcv", fake_fetch)
     return captured
 
 
@@ -98,7 +98,7 @@ class TestGetOhlcv:
         def boom(*args, **kwargs):
             raise MarketDataError("no data returned for 'XAUUSD'. Check the symbol (gold is 'GC=F' ...)")
 
-        monkeypatch.setattr("deerflow.community.market_data.tools.fetch_ohlcv", boom)
+        monkeypatch.setattr("nova.community.market_data.tools.fetch_ohlcv", boom)
         result = _call(get_ohlcv_tool, description="d", symbol="XAUUSD")
         assert result.startswith("Error:")
         assert "GC=F" in result

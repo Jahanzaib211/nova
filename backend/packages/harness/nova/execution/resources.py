@@ -16,7 +16,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 
-from deerflow.execution.models import ExecutionClass
+from nova.execution.models import ExecutionClass
 
 logger = logging.getLogger(__name__)
 

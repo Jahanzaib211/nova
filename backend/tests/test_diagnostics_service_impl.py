@@ -1,7 +1,7 @@
 """DiagnosticsServiceImpl against the real diagnostics recorder.
 
 The service used to import a ``Diagnostics`` class that never existed in
-``deerflow.runtime.stream_bridge.diagnostics`` (the module exports the
+``nova.runtime.stream_bridge.diagnostics`` (the module exports the
 ``diagnostics`` instance of ``_Diagnostics``). The EventBus swallows handler
 exceptions, so every run event the service was subscribed to raised
 ImportError and was silently dropped. These tests drive the real recorder
@@ -14,11 +14,11 @@ from collections import deque
 
 import pytest
 
-from deerflow.events.bus import EventBus
-from deerflow.events.event import RunCompleted, RunStarted
-from deerflow.runtime.stream_bridge import diagnostics as diagnostics_module
-from deerflow.services.implementations import DiagnosticsServiceImpl
-from deerflow.services.types import DiagnosticsRecord
+from nova.events.bus import EventBus
+from nova.events.event import RunCompleted, RunStarted
+from nova.runtime.stream_bridge import diagnostics as diagnostics_module
+from nova.services.implementations import DiagnosticsServiceImpl
+from nova.services.types import DiagnosticsRecord
 
 
 @pytest.fixture

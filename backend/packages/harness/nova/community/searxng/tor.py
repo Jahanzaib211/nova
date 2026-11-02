@@ -93,7 +93,7 @@ class TorProxy:
         if self._fallback:
             logger.debug("Using direct connection (TOR unavailable)")
             return httpx.Client(timeout=timeout)
-        from deerflow.community.searxng.search_errors import SearchUnavailableError
+        from nova.community.searxng.search_errors import SearchUnavailableError
 
         raise SearchUnavailableError(
             "TOR proxy unavailable and fallback disabled",
@@ -110,7 +110,7 @@ class TorProxy:
                 logger.warning("TOR async transport creation failed, falling back: %s", exc)
         if self._fallback:
             return httpx.AsyncClient(timeout=timeout)
-        from deerflow.community.searxng.search_errors import SearchUnavailableError
+        from nova.community.searxng.search_errors import SearchUnavailableError
 
         raise SearchUnavailableError(
             "TOR proxy unavailable and fallback disabled",

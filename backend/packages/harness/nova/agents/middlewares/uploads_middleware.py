@@ -10,10 +10,10 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import run_in_executor
 from langgraph.runtime import Runtime
 
-from deerflow.config.paths import Paths, get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.utils.file_conversion import extract_outline
-from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY, message_content_to_text
+from nova.config.paths import Paths, get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.utils.file_conversion import extract_outline
+from nova.utils.messages import ORIGINAL_USER_CONTENT_KEY, message_content_to_text
 
 logger = logging.getLogger(__name__)
 

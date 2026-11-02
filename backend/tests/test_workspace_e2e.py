@@ -35,10 +35,10 @@ _THREAD_ID = "e2e-workspace-thread"
 @pytest.fixture(autouse=True)
 def _real_stack(tmp_path, monkeypatch):
     """Real engine + real paths rooted in tmp, workspace flag on."""
-    import deerflow.config.paths as paths_module
+    import nova.config.paths as paths_module
     from app.gateway import deps
-    from deerflow.config import get_app_config
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.config import get_app_config
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
 
@@ -50,7 +50,7 @@ def _real_stack(tmp_path, monkeypatch):
     config = get_app_config()
     # Point the app's database at tmp so the lifespan engine init never
     # touches the deployment DB.
-    from deerflow.config.database_config import DatabaseConfig
+    from nova.config.database_config import DatabaseConfig
 
     original_database = config.database
     monkeypatch.setattr(config, "database", DatabaseConfig(backend="sqlite", sqlite_dir=str(tmp_path)))
@@ -97,7 +97,7 @@ def _register(client: TestClient, email: str) -> str:
 
 def _create_real_project(user_id: str, thread_id: str = _THREAD_ID) -> None:
     """Materialize a real Python project in the thread's workspace dir."""
-    from deerflow.config.paths import get_paths
+    from nova.config.paths import get_paths
 
     root = get_paths().sandbox_work_dir(thread_id, user_id=user_id)
     (root / "src").mkdir(parents=True, exist_ok=True)
@@ -138,7 +138,7 @@ class TestWorkspaceFlagAndAuth:
         assert resp.status_code == 401
 
     def test_flag_off_returns_403_for_authed_user(self, client):
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         user_id = _register(client, "flagoff@example.com")
         _create_real_project(user_id)

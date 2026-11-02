@@ -9,7 +9,7 @@ from __future__ import annotations
 import bisect
 from datetime import UTC, datetime
 
-from deerflow.runtime.events.store.base import RunEventStore
+from nova.runtime.events.store.base import RunEventStore
 
 
 class MemoryRunEventStore(RunEventStore):

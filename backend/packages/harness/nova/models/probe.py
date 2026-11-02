@@ -31,10 +31,10 @@ class ModelProbeResult:
 async def probe_model(name: str, *, app_config: Any | None = None, timeout: float = PROBE_TIMEOUT_SECONDS) -> ModelProbeResult:
     """Send :data:`PROBE_PROMPT` to model ``name``; never raises for a model
     that fails to answer. ``LookupError`` when no such model is configured."""
-    from deerflow.models.factory import create_chat_model
+    from nova.models.factory import create_chat_model
 
     if app_config is None:
-        from deerflow.config.app_config import get_app_config
+        from nova.config.app_config import get_app_config
 
         app_config = get_app_config()
     if app_config.get_model_config(name) is None:

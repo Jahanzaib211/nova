@@ -13,7 +13,7 @@ import logging
 import smtplib
 from email.message import EmailMessage
 
-from deerflow.config.app_config import EmailConfig
+from nova.config.app_config import EmailConfig
 
 logger = logging.getLogger(__name__)
 

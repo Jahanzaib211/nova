@@ -36,9 +36,9 @@ _FETCH_CONCURRENCY = 4
 
 async def _fetch_one(url: str, source: str, trace_id: str) -> dict[str, Any] | None:
     try:
-        from deerflow.community.jina_ai.jina_client import JinaClient
-        from deerflow.community.searxng.audit import get_audit_trail
-        from deerflow.sandbox.browser_tracing import browser_span
+        from nova.community.jina_ai.jina_client import JinaClient
+        from nova.community.searxng.audit import get_audit_trail
+        from nova.sandbox.browser_tracing import browser_span
 
         start = time.monotonic()
         with browser_span("igino_fetch", {"url": url, "source": source, "trace_id": trace_id}):
@@ -47,7 +47,7 @@ async def _fetch_one(url: str, source: str, trace_id: str) -> dict[str, Any] | N
             elapsed_ms = (time.monotonic() - start) * 1000
 
             try:
-                from deerflow.sandbox.metrics import igino_fetch_duration_ms, igino_fetch_total
+                from nova.sandbox.metrics import igino_fetch_duration_ms, igino_fetch_total
 
                 igino_fetch_total.inc("ok")
                 igino_fetch_duration_ms.observe(elapsed_ms, source)
@@ -69,7 +69,7 @@ async def _fetch_one(url: str, source: str, trace_id: str) -> dict[str, Any] | N
     except Exception as exc:
         elapsed_ms = (time.monotonic() - start) * 1000 if "start" in dir() else 0
         try:
-            from deerflow.sandbox.metrics import igino_fetch_duration_ms, igino_fetch_total
+            from nova.sandbox.metrics import igino_fetch_duration_ms, igino_fetch_total
 
             igino_fetch_total.inc("error")
             igino_fetch_duration_ms.observe(elapsed_ms, source)
@@ -110,8 +110,8 @@ async def igino_research_tool(
     errors: list[str] = []
 
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
-        from deerflow.community.searxng.searxng_client import SearxngClient
+        from nova.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.searxng_client import SearxngClient
 
         client = SearxngClient(tor_enabled=privacy)
         search_results = await asyncio.wait_for(
@@ -129,7 +129,7 @@ async def igino_research_tool(
     if not search_results:
         elapsed_ms = (time.monotonic() - start) * 1000
         try:
-            from deerflow.sandbox.metrics import igino_research_duration_ms, igino_research_total
+            from nova.sandbox.metrics import igino_research_duration_ms, igino_research_total
 
             igino_research_total.inc("failed")
             igino_research_duration_ms.observe(elapsed_ms)
@@ -206,14 +206,14 @@ async def igino_research_tool(
     elapsed_ms = (time.monotonic() - start) * 1000
     tor_available = False
     try:
-        from deerflow.community.searxng.tor import get_tor_proxy
+        from nova.community.searxng.tor import get_tor_proxy
 
         tor_available = get_tor_proxy().is_available()
     except Exception:
         pass
 
     try:
-        from deerflow.sandbox.metrics import igino_research_duration_ms, igino_research_total
+        from nova.sandbox.metrics import igino_research_duration_ms, igino_research_total
 
         igino_research_total.inc("ok" if not errors else "partial")
         igino_research_duration_ms.observe(elapsed_ms)
@@ -221,7 +221,7 @@ async def igino_research_tool(
         pass
 
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         get_audit_trail().search(
             thread_id="",

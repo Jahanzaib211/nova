@@ -9,10 +9,10 @@ from functools import cached_property
 from pathlib import Path
 from typing import NamedTuple
 
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX
-from deerflow.sandbox.local.list_dir import list_dir
-from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.search import GrepMatch, find_glob_matches, find_grep_matches
+from nova.config.paths import VIRTUAL_PATH_PREFIX
+from nova.sandbox.local.list_dir import list_dir
+from nova.sandbox.sandbox import Sandbox
+from nova.sandbox.search import GrepMatch, find_glob_matches, find_grep_matches
 
 logger = logging.getLogger(__name__)
 
@@ -333,8 +333,8 @@ class LocalSandbox(Sandbox):
 
         # All command execution flows through the Execution Kernel (Phase C7):
         # policy-gated, resource-bounded, audited, supervised.
-        from deerflow.execution.adapters import ShellAdapter
-        from deerflow.services.container import service_container
+        from nova.execution.adapters import ShellAdapter
+        from nova.services.container import service_container
 
         adapter = ShellAdapter(service_container.execution_kernel())
 

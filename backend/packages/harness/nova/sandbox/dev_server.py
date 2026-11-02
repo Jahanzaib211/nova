@@ -29,7 +29,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from deerflow.execution.supervisor import SpawnedProcess
+from nova.execution.supervisor import SpawnedProcess
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def _notify_dev_server_status(handle: DevServerHandle) -> None:
     Non-fatal by contract: listener failures are contained inside the emitter.
     """
     try:
-        from deerflow.sandbox.computer_events import emit_dev_server_status
+        from nova.sandbox.computer_events import emit_dev_server_status
 
         emit_dev_server_status(
             {
@@ -188,7 +188,7 @@ def _sandbox_for_thread(thread_id: str):
     acquiring from a probe would create a container as a side effect of asking
     whether one has a server running.
     """
-    from deerflow.sandbox import get_sandbox_provider
+    from nova.sandbox import get_sandbox_provider
 
     try:
         provider = get_sandbox_provider()
@@ -303,7 +303,7 @@ async def discover_live_preview(thread_id: str) -> tuple[int, str, int] | None:
     and returns ``(container_port, host, host_port)`` for the first hit, else
     ``None``. Liveness is the same TCP authority the status endpoint uses.
     """
-    from deerflow.sandbox import get_sandbox_provider
+    from nova.sandbox import get_sandbox_provider
 
     provider = get_sandbox_provider()
     getter = getattr(provider, "get_preview_endpoint", None)
@@ -522,7 +522,7 @@ async def _auto_verify_preview(thread_id: str, sandbox: object, label: str) -> N
                 return
             if h.status == "ready":
                 break
-        from deerflow.sandbox.browser_check import run_browser_check
+        from nova.sandbox.browser_check import run_browser_check
 
         check = await asyncio.to_thread(run_browser_check, thread_id, sandbox, label=label, routes=["/"], with_screenshot=True)
         verdict = "✓ passed" if check.ok else "✗ found issues"
@@ -559,7 +559,7 @@ def _append_devlog_to_sandbox_log(thread_id: str, text: str) -> None:
     type, so this output stays visible where it is useful without being counted.
     """
     try:
-        from deerflow.sandbox.tools import _write_sandbox_observation
+        from nova.sandbox.tools import _write_sandbox_observation
 
         _write_sandbox_observation(
             _sandbox_id_for_thread(thread_id),
@@ -584,7 +584,7 @@ def _sandbox_id_for_thread(thread_id: str) -> str:
     is; fall back to the local form, which the writer can always resolve.
     """
     try:
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         mapping = getattr(get_sandbox_provider(), "_thread_sandboxes", None) or {}
         sandbox_id = mapping.get(thread_id)
@@ -814,8 +814,8 @@ async def _start_dev_server_local(thread_id: str, cwd: str, command: str, label:
     handle.log_buffer.append(f"[nova] starting dev server on port {port} in {cwd}")
 
     try:
-        from deerflow.execution import ExecutionClass, ExecutionRequest, ResourceLimits
-        from deerflow.services.container import service_container
+        from nova.execution import ExecutionClass, ExecutionRequest, ResourceLimits
+        from nova.services.container import service_container
 
         kernel = service_container.execution_kernel()
         proc = await kernel.spawn(
@@ -854,7 +854,7 @@ async def _start_dev_server_aio(
 ) -> DevServerHandle:
     """Start the dev server inside the per-thread container, reached via the
     container's published preview port."""
-    from deerflow.sandbox import get_sandbox_provider
+    from nova.sandbox import get_sandbox_provider
 
     handle = DevServerHandle(
         thread_id=thread_id,

@@ -1,8 +1,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from deerflow.agents.memory.prompt import format_conversation_for_update
-from deerflow.agents.memory.updater import (
+from nova.agents.memory.prompt import format_conversation_for_update
+from nova.agents.memory.updater import (
     MemoryUpdater,
     _extract_text,
     clear_memory_data,
@@ -11,7 +11,7 @@ from deerflow.agents.memory.updater import (
     import_memory_data,
     update_memory_fact,
 )
-from deerflow.config.memory_config import MemoryConfig
+from nova.config.memory_config import MemoryConfig
 
 
 def _make_memory(facts: list[dict[str, object]] | None = None) -> dict[str, object]:
@@ -69,7 +69,7 @@ def test_apply_updates_skips_existing_duplicate_and_preserves_removals() -> None
     }
 
     with patch(
-        "deerflow.agents.memory.updater.get_memory_config",
+        "nova.agents.memory.updater.get_memory_config",
         return_value=_memory_config(max_facts=100, fact_confidence_threshold=0.7),
     ):
         result = updater._apply_updates(current_memory, update_data, thread_id="thread-b")
@@ -94,8 +94,8 @@ def test_prepare_update_prompt_preserves_non_ascii_memory_text() -> None:
     )
 
     with (
-        patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-        patch("deerflow.agents.memory.updater.get_memory_data", return_value=current_memory),
+        patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+        patch("nova.agents.memory.updater.get_memory_data", return_value=current_memory),
     ):
         msg = MagicMock()
         msg.type = "human"
@@ -125,7 +125,7 @@ def test_apply_updates_skips_same_batch_duplicates_and_keeps_source_metadata() -
     }
 
     with patch(
-        "deerflow.agents.memory.updater.get_memory_config",
+        "nova.agents.memory.updater.get_memory_config",
         return_value=_memory_config(max_facts=100, fact_confidence_threshold=0.7),
     ):
         result = updater._apply_updates(current_memory, update_data, thread_id="thread-42")
@@ -169,7 +169,7 @@ def test_apply_updates_preserves_threshold_and_max_facts_trimming() -> None:
     }
 
     with patch(
-        "deerflow.agents.memory.updater.get_memory_config",
+        "nova.agents.memory.updater.get_memory_config",
         return_value=_memory_config(max_facts=2, fact_confidence_threshold=0.7),
     ):
         result = updater._apply_updates(current_memory, update_data, thread_id="thread-9")
@@ -197,7 +197,7 @@ def test_apply_updates_preserves_source_error() -> None:
     }
 
     with patch(
-        "deerflow.agents.memory.updater.get_memory_config",
+        "nova.agents.memory.updater.get_memory_config",
         return_value=_memory_config(max_facts=100, fact_confidence_threshold=0.7),
     ):
         result = updater._apply_updates(current_memory, update_data, thread_id="thread-correction")
@@ -221,7 +221,7 @@ def test_apply_updates_ignores_empty_source_error() -> None:
     }
 
     with patch(
-        "deerflow.agents.memory.updater.get_memory_config",
+        "nova.agents.memory.updater.get_memory_config",
         return_value=_memory_config(max_facts=100, fact_confidence_threshold=0.7),
     ):
         result = updater._apply_updates(current_memory, update_data, thread_id="thread-correction")
@@ -230,7 +230,7 @@ def test_apply_updates_ignores_empty_source_error() -> None:
 
 
 def test_clear_memory_data_resets_all_sections() -> None:
-    with patch("deerflow.agents.memory.updater._save_memory_to_file", return_value=True):
+    with patch("nova.agents.memory.updater._save_memory_to_file", return_value=True):
         result = clear_memory_data()
 
     assert result["version"] == "1.0"
@@ -262,8 +262,8 @@ def test_delete_memory_fact_removes_only_matching_fact() -> None:
     )
 
     with (
-        patch("deerflow.agents.memory.updater.get_memory_data", return_value=current_memory),
-        patch("deerflow.agents.memory.updater._save_memory_to_file", return_value=True),
+        patch("nova.agents.memory.updater.get_memory_data", return_value=current_memory),
+        patch("nova.agents.memory.updater._save_memory_to_file", return_value=True),
     ):
         result = delete_memory_fact("fact_delete")
 
@@ -272,8 +272,8 @@ def test_delete_memory_fact_removes_only_matching_fact() -> None:
 
 def test_create_memory_fact_appends_manual_fact() -> None:
     with (
-        patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-        patch("deerflow.agents.memory.updater._save_memory_to_file", return_value=True),
+        patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+        patch("nova.agents.memory.updater._save_memory_to_file", return_value=True),
     ):
         result = create_memory_fact(
             content="  User prefers concise code reviews.  ",
@@ -308,7 +308,7 @@ def test_create_memory_fact_rejects_invalid_confidence() -> None:
 
 
 def test_delete_memory_fact_raises_for_unknown_id() -> None:
-    with patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()):
+    with patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()):
         try:
             delete_memory_fact("fact_missing")
         except KeyError as exc:
@@ -334,7 +334,7 @@ def test_import_memory_data_saves_and_returns_imported_memory() -> None:
     mock_storage.save.return_value = True
     mock_storage.load.return_value = imported_memory
 
-    with patch("deerflow.agents.memory.updater.get_memory_storage", return_value=mock_storage):
+    with patch("nova.agents.memory.updater.get_memory_storage", return_value=mock_storage):
         result = import_memory_data(imported_memory)
 
     mock_storage.save.assert_called_once_with(imported_memory, None, user_id=None)
@@ -365,8 +365,8 @@ def test_update_memory_fact_updates_only_matching_fact() -> None:
     )
 
     with (
-        patch("deerflow.agents.memory.updater.get_memory_data", return_value=current_memory),
-        patch("deerflow.agents.memory.updater._save_memory_to_file", return_value=True),
+        patch("nova.agents.memory.updater.get_memory_data", return_value=current_memory),
+        patch("nova.agents.memory.updater._save_memory_to_file", return_value=True),
     ):
         result = update_memory_fact(
             fact_id="fact_edit",
@@ -398,8 +398,8 @@ def test_update_memory_fact_preserves_omitted_fields() -> None:
     )
 
     with (
-        patch("deerflow.agents.memory.updater.get_memory_data", return_value=current_memory),
-        patch("deerflow.agents.memory.updater._save_memory_to_file", return_value=True),
+        patch("nova.agents.memory.updater.get_memory_data", return_value=current_memory),
+        patch("nova.agents.memory.updater._save_memory_to_file", return_value=True),
     ):
         result = update_memory_fact(
             fact_id="fact_edit",
@@ -412,7 +412,7 @@ def test_update_memory_fact_preserves_omitted_fields() -> None:
 
 
 def test_update_memory_fact_raises_for_unknown_id() -> None:
-    with patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()):
+    with patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()):
         try:
             update_memory_fact(
                 fact_id="fact_missing",
@@ -442,7 +442,7 @@ def test_update_memory_fact_rejects_invalid_confidence() -> None:
 
     for confidence in (-0.1, 1.1, float("nan"), float("inf"), float("-inf")):
         with patch(
-            "deerflow.agents.memory.updater.get_memory_data",
+            "nova.agents.memory.updater.get_memory_data",
             return_value=current_memory,
         ):
             try:
@@ -570,9 +570,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=self._make_mock_model(content)),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True, fact_confidence_threshold=0.7, max_facts=100)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=mock_storage),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True, fact_confidence_threshold=0.7, max_facts=100)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=mock_storage),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -592,9 +592,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -616,9 +616,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=self._make_mock_model(list_content)),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -715,9 +715,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -740,9 +740,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -765,9 +765,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -790,9 +790,9 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -815,7 +815,7 @@ class TestUpdateMemoryStructuredResponse:
 
         with (
             patch(
-                "deerflow.agents.memory.updater._SYNC_MEMORY_UPDATER_EXECUTOR.submit",
+                "nova.agents.memory.updater._SYNC_MEMORY_UPDATER_EXECUTOR.submit",
                 side_effect=RuntimeError("executor down"),
             ),
         ):
@@ -853,9 +853,9 @@ class TestSyncUpdateIsolatesProviderClientPool:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -881,9 +881,9 @@ class TestSyncUpdateIsolatesProviderClientPool:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
             patch("asyncio.run", side_effect=AssertionError("asyncio.run must not be called from sync update path")),
         ):
             msg = MagicMock()
@@ -924,7 +924,7 @@ class TestFactDeduplicationCaseInsensitive:
         }
 
         with patch(
-            "deerflow.agents.memory.updater.get_memory_config",
+            "nova.agents.memory.updater.get_memory_config",
             return_value=_memory_config(max_facts=100, fact_confidence_threshold=0.7),
         ):
             result = updater._apply_updates(current_memory, update_data, thread_id="thread-b")
@@ -955,7 +955,7 @@ class TestFactDeduplicationCaseInsensitive:
         }
 
         with patch(
-            "deerflow.agents.memory.updater.get_memory_config",
+            "nova.agents.memory.updater.get_memory_config",
             return_value=_memory_config(max_facts=100, fact_confidence_threshold=0.7),
         ):
             result = updater._apply_updates(current_memory, update_data, thread_id="thread-b")
@@ -982,9 +982,9 @@ class TestReinforcementHint:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -1007,9 +1007,9 @@ class TestReinforcementHint:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -1032,9 +1032,9 @@ class TestReinforcementHint:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=MagicMock(return_value=True))),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -1084,9 +1084,9 @@ class TestFinalizeCacheIsolation:
 
         with (
             patch.object(updater, "_get_model", return_value=mock_model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True, fact_confidence_threshold=0.7)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=original_memory),
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=save_mock)),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True, fact_confidence_threshold=0.7)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=original_memory),
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=MagicMock(save=save_mock)),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -1133,9 +1133,9 @@ class TestUserIdForwarding:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()) as mock_load,
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=mock_storage),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()) as mock_load,
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=mock_storage),
         ):
             msg = MagicMock()
             msg.type = "human"
@@ -1162,9 +1162,9 @@ class TestUserIdForwarding:
 
         with (
             patch.object(updater, "_get_model", return_value=model),
-            patch("deerflow.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
-            patch("deerflow.agents.memory.updater.get_memory_data", return_value=_make_memory()) as mock_load,
-            patch("deerflow.agents.memory.updater.get_memory_storage", return_value=mock_storage),
+            patch("nova.agents.memory.updater.get_memory_config", return_value=_memory_config(enabled=True)),
+            patch("nova.agents.memory.updater.get_memory_data", return_value=_make_memory()) as mock_load,
+            patch("nova.agents.memory.updater.get_memory_storage", return_value=mock_storage),
         ):
             msg = MagicMock()
             msg.type = "human"

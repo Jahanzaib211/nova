@@ -14,9 +14,9 @@ import logging
 
 from langchain_core.tools import BaseTool, StructuredTool
 
-from deerflow.capabilities.registry import CapabilityRegistry
-from deerflow.capabilities.types import OpContext, Operation
-from deerflow.runtime.user_context import get_effective_user_id
+from nova.capabilities.registry import CapabilityRegistry
+from nova.capabilities.types import OpContext, Operation
+from nova.runtime.user_context import get_effective_user_id
 
 logger = logging.getLogger(__name__)
 

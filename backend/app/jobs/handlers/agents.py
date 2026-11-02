@@ -18,10 +18,10 @@ import asyncio
 import logging
 from typing import Any
 
-from deerflow.agents_registry.registry import AGENT_TASK_JOB
-from deerflow.config.app_config import get_app_config
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.registry import JobRegistry
+from nova.agents_registry.registry import AGENT_TASK_JOB
+from nova.config.app_config import get_app_config
+from nova.jobs.context import JobContext
+from nova.jobs.registry import JobRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _write_artifact(ctx: JobContext, agent: str, task: str, result: str) -> str 
     if not ctx.thread_id:
         return None
     try:
-        from deerflow.config.paths import get_paths
+        from nova.config.paths import get_paths
 
         out_dir = get_paths().thread_dir(ctx.thread_id, user_id=ctx.owner_user_id) / "user-data" / "outputs" / "agent-tasks"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -43,9 +43,9 @@ def _write_artifact(ctx: JobContext, agent: str, task: str, result: str) -> str 
 
 
 async def _run_subagent(ctx: JobContext, agent: str, task: str, model: str | None = None) -> str:
-    from deerflow.subagents import SubagentExecutor, get_subagent_config
-    from deerflow.subagents.executor import SubagentStatus, get_background_task_result
-    from deerflow.tools import get_available_tools
+    from nova.subagents import SubagentExecutor, get_subagent_config
+    from nova.subagents.executor import SubagentStatus, get_background_task_result
+    from nova.tools import get_available_tools
 
     config = get_app_config()
     sub_cfg = get_subagent_config(agent, app_config=config)
@@ -79,8 +79,8 @@ async def _run_subagent(ctx: JobContext, agent: str, task: str, model: str | Non
 
 
 async def _run_acp(ctx: JobContext, agent: str, task: str) -> str:
-    from deerflow.config.acp_config import get_acp_agents
-    from deerflow.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
+    from nova.config.acp_config import get_acp_agents
+    from nova.tools.builtins.invoke_acp_agent_tool import build_invoke_acp_agent_tool
 
     agents = get_acp_agents()
     if agent not in agents:

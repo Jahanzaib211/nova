@@ -5,15 +5,15 @@ import pytest
 from langchain_core.messages import ToolMessage
 from langgraph.errors import GraphInterrupt
 
-from deerflow.agents.middlewares.tool_error_handling_middleware import (
+from nova.agents.middlewares.tool_error_handling_middleware import (
     ToolErrorHandlingMiddleware,
     build_subagent_runtime_middlewares,
 )
-from deerflow.agents.middlewares.view_image_middleware import ViewImageMiddleware
-from deerflow.config.app_config import AppConfig, CircuitBreakerConfig
-from deerflow.config.guardrails_config import GuardrailsConfig
-from deerflow.config.model_config import ModelConfig
-from deerflow.config.sandbox_config import SandboxConfig
+from nova.agents.middlewares.view_image_middleware import ViewImageMiddleware
+from nova.config.app_config import AppConfig, CircuitBreakerConfig
+from nova.config.guardrails_config import GuardrailsConfig
+from nova.config.model_config import ModelConfig
+from nova.config.sandbox_config import SandboxConfig
 
 
 def _request(name: str = "web_search", tool_call_id: str | None = "tc-1"):
@@ -60,31 +60,31 @@ def _stub_runtime_middleware_imports(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.llm_error_handling_middleware",
+        "nova.agents.middlewares.llm_error_handling_middleware",
         _module(
-            "deerflow.agents.middlewares.llm_error_handling_middleware",
+            "nova.agents.middlewares.llm_error_handling_middleware",
             LLMErrorHandlingMiddleware=FakeLLMErrorHandlingMiddleware,
         ),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.thread_data_middleware",
-        _module("deerflow.agents.middlewares.thread_data_middleware", ThreadDataMiddleware=FakeMiddleware),
+        "nova.agents.middlewares.thread_data_middleware",
+        _module("nova.agents.middlewares.thread_data_middleware", ThreadDataMiddleware=FakeMiddleware),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.sandbox.middleware",
-        _module("deerflow.sandbox.middleware", SandboxMiddleware=FakeMiddleware),
+        "nova.sandbox.middleware",
+        _module("nova.sandbox.middleware", SandboxMiddleware=FakeMiddleware),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.dangling_tool_call_middleware",
-        _module("deerflow.agents.middlewares.dangling_tool_call_middleware", DanglingToolCallMiddleware=FakeMiddleware),
+        "nova.agents.middlewares.dangling_tool_call_middleware",
+        _module("nova.agents.middlewares.dangling_tool_call_middleware", DanglingToolCallMiddleware=FakeMiddleware),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.sandbox_audit_middleware",
-        _module("deerflow.agents.middlewares.sandbox_audit_middleware", SandboxAuditMiddleware=FakeMiddleware),
+        "nova.agents.middlewares.sandbox_audit_middleware",
+        _module("nova.agents.middlewares.sandbox_audit_middleware", SandboxAuditMiddleware=FakeMiddleware),
     )
 
 
@@ -104,31 +104,31 @@ def test_build_subagent_runtime_middlewares_threads_app_config_to_llm_middleware
 
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.llm_error_handling_middleware",
+        "nova.agents.middlewares.llm_error_handling_middleware",
         _module(
-            "deerflow.agents.middlewares.llm_error_handling_middleware",
+            "nova.agents.middlewares.llm_error_handling_middleware",
             LLMErrorHandlingMiddleware=FakeLLMErrorHandlingMiddleware,
         ),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.thread_data_middleware",
-        _module("deerflow.agents.middlewares.thread_data_middleware", ThreadDataMiddleware=FakeMiddleware),
+        "nova.agents.middlewares.thread_data_middleware",
+        _module("nova.agents.middlewares.thread_data_middleware", ThreadDataMiddleware=FakeMiddleware),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.sandbox.middleware",
-        _module("deerflow.sandbox.middleware", SandboxMiddleware=FakeMiddleware),
+        "nova.sandbox.middleware",
+        _module("nova.sandbox.middleware", SandboxMiddleware=FakeMiddleware),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.dangling_tool_call_middleware",
-        _module("deerflow.agents.middlewares.dangling_tool_call_middleware", DanglingToolCallMiddleware=FakeMiddleware),
+        "nova.agents.middlewares.dangling_tool_call_middleware",
+        _module("nova.agents.middlewares.dangling_tool_call_middleware", DanglingToolCallMiddleware=FakeMiddleware),
     )
     monkeypatch.setitem(
         sys.modules,
-        "deerflow.agents.middlewares.sandbox_audit_middleware",
-        _module("deerflow.agents.middlewares.sandbox_audit_middleware", SandboxAuditMiddleware=FakeMiddleware),
+        "nova.agents.middlewares.sandbox_audit_middleware",
+        _module("nova.agents.middlewares.sandbox_audit_middleware", SandboxAuditMiddleware=FakeMiddleware),
     )
 
     middlewares = build_subagent_runtime_middlewares(app_config=app_config, lazy_init=False)
@@ -137,8 +137,8 @@ def test_build_subagent_runtime_middlewares_threads_app_config_to_llm_middleware
     # 8 baseline (ToolOutputBudget, ThreadData, Sandbox, DanglingToolCall,
     # LLMErrorHandling, SecureShip, SandboxAudit, ToolErrorHandling)
     # + 1 SafetyFinishReasonMiddleware (enabled by default).
-    from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
-    from deerflow.agents.middlewares.tool_output_budget_middleware import ToolOutputBudgetMiddleware
+    from nova.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
+    from nova.agents.middlewares.tool_output_budget_middleware import ToolOutputBudgetMiddleware
 
     assert len(middlewares) == 9
     assert isinstance(middlewares[0], ToolOutputBudgetMiddleware)
@@ -259,10 +259,10 @@ def test_subagent_runtime_middlewares_attach_deferred_filter_when_setup_has_name
     """A subagent built with deferred MCP tools gets DeferredToolFilterMiddleware, positioned before SafetyFinishReasonMiddleware (mirrors the lead ordering)."""
     from langchain_core.tools import tool as as_tool
 
-    from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
-    from deerflow.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
-    from deerflow.tools.builtins.tool_search import build_deferred_tool_setup
-    from deerflow.tools.mcp_metadata import tag_mcp_tool
+    from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+    from nova.agents.middlewares.safety_finish_reason_middleware import SafetyFinishReasonMiddleware
+    from nova.tools.builtins.tool_search import build_deferred_tool_setup
+    from nova.tools.mcp_metadata import tag_mcp_tool
 
     app_config = _make_app_config()
     _stub_runtime_middleware_imports(monkeypatch)
@@ -286,8 +286,8 @@ def test_subagent_runtime_middlewares_attach_deferred_filter_when_setup_has_name
 
 def test_subagent_runtime_middlewares_skip_deferred_filter_without_names(monkeypatch):
     """No deferred setup (disabled / no MCP tool) -> no DeferredToolFilterMiddleware."""
-    from deerflow.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
-    from deerflow.tools.builtins.tool_search import DeferredToolSetup
+    from nova.agents.middlewares.deferred_tool_filter_middleware import DeferredToolFilterMiddleware
+    from nova.tools.builtins.tool_search import DeferredToolSetup
 
     app_config = _make_app_config()
     _stub_runtime_middleware_imports(monkeypatch)

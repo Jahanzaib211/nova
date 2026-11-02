@@ -28,7 +28,7 @@ class TestRunLifecycleStatus:
     """Verify RunLifecycleStatus enum states and properties."""
 
     def test_has_all_states(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus
+        from nova.runtime.lifecycle import RunLifecycleStatus
 
         expected = {
             "created",
@@ -47,7 +47,7 @@ class TestRunLifecycleStatus:
         assert actual == expected
 
     def test_terminal_states(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus
+        from nova.runtime.lifecycle import RunLifecycleStatus
 
         assert RunLifecycleStatus.COMPLETED.is_terminal
         assert RunLifecycleStatus.FAILED.is_terminal
@@ -57,7 +57,7 @@ class TestRunLifecycleStatus:
         assert not RunLifecycleStatus.CREATED.is_terminal
 
     def test_active_states(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus
+        from nova.runtime.lifecycle import RunLifecycleStatus
 
         assert RunLifecycleStatus.RUNNING.is_active
         assert RunLifecycleStatus.INITIALIZING.is_active
@@ -66,7 +66,7 @@ class TestRunLifecycleStatus:
         assert not RunLifecycleStatus.PAUSED.is_active
 
     def test_transitional_states(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus
+        from nova.runtime.lifecycle import RunLifecycleStatus
 
         assert RunLifecycleStatus.CHECKPOINT.is_transitional
         assert RunLifecycleStatus.PAUSED.is_transitional
@@ -74,7 +74,7 @@ class TestRunLifecycleStatus:
         assert not RunLifecycleStatus.RUNNING.is_transitional
 
     def test_is_str_enum(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus
+        from nova.runtime.lifecycle import RunLifecycleStatus
 
         assert isinstance(RunLifecycleStatus.RUNNING, str)
         assert RunLifecycleStatus.RUNNING == "running"
@@ -84,42 +84,42 @@ class TestAdaptRunStatus:
     """Verify adapters between existing enums and RunLifecycleStatus."""
 
     def test_adapt_pending_to_created(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("pending") == RunLifecycleStatus.CREATED
 
     def test_adapt_running_to_running(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("running") == RunLifecycleStatus.RUNNING
 
     def test_adapt_success_to_completed(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("success") == RunLifecycleStatus.COMPLETED
 
     def test_adapt_error_to_failed(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("error") == RunLifecycleStatus.FAILED
 
     def test_adapt_timeout_to_failed(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("timeout") == RunLifecycleStatus.FAILED
 
     def test_adapt_interrupted_to_cancelled(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("interrupted") == RunLifecycleStatus.CANCELLED
 
     def test_adapt_enum_passthrough(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status(RunLifecycleStatus.RUNNING) == RunLifecycleStatus.RUNNING
 
     def test_adapt_unknown_defaults_to_running(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, adapt_run_status
 
         assert adapt_run_status("bogus") == RunLifecycleStatus.RUNNING
 
@@ -128,27 +128,27 @@ class TestToRunStatus:
     """Verify conversion back to legacy RunStatus strings."""
 
     def test_completed_to_success(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, to_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, to_run_status
 
         assert to_run_status(RunLifecycleStatus.COMPLETED) == "success"
 
     def test_failed_to_error(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, to_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, to_run_status
 
         assert to_run_status(RunLifecycleStatus.FAILED) == "error"
 
     def test_cancelled_to_interrupted(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, to_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, to_run_status
 
         assert to_run_status(RunLifecycleStatus.CANCELLED) == "interrupted"
 
     def test_running_to_running(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, to_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, to_run_status
 
         assert to_run_status(RunLifecycleStatus.RUNNING) == "running"
 
     def test_created_to_pending(self):
-        from deerflow.runtime.lifecycle import RunLifecycleStatus, to_run_status
+        from nova.runtime.lifecycle import RunLifecycleStatus, to_run_status
 
         assert to_run_status(RunLifecycleStatus.CREATED) == "pending"
 
@@ -162,7 +162,7 @@ class TestDomainEvent:
     """Verify domain event creation and immutability."""
 
     def test_base_event_creation(self):
-        from deerflow.events.event import DomainEvent
+        from nova.events.event import DomainEvent
 
         event = DomainEvent(run_id="r1", thread_id="t1", correlation_id="c1")
         assert event.run_id == "r1"
@@ -174,20 +174,20 @@ class TestDomainEvent:
         assert event.timestamp  # non-empty
 
     def test_event_is_frozen(self):
-        from deerflow.events.event import DomainEvent
+        from nova.events.event import DomainEvent
 
         event = DomainEvent(run_id="r1")
         with pytest.raises(AttributeError):
             event.run_id = "r2"  # type: ignore[misc]
 
     def test_event_payload(self):
-        from deerflow.events.event import DomainEvent
+        from nova.events.event import DomainEvent
 
         event = DomainEvent(payload={"key": "value"})
         assert event.payload == {"key": "value"}
 
     def test_lifecycle_event_type_names(self):
-        from deerflow.events.event import (
+        from nova.events.event import (
             RunArchived,
             RunCancelled,
             RunCompleted,
@@ -212,7 +212,7 @@ class TestDomainEvent:
         assert RunInitialized().event_type == "RunInitialized"
 
     def test_non_lifecycle_events(self):
-        from deerflow.events.event import (
+        from nova.events.event import (
             ArtifactCreated,
             BrowserStarted,
             BrowserStopped,
@@ -240,12 +240,12 @@ class TestEventBus:
     """Verify EventBus subscribe, publish, unsubscribe, replay."""
 
     def setup_method(self):
-        from deerflow.events.bus import EventBus
+        from nova.events.bus import EventBus
 
         self.bus = EventBus()
 
     def test_subscribe_and_publish(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         received = []
         self.bus.subscribe(RunCreated, lambda e: received.append(e))
@@ -257,7 +257,7 @@ class TestEventBus:
         assert received[0].run_id == "r1"
 
     def test_multiple_handlers(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         results_a = []
         results_b = []
@@ -270,7 +270,7 @@ class TestEventBus:
         assert results_b == ["b"]
 
     def test_unsubscribe(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         received = []
         handler = lambda e: received.append(e)
@@ -286,13 +286,13 @@ class TestEventBus:
         assert len(received) == 1  # not called again
 
     def test_unsubscribe_nonexistent(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         removed = self.bus.unsubscribe(RunCreated, lambda e: None)
         assert removed is False
 
     def test_publish_records_history(self):
-        from deerflow.events.event import RunCompleted, RunCreated
+        from nova.events.event import RunCompleted, RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.publish(RunCompleted(run_id="r1"))
@@ -300,7 +300,7 @@ class TestEventBus:
         assert self.bus.history_size == 2
 
     def test_replay_all(self):
-        from deerflow.events.event import RunCompleted, RunCreated
+        from nova.events.event import RunCompleted, RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.publish(RunCompleted(run_id="r1"))
@@ -309,7 +309,7 @@ class TestEventBus:
         assert len(history) == 2
 
     def test_replay_filtered(self):
-        from deerflow.events.event import RunCompleted, RunCreated
+        from nova.events.event import RunCompleted, RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.publish(RunCompleted(run_id="r1"))
@@ -319,7 +319,7 @@ class TestEventBus:
         assert len(created) == 2
 
     def test_replay_with_limit(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         for i in range(5):
             self.bus.publish(RunCreated(run_id=f"r{i}"))
@@ -328,14 +328,14 @@ class TestEventBus:
         assert len(history) == 3
 
     def test_clear_history(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         self.bus.publish(RunCreated(run_id="r1"))
         self.bus.clear_history()
         assert self.bus.history_size == 0
 
     def test_handler_exception_does_not_break_other_handlers(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         def bad_handler(e):
             raise ValueError("boom")
@@ -348,14 +348,14 @@ class TestEventBus:
         assert good_results == ["ok"]
 
     def test_handler_count(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         self.bus.subscribe(RunCreated, lambda e: None)
         self.bus.subscribe(RunCreated, lambda e: None)
         assert self.bus.handler_count(RunCreated) == 2
 
     def test_base_domain_event_handler_gets_all_events(self):
-        from deerflow.events.event import DomainEvent, RunCompleted, RunCreated
+        from nova.events.event import DomainEvent, RunCompleted, RunCreated
 
         received = []
         self.bus.subscribe(DomainEvent, lambda e: received.append(e.event_type))
@@ -366,7 +366,7 @@ class TestEventBus:
         assert received == ["RunCreated", "RunCompleted"]
 
     def test_history_max_size(self):
-        from deerflow.events.event import RunCreated
+        from nova.events.event import RunCreated
 
         bus = self.bus
         bus._max_history = 5
@@ -384,9 +384,9 @@ class TestEventPublisher:
     """Verify EventPublisher automatic metadata injection."""
 
     def test_publish_injects_metadata(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCreated
-        from deerflow.events.publisher import EventPublisher
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCreated
+        from nova.events.publisher import EventPublisher
 
         bus = EventBus()
         publisher = EventPublisher(bus)
@@ -410,9 +410,9 @@ class TestEventPublisher:
         assert event is received[0]
 
     def test_publish_uses_singleton_bus_by_default(self):
-        from deerflow.events.bus import event_bus
-        from deerflow.events.event import RunCreated
-        from deerflow.events.publisher import EventPublisher
+        from nova.events.bus import event_bus
+        from nova.events.event import RunCreated
+        from nova.events.publisher import EventPublisher
 
         publisher = EventPublisher()
         # Should use the module-level event_bus (not crash)
@@ -431,9 +431,9 @@ class TestEventSubscriber:
     """Verify EventSubscriber decorator-based registration."""
 
     def test_decorator_registration(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCreated
-        from deerflow.events.subscriber import EventSubscriber
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCreated
+        from nova.events.subscriber import EventSubscriber
 
         bus = EventBus()
         subscriber = EventSubscriber()
@@ -449,9 +449,9 @@ class TestEventSubscriber:
         assert received == ["r1"]
 
     def test_multiple_decorators(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCompleted, RunCreated
-        from deerflow.events.subscriber import EventSubscriber
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCompleted, RunCreated
+        from nova.events.subscriber import EventSubscriber
 
         bus = EventBus()
         subscriber = EventSubscriber()
@@ -481,7 +481,7 @@ class TestEventRegistry:
     """Verify EventRegistry event type discovery."""
 
     def test_all_lifecycle_events_registered(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         lifecycle = event_registry.list_by_category("lifecycle")
         assert "RunCreated" in lifecycle
@@ -492,34 +492,34 @@ class TestEventRegistry:
         assert "RunArchived" in lifecycle
 
     def test_workspace_events_registered(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         workspace = event_registry.list_by_category("workspace")
         assert "WorkspaceMounted" in workspace
         assert "WorkspaceReleased" in workspace
 
     def test_browser_events_registered(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         browser = event_registry.list_by_category("browser")
         assert "BrowserStarted" in browser
         assert "BrowserStopped" in browser
 
     def test_health_events_registered(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         health = event_registry.list_by_category("health")
         assert "HealthChanged" in health
 
     def test_get_event_metadata(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         meta = event_registry.get("RunCreated")
         assert meta is not None
         assert meta.category == "lifecycle"
 
     def test_list_events(self):
-        from deerflow.events.registry import event_registry
+        from nova.events.registry import event_registry
 
         all_events = event_registry.list_events()
         assert len(all_events) >= 17  # at least 17 events registered
@@ -535,9 +535,9 @@ class TestRunServiceImplLifecycleEvents:
 
     @pytest.mark.asyncio
     async def test_create_publishes_run_created(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCreated
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCreated
+        from nova.services.implementations import RunServiceImpl
 
         bus = EventBus()
         mock_manager = AsyncMock()
@@ -570,9 +570,9 @@ class TestRunServiceImplLifecycleEvents:
 
     @pytest.mark.asyncio
     async def test_cancel_publishes_run_cancelled(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCancelled
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCancelled
+        from nova.services.implementations import RunServiceImpl
 
         bus = EventBus()
         mock_manager = AsyncMock()
@@ -592,9 +592,9 @@ class TestRunServiceImplLifecycleEvents:
 
     @pytest.mark.asyncio
     async def test_set_status_publishes_lifecycle_event(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCompleted, RunFailed
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCompleted, RunFailed
+        from nova.services.implementations import RunServiceImpl
 
         bus = EventBus()
         mock_manager = AsyncMock()
@@ -624,11 +624,11 @@ class TestRunServiceImplLifecycleEvents:
 class TestDiagnosticsServiceEventBusIntegration:
     """Verify DiagnosticsService subscribes to EventBus and records events."""
 
-    @patch("deerflow.services.implementations.DiagnosticsServiceImpl.record")
+    @patch("nova.services.implementations.DiagnosticsServiceImpl.record")
     def test_subscribes_to_all_events(self, mock_record):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCreated
-        from deerflow.services.implementations import DiagnosticsServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCreated
+        from nova.services.implementations import DiagnosticsServiceImpl
 
         bus = EventBus()
         diag = DiagnosticsServiceImpl()
@@ -642,11 +642,11 @@ class TestDiagnosticsServiceEventBusIntegration:
         assert call_args[1]["run_id"] == "r1"
         assert call_args[1]["correlation_id"] == "c1"
 
-    @patch("deerflow.services.implementations.DiagnosticsServiceImpl.record")
+    @patch("nova.services.implementations.DiagnosticsServiceImpl.record")
     def test_records_multiple_event_types(self, mock_record):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import RunCompleted, RunCreated
-        from deerflow.services.implementations import DiagnosticsServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import RunCompleted, RunCreated
+        from nova.services.implementations import DiagnosticsServiceImpl
 
         bus = EventBus()
         diag = DiagnosticsServiceImpl()
@@ -671,9 +671,9 @@ class TestHealthServiceImplHealthChangedEvents:
 
     @pytest.mark.asyncio
     async def test_publishes_health_changed_on_transition(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import HealthChanged
-        from deerflow.services.implementations import HealthServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import HealthChanged
+        from nova.services.implementations import HealthServiceImpl
 
         bus = EventBus()
         healthy_probe = AsyncMock(return_value=MagicMock(healthy=True, message="ok"))
@@ -688,9 +688,9 @@ class TestHealthServiceImplHealthChangedEvents:
 
     @pytest.mark.asyncio
     async def test_no_event_if_state_unchanged(self):
-        from deerflow.events.bus import EventBus
-        from deerflow.events.event import HealthChanged
-        from deerflow.services.implementations import HealthServiceImpl
+        from nova.events.bus import EventBus
+        from nova.events.event import HealthChanged
+        from nova.services.implementations import HealthServiceImpl
 
         bus = EventBus()
         healthy_probe = AsyncMock(return_value=MagicMock(healthy=True, message="ok"))
@@ -713,17 +713,17 @@ class TestModuleLevelEventBus:
     """Verify the module-level event_bus singleton works."""
 
     def test_singleton_exists(self):
-        from deerflow.events.bus import event_bus
+        from nova.events.bus import event_bus
 
         assert event_bus is not None
 
     def test_singleton_is_event_bus(self):
-        from deerflow.events.bus import EventBus, event_bus
+        from nova.events.bus import EventBus, event_bus
 
         assert isinstance(event_bus, EventBus)
 
     def test_events_init_exports(self):
-        from deerflow.events import (
+        from nova.events import (
             DomainEvent,
             EventBus,
             EventPublisher,

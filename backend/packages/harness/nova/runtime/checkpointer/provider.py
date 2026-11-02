@@ -7,7 +7,7 @@ Supported backends: memory, sqlite, postgres.
 
 Usage::
 
-    from deerflow.runtime.checkpointer.provider import get_checkpointer, checkpointer_context
+    from nova.runtime.checkpointer.provider import get_checkpointer, checkpointer_context
 
     # Singleton — reused across calls, closed on process exit
     cp = get_checkpointer()
@@ -26,9 +26,9 @@ from collections.abc import Iterator
 
 from langgraph.types import Checkpointer
 
-from deerflow.config.app_config import get_app_config
-from deerflow.config.checkpointer_config import CheckpointerConfig, ensure_config_loaded
-from deerflow.runtime.store._sqlite_utils import ensure_sqlite_parent_dir, resolve_sqlite_conn_str
+from nova.config.app_config import get_app_config
+from nova.config.checkpointer_config import CheckpointerConfig, ensure_config_loaded
+from nova.runtime.store._sqlite_utils import ensure_sqlite_parent_dir, resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def get_checkpointer() -> Checkpointer:
         if _checkpointer is not None:
             return _checkpointer
 
-        from deerflow.config.checkpointer_config import get_checkpointer_config
+        from nova.config.checkpointer_config import get_checkpointer_config
 
         config = get_checkpointer_config()
 

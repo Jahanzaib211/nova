@@ -18,9 +18,9 @@ from app.channels.runtime_config_store import (
 )
 from app.gateway import admin_ops
 from app.gateway.deps import require_admin_user
-from deerflow.config.channel_connections_config import ChannelConnectionsConfig
-from deerflow.persistence.channel_connections import ChannelConnectionRepository
-from deerflow.persistence.engine import get_session_factory
+from nova.config.channel_connections_config import ChannelConnectionsConfig
+from nova.persistence.channel_connections import ChannelConnectionRepository
+from nova.persistence.engine import get_session_factory
 
 router = APIRouter(prefix="/api/channels", tags=["channel-connections"])
 logger = logging.getLogger(__name__)
@@ -158,7 +158,7 @@ def _get_user_id(request: Request) -> str:
 
 
 def _get_app_config():
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     return get_app_config()
 

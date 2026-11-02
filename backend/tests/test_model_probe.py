@@ -12,8 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.models import probe as probe_module
-from deerflow.models.probe import PROBE_PROMPT, probe_model
+from nova.models import probe as probe_module
+from nova.models.probe import PROBE_PROMPT, probe_model
 
 
 class _Config:
@@ -40,7 +40,7 @@ def _fake_factory(monkeypatch, reply):
         calls.append({"attach_tracing": attach_tracing})
         return _Model()
 
-    monkeypatch.setattr("deerflow.models.factory.create_chat_model", _create)
+    monkeypatch.setattr("nova.models.factory.create_chat_model", _create)
     return calls
 
 
@@ -67,8 +67,8 @@ def test_probe_reports_errors_and_unknown_models(monkeypatch):
 
 def test_capability_and_router_share_the_probe(monkeypatch):
     from app.gateway.routers import models as models_router
-    from deerflow.capabilities.modules import models as models_module
-    from deerflow.capabilities.types import OpContext
+    from nova.capabilities.modules import models as models_module
+    from nova.capabilities.types import OpContext
 
     seen = []
 

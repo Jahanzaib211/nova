@@ -1,6 +1,6 @@
-from deerflow.runtimes.registry import RuntimeRegistry, get_runtime_registry, reset_runtime_registry
-from deerflow.runtimes.transcript import transcript_for_prompt
-from deerflow.runtimes.types import (
+from nova.runtimes.registry import RuntimeRegistry, get_runtime_registry, reset_runtime_registry
+from nova.runtimes.transcript import transcript_for_prompt
+from nova.runtimes.types import (
     DEFAULT_MODE,
     NATIVE,
     PERMISSION_MODES,

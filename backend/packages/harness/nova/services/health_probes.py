@@ -67,7 +67,7 @@ async def probe_database() -> ProbeStatus:
     try:
         from sqlalchemy import text
 
-        from deerflow.persistence.engine import get_session_factory
+        from nova.persistence.engine import get_session_factory
 
         factory = get_session_factory()
         if factory is None:
@@ -129,7 +129,7 @@ async def probe_sandbox_provider() -> ProbeStatus:
     for a health endpoint. The watchdog's CDP probe covers live reachability.
     """
     try:
-        from deerflow.config.app_config import get_app_config
+        from nova.config.app_config import get_app_config
 
         sandbox = getattr(get_app_config(), "sandbox", None)
         if sandbox is None:

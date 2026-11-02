@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from deerflow.workspace.scanners.ignore import GitignoreParser, build_gitignore_matcher, should_ignore_name
+from nova.workspace.scanners.ignore import GitignoreParser, build_gitignore_matcher, should_ignore_name
 
 
 @dataclass

@@ -6,7 +6,7 @@ import logging
 import os
 from types import SimpleNamespace
 
-from deerflow.runtime.user_context import DEFAULT_USER_ID
+from nova.runtime.user_context import DEFAULT_USER_ID
 
 AUTH_DISABLED_ENV_VAR = "DEER_FLOW_AUTH_DISABLED"
 AUTH_DISABLED_USER_ID = DEFAULT_USER_ID

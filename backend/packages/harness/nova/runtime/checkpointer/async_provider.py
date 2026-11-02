@@ -7,12 +7,12 @@ Supported backends: memory, sqlite, postgres.
 
 Usage (e.g. FastAPI lifespan)::
 
-    from deerflow.runtime.checkpointer.async_provider import make_checkpointer
+    from nova.runtime.checkpointer.async_provider import make_checkpointer
 
     async with make_checkpointer() as checkpointer:
         app.state.checkpointer = checkpointer  # InMemorySaver if not configured
 
-For sync usage see :mod:`deerflow.runtime.checkpointer.provider`.
+For sync usage see :mod:`nova.runtime.checkpointer.provider`.
 """
 
 from __future__ import annotations
@@ -24,13 +24,13 @@ from collections.abc import AsyncIterator
 
 from langgraph.types import Checkpointer
 
-from deerflow.config.app_config import AppConfig, get_app_config
-from deerflow.runtime.checkpointer.provider import (
+from nova.config.app_config import AppConfig, get_app_config
+from nova.runtime.checkpointer.provider import (
     POSTGRES_CONN_REQUIRED,
     POSTGRES_INSTALL,
     SQLITE_INSTALL,
 )
-from deerflow.runtime.store._sqlite_utils import ensure_sqlite_parent_dir, resolve_sqlite_conn_str
+from nova.runtime.store._sqlite_utils import ensure_sqlite_parent_dir, resolve_sqlite_conn_str
 
 logger = logging.getLogger(__name__)
 

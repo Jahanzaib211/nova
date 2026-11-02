@@ -22,8 +22,8 @@ import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 
-from deerflow.execution.adapters.base import BaseAdapter
-from deerflow.execution.models import (
+from nova.execution.adapters.base import BaseAdapter
+from nova.execution.models import (
     ExecutionClass,
     ExecutionRequest,
     ExecutionResult,

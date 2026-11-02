@@ -73,7 +73,7 @@ class ToolContext:
                 raise ValueError("Thread ID not available in tool context")
 
             if self.sandbox_provider is None:
-                from deerflow.sandbox.sandbox_provider import get_sandbox_provider
+                from nova.sandbox.sandbox_provider import get_sandbox_provider
 
                 self.sandbox_provider = get_sandbox_provider()
 

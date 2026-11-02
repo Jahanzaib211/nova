@@ -35,10 +35,10 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-import deerflow.sandbox as sandbox_pkg
+import nova.sandbox as sandbox_pkg
 from app.gateway.routers import sandbox as sandbox_router
-from deerflow.persistence.thread_meta.memory import MemoryThreadMetaStore
-from deerflow.runtime.user_context import reset_current_user, set_current_user
+from nova.persistence.thread_meta.memory import MemoryThreadMetaStore
+from nova.runtime.user_context import reset_current_user, set_current_user
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 

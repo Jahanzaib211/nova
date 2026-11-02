@@ -82,13 +82,13 @@ class TestTheProducerIsOffByDefault:
     the deployment's frontend is known to understand it."""
 
     def test_streaming_is_disabled_unless_configured(self):
-        from deerflow.config.sandbox_config import SandboxConfig
+        from nova.config.sandbox_config import SandboxConfig
 
         assert SandboxConfig(use="test").stream_terminal_output is False
 
     def test_bash_takes_the_plain_path_when_the_flag_is_off(self, monkeypatch):
-        import deerflow.tools.builtins.workspace_tools  # noqa: F401 - import-cycle order
-        from deerflow.sandbox import tools as sandbox_tools
+        import nova.tools.builtins.workspace_tools  # noqa: F401 - import-cycle order
+        from nova.sandbox import tools as sandbox_tools
 
         monkeypatch.setattr(sandbox_tools, "_terminal_streaming_enabled", lambda: False)
         assert sandbox_tools._terminal_streaming_enabled() is False

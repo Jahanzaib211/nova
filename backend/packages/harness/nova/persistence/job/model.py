@@ -1,7 +1,7 @@
 """Job runner tables: jobs, job_events, job_schedules, job_workers.
 
 Statuses and event types are pinned to ``contracts/job_status_contract.json``
-(see ``deerflow.jobs.status``). Rows are owner-scoped like ``runs``
+(see ``nova.jobs.status``). Rows are owner-scoped like ``runs``
 (``owner_user_id``), and a job may belong to a thread so its progress can be
 mirrored into that thread's Agent's Computer.
 """
@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from deerflow.persistence.base import Base
+from nova.persistence.base import Base
 
 
 def _now() -> datetime:

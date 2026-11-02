@@ -57,7 +57,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
 if TYPE_CHECKING:
-    from deerflow.config.loop_detection_config import LoopDetectionConfig
+    from nova.config.loop_detection_config import LoopDetectionConfig
 
 logger = logging.getLogger(__name__)
 

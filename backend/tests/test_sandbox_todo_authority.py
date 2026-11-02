@@ -47,7 +47,7 @@ class TestWriterNoLongerSkipsContainerSandboxes:
     )
     def test_thread_id_from_config_is_used_regardless_of_sandbox_id(self, tmp_path, monkeypatch, sandbox_id):
         """A hash sandbox id must no longer disable the write."""
-        from deerflow.agents.middlewares import observe_adjust_middleware as mod
+        from nova.agents.middlewares import observe_adjust_middleware as mod
 
         written = {}
 
@@ -57,8 +57,8 @@ class TestWriterNoLongerSkipsContainerSandboxes:
                 written["dir"] = d
                 return d
 
-        monkeypatch.setattr("deerflow.config.paths.get_paths", lambda: _Paths())
-        monkeypatch.setattr("deerflow.runtime.user_context.get_effective_user_id", lambda: "u1")
+        monkeypatch.setattr("nova.config.paths.get_paths", lambda: _Paths())
+        monkeypatch.setattr("nova.runtime.user_context.get_effective_user_id", lambda: "u1")
 
         state = {"sandbox": {"sandbox_id": sandbox_id}}
         mod._write_todo_md_file([{"content": "ship", "status": "pending"}], state, "thread-42")
@@ -68,7 +68,7 @@ class TestWriterNoLongerSkipsContainerSandboxes:
         assert "ship" in todo_file.read_text()
 
     def test_no_thread_id_anywhere_is_a_clean_skip(self, monkeypatch):
-        from deerflow.agents.middlewares import observe_adjust_middleware as mod
+        from nova.agents.middlewares import observe_adjust_middleware as mod
 
         # Must not raise, must not write.
         mod._write_todo_md_file([{"content": "x", "status": "pending"}], {"sandbox": {"sandbox_id": "hash"}}, None)
@@ -88,6 +88,6 @@ class TestThreadIdFromConfig:
         ],
     )
     def test_tolerates_every_config_shape(self, config, expected):
-        from deerflow.agents.middlewares.observe_adjust_middleware import _thread_id_from_config
+        from nova.agents.middlewares.observe_adjust_middleware import _thread_id_from_config
 
         assert _thread_id_from_config(config) == expected

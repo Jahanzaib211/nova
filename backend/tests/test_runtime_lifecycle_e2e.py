@@ -330,7 +330,7 @@ def test_stream_run_executes_real_lead_agent_setup_agent_business_path(isolated_
 
     with (
         patch(
-            "deerflow.agents.lead_agent.agent.create_chat_model",
+            "nova.agents.lead_agent.agent.create_chat_model",
             new=_build_fake_setup_agent_model(agent_name),
         ),
         TestClient(isolated_app) as client,
@@ -429,7 +429,7 @@ def test_cancel_interrupt_stops_running_background_run(isolated_app):
 async def test_sse_consumer_disconnect_cancels_inflight_run():
     """A disconnected SSE request should cancel an in-flight run when configured."""
     from app.gateway.services import sse_consumer
-    from deerflow.runtime import DisconnectMode, MemoryStreamBridge, RunManager, RunStatus
+    from nova.runtime import DisconnectMode, MemoryStreamBridge, RunManager, RunStatus
 
     bridge = MemoryStreamBridge()
     run_manager = RunManager()

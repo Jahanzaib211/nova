@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from deerflow.services.protocols import (
+from nova.services.protocols import (
     ArtifactService,
     BrowserService,
     ConfigurationService,
@@ -25,7 +25,7 @@ from deerflow.services.protocols import (
     TerminalService,
     WorkspaceService,
 )
-from deerflow.services.types import (
+from nova.services.types import (
     DiagnosticsRecord,
     HealthReport,
     ProbeResult,
@@ -44,7 +44,7 @@ class TestProtocolCompliance:
     """Verify that each implementation has the expected protocol methods."""
 
     def test_run_service_impl_has_methods(self):
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.services.implementations import RunServiceImpl
 
         mock_manager = MagicMock()
         impl = RunServiceImpl(mock_manager)
@@ -57,14 +57,14 @@ class TestProtocolCompliance:
         assert asyncio.iscoroutinefunction(impl.get)
 
     def test_workspace_service_impl_has_methods(self):
-        from deerflow.services.implementations import WorkspaceServiceImpl
+        from nova.services.implementations import WorkspaceServiceImpl
 
         impl = WorkspaceServiceImpl()
         assert hasattr(impl, "resolve_paths")
         assert hasattr(impl, "ensure_directories")
 
     def test_repository_service_impl_has_methods(self):
-        from deerflow.services.implementations import RepositoryServiceImpl
+        from nova.services.implementations import RepositoryServiceImpl
 
         mock_store = MagicMock()
         impl = RepositoryServiceImpl(mock_store)
@@ -74,7 +74,7 @@ class TestProtocolCompliance:
         assert asyncio.iscoroutinefunction(impl.put)
 
     def test_browser_service_impl_has_methods(self):
-        from deerflow.services.implementations import BrowserServiceImpl
+        from nova.services.implementations import BrowserServiceImpl
 
         impl = BrowserServiceImpl()
         assert hasattr(impl, "check")
@@ -82,14 +82,14 @@ class TestProtocolCompliance:
         assert asyncio.iscoroutinefunction(impl.check)
 
     def test_terminal_service_impl_has_methods(self):
-        from deerflow.services.implementations import TerminalServiceImpl
+        from nova.services.implementations import TerminalServiceImpl
 
         impl = TerminalServiceImpl()
         assert hasattr(impl, "execute")
         assert asyncio.iscoroutinefunction(impl.execute)
 
     def test_artifact_service_impl_has_methods(self):
-        from deerflow.services.implementations import ArtifactServiceImpl
+        from nova.services.implementations import ArtifactServiceImpl
 
         impl = ArtifactServiceImpl()
         assert hasattr(impl, "get")
@@ -97,7 +97,7 @@ class TestProtocolCompliance:
         assert asyncio.iscoroutinefunction(impl.get)
 
     def test_health_service_impl_has_methods(self):
-        from deerflow.services.implementations import HealthServiceImpl
+        from nova.services.implementations import HealthServiceImpl
 
         impl = HealthServiceImpl()
         assert hasattr(impl, "check_all")
@@ -105,21 +105,21 @@ class TestProtocolCompliance:
         assert asyncio.iscoroutinefunction(impl.check_all)
 
     def test_recovery_service_impl_has_methods(self):
-        from deerflow.services.implementations import RecoveryServiceImpl
+        from nova.services.implementations import RecoveryServiceImpl
 
         impl = RecoveryServiceImpl()
         assert hasattr(impl, "recover")
         assert asyncio.iscoroutinefunction(impl.recover)
 
     def test_configuration_service_impl_has_methods(self):
-        from deerflow.services.implementations import ConfigurationServiceImpl
+        from nova.services.implementations import ConfigurationServiceImpl
 
         impl = ConfigurationServiceImpl()
         assert hasattr(impl, "get_config")
         assert hasattr(impl, "get_config_value")
 
     def test_diagnostics_service_impl_has_methods(self):
-        from deerflow.services.implementations import DiagnosticsServiceImpl
+        from nova.services.implementations import DiagnosticsServiceImpl
 
         impl = DiagnosticsServiceImpl()
         assert hasattr(impl, "record")
@@ -174,7 +174,7 @@ class TestTypes:
 
 class TestRunServiceImpl:
     def test_create_delegates_to_manager(self):
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.services.implementations import RunServiceImpl
 
         mock_manager = MagicMock()
         mock_record = MagicMock()
@@ -197,7 +197,7 @@ class TestRunServiceImpl:
         mock_manager.create.assert_called_once()
 
     def test_get_returns_none_when_not_found(self):
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.services.implementations import RunServiceImpl
 
         mock_manager = MagicMock()
         mock_manager.get = AsyncMock(return_value=None)
@@ -207,7 +207,7 @@ class TestRunServiceImpl:
         assert result is None
 
     def test_cancel_delegates(self):
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.services.implementations import RunServiceImpl
 
         mock_manager = MagicMock()
         mock_manager.cancel = AsyncMock(return_value=True)
@@ -217,7 +217,7 @@ class TestRunServiceImpl:
         assert result is True
 
     def test_create_or_reject_delegates(self):
-        from deerflow.services.implementations import RunServiceImpl
+        from nova.services.implementations import RunServiceImpl
 
         mock_manager = MagicMock()
         mock_record = MagicMock()
@@ -247,7 +247,7 @@ class TestRunServiceImpl:
 
 class TestWorkspaceServiceImpl:
     def test_resolve_paths_default_user(self):
-        from deerflow.services.implementations import WorkspaceServiceImpl
+        from nova.services.implementations import WorkspaceServiceImpl
 
         impl = WorkspaceServiceImpl(base_dir=".deer-flow")
         paths = impl.resolve_paths("thread-123")
@@ -255,14 +255,14 @@ class TestWorkspaceServiceImpl:
         assert "default" in paths.workspace
 
     def test_resolve_paths_custom_user(self):
-        from deerflow.services.implementations import WorkspaceServiceImpl
+        from nova.services.implementations import WorkspaceServiceImpl
 
         impl = WorkspaceServiceImpl(base_dir=".deer-flow")
         paths = impl.resolve_paths("thread-123", user_id="alice")
         assert "alice" in paths.workspace
 
     def test_ensure_directories_creates_dirs(self, tmp_path):
-        from deerflow.services.implementations import WorkspaceServiceImpl
+        from nova.services.implementations import WorkspaceServiceImpl
 
         impl = WorkspaceServiceImpl(base_dir=str(tmp_path / "df"))
         paths = impl.ensure_directories("t1")
@@ -280,7 +280,7 @@ class TestWorkspaceServiceImpl:
 
 class TestRepositoryServiceImpl:
     def test_put_delegates_to_store(self):
-        from deerflow.services.implementations import RepositoryServiceImpl
+        from nova.services.implementations import RepositoryServiceImpl
 
         mock_store = MagicMock()
         mock_store.put = AsyncMock()
@@ -290,7 +290,7 @@ class TestRepositoryServiceImpl:
         mock_store.put.assert_called_once()
 
     def test_get_delegates(self):
-        from deerflow.services.implementations import RepositoryServiceImpl
+        from nova.services.implementations import RepositoryServiceImpl
 
         mock_store = MagicMock()
         mock_store.get = AsyncMock(return_value={"run_id": "r1"})
@@ -307,13 +307,13 @@ class TestRepositoryServiceImpl:
 
 class TestBrowserServiceImpl:
     def test_circuit_starts_closed(self):
-        from deerflow.services.implementations import BrowserServiceImpl
+        from nova.services.implementations import BrowserServiceImpl
 
         impl = BrowserServiceImpl()
         assert impl.is_circuit_open() is False
 
     def test_circuit_opens_after_failures(self):
-        from deerflow.services.implementations import BrowserServiceImpl
+        from nova.services.implementations import BrowserServiceImpl
 
         impl = BrowserServiceImpl()
         impl._failure_count = 3
@@ -328,7 +328,7 @@ class TestBrowserServiceImpl:
 
 class TestHealthServiceImpl:
     def test_check_all_with_no_probes(self):
-        from deerflow.services.implementations import HealthServiceImpl
+        from nova.services.implementations import HealthServiceImpl
 
         impl = HealthServiceImpl(probes={})
         report = asyncio.run(impl.check_all())
@@ -336,7 +336,7 @@ class TestHealthServiceImpl:
         assert report.probe_count == 0
 
     def test_check_single_unknown_probe(self):
-        from deerflow.services.implementations import HealthServiceImpl
+        from nova.services.implementations import HealthServiceImpl
 
         impl = HealthServiceImpl(probes={})
         result = asyncio.run(impl.check_single("nonexistent"))
@@ -351,23 +351,23 @@ class TestHealthServiceImpl:
 
 class TestConfigurationServiceImpl:
     def test_get_config_value_missing_key_returns_default(self):
-        from deerflow.services.implementations import ConfigurationServiceImpl
+        from nova.services.implementations import ConfigurationServiceImpl
 
         impl = ConfigurationServiceImpl()
         mock_config = MagicMock()
         # Make getattr raise AttributeError for the nested path
         del mock_config.nonexistent
-        with patch("deerflow.config.get_app_config", return_value=mock_config):
+        with patch("nova.config.get_app_config", return_value=mock_config):
             result = impl.get_config_value("nonexistent.key", default="fallback")
             assert result == "fallback"
 
     def test_get_config_value_existing_key(self):
-        from deerflow.services.implementations import ConfigurationServiceImpl
+        from nova.services.implementations import ConfigurationServiceImpl
 
         impl = ConfigurationServiceImpl()
         mock_config = MagicMock()
         mock_config.models = [{"name": "test"}]
-        with patch("deerflow.config.get_app_config", return_value=mock_config):
+        with patch("nova.config.get_app_config", return_value=mock_config):
             result = impl.get_config_value("models")
             assert result == [{"name": "test"}]
 
@@ -382,7 +382,7 @@ class TestPackageExports:
         # Re-imports the same names from the package root to verify the
         # public __init__ re-export works, not just the submodule import
         # already covered above.
-        from deerflow.services import (  # noqa: F811
+        from nova.services import (  # noqa: F811
             ArtifactService,
             BrowserService,
             ConfigurationService,
@@ -412,7 +412,7 @@ class TestPackageExports:
         )
 
     def test_all_types_exported(self):
-        from deerflow.services import (
+        from nova.services import (
             DiagnosticsRecord,
             HealthReport,
             ProbeResult,

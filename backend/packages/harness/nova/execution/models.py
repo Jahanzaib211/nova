@@ -6,7 +6,7 @@ status vocabulary.  No I/O lives here.
 
 Usage::
 
-    from deerflow.execution.models import ExecutionRequest, ExecutionClass
+    from nova.execution.models import ExecutionRequest, ExecutionClass
 
     req = ExecutionRequest(
         argv=["git", "-C", "/repo", "status", "--porcelain"],
@@ -25,10 +25,10 @@ from enum import Enum
 from typing import Any
 
 # Re-exported so the four sibling modules keep a short import. The canonical
-# definition is deerflow.utils.time.now_iso, whose docstring states that all
+# definition is nova.utils.time.now_iso, whose docstring states that all
 # timestamp generation should funnel through it -- execution/ had five
 # byte-identical private copies instead, none of which funnelled anywhere.
-from deerflow.utils.time import now_iso  # noqa: F401
+from nova.utils.time import now_iso  # noqa: F401
 
 
 def _new_execution_id() -> str:

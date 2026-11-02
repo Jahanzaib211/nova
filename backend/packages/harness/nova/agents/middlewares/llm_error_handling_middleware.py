@@ -20,7 +20,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import AIMessage
 from langgraph.errors import GraphBubbleUp
 
-from deerflow.config.app_config import AppConfig
+from nova.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -276,7 +276,7 @@ class LLMErrorHandlingMiddleware(AgentMiddleware[AgentState]):
                 continue
             tried.add(model_cfg.model)
             try:
-                from deerflow import models as models_pkg
+                from nova import models as models_pkg
 
                 model = models_pkg.create_chat_model(name, app_config=self._app_config)
             except Exception:

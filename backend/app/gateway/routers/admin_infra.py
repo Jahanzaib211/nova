@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from app.gateway import admin_ops, infra_client
 from app.gateway.deps import require_admin_user
 from app.gateway.routers.admin import _ADMIN_REQUIRED_DETAIL, _actor
-from deerflow.config.app_config import get_app_config
+from nova.config.app_config import get_app_config
 
 router = APIRouter(prefix="/api/v1/admin/infra", tags=["admin"])
 

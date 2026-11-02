@@ -12,7 +12,7 @@ import re
 import uuid
 from pathlib import Path
 
-from deerflow.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
+from nova.workspace.models.symbol import Symbol, SymbolKind, SymbolLocation
 
 IMPORT_RE = re.compile(
     r"(?:import\s+(?:(?:\{[^}]+\}|[^;'\"{}]+)\s+from\s+)?['\"]([^'\"]+)['\"]|"

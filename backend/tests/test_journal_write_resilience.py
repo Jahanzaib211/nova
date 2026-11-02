@@ -18,9 +18,9 @@ import time
 
 import pytest
 
-from deerflow.runtime import journal as journal_module
-from deerflow.runtime.events.store.memory import MemoryRunEventStore
-from deerflow.runtime.journal import RunJournal
+from nova.runtime import journal as journal_module
+from nova.runtime.events.store.memory import MemoryRunEventStore
+from nova.runtime.journal import RunJournal
 
 pytestmark = pytest.mark.anyio
 
@@ -102,7 +102,7 @@ async def test_backoff_doubles_and_is_capped(fast_backoff):
 async def test_failure_warnings_are_rate_limited(fast_backoff, caplog):
     store = FailsFast()
     journal = RunJournal("r1", "t1", store, flush_threshold=2, write_timeout=1)
-    with caplog.at_level(logging.WARNING, logger="deerflow.runtime.journal"):
+    with caplog.at_level(logging.WARNING, logger="nova.runtime.journal"):
         _emit(journal, 2)
         await asyncio.sleep(2.5)
     journal._cancel_retry()
@@ -115,7 +115,7 @@ async def test_failure_warnings_are_rate_limited(fast_backoff, caplog):
 async def test_the_journal_recovers_when_the_store_comes_back(fast_backoff, caplog):
     store = FailsFast(failures=3)
     journal = RunJournal("r1", "t1", store, flush_threshold=2, write_timeout=1)
-    with caplog.at_level(logging.INFO, logger="deerflow.runtime.journal"):
+    with caplog.at_level(logging.INFO, logger="nova.runtime.journal"):
         _emit(journal, 2)
         await asyncio.sleep(1.0)
     assert await _contents(store) == ["m0", "m1"]
@@ -135,7 +135,7 @@ async def test_final_flush_terminates_when_the_store_fails_fast(caplog):
     await asyncio.sleep(0)
 
     start = time.monotonic()
-    with caplog.at_level(logging.ERROR, logger="deerflow.runtime.journal"):
+    with caplog.at_level(logging.ERROR, logger="nova.runtime.journal"):
         with pytest.raises(ConnectionError):
             await asyncio.wait_for(journal.flush(), timeout=5)
     elapsed = time.monotonic() - start
@@ -161,7 +161,7 @@ async def test_a_timed_out_write_is_not_resent(caplog):
     store = CommitsThenHangs()
     journal = RunJournal("r1", "t1", store, flush_threshold=2, write_timeout=0.1)
 
-    with caplog.at_level(logging.WARNING, logger="deerflow.runtime.journal"):
+    with caplog.at_level(logging.WARNING, logger="nova.runtime.journal"):
         _emit(journal, 2)
         await asyncio.sleep(0.3)
         journal._cancel_retry()
@@ -191,7 +191,7 @@ async def test_the_buffer_is_capped_while_the_store_is_down(caplog):
     journal = RunJournal("r1", "t1", store, flush_threshold=100, write_timeout=1, max_buffer_events=10)
 
     journal._put(event_type="run.start", category="trace")
-    with caplog.at_level(logging.WARNING, logger="deerflow.runtime.journal"):
+    with caplog.at_level(logging.WARNING, logger="nova.runtime.journal"):
         _emit(journal, 30)
     journal._put(event_type="run.end", category="outputs")
 

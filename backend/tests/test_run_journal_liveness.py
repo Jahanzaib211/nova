@@ -21,8 +21,8 @@ import logging
 
 import pytest
 
-from deerflow.runtime.events.store.memory import MemoryRunEventStore
-from deerflow.runtime.journal import RunJournal
+from nova.runtime.events.store.memory import MemoryRunEventStore
+from nova.runtime.journal import RunJournal
 
 pytestmark = pytest.mark.anyio
 
@@ -64,7 +64,7 @@ async def test_a_hung_write_does_not_switch_the_journal_off(caplog):
     store = HangsFirstWrite()
     journal = RunJournal("r1", "t1", store, flush_threshold=2, write_timeout=0.1)
 
-    with caplog.at_level(logging.WARNING, logger="deerflow.runtime.journal"):
+    with caplog.at_level(logging.WARNING, logger="nova.runtime.journal"):
         _emit(journal, 2)  # first flush hangs, then times out
         await _settle()
         _emit(journal, 2, start=2)  # must still flush once the backoff ends

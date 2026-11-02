@@ -11,9 +11,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
 from app.gateway.routers import threads
-from deerflow.config.paths import Paths
-from deerflow.persistence.thread_meta import InvalidMetadataFilterError
-from deerflow.persistence.thread_meta.memory import THREADS_NS, MemoryThreadMetaStore
+from nova.config.paths import Paths
+from nova.persistence.thread_meta import InvalidMetadataFilterError
+from nova.persistence.thread_meta.memory import THREADS_NS, MemoryThreadMetaStore
 
 _ISO_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
@@ -107,7 +107,7 @@ def test_delete_thread_data_rejects_invalid_thread_id(tmp_path):
 
 
 def test_delete_thread_route_cleans_thread_directory(tmp_path):
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.runtime.user_context import get_effective_user_id
 
     paths = Paths(tmp_path)
     user_id = get_effective_user_id()

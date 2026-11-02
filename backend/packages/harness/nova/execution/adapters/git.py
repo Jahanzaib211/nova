@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from deerflow.execution.adapters.base import BaseAdapter
-from deerflow.execution.models import ExecutionClass, ExecutionResult
+from nova.execution.adapters.base import BaseAdapter
+from nova.execution.models import ExecutionClass, ExecutionResult
 
 
 class GitAdapter(BaseAdapter):

@@ -19,7 +19,7 @@ import logging
 import re
 from pathlib import Path
 
-from deerflow.config.app_config import get_app_config
+from nova.config.app_config import get_app_config
 
 logger = logging.getLogger(__name__)
 

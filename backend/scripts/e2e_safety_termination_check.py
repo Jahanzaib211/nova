@@ -85,12 +85,12 @@ class _ContentFilteredFakeModel(BaseChatModel):
 def main() -> int:
     # Inject the fake model BEFORE constructing the client. Both the
     # client module and the lead-agent module bind ``create_chat_model``
-    # at import time via ``from deerflow.models import create_chat_model``,
+    # at import time via ``from nova.models import create_chat_model``,
     # so we patch both attribute slots — the source-of-truth patch on
     # ``factory.create_chat_model`` doesn't propagate back into already-
     # imported names.
-    import deerflow.agents.lead_agent.agent as lead_agent_module
-    from deerflow import client as client_module
+    import nova.agents.lead_agent.agent as lead_agent_module
+    from nova import client as client_module
 
     fake = _ContentFilteredFakeModel()
     originals = {
@@ -104,7 +104,7 @@ def main() -> int:
     lead_agent_module.create_chat_model = fake_create_chat_model
     client_module.create_chat_model = fake_create_chat_model
 
-    from deerflow.client import DeerFlowClient
+    from nova.client import DeerFlowClient
 
     try:
         client = DeerFlowClient()

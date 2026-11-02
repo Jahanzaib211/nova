@@ -111,7 +111,7 @@ async def run_browser_check_bounded(
     The semaphore is always released, even on error or timeout.
     """
     # Local imports keep this module side-effect-free at import time.
-    from deerflow.sandbox.browser_check import run_browser_check
+    from nova.sandbox.browser_check import run_browser_check
 
     total = total_timeout_s if total_timeout_s is not None else _BROWSER_CHECK_TOTAL_TIMEOUT_S
     queue = queue_timeout_s if queue_timeout_s is not None else _BROWSER_CHECK_QUEUE_TIMEOUT_S

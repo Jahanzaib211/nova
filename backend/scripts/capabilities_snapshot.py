@@ -16,8 +16,8 @@ import sys
 
 def main() -> int:
     from app.gateway.capabilities_modules import register_gateway_modules
-    from deerflow.capabilities import CapabilityRegistry
-    from deerflow.capabilities.modules import register_builtin_modules
+    from nova.capabilities import CapabilityRegistry
+    from nova.capabilities.modules import register_builtin_modules
 
     reg = CapabilityRegistry()
     register_builtin_modules(reg)

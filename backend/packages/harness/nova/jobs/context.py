@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from .errors import JobCancelled
 
 if TYPE_CHECKING:
-    from deerflow.persistence.job.sql import JobRepository
+    from nova.persistence.job.sql import JobRepository
 
 
 class JobContext:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from deerflow.persistence.job.sql import JobRepository
+from nova.persistence.job.sql import JobRepository
 
 AGENT_TASK_JOB = "agents.task"
 #: The worker queue agent tasks run on (``jobs.queues`` must list it).
@@ -22,7 +22,7 @@ def agent_task_queue() -> str:
     that queue — the worker claims only what config names.
     """
     try:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         queues = list(getattr(get_app_config().jobs, "queues", None) or ["default"])
     except Exception:  # noqa: BLE001 - no config means the defaults
@@ -39,7 +39,7 @@ async def enqueue_agent_task(repo: JobRepository, *, agent: str, kind: str, task
     ``default`` with that budget (5 attempts) while ``delegate_async`` used
     one — the same task was idempotent or not depending on who asked.
     """
-    from deerflow.jobs.queue import JobQueue
+    from nova.jobs.queue import JobQueue
 
     payload: dict[str, Any] = {"agent": agent, "kind": kind, "task": task}
     if model:
@@ -78,7 +78,7 @@ def build_registry(config: Any, *, custom_agents: list[Any] | None = None, count
     lead_model = config.models[0].name if getattr(config, "models", None) else None
     entries.append({"id": "lead", "kind": "lead", "name": "Nova", "description": "The lead agent every chat talks to.", "model": lead_model, "runner": "gateway", "async_capable": False, **counts.get("lead", {"queued": 0, "running": 0})})
 
-    from deerflow.subagents.registry import BUILTIN_SUBAGENTS
+    from nova.subagents.registry import BUILTIN_SUBAGENTS
 
     subagents = getattr(config, "subagents", None)
     overrides = getattr(subagents, "agents", {}) or {}

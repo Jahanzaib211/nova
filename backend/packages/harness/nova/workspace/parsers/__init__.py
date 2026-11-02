@@ -7,8 +7,8 @@ All parsers are safe: files that cannot be parsed are skipped silently.
 
 from __future__ import annotations
 
-from deerflow.workspace.parsers.js_parser import JSParser
-from deerflow.workspace.parsers.python_parser import PythonParseError, PythonParser
+from nova.workspace.parsers.js_parser import JSParser
+from nova.workspace.parsers.python_parser import PythonParseError, PythonParser
 
 __all__ = [
     "PythonParseError",

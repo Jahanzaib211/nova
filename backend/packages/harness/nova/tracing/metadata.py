@@ -18,10 +18,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from deerflow.config import get_enabled_tracing_providers
+from nova.config import get_enabled_tracing_providers
 
-# Lazy-imported below to avoid a circular import: ``deerflow.runtime`` eagerly
-# imports the run worker, which in turn needs ``deerflow.tracing``.
+# Lazy-imported below to avoid a circular import: ``nova.runtime`` eagerly
+# imports the run worker, which in turn needs ``nova.tracing``.
 _DEFAULT_TRACE_NAME = "lead-agent"
 
 
@@ -51,7 +51,7 @@ def build_langfuse_trace_metadata(
     if "langfuse" not in get_enabled_tracing_providers():
         return {}
 
-    from deerflow.runtime.user_context import DEFAULT_USER_ID
+    from nova.runtime.user_context import DEFAULT_USER_ID
 
     metadata: dict[str, Any] = {
         "langfuse_session_id": thread_id,

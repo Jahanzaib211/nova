@@ -5,9 +5,9 @@ from urllib.parse import urlsplit
 import httpx
 from langchain.tools import tool
 
-from deerflow.community.jina_ai.jina_client import JinaClient
-from deerflow.config import get_app_config
-from deerflow.utils.readability import ReadabilityExtractor
+from nova.community.jina_ai.jina_client import JinaClient
+from nova.config import get_app_config
+from nova.utils.readability import ReadabilityExtractor
 
 logger = logging.getLogger(__name__)
 

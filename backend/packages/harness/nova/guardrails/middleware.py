@@ -12,7 +12,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.types import Command
 
-from deerflow.guardrails.provider import GuardrailDecision, GuardrailProvider, GuardrailReason, GuardrailRequest
+from nova.guardrails.provider import GuardrailDecision, GuardrailProvider, GuardrailReason, GuardrailRequest
 
 logger = logging.getLogger(__name__)
 

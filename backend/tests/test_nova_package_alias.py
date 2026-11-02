@@ -34,3 +34,5 @@ def test_alias_does_not_shadow_a_missing_module() -> None:
     # same way a bad `deerflow.` path does, or typos become silent no-ops.
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("nova.definitely_not_a_module")
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("deerflow.definitely_not_a_module")

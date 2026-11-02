@@ -22,11 +22,11 @@ from types import SimpleNamespace
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 
-from deerflow.agents.middlewares.dangling_tool_call_middleware import (
+from nova.agents.middlewares.dangling_tool_call_middleware import (
     DanglingToolCallMiddleware,
 )
 
-LOGGER_NAME = "deerflow.agents.middlewares.dangling_tool_call_middleware"
+LOGGER_NAME = "nova.agents.middlewares.dangling_tool_call_middleware"
 
 
 def _runtime(thread_id: str = "t1", run_id: str = "r1"):

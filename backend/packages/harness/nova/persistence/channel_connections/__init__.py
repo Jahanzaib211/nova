@@ -1,12 +1,12 @@
 """User-owned IM channel connection persistence."""
 
-from deerflow.persistence.channel_connections.model import (
+from nova.persistence.channel_connections.model import (
     ChannelConnectionRow,
     ChannelConversationRow,
     ChannelCredentialRow,
     ChannelOAuthStateRow,
 )
-from deerflow.persistence.channel_connections.sql import (
+from nova.persistence.channel_connections.sql import (
     ChannelConnectionRepository,
     ChannelCredentialCipher,
 )

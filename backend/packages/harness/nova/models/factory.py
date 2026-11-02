@@ -4,10 +4,10 @@ import os
 from langchain.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
-from deerflow.config import get_app_config
-from deerflow.config.app_config import AppConfig
-from deerflow.reflection import resolve_class
-from deerflow.tracing import build_tracing_callbacks
+from nova.config import get_app_config
+from nova.config.app_config import AppConfig
+from nova.reflection import resolve_class
+from nova.tracing import build_tracing_callbacks
 
 logger = logging.getLogger(__name__)
 
@@ -217,14 +217,14 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
     # its task-local context, it replaces the configured key so usage bills to
     # the user's own provider account. Null-safe — no-op when unset (the
     # default for every non-BYOK run), so this cannot affect normal runs.
-    from deerflow.runtime.byok_context import get_byok_api_key
+    from nova.runtime.byok_context import get_byok_api_key
 
     _byok_key = get_byok_api_key()
     if _byok_key:
         model_settings_from_config["api_key"] = _byok_key
 
     # For Codex Responses API models: map thinking mode to reasoning_effort
-    from deerflow.models.openai_codex_provider import CodexChatModel
+    from nova.models.openai_codex_provider import CodexChatModel
 
     if issubclass(model_class, CodexChatModel):
         # The ChatGPT Codex endpoint currently rejects max_tokens/max_output_tokens.

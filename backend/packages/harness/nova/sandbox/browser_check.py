@@ -42,8 +42,8 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 from weakref import WeakValueDictionary
 
-from deerflow.sandbox.dev_server import get_dev_server
-from deerflow.sandbox.metrics import browser_check_duration_ms, browser_check_total
+from nova.sandbox.dev_server import get_dev_server
+from nova.sandbox.metrics import browser_check_duration_ms, browser_check_total
 
 logger = logging.getLogger(__name__)
 
@@ -664,7 +664,7 @@ def _run_targets_via_cdp(
     so a bad target never triggers a reconnect.
     """
     if thread_id:
-        from deerflow.sandbox.browser_retry import retry_browser_call
+        from nova.sandbox.browser_retry import retry_browser_call
 
         return retry_browser_call(
             thread_id,
@@ -682,7 +682,7 @@ def _run_targets_via_cdp_once(cdp_url: str, targets: list[tuple[str, str, str]],
     """Single (unretried) attempt — see ``_run_targets_via_cdp`` for the retry wrapper."""
     from playwright.sync_api import sync_playwright
 
-    from deerflow.sandbox.browser_errors import classify_playwright_exception
+    from nova.sandbox.browser_errors import classify_playwright_exception
 
     out: list[RouteResult] = []
     try:

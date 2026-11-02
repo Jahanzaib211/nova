@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.feedback.model import FeedbackRow
-from deerflow.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
-from deerflow.utils.time import coerce_iso
+from nova.persistence.feedback.model import FeedbackRow
+from nova.runtime.user_context import AUTO, _AutoSentinel, resolve_user_id
+from nova.utils.time import coerce_iso
 
 
 class FeedbackRepository:

@@ -315,7 +315,7 @@ def _internal_owner_request(owner_user_id: str) -> SimpleNamespace:
     what ``ChannelManager._fetch_gateway`` attaches via ``_owner_headers``.
     """
     from app.gateway.internal_auth import INTERNAL_OWNER_USER_ID_HEADER_NAME, INTERNAL_SYSTEM_ROLE
-    from deerflow.runtime.user_context import DEFAULT_USER_ID
+    from nova.runtime.user_context import DEFAULT_USER_ID
 
     return SimpleNamespace(
         headers={INTERNAL_OWNER_USER_ID_HEADER_NAME: owner_user_id},
@@ -346,7 +346,7 @@ def test_get_memory_sanitizes_unsafe_owner_header() -> None:
     applies, so the memory bucket matches the owner's file/upload bucket and the
     raw id never reaches ``_validate_user_id`` unsanitized.
     """
-    from deerflow.config.paths import make_safe_user_id
+    from nova.config.paths import make_safe_user_id
 
     raw_owner = "feishu|ou_AbC/123"
     seen: dict[str, str] = {}

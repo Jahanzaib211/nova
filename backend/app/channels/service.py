@@ -16,8 +16,8 @@ from app.channels.store import ChannelStore
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
-    from deerflow.config.channel_connections_config import ChannelConnectionsConfig
+    from nova.config.app_config import AppConfig
+    from nova.config.channel_connections_config import ChannelConnectionsConfig
 
 # Channel name → import path for lazy loading
 _CHANNEL_REGISTRY: dict[str, str] = {
@@ -70,8 +70,8 @@ def _make_connection_repo(connection_config: ChannelConnectionsConfig | None):
         return None
 
     try:
-        from deerflow.persistence.channel_connections import ChannelConnectionRepository
-        from deerflow.persistence.engine import get_session_factory
+        from nova.persistence.channel_connections import ChannelConnectionRepository
+        from nova.persistence.engine import get_session_factory
     except Exception:
         logger.exception("Failed to import channel connection repository")
         return None
@@ -124,7 +124,7 @@ class ChannelService:
     def from_app_config(cls, app_config: AppConfig | None = None) -> ChannelService:
         """Create a ChannelService from the application config."""
         if app_config is None:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             app_config = get_app_config()
         channels_config = {}
@@ -243,7 +243,7 @@ class ChannelService:
         Falls back to the cached ``self._config`` when config loading fails.
         """
         try:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             app_config = get_app_config()
             extra = app_config.model_extra or {}
@@ -315,7 +315,7 @@ class ChannelService:
             return False
 
         try:
-            from deerflow.reflection import resolve_class
+            from nova.reflection import resolve_class
 
             channel_cls = resolve_class(import_path, base_class=None)
         except Exception:

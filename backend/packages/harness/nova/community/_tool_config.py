@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from deerflow.config import get_app_config
+from nova.config import get_app_config
 
 
 def tool_config_extras(tool_name: str) -> dict[str, Any] | None:

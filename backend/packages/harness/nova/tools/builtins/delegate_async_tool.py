@@ -16,7 +16,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolArg, StructuredTool
 from pydantic import BaseModel, Field
 
-from deerflow.agents_registry.registry import AGENT_TASK_JOB, enqueue_agent_task
+from nova.agents_registry.registry import AGENT_TASK_JOB, enqueue_agent_task
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class _CheckInput(BaseModel):
 
 
 def _known_agents(config: Any) -> dict[str, str]:
-    from deerflow.subagents.registry import get_subagent_names
+    from nova.subagents.registry import get_subagent_names
 
     out = {name: "subagent" for name in get_subagent_names(app_config=config)}
     for name in getattr(config, "acp_agents", {}) or {}:
@@ -41,7 +41,7 @@ def _known_agents(config: Any) -> dict[str, str]:
 
 def build_delegate_tools(config: Any, repo_factory: Any) -> list[BaseTool]:
     """``repo_factory()`` returns a JobRepository (the gateway's session factory)."""
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.runtime.user_context import get_effective_user_id
 
     agents = _known_agents(config)
     listing = "\n".join(f"- {name} ({kind})" for name, kind in agents.items()) or "- (none configured)"

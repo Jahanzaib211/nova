@@ -21,9 +21,9 @@ import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from deerflow.execution.models import ExecutionRequest
-from deerflow.execution.policy import PolicyEngine
-from deerflow.execution.resources import ResourceManager
+from nova.execution.models import ExecutionRequest
+from nova.execution.policy import PolicyEngine
+from nova.execution.resources import ResourceManager
 
 logger = logging.getLogger(__name__)
 

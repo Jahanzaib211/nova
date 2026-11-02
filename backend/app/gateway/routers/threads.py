@@ -4,7 +4,7 @@ Combines the existing thread-local filesystem cleanup with LangGraph
 Platform-compatible thread management backed by the checkpointer.
 
 Channel values returned in state responses are serialized through
-:func:`deerflow.runtime.serialization.serialize_channel_values` to
+:func:`nova.runtime.serialization.serialize_channel_values` to
 ensure LangChain message objects are converted to JSON-safe dicts
 matching the LangGraph Platform wire format expected by the
 ``useStream`` React hook.
@@ -26,10 +26,10 @@ from app.gateway.deps import get_checkpointer
 from app.gateway.internal_auth import get_trusted_internal_owner_user_id
 from app.gateway.task_events import TaskEventHub
 from app.gateway.utils import sanitize_log_param
-from deerflow.config.paths import Paths, get_paths
-from deerflow.runtime import serialize_channel_values_for_api
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.utils.time import coerce_iso, now_iso
+from nova.config.paths import Paths, get_paths
+from nova.runtime import serialize_channel_values_for_api
+from nova.runtime.user_context import get_effective_user_id
+from nova.utils.time import coerce_iso, now_iso
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/threads", tags=["threads"])
@@ -99,11 +99,11 @@ class ThreadSearchRequest(BaseModel):
         """Reject filter entries the SQL backend cannot compile.
 
         Enforces consistent behaviour across SQL and memory backends.
-        See ``deerflow.persistence.json_compat`` for the shared validators.
+        See ``nova.persistence.json_compat`` for the shared validators.
         """
         if not v:
             return v
-        from deerflow.persistence.json_compat import validate_metadata_filter_key, validate_metadata_filter_value
+        from nova.persistence.json_compat import validate_metadata_filter_key, validate_metadata_filter_value
 
         bad_entries: list[str] = []
         for key, value in v.items():
@@ -333,7 +333,7 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
     (SQL-backed for sqlite/postgres, Store-backed for memory mode).
     """
     from app.gateway.deps import get_thread_store
-    from deerflow.persistence.thread_meta import InvalidMetadataFilterError
+    from nova.persistence.thread_meta import InvalidMetadataFilterError
 
     repo = get_thread_store(request)
     try:
@@ -610,7 +610,7 @@ async def get_thread_history(thread_id: str, body: ThreadHistoryRequest, request
 
     Messages are read from the checkpointer's channel values (the
     authoritative source) and serialized via
-    :func:`~deerflow.runtime.serialization.serialize_channel_values`.
+    :func:`~nova.runtime.serialization.serialize_channel_values`.
     Only the latest (first) checkpoint carries the ``messages`` key to
     avoid duplicating them across every entry.
     """
@@ -717,7 +717,7 @@ async def tasks_ws(websocket: WebSocket, thread_id: str) -> None:
     """
     from app.gateway.task_events import run_tasks_ws_stream
     from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
-    from deerflow.runtime.user_context import reset_current_user, set_current_user
+    from nova.runtime.user_context import reset_current_user, set_current_user
 
     if not ws_same_origin(websocket):
         logger.warning(
@@ -768,7 +768,7 @@ async def computer_ws(websocket: WebSocket, thread_id: str) -> None:
     """
     from app.gateway.task_events import run_computer_ws_stream
     from app.gateway.ws_guards import ws_caller_owns_thread, ws_same_origin, ws_user
-    from deerflow.runtime.user_context import reset_current_user, set_current_user
+    from nova.runtime.user_context import reset_current_user, set_current_user
 
     if not ws_same_origin(websocket):
         logger.warning(

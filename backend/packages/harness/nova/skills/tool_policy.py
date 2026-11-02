@@ -1,7 +1,7 @@
 import logging
 from typing import Protocol
 
-from deerflow.skills.types import Skill
+from nova.skills.types import Skill
 
 logger = logging.getLogger(__name__)
 

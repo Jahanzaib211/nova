@@ -24,9 +24,9 @@ from langchain_core.callbacks.manager import AsyncCallbackManagerForLLMRun
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-from deerflow.runtime import journal as journal_module
-from deerflow.runtime.journal import RunJournal
-from deerflow.subagents.token_collector import SubagentTokenCollector
+from nova.runtime import journal as journal_module
+from nova.runtime.journal import RunJournal
+from nova.subagents.token_collector import SubagentTokenCollector
 
 pytestmark = pytest.mark.anyio
 

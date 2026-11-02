@@ -15,9 +15,9 @@ interaction between a repo data file and the policy, so a test with fake skills
 would have stayed green through the entire outage.
 """
 
-from deerflow.agents.lead_agent.agent import skills_for_tool_policy
-from deerflow.config.app_config import get_app_config
-from deerflow.skills.tool_policy import filter_tools_by_skill_allowed_tools
+from nova.agents.lead_agent.agent import skills_for_tool_policy
+from nova.config.app_config import get_app_config
+from nova.skills.tool_policy import filter_tools_by_skill_allowed_tools
 
 
 class _T:
@@ -50,7 +50,7 @@ def test_a_selected_skill_still_restricts(monkeypatch):
     config does not resolve the repo skills tree, so that skip was the normal
     path, not the exception.
     """
-    from deerflow.agents.lead_agent import agent as agent_mod
+    from nova.agents.lead_agent import agent as agent_mod
 
     class FakeSkill:
         def __init__(self, name, allowed_tools):
@@ -64,7 +64,7 @@ def test_a_selected_skill_still_restricts(monkeypatch):
         raising=False,
     )
     monkeypatch.setitem(
-        __import__("sys").modules["deerflow.agents.lead_agent.prompt"].__dict__,
+        __import__("sys").modules["nova.agents.lead_agent.prompt"].__dict__,
         "get_enabled_skills_for_config",
         lambda _cfg: [FakeSkill("security", ["bash", "read_file"]), FakeSkill("other", None)],
     )

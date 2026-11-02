@@ -10,8 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from deerflow.capabilities.modules._common import Empty
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _locate(binary: str) -> list[str] | None:
@@ -60,7 +60,7 @@ async def _version_of(binary: str, *args: str) -> str | None:
     if not argv:
         return None
     try:
-        from deerflow.execution import ExecutionClass, ExecutionKernel, ExecutionRequest, ResourceLimits
+        from nova.execution import ExecutionClass, ExecutionKernel, ExecutionRequest, ResourceLimits
 
         result = await ExecutionKernel().execute(ExecutionRequest(argv=(*argv, *(args or ("--version",))), execution_class=ExecutionClass.SHELL, limits=ResourceLimits(timeout=10), intent=f"{binary} version for Settings › Updates"))
         out = (result.stdout or result.stderr or "").strip()
@@ -74,7 +74,7 @@ class VersionsOut(BaseModel):
 
 
 async def _versions(ctx: OpContext, inp: Empty) -> VersionsOut:
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     cfg = get_app_config()
     claude, node, openclaw = await asyncio.gather(_version_of("claude"), _version_of("node"), _version_of("openclaw"))

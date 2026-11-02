@@ -1,6 +1,6 @@
 """Built-in guardrail providers that ship with DeerFlow."""
 
-from deerflow.guardrails.provider import GuardrailDecision, GuardrailReason, GuardrailRequest
+from nova.guardrails.provider import GuardrailDecision, GuardrailReason, GuardrailRequest
 
 
 class AllowlistProvider:

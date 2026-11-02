@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from deerflow.persistence.channel_connections import (
+from nova.persistence.channel_connections import (
     ChannelConnectionRepository,
     ChannelConnectionRow,
     ChannelCredentialCipher,
@@ -19,7 +19,7 @@ from deerflow.persistence.channel_connections import (
 
 @pytest.fixture
 async def repo(tmp_path):
-    from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
+    from nova.persistence.engine import close_engine, get_session_factory, init_engine
 
     url = f"sqlite+aiosqlite:///{tmp_path / 'channels.db'}"
     await init_engine("sqlite", url=url, sqlite_dir=str(tmp_path))
@@ -250,7 +250,7 @@ class TestChannelConnectionRepository:
             cipher=ChannelCredentialCipher.from_key("wrong-encryption-key"),
         )
 
-        with caplog.at_level(logging.WARNING, logger="deerflow.persistence.channel_connections.sql"):
+        with caplog.at_level(logging.WARNING, logger="nova.persistence.channel_connections.sql"):
             credentials = await wrong_key_repo.get_credentials(connection["id"])
 
         assert credentials is None

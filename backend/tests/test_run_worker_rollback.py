@@ -7,9 +7,9 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.base import empty_checkpoint
 from langgraph.checkpoint.memory import InMemorySaver
 
-from deerflow.runtime.runs.manager import RunManager
-from deerflow.runtime.runs.schemas import RunStatus
-from deerflow.runtime.runs.worker import (
+from nova.runtime.runs.manager import RunManager
+from nova.runtime.runs.schemas import RunStatus
+from nova.runtime.runs.worker import (
     RunContext,
     _agent_factory_supports_app_config,
     _build_runtime_context,
@@ -539,7 +539,7 @@ def test_agent_factory_supports_app_config_returns_false_when_signature_lookup_f
         def __call__(self, **kwargs):
             return kwargs
 
-    monkeypatch.setattr("deerflow.runtime.runs.worker.inspect.signature", lambda _obj: (_ for _ in ()).throw(ValueError("boom")))
+    monkeypatch.setattr("nova.runtime.runs.worker.inspect.signature", lambda _obj: (_ for _ in ()).throw(ValueError("boom")))
 
     assert _agent_factory_supports_app_config(BrokenCallable()) is False
 

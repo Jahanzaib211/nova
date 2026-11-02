@@ -83,7 +83,7 @@ def emit_observation(payload: dict[str, Any]) -> None:
 def emit_channel(channel: str, payload: dict[str, Any]) -> None:
     """Announce a typed event on a named computer-ws channel. Never raises."""
     try:
-        from deerflow.sandbox import computer_events as _self
+        from nova.sandbox import computer_events as _self
 
         # Route through the same listener registries so the gateway needs one
         # wiring: observations ride the observation listeners with an explicit

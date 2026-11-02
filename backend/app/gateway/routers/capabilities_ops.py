@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_auth
 from app.gateway.deps import is_admin
-from deerflow.capabilities import CapabilityRegistry, OpContext, OperationConflict, OperationDenied, OperationNotFound, get_registry
-from deerflow.capabilities.modules.features import compute_flags
+from nova.capabilities import CapabilityRegistry, OpContext, OperationConflict, OperationDenied, OperationNotFound, get_registry
+from nova.capabilities.modules.features import compute_flags
 
 logger = logging.getLogger(__name__)
 

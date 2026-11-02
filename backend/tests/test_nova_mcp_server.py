@@ -15,7 +15,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from pydantic import BaseModel
 
-from deerflow.capabilities import CapabilityModule, CapabilityRegistry, ModuleStatus, OpContext, Operation
+from nova.capabilities import CapabilityModule, CapabilityRegistry, ModuleStatus, OpContext, Operation
 
 pytestmark = pytest.mark.no_auto_user
 
@@ -66,8 +66,8 @@ def _registry() -> CapabilityRegistry:
 
 
 async def _tokens(tmp_path):
-    from deerflow.persistence.engine import get_session_factory, init_engine
-    from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+    from nova.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.harness_token.sql import HarnessTokenRepository
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'mcp.db'}", sqlite_dir=str(tmp_path))
     return HarnessTokenRepository(get_session_factory())
@@ -78,7 +78,7 @@ def _close_engine_after_test():
     yield
     import asyncio
 
-    from deerflow.persistence.engine import close_engine
+    from nova.persistence.engine import close_engine
 
     asyncio.run(close_engine())
 
@@ -231,11 +231,11 @@ def test_enabled_flag_reads_config(monkeypatch):
     def _cfg(enabled):
         return SimpleNamespace(capabilities=SimpleNamespace(mcp_server=SimpleNamespace(enabled=enabled)))
 
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: _cfg(False))
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: _cfg(False))
     assert mcp_server_enabled() is False
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: _cfg(True))
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: _cfg(True))
     assert mcp_server_enabled() is True
-    monkeypatch.setattr("deerflow.config.app_config.get_app_config", lambda: SimpleNamespace())
+    monkeypatch.setattr("nova.config.app_config.get_app_config", lambda: SimpleNamespace())
     assert mcp_server_enabled() is True, "default is on"
 
 

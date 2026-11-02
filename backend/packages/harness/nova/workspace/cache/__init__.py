@@ -6,9 +6,9 @@ graphs on disk with TTL-based and content-hash invalidation.
 
 from __future__ import annotations
 
-from deerflow.workspace.cache.cache_key import CacheKeyBuilder
-from deerflow.workspace.cache.invalidator import CacheInvalidator
-from deerflow.workspace.cache.workspace_cache import CacheEntry, WorkspaceCache
+from nova.workspace.cache.cache_key import CacheKeyBuilder
+from nova.workspace.cache.invalidator import CacheInvalidator
+from nova.workspace.cache.workspace_cache import CacheEntry, WorkspaceCache
 
 __all__ = [
     "CacheEntry",

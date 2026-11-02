@@ -15,13 +15,13 @@ from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.channel_connections.model import (
+from nova.persistence.channel_connections.model import (
     ChannelConnectionRow,
     ChannelConversationRow,
     ChannelCredentialRow,
     ChannelOAuthStateRow,
 )
-from deerflow.utils.time import coerce_iso
+from nova.utils.time import coerce_iso
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class ChannelConnectionRepository:
         self._cipher = cipher
 
     async def close(self) -> None:
-        from deerflow.persistence.engine import close_engine
+        from nova.persistence.engine import close_engine
 
         await close_engine()
 

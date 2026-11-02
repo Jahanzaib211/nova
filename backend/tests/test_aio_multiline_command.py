@@ -15,8 +15,8 @@ import pytest
 
 @pytest.fixture()
 def sandbox():
-    with patch("deerflow.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
-        from deerflow.community.aio_sandbox.aio_sandbox import AioSandbox
+    with patch("nova.community.aio_sandbox.aio_sandbox.AioSandboxClient"):
+        from nova.community.aio_sandbox.aio_sandbox import AioSandbox
 
         return AioSandbox(id="test-sandbox", base_url="http://localhost:8080")
 
@@ -85,7 +85,7 @@ class TestSingleLineWrapper:
 class TestErrorObservationRetryStillWorks:
     def test_retry_also_sends_the_wrapped_form(self, sandbox):
         """The signature retry is a backstop; it must not re-send a raw newline."""
-        from deerflow.community.aio_sandbox.aio_sandbox import _ERROR_OBSERVATION_SIGNATURE
+        from nova.community.aio_sandbox.aio_sandbox import _ERROR_OBSERVATION_SIGNATURE
 
         seen = []
         outputs = [f"Command failed: {_ERROR_OBSERVATION_SIGNATURE}", "recovered"]

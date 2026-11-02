@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-from deerflow.config.acp_config import ACPPermissionPolicy
+from nova.config.acp_config import ACPPermissionPolicy
 
 NATIVE = "native"
 

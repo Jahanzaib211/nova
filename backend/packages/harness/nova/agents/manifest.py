@@ -19,7 +19,7 @@ Hard rules (enforced elsewhere, surfaced here for the agent):
   on ``is_local_sandbox``; the local provider behaves exactly as upstream.
 * **Non-fatal.** Anything new in the run path is wrapped so a failure can
   never break a run.
-* **Harness boundary.** ``deerflow.*`` never imports ``app.*``.
+* **Harness boundary.** ``nova.*`` never imports ``app.*``.
 
 Why this exists: the deterministic verification gates
 (``observe_adjust_middleware.py`` etc.) fire *after* the agent produces
@@ -37,7 +37,7 @@ from pathlib import Path
 
 from langgraph.runtime import Runtime
 
-from deerflow.config.runtime_paths import project_root
+from nova.config.runtime_paths import project_root
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ def _one_line_purpose(description: str | None) -> str:
 def _collect_tools() -> list[tuple[str, str]]:
     """Return ``[(name, purpose), ...]`` for every agent-visible tool.
 
-    Imports ``deerflow.tools.tools`` lazily to keep this module cheap to
+    Imports ``nova.tools.tools`` lazily to keep this module cheap to
     import. Includes ``BUILTIN_TOOLS`` + ``SUBAGENT_TOOLS`` (the latter
     is conditionally appended to the lead agent's tool list at run time).
     ``view_image_tool`` is included only when the model supports vision;
@@ -119,7 +119,7 @@ def _collect_tools() -> list[tuple[str, str]]:
     manifest still has a sensible tool inventory.
     """
     try:
-        from deerflow.tools.tools import BUILTIN_TOOLS, SUBAGENT_TOOLS, view_image_tool  # noqa: PLC0415
+        from nova.tools.tools import BUILTIN_TOOLS, SUBAGENT_TOOLS, view_image_tool  # noqa: PLC0415
     except Exception as exc:  # noqa: BLE001 — manifest is non-fatal
         logger.debug("manifest: BUILTIN_TOOLS import failed (%s); using overrides only", exc)
         return sorted(_TOOL_PURPOSE_OVERRIDES.items())
@@ -227,7 +227,7 @@ Hard rules:
   - additive / reversible only (one-edit revert)
   - local-sandbox path byte-identical (branch on is_local_sandbox)
   - non-fatal in the run path (a failure can never break a run)
-  - harness boundary: deerflow.* never imports app.*
+  - harness boundary: nova.* never imports app.*
 
 Agent's Computer panel (right side of the chat):
   - Files    — repo tree + Outputs

@@ -32,13 +32,13 @@ from langgraph.errors import GraphRecursionError
 if TYPE_CHECKING:
     from langchain_core.messages import HumanMessage
 
-from deerflow.config.app_config import AppConfig
-from deerflow.runtime.run_context import reset_run_scope, set_run_scope
-from deerflow.runtime.serialization import serialize
-from deerflow.runtime.stream_bridge import StreamBridge
-from deerflow.runtime.stream_bridge.diagnostics import record_worker_publish
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.tracing import inject_langfuse_metadata
+from nova.config.app_config import AppConfig
+from nova.runtime.run_context import reset_run_scope, set_run_scope
+from nova.runtime.serialization import serialize
+from nova.runtime.stream_bridge import StreamBridge
+from nova.runtime.stream_bridge.diagnostics import record_worker_publish
+from nova.runtime.user_context import get_effective_user_id
+from nova.tracing import inject_langfuse_metadata
 
 from .manager import RunManager, RunRecord
 from .naming import resolve_root_run_name
@@ -74,7 +74,7 @@ async def _service_set_status(
     wired (e.g. embedded/test usage outside Gateway).
     """
     try:
-        from deerflow.services.container import service_container
+        from nova.services.container import service_container
 
         run_svc = service_container.run_service()
         # The container's RunService must be backed by THIS worker's
@@ -263,7 +263,7 @@ async def run_agent(
         # otherwise a failure here would leave the stream hanging
         # with no terminator.
         if event_store is not None:
-            from deerflow.runtime.journal import RunJournal
+            from nova.runtime.journal import RunJournal
 
             journal = RunJournal(
                 run_id=run_id,
@@ -559,7 +559,7 @@ async def run_agent(
         # has dispatched its own subagents, which must keep running.
         if run_id:
             try:
-                from deerflow.subagents.executor import cancel_background_tasks_for_run
+                from nova.subagents.executor import cancel_background_tasks_for_run
 
                 cancel_background_tasks_for_run(run_id)
             except Exception:

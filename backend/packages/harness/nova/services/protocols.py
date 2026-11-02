@@ -8,7 +8,7 @@ Phase C1 — interfaces only.  No implementation logic lives here.
 
 Usage::
 
-    from deerflow.services.protocols import RunService
+    from nova.services.protocols import RunService
 
     async def my_handler(run_svc: RunService) -> None:
         run = await run_svc.get("run-123")
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from deerflow.services.types import (
+from nova.services.types import (
     DiagnosticsRecord,
     HealthReport,
     ProbeResult,

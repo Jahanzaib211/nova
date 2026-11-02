@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.jobs.service import USER_SCHEDULABLE_JOB_TYPES, JobService
+from nova.jobs.service import USER_SCHEDULABLE_JOB_TYPES, JobService
 
 
 class _Repo:
@@ -57,8 +57,8 @@ def test_admin_can_schedule_anything():
     [(["default", "email", "agents"], "agents"), (["default"], "default"), (["email", "default"], "email")],
 )
 def test_agent_tasks_go_to_a_queue_a_worker_claims(monkeypatch, queues, expected):
-    import deerflow.config as config_mod
-    from deerflow.agents_registry.registry import agent_task_queue
+    import nova.config as config_mod
+    from nova.agents_registry.registry import agent_task_queue
 
     monkeypatch.setattr(config_mod, "get_app_config", lambda: SimpleNamespace(jobs=SimpleNamespace(queues=queues)))
     assert agent_task_queue() == expected

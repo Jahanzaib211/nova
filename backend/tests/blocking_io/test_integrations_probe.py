@@ -5,8 +5,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from deerflow.config.integrations_config import IntegrationsConfig, IntegrationServiceConfig
-from deerflow.integrations.registry import build_registry
+from nova.config.integrations_config import IntegrationsConfig, IntegrationServiceConfig
+from nova.integrations.registry import build_registry
 
 pytestmark = pytest.mark.anyio
 

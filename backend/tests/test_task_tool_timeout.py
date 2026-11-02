@@ -25,15 +25,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.config.subagents_config import (
+from nova.config.subagents_config import (
     SubagentsAppConfig,
     clamp_task_timeout,
     get_subagents_app_config,
     load_subagents_config_from_dict,
 )
-from deerflow.subagents.registry import get_subagent_config
+from nova.subagents.registry import get_subagent_config
 
-task_tool_module = importlib.import_module("deerflow.tools.builtins.task_tool")
+task_tool_module = importlib.import_module("nova.tools.builtins.task_tool")
 
 
 class _FakeStatus(Enum):
@@ -110,7 +110,7 @@ def _wire_task_tool(monkeypatch, captured: dict, *, status=_FakeStatus.COMPLETED
     )
     monkeypatch.setattr(task_tool_module, "get_stream_writer", lambda: lambda _event: None)
     monkeypatch.setattr(task_tool_module.asyncio, "sleep", _no_sleep)
-    monkeypatch.setattr("deerflow.tools.get_available_tools", lambda **_kwargs: [])
+    monkeypatch.setattr("nova.tools.get_available_tools", lambda **_kwargs: [])
 
 
 @pytest.fixture
@@ -214,7 +214,7 @@ def test_the_clamp_never_shortens_an_operator_configured_timeout(subagents_confi
 
 
 def test_the_request_does_not_leak_into_the_builtin_definition(subagents_config):
-    from deerflow.subagents.builtins import BUILTIN_SUBAGENTS
+    from nova.subagents.builtins import BUILTIN_SUBAGENTS
 
     original = BUILTIN_SUBAGENTS["general-purpose"].timeout_seconds
     load_subagents_config_from_dict({"timeout_seconds": 1800, "max_timeout_seconds": 5400})

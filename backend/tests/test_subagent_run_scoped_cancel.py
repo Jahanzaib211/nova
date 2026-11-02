@@ -15,13 +15,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from deerflow.runtime.run_context import current_run_scope, reset_run_scope, set_run_scope
-from deerflow.runtime.runs.manager import RunManager
-from deerflow.runtime.runs.schemas import RunStatus
-from deerflow.runtime.runs.worker import RunContext, run_agent
-from deerflow.subagents import executor
-from deerflow.subagents.config import SubagentConfig
-from deerflow.subagents.executor import (
+from nova.runtime.run_context import current_run_scope, reset_run_scope, set_run_scope
+from nova.runtime.runs.manager import RunManager
+from nova.runtime.runs.schemas import RunStatus
+from nova.runtime.runs.worker import RunContext, run_agent
+from nova.subagents import executor
+from nova.subagents.config import SubagentConfig
+from nova.subagents.executor import (
     SubagentExecutor,
     SubagentResult,
     SubagentStatus,

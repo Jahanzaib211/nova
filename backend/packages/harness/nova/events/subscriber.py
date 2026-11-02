@@ -9,8 +9,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from deerflow.events.bus import EventBus, event_bus
-from deerflow.events.event import DomainEvent
+from nova.events.bus import EventBus, event_bus
+from nova.events.event import DomainEvent
 
 E = TypeVar("E", bound=DomainEvent)
 

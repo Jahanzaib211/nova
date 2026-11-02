@@ -40,7 +40,7 @@ def _user(user_id, role="user"):
 
 @pytest.fixture(autouse=True)
 def _isolate_app_config_singleton():
-    from deerflow.config.app_config import reset_app_config
+    from nova.config.app_config import reset_app_config
 
     reset_app_config()
     yield
@@ -51,7 +51,7 @@ def _isolate_app_config_singleton():
 def config_env(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "sandbox:\n  use: deerflow.sandbox.local.provider:LocalSandboxProvider\nmodels:\n  - name: config-model\n    use: langchain_openai:ChatOpenAI\n    model: gpt-4o-mini\n    api_key: fake-key\n",
+        "sandbox:\n  use: nova.sandbox.local.provider:LocalSandboxProvider\nmodels:\n  - name: config-model\n    use: langchain_openai:ChatOpenAI\n    model: gpt-4o-mini\n    api_key: fake-key\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(config_path))
@@ -192,7 +192,7 @@ class TestRepositoryHelpers:
         from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
         from app.gateway.repositories.model_repository import ModelRepository
-        from deerflow.persistence.base import Base
+        from nova.persistence.base import Base
 
         engine = create_async_engine("sqlite+aiosqlite://")
         async with engine.begin() as conn:

@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from deerflow.persistence.base import Base
-from deerflow.persistence.models.model_config_row import ModelConfigRow
+from nova.persistence.base import Base
+from nova.persistence.models.model_config_row import ModelConfigRow
 
 
 @pytest.fixture

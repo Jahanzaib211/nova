@@ -7,7 +7,7 @@ import stat
 
 import pytest
 
-from deerflow.skills.storage import get_or_new_skill_storage
+from nova.skills.storage import get_or_new_skill_storage
 
 
 @pytest.fixture()

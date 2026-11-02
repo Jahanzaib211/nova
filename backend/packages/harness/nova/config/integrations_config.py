@@ -16,7 +16,7 @@ import os
 
 from pydantic import BaseModel, Field, field_validator
 
-from deerflow.integrations.health import INTEGRATION_KINDS
+from nova.integrations.health import INTEGRATION_KINDS
 
 
 class IntegrationServiceConfig(BaseModel):

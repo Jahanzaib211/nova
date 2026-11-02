@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from deerflow.community.crawl4ai.crawl_tool import (
+from nova.community.crawl4ai.crawl_tool import (
     _LinkExtractor,
     _normalise,
     _RobotsGate,
@@ -48,7 +48,7 @@ def allow_all_robots(monkeypatch):
 
 
 def _install_client(monkeypatch, client: _FakeClient) -> None:
-    monkeypatch.setattr("deerflow.community.crawl4ai.crawl_tool._get_client", lambda: client)
+    monkeypatch.setattr("nova.community.crawl4ai.crawl_tool._get_client", lambda: client)
 
 
 class TestItActuallyFollowsLinks:

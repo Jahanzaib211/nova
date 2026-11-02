@@ -8,10 +8,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_config
 from langgraph.runtime import Runtime
 
-from deerflow.agents.manifest import build_agent_manifest
-from deerflow.agents.thread_state import ThreadDataState
-from deerflow.config.paths import Paths, get_paths
-from deerflow.runtime.user_context import get_effective_user_id
+from nova.agents.manifest import build_agent_manifest
+from nova.agents.thread_state import ThreadDataState
+from nova.config.paths import Paths, get_paths
+from nova.runtime.user_context import get_effective_user_id
 
 logger = logging.getLogger(__name__)
 

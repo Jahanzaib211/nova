@@ -28,16 +28,16 @@ from typing import Any
 
 import httpx
 
-from deerflow.community.searxng.search_cache import CacheKey, get_search_cache
-from deerflow.community.searxng.search_errors import (
+from nova.community.searxng.search_cache import CacheKey, get_search_cache
+from nova.community.searxng.search_errors import (
     SearchConnectionError,
     SearchError,
     SearchTimeoutError,
     SearchTransientError,
     is_transient,
 )
-from deerflow.community.searxng.tor import get_tor_proxy
-from deerflow.sandbox.browser_tracing import browser_span, get_trace_id, set_trace_id
+from nova.community.searxng.tor import get_tor_proxy
+from nova.sandbox.browser_tracing import browser_span, get_trace_id, set_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ _RETRY_BASE_MS = 100
 _RETRY_JITTER = 0.30
 
 try:
-    from deerflow.sandbox.metrics import Counter, Histogram, get_registry
+    from nova.sandbox.metrics import Counter, Histogram, get_registry
 
     _igino_search_total = get_registry().register_counter(Counter("igino_search_total", "Total iGIN0 searches, partitioned by outcome.", labelnames=("outcome",)))
     _igino_search_duration = get_registry().register_histogram(Histogram("igino_search_duration_ms", "iGIN0 search latency in milliseconds.", labelnames=("source",)))
@@ -188,7 +188,7 @@ class SearxngClient:
                         context={"status": resp.status_code, "query": query},
                     )
                 if resp.status_code >= 400:
-                    from deerflow.community.searxng.search_errors import SearchPermanentError
+                    from nova.community.searxng.search_errors import SearchPermanentError
 
                     raise SearchPermanentError(
                         f"SearXNG client error (HTTP {resp.status_code})",

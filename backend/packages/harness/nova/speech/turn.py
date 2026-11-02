@@ -131,7 +131,7 @@ class SmartTurnV3(TurnDetector):
         try:
             import onnxruntime as ort
 
-            from deerflow.speech.devices import resolve_onnx_providers
+            from nova.speech.devices import resolve_onnx_providers
 
             providers, _ = resolve_onnx_providers(self.device, subsystem="smart-turn")
             opts = ort.SessionOptions()
@@ -158,7 +158,7 @@ class SmartTurnV3(TurnDetector):
 
     def warmup(self) -> None:
         if not self._ensure():
-            from deerflow.speech.base import SpeechEngineUnavailable
+            from nova.speech.base import SpeechEngineUnavailable
 
             raise SpeechEngineUnavailable(f"smart-turn weights not found at {self._model_path!r}. Run scripts/fetch-voice-models.sh")
 

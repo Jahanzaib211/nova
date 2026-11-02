@@ -10,7 +10,7 @@ Replaces the basic tool with a hardened version that:
 Configuration (in config.yaml):
   - name: web_search
     group: web
-    use: deerflow.community.searxng.tools:web_search_tool
+    use: nova.community.searxng.tools:web_search_tool
     base_url: http://searxng:8080
     max_results: 5
     tor_enabled: false
@@ -25,7 +25,7 @@ from typing import Any
 
 from langchain.tools import tool
 
-from deerflow.community._tool_config import tool_config_extras as _get_tool_config
+from nova.community._tool_config import tool_config_extras as _get_tool_config
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def _get_searxng_client(base_url: str, use_tor: bool) -> Any:
     Exposed at module scope so tests can patch it (see tests/test_searxng_client.py
     TestSearxngTools). Production callers do not override this.
     """
-    from deerflow.community.searxng.searxng_client import SearxngClient
+    from nova.community.searxng.searxng_client import SearxngClient
 
     return SearxngClient(base_url=base_url, tor_enabled=use_tor)
 
@@ -57,7 +57,7 @@ async def web_search_tool(query: str, tor: bool = False) -> str:
     use_tor = tor or tor_default
 
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         client = _get_searxng_client(base_url, use_tor)
         results = await client.search(query, max_results=max_results)
@@ -96,7 +96,7 @@ async def web_search_tool(query: str, tor: bool = False) -> str:
             return await _ddg_fallback(query, max_results, start)
         except Exception as fallback_exc:
             logger.error("DDG fallback also failed: %s", fallback_exc)
-            from deerflow.community.searxng.audit import get_audit_trail
+            from nova.community.searxng.audit import get_audit_trail
 
             get_audit_trail().search(
                 query=query,
@@ -114,12 +114,12 @@ async def web_search_tool(query: str, tor: bool = False) -> str:
 
 
 async def _ddg_fallback(query: str, max_results: int, start: float) -> str:
-    from deerflow.community.ddg_search.tools import web_search_tool as ddg_tool
+    from nova.community.ddg_search.tools import web_search_tool as ddg_tool
 
     raw = await ddg_tool.ainvoke({"query": query})
     elapsed_ms = (time.monotonic() - start) * 1000
 
-    from deerflow.community.searxng.audit import get_audit_trail
+    from nova.community.searxng.audit import get_audit_trail
 
     get_audit_trail().search(
         query=query,

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from deerflow.agents.memory.message_processing import detect_correction, detect_reinforcement, filter_messages_for_memory
-from deerflow.agents.memory.queue import get_memory_queue
-from deerflow.agents.middlewares.summarization_middleware import SummarizationEvent
-from deerflow.config.memory_config import get_memory_config
-from deerflow.runtime.user_context import resolve_runtime_user_id
+from nova.agents.memory.message_processing import detect_correction, detect_reinforcement, filter_messages_for_memory
+from nova.agents.memory.queue import get_memory_queue
+from nova.agents.middlewares.summarization_middleware import SummarizationEvent
+from nova.config.memory_config import get_memory_config
+from nova.runtime.user_context import resolve_runtime_user_id
 
 
 def memory_flush_hook(event: SummarizationEvent) -> None:

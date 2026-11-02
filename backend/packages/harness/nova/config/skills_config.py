@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from deerflow.config.runtime_paths import project_root, resolve_path
+from nova.config.runtime_paths import project_root, resolve_path
 
 
 def _legacy_skills_candidates() -> tuple[Path, ...]:
@@ -17,7 +17,7 @@ class SkillsConfig(BaseModel):
     """Configuration for skills system"""
 
     use: str = Field(
-        default="deerflow.skills.storage.local_skill_storage:LocalSkillStorage",
+        default="nova.skills.storage.local_skill_storage:LocalSkillStorage",
         description="Class path of the SkillStorage implementation.",
     )
     path: str | None = Field(

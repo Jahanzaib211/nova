@@ -68,8 +68,8 @@ def test_factory_uses_byok_contextvar():
     """create_chat_model overrides api_key when the BYOK contextvar is set."""
     from types import SimpleNamespace
 
-    from deerflow.models import factory
-    from deerflow.runtime.byok_context import reset_byok_api_key, set_byok_api_key
+    from nova.models import factory
+    from nova.runtime.byok_context import reset_byok_api_key, set_byok_api_key
 
     captured = {}
 
@@ -120,7 +120,7 @@ def test_factory_uses_byok_contextvar():
 def client(tmp_path):
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     url = f"sqlite+aiosqlite:///{tmp_path}/byok.db"
@@ -220,7 +220,7 @@ async def test_start_run_byok_bypasses_wall_and_sets_key(monkeypatch):
 
     set_keys: list[str | None] = []
     monkeypatch.setattr(
-        "deerflow.runtime.byok_context.set_byok_api_key",
+        "nova.runtime.byok_context.set_byok_api_key",
         lambda k: set_keys.append(k),
     )
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from deerflow.config import (
+from nova.config import (
     get_enabled_tracing_providers,
     get_tracing_config,
     validate_enabled_tracing_providers,
@@ -59,7 +59,7 @@ def build_tracing_callbacks() -> list[Any]:
             # every span silently, which reads as "tracing works" while
             # nothing is collected.
             try:
-                from deerflow.tracing.otel import OTelTracingHandler, otel_tracing_enabled
+                from nova.tracing.otel import OTelTracingHandler, otel_tracing_enabled
 
                 if otel_tracing_enabled():
                     callbacks.append(OTelTracingHandler())

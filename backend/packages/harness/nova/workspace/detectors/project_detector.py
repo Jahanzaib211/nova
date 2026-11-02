@@ -10,8 +10,8 @@ import json
 import uuid
 from pathlib import Path
 
-from deerflow.workspace.models.project import Project, ProjectKind
-from deerflow.workspace.scanners.walker import BoundedWalker, TraversalLimit
+from nova.workspace.models.project import Project, ProjectKind
+from nova.workspace.scanners.walker import BoundedWalker, TraversalLimit
 
 PROJECT_MARKERS: dict[str, ProjectKind] = {
     "package.json": ProjectKind.NODE_PROJECT,

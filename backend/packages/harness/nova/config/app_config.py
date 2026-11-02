@@ -10,39 +10,39 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from deerflow.config.acp_config import ACPAgentConfig, load_acp_config_from_dict
-from deerflow.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
-from deerflow.config.capabilities_config import CapabilitiesConfig
-from deerflow.config.channel_connections_config import ChannelConnectionsConfig
-from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
-from deerflow.config.database_config import DatabaseConfig
-from deerflow.config.email_config import EmailConfig
-from deerflow.config.email_marketing_config import EmailMarketingConfig
-from deerflow.config.extensions_config import ExtensionsConfig
-from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
-from deerflow.config.integrations_config import IntegrationsConfig
-from deerflow.config.jobs_config import JobsConfig
-from deerflow.config.loop_detection_config import LoopDetectionConfig
-from deerflow.config.memory_config import MemoryConfig, load_memory_config_from_dict
-from deerflow.config.model_config import ModelConfig
-from deerflow.config.reload_boundary import format_field_description
-from deerflow.config.run_events_config import RunEventsConfig
-from deerflow.config.runtime_paths import existing_project_file
-from deerflow.config.runtimes_config import RuntimesConfig
-from deerflow.config.safety_finish_reason_config import SafetyFinishReasonConfig
-from deerflow.config.sandbox_config import SandboxConfig
-from deerflow.config.skill_evolution_config import SkillEvolutionConfig
-from deerflow.config.skills_config import SkillsConfig
-from deerflow.config.stream_bridge_config import StreamBridgeConfig, load_stream_bridge_config_from_dict
-from deerflow.config.subagents_config import SubagentsAppConfig, load_subagents_config_from_dict
-from deerflow.config.suggestions_config import SuggestionsConfig
-from deerflow.config.summarization_config import SummarizationConfig, load_summarization_config_from_dict
-from deerflow.config.title_config import TitleConfig, load_title_config_from_dict
-from deerflow.config.token_usage_config import TokenUsageConfig
-from deerflow.config.tool_config import ToolConfig, ToolGroupConfig
-from deerflow.config.tool_output_config import ToolOutputConfig
-from deerflow.config.tool_search_config import ToolSearchConfig, load_tool_search_config_from_dict
-from deerflow.config.workspace_config import WorkspaceIntelConfig
+from nova.config.acp_config import ACPAgentConfig, load_acp_config_from_dict
+from nova.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
+from nova.config.capabilities_config import CapabilitiesConfig
+from nova.config.channel_connections_config import ChannelConnectionsConfig
+from nova.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
+from nova.config.database_config import DatabaseConfig
+from nova.config.email_config import EmailConfig
+from nova.config.email_marketing_config import EmailMarketingConfig
+from nova.config.extensions_config import ExtensionsConfig
+from nova.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
+from nova.config.integrations_config import IntegrationsConfig
+from nova.config.jobs_config import JobsConfig
+from nova.config.loop_detection_config import LoopDetectionConfig
+from nova.config.memory_config import MemoryConfig, load_memory_config_from_dict
+from nova.config.model_config import ModelConfig
+from nova.config.reload_boundary import format_field_description
+from nova.config.run_events_config import RunEventsConfig
+from nova.config.runtime_paths import existing_project_file
+from nova.config.runtimes_config import RuntimesConfig
+from nova.config.safety_finish_reason_config import SafetyFinishReasonConfig
+from nova.config.sandbox_config import SandboxConfig
+from nova.config.skill_evolution_config import SkillEvolutionConfig
+from nova.config.skills_config import SkillsConfig
+from nova.config.stream_bridge_config import StreamBridgeConfig, load_stream_bridge_config_from_dict
+from nova.config.subagents_config import SubagentsAppConfig, load_subagents_config_from_dict
+from nova.config.suggestions_config import SuggestionsConfig
+from nova.config.summarization_config import SummarizationConfig, load_summarization_config_from_dict
+from nova.config.title_config import TitleConfig, load_title_config_from_dict
+from nova.config.token_usage_config import TokenUsageConfig
+from nova.config.tool_config import ToolConfig, ToolGroupConfig
+from nova.config.tool_output_config import ToolOutputConfig
+from nova.config.tool_search_config import ToolSearchConfig, load_tool_search_config_from_dict
+from nova.config.workspace_config import WorkspaceIntelConfig
 
 load_dotenv()
 
@@ -76,9 +76,9 @@ def logging_level_from_config(name: str | None) -> int:
 
 
 def apply_logging_level(name: str | None) -> None:
-    """Resolve *name* to a logging level and apply it to the ``deerflow``/``app`` logger hierarchies.
+    """Resolve *name* to a logging level and apply it to the ``nova``/``app`` logger hierarchies.
 
-    Only the ``deerflow`` and ``app`` logger levels are changed so that
+    Only the ``nova`` and ``app`` logger levels are changed so that
     third-party library verbosity (e.g. uvicorn, sqlalchemy) is not
     affected. Root handler levels are lowered (never raised) so that
     messages from the configured loggers can propagate through without
@@ -86,7 +86,7 @@ def apply_logging_level(name: str | None) -> None:
     intentionally restrictive for third-party log output.
     """
     level = logging_level_from_config(name)
-    for logger_name in ("deerflow", "app"):
+    for logger_name in ("nova", "app"):
         logging.getLogger(logger_name).setLevel(level)
     for handler in logging.root.handlers:
         if level < handler.level:
@@ -100,7 +100,7 @@ class AppConfig(BaseModel):
         default="info",
         description=format_field_description(
             "log_level",
-            field_doc="Logging level for deerflow and app modules (debug/info/warning/error); third-party libraries are not affected.",
+            field_doc="Logging level for nova and app modules (debug/info/warning/error); third-party libraries are not affected.",
         ),
     )
     token_usage: TokenUsageConfig = Field(default_factory=TokenUsageConfig, description="Token usage tracking configuration")
@@ -129,7 +129,7 @@ class AppConfig(BaseModel):
     suggestions: SuggestionsConfig = Field(default_factory=SuggestionsConfig, description="Follow-up suggestions configuration.")
     speech: dict = Field(
         default_factory=dict,
-        description="Voice (STT/TTS) configuration. Untyped on purpose: engine kwargs are engine-specific and are passed straight to the constructor by deerflow.speech.registry, the same way sandbox.use works. Absent or enabled=false means voice is off.",
+        description="Voice (STT/TTS) configuration. Untyped on purpose: engine kwargs are engine-specific and are passed straight to the constructor by nova.speech.registry, the same way sandbox.use works. Absent or enabled=false means voice is off.",
     )
     circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig, description="LLM circuit breaker configuration")
     model_fallbacks: list[str] = Field(default_factory=list, description="Models (by name, in order) that take over a turn when the current one is out of quota or credit. Unknown names are skipped.")
@@ -292,7 +292,7 @@ class AppConfig(BaseModel):
         config.yaml wins on name collisions; invalid runtime entries are skipped
         with a warning rather than failing the whole config load.
         """
-        from deerflow.config.runtime_models import load_runtime_model_dicts, runtime_models_path
+        from nova.config.runtime_models import load_runtime_model_dicts, runtime_models_path
 
         entries = load_runtime_model_dicts(runtime_models_path(resolved_path))
         if not entries:
@@ -328,7 +328,7 @@ class AppConfig(BaseModel):
 
     @classmethod
     def _apply_singleton_configs(cls, config: Self, acp_agents: dict[str, ACPAgentConfig]) -> None:
-        from deerflow.config.checkpointer_config import get_checkpointer_config
+        from nova.config.checkpointer_config import get_checkpointer_config
 
         previous_checkpointer_config = get_checkpointer_config()
 
@@ -346,8 +346,8 @@ class AppConfig(BaseModel):
         if previous_checkpointer_config != config.checkpointer:
             # These runtime singletons derive their backend from checkpointer config.
             # Keep imports local to avoid cycles: both providers import get_app_config.
-            from deerflow.runtime.checkpointer import reset_checkpointer
-            from deerflow.runtime.store import reset_store
+            from nova.runtime.checkpointer import reset_checkpointer
+            from nova.runtime.store import reset_store
 
             reset_checkpointer()
             reset_store()
@@ -511,7 +511,7 @@ def _get_config_signature(config_path: Path) -> _ConfigSignature | None:
 def _get_combined_signature(config_path: Path) -> _CombinedSignature:
     """Signature covering config.yaml and the runtime models store, so a write
     to either file triggers the mtime/content reload in get_app_config()."""
-    from deerflow.config.runtime_models import runtime_models_path
+    from nova.config.runtime_models import runtime_models_path
 
     return (
         _get_config_signature(config_path),

@@ -9,12 +9,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from deerflow.capabilities.modules._common import Empty, Items
-from deerflow.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
+from nova.capabilities.modules._common import Empty, Items
+from nova.capabilities.types import CapabilityModule, ModuleStatus, OpContext, Operation
 
 
 def _registry():
-    from deerflow.runtimes import get_runtime_registry
+    from nova.runtimes import get_runtime_registry
 
     return get_runtime_registry()
 
@@ -28,7 +28,7 @@ class DescribeOut(BaseModel):
 
 
 async def _list(ctx: OpContext, inp: Empty) -> DescribeOut:
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     rt = getattr(get_app_config(), "runtimes", None)
     d = _registry().describe()
@@ -80,7 +80,7 @@ async def _sessions(ctx: OpContext, inp: SessionsIn) -> Items:
 
 
 async def _status() -> ModuleStatus:
-    from deerflow.config.app_config import get_app_config
+    from nova.config.app_config import get_app_config
 
     rt = getattr(get_app_config(), "runtimes", None)
     if rt is None or not getattr(rt, "enabled", False):

@@ -7,7 +7,7 @@ RunState dataclass, and a service container for dependency injection.
 
 Usage::
 
-    from deerflow.services import service_container, RunState
+    from nova.services import service_container, RunState
 
     # Get services via container
     run_svc = service_container.run_service()
@@ -20,8 +20,8 @@ Usage::
     service_container.override(run_service=my_mock_run_svc)
 """
 
-from deerflow.services.container import ServiceContainer, service_container
-from deerflow.services.protocols import (
+from nova.services.container import ServiceContainer, service_container
+from nova.services.protocols import (
     ArtifactService,
     BrowserService,
     ConfigurationService,
@@ -33,7 +33,7 @@ from deerflow.services.protocols import (
     TerminalService,
     WorkspaceService,
 )
-from deerflow.services.types import (
+from nova.services.types import (
     DiagnosticsRecord,
     HealthReport,
     ProbeResult,

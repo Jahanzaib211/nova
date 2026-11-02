@@ -6,9 +6,9 @@ from langchain_core.messages import ToolMessage
 from langgraph.config import get_config
 from langgraph.types import Command
 
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.tools.types import Runtime
+from nova.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.tools.types import Runtime
 
 OUTPUTS_VIRTUAL_PREFIX = f"{VIRTUAL_PATH_PREFIX}/outputs"
 

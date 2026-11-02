@@ -6,12 +6,12 @@ context onto the requests it builds.
 
 from __future__ import annotations
 
-from deerflow.execution.models import (
+from nova.execution.models import (
     ExecutionClass,
     ExecutionRequest,
     ResourceLimits,
 )
-from deerflow.execution.protocols import ExecutionKernelProtocol
+from nova.execution.protocols import ExecutionKernelProtocol
 
 
 class BaseAdapter:

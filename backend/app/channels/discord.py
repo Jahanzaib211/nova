@@ -534,7 +534,7 @@ class DiscordChannel(Channel):
                 )
                 return None
 
-            thread_name = f"deerflow-{message.author.display_name}-{message.id}"[:100]
+            thread_name = f"nova-{message.author.display_name}-{message.id}"[:100]
             return await message.create_thread(name=thread_name)
         except self._discord_module.errors.HTTPException as exc:
             if exc.code == 50024:

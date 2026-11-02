@@ -10,21 +10,21 @@ from langchain.tools import InjectedToolCallId, tool
 from langchain_core.callbacks import BaseCallbackManager
 from langgraph.config import get_stream_writer
 
-from deerflow.config import get_app_config
-from deerflow.runtime.user_context import resolve_runtime_user_id
-from deerflow.sandbox.security import LOCAL_BASH_SUBAGENT_DISABLED_MESSAGE, is_host_bash_allowed
-from deerflow.subagents import SubagentExecutor, get_available_subagent_names, get_subagent_config
-from deerflow.subagents.config import resolve_subagent_model_name
-from deerflow.subagents.executor import (
+from nova.config import get_app_config
+from nova.runtime.user_context import resolve_runtime_user_id
+from nova.sandbox.security import LOCAL_BASH_SUBAGENT_DISABLED_MESSAGE, is_host_bash_allowed
+from nova.subagents import SubagentExecutor, get_available_subagent_names, get_subagent_config
+from nova.subagents.config import resolve_subagent_model_name
+from nova.subagents.executor import (
     SubagentStatus,
     cleanup_background_task,
     get_background_task_result,
     request_cancel_background_task,
 )
-from deerflow.tools.types import Runtime
+from nova.tools.types import Runtime
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +328,7 @@ async def task_tool(
 
     # Get available tools (excluding task tool to prevent nesting)
     # Lazy import to avoid circular dependency
-    from deerflow.tools import get_available_tools
+    from nova.tools import get_available_tools
 
     # Inherit parent agent's tool_groups so subagents respect the same restrictions
     parent_tool_groups = metadata.get("tool_groups")

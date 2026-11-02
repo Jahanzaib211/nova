@@ -8,7 +8,7 @@ requests carry argv only).
 
 Usage::
 
-    from deerflow.execution.policy import PolicyEngine
+    from nova.execution.policy import PolicyEngine
 
     engine = PolicyEngine()
     decision = engine.evaluate(request)
@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from deerflow.execution.models import (
+from nova.execution.models import (
     ExecutionClass,
     ExecutionRequest,
     PolicyDecision,

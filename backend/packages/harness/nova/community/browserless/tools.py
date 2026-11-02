@@ -4,8 +4,8 @@ import time
 
 from langchain.tools import tool
 
-from deerflow.community._tool_config import tool_config_extras as _get_tool_config
-from deerflow.utils.readability import ReadabilityExtractor
+from nova.community._tool_config import tool_config_extras as _get_tool_config
+from nova.utils.readability import ReadabilityExtractor
 
 from .browserless_client import BrowserlessClient
 
@@ -92,7 +92,7 @@ def _record_fetch(url: str, *, success: bool, duration_ms: float, error: str | N
     every failure here is swallowed.
     """
     try:
-        from deerflow.community.searxng.audit import get_audit_trail
+        from nova.community.searxng.audit import get_audit_trail
 
         get_audit_trail().fetch(
             url=url,

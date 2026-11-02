@@ -185,7 +185,7 @@ def require_auth[**P, T](func: Callable[P, T]) -> Callable[P, T]:
         _env_bypass = _is_auth_disabled()
 
         if _test_bypass or _env_bypass:
-            from deerflow.runtime.user_context import get_current_user
+            from nova.runtime.user_context import get_current_user
 
             existing_user = get_current_user()
             if existing_user is not None:

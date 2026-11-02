@@ -13,8 +13,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.gateway.services import sse_consumer
-from deerflow.runtime.runs.manager import RunManager, RunRecord, RunStatus
-from deerflow.runtime.runs.store.memory import MemoryRunStore
+from nova.runtime.runs.manager import RunManager, RunRecord, RunStatus
+from nova.runtime.runs.store.memory import MemoryRunStore
 
 
 class _FakeBridge:
@@ -25,7 +25,7 @@ class _FakeBridge:
 
     async def subscribe(self, run_id, last_event_id=None):
         self.subscribed.append(run_id)
-        from deerflow.runtime import END_SENTINEL
+        from nova.runtime import END_SENTINEL
 
         yield END_SENTINEL
 
@@ -68,7 +68,7 @@ async def test_sse_consumer_omits_correlation_id_when_empty():
         thread_id="thread-a",
         assistant_id=None,
         status=RunStatus.success,
-        on_disconnect=__import__("deerflow.runtime.runs.schemas", fromlist=["DisconnectMode"]).DisconnectMode.cancel,
+        on_disconnect=__import__("nova.runtime.runs.schemas", fromlist=["DisconnectMode"]).DisconnectMode.cancel,
         correlation_id="",
     )
     bridge = _FakeBridge()

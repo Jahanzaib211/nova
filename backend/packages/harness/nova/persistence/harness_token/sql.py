@@ -17,7 +17,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.harness_token.model import HarnessTokenRow
+from nova.persistence.harness_token.model import HarnessTokenRow
 
 TOKEN_PREFIX = "nhk_"
 _SHAPE = re.compile(r"^nhk_[A-Za-z0-9_-]{43}$")

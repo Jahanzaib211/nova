@@ -30,7 +30,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
-from deerflow.runtime.stream_bridge.base import StreamBridge
+from nova.runtime.stream_bridge.base import StreamBridge
 
 logger = logging.getLogger(__name__)
 

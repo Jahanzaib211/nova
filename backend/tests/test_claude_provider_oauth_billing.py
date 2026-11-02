@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from deerflow.models.claude_provider import OAUTH_BILLING_HEADER, ClaudeChatModel
+from nova.models.claude_provider import OAUTH_BILLING_HEADER, ClaudeChatModel
 
 
 def _make_model() -> ClaudeChatModel:

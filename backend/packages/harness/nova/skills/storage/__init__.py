@@ -1,12 +1,12 @@
 """SkillStorage singleton + reflection-based factory.
 
-Mirrors the pattern used by ``deerflow/sandbox/sandbox_provider.py``.
+Mirrors the pattern used by ``nova/sandbox/sandbox_provider.py``.
 """
 
 from __future__ import annotations
 
-from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
-from deerflow.skills.storage.skill_storage import SkillStorage
+from nova.skills.storage.local_skill_storage import LocalSkillStorage
+from nova.skills.storage.skill_storage import SkillStorage
 
 _default_skill_storage: SkillStorage | None = None
 _default_skill_storage_config: object | None = None
@@ -27,11 +27,11 @@ def get_or_new_skill_storage(**kwargs) -> SkillStorage:
     """
     global _default_skill_storage, _default_skill_storage_config
 
-    from deerflow.config import get_app_config
-    from deerflow.config.skills_config import SkillsConfig
+    from nova.config import get_app_config
+    from nova.config.skills_config import SkillsConfig
 
     def _make_storage(skills_config: SkillsConfig, *, host_path: str | None = None, **kwargs) -> SkillStorage:
-        from deerflow.reflection import resolve_class
+        from nova.reflection import resolve_class
 
         cls = resolve_class(skills_config.use, SkillStorage)
         return cls(
@@ -48,7 +48,7 @@ def get_or_new_skill_storage(**kwargs) -> SkillStorage:
             return _make_storage(app_config.skills, host_path=str(skills_path), **kwargs)
         # No app_config: use a default SkillsConfig so we never need to read config.yaml
         # when the caller has already supplied an explicit host path.
-        from deerflow.config.skills_config import SkillsConfig
+        from nova.config.skills_config import SkillsConfig
 
         return _make_storage(SkillsConfig(), host_path=str(skills_path), **kwargs)
 

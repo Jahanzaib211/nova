@@ -5,13 +5,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from deerflow.agents.memory.storage import (
+from nova.agents.memory.storage import (
     FileMemoryStorage,
     MemoryStorage,
     create_empty_memory,
     get_memory_storage,
 )
-from deerflow.config.memory_config import MemoryConfig
+from nova.config.memory_config import MemoryConfig
 
 
 class TestCreateEmptyMemory:
@@ -52,8 +52,8 @@ class TestFileMemoryStorage:
             mock_paths.memory_file = tmp_path / "memory.json"
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 path = storage._get_memory_file_path(None)
                 assert path == tmp_path / "memory.json"
@@ -66,7 +66,7 @@ class TestFileMemoryStorage:
             mock_paths.agent_memory_file.return_value = tmp_path / "agents" / "test-agent" / "memory.json"
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
             storage = FileMemoryStorage()
             path = storage._get_memory_file_path("test-agent")
             assert path == tmp_path / "agents" / "test-agent" / "memory.json"
@@ -86,8 +86,8 @@ class TestFileMemoryStorage:
             mock_paths.memory_file = tmp_path / "non_existent_memory.json"
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 memory = storage.load()
                 assert isinstance(memory, dict)
@@ -102,8 +102,8 @@ class TestFileMemoryStorage:
             mock_paths.memory_file = memory_file
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 test_memory = {"version": "1.0", "facts": [{"content": "test fact"}]}
                 result = storage.save(test_memory)
@@ -119,8 +119,8 @@ class TestFileMemoryStorage:
             mock_paths.memory_file = memory_file
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 original = {"version": "1.0", "facts": []}
                 before_keys = set(original.keys())
@@ -147,8 +147,8 @@ class TestFileMemoryStorage:
             mock_paths.memory_file = memory_file
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 # Warm the cache
                 cached = storage.load()
@@ -186,8 +186,8 @@ class TestFileMemoryStorage:
             except Exception as exc:
                 errors.append(exc)
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 threads = [threading.Thread(target=load_many, args=(storage,)) for _ in range(8)]
                 for t in threads:
@@ -208,8 +208,8 @@ class TestFileMemoryStorage:
             mock_paths.memory_file = memory_file
             return mock_paths
 
-        with patch("deerflow.agents.memory.storage.get_paths", side_effect=mock_get_paths):
-            with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
+        with patch("nova.agents.memory.storage.get_paths", side_effect=mock_get_paths):
+            with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_path="")):
                 storage = FileMemoryStorage()
                 # First load
                 memory1 = storage.load()
@@ -229,7 +229,7 @@ class TestGetMemoryStorage:
     @pytest.fixture(autouse=True)
     def reset_storage_instance(self):
         """Reset the global storage instance before and after each test."""
-        from deerflow.agents.memory import storage as storage_mod
+        from nova.agents.memory import storage as storage_mod
 
         storage_mod._storage_instance = None
         yield
@@ -237,19 +237,19 @@ class TestGetMemoryStorage:
 
     def test_returns_file_memory_storage_by_default(self):
         """Should return FileMemoryStorage by default."""
-        with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="deerflow.agents.memory.storage.FileMemoryStorage")):
+        with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="nova.agents.memory.storage.FileMemoryStorage")):
             storage = get_memory_storage()
             assert isinstance(storage, FileMemoryStorage)
 
     def test_falls_back_to_file_memory_storage_on_error(self):
         """Should fall back to FileMemoryStorage if configured storage fails to load."""
-        with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="non.existent.StorageClass")):
+        with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="non.existent.StorageClass")):
             storage = get_memory_storage()
             assert isinstance(storage, FileMemoryStorage)
 
     def test_returns_singleton_instance(self):
         """Should return the same instance on subsequent calls."""
-        with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="deerflow.agents.memory.storage.FileMemoryStorage")):
+        with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="nova.agents.memory.storage.FileMemoryStorage")):
             storage1 = get_memory_storage()
             storage2 = get_memory_storage()
             assert storage1 is storage2
@@ -264,7 +264,7 @@ class TestGetMemoryStorage:
             # that the singleton initialization remains thread-safe.
             results.append(get_memory_storage())
 
-        with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="deerflow.agents.memory.storage.FileMemoryStorage")):
+        with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="nova.agents.memory.storage.FileMemoryStorage")):
             threads = [threading.Thread(target=get_storage) for _ in range(10)]
             for t in threads:
                 t.start()
@@ -278,13 +278,13 @@ class TestGetMemoryStorage:
     def test_get_memory_storage_invalid_class_fallback(self):
         """Should fall back to FileMemoryStorage if the configured class is not actually a class."""
         # Using a built-in function instead of a class
-        with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="os.path.join")):
+        with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="os.path.join")):
             storage = get_memory_storage()
             assert isinstance(storage, FileMemoryStorage)
 
     def test_get_memory_storage_non_subclass_fallback(self):
         """Should fall back to FileMemoryStorage if the configured class is not a subclass of MemoryStorage."""
         # Using 'dict' as a class that is not a MemoryStorage subclass
-        with patch("deerflow.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="builtins.dict")):
+        with patch("nova.agents.memory.storage.get_memory_config", return_value=MemoryConfig(storage_class="builtins.dict")):
             storage = get_memory_storage()
             assert isinstance(storage, FileMemoryStorage)

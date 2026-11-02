@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import asyncio
 
-from deerflow.jobs.context import JobContext
-from deerflow.jobs.registry import JobRegistry
+from nova.jobs.context import JobContext
+from nova.jobs.registry import JobRegistry
 
 
 async def sleep_job(ctx: JobContext) -> dict:

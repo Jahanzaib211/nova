@@ -287,7 +287,7 @@ def _make_internal_owner_check_app():
     from fastapi import Request
     from langgraph.store.memory import InMemoryStore
 
-    from deerflow.persistence.thread_meta.memory import MemoryThreadMetaStore
+    from nova.persistence.thread_meta.memory import MemoryThreadMetaStore
 
     app = FastAPI()
     thread_store = MemoryThreadMetaStore(InMemoryStore())
@@ -385,7 +385,7 @@ def test_sqlite_round_trip_new_fields():
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
 
     async def _run() -> None:
-        from deerflow.persistence.engine import (
+        from nova.persistence.engine import (
             close_engine,
             get_session_factory,
             init_engine,
@@ -442,7 +442,7 @@ def test_sqlite_email_lookup_is_case_insensitive():
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
 
     async def _run() -> None:
-        from deerflow.persistence.engine import (
+        from nova.persistence.engine import (
             close_engine,
             get_session_factory,
             init_engine,
@@ -512,7 +512,7 @@ def test_sqlite_round_trip_plan_and_referral_fields():
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
 
     async def _run() -> None:
-        from deerflow.persistence.engine import (
+        from nova.persistence.engine import (
             close_engine,
             get_session_factory,
             init_engine,
@@ -581,12 +581,12 @@ def test_update_user_raises_when_row_concurrently_deleted(tmp_path):
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
 
     async def _run() -> None:
-        from deerflow.persistence.engine import (
+        from nova.persistence.engine import (
             close_engine,
             get_session_factory,
             init_engine,
         )
-        from deerflow.persistence.user.model import UserRow
+        from nova.persistence.user.model import UserRow
 
         with tempfile.TemporaryDirectory() as d:
             url = f"sqlite+aiosqlite:///{d}/scratch.db"
@@ -981,7 +981,7 @@ def test_sqlite_update_user_maps_duplicate_email_to_value_error():
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
 
     async def _run() -> None:
-        from deerflow.persistence.engine import close_engine, get_session_factory, init_engine
+        from nova.persistence.engine import close_engine, get_session_factory, init_engine
 
         with tempfile.TemporaryDirectory() as tmpdir:
             await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmpdir}/dup.db", sqlite_dir=tmpdir)

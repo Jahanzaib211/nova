@@ -6,10 +6,10 @@ entities in the workspace.  It is built from scan + parse results.
 
 from __future__ import annotations
 
-from deerflow.workspace.graph.command_registry import CommandRegistry
-from deerflow.workspace.graph.dependency_graph import DependencyGraph
-from deerflow.workspace.graph.symbol_index import SymbolIndex
-from deerflow.workspace.graph.workspace_graph import WorkspaceGraph
+from nova.workspace.graph.command_registry import CommandRegistry
+from nova.workspace.graph.dependency_graph import DependencyGraph
+from nova.workspace.graph.symbol_index import SymbolIndex
+from nova.workspace.graph.workspace_graph import WorkspaceGraph
 
 __all__ = [
     "CommandRegistry",

@@ -1,11 +1,11 @@
-"""Tests for deerflow.config.tracing_config."""
+"""Tests for nova.config.tracing_config."""
 
 from __future__ import annotations
 
 import pytest
 
-from deerflow.config import tracing_config as tracing_module
-from deerflow.config.tracing_config import reset_tracing_config
+from nova.config import tracing_config as tracing_module
+from nova.config.tracing_config import reset_tracing_config
 
 
 def _reset_tracing_cache() -> None:

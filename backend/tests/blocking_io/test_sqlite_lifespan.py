@@ -27,8 +27,8 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_async_checkpointer_sqlite_setup_does_not_block_event_loop(tmp_path: Path) -> None:
-    from deerflow.config.checkpointer_config import CheckpointerConfig
-    from deerflow.runtime.checkpointer.async_provider import _async_checkpointer
+    from nova.config.checkpointer_config import CheckpointerConfig
+    from nova.runtime.checkpointer.async_provider import _async_checkpointer
 
     db_file = tmp_path / "subdir" / "store.db"
 

@@ -34,8 +34,8 @@ def _get_work_dir(thread_id: str | None) -> str:
     Returns:
         An absolute physical filesystem path to use as the working directory.
     """
-    from deerflow.config.paths import get_paths
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.config.paths import get_paths
+    from nova.runtime.user_context import get_effective_user_id
 
     paths = get_paths()
     if thread_id:
@@ -55,8 +55,8 @@ def _get_work_dir(thread_id: str | None) -> str:
 def _nova_mcp(user_id: str | None, thread_id: str | None):
     """Nova's MCP server for a delegated session: the chat runtime's factory,
     but minting a token scoped to the thread's sandbox only."""
-    from deerflow.runtimes.session import default_nova_mcp
-    from deerflow.runtimes.transcript import DELEGATE_ROLE
+    from nova.runtimes.session import default_nova_mcp
+    from nova.runtimes.transcript import DELEGATE_ROLE
 
     return default_nova_mcp(user_id, thread_id, role=DELEGATE_ROLE)
 
@@ -118,7 +118,7 @@ def _record_delegated_usage(config: Any, agent: str, agent_config: Any, text: An
 
 def _build_acp_mcp_servers() -> list[dict[str, Any]]:
     """ACP ``mcpServers`` payload for ``new_session`` (shared with the runtime dispatch)."""
-    from deerflow.runtimes.acp_transport import build_acp_mcp_servers
+    from nova.runtimes.acp_transport import build_acp_mcp_servers
 
     return build_acp_mcp_servers()
 
@@ -139,7 +139,7 @@ def _stream_writer() -> Callable[[dict[str, Any]], None] | None:
 
 def _build_permission_response(options: Any, *, auto_approve: bool, policy: Any | None = None, kind: str | None = None):
     """Select a permission option per policy (delegates to the shared transport)."""
-    from deerflow.runtimes.acp_transport import build_permission_response
+    from nova.runtimes.acp_transport import build_permission_response
 
     return build_permission_response(options, auto_approve=auto_approve, policy=policy, kind=kind)
 
@@ -194,7 +194,7 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         thread_id: str | None = ((config or {}).get("configurable") or {}).get("thread_id")
 
         try:
-            from deerflow.runtimes.acp_transport import run_acp_prompt
+            from nova.runtimes.acp_transport import run_acp_prompt
         except ImportError:
             return "Error: agent-client-protocol package is not installed. Run `uv sync` to install project dependencies."
 
@@ -216,10 +216,10 @@ def build_invoke_acp_agent_tool(agents: dict) -> BaseTool:
         # auto_approve_permissions (see backend/docs/ACP_AGENTS.md). Nova's own
         # sandbox tools are judged by operation kind, so they work in this
         # "standard" preset while the agent's private Write/Bash stay denied.
-        from deerflow.runtime.user_context import get_effective_user_id
-        from deerflow.runtimes.session import open_acp_session
-        from deerflow.runtimes.transcript import DELEGATE_ROLE
-        from deerflow.runtimes.types import PermissionPreset
+        from nova.runtime.user_context import get_effective_user_id
+        from nova.runtimes.session import open_acp_session
+        from nova.runtimes.transcript import DELEGATE_ROLE
+        from nova.runtimes.types import PermissionPreset
 
         permission = PermissionPreset(mode="standard", auto_approve=agent_config.auto_approve_permissions, policy=agent_config.permission_policy, label="agent policy", description="")
 

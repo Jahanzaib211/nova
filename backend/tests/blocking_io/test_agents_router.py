@@ -23,9 +23,9 @@ from types import SimpleNamespace
 import pytest
 
 from app.gateway.routers.agents import AgentCreateRequest, create_agent_endpoint, delete_agent
-from deerflow.config.agents_api_config import load_agents_api_config_from_dict
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_effective_user_id
+from nova.config.agents_api_config import load_agents_api_config_from_dict
+from nova.config.paths import get_paths
+from nova.runtime.user_context import get_effective_user_id
 
 pytestmark = pytest.mark.asyncio
 
@@ -38,7 +38,7 @@ def _make_auth_stub() -> SimpleNamespace:
 
 async def test_create_agent_does_not_block_event_loop(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
-    monkeypatch.setattr("deerflow.config.paths._paths", None)
+    monkeypatch.setattr("nova.config.paths._paths", None)
     load_agents_api_config_from_dict({"enabled": True})
     try:
         response = await create_agent_endpoint(
@@ -56,7 +56,7 @@ async def test_create_agent_does_not_block_event_loop(tmp_path: Path, monkeypatc
 
 async def test_delete_agent_does_not_block_event_loop(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("DEER_FLOW_HOME", str(tmp_path))
-    monkeypatch.setattr("deerflow.config.paths._paths", None)
+    monkeypatch.setattr("nova.config.paths._paths", None)
     load_agents_api_config_from_dict({"enabled": True})
     try:
         # The bypass preserves the contextvar user (test-user-autouse from autouse fixture)

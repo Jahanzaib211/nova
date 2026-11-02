@@ -9,8 +9,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.gateway.auth.config import AuthConfig, set_auth_config
-from deerflow.jobs.queue import JobQueue
-from deerflow.persistence.job.sql import JobRepository
+from nova.jobs.queue import JobQueue
+from nova.persistence.job.sql import JobRepository
 
 _TEST_SECRET = "test-secret-key-admin-jobs-min-32chars!!"
 _PASSWORD = "Passw0rd!Passw0rd!"
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.no_auto_user
 def app(tmp_path):
     from app.gateway import deps
     from app.gateway.app import create_app
-    from deerflow.persistence.engine import close_engine, init_engine
+    from nova.persistence.engine import close_engine, init_engine
 
     set_auth_config(AuthConfig(jwt_secret=_TEST_SECRET))
     asyncio.run(init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path}/admin_jobs.db", sqlite_dir=str(tmp_path)))
@@ -35,7 +35,7 @@ def app(tmp_path):
 
 
 def _repo() -> JobRepository:
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.engine import get_session_factory
 
     return JobRepository(get_session_factory())
 

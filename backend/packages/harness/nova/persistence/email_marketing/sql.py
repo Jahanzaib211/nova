@@ -15,7 +15,7 @@ from uuid import uuid4
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.email_marketing.model import (
+from nova.persistence.email_marketing.model import (
     EmBounceCursorRow,
     EmCampaignRow,
     EmContactRow,

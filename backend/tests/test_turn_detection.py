@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from deerflow.speech.turn import (
+from nova.speech.turn import (
     MEL_BINS,
     MEL_FRAMES,
     WINDOW_SAMPLES,
@@ -61,7 +61,7 @@ class TestFallbackIsAlwaysSafe:
         assert detector.completion_probability(b"\x00\x00" * 16_000) == 1.0
 
     def test_warmup_says_what_is_missing(self) -> None:
-        from deerflow.speech.base import SpeechEngineUnavailable
+        from nova.speech.base import SpeechEngineUnavailable
 
         with pytest.raises(SpeechEngineUnavailable, match="fetch-voice-models"):
             SmartTurnV3(model_path="/nope/does-not-exist.onnx").warmup()
@@ -73,8 +73,8 @@ class TestSessionTurnLogic:
     @staticmethod
     def _session(detector, config=None):
         from app.gateway.routers.voice import VoiceSession
-        from deerflow.speech.engines.null import ScriptedSTT, ToneTTS
-        from deerflow.speech.vad import EnergyVad, VadConfig
+        from nova.speech.engines.null import ScriptedSTT, ToneTTS
+        from nova.speech.vad import EnergyVad, VadConfig
 
         sent: list[dict] = []
 

@@ -1,4 +1,4 @@
-"""One MCP tool counter: ``deerflow.mcp.cache.tool_counts_by_server``.
+"""One MCP tool counter: ``nova.mcp.cache.tool_counts_by_server``.
 
 The integrations adapter counted by ``<server>_`` name prefix (what
 ``tool_name_prefix=True`` produces) while ``mcp.servers`` counted by
@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from deerflow.mcp import cache
+from nova.mcp import cache
 
 
 @pytest.fixture()
@@ -39,9 +39,9 @@ def test_counting_never_triggers_loading(monkeypatch):
 
 
 def test_capability_and_integrations_adapter_agree(loaded, monkeypatch):
-    from deerflow.capabilities.modules import mcp as mcp_module
-    from deerflow.capabilities.types import OpContext
-    from deerflow.integrations import adapters
+    from nova.capabilities.modules import mcp as mcp_module
+    from nova.capabilities.types import OpContext
+    from nova.integrations import adapters
 
     servers = {"github": SimpleNamespace(enabled=True, type="stdio", command="npx", url=None, description=""), "git": SimpleNamespace(enabled=True, type="stdio", command="uvx", url=None, description="")}
     monkeypatch.setattr(mcp_module, "_servers", lambda: servers)

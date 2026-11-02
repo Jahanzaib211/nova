@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.jobs.status import TERMINAL_JOB_STATUSES, JobEventType, JobStatus
+from nova.jobs.status import TERMINAL_JOB_STATUSES, JobEventType, JobStatus
 
 from .model import JobEventRow, JobRow, JobScheduleRow, JobWorkerRow
 

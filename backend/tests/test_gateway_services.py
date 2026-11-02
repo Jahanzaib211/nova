@@ -6,13 +6,13 @@ import json
 
 import pytest
 
-from deerflow.config.app_config import AppConfig, reset_app_config, set_app_config
+from nova.config.app_config import AppConfig, reset_app_config, set_app_config
 
 
 @pytest.fixture
 def _stub_app_config():
     """Keep run-context tests independent from a developer-local config.yaml."""
-    set_app_config(AppConfig.model_validate({"sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"}}))
+    set_app_config(AppConfig.model_validate({"sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"}}))
     yield
     reset_app_config()
 
@@ -279,7 +279,7 @@ def test_build_run_config_context_custom_agent_injects_agent_name():
 def test_resolve_agent_factory_returns_make_lead_agent():
     """resolve_agent_factory always returns make_lead_agent regardless of assistant_id."""
     from app.gateway.services import resolve_agent_factory
-    from deerflow.agents.lead_agent.agent import make_lead_agent
+    from nova.agents.lead_agent.agent import make_lead_agent
 
     assert resolve_agent_factory(None) is make_lead_agent
     assert resolve_agent_factory("lead_agent") is make_lead_agent
@@ -558,10 +558,10 @@ def test_start_run_uses_internal_owner_header_for_persistence(_stub_app_config):
 
     from app.gateway.internal_auth import INTERNAL_OWNER_USER_ID_HEADER_NAME, INTERNAL_SYSTEM_ROLE
     from app.gateway.services import start_run
-    from deerflow.persistence.thread_meta.memory import MemoryThreadMetaStore
-    from deerflow.runtime import RunManager
-    from deerflow.runtime.runs.store.memory import MemoryRunStore
-    from deerflow.runtime.user_context import get_effective_user_id
+    from nova.persistence.thread_meta.memory import MemoryThreadMetaStore
+    from nova.runtime import RunManager
+    from nova.runtime.runs.store.memory import MemoryRunStore
+    from nova.runtime.user_context import get_effective_user_id
 
     async def _scenario():
         run_store = MemoryRunStore()

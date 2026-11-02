@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from deerflow.persistence.base import Base
-from deerflow.persistence.thread_meta.sql import ThreadMetaRepository
+from nova.persistence.base import Base
+from nova.persistence.thread_meta.sql import ThreadMetaRepository
 
 
 @pytest.fixture

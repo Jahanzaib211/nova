@@ -9,8 +9,8 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from deerflow.persistence.engine import get_session_factory
-from deerflow.persistence.models.agent_config_row import AgentConfigRow
+from nova.persistence.engine import get_session_factory
+from nova.persistence.models.agent_config_row import AgentConfigRow
 
 
 class AgentRepository:

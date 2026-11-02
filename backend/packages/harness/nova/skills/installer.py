@@ -13,8 +13,8 @@ import stat
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from deerflow.skills.permissions import make_skill_tree_sandbox_readable
-from deerflow.skills.security_scanner import scan_skill_content
+from nova.skills.permissions import make_skill_tree_sandbox_readable
+from nova.skills.security_scanner import scan_skill_content
 
 logger = logging.getLogger(__name__)
 

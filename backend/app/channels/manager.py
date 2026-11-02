@@ -28,13 +28,13 @@ from app.channels.message_bus import (
 from app.channels.store import ChannelStore
 from app.gateway.csrf_middleware import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.gateway.internal_auth import create_internal_auth_headers
-from deerflow.config.agents_config import load_agent_config
-from deerflow.config.paths import make_safe_user_id
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.skills.slash import parse_slash_skill_reference
-from deerflow.skills.storage import get_or_new_skill_storage
-from deerflow.skills.storage.skill_storage import SkillStorage
-from deerflow.utils.messages import ORIGINAL_USER_CONTENT_KEY
+from nova.config.agents_config import load_agent_config
+from nova.config.paths import make_safe_user_id
+from nova.runtime.user_context import get_effective_user_id
+from nova.skills.slash import parse_slash_skill_reference
+from nova.skills.storage import get_or_new_skill_storage
+from nova.skills.storage.skill_storage import SkillStorage
+from nova.utils.messages import ORIGINAL_USER_CONTENT_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -516,7 +516,7 @@ def _owner_headers(msg: InboundMessage) -> dict[str, str] | None:
 
 
 def _safe_user_id_for_run(raw_user_id: str) -> str:
-    from deerflow.config.paths import get_paths
+    from nova.config.paths import get_paths
 
     try:
         return get_paths().prepare_user_dir_for_raw_id(raw_user_id)
@@ -589,7 +589,7 @@ def _resolve_attachments(thread_id: str, artifacts: list[str], *, user_id: str |
     Skips artifacts that cannot be resolved (missing files, invalid paths)
     and logs warnings for them.
     """
-    from deerflow.config.paths import get_paths
+    from nova.config.paths import get_paths
 
     attachments: list[ResolvedAttachment] = []
     paths = get_paths()
@@ -662,7 +662,7 @@ async def _ingest_inbound_files(thread_id: str, msg: InboundMessage, *, user_id:
     if not msg.files:
         return []
 
-    from deerflow.uploads.manager import (
+    from nova.uploads.manager import (
         UnsafeUploadPathError,
         claim_unique_filename,
         ensure_uploads_dir,

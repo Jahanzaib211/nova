@@ -1,6 +1,6 @@
 """``/api/integrations`` — what Nova can reach, and whether it works.
 
-Read model over :mod:`deerflow.integrations`: services from
+Read model over :mod:`nova.integrations`: services from
 ``integrations.services`` in config.yaml plus the MCP servers, skills and
 ACP agents the gateway already knows. Results are cached for
 ``integrations.probe_cache_seconds``; ``?refresh=1`` or ``POST …/probe``

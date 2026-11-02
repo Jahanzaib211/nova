@@ -6,7 +6,7 @@ methods read the contextvar via a sentinel default parameter, letting
 routers stay free of ``user_id`` boilerplate.
 
 Three-state semantics for the repository ``user_id`` parameter (the
-consumer side of this module lives in ``deerflow.persistence.*``):
+consumer side of this module lives in ``nova.persistence.*``):
 
 - ``_AUTO`` (module-private sentinel, default): read from contextvar;
   raise :class:`RuntimeError` if unset.

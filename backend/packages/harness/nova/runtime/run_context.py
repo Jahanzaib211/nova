@@ -21,7 +21,7 @@ here is required for a run to work; readers degrade to omitting the field
 when no frame is set (embedded clients, tests).
 
 Deliberately kept in the harness layer: consumers under
-``packages/harness/deerflow`` must be able to import it without crossing
+``packages/harness/nova`` must be able to import it without crossing
 into ``app.gateway``, per the harness-boundary rule.
 """
 

@@ -15,16 +15,16 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from deerflow.persistence.base import Base
+from nova.persistence.base import Base
 
 # Import all models so metadata is populated.
 try:
-    import deerflow.persistence.models as models  # register ORM models with Base.metadata
+    import nova.persistence.models as models  # register ORM models with Base.metadata
 
     _ = models
 except ImportError:
     # Models not available — migration will work with existing metadata only.
-    logging.getLogger(__name__).warning("Could not import deerflow.persistence.models; Alembic may not detect all tables")
+    logging.getLogger(__name__).warning("Could not import nova.persistence.models; Alembic may not detect all tables")
 
 config = context.config
 if config.config_file_name is not None:

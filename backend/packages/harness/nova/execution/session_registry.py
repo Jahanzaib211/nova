@@ -6,7 +6,7 @@ environment, terminal size, heartbeat, and metrics.
 
 Usage::
 
-    from deerflow.execution.session_registry import SessionRegistry, ShellSession
+    from nova.execution.session_registry import SessionRegistry, ShellSession
 
     registry = SessionRegistry()
     session = registry.create_session(run_id="run-1", ...)
@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from deerflow.execution.models import now_iso
+from nova.execution.models import now_iso
 
 logger = logging.getLogger(__name__)
 

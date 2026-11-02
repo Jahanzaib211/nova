@@ -11,9 +11,9 @@ import threading
 
 import pytest
 
-from deerflow.events.bus import EventBus
-from deerflow.workspace.events import CacheHit, WorkspaceScanned
-from deerflow.workspace.events.bridge import WorkspaceEventBridge
+from nova.events.bus import EventBus
+from nova.workspace.events import CacheHit, WorkspaceScanned
+from nova.workspace.events.bridge import WorkspaceEventBridge
 
 
 class TestSubscriptionScoping:
@@ -148,7 +148,7 @@ class TestDeadLoopIsSilentlyDropped:
         # in this sync test — that's the point: the loop is dead/foreign).
         sub_id = "manual"
         queue: asyncio.Queue = asyncio.Queue()
-        from deerflow.workspace.events.bridge import _Subscription
+        from nova.workspace.events.bridge import _Subscription
 
         bridge._subs[sub_id] = _Subscription(root_path="/root/a", loop=loop, queue=queue)
         loop.close()

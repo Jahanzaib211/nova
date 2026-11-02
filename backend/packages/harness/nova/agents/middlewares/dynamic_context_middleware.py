@@ -40,7 +40,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
 if TYPE_CHECKING:
-    from deerflow.config.app_config import AppConfig
+    from nova.config.app_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class DynamicContextMiddleware(AgentMiddleware):
         self._app_config = app_config
 
     def _build_full_reminder(self) -> str:
-        from deerflow.agents.lead_agent.prompt import _get_memory_context
+        from nova.agents.lead_agent.prompt import _get_memory_context
 
         # Memory injection is gated by injection_enabled; date is always included.
         injection_enabled = self._app_config.memory.injection_enabled if self._app_config else True

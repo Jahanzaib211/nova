@@ -17,22 +17,22 @@ logger = logging.getLogger(__name__)
 
 from langchain.tools import tool
 
-from deerflow.agents.thread_state import ThreadDataState
-from deerflow.config import get_app_config
-from deerflow.config.paths import VIRTUAL_PATH_PREFIX
-from deerflow.sandbox.exceptions import (
+from nova.agents.thread_state import ThreadDataState
+from nova.config import get_app_config
+from nova.config.paths import VIRTUAL_PATH_PREFIX
+from nova.sandbox.exceptions import (
     SandboxError,
     SandboxNotFoundError,
     SandboxRuntimeError,
 )
-from deerflow.sandbox.file_operation_lock import get_file_operation_lock
-from deerflow.sandbox.sandbox import Sandbox
-from deerflow.sandbox.sandbox_provider import get_sandbox_provider
-from deerflow.sandbox.search import GrepMatch
-from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
-from deerflow.tools.types import Runtime
-from deerflow.utils.atomic_write import atomic_write_text
-from deerflow.utils.sanitize import sanitize_terminal_text
+from nova.sandbox.file_operation_lock import get_file_operation_lock
+from nova.sandbox.sandbox import Sandbox
+from nova.sandbox.sandbox_provider import get_sandbox_provider
+from nova.sandbox.search import GrepMatch
+from nova.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
+from nova.tools.types import Runtime
+from nova.utils.atomic_write import atomic_write_text
+from nova.utils.sanitize import sanitize_terminal_text
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
 # A ``{...}`` block holding a single identifier-like placeholder (e.g. ``{id}``
@@ -136,7 +136,7 @@ def _thread_id_for_observation(sandbox_id: str) -> str | None:
     if not sandbox_id or sandbox_id == "local":
         return None
     try:
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         thread_sandboxes = getattr(get_sandbox_provider(), "_thread_sandboxes", None) or {}
         for thread_id, sid in thread_sandboxes.items():
@@ -182,8 +182,8 @@ def _sandbox_log_file(thread_id: str):
         if not thread_id:
             return None
 
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         try:
             user_id = get_effective_user_id()
@@ -481,7 +481,7 @@ def _write_sandbox_observation(
         # that got neither truncation nor sanitisation, which is how raw ANSI and
         # runs of NUL bytes from the dev-server mirror reached the Terminal and
         # rendered as garbage. SGR colour survives; cursor/erase codes and control
-        # bytes do not. See deerflow.utils.sanitize.
+        # bytes do not. See nova.utils.sanitize.
         record: dict = {
             "ts": ts,
             "type": tool,
@@ -494,7 +494,7 @@ def _write_sandbox_observation(
         # outside a stamped run is byte-identical to before and no consumer
         # sees null-padded keys.
         try:
-            from deerflow.runtime.run_context import current_run_fields
+            from nova.runtime.run_context import current_run_fields
 
             record.update(current_run_fields())
         except Exception:
@@ -537,7 +537,7 @@ def _write_sandbox_observation(
             # poll. Non-fatal by contract; delta/replace frames are skipped —
             # one signal per command, not per chunk.
             try:
-                from deerflow.sandbox.computer_events import (
+                from nova.sandbox.computer_events import (
                     emit_channel,
                     emit_observation,
                 )
@@ -602,7 +602,7 @@ def _readopt_released(sandbox: Sandbox):
     situation — destroyed containers must surface as errors, never resurrect.
     """
     try:
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         readopt = getattr(get_sandbox_provider(), "readopt_released", None)
         if readopt is None:
@@ -738,7 +738,7 @@ def _get_skills_container_path() -> str:
     if cached is not None:
         return cached
     try:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         value = get_app_config().skills.container_path
         _get_skills_container_path._cached = value  # type: ignore[attr-defined]
@@ -760,7 +760,7 @@ def _get_skills_host_path() -> str | None:
     if cached is not None:
         return cached
     try:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         config = get_app_config()
         skills_path = config.skills.get_skills_path()
@@ -821,7 +821,7 @@ def _get_custom_mounts():
     try:
         from pathlib import Path
 
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         config = get_app_config()
         mounts = []
@@ -890,8 +890,8 @@ def _get_acp_workspace_host_path(thread_id: str | None = None) -> str | None:
     """
     if thread_id is not None:
         try:
-            from deerflow.config.paths import get_paths
-            from deerflow.runtime.user_context import get_effective_user_id
+            from nova.config.paths import get_paths
+            from nova.runtime.user_context import get_effective_user_id
 
             host_path = get_paths().acp_workspace_dir(thread_id, user_id=get_effective_user_id())
             if host_path.exists():
@@ -904,7 +904,7 @@ def _get_acp_workspace_host_path(thread_id: str | None = None) -> str | None:
     if cached is not None:
         return cached
     try:
-        from deerflow.config.paths import get_paths
+        from nova.config.paths import get_paths
 
         host_path = get_paths().base_dir / "acp-workspace"
         if host_path.exists():
@@ -966,7 +966,7 @@ def _get_mcp_allowed_paths() -> list[str]:
     """Get the list of allowed paths from MCP config for file system server."""
     allowed_paths = []
     try:
-        from deerflow.config.extensions_config import get_extensions_config
+        from nova.config.extensions_config import get_extensions_config
 
         extensions_config = get_extensions_config()
 
@@ -2050,7 +2050,7 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
             command = _apply_cwd_prefix(command, thread_data)
             output = sandbox.execute_command(command)
             try:
-                from deerflow.config.app_config import get_app_config
+                from nova.config.app_config import get_app_config
 
                 sandbox_cfg = get_app_config().sandbox
                 max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
@@ -2062,7 +2062,7 @@ def bash_tool(runtime: Runtime, description: str, command: str) -> str:
             return result
         ensure_thread_directories_exist(runtime)
         try:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
@@ -2184,7 +2184,7 @@ def _capture_external_dev_server(
             try:
                 out = (sandbox.execute_command(probe) or "").strip()
                 if out[:1] in ("2", "3"):
-                    from deerflow.sandbox.dev_server import (
+                    from nova.sandbox.dev_server import (
                         register_external_dev_server,
                     )
 
@@ -2287,7 +2287,7 @@ async def _bash_tool_async(runtime: Runtime, description: str, command: str) -> 
                     thread_data = get_thread_data(runtime)
                     workspace_root = thread_data.get("workspace_path") or ""
                     if workspace_root:
-                        from deerflow.sandbox.dev_server import start_dev_server as _start
+                        from nova.sandbox.dev_server import start_dev_server as _start
 
                         bare_cmd, cwd = _extract_dev_command_and_cwd(command, workspace_root)
                         handle = await _start(thread_id, cwd, bare_cmd)
@@ -2309,8 +2309,8 @@ async def _bash_tool_async(runtime: Runtime, description: str, command: str) -> 
                 thread_data = get_thread_data(runtime)
                 thread_id = _extract_thread_id_from_thread_data(thread_data)
                 if sandbox_id and thread_id:
-                    from deerflow.sandbox import get_sandbox_provider
-                    from deerflow.sandbox.dev_server import start_dev_server as _start
+                    from nova.sandbox import get_sandbox_provider
+                    from nova.sandbox.dev_server import start_dev_server as _start
 
                     sandbox = get_sandbox_provider().get(sandbox_id)
                     if sandbox is not None:
@@ -2367,7 +2367,7 @@ def ls_tool(runtime: Runtime, description: str, path: str) -> str:
         if thread_data is not None:
             output = mask_local_paths_in_output(output, thread_data)
         try:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.ls_output_max_chars if sandbox_cfg else 20000
@@ -2596,7 +2596,7 @@ def read_file_tool(
         if start_line is not None and end_line is not None:
             content = "\n".join(content.splitlines()[start_line - 1 : end_line])
         try:
-            from deerflow.config.app_config import get_app_config
+            from nova.config.app_config import get_app_config
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.read_file_output_max_chars if sandbox_cfg else 50000

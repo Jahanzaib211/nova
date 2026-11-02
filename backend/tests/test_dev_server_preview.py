@@ -17,12 +17,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Import the agent graph first so deerflow.sandbox.tools loads in the same order
-# as production (avoids a tools-first circular import with deerflow.agents).
-from deerflow.community.aio_sandbox.local_backend import LocalContainerBackend
-from deerflow.community.aio_sandbox.sandbox_info import SandboxInfo
-from deerflow.execution.testing import FakeExecutionKernel
-from deerflow.services.container import service_container
+# Import the agent graph first so nova.sandbox.tools loads in the same order
+# as production (avoids a tools-first circular import with nova.agents).
+from nova.community.aio_sandbox.local_backend import LocalContainerBackend
+from nova.community.aio_sandbox.sandbox_info import SandboxInfo
+from nova.execution.testing import FakeExecutionKernel
+from nova.services.container import service_container
 
 
 @pytest.fixture(autouse=True)
@@ -85,7 +85,7 @@ def test_start_container_publishes_preview_ports(monkeypatch):
     )
     monkeypatch.setattr(backend, "_runtime", "docker")
     monkeypatch.setattr(
-        "deerflow.community.aio_sandbox.local_backend.get_free_port",
+        "nova.community.aio_sandbox.local_backend.get_free_port",
         _fake_get_free_port_factory(51000),
     )
 
@@ -167,7 +167,7 @@ def test_start_container_no_preview_ports_by_default(monkeypatch):
 
 
 def _make_bare_provider():
-    aio_mod = importlib.import_module("deerflow.community.aio_sandbox.aio_sandbox_provider")
+    aio_mod = importlib.import_module("nova.community.aio_sandbox.aio_sandbox_provider")
     provider = aio_mod.AioSandboxProvider.__new__(aio_mod.AioSandboxProvider)
     provider._lock = MagicMock()
     provider._thread_sandboxes = {}
@@ -215,11 +215,11 @@ class _FakeSandbox:
 
 
 def test_dev_server_aio_branch_runs_in_container(monkeypatch):
-    dev_server = importlib.import_module("deerflow.sandbox.dev_server")
+    dev_server = importlib.import_module("nova.sandbox.dev_server")
     dev_server._servers.clear()
 
     fake_provider = SimpleNamespace(get_preview_endpoint=lambda thread_id, container_port=4100: ("host.docker.internal", 51000))
-    monkeypatch.setattr("deerflow.sandbox.get_sandbox_provider", lambda: fake_provider)
+    monkeypatch.setattr("nova.sandbox.get_sandbox_provider", lambda: fake_provider)
     # Avoid touching the real filesystem when mirroring to sandbox.log.
     monkeypatch.setattr(dev_server, "_append_devlog_to_sandbox_log", lambda *a, **k: None)
 
@@ -250,11 +250,11 @@ def test_dev_server_aio_branch_runs_in_container(monkeypatch):
 
 
 def test_dev_server_aio_branch_errors_without_endpoint(monkeypatch):
-    dev_server = importlib.import_module("deerflow.sandbox.dev_server")
+    dev_server = importlib.import_module("nova.sandbox.dev_server")
     dev_server._servers.clear()
 
     fake_provider = SimpleNamespace(get_preview_endpoint=lambda thread_id, container_port=4100: None)
-    monkeypatch.setattr("deerflow.sandbox.get_sandbox_provider", lambda: fake_provider)
+    monkeypatch.setattr("nova.sandbox.get_sandbox_provider", lambda: fake_provider)
 
     sandbox = _FakeSandbox()
 
@@ -267,7 +267,7 @@ def test_dev_server_aio_branch_errors_without_endpoint(monkeypatch):
 
 
 def test_ensure_host_binding():
-    from deerflow.sandbox.dev_server import _ensure_host_binding
+    from nova.sandbox.dev_server import _ensure_host_binding
 
     # Next.js: no flag added (HOSTNAME env handles it).
     assert _ensure_host_binding("next dev") == "next dev"
@@ -283,7 +283,7 @@ def test_ensure_host_binding():
 def test_port_alive_reflects_listening_socket():
     """dev-status liveness is judged by a real TCP connect, so a running server's
     preview persists even if the log-tail poller died."""
-    from deerflow.sandbox.dev_server import port_alive as _port_alive
+    from nova.sandbox.dev_server import port_alive as _port_alive
 
     async def _run():
         server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
@@ -303,7 +303,7 @@ def test_port_alive_reflects_listening_socket():
 
 
 def test_extract_dev_command_strips_leading_env_prefix():
-    from deerflow.sandbox.tools import _extract_dev_command_and_cwd
+    from nova.sandbox.tools import _extract_dev_command_and_cwd
 
     # A leading inline env-assignment (PORT=4200 …) must be stripped so the
     # launcher doesn't exec it as the program (setsid: failed to execute PORT=…).
@@ -320,7 +320,7 @@ def test_extract_dev_command_strips_leading_env_prefix():
 
 
 def test_looks_like_dev_server_matches_dev_and_serves():
-    from deerflow.sandbox.tools import _looks_like_dev_server
+    from nova.sandbox.tools import _looks_like_dev_server
 
     for cmd in (
         "npm run dev",
@@ -343,7 +343,7 @@ def test_looks_like_dev_server_matches_dev_and_serves():
 
 
 def test_thread_id_for_observation_local_and_aio(monkeypatch):
-    from deerflow.sandbox import tools as sandbox_tools
+    from nova.sandbox import tools as sandbox_tools
 
     # Local per-thread id encodes the thread directly.
     assert sandbox_tools._thread_id_for_observation("local:abc-123") == "abc-123"
@@ -353,13 +353,13 @@ def test_thread_id_for_observation_local_and_aio(monkeypatch):
 
     # AIO hash id → reverse-looked-up from the provider's thread→sandbox map.
     fake_provider = SimpleNamespace(_thread_sandboxes={"thread-9": "hash-9", "thread-8": "hash-8"})
-    monkeypatch.setattr("deerflow.sandbox.get_sandbox_provider", lambda: fake_provider)
+    monkeypatch.setattr("nova.sandbox.get_sandbox_provider", lambda: fake_provider)
     assert sandbox_tools._thread_id_for_observation("hash-9") == "thread-9"
     assert sandbox_tools._thread_id_for_observation("unknown-hash") is None
 
 
 def test_allocate_container_port_assigns_distinct_ports(monkeypatch):
-    dev_server = importlib.import_module("deerflow.sandbox.dev_server")
+    dev_server = importlib.import_module("nova.sandbox.dev_server")
     dev_server._servers.clear()
 
     # Default label always gets the first published port.
@@ -374,12 +374,12 @@ def test_allocate_container_port_assigns_distinct_ports(monkeypatch):
 
 
 def test_dev_server_label_keying(monkeypatch):
-    dev_server = importlib.import_module("deerflow.sandbox.dev_server")
+    dev_server = importlib.import_module("nova.sandbox.dev_server")
     dev_server._servers.clear()
     monkeypatch.setattr(dev_server, "_append_devlog_to_sandbox_log", lambda *a, **k: None)
 
     fake_provider = SimpleNamespace(get_preview_endpoint=lambda thread_id, container_port=4100: ("h", 50000 + container_port))
-    monkeypatch.setattr("deerflow.sandbox.get_sandbox_provider", lambda: fake_provider)
+    monkeypatch.setattr("nova.sandbox.get_sandbox_provider", lambda: fake_provider)
     sandbox = _FakeSandbox()
 
     async def _run():

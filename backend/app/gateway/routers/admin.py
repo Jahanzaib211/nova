@@ -20,10 +20,10 @@ from app.gateway.deps import get_local_provider, get_run_service, require_admin_
 from app.gateway.referrals import _add_grant
 from app.gateway.routers.channel_connections import ChannelConnectionResponse, ChannelConnectionsResponse, _get_channel_connections_config, _get_repository
 from app.gateway.routers.thread_runs import _cancel_conflict_detail
-from deerflow.persistence.engine import get_session_factory
-from deerflow.persistence.thread_meta import ThreadMetaRepository
-from deerflow.runtime.events.store.db import DbRunEventStore
-from deerflow.utils.time import coerce_iso
+from nova.persistence.engine import get_session_factory
+from nova.persistence.thread_meta import ThreadMetaRepository
+from nova.runtime.events.store.db import DbRunEventStore
+from nova.utils.time import coerce_iso
 
 _NO_SQL_BACKEND_DETAIL = "Conversation history requires a SQL-backed deployment (config.yaml: database.backend=sqlite|postgres)."
 
@@ -559,8 +559,8 @@ async def list_user_thread_runs(
 
     from sqlalchemy import select
 
-    from deerflow.persistence.engine import get_session_factory as _sf
-    from deerflow.persistence.run.model import RunRow
+    from nova.persistence.engine import get_session_factory as _sf
+    from nova.persistence.run.model import RunRow
 
     sf = _sf()
     if sf is None:
@@ -919,7 +919,7 @@ async def reset_user_password(user_id: str, request: Request) -> ResetPasswordRe
     """
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
     from app.gateway.auth.reset_admin import reset_user_password as _reset
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.engine import get_session_factory
 
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     provider = get_local_provider()
@@ -1247,7 +1247,7 @@ async def gates_sandbox(request: Request) -> GateSandboxResponse:
     running: int | None = None
     backend = ""
     try:
-        from deerflow.sandbox import get_sandbox_provider
+        from nova.sandbox import get_sandbox_provider
 
         provider = get_sandbox_provider()
         backend = type(getattr(provider, "_backend", provider)).__name__

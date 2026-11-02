@@ -51,8 +51,8 @@ class ArtifactDelivery:
         Returns:
             List of resolved attachments.
         """
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         attachments: list[ResolvedAttachment] = []
         paths = get_paths()

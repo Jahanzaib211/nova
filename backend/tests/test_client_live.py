@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 from support.live_gate import live_skip_reason
 
-from deerflow.client import DeerFlowClient, StreamEvent
-from deerflow.sandbox.security import is_host_bash_allowed
-from deerflow.uploads.manager import PathTraversalError
+from nova.client import DeerFlowClient, StreamEvent
+from nova.sandbox.security import is_host_bash_allowed
+from nova.uploads.manager import PathTraversalError
 
 # Live tests are opt-in (DEERFLOW_LIVE_TESTS=1) and never run in CI.
 _skip_reason = live_skip_reason()

@@ -17,10 +17,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from deerflow.skills.security_scanner import scan_skill_content
-from deerflow.skills.storage import get_or_new_skill_storage
-from deerflow.skills.storage.skill_storage import SkillStorage
-from deerflow.skills.types import SKILL_MD_FILE
+from nova.skills.security_scanner import scan_skill_content
+from nova.skills.storage import get_or_new_skill_storage
+from nova.skills.storage.skill_storage import SkillStorage
+from nova.skills.types import SKILL_MD_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ async def promote_skill_to_global(name: str, source_dir: Path, *, thread_id: str
 
     # Refresh the in-process skills/system-prompt cache so it's available now.
     try:
-        from deerflow.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
+        from nova.agents.lead_agent.prompt import refresh_skills_system_prompt_cache_async
 
         await refresh_skills_system_prompt_cache_async()
     except Exception:

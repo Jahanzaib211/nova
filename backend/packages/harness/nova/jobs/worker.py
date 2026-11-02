@@ -21,7 +21,7 @@ from .registry import JobRegistry
 from .scheduler import tick_schedules
 
 if TYPE_CHECKING:
-    from deerflow.persistence.job.sql import JobRepository
+    from nova.persistence.job.sql import JobRepository
 
 logger = logging.getLogger(__name__)
 

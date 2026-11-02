@@ -1,4 +1,4 @@
-"""``deerflow.integrations`` — config, clients, registry and probe caching.
+"""``nova.integrations`` — config, clients, registry and probe caching.
 
 All HTTP goes through ``httpx.MockTransport``: nothing here touches the
 network, and every client is exercised against the shape its real service
@@ -13,9 +13,9 @@ import json
 import httpx
 import pytest
 
-from deerflow.config.integrations_config import IntegrationsConfig, IntegrationServiceConfig
-from deerflow.integrations.health import IntegrationKind, IntegrationStatus
-from deerflow.integrations.registry import IntegrationRegistry, build_registry
+from nova.config.integrations_config import IntegrationsConfig, IntegrationServiceConfig
+from nova.integrations.health import IntegrationKind, IntegrationStatus
+from nova.integrations.registry import IntegrationRegistry, build_registry
 
 pytestmark = pytest.mark.anyio
 
@@ -203,8 +203,8 @@ async def test_results_match_the_contract_item_schema():
 
 
 async def test_extension_adapters_list_mcp_servers_skills_and_acp_agents(monkeypatch, tmp_path):
-    from deerflow.config.acp_config import ACPAgentConfig
-    from deerflow.integrations import adapters
+    from nova.config.acp_config import ACPAgentConfig
+    from nova.integrations import adapters
 
     monkeypatch.setattr(adapters, "_mcp_servers", lambda: {"github": {"enabled": True}, "old": {"enabled": False}})
     monkeypatch.setattr(adapters, "_mcp_tool_counts", lambda servers: ({"github": 12}, True))

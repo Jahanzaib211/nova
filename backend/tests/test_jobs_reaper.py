@@ -6,16 +6,16 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from deerflow.jobs.queue import JobQueue
-from deerflow.jobs.status import JobStatus
-from deerflow.jobs.worker import reap_expired_leases
-from deerflow.persistence.job.sql import JobRepository
+from nova.jobs.queue import JobQueue
+from nova.jobs.status import JobStatus
+from nova.jobs.worker import reap_expired_leases
+from nova.persistence.job.sql import JobRepository
 
 pytestmark = pytest.mark.no_auto_user
 
 
 async def _repo(tmp_path) -> JobRepository:
-    from deerflow.persistence.engine import get_session_factory, init_engine
+    from nova.persistence.engine import get_session_factory, init_engine
 
     await init_engine("sqlite", url=f"sqlite+aiosqlite:///{tmp_path / 'jobs.db'}", sqlite_dir=str(tmp_path))
     return JobRepository(get_session_factory())
@@ -26,7 +26,7 @@ def _close_engine_after_test():
     yield
     import asyncio
 
-    from deerflow.persistence.engine import close_engine
+    from nova.persistence.engine import close_engine
 
     asyncio.run(close_engine())
 

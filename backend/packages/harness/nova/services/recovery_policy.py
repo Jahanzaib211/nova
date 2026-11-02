@@ -6,7 +6,7 @@ timeout, max retries, escalation condition, success condition.
 
 Usage::
 
-    from deerflow.services.recovery_policy import (
+    from nova.services.recovery_policy import (
         RecoveryPolicy,
         TunnelDisconnectedPolicy,
         select_policy,

@@ -10,8 +10,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from deerflow.execution.adapters.base import BaseAdapter
-from deerflow.execution.models import ExecutionClass, ExecutionResult
+from nova.execution.adapters.base import BaseAdapter
+from nova.execution.models import ExecutionClass, ExecutionResult
 
 
 class PythonAdapter(BaseAdapter):

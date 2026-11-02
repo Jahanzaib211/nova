@@ -8,14 +8,14 @@ from pydantic import BaseModel, Field
 from app.gateway.authz import require_auth
 from app.gateway.deps import get_config, get_current_user_from_request, is_admin
 from app.gateway.repositories.model_repository import get_model_repo
-from deerflow.config.app_config import AppConfig, reload_app_config
-from deerflow.config.model_config import ModelConfig
-from deerflow.config.runtime_models import (
+from nova.config.app_config import AppConfig, reload_app_config
+from nova.config.model_config import ModelConfig
+from nova.config.runtime_models import (
     load_runtime_model_dicts,
     runtime_model_names,
     save_runtime_model_dicts,
 )
-from deerflow.models.probe import PROBE_TIMEOUT_SECONDS
+from nova.models.probe import PROBE_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -443,7 +443,7 @@ async def discover_local_models() -> DiscoverResponse:
     description="Send a minimal completion request to the model and report whether it responds.",
 )
 async def test_model(model_name: str, config: AppConfig = Depends(get_config)) -> ModelTestResponse:
-    from deerflow.models.probe import probe_model
+    from nova.models.probe import probe_model
 
     try:
         result = await probe_model(model_name, app_config=config, timeout=MODEL_TEST_TIMEOUT_SEC)

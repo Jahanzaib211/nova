@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
-from deerflow.client import DeerFlowClient, StreamEvent
-from deerflow.config.app_config import AppConfig
+from nova.client import DeerFlowClient, StreamEvent
+from nova.config.app_config import AppConfig
 
 # Load .env from project root (for OPENAI_API_KEY etc.)
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
@@ -81,7 +81,7 @@ def _make_e2e_config() -> AppConfig:
                 }
             ],
             "sandbox": {
-                "use": "deerflow.sandbox.local:LocalSandboxProvider",
+                "use": "nova.sandbox.local:LocalSandboxProvider",
                 "allow_host_bash": True,
             },
         }
@@ -110,51 +110,51 @@ def e2e_env(tmp_path, monkeypatch):
         "DEER_FLOW_PROJECT_ROOT",
         str(Path(__file__).resolve().parents[2]),
     )
-    monkeypatch.setattr("deerflow.config.paths._paths", None)
-    monkeypatch.setattr("deerflow.sandbox.sandbox_provider._default_sandbox_provider", None)
+    monkeypatch.setattr("nova.config.paths._paths", None)
+    monkeypatch.setattr("nova.sandbox.sandbox_provider._default_sandbox_provider", None)
 
     # 2. Inject a clean AppConfig. We must reset _app_config to None BEFORE
     # calling _make_e2e_config() because AppConfig() constructor misbehaves when
     # a disk config is already cached: it returns the cached model list instead
     # of the provided one. Clearing first ensures the test config is correct.
-    monkeypatch.setattr("deerflow.config.app_config._app_config", None)
-    monkeypatch.setattr("deerflow.config.app_config._app_config_is_custom", False)
+    monkeypatch.setattr("nova.config.app_config._app_config", None)
+    monkeypatch.setattr("nova.config.app_config._app_config_is_custom", False)
     config = _make_e2e_config()
-    monkeypatch.setattr("deerflow.config.app_config._app_config", config)
-    monkeypatch.setattr("deerflow.config.app_config._app_config_is_custom", True)
-    monkeypatch.setattr("deerflow.client.get_app_config", lambda: config)
+    monkeypatch.setattr("nova.config.app_config._app_config", config)
+    monkeypatch.setattr("nova.config.app_config._app_config_is_custom", True)
+    monkeypatch.setattr("nova.client.get_app_config", lambda: config)
 
     # 3. Disable title generation (extra LLM call, non-deterministic)
-    from deerflow.config.title_config import TitleConfig
+    from nova.config.title_config import TitleConfig
 
-    monkeypatch.setattr("deerflow.config.title_config._title_config", TitleConfig(enabled=False))
+    monkeypatch.setattr("nova.config.title_config._title_config", TitleConfig(enabled=False))
 
     # 4. Disable memory queueing (avoids background threads & file writes)
-    from deerflow.config.memory_config import MemoryConfig
+    from nova.config.memory_config import MemoryConfig
 
     monkeypatch.setattr(
-        "deerflow.agents.middlewares.memory_middleware.get_memory_config",
+        "nova.agents.middlewares.memory_middleware.get_memory_config",
         lambda: MemoryConfig(enabled=False),
     )
 
     # 5. Ensure summarization is off (default, but be explicit)
-    from deerflow.config.summarization_config import SummarizationConfig
+    from nova.config.summarization_config import SummarizationConfig
 
-    monkeypatch.setattr("deerflow.config.summarization_config._summarization_config", SummarizationConfig(enabled=False))
+    monkeypatch.setattr("nova.config.summarization_config._summarization_config", SummarizationConfig(enabled=False))
 
     # 6. Exclude TitleMiddleware from the chain.
     #    It triggers an extra LLM call to generate a thread title, which adds
     #    non-determinism and cost to E2E tests (title generation is already
     #    disabled via TitleConfig above, but the middleware still participates
     #    in the chain and can interfere with event ordering).
-    from deerflow.agents.lead_agent.agent import build_middlewares as _original_build_middlewares
-    from deerflow.agents.middlewares.title_middleware import TitleMiddleware
+    from nova.agents.lead_agent.agent import build_middlewares as _original_build_middlewares
+    from nova.agents.middlewares.title_middleware import TitleMiddleware
 
     def _sync_safe_build_middlewares(*args, **kwargs):
         mws = _original_build_middlewares(*args, **kwargs)
         return [m for m in mws if not isinstance(m, TitleMiddleware)]
 
-    monkeypatch.setattr("deerflow.client.build_middlewares", _sync_safe_build_middlewares)
+    monkeypatch.setattr("nova.client.build_middlewares", _sync_safe_build_middlewares)
 
     return {"tmp_path": tmp_path}
 
@@ -285,8 +285,8 @@ class TestFileUploadIntegration:
         assert result["files"][0]["filename"] == "readme.txt"
 
         # Physically exists
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         assert (get_paths().sandbox_uploads_dir(tid, user_id=get_effective_user_id()) / "readme.txt").exists()
 
@@ -423,7 +423,7 @@ class TestMiddlewareChain:
 
         # ThreadDataMiddleware should have set paths in the state.
         # We verify the paths singleton can resolve the thread dir.
-        from deerflow.config.paths import get_paths
+        from nova.config.paths import get_paths
 
         thread_dir = get_paths().thread_dir(tid)
         assert str(thread_dir).endswith(tid)
@@ -496,8 +496,8 @@ class TestArtifactAccess:
 
     def test_get_artifact_happy_path(self, e2e_env):
         """Write a file to outputs, then read it back via get_artifact()."""
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         c = DeerFlowClient(checkpointer=None, thinking_enabled=False)
         tid = str(uuid.uuid4())
@@ -513,8 +513,8 @@ class TestArtifactAccess:
 
     def test_get_artifact_nested_path(self, e2e_env):
         """Artifacts in subdirectories are accessible."""
-        from deerflow.config.paths import get_paths
-        from deerflow.runtime.user_context import get_effective_user_id
+        from nova.config.paths import get_paths
+        from nova.runtime.user_context import get_effective_user_id
 
         c = DeerFlowClient(checkpointer=None, thinking_enabled=False)
         tid = str(uuid.uuid4())
@@ -552,11 +552,11 @@ class TestSkillInstallation:
     @pytest.fixture(autouse=True)
     def _allow_skill_security_scan(self, monkeypatch):
         async def _scan(*args, **kwargs):
-            from deerflow.skills.security_scanner import ScanResult
+            from nova.skills.security_scanner import ScanResult
 
             return ScanResult(decision="allow", reason="ok")
 
-        monkeypatch.setattr("deerflow.skills.installer.scan_skill_content", _scan)
+        monkeypatch.setattr("nova.skills.installer.scan_skill_content", _scan)
 
     @pytest.fixture(autouse=True)
     def _isolate_skills_dir(self, tmp_path, monkeypatch):
@@ -564,10 +564,10 @@ class TestSkillInstallation:
         skills_root = tmp_path / "skills"
         (skills_root / "public").mkdir(parents=True)
         (skills_root / "custom").mkdir(parents=True)
-        from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
+        from nova.skills.storage.local_skill_storage import LocalSkillStorage
 
         monkeypatch.setattr(
-            "deerflow.skills.storage._default_skill_storage",
+            "nova.skills.storage._default_skill_storage",
             LocalSkillStorage(host_path=str(skills_root)),
         )
         self._skills_root = skills_root
@@ -704,7 +704,7 @@ class TestConfigManagement:
         monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(config_file))
 
         # Force reload so the singleton picks up our test file
-        from deerflow.config.extensions_config import reload_extensions_config
+        from nova.config.extensions_config import reload_extensions_config
 
         reload_extensions_config()
 
@@ -730,7 +730,7 @@ class TestConfigManagement:
         config_file.write_text(json.dumps({"mcpServers": {}, "skills": {}}))
         monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(config_file))
 
-        from deerflow.config.extensions_config import reload_extensions_config
+        from nova.config.extensions_config import reload_extensions_config
 
         reload_extensions_config()
 
@@ -758,7 +758,7 @@ class TestConfigManagement:
         config_file.write_text(json.dumps({"mcpServers": {}, "skills": {}}))
         monkeypatch.setenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH", str(config_file))
 
-        from deerflow.config.extensions_config import reload_extensions_config
+        from nova.config.extensions_config import reload_extensions_config
 
         reload_extensions_config()
 

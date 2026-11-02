@@ -30,7 +30,7 @@ from langchain_core.messages import AIMessage, AnyMessage, BaseMessage, HumanMes
 from langgraph.types import Command
 
 if TYPE_CHECKING:
-    from deerflow.runtime.events.store.base import RunEventStore
+    from nova.runtime.events.store.base import RunEventStore
 
 logger = logging.getLogger(__name__)
 

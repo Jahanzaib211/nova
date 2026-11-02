@@ -13,7 +13,7 @@ is unnecessary and inheriting the parent checkpointer is harmful.
 The executor's historical circular import is fixed in production code (pinned
 by tests/test_import_hygiene.py), so this file imports the real modules — no
 sys.modules mocking. The old machinery here left a stale executor module object
-dangling as the ``deerflow.subagents.executor`` package attribute, which made
+dangling as the ``nova.subagents.executor`` package attribute, which made
 later executor tests patch the wrong module (order-dependent suite failures).
 """
 
@@ -31,9 +31,9 @@ def _default_app_config():
 @pytest.fixture(autouse=True)
 def _setup_executor_module(monkeypatch):
     """Yield the real executor classes with a hermetic get_app_config seam."""
-    import deerflow.subagents.executor as executor_module
-    from deerflow.subagents.config import SubagentConfig
-    from deerflow.subagents.executor import SubagentExecutor
+    import nova.subagents.executor as executor_module
+    from nova.subagents.config import SubagentConfig
+    from nova.subagents.executor import SubagentExecutor
 
     monkeypatch.setattr(executor_module, "get_app_config", _default_app_config)
 
@@ -69,11 +69,11 @@ class TestSubagentCheckpointerIsolation:
             return []
 
         monkeypatch.setattr(executor_module, "create_agent", fake_create_agent)
-        mw_module = ModuleType("deerflow.agents.middlewares.tool_error_handling_middleware")
+        mw_module = ModuleType("nova.agents.middlewares.tool_error_handling_middleware")
         mw_module.build_subagent_runtime_middlewares = fake_build_subagent_runtime_middlewares
         monkeypatch.setitem(
             sys.modules,
-            "deerflow.agents.middlewares.tool_error_handling_middleware",
+            "nova.agents.middlewares.tool_error_handling_middleware",
             mw_module,
         )
 

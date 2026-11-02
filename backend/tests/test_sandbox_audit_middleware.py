@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.messages import ToolMessage
 
-from deerflow.agents.middlewares.sandbox_audit_middleware import (
+from nova.agents.middlewares.sandbox_audit_middleware import (
     SandboxAuditMiddleware,
     _classify_command,
     _split_compound_command,

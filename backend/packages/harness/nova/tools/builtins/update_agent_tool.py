@@ -25,11 +25,11 @@ from langchain_core.tools import tool
 from langgraph.types import Command
 from pydantic import BeforeValidator
 
-from deerflow.config.agents_config import load_agent_config, validate_agent_name
-from deerflow.config.app_config import get_app_config
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import resolve_runtime_user_id
-from deerflow.tools.types import Runtime
+from nova.config.agents_config import load_agent_config, validate_agent_name
+from nova.config.app_config import get_app_config
+from nova.config.paths import get_paths
+from nova.runtime.user_context import resolve_runtime_user_id
+from nova.tools.types import Runtime
 
 logger = logging.getLogger(__name__)
 

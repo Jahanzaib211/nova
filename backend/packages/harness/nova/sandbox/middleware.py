@@ -11,8 +11,8 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from deerflow.agents.thread_state import SandboxStateField, ThreadDataState
-from deerflow.sandbox import get_sandbox_provider
+from nova.agents.thread_state import SandboxStateField, ThreadDataState
+from nova.sandbox import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ class SandboxMiddleware(AgentMiddleware[SandboxMiddlewareState]):
     # graph state via Command(update=...).
     #
     # Background:
-    #   ``ensure_sandbox_initialized*`` in ``deerflow.sandbox.tools`` mutates
+    #   ``ensure_sandbox_initialized*`` in ``nova.sandbox.tools`` mutates
     #   ``runtime.state["sandbox"]`` directly. That mutation is local to the
     #   current tool invocation and is NOT picked up by LangGraph's channel
     #   reducer, so subsequent graph steps (and downstream consumers such as

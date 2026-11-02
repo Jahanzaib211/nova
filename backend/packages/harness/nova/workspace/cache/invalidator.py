@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 
-from deerflow.workspace.cache.workspace_cache import WorkspaceCache
+from nova.workspace.cache.workspace_cache import WorkspaceCache
 
 
 @dataclass

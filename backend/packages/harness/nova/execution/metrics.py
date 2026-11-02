@@ -11,7 +11,7 @@ import threading
 from collections import defaultdict
 from typing import Any
 
-from deerflow.execution.models import ExecutionClass, ExecutionStatus
+from nova.execution.models import ExecutionClass, ExecutionStatus
 
 
 class ExecutionMetrics:

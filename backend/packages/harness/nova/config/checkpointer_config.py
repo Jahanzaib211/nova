@@ -43,7 +43,7 @@ def set_checkpointer_config(config: CheckpointerConfig | None) -> None:
 
 def ensure_config_loaded() -> None:
     """Lazily load app config when checkpointer config has not been initialized."""
-    from deerflow.config.app_config import _app_config, get_app_config
+    from nova.config.app_config import _app_config, get_app_config
 
     config = get_checkpointer_config()
     if config is not None or _app_config is not None:

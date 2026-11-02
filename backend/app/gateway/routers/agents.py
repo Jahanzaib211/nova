@@ -14,11 +14,11 @@ from pydantic import BaseModel, Field
 from app.gateway.authz import require_auth
 from app.gateway.deps import get_current_user_from_request
 from app.gateway.repositories.agent_repository import AgentRepository, get_agent_repo
-from deerflow.config.agents_api_config import get_agents_api_config
-from deerflow.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
-from deerflow.config.paths import get_paths
-from deerflow.runtime.user_context import get_effective_user_id
-from deerflow.utils.atomic_write import atomic_write_text
+from nova.config.agents_api_config import get_agents_api_config
+from nova.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
+from nova.config.paths import get_paths
+from nova.runtime.user_context import get_effective_user_id
+from nova.utils.atomic_write import atomic_write_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])

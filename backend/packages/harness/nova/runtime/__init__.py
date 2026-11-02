@@ -1,8 +1,8 @@
 """LangGraph-compatible runtime — runs, streaming, and lifecycle management.
 
-Re-exports the public API of :mod:`~deerflow.runtime.runs` and
-:mod:`~deerflow.runtime.stream_bridge` so that consumers can import
-directly from ``deerflow.runtime``.
+Re-exports the public API of :mod:`~nova.runtime.runs` and
+:mod:`~nova.runtime.stream_bridge` so that consumers can import
+directly from ``nova.runtime``.
 """
 
 from .checkpointer import checkpointer_context, get_checkpointer, make_checkpointer, reset_checkpointer

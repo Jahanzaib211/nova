@@ -13,8 +13,8 @@ import re
 import shlex
 from datetime import datetime
 
-from deerflow.execution.models import ExecutionResult, ExecutionStatus
-from deerflow.utils.network import get_free_port, release_port, reserve_port
+from nova.execution.models import ExecutionResult, ExecutionStatus
+from nova.utils.network import get_free_port, release_port, reserve_port
 
 from .backend import SandboxBackend, wait_for_sandbox_ready
 from .sandbox_info import SandboxInfo
@@ -276,8 +276,8 @@ class LocalContainerBackend(SandboxBackend):
         import platform
 
         if platform.system() == "Darwin":
-            from deerflow.execution.adapters import DockerAdapter
-            from deerflow.services.container import service_container
+            from nova.execution.adapters import DockerAdapter
+            from nova.services.container import service_container
 
             probe = DockerAdapter(service_container.execution_kernel(), runtime="container")
             result = probe.version(timeout=5)
@@ -294,8 +294,8 @@ class LocalContainerBackend(SandboxBackend):
         The adapter is rebuilt per call so ``self._runtime`` changes (tests,
         late detection) always take effect.
         """
-        from deerflow.execution.adapters import DockerAdapter
-        from deerflow.services.container import service_container
+        from nova.execution.adapters import DockerAdapter
+        from nova.services.container import service_container
 
         adapter = DockerAdapter(service_container.execution_kernel(), runtime=self._runtime)
         return adapter.cli(*args, timeout=timeout, intent=intent)

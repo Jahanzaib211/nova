@@ -2,7 +2,7 @@
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from deerflow.client import DeerFlowClient
+from nova.client import DeerFlowClient
 
 
 def test_serialize_ai_message_preserves_additional_kwargs():

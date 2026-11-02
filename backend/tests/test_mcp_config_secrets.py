@@ -27,7 +27,7 @@ from app.gateway.routers.mcp import (
     reset_mcp_tools_cache_endpoint,
     update_mcp_configuration,
 )
-from deerflow.config.extensions_config import ExtensionsConfig
+from nova.config.extensions_config import ExtensionsConfig
 
 # ---------------------------------------------------------------------------
 # _mask_server_config

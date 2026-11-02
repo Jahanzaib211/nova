@@ -17,8 +17,8 @@ from typing import Any
 
 from langchain.tools import tool
 
-from deerflow.community.market_data import indicators as ind
-from deerflow.community.market_data.providers import MarketDataError, fetch_ohlcv
+from nova.community.market_data import indicators as ind
+from nova.community.market_data.providers import MarketDataError, fetch_ohlcv
 
 _MAX_LIMIT = 1000
 _DEFAULT_TAIL = 5
@@ -27,7 +27,7 @@ _DEFAULT_TAIL = 5
 def _tool_extra(name: str) -> dict[str, Any]:
     """Config overrides for a tool, or {} when unconfigured."""
     try:
-        from deerflow.config import get_app_config
+        from nova.config import get_app_config
 
         config = get_app_config().get_tool_config(name)
     except Exception:

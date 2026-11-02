@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deerflow.config.app_config import AppConfig
+from nova.config.app_config import AppConfig
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +34,7 @@ def test_runtime_model_resolves_env_placeholder_in_api_key(tmp_path, monkeypatch
     _write(
         config_path,
         {
-            "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+            "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
             "models": [{"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}],
         },
     )
@@ -70,7 +70,7 @@ def test_runtime_model_with_unset_env_is_skipped_not_crashing(tmp_path, monkeypa
     _write(
         config_path,
         {
-            "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+            "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
             "models": [{"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}],
         },
     )
@@ -102,7 +102,7 @@ def test_runtime_model_literal_api_key_unchanged(tmp_path):
     _write(
         config_path,
         {
-            "sandbox": {"use": "deerflow.sandbox.local:LocalSandboxProvider"},
+            "sandbox": {"use": "nova.sandbox.local:LocalSandboxProvider"},
             "models": [{"name": "base", "use": "langchain_openai:ChatOpenAI", "model": "gpt-test"}],
         },
     )

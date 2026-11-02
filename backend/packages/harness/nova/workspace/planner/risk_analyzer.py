@@ -20,7 +20,7 @@ import shlex
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from deerflow.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel, StepKind
+from nova.workspace.models.execution_plan import ExecutionPlan, ExecutionStep, RiskLevel, StepKind
 
 _SHELL_PROGRAMS = {"bash", "sh", "zsh", "dash", "ksh"}
 _WRAPPER_PROGRAMS = {"sudo", "env", "nice", "nohup", "time", "timeout"}

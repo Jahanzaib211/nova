@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-import deerflow.community.jina_ai.jina_client as jina_client_module
-from deerflow.community.jina_ai.tools import (
+import nova.community.jina_ai.jina_client as jina_client_module
+from nova.community.jina_ai.tools import (
     _coerce_bool,
     _coerce_proxy,
     _coerce_timeout,
@@ -93,10 +93,10 @@ async def test_crawl_transient_failure_logs_without_traceback(jina_client, monke
 
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
 
-    with caplog.at_level(logging.DEBUG, logger="deerflow.community.jina_ai.jina_client"):
+    with caplog.at_level(logging.DEBUG, logger="nova.community.jina_ai.jina_client"):
         result = await jina_client.crawl("https://example.com")
 
-    jina_records = [r for r in caplog.records if r.name == "deerflow.community.jina_ai.jina_client"]
+    jina_records = [r for r in caplog.records if r.name == "nova.community.jina_ai.jina_client"]
     assert len(jina_records) == 1, f"expected exactly one log record, got {len(jina_records)}"
     record = jina_records[0]
     assert record.levelno == logging.WARNING, f"expected WARNING, got {record.levelname}"
@@ -200,7 +200,7 @@ async def test_crawl_warns_once_when_api_key_missing(jina_client, monkeypatch, c
     monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
     monkeypatch.delenv("JINA_API_KEY", raising=False)
 
-    with caplog.at_level(logging.WARNING, logger="deerflow.community.jina_ai.jina_client"):
+    with caplog.at_level(logging.WARNING, logger="nova.community.jina_ai.jina_client"):
         await jina_client.crawl("https://example.com")
         await jina_client.crawl("https://example.com")
 
@@ -242,9 +242,9 @@ async def test_web_fetch_tool_returns_error_on_crawl_failure(monkeypatch):
 
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr("nova.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
-    monkeypatch.setattr("deerflow.community.jina_ai.tools._direct_fetch", mock_direct)
+    monkeypatch.setattr("nova.community.jina_ai.tools._direct_fetch", mock_direct)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert result.startswith("Error:")
     assert "429" in result
@@ -263,9 +263,9 @@ async def test_web_fetch_tool_falls_back_to_direct_fetch(monkeypatch):
 
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr("nova.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
-    monkeypatch.setattr("deerflow.community.jina_ai.tools._direct_fetch", mock_direct)
+    monkeypatch.setattr("nova.community.jina_ai.tools._direct_fetch", mock_direct)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert not result.startswith("Error:")
     assert "Fallback content" in result
@@ -280,7 +280,7 @@ async def test_web_fetch_tool_returns_markdown_on_success(monkeypatch):
 
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr("nova.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert "Hello world" in result
@@ -304,7 +304,7 @@ async def test_web_fetch_tool_forwards_proxy_and_trust_env(monkeypatch):
         "trust_env": "false",
     }
     mock_config.get_tool_config.return_value = mock_tool_config
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr("nova.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
 
     result = await web_fetch_tool.ainvoke("https://example.com")
@@ -331,7 +331,7 @@ async def test_web_fetch_tool_ignores_empty_proxy(monkeypatch):
     mock_tool_config = MagicMock()
     mock_tool_config.model_extra = {"proxy": "   ", "trust_env": True}
     mock_config.get_tool_config.return_value = mock_tool_config
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr("nova.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
 
     result = await web_fetch_tool.ainvoke("https://example.com")
@@ -351,7 +351,7 @@ async def test_web_fetch_tool_offloads_extraction_to_thread(monkeypatch):
 
     mock_config = MagicMock()
     mock_config.get_tool_config.return_value = None
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.get_app_config", lambda: mock_config)
+    monkeypatch.setattr("nova.community.jina_ai.tools.get_app_config", lambda: mock_config)
     monkeypatch.setattr(jina_client_module.JinaClient, "crawl", mock_crawl)
 
     to_thread_called = False
@@ -362,7 +362,7 @@ async def test_web_fetch_tool_offloads_extraction_to_thread(monkeypatch):
         to_thread_called = True
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr("deerflow.community.jina_ai.tools.asyncio.to_thread", tracking_to_thread)
+    monkeypatch.setattr("nova.community.jina_ai.tools.asyncio.to_thread", tracking_to_thread)
     result = await web_fetch_tool.ainvoke("https://example.com")
     assert to_thread_called, "extract_article must be called via asyncio.to_thread to avoid blocking the event loop"
     assert "threaded" in result

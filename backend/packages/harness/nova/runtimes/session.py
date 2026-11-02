@@ -32,7 +32,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from deerflow.runtimes.transcript import CHAT_ROLE, DELEGATE_ROLE, permission_contract, runtime_preamble
+from nova.runtimes.transcript import CHAT_ROLE, DELEGATE_ROLE, permission_contract, runtime_preamble
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class ACPTurnTimeout(TimeoutError):
 def default_turn_timeout() -> float:
     """``runtimes.turn_timeout_seconds``, or the default when config is unreadable."""
     try:
-        from deerflow.config.app_config import get_app_config
+        from nova.config.app_config import get_app_config
 
         value = getattr(getattr(get_app_config(), "runtimes", None), "turn_timeout_seconds", None)
         return float(value) if value else DEFAULT_TURN_TIMEOUT
@@ -91,13 +91,13 @@ def default_nova_mcp(user_id: str | None, thread_id: str | None, *, role: str = 
     delegate = role == DELEGATE_ROLE
     if delegate and not thread_id:
         return None, lambda: None
-    from deerflow.persistence.engine import get_session_factory
+    from nova.persistence.engine import get_session_factory
 
     sf = get_session_factory()
     if sf is None or not user_id:
         return None, lambda: None
-    from deerflow.config.app_config import get_app_config
-    from deerflow.persistence.harness_token.sql import HarnessTokenRepository
+    from nova.config.app_config import get_app_config
+    from nova.persistence.harness_token.sql import HarnessTokenRepository
 
     rt = getattr(get_app_config(), "runtimes", None)
     url = getattr(rt, "nova_mcp_url", None) or "http://127.0.0.1:8001/api/mcp/nova"
@@ -111,7 +111,7 @@ def default_nova_mcp(user_id: str | None, thread_id: str | None, *, role: str = 
 
 
 def default_client_servers() -> list[dict[str, Any]]:
-    from deerflow.runtimes.acp_transport import build_acp_mcp_servers
+    from nova.runtimes.acp_transport import build_acp_mcp_servers
 
     return build_acp_mcp_servers()
 
@@ -139,7 +139,7 @@ def mirror_runtime_action(thread_id: str | None, agent: str, status: str) -> Non
         # "permission denied: execute — rm -rf" -> kind "permission_denied", title "execute — rm -rf"
         kind = head.replace(" ", "_")
     try:
-        from deerflow.sandbox.tools import record_runtime_observation
+        from nova.sandbox.tools import record_runtime_observation
 
         record_runtime_observation(thread_id, agent=agent, kind=kind, title=title)
     except Exception:  # never let the mirror break the turn

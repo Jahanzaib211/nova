@@ -4,7 +4,7 @@ Everything runs locally — no API key, no per-minute cost, no audio leaving the
 machine. See ``base.py`` for why these are not declared as ``models:``.
 """
 
-from deerflow.speech.base import (
+from nova.speech.base import (
     STT_SAMPLE_RATE,
     AudioChunk,
     SpeechEngineUnavailable,
@@ -12,14 +12,14 @@ from deerflow.speech.base import (
     TextToSpeech,
     Transcript,
 )
-from deerflow.speech.registry import (
+from nova.speech.registry import (
     get_stt_engine,
     get_tts_engine,
     is_speech_enabled,
     reset_engines,
     set_engines,
 )
-from deerflow.speech.vad import EnergyVad, SileroVad, Vad, VadConfig, VadEvent, frames_of
+from nova.speech.vad import EnergyVad, SileroVad, Vad, VadConfig, VadEvent, frames_of
 
 __all__ = [
     "STT_SAMPLE_RATE",
