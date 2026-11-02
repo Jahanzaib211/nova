@@ -112,7 +112,8 @@ class Paths:
     BaseDir resolution (in priority order):
         1. Constructor argument `base_dir`
         2. NOVA_HOME (legacy: DEER_FLOW_HOME) environment variable
-        3. Caller project fallback: `{project_root}/.deer-flow`
+        3. Caller project fallback: `{project_root}/.nova`, or the legacy
+           `{project_root}/.deer-flow` when only that one exists
     """
 
     def __init__(self, base_dir: str | Path | None = None) -> None:

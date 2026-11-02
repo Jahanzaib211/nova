@@ -77,8 +77,10 @@ def overrides_path() -> Path:
 
     Precedence: this file wins over ``config.yaml``, key by key.
     """
+    from nova.config.runtime_paths import default_home
+
     home = getenv_compat("HOME")
-    base = Path(home) if home else Path(".deer-flow")
+    base = Path(home) if home else default_home(Path("."))
     return base / "voice-settings.yaml"
 
 

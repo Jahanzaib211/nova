@@ -74,11 +74,37 @@ def in_container() -> bool:
     return False
 
 
+HOME_DIRNAME = ".nova"
+# Pre-rename default. Still used when it is the only one on disk: existing
+# installs keep their data where it is -- code never moves user data.
+LEGACY_HOME_DIRNAME = ".deer-flow"
+
+
+def default_home(root: Path) -> Path:
+    """The default state directory under *root*, honouring a legacy install.
+
+    ``.nova`` if it exists, else ``.deer-flow`` if *that* exists (a pre-rename
+    install that has not been migrated), else ``.nova`` -- which callers create
+    lazily on first write.
+    """
+    current = root / HOME_DIRNAME
+    if current.exists():
+        return current
+    legacy = root / LEGACY_HOME_DIRNAME
+    if legacy.exists():
+        return legacy
+    return current
+
+
 def runtime_home() -> Path:
-    """Return the writable DeerFlow state directory."""
+    """Return the writable Nova state directory.
+
+    ``NOVA_HOME`` (or legacy ``DEER_FLOW_HOME``) wins; otherwise
+    :func:`default_home` under the project root.
+    """
     if env_home := getenv_compat("HOME"):
         return Path(env_home).resolve()
-    return project_root() / ".deer-flow"
+    return default_home(project_root())
 
 
 def resolve_path(value: str | os.PathLike[str], *, base: Path | None = None) -> Path:
