@@ -28,10 +28,18 @@ services:
         read_only: true
       # Claude Code keeps account/onboarding state beside the directory, in
       # ~/.claude.json; without it the CLI reports "configuration file not
-      # found" and never authenticates. Same read-only contract.
+      # found" and never authenticates. It is NOT bind-mounted as a single
+      # file: the CLI rewrites it by write-then-rename, and a single-file bind
+      # keeps serving the inode from container creation, so the container read
+      # an ever older copy (drift gate: file_mounts yellow). scripts/acp-
+      # secrets.sh stages it into this directory on every launcher start; a
+      # directory mount resolves names on each lookup, so a re-stage is live
+      # without recreating anything. /root/.claude.json is a symlink to
+      # NOVA_CLAUDE_STATE_FILE (dev-entrypoint.sh / the jobs command below).
+      # Same read-only contract.
       - type: bind
-        source: ${HOME:?HOME must be set}/.claude.json
-        target: /root/.claude.json
+        source: ${NOVA_CLAUDE_STATE_DIR:-${HOME:?HOME must be set}/.nova/claude-state}
+        target: /run/nova/claude-state
         read_only: true
         bind:
           create_host_path: true
@@ -41,6 +49,8 @@ services:
         read_only: true
         bind:
           create_host_path: true
+    environment:
+      - NOVA_CLAUDE_STATE_FILE=/run/nova/claude-state/.claude.json
   # The jobs worker runs ACP agents as agents.task jobs (delegate_async) and
   # needs the same read-only login for the Claude Code binary.
   jobs:
@@ -49,12 +59,19 @@ services:
         source: ${HOME:?HOME must be set}/.claude
         target: /root/.claude
         read_only: true
-      # Claude Code keeps account/onboarding state beside the directory, in
-      # ~/.claude.json; without it the CLI reports "configuration file not
-      # found" and never authenticates. Same read-only contract.
+      # ~/.claude.json via the staged directory; see the gateway above.
       - type: bind
-        source: ${HOME:?HOME must be set}/.claude.json
-        target: /root/.claude.json
+        source: ${NOVA_CLAUDE_STATE_DIR:-${HOME:?HOME must be set}/.nova/claude-state}
+        target: /run/nova/claude-state
         read_only: true
         bind:
           create_host_path: true
+    environment:
+      - NOVA_CLAUDE_STATE_FILE=/run/nova/claude-state/.claude.json
+    # The base command plus the symlink the gateway gets from dev-entrypoint.sh.
+    # Keep the tail identical to docker-compose-dev.yaml's jobs command
+    # (pinned by tests/test_cli_auth_overlay.py).
+    command:
+      - sh
+      - -c
+      - 'ln -sfn "$$NOVA_CLAUDE_STATE_FILE" /root/.claude.json; cd /app/backend && PYTHONPATH=. exec uv run --no-sync python -m app.jobs.worker'

@@ -184,6 +184,15 @@ if [ "${NOVA_DB_MIGRATE:-1}" = "1" ]; then
     NOVA_BACKEND_DIR=/app/backend /usr/local/bin/db-migrate.sh
 fi
 
+# ── Claude Code state (cli-auth overlay) ───────────────────────────────────
+# The overlay mounts ~/.nova/claude-state as a directory (a single-file mount
+# of ~/.claude.json goes stale when the CLI rewrites it by rename). Point the
+# CLI's fixed location at the staged copy; a dangling link until
+# scripts/acp-secrets.sh has staged it is harmless.
+if [ -n "${NOVA_CLAUDE_STATE_FILE:-}" ]; then
+    ln -sfn "$NOVA_CLAUDE_STATE_FILE" /root/.claude.json || echo "[startup] could not link /root/.claude.json" >&2
+fi
+
 # ── ACP agents: warm the Claude adapter so the first invoke is not a download ─
 # Best-effort and backgrounded: a slow registry must never delay the gateway.
 # An interrupted install leaves an npx cache entry without its bin link, and

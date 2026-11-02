@@ -12,7 +12,7 @@ configured (`acp_agents` in `config.yaml`):
 ## Enabling
 
 ```bash
-echo NOVA_ACP_AGENTS=1 >> .env          # opt-in: mounts ~/.claude + ~/.claude.json (ro) + OpenClaw package/token
+echo NOVA_ACP_AGENTS=1 >> .env          # opt-in: mounts ~/.claude + staged ~/.claude.json (ro) + OpenClaw package/token
 pm2 restart nova                         # scripts/pm2-nova.sh reads the flag from .env and adds cli-auth + acp overlays
 ```
 
@@ -22,6 +22,20 @@ cli-auth overlay mounts both (the CLI otherwise reports "configuration
 file not found" and never authenticates), and the agent's `env` must not
 set `CLAUDE_CONFIG_DIR` — with it the CLI looks for `.claude.json` *inside*
 the directory.
+
+`~/.claude.json` is **not** a single-file bind mount any more. The CLI rewrites
+it by write-then-rename, and a single-file bind keeps serving the inode that
+existed when the container was created, so the container read an ever older
+copy (the drift gate's `file_mounts` check flagged it yellow).
+`scripts/acp-secrets.sh` — run by `scripts/pm2-nova.sh` / `scripts/docker.sh`
+on every start — copies it to `~/.nova/claude-state/.claude.json` (0700 dir,
+0600 file); the cli-auth overlay mounts that **directory** read-only at
+`/run/nova/claude-state`, and `/root/.claude.json` is a symlink into it
+(`dev-entrypoint.sh` for the gateway, the overlay's `command` for jobs). Re-run
+`scripts/acp-secrets.sh` after a `claude login` on the host; the containers see
+the new copy immediately, no recreation. The credential itself
+(`~/.claude/.credentials.json`) is never copied — it stays in the live
+`~/.claude` directory mount.
 
 `docker/dev-entrypoint.sh` warms the Claude adapter (`npx … --version`) into
 the `gateway-npm-cache` volume in the background so the first invocation is
