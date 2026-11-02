@@ -127,7 +127,11 @@ test("mergeMessages lets a visible live message replace overlapping hidden histo
   ]);
 });
 
-test("getSummarizationMiddlewareMessages matches DeerFlow summarization update keys", () => {
+test.each([
+  "NovaSummarizationMiddleware.before_model",
+  // Legacy backend class name, kept until the backend rename has shipped.
+  "DeerFlowSummarizationMiddleware.before_model",
+])("getSummarizationMiddlewareMessages matches %s", (updateKey) => {
   const removeAll = {
     id: "__remove_all__",
     type: "remove",
@@ -142,7 +146,7 @@ test("getSummarizationMiddlewareMessages matches DeerFlow summarization update k
 
   expect(
     getSummarizationMiddlewareMessages({
-      "DeerFlowSummarizationMiddleware.before_model": {
+      [updateKey]: {
         messages: [removeAll, summary],
       },
     }),

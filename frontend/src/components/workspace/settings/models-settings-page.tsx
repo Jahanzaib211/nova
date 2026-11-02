@@ -137,7 +137,7 @@ const AMD_CLOUD_PRESET: FormState = {
   display_name: "AMD Instinct (vLLM/ROCm)",
   model: "google/gemma-3-27b-it",
   providerChoice: CUSTOM,
-  customUse: "deerflow.models.vllm_provider:VllmChatModel",
+  customUse: "nova.models.vllm_provider:VllmChatModel",
   base_url: "http://<amd-droplet-ip>:8000/v1",
   api_key: "not-needed",
   supports_thinking: false,

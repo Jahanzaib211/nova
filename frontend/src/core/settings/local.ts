@@ -1,3 +1,4 @@
+import { getMigratedItem, removeMigratedItem } from "../compat/storage";
 import type { TokenUsageInlineMode } from "../messages/usage-model";
 import type { AgentThreadContext, RuntimeContextFields } from "../threads";
 
@@ -16,8 +17,8 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   },
 };
 
-export const LOCAL_SETTINGS_KEY = "deerflow.local-settings";
-export const THREAD_MODEL_KEY_PREFIX = "deerflow.thread-model.";
+export const LOCAL_SETTINGS_KEY = "nova.local-settings";
+export const THREAD_MODEL_KEY_PREFIX = "nova.thread-model.";
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
@@ -72,7 +73,10 @@ export function getThreadModelName(threadId: string): string | undefined {
   if (!isBrowser()) {
     return undefined;
   }
-  return localStorage.getItem(getThreadModelStorageKey(threadId)) ?? undefined;
+  return (
+    getMigratedItem(localStorage, getThreadModelStorageKey(threadId)) ??
+    undefined
+  );
 }
 
 export function saveThreadModelName(
@@ -84,7 +88,7 @@ export function saveThreadModelName(
   }
   const key = getThreadModelStorageKey(threadId);
   if (!modelName) {
-    localStorage.removeItem(key);
+    removeMigratedItem(localStorage, key);
     return;
   }
   localStorage.setItem(key, modelName);
@@ -110,7 +114,7 @@ export function getLocalSettings(): LocalSettings {
   if (!isBrowser()) {
     return DEFAULT_LOCAL_SETTINGS;
   }
-  const json = localStorage.getItem(LOCAL_SETTINGS_KEY);
+  const json = getMigratedItem(localStorage, LOCAL_SETTINGS_KEY);
   try {
     if (json) {
       const settings = JSON.parse(json) as Partial<LocalSettings>;

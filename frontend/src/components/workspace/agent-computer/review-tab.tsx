@@ -21,7 +21,7 @@ function riskColor(level: string): string {
   return "text-warning";
 }
 
-// WIK risk levels (deerflow.workspace.models.execution_plan.RiskLevel) use a
+// WIK risk levels (nova.workspace.models.execution_plan.RiskLevel) use a
 // different vocabulary than the sandbox-review risks above.
 function kernelRiskColor(level: string): string {
   if (level === "critical") return "text-destructive";

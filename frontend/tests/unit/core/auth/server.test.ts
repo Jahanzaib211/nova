@@ -10,10 +10,14 @@ vi.mock("next/headers", () => ({
 }));
 
 const ENV_KEYS = [
-  "DEER_FLOW_AUTH_DISABLED",
-  "DEER_FLOW_ENV",
+  "NOVA_AUTH_DISABLED",
+  "NOVA_ENV",
   "ENVIRONMENT",
   "NEXT_PUBLIC_STATIC_WEBSITE_ONLY",
+  "NOVA_INTERNAL_GATEWAY_BASE_URL",
+  "NOVA_TRUSTED_ORIGINS",
+  "DEER_FLOW_AUTH_DISABLED",
+  "DEER_FLOW_ENV",
   "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL",
   "DEER_FLOW_TRUSTED_ORIGINS",
 ] as const;
@@ -55,12 +59,14 @@ describe("getServerSideUser", () => {
 
   beforeEach(() => {
     saved = snapshotEnv();
+    setEnv("NOVA_AUTH_DISABLED", undefined);
+    setEnv("NOVA_ENV", undefined);
     setEnv("DEER_FLOW_AUTH_DISABLED", undefined);
     setEnv("DEER_FLOW_ENV", undefined);
     setEnv("ENVIRONMENT", undefined);
     setEnv("NEXT_PUBLIC_STATIC_WEBSITE_ONLY", undefined);
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", undefined);
-    setEnv("DEER_FLOW_TRUSTED_ORIGINS", undefined);
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", undefined);
+    setEnv("NOVA_TRUSTED_ORIGINS", undefined);
   });
 
   afterEach(() => {
@@ -85,7 +91,7 @@ describe("getServerSideUser", () => {
   });
 
   test("bypasses gateway auth in auth-disabled mode", async () => {
-    setEnv("DEER_FLOW_AUTH_DISABLED", "1");
+    setEnv("NOVA_AUTH_DISABLED", "1");
     const fetchSpy = vi.fn(() => {
       throw new Error("fetch should not be called in auth-disabled mode");
     });
@@ -101,12 +107,23 @@ describe("getServerSideUser", () => {
   });
 
   test("does not enable auth-disabled mode in explicit production environments", async () => {
-    setEnv("DEER_FLOW_AUTH_DISABLED", "1");
-    setEnv("DEER_FLOW_ENV", "production");
+    setEnv("NOVA_AUTH_DISABLED", "1");
+    setEnv("NOVA_ENV", "production");
 
     const { isAuthDisabledMode } =
       await import("@/core/auth/auth-disabled-user");
 
+    expect(isAuthDisabledMode()).toBe(false);
+  });
+
+  test("honours the legacy DEER_FLOW_AUTH_DISABLED / DEER_FLOW_ENV names", async () => {
+    setEnv("DEER_FLOW_AUTH_DISABLED", "1");
+
+    const { isAuthDisabledMode } =
+      await import("@/core/auth/auth-disabled-user");
+
+    expect(isAuthDisabledMode()).toBe(true);
+    setEnv("DEER_FLOW_ENV", "production");
     expect(isAuthDisabledMode()).toBe(false);
   });
 });
@@ -116,12 +133,13 @@ describe("getServerSideUser — gateway_unavailable contract (issue #3493)", () 
 
   beforeEach(() => {
     saved = snapshotEnv();
+    setEnv("NOVA_AUTH_DISABLED", undefined);
     setEnv("DEER_FLOW_AUTH_DISABLED", undefined);
     setEnv("NEXT_PUBLIC_STATIC_WEBSITE_ONLY", undefined);
     // gateway-config.ts now requires the gateway URL — provide it so the
     // tests reach the auth fetch path instead of throwing at config parse.
-    setEnv("DEER_FLOW_INTERNAL_GATEWAY_BASE_URL", "http://127.0.0.1:8001");
-    setEnv("DEER_FLOW_TRUSTED_ORIGINS", "http://localhost:3000");
+    setEnv("NOVA_INTERNAL_GATEWAY_BASE_URL", "http://127.0.0.1:8001");
+    setEnv("NOVA_TRUSTED_ORIGINS", "http://localhost:3000");
   });
 
   afterEach(() => {

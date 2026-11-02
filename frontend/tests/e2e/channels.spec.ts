@@ -84,7 +84,7 @@ function mockChannelsAPI(
         mode: "binding_code",
         url: null,
         code: "abc123",
-        instruction: "Send /connect abc123 to the DeerFlow Slack bot.",
+        instruction: "Send /connect abc123 to the Nova Slack bot.",
         expires_in: 600,
       }),
     });
@@ -304,7 +304,7 @@ test.describe("IM channels", () => {
       .click();
 
     await expect(
-      page.getByText("Send /connect abc123 to the DeerFlow Slack bot."),
+      page.getByText("Send /connect abc123 to the Nova Slack bot."),
     ).toBeVisible();
     expect(slackConnectCalls).toBe(1);
   });
@@ -383,7 +383,7 @@ test.describe("IM channels", () => {
           mode: "binding_code",
           url: null,
           code: "abc123",
-          instruction: "Send /connect abc123 to the DeerFlow Slack bot.",
+          instruction: "Send /connect abc123 to the Nova Slack bot.",
           expires_in: 600,
         }),
       });
@@ -404,7 +404,7 @@ test.describe("IM channels", () => {
 
     await expect(setupDialog).toBeHidden();
     await expect(
-      page.getByText("Send /connect abc123 to the DeerFlow Slack bot."),
+      page.getByText("Send /connect abc123 to the Nova Slack bot."),
     ).toBeVisible();
     expect(slackConnectCalls).toBe(1);
   });

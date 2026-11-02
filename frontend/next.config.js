@@ -4,8 +4,11 @@
  */
 import "./src/env.js";
 
-function getInternalServiceURL(envKey, fallbackURL) {
-  const configured = process.env[envKey]?.trim();
+// Reads NOVA_<name>, falling back to the legacy DEER_FLOW_<name>.
+function getInternalServiceURL(name, fallbackURL) {
+  const configured = (
+    process.env[`NOVA_${name}`] ?? process.env[`DEER_FLOW_${name}`]
+  )?.trim();
   return configured && configured.length > 0
     ? configured.replace(/\/+$/, "")
     : fallbackURL;
@@ -37,6 +40,19 @@ const config = {
   productionBrowserSourceMaps: process.env.NOVA_SOURCEMAPS === "1",
   async redirects() {
     return [
+      // Docs pages renamed with the deerflow -> nova rename.
+      {
+        source: "/:lang(en|zh)/docs/introduction/why-deerflow",
+        destination: "/:lang/docs/introduction/why-nova",
+        permanent: true,
+        locale: false,
+      },
+      {
+        source: "/:lang(en|zh)/docs/tutorials/deploy-your-own-deerflow",
+        destination: "/:lang/docs/tutorials/deploy-your-own-nova",
+        permanent: true,
+        locale: false,
+      },
       // The jobs list moved into Settings › Jobs; keep old bookmarks working.
       {
         source: "/workspace/jobs",
@@ -48,7 +64,7 @@ const config = {
   async rewrites() {
     const rewrites = [];
     const gatewayURL = getInternalServiceURL(
-      "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL",
+      "INTERNAL_GATEWAY_BASE_URL",
       "http://127.0.0.1:8001",
     );
 

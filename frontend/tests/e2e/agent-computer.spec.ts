@@ -2,7 +2,7 @@
  * E2E spec: Agent Computer panel and the chat workspace skeleton.
  *
  * Mocks the LangGraph / Backend APIs so the test is hermetic — same
- * pattern as tests/e2e/chat.spec.ts. With `DEER_FLOW_AUTH_DISABLED=1`
+ * pattern as tests/e2e/chat.spec.ts. With `NOVA_AUTH_DISABLED=1`
  * the workspace renders without the sign-in gate; in production mode
  * the sign-in form is shown, which we also assert.
  *

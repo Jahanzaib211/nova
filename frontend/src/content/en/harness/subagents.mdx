@@ -24,7 +24,7 @@ Subagents solve two key problems in long-horizon workflows:
 
 ## Built-in subagents
 
-DeerFlow ships with two built-in subagents:
+Nova ships with two built-in subagents:
 
 ### general-purpose
 
@@ -95,7 +95,7 @@ If the agent tries to call more subagents than the limit allows, the middleware 
 
 ## ACP agents (external agents)
 
-In addition to the built-in subagents, DeerFlow supports delegating to external agents through the **Agent Connect Protocol (ACP)**. ACP allows DeerFlow to invoke agents running as separate processes (including third-party CLI tools wrapped with an ACP adapter).
+In addition to the built-in subagents, Nova supports delegating to external agents through the **Agent Connect Protocol (ACP)**. ACP allows Nova to invoke agents running as separate processes (including third-party CLI tools wrapped with an ACP adapter).
 
 Configure ACP agents in `config.yaml`:
 
@@ -120,7 +120,7 @@ acp_agents:
 The Lead Agent invokes ACP agents through the `invoke_acp_agent` built-in tool.
 
 <Callout type="tip">
-  ACP agents run as child processes managed by DeerFlow. They communicate over
+  ACP agents run as child processes managed by Nova. They communicate over
   the ACP wire protocol. The standard CLI tools (like the plain `claude` or
   `codex` commands) are not ACP-compatible by default — use the adapter packages
   listed above or a compatible ACP wrapper.
@@ -128,7 +128,7 @@ The Lead Agent invokes ACP agents through the `invoke_acp_agent` built-in tool.
 
 ## Custom agents as subagents
 
-Custom agents created through the DeerFlow App UI can also be invoked as subagents using the `task` tool. When you specify `agent="my-custom-agent"`, the runtime loads that agent's configuration (skills, tool groups, model) and runs it as a subagent for the delegated task.
+Custom agents created through the Nova App UI can also be invoked as subagents using the `task` tool. When you specify `agent="my-custom-agent"`, the runtime loads that agent's configuration (skills, tool groups, model) and runs it as a subagent for the delegated task.
 
 <Cards num={2}>
   <Cards.Card title="Sandbox" href="./sandbox" />

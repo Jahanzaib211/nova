@@ -1,10 +1,12 @@
 import type { NextRequest } from "next/server";
 
+import { getEnvCompat } from "@/core/compat/env";
+
 // Server-side proxy: honour the same internal gateway override next.config.js
 // uses for its rewrites, so an e2e build pointed at a closed port never
 // reaches the live gateway (a 401 from there redirects the browser to /login).
 const BACKEND_BASE_URL =
-  process.env.DEER_FLOW_INTERNAL_GATEWAY_BASE_URL ??
+  getEnvCompat("INTERNAL_GATEWAY_BASE_URL") ??
   process.env.NEXT_PUBLIC_BACKEND_BASE_URL ??
   "http://127.0.0.1:8001";
 

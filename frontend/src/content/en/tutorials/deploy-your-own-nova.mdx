@@ -1,13 +1,13 @@
 ---
-title: Deploy Your Own DeerFlow
-description: This tutorial guides you through deploying DeerFlow to a production environment using Docker Compose for multi-user access.
+title: Deploy Your Own Nova
+description: This tutorial guides you through deploying Nova to a production environment using Docker Compose for multi-user access.
 ---
 
 import { Callout, Steps } from "nextra/components";
 
-# Deploy Your Own DeerFlow
+# Deploy Your Own Nova
 
-This tutorial guides you through deploying DeerFlow to a production environment using Docker Compose for multi-user access.
+This tutorial guides you through deploying Nova to a production environment using Docker Compose for multi-user access.
 
 ## Prerequisites
 
@@ -22,8 +22,8 @@ This tutorial guides you through deploying DeerFlow to a production environment 
 ### Clone the repository
 
 ```bash
-git clone https://github.com/bytedance/deer-flow.git
-cd deer-flow
+git clone https://github.com/Jahanzaib211/nova.git
+cd nova
 ```
 
 ### Create the configuration file
@@ -39,7 +39,7 @@ Edit `config.yaml` to add your model configuration.
 ```bash
 cat > .env << EOF
 OPENAI_API_KEY=sk-your-key-here
-DEER_FLOW_ROOT=$(pwd)
+NOVA_ROOT=$(pwd)
 BETTER_AUTH_SECRET=$(openssl rand -base64 32)
 BETTER_AUTH_URL=https://your-domain.com
 EOF
@@ -70,7 +70,7 @@ Open `http://your-server:2026` in your browser.
 - Configure HTTPS/TLS for nginx
 - Set `BETTER_AUTH_SECRET` to a strong random string (minimum 32 characters)
 - Configure firewall rules to allow only necessary ports
-- Back up `backend/.deer-flow/` directory regularly
+- Back up `backend/.nova/` directory regularly
 - Consider using a container-based sandbox (`AioSandboxProvider`) for multi-user isolation
 
 ## Next steps

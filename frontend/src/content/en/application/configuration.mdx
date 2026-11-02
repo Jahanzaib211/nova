@@ -1,13 +1,13 @@
 ---
 title: Configuration
-description: DeerFlow App is configured through two files and a set of environment variables. This page covers the application-level configuration that most operators need to set up before deploying.
+description: Nova App is configured through two files and a set of environment variables. This page covers the application-level configuration that most operators need to set up before deploying.
 ---
 
 import { Callout, Cards, Tabs } from "nextra/components";
 
 # Configuration
 
-DeerFlow App is configured through two files and a set of environment variables. This page covers the application-level configuration that most operators need to set up before deploying.
+Nova App is configured through two files and a set of environment variables. This page covers the application-level configuration that most operators need to set up before deploying.
 
 ## Configuration files
 
@@ -69,7 +69,7 @@ models:
 ```yaml
 models:
   - name: deepseek-v3
-    use: deerflow.models.patched_deepseek:PatchedChatDeepSeek
+    use: nova.models.patched_deepseek:PatchedChatDeepSeek
     model: deepseek-reasoner
     api_key: $DEEPSEEK_API_KEY
     timeout: 600.0
@@ -99,7 +99,7 @@ models:
     supports_vision: false
 ```
 
-Install Ollama provider: `cd backend && uv add 'deerflow-harness[ollama]'`
+Install Ollama provider: `cd backend && uv add 'nova-harness[ollama]'`
 
 <Callout type="warning">
   Use <code>langchain_ollama:ChatOllama</code> (not the OpenAI-compatible
@@ -130,26 +130,26 @@ Choose the execution environment for agent file and command operations:
   <Tabs.Tab>
 ```yaml
 sandbox:
-  use: deerflow.sandbox.local:LocalSandboxProvider
+  use: nova.sandbox.local:LocalSandboxProvider
   allow_host_bash: false  # set true only for trusted single-user workflows
 ```
   </Tabs.Tab>
   <Tabs.Tab>
 ```yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: nova.community.aio_sandbox:AioSandboxProvider
   image: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest
   replicas: 3
   idle_timeout: 600
 ```
 
-Install: `cd backend && uv add 'deerflow-harness[aio-sandbox]'`
+Install: `cd backend && uv add 'nova-harness[aio-sandbox]'`
 
   </Tabs.Tab>
   <Tabs.Tab>
 ```yaml
 sandbox:
-  use: deerflow.community.aio_sandbox:AioSandboxProvider
+  use: nova.community.aio_sandbox:AioSandboxProvider
   provisioner_url: http://provisioner:8002
 ```
   </Tabs.Tab>
@@ -162,34 +162,34 @@ Configure which tools the agent has access to. The defaults use DuckDuckGo (no A
 ```yaml
 tools:
   # Web search (choose one)
-  - use: deerflow.community.ddg_search.tools:web_search_tool # default, no key required
-  # - use: deerflow.community.tavily.tools:web_search_tool
+  - use: nova.community.ddg_search.tools:web_search_tool # default, no key required
+  # - use: nova.community.tavily.tools:web_search_tool
   #   api_key: $TAVILY_API_KEY
 
   # Web fetch (choose one)
-  - use: deerflow.community.jina_ai.tools:web_fetch_tool
+  - use: nova.community.jina_ai.tools:web_fetch_tool
 
   # Image search
-  - use: deerflow.community.image_search.tools:image_search_tool
+  - use: nova.community.image_search.tools:image_search_tool
 
   # File operations
-  - use: deerflow.sandbox.tools:ls_tool
-  - use: deerflow.sandbox.tools:read_file_tool
-  - use: deerflow.sandbox.tools:glob_tool
-  - use: deerflow.sandbox.tools:grep_tool
-  - use: deerflow.sandbox.tools:write_file_tool
-  - use: deerflow.sandbox.tools:str_replace_tool
-  - use: deerflow.sandbox.tools:bash_tool
+  - use: nova.sandbox.tools:ls_tool
+  - use: nova.sandbox.tools:read_file_tool
+  - use: nova.sandbox.tools:glob_tool
+  - use: nova.sandbox.tools:grep_tool
+  - use: nova.sandbox.tools:write_file_tool
+  - use: nova.sandbox.tools:str_replace_tool
+  - use: nova.sandbox.tools:bash_tool
 ```
 
 ### Thread state persistence (checkpointer)
 
-By default, DeerFlow uses an SQLite checkpointer for thread state persistence:
+By default, Nova uses an SQLite checkpointer for thread state persistence:
 
 ```yaml
 checkpointer:
   type: sqlite
-  connection_string: checkpoints.db # stored in backend/.deer-flow/
+  connection_string: checkpoints.db # stored in backend/.nova/
 ```
 
 For production deployments with multiple processes:
@@ -197,7 +197,7 @@ For production deployments with multiple processes:
 ```yaml
 checkpointer:
   type: postgres
-  connection_string: postgresql://user:password@localhost:5432/deerflow
+  connection_string: postgresql://user:password@localhost:5432/nova
 ```
 
 Install PostgreSQL support: `cd backend && uv add langgraph-checkpoint-postgres psycopg[binary] psycopg-pool`

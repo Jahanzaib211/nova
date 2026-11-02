@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -18,7 +19,11 @@ import { describe, expect, it } from "vitest";
  * no type that could relate the two.
  */
 const REPO_ROOT = path.resolve(__dirname, "../../..");
-const BACKEND = path.join(REPO_ROOT, "backend/packages/harness/deerflow");
+// The harness package moved from `deerflow/` to `nova/`; accept either layout.
+const BACKEND = [
+  path.join(REPO_ROOT, "backend/packages/harness/nova"),
+  path.join(REPO_ROOT, "backend/packages/harness/deerflow"),
+].find((dir) => fs.existsSync(path.join(dir, "agents")))!;
 const FRONTEND_SRC = path.join(REPO_ROOT, "frontend/src");
 
 function emittedTaskEvents(): string[] {

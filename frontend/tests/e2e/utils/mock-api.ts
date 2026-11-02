@@ -94,7 +94,7 @@ function mockStreamMessages() {
     {
       type: "ai",
       id: "msg-ai-1",
-      content: "Hello from DeerFlow!",
+      content: "Hello from Nova!",
     },
   ];
 }
@@ -665,7 +665,7 @@ export function mockWorkspaceAPI(page: Page) {
 
 /**
  * Build a minimal SSE stream that the LangGraph SDK can parse.
- * The stream returns a single AI message: "Hello from DeerFlow!".
+ * The stream returns a single AI message: "Hello from Nova!".
  */
 /**
  * A LangGraph `custom` stream frame — what `writer({...})` produces backend-side.

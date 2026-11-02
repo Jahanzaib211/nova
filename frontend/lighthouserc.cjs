@@ -6,7 +6,7 @@
  * every performance number meaningless.
  *
  * Auth: the gated routes redirect to sign-in, so the collected URLs are the
- * public surface plus the chat shell with `DEER_FLOW_AUTH_DISABLED=1` — the
+ * public surface plus the chat shell with `NOVA_AUTH_DISABLED=1` — the
  * same switch `playwright.config.ts` already uses for e2e.
  *
  * Port: `pnpm start` defaults to 3000, which on this box is regularly taken by

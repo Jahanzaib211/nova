@@ -173,6 +173,8 @@ function isNonEmptyString(value: string | undefined): value is string {
 
 const SUMMARIZATION_MIDDLEWARE_UPDATE_KEYS = new Set([
   "SummarizationMiddleware.before_model",
+  "NovaSummarizationMiddleware.before_model",
+  // Legacy backend class name, emitted until the backend rename lands.
   "DeerFlowSummarizationMiddleware.before_model",
 ]);
 

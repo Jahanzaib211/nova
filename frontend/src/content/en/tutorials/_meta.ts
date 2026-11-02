@@ -16,7 +16,7 @@ const meta: MetaRecord = {
   "work-with-memory": {
     title: "Work with Memory",
   },
-  "deploy-your-own-deerflow": {
+  "deploy-your-own-nova": {
     title: "Deploy Your Own Nova",
   },
 };

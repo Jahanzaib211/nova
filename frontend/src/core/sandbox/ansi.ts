@@ -2,7 +2,7 @@
  * Turn SGR escape sequences into styled spans for the Terminal.
  *
  * The backend deliberately keeps SGR (`ESC[…m`) and strips every other escape
- * (see `deerflow/utils/sanitize.py`), because colour is signal: a dev server's
+ * (see `nova/utils/sanitize.py`), because colour is signal: a dev server's
  * red error line and green ready line are the fastest way to read a log, and a
  * terminal that renders them as plain text throws that away.
  *

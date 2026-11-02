@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { getEnvCompat } from "../compat/env";
+
 const gatewayConfigSchema = z.object({
   internalGatewayUrl: z.string().url(),
   trustedOrigins: z.array(z.string()).min(1),
@@ -18,7 +20,7 @@ let _cached: GatewayConfig | null = null;
  * hits Docker's flaky resolver.
  */
 const _KNOWN_GATEWAY_HOSTNAMES: Record<string, string> = {
-  gateway: process.env.DEER_FLOW_DEV_GATEWAY_IP ?? "192.168.200.3",
+  gateway: getEnvCompat("DEV_GATEWAY_IP") ?? "192.168.200.3",
 };
 
 function _pinHostToIp(url: string): string {
@@ -45,16 +47,16 @@ export function getGatewayConfig(): GatewayConfig {
   // frontend container at 127.0.0.1) and made the chat UI show
   // "failed to fetch" toasts. A loud failure at startup is far cheaper than
   // a silent, hard-to-diagnose half-hour outage.
-  const rawUrl = process.env.DEER_FLOW_INTERNAL_GATEWAY_BASE_URL?.trim();
+  const rawUrl = getEnvCompat("INTERNAL_GATEWAY_BASE_URL")?.trim();
   if (!rawUrl || rawUrl.length === 0) {
     throw new Error(
-      "DEER_FLOW_INTERNAL_GATEWAY_BASE_URL is required but was empty or unset. " +
+      "NOVA_INTERNAL_GATEWAY_BASE_URL (legacy: DEER_FLOW_INTERNAL_GATEWAY_BASE_URL) is required but was empty or unset. " +
         "Set it in docker-compose (or the frontend .env) before starting the Next.js server.",
     );
   }
   const internalGatewayUrl = _pinHostToIp(rawUrl);
 
-  const rawOrigins = process.env.DEER_FLOW_TRUSTED_ORIGINS?.trim();
+  const rawOrigins = getEnvCompat("TRUSTED_ORIGINS")?.trim();
   const trustedOrigins = rawOrigins
     ? rawOrigins
         .split(",")

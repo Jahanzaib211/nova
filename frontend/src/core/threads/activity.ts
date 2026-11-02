@@ -4,7 +4,7 @@
 // (Terminal spinner, Editor "writing…", auto-open, current-tool status) used to
 // come from the LangGraph `events` stream mode via `onLangChainEvent`
 // (`on_tool_start`/`on_tool_end`). The gateway worker does NOT emit `events`
-// mode (deerflow/runtime/runs/worker.py skips it — it needs astream_events,
+// mode (nova/runtime/runs/worker.py skips it — it needs astream_events,
 // which can't co-produce `values`), so that callback never fires at runtime and
 // the whole live-tool layer went dark (panel never auto-opened, no spinner).
 //
@@ -174,7 +174,7 @@ export function activeWriteFilePathFromActivity(
  * (live 2026-09-22). Each status line becomes one card; the last one is
  * `running` while the turn is live.
  *
- * Status lines come from `deerflow.runtimes.acp_transport`:
+ * Status lines come from `nova.runtimes.acp_transport`:
  *   `<kind>: <title>`                       — a tool call (kind: read, edit, execute, search, fetch, other…)
  *   `permission approved|denied: <kind> — <title>`
  *   `runtime: <agent> (<mode>)` / `thinking: …` — narration, skipped.
