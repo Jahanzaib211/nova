@@ -12,6 +12,7 @@ import { parseAuthError } from "@/core/auth/types";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { BillingSettings } from "./billing-settings";
+import { BrowserProfilesSettings } from "./browser-profiles-settings";
 import { ByokSettings } from "./byok-settings";
 import { CreditsMeter } from "./credits-meter";
 import { ReferralCard } from "./referral-card";
@@ -150,6 +151,8 @@ export function AccountSettingsPage() {
       <BillingSettings />
 
       <ByokSettings />
+
+      <BrowserProfilesSettings />
 
       <ReferralCard />
 

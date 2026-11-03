@@ -24,6 +24,8 @@ import {
 } from "@/core/sandbox/hooks";
 import { cn } from "@/lib/utils";
 
+import { BrowserAttentionBanner } from "./browser-attention-banner";
+
 /**
  * Build the iframe ``src`` for the Browser-tab preview, choosing between the
  * canonical preview proxy (fast path) and the generic absproxy (safety net for
@@ -218,6 +220,14 @@ export function Browser({
   // CSS), so once VNC was toggled on the noVNC iframe kept streaming video —
   // bandwidth and CPU — while the user sat on Files or Terminal.
   const vncVisible = Boolean(active) && showVnc;
+  // Captcha / login hand-off from the browser layer: polls only while visible.
+  const attentionBanner = (
+    <BrowserAttentionBanner
+      threadId={threadId}
+      active={Boolean(active)}
+      onOpenLiveView={showVnc ? undefined : () => setShowVnc(true)}
+    />
+  );
   // The hook deliberately returns EMPTY_TERMINAL_URLS with a `reason` when the
   // sandbox has no VNC / the URL fetch fails — render that instead of an
   // infinite spinner, and expose its refetch for recycled sandboxes.
@@ -329,6 +339,7 @@ export function Browser({
   if (showVnc) {
     return (
       <div className="flex h-full flex-col">
+        {attentionBanner}
         <div className="border-panel-border bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
           <button
             onClick={() => setShowVnc(false)}
@@ -380,6 +391,7 @@ export function Browser({
   if (devServer.running && devServer.url) {
     return (
       <div className="flex h-full flex-col">
+        {attentionBanner}
         {/* Browser chrome: nav + address bar */}
         <div className="border-panel-border bg-muted/20 flex shrink-0 items-center gap-1 border-b px-1.5 py-1">
           <button
@@ -682,20 +694,23 @@ export function Browser({
 
   if (!filePath) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
-        <GlobeIcon className="text-muted-foreground/20 h-8 w-8" />
-        <p className="text-muted-foreground/50 text-xs">
-          {t.agentComputer.browser.previewWillAppear}
-          <br />
-          {t.agentComputer.browser.previewWillAppearLine2}
-        </p>
-        <button
-          onClick={() => setShowVnc(true)}
-          className="border-panel-border text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
-        >
-          <EyeIcon className="h-3 w-3" />{" "}
-          {t.agentComputer.browser.watchLiveBrowser}
-        </button>
+      <div className="flex h-full flex-col">
+        {attentionBanner}
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
+          <GlobeIcon className="text-muted-foreground/20 h-8 w-8" />
+          <p className="text-muted-foreground/50 text-xs">
+            {t.agentComputer.browser.previewWillAppear}
+            <br />
+            {t.agentComputer.browser.previewWillAppearLine2}
+          </p>
+          <button
+            onClick={() => setShowVnc(true)}
+            className="border-panel-border text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:border-[--primary]/40"
+          >
+            <EyeIcon className="h-3 w-3" />{" "}
+            {t.agentComputer.browser.watchLiveBrowser}
+          </button>
+        </div>
       </div>
     );
   }
@@ -749,6 +764,7 @@ export function Browser({
 
   return (
     <div className="flex h-full flex-col">
+      {attentionBanner}
       {/* Browser toolbar */}
       <div className="border-panel-border bg-muted/20 flex shrink-0 items-center gap-1.5 border-b px-2 py-1">
         <GlobeIcon className="text-warning h-3 w-3 shrink-0" />

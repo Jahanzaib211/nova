@@ -13,6 +13,35 @@ import type { Translations } from "./types";
 
 export const enUS: Translations = {
   features: {
+    browser: {
+      profilesTitle: "Browser profiles",
+      profilesDescription:
+        "Saved logins the agent's browser can reuse (cookies and localStorage, encrypted at rest, sent only to the listed sites). Ask the agent to save one with browser_profile_save after you log in through the live view.",
+      profilesEmpty: "No browser profiles saved yet.",
+      profilesDisabled: "Browser profiles are turned off on this instance.",
+      cookies: "cookies",
+      makeDefault: "Use by default",
+      isDefault: "Default",
+      clearDefault: "Unset default",
+      remove: "Delete",
+      corrupt: "unreadable (key changed) — delete and save again",
+      attentionTitle: "The agent needs you in the browser",
+      attentionBody:
+        "A {kind} check is blocking {url}. Solve it in the live view, then press Done.",
+      openLiveView: "Open live view",
+      done: "Done",
+      recordingTitle: "Browser recordings",
+      recordingOn: "Recording browser sessions",
+      recordingOff: "Record browser sessions",
+      recordingCost:
+        "Saves ~2 screenshots per second while the agent browses (a few MB per minute), capped per session; the oldest sessions are deleted.",
+      recordingsEmpty: "No recordings for this conversation.",
+      steps: "Steps",
+      play: "Play",
+      pause: "Pause",
+      deleteRecording: "Delete recording",
+      truncated: "size cap reached — later frames were not kept",
+    },
     jobs: {
       title: "Jobs",
       description:

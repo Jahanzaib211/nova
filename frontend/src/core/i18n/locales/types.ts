@@ -395,8 +395,36 @@ export interface RuntimePickerTranslations {
   disabled: string;
 }
 
+export interface BrowserLayerTranslations {
+  profilesTitle: string;
+  profilesDescription: string;
+  profilesEmpty: string;
+  profilesDisabled: string;
+  cookies: string;
+  makeDefault: string;
+  isDefault: string;
+  clearDefault: string;
+  remove: string;
+  corrupt: string;
+  attentionTitle: string;
+  attentionBody: string;
+  openLiveView: string;
+  done: string;
+  recordingTitle: string;
+  recordingOn: string;
+  recordingOff: string;
+  recordingCost: string;
+  recordingsEmpty: string;
+  steps: string;
+  play: string;
+  pause: string;
+  deleteRecording: string;
+  truncated: string;
+}
+
 export interface Translations {
   features: {
+    browser: BrowserLayerTranslations;
     jobs: JobsFeatureTranslations;
     integrations: IntegrationsFeatureTranslations;
     voice: VoiceFeatureTranslations;

@@ -38,6 +38,8 @@ import {
 } from "@/core/workspace/hooks";
 import { cn } from "@/lib/utils";
 
+import { BrowserReplay } from "./browser-replay";
+
 // Tab 4: Activity — compact event cards + Files tree
 // ──────────────────────────────────────────────────────────
 // Icon/color per work kind, from the shared classifier. The previous private
@@ -364,6 +366,7 @@ export function ActivityPanel({
           <div ref={bottomRef} />
         </div>
       </ScrollArea>
+      <BrowserReplay threadId={threadId} active={active} />
     </div>
   );
 }

@@ -13,6 +13,35 @@ import type { Translations } from "./types";
 
 export const zhCN: Translations = {
   features: {
+    browser: {
+      profilesTitle: "浏览器配置文件",
+      profilesDescription:
+        "智能体浏览器可复用的已保存登录（Cookie 与 localStorage，静态加密，仅发送给列出的站点）。在实时视图中登录后，让智能体用 browser_profile_save 保存。",
+      profilesEmpty: "尚未保存浏览器配置文件。",
+      profilesDisabled: "此实例已关闭浏览器配置文件。",
+      cookies: "个 Cookie",
+      makeDefault: "设为默认",
+      isDefault: "默认",
+      clearDefault: "取消默认",
+      remove: "删除",
+      corrupt: "无法读取（密钥已更换）— 请删除后重新保存",
+      attentionTitle: "智能体需要你在浏览器中操作",
+      attentionBody:
+        "{url} 被 {kind} 验证拦截。请在实时视图中完成验证，然后点击“完成”。",
+      openLiveView: "打开实时视图",
+      done: "完成",
+      recordingTitle: "浏览器录制",
+      recordingOn: "正在录制浏览器会话",
+      recordingOff: "录制浏览器会话",
+      recordingCost:
+        "智能体浏览时每秒约保存 2 张截图（每分钟数 MB），每个会话有上限，最旧的会话会被删除。",
+      recordingsEmpty: "此对话没有录制。",
+      steps: "步骤",
+      play: "播放",
+      pause: "暂停",
+      deleteRecording: "删除录制",
+      truncated: "已达大小上限 — 之后的帧未保存",
+    },
     jobs: {
       title: "任务",
       description:
