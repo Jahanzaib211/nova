@@ -144,7 +144,9 @@ class AppConfig(BaseModel):
     )
     browser: BrowserConfig = Field(
         default_factory=BrowserConfig,
-        description=("Unified browser layer: stealth, proxy, timezone, ad blocking, profiles, downloads, recording and the web_fetch escalation ladder, applied to the sandbox Chromium, Browserless and Crawl4AI. Read per call, so edits hot-reload."),
+        description=(
+            "Unified browser layer: stealth, proxy, timezone, ad blocking, profiles, downloads, recording and the web_fetch escalation ladder, applied to the sandbox Chromium, Browserless and Crawl4AI. Read per call, so edits hot-reload."
+        ),
     )
     loop_detection: LoopDetectionConfig = Field(default_factory=LoopDetectionConfig, description="Loop detection middleware configuration")
     safety_finish_reason: SafetyFinishReasonConfig = Field(default_factory=SafetyFinishReasonConfig, description="Provider safety-filter finish_reason interception middleware configuration")
