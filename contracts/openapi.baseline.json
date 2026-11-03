@@ -966,6 +966,95 @@
         "title": "BridgeListRequest",
         "type": "object"
       },
+      "BrowserProfileInfo": {
+        "properties": {
+          "bytes": {
+            "default": 0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "cookie_count": {
+            "default": 0,
+            "title": "Cookie Count",
+            "type": "integer"
+          },
+          "corrupt": {
+            "default": false,
+            "title": "Corrupt",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "domains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Domains",
+            "type": "array"
+          },
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origin_count": {
+            "default": 0,
+            "title": "Origin Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "domains"
+        ],
+        "title": "BrowserProfileInfo",
+        "type": "object"
+      },
+      "BrowserProfilesResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/BrowserProfileInfo"
+            },
+            "title": "Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "profiles"
+        ],
+        "title": "BrowserProfilesResponse",
+        "type": "object"
+      },
       "ByokAdminResponse": {
         "description": "One user's BYOK state, as visible to an admin.",
         "properties": {
@@ -4261,6 +4350,19 @@
         "title": "RecentUsersResponse",
         "type": "object"
       },
+      "RecordingToggle": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "RecordingToggle",
+        "type": "object"
+      },
       "ReferralResponse": {
         "description": "The caller's referral standing.",
         "properties": {
@@ -4528,7 +4630,7 @@
                 "type": "null"
               }
             ],
-            "description": "DeerFlow context overrides (model_name, thinking_enabled, etc.)",
+            "description": "Nova context overrides (model_name, thinking_enabled, etc.)",
             "title": "Context"
           },
           "feedback_keys": {
@@ -4717,6 +4819,11 @@
             ],
             "title": "Assistant Id"
           },
+          "correlation_id": {
+            "default": "",
+            "title": "Correlation Id",
+            "type": "string"
+          },
           "created_at": {
             "default": "",
             "title": "Created At",
@@ -4773,6 +4880,11 @@
           "thread_id": {
             "title": "Thread Id",
             "type": "string"
+          },
+          "token_usage_by_model": {
+            "additionalProperties": true,
+            "title": "Token Usage By Model",
+            "type": "object"
           },
           "total_input_tokens": {
             "default": 0,
@@ -5923,6 +6035,47 @@
         "title": "TestSendRequest",
         "type": "object"
       },
+      "ThreadBrowserState": {
+        "properties": {
+          "attention": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attention"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          },
+          "recording": {
+            "title": "Recording",
+            "type": "boolean"
+          },
+          "recording_default": {
+            "title": "Recording Default",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "recording",
+          "recording_default"
+        ],
+        "title": "ThreadBrowserState",
+        "type": "object"
+      },
       "ThreadCreateRequest": {
         "description": "Request body for creating a thread.",
         "properties": {
@@ -6907,6 +7060,19 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "app__gateway__routers__browser_layer__MessageResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "MessageResponse",
+        "type": "object"
+      },
       "app__gateway__routers__byok__MessageResponse": {
         "properties": {
           "message": {
@@ -6923,7 +7089,7 @@
     }
   },
   "info": {
-    "title": "DeerFlow API Gateway",
+    "title": "Nova API Gateway",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
@@ -7369,6 +7535,133 @@
         "summary": "Get Assistant Schemas",
         "tags": [
           "assistants-compat"
+        ]
+      }
+    },
+    "/api/browser/profiles": {
+      "get": {
+        "description": "The caller's saved browser profiles (metadata only \u2014 never cookie values).",
+        "operationId": "list_browser_profiles_api_browser_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserProfilesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Browser Profiles",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/browser/profiles-default": {
+      "delete": {
+        "operationId": "clear_default_browser_profile_api_browser_profiles_default_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__gateway__routers__browser_layer__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Clear Default Browser Profile",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/browser/profiles/{name}": {
+      "delete": {
+        "operationId": "delete_browser_profile_api_browser_profiles__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__gateway__routers__browser_layer__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Browser Profile",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/browser/profiles/{name}/default": {
+      "post": {
+        "operationId": "set_default_browser_profile_api_browser_profiles__name__default_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__gateway__routers__browser_layer__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Default Browser Profile",
+        "tags": [
+          "browser"
         ]
       }
     },
@@ -10953,7 +11246,7 @@
     },
     "/api/metrics": {
       "get": {
-        "description": "Prometheus-format metrics scrape endpoint.\n\nRenders the in-process registry built by ``deerflow.sandbox.metrics``.\nKept here (not in the main ``/health``) so Prometheus scrapers can\npoll it on a different cadence than the health endpoint.",
+        "description": "Prometheus-format metrics scrape endpoint.\n\nRenders the in-process registry built by ``nova.sandbox.metrics``.\nKept here (not in the main ``/health``) so Prometheus scrapers can\npoll it on a different cadence than the health endpoint.",
         "operationId": "metrics_api_metrics_get",
         "responses": {
           "200": {
@@ -11478,8 +11771,28 @@
     },
     "/api/runtime/capabilities": {
       "get": {
-        "description": "Returns the agent's currently loaded skill/tool/hook/subagent set\nplus a per-thread circuit-breaker snapshot. Read-only, fast (no I/O).",
+        "description": "Returns the agent's currently loaded skill/tool/hook/subagent set\nplus a per-thread circuit-breaker snapshot. Read-only; the only I/O is the\nSearXNG health probe in ``igino``, which is capped at 3 s.",
         "operationId": "get_runtime_capabilities_api_runtime_capabilities_get",
+        "parameters": [
+          {
+            "description": "Restrict the circuit-breaker snapshot to one thread. The runtime bar is rendered above a single chat's Agent's Computer, so without this a breaker opened by an unrelated thread paints that chat as degraded.",
+            "in": "query",
+            "name": "thread_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict the circuit-breaker snapshot to one thread. The runtime bar is rendered above a single chat's Agent's Computer, so without this a breaker opened by an unrelated thread paints that chat as degraded.",
+              "title": "Thread Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -11490,6 +11803,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List loaded skills, tools, hooks, subagents, and circuit states",
@@ -14742,9 +15065,350 @@
         ]
       }
     },
+    "/api/threads/{thread_id}/browser/attention/resolve": {
+      "post": {
+        "description": "The user says they finished the captcha/login in the live view.",
+        "operationId": "resolve_thread_attention_api_threads__thread_id__browser_attention_resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__gateway__routers__browser_layer__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Thread Attention",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/browser/recording": {
+      "put": {
+        "operationId": "set_thread_recording_api_threads__thread_id__browser_recording_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordingToggle"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadBrowserState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Thread Recording",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/browser/recordings": {
+      "get": {
+        "operationId": "list_thread_recordings_api_threads__thread_id__browser_recordings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Thread Recordings Api Threads  Thread Id  Browser Recordings Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Thread Recordings",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/browser/recordings/{session_id}": {
+      "delete": {
+        "operationId": "delete_thread_recording_api_threads__thread_id__browser_recordings__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__gateway__routers__browser_layer__MessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Thread Recording",
+        "tags": [
+          "browser"
+        ]
+      },
+      "get": {
+        "operationId": "get_thread_recording_api_threads__thread_id__browser_recordings__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Thread Recording Api Threads  Thread Id  Browser Recordings  Session Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Thread Recording",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/browser/recordings/{session_id}/frames/{frame}": {
+      "get": {
+        "operationId": "get_thread_recording_frame_api_threads__thread_id__browser_recordings__session_id__frames__frame__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "frame",
+            "required": true,
+            "schema": {
+              "title": "Frame",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Thread Recording Frame",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/browser/state": {
+      "get": {
+        "operationId": "get_thread_browser_state_api_threads__thread_id__browser_state_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadBrowserState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Thread Browser State",
+        "tags": [
+          "browser"
+        ]
+      }
+    },
     "/api/threads/{thread_id}/history": {
       "post": {
-        "description": "Get checkpoint history for a thread.\n\nMessages are read from the checkpointer's channel values (the\nauthoritative source) and serialized via\n:func:`~deerflow.runtime.serialization.serialize_channel_values`.\nOnly the latest (first) checkpoint carries the ``messages`` key to\navoid duplicating them across every entry.",
+        "description": "Get checkpoint history for a thread.\n\nMessages are read from the checkpointer's channel values (the\nauthoritative source) and serialized via\n:func:`~nova.runtime.serialization.serialize_channel_values`.\nOnly the latest (first) checkpoint carries the ``messages`` key to\navoid duplicating them across every entry.",
         "operationId": "get_thread_history_api_threads__thread_id__history_post",
         "parameters": [
           {
@@ -19810,7 +20474,7 @@
       "name": "uploads"
     },
     {
-      "description": "Manage DeerFlow thread-local filesystem data",
+      "description": "Manage Nova thread-local filesystem data",
       "name": "threads"
     },
     {

@@ -26,6 +26,7 @@ from app.gateway.routers import (
     auth,
     billing,
     browser_health,
+    browser_layer,
     byok,
     capabilities,
     channel_connections,
@@ -548,6 +549,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Browser subsystem health + Prometheus metrics (v7 C4)
     app.include_router(browser_health.router)
+
+    # Browser layer: profiles (per user) + per-thread browser state and recordings
+    app.include_router(browser_layer.router)
 
     # Runtime capabilities: skills, tools, hooks, subagents, circuit states (v7.1)
     app.include_router(capabilities.router)
