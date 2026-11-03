@@ -245,6 +245,76 @@ def _registry_kind(op_name: str) -> str | None:
         return None
 
 
+def permission_denial_reason(kind: str | None, permission: PermissionPreset, *, nova_op_kind: str | None = None, offered_allow: bool = True) -> str:
+    """Why a permission request was denied, in words the transcript can show.
+
+    ACP gives the agent no channel for a reason -- a denial is a bare
+    ``cancelled`` -- and Claude Code reads that as "the user aborted the
+    permission request", then asks the user to approve a dialog that does not
+    exist. The transcript, the logs and the Activity pane at least say what
+    happened: no person was asked; a policy decided.
+    """
+    label = permission.label
+    if not offered_allow:
+        return f"policy approved it, but the agent offered no allow option under {label}"
+    if nova_op_kind is not None:
+        return f"policy: Nova '{nova_op_kind}' operations are not allowed under {label}"
+    if kind is None:
+        return f"policy: the agent did not say what kind of action this is, and unlabelled actions are not allowed under {label}"
+    if kind in permission.policy.deny_kinds:
+        return f"policy: kind '{kind}' is always denied under {label}"
+    return f"policy: kind '{kind}' is not allowed under {label}"
+
+
+class _ThoughtBuffer:
+    """Coalesce ``agent_thought_chunk`` fragments into readable statuses.
+
+    Adapters stream reasoning a few tokens at a time. Emitting each fragment
+    as its own ``thinking:`` status rendered a delegated turn as dozens of
+    rows ("thinking: ks like a system-level set"), and because the UI keeps
+    only the last 50 statuses, the fragments pushed every real tool call out
+    of view.
+
+    A thought is flushed at a paragraph break, when it passes ``max_chars``
+    (cut on a word boundary), when the session changes, and -- by the caller
+    -- before any non-thought update and at the end of the turn, so thoughts
+    keep their place relative to tool calls and none is lost. 500 characters
+    is roughly a short paragraph: long reasoning becomes a handful of rows
+    that each read as prose, well inside the 50-row window.
+    """
+
+    def __init__(self, emit: TextSink, *, max_chars: int = 500) -> None:
+        self._emit = emit
+        self._max = max_chars
+        self._sid = ""
+        self._buf = ""
+
+    def push(self, session_id: str, text: str) -> None:
+        if session_id != self._sid:
+            self.flush()
+            self._sid = session_id
+        self._buf += text
+        if "\n\n" in self._buf:
+            head, _, self._buf = self._buf.rpartition("\n\n")
+            for paragraph in head.split("\n\n"):
+                self._send(paragraph)
+        while len(self._buf) > self._max:
+            cut = self._buf.rfind(" ", 0, self._max + 1)
+            if cut <= 0:
+                cut = self._max
+            self._send(self._buf[:cut])
+            self._buf = self._buf[cut:]
+
+    def flush(self) -> None:
+        self._send(self._buf)
+        self._buf = ""
+
+    def _send(self, text: str) -> None:
+        text = text.strip()
+        if text:
+            self._emit(self._sid, f"thinking: {text}")
+
+
 def resolve_env(agent_cfg: ACPAgentConfig) -> dict[str, str] | None:
     if not agent_cfg.env:
         return None
@@ -342,11 +412,19 @@ async def run_acp_prompt(
     from acp.schema import ClientCapabilities, Implementation, TextContentBlock
 
     chunks: list[str] = []
+    thoughts = _ThoughtBuffer(on_status)
 
     class _Client(Client):
         async def session_update(self, session_id: str, update, **kwargs) -> None:  # type: ignore[override]
             try:
-                if hasattr(update, "content") and isinstance(update.content, TextContentBlock):
+                is_text = hasattr(update, "content") and isinstance(update.content, TextContentBlock)
+                if is_text and str(getattr(update, "session_update", "") or "") == "agent_thought_chunk":
+                    thoughts.push(session_id, update.content.text)
+                    return
+                # Anything else ends the current thought, so it lands before
+                # the action or answer that followed it.
+                thoughts.flush()
+                if is_text:
                     # ACP streams three kinds of text on the same field. Only
                     # ``agent_message_chunk`` is the answer: a thought chunk is
                     # the model reasoning aloud, and a user chunk is our own
@@ -356,9 +434,6 @@ async def run_acp_prompt(
                     # reasoning was concatenated onto the answer.
                     update_kind = str(getattr(update, "session_update", "") or "")
                     text = update.content.text
-                    if update_kind == "agent_thought_chunk":
-                        on_status(session_id, f"thinking: {text}")
-                        return
                     if update_kind == "user_message_chunk":
                         return
                     chunks.append(text)
@@ -371,15 +446,25 @@ async def run_acp_prompt(
                 logger.debug("acp session_update handling failed", exc_info=True)
 
         async def request_permission(self, options, session_id: str, tool_call, **kwargs):  # type: ignore[override]
+            thoughts.flush()
             kind = getattr(tool_call, "kind", None)
-            title = getattr(tool_call, "title", None) or getattr(tool_call, "tool_call_id", "")
-            nova = nova_tool_decision(getattr(tool_call, "title", None), permission.mode, _registry_kind)
+            raw_title = getattr(tool_call, "title", None)
+            title = raw_title or getattr(tool_call, "tool_call_id", "")
+            nova = nova_tool_decision(raw_title, permission.mode, _registry_kind)
+            nova_op_kind = None
             if nova is None:
-                response = build_permission_response(options, auto_approve=permission.auto_approve, policy=permission.policy, kind=kind)
+                approved = permission.policy.decide(kind, auto_approve=permission.auto_approve)
             else:
-                response = build_permission_response(options, auto_approve=nova, policy=None, kind=kind)
-            verdict = "approved" if response.outcome.outcome == "selected" else "denied"
-            on_status(session_id, f"permission {verdict}: {kind or 'tool'} — {title}")
+                approved = nova
+                nova_op_kind = _registry_kind(raw_title[len(NOVA_TOOL_PREFIX) :].replace("__", ".", 1))
+            response = build_permission_response(options, auto_approve=approved, policy=None, kind=kind)
+            # Keep the leading "permission <verdict>: <kind> — <title>" exactly:
+            # middleware._mirror_runtime_action parses it into Activity cards.
+            if response.outcome.outcome == "selected":
+                on_status(session_id, f"permission approved: {kind or 'tool'} — {title}")
+            else:
+                reason = permission_denial_reason(kind, permission, nova_op_kind=nova_op_kind, offered_allow=not approved)
+                on_status(session_id, f"permission denied: {kind or 'tool'} — {title} ({reason})")
             return response
 
     stderr_tail: collections.deque[str] = collections.deque(maxlen=5)
@@ -494,6 +579,9 @@ async def run_acp_prompt(
                                 _run_scope_suffix(),
                             )
                     finally:
+                        # A thought still buffered when the turn ends -- on
+                        # success, error or cancellation -- is still emitted.
+                        thoughts.flush()
                         # Was only cancelled on the success path, so a failed
                         # initialize/prompt leaked the drain task too.
                         drain.cancel()

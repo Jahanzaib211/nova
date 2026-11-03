@@ -14,6 +14,7 @@ from nova.config.acp_config import ACPAgentConfig, load_acp_config_from_dict
 from nova.config.agents_api_config import AgentsApiConfig, load_agents_api_config_from_dict
 from nova.config.capabilities_config import CapabilitiesConfig
 from nova.config.channel_connections_config import ChannelConnectionsConfig
+from nova.config.checkpoint_retention_config import CheckpointRetentionConfig
 from nova.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from nova.config.database_config import DatabaseConfig
 from nova.config.email_config import EmailConfig
@@ -183,6 +184,12 @@ class AppConfig(BaseModel):
         description=format_field_description(
             "run_events",
             field_doc="Run-event store backend (memory for dev, db for production queries, jsonl for lightweight single-node persistence).",
+        ),
+    )
+    checkpoint_retention: CheckpointRetentionConfig = Field(
+        default_factory=CheckpointRetentionConfig,
+        description=(
+            "Checkpoint retention job (jobs-worker type `maintenance.checkpoints.prune`, CLI `python -m app.jobs.checkpoint_retention`): keep the newest N checkpoints per thread. Off and dry-run by default. Read per job, so edits hot-reload."
         ),
     )
     checkpointer: CheckpointerConfig | None = Field(

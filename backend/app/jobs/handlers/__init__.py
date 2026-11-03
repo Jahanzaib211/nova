@@ -6,6 +6,7 @@ from nova.jobs.registry import JobRegistry
 
 from .agents import register as register_agents
 from .email_marketing import register as register_email_marketing
+from .maintenance import register as register_maintenance
 from .smoke import register as register_smoke
 
 
@@ -14,4 +15,5 @@ def build_registry() -> JobRegistry:
     register_smoke(registry)
     register_email_marketing(registry)
     register_agents(registry)
+    register_maintenance(registry)
     return registry

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -47,6 +48,16 @@ DEFAULT_TURN_TIMEOUT = 1800.0
 #: How long past the budget the session waits for a runner that ignores its
 #: own ``timeout`` argument before cancelling it from outside.
 TIMEOUT_GRACE_S = 2.0
+#: How long a per-turn harness token outlives its turn budget. The session
+#: revokes the token when it closes; the expiry is the backstop for a revoke
+#: that failed, so it only has to be comfortably past the turn's own deadline.
+TOKEN_TTL_MARGIN_S = 600.0
+
+
+def runtime_token_ttl(turn_timeout: float | None = None) -> float:
+    """Seconds a per-turn runtime/delegate token stays valid: the turn budget plus a margin."""
+    budget = turn_timeout if turn_timeout else default_turn_timeout()
+    return float(budget) + TIMEOUT_GRACE_S + TOKEN_TTL_MARGIN_S
 
 
 class ACPTurnTimeout(TimeoutError):
@@ -104,8 +115,9 @@ def default_nova_mcp(user_id: str | None, thread_id: str | None, *, role: str = 
     repo = HarnessTokenRepository(sf)
     scopes = list(DELEGATE_SCOPES if delegate else CHAT_SCOPES)
 
-    async def _mint():
-        return await repo.create(owner_user_id=user_id, name=f"runtime:{thread_id or 'chat'}", scopes=scopes)
+    async def _mint(ttl_seconds: float | None = None):
+        # Always expiring: a revoke that fails must not leave this live.
+        return await repo.create(owner_user_id=user_id, name=f"runtime:{thread_id or 'chat'}", scopes=scopes, ttl_seconds=ttl_seconds or runtime_token_ttl())
 
     return {"__mint__": _mint, "url": url, "repo": repo}, lambda: None
 
@@ -185,6 +197,20 @@ class ACPSession:
             raise ACPTurnTimeout(f"{self.agent} did not finish within {budget} (the ACP turn budget, runtimes.turn_timeout_seconds); the adapter was stopped") from exc
 
 
+async def _call_mint(mint: Callable[..., Any], ttl_seconds: float) -> dict[str, Any]:
+    """Mint with the session's own token TTL when the factory accepts one.
+
+    Factories that predate the parameter (tests, custom deployments) are
+    called as before; :func:`default_nova_mcp`'s mint then falls back to the
+    configured turn budget, so its token expires either way.
+    """
+    try:
+        accepts = "ttl_seconds" in inspect.signature(mint).parameters
+    except (TypeError, ValueError):
+        accepts = False
+    return await (mint(ttl_seconds=ttl_seconds) if accepts else mint())
+
+
 #: Revoke tasks still running after their session was cancelled, kept
 #: referenced so the event loop does not garbage-collect them mid-flight.
 _pending_revokes: set[asyncio.Task[Any]] = set()
@@ -200,16 +226,16 @@ async def _revoke_token(repo: Any, token_id: str, owner_user_id: str, agent: str
     task behind ``asyncio.shield``: if the caller is cancelled again, the
     task still finishes in the background and the cancellation propagates.
 
-    The token store has no expiry column, so a revoke that fails outright
-    leaves the token live until someone revokes it by hand -- hence WARNING,
-    not debug.
+    A revoke that fails outright leaves the token live until its
+    ``expires_at`` (turn budget + :data:`TOKEN_TTL_MARGIN_S`) or the
+    gateway's startup sweep -- hence WARNING, not debug.
     """
 
     async def _revoke() -> None:
         try:
             await repo.revoke(token_id, owner_user_id=owner_user_id)
         except Exception:
-            logger.warning("ACP %s: revoking the per-turn harness token %s failed; it stays live until revoked", agent, token_id, exc_info=True)
+            logger.warning("ACP %s: revoking the per-turn harness token %s failed; it stays live until it expires", agent, token_id, exc_info=True)
 
     task = asyncio.ensure_future(_revoke())
     _pending_revokes.add(task)
@@ -247,7 +273,7 @@ async def open_acp_session(
         try:
             nova_server, cleanup = nova_mcp(user_id, thread_id)
             if nova_server and "__mint__" in nova_server:
-                minted = await nova_server["__mint__"]()
+                minted = await _call_mint(nova_server["__mint__"], runtime_token_ttl(session.turn_timeout))
                 session.mcp_servers.append({"name": "nova", "type": "http", "url": nova_server["url"], "headers": [{"name": "Authorization", "value": f"Bearer {minted['token']}"}]})
             elif nova_server:
                 session.mcp_servers.append(nova_server)

@@ -10,6 +10,7 @@ import {
   applyAcpUpdate,
   isAcpUpdateEvent,
   runtimeTranscripts,
+  statusTone,
   type AcpUpdateEvent,
 } from "@/core/threads/acp-transcript";
 import { acpTranscriptActivityEvents } from "@/core/threads/activity";
@@ -255,5 +256,54 @@ describe("paragraph breaks", () => {
     expect(s.claude_code?.text).toBe(
       "Let me look at the sandbox.\n\nIt has three files.\n\n",
     );
+  });
+});
+
+describe("status tones", () => {
+  const render = (node: React.ReactNode) =>
+    renderToStaticMarkup(
+      <I18nProvider initialLocale="en-US">{node}</I18nProvider>,
+    );
+  const denial =
+    "permission denied: edit — Write (policy: kind 'edit' is not allowed under Standard)";
+  const thought =
+    "thinking: I'm checking whether the Write failure is really about the session directory.";
+
+  it("classifies narration, denials and actions", () => {
+    expect(statusTone(thought)).toBe("thinking");
+    expect(statusTone(denial)).toBe("denied");
+    expect(statusTone("runtime: claude_code (Standard)")).toBe("note");
+    expect(statusTone("read: Read(x)")).toBe("action");
+  });
+
+  it("shows a coalesced thought as prose and the full denial reason", () => {
+    const html = render(
+      <AcpTranscriptView
+        transcript={{
+          sessionId: "s-1",
+          text: "",
+          statuses: [thought, denial],
+          actionCount: 1,
+        }}
+        result={undefined}
+        running
+      />,
+    );
+    expect(html).toContain('data-tone="thinking"');
+    expect(html).toContain("checking whether the Write failure");
+    expect(html).not.toContain("thinking:");
+    expect(html).toContain("is not allowed under Standard");
+  });
+
+  it("never truncates a denial in the runtime card", () => {
+    let s = applyAcpUpdate({}, ev({ kind: "status", delta: thought }));
+    s = applyAcpUpdate(s, ev({ kind: "status", delta: denial }));
+    const html = render(
+      <RuntimeTranscriptCard agent="claude_code" transcript={s.claude_code!} />,
+    );
+    const deniedRow = /<div[^>]*data-tone="denied"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(deniedRow).not.toBe("");
+    expect(deniedRow).not.toContain("truncate");
+    expect(html).toContain("is not allowed under Standard");
   });
 });
