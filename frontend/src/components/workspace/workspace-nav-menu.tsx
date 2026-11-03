@@ -129,7 +129,7 @@ export function WorkspaceNavMenu() {
                       {t.workspace.reportIssue}
                     </DropdownMenuItem>
                   </a>
-                  <a href="mailto:alilabsx@gmail.com">
+                  <a href="mailto:jahanzaib@alilabs.com,alilabsx@gmail.com">
                     <DropdownMenuItem>
                       <MailIcon />
                       {t.workspace.contactUs}

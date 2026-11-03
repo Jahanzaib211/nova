@@ -55,7 +55,7 @@ const plans = [
     ],
     cta: {
       label: "Start a pilot",
-      href: "mailto:alilabsx@gmail.com?subject=Nova%20Plus%20pilot",
+      href: "mailto:jahanzaib@alilabs.com,alilabsx@gmail.com?subject=Nova%20Plus%20pilot",
       external: false,
     },
     highlight: true,
@@ -74,7 +74,7 @@ const plans = [
     ],
     cta: {
       label: "Talk to us",
-      href: "mailto:alilabsx@gmail.com?subject=Nova%20Enterprise",
+      href: "mailto:jahanzaib@alilabs.com,alilabsx@gmail.com?subject=Nova%20Enterprise",
       external: false,
     },
     highlight: false,
@@ -93,7 +93,7 @@ const plans = [
     ],
     cta: {
       label: "Book deployment",
-      href: "mailto:alilabsx@gmail.com?subject=Nova%20deployment",
+      href: "mailto:jahanzaib@alilabs.com,alilabsx@gmail.com?subject=Nova%20deployment",
       external: false,
     },
     highlight: false,
@@ -186,7 +186,7 @@ export default function SaasPage() {
               variant="outline"
               className="h-11 rounded-lg border-white/15 bg-transparent px-6 text-sm font-semibold text-white hover:border-white/30 hover:bg-white/5 hover:text-white"
             >
-              <a href="mailto:alilabsx@gmail.com?subject=Nova%20pilot">
+              <a href="mailto:jahanzaib@alilabs.com,alilabsx@gmail.com?subject=Nova%20pilot">
                 <MailIcon className="size-4" aria-hidden="true" />
                 Talk to us
               </a>
@@ -387,6 +387,13 @@ export default function SaasPage() {
                 Ali Technologies
               </a>{" "}
               ·{" "}
+              <a
+                href="mailto:jahanzaib@alilabs.com"
+                className="text-slate-300 underline underline-offset-4 transition hover:text-white"
+              >
+                jahanzaib@alilabs.com
+              </a>{" "}
+              or{" "}
               <a
                 href="mailto:alilabsx@gmail.com"
                 className="text-slate-300 underline underline-offset-4 transition hover:text-white"

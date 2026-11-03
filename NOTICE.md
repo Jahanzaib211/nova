@@ -46,7 +46,7 @@ identify this derivative work and its owner.
 ## Contact
 
 - Website: <https://www.alilabsx.com>
-- Email: <alilabsx@gmail.com>
+- Email: <jahanzaib@alilabs.com> (also <alilabsx@gmail.com>)
 - Phone / WhatsApp: +92 306 6422442
 - LinkedIn: <https://www.linkedin.com/in/jahanzaib-ali-6383b3399>
 - Issues: <https://github.com/Jahanzaib211/nova/issues>

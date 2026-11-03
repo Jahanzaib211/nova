@@ -440,7 +440,7 @@ async def start_run(
                 # user clearly, give them a path to more (contact the operator /
                 # request an increase), and let the operator raise their limit
                 # from the ops console. Machine-readable code + human message.
-                contact = _os.environ.get("NOVA_SUPPORT_CONTACT", "alilabsx@gmail.com").strip()
+                contact = _os.environ.get("NOVA_SUPPORT_CONTACT", "jahanzaib@alilabs.com or alilabsx@gmail.com").strip()
                 raise HTTPException(
                     status_code=402,
                     detail={
