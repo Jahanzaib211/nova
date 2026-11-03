@@ -5,9 +5,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "*" ]
-  schedule:
-    # Every 6 hours — catches silent image loss between deploys
-    - cron: '0 */6 * * *'
+  # No `schedule:`. The cron run failed every time (6/6) on GitHub-hosted
+  # runners: they have no sandbox image and no docker/sandbox/vendor, so the
+  # image-chain job can only ever report the runner, not the deployment. Run it
+  # by hand (workflow_dispatch) on a host that has the images; the host's own
+  # healthcheck daemon covers "image lost between deploys".
   workflow_dispatch:
 
 permissions:
@@ -21,9 +23,10 @@ jobs:
   sandbox-health:
     name: Sandbox image chain + tool inventory
     runs-on: ubuntu-latest
-    # Only run on schedule/dispatch when Docker is available
-    # PR/push jobs skip the Docker checks (no daemon in CI)
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Manual only: needs the sandbox images, which hosted runners do not have.
+    # PR/push runs skip it (manifest-check below still runs — it is a
+    # required status check, do not rename it).
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v6

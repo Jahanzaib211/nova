@@ -1,15 +1,17 @@
 # Dependabot — automated dependency PRs.
 # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
 #
-# v7.3 (Nova rebrand): config-only — Dependabot ALERTS are still disabled on the
-# free GitHub plan. Once we upgrade to Pro (or make the repo public) this
-# config becomes active without further edits. Grouped minor/patch updates
-# keep the PR noise down; security updates are surfaced immediately.
+# The repository is public, so alerts and security updates are active. Grouped
+# minor/patch updates keep the PR noise down; security updates are surfaced
+# immediately.
 
 version: 2
 
 updates:
-  - package-ecosystem: "pip"
+  # uv, not pip: backend dependencies are locked in backend/uv.lock (a uv
+  # workspace with nova-harness as a member). The pip ecosystem never read the
+  # lock, so it proposed bumps the lock did not contain.
+  - package-ecosystem: "uv"
     directory: "/backend"
     schedule:
       interval: "weekly"
@@ -43,4 +45,35 @@ updates:
       interval: "weekly"
     labels:
       - "area:ci"
+      - "risk:low"
+
+  # Base images in every Dockerfile (FROM / COPY --from). Several are pinned by
+  # digest on purpose (docker:cli, the sandbox base); Dependabot keeps those
+  # digests moving instead of letting them rot.
+  - package-ecosystem: "docker"
+    directories:
+      - "/backend"
+      - "/frontend"
+      - "/docker/provisioner"
+      - "/docker/sandbox"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "area:deps"
+      - "risk:low"
+
+  # Service images in the compose files (nginx, postgres, searxng, crawl4ai,
+  # browserless, autoheal, ollama, monitoring), all digest- or version-pinned.
+  - package-ecosystem: "docker-compose"
+    directories:
+      - "/docker"
+      - "/docker/monitoring"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "area:deps"
       - "risk:low"
