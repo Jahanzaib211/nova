@@ -70,20 +70,198 @@ def _band(value: float, warn: float, fail: float) -> str:
     return GREEN
 
 
+def _env_float(key: str, default: float) -> float:
+    try:
+        raw = os.environ.get(key, "").strip()
+        return float(raw) if raw else default
+    except ValueError:
+        return default
+
+
 def check_disk() -> dict:
     usage = shutil.disk_usage("/")
     pct = usage.used / usage.total * 100
     free_gb = usage.free / 1024**3
     # 85/95: at 95% the box is minutes from failing writes, and SQLite VACUUM
     # (the repair for the DB-size check below) needs headroom to run at all.
+    warn = _env_float("NOVA_GATE_DISK_WARN_PCT", 85)
+    fail = _env_float("NOVA_GATE_DISK_RED_PCT", 95)
     return check(
         "disk",
-        _band(pct, 85, 95),
+        _band(pct, warn, fail),
         f"{pct:.1f}% used on / ({free_gb:.0f} GiB free)",
         percent_used=round(pct, 1),
         free_bytes=usage.free,
         total_bytes=usage.total,
     )
+
+
+# --------------------------------------------------------------------------- disk growth
+#
+# A percentage only says how full the disk is, not how fast it is filling. On
+# 2026-11-02 log rotation failed every hour and left an 80 MB uncompressed copy
+# behind each time; the disk check stayed green at 44 % the whole while. Two
+# samples an interval apart turn that into a rate and an ETA.
+
+DISK_HISTORY_KEEP_SEC = 3 * 86400
+#: The rate is only trusted over at least this much elapsed time; shorter
+#: windows are dominated by one build or one pull.
+DISK_RATE_MIN_WINDOW_SEC = 3600
+
+
+def _disk_history_path() -> Path:
+    override = os.environ.get("NOVA_GATE_DISK_HISTORY_PATH", "").strip()
+    return Path(override) if override else Path.home() / ".nova" / "state" / "disk-history.json"
+
+
+def disk_eta(samples: list[tuple[float, int]], now: float, used: int, free: int) -> tuple[float | None, float | None]:
+    """(bytes/hour growth, hours until full) from the oldest sample at least
+    DISK_RATE_MIN_WINDOW_SEC old; (None, None) when there is none yet. A disk
+    that is shrinking or flat has no ETA."""
+    usable = [(t, u) for t, u in samples if now - t >= DISK_RATE_MIN_WINDOW_SEC]
+    if not usable:
+        return None, None
+    t0, u0 = min(usable)
+    rate = (used - u0) / ((now - t0) / 3600)
+    if rate <= 0:
+        return rate, None
+    return rate, free / rate
+
+
+#: ``--print`` reads the disk history without appending to it.
+_RECORD_DISK_HISTORY = True
+
+
+def check_disk_growth(record: bool | None = None) -> dict:
+    """How fast / is filling, and when it will be full at that rate.
+
+    YELLOW when the ETA is under NOVA_GATE_DISK_ETA_WARN_HOURS (72), RED under
+    NOVA_GATE_DISK_ETA_RED_HOURS (24). The sample history lives outside the
+    gates directory (NOVA_GATE_DISK_HISTORY_PATH); ``record=False`` (``--print``)
+    reads it without appending.
+    """
+    if record is None:
+        record = _RECORD_DISK_HISTORY
+    usage = shutil.disk_usage("/")
+    now = time.time()
+    path = _disk_history_path()
+    try:
+        samples = [(float(t), int(u)) for t, u in json.loads(path.read_text())]
+    except (OSError, ValueError, TypeError):
+        samples = []
+    samples = [s for s in samples if now - s[0] <= DISK_HISTORY_KEEP_SEC]
+    if record:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps([*samples, (now, usage.used)][-500:]))
+        except OSError:
+            pass
+    rate, eta = disk_eta(samples, now, usage.used, usage.free)
+    if rate is None:
+        return check("disk_growth", GREEN, "collecting samples (needs one at least 1 h old)", samples=len(samples))
+    gb_per_day = rate * 24 / 1024**3
+    if eta is None:
+        return check("disk_growth", GREEN, f"/ is not growing ({gb_per_day:+.1f} GiB/day)", gib_per_day=round(gb_per_day, 2))
+    warn = _env_float("NOVA_GATE_DISK_ETA_WARN_HOURS", 72)
+    fail = _env_float("NOVA_GATE_DISK_ETA_RED_HOURS", 24)
+    status = RED if eta < fail else (YELLOW if eta < warn else GREEN)
+    detail = f"/ growing {gb_per_day:+.1f} GiB/day — full in {eta / 24:.1f} days at this rate"
+    if status != GREEN:
+        detail += " — find the writer (docker system df, du -sh logs/ backend/.nova)"
+    return check("disk_growth", status, detail, gib_per_day=round(gb_per_day, 2), hours_to_full=round(eta, 1))
+
+
+# --------------------------------------------------------------------------- docker growth
+
+_SIZE_UNITS = {"B": 1, "KB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 1000**4, "PB": 1000**5}
+
+
+def parse_docker_size(text: str) -> int:
+    """``"37.57GB"`` / ``"2.509kB"`` / ``"0B"`` -> bytes (docker uses SI units)."""
+    raw = (text or "").strip().split(" ", 1)[0]
+    number = raw.rstrip("kKMGTPB")
+    unit = raw[len(number) :].upper() or "B"
+    try:
+        return int(round(float(number) * _SIZE_UNITS.get(unit, 1)))
+    except ValueError:
+        return 0
+
+
+_DOCKER_DF_CACHE: dict | None = None
+
+
+def _docker_df_verbose() -> tuple[dict | None, str]:
+    """``docker system df -v`` as JSON, cached for the run (it is slow)."""
+    global _DOCKER_DF_CACHE
+    if _DOCKER_DF_CACHE is not None:
+        return _DOCKER_DF_CACHE, ""
+    timeout_s = float(os.environ.get("NOVA_DOCKER_DF_TIMEOUT", "90"))
+    try:
+        out = subprocess.run(["docker", "system", "df", "-v", "--format", "{{json .}}"], capture_output=True, text=True, timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        return None, f"docker system df -v exceeded {timeout_s:.0f}s"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return None, f"docker unavailable: {exc}"
+    if out.returncode != 0:
+        return None, f"docker error: {out.stderr.strip()[:120] or 'unknown'}"
+    try:
+        _DOCKER_DF_CACHE = json.loads(out.stdout)
+    except json.JSONDecodeError as exc:
+        return None, f"unparseable docker system df output: {exc}"
+    return _DOCKER_DF_CACHE, ""
+
+
+def evaluate_build_cache(df: dict, warn_gb: float, fail_gb: float) -> dict:
+    entries = df.get("BuildCache") or []
+    total = sum(parse_docker_size(e.get("Size", "")) for e in entries)
+    in_use = sum(parse_docker_size(e.get("Size", "")) for e in entries if str(e.get("InUse")).lower() == "true")
+    gb = total / 1000**3
+    status = _band(gb, warn_gb, fail_gb)
+    detail = f"{gb:.1f} GB build cache in {len(entries)} entries ({in_use / 1000**3:.1f} GB in use)"
+    if status != GREEN:
+        detail += f" — over {fail_gb if status == RED else warn_gb:.0f} GB; reclaim with: docker builder prune --filter until=168h"
+    return check("docker_build_cache", status, detail, bytes=total, in_use_bytes=in_use, entries=len(entries), warn_gb=warn_gb, red_gb=fail_gb)
+
+
+def evaluate_volumes(df: dict, warn_gb: float, fail_gb: float) -> dict:
+    """Largest single volume against the thresholds; total reported too.
+
+    A single volume is the useful unit: the Postgres data volume grows with the
+    checkpoint table, the ollama volume with every model pull.
+    """
+    volumes = sorted(((v.get("Name", "?"), parse_docker_size(v.get("Size", ""))) for v in df.get("Volumes") or []), key=lambda nv: -nv[1])
+    total = sum(size for _, size in volumes)
+    if not volumes:
+        return check("docker_volumes", GREEN, "no docker volumes", total_bytes=0, largest=[])
+    name, size = volumes[0]
+    status = _band(size / 1000**3, warn_gb, fail_gb)
+    top = ", ".join(f"{n[:40]} {s / 1000**3:.1f} GB" for n, s in volumes[:4])
+    detail = f"{len(volumes)} volumes, {total / 1000**3:.1f} GB total; largest: {top}"
+    if status != GREEN:
+        detail += f" — {name} is over {fail_gb if status == RED else warn_gb:.0f} GB"
+    return check(
+        "docker_volumes",
+        status,
+        detail,
+        total_bytes=total,
+        largest=[{"name": n, "bytes": s} for n, s in volumes[:10]],
+        warn_gb=warn_gb,
+        red_gb=fail_gb,
+    )
+
+
+def check_docker_build_cache() -> dict:
+    df, err = _docker_df_verbose()
+    if df is None:
+        return check("docker_build_cache", YELLOW, err)
+    return evaluate_build_cache(df, _env_float("NOVA_GATE_BUILD_CACHE_WARN_GB", 50), _env_float("NOVA_GATE_BUILD_CACHE_RED_GB", 100))
+
+
+def check_docker_volumes() -> dict:
+    df, err = _docker_df_verbose()
+    if df is None:
+        return check("docker_volumes", YELLOW, err)
+    return evaluate_volumes(df, _env_float("NOVA_GATE_VOLUME_WARN_GB", 50), _env_float("NOVA_GATE_VOLUME_RED_GB", 100))
 
 
 def check_inodes() -> dict:
@@ -593,6 +771,7 @@ def check_rotate_job() -> dict:
 
 CHECKS = (
     check_disk,
+    check_disk_growth,
     check_inodes,
     check_memory,
     check_swap,
@@ -602,6 +781,8 @@ CHECKS = (
     check_workspace_backlog,
     check_logs,
     check_docker_reclaimable,
+    check_docker_build_cache,
+    check_docker_volumes,
     check_prune_job,
     check_rotate_job,
 )
@@ -614,7 +795,7 @@ def build_report() -> dict:
             results.append(fn())
         except Exception as exc:  # noqa: BLE001
             results.append(
-                check(fn.__name__.replace("check_", ""), YELLOW, f"check raised: {exc}")
+                check(getattr(fn, "__name__", "check").replace("check_", ""), YELLOW, f"check raised: {exc}")
             )
     overall = (
         RED
@@ -661,6 +842,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--status-path", type=Path, default=_default_status_path())
     args = parser.parse_args(argv)
 
+    global _RECORD_DISK_HISTORY
+    _RECORD_DISK_HISTORY = not args.print_only
     report = build_report()
     if not args.print_only:
         try:

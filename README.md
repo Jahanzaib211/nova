@@ -366,7 +366,7 @@ make ci-fast     # lint + tests only
 make self-audit  # full self-probe
 ```
 
-20 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
+21 GitHub Actions workflows. Pre-commit hooks. CodeQL weekly + every PR.
 
 ## Contributing
 

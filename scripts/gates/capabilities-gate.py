@@ -88,13 +88,44 @@ def mcp_probe(base: str, timeout: float = 5.0) -> int | None:
 # ---------------------------------------------------------------- evaluation
 
 
-def evaluate_modules(ops: dict) -> dict:
+def _load_gate_optional():
+    """scripts/lib/gate_optional.py, or None when it cannot be imported."""
+    try:
+        sys.path.insert(0, str(REPO_ROOT / "scripts" / "lib"))
+        import gate_optional  # type: ignore[import-not-found]
+    except ImportError:
+        return None
+    return gate_optional
+
+
+def evaluate_modules(ops: dict, optional_stacks: frozenset[str] | None = None) -> dict:
+    """Configured-but-unhealthy modules are yellow.
+
+    A module is only excused when every service it reports as "required
+    failing" belongs to a stack declared in NOVA_GATE_OPTIONAL_STACKS -- a
+    deployment that never ran Chatwoot/Twenty/OpenClaw should not hold the
+    integrations module yellow forever. The excuse needs the gateway's full,
+    untruncated list; anything else (another service failing, a detail we
+    cannot parse) stays yellow.
+    """
     status = ops.get("status", {})
-    bad = sorted(k for k, v in status.items() if v.get("configured") and not v.get("healthy"))
+    lib = _load_gate_optional() if optional_stacks else None
+    bad, excused = [], {}
+    for k, v in sorted(status.items()):
+        if not v.get("configured") or v.get("healthy"):
+            continue
+        split = lib.failing_outside(str(v.get("detail", "")), optional_stacks) if lib else None
+        if split and split[0] and not split[1]:
+            excused[k] = split[0]
+        else:
+            bad.append(k)
     configured = sum(1 for v in status.values() if v.get("configured"))
+    note = ""
+    if excused:
+        note = "; optional, not deployed (NOVA_GATE_OPTIONAL_STACKS): " + ", ".join(f"{k}: {', '.join(names)}" for k, names in excused.items())
     if bad:
-        return check("modules", YELLOW, f"{len(bad)} configured module(s) unhealthy: " + ", ".join(f"{k} ({status[k].get('detail', '')})" for k in bad), unhealthy=bad)
-    return check("modules", GREEN, f"{configured}/{len(status)} module(s) configured, all healthy", unhealthy=[])
+        return check("modules", YELLOW, f"{len(bad)} configured module(s) unhealthy: " + ", ".join(f"{k} ({status[k].get('detail', '')})" for k in bad) + note, unhealthy=bad, optional=excused)
+    return check("modules", GREEN, f"{configured}/{len(status)} module(s) configured, all healthy" + note, unhealthy=[], optional=excused)
 
 
 def evaluate_contract(ops: dict, baseline: dict | None) -> dict:
@@ -137,11 +168,11 @@ def evaluate_mcp(status: int | None) -> dict:
     return check("mcp_server", YELLOW, f"/api/mcp/nova answered HTTP {status} without a token (expected 401)", http=status)
 
 
-def build_report(ops: dict | None, baseline: dict | None, runtimes: dict | None, *, mcp_status: int | None, error: str | None = None) -> dict:
+def build_report(ops: dict | None, baseline: dict | None, runtimes: dict | None, *, mcp_status: int | None, error: str | None = None, optional_stacks: frozenset[str] | None = None) -> dict:
     if ops is None:
         checks = [check("registry", RED, f"capability registry unavailable: {error}")]
     else:
-        checks = [evaluate_modules(ops), evaluate_contract(ops, baseline), evaluate_runtimes(runtimes), evaluate_mcp(mcp_status)]
+        checks = [evaluate_modules(ops, optional_stacks),evaluate_contract(ops, baseline), evaluate_runtimes(runtimes), evaluate_mcp(mcp_status)]
     overall = RED if any(c["status"] == RED for c in checks) else (YELLOW if any(c["status"] == YELLOW for c in checks) else GREEN)
     return {"gate": "capabilities", "checked_at_epoch": time.time(), "overall": overall, "ok": overall != RED, "checks": checks}
 
@@ -161,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", default=os.environ.get("NOVA_GATEWAY_BASE", "http://127.0.0.1:2026"))
     parser.add_argument("--out", default=os.environ.get("NOVA_GATES_DIR", str(Path.home() / ".nova" / "gates")))
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--print", dest="print_only", action="store_true", help="print only; do not write the status file")
     args = parser.parse_args(argv)
 
     token = ops_token()
@@ -176,8 +208,11 @@ def main(argv: list[str] | None = None) -> int:
             error = f"runtimes.list: {exc}"
     except (urllib.error.URLError, OSError, ValueError) as exc:
         error = str(exc)
-    report = build_report(ops, baseline, runtimes, mcp_status=mcp_probe(args.base), error=error)
-    write_atomic(Path(args.out) / "capabilities.json", report)
+    lib = _load_gate_optional()
+    optional = lib.optional_stacks() if lib else frozenset()
+    report = build_report(ops, baseline, runtimes, mcp_status=mcp_probe(args.base), error=error, optional_stacks=optional)
+    if not args.print_only:
+        write_atomic(Path(args.out) / "capabilities.json", report)
     if args.json:
         print(json.dumps(report, indent=2))
     else:

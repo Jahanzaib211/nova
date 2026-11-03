@@ -37,6 +37,15 @@ So this gate answers five questions about the runs table:
   ``NOVA_GATE_ORPHAN_WINDOW_SECONDS`` (default 3600): a restart recently
   killed in-flight work. Never red — reaping is recovery working. The
   24-hour count is reported for context.
+- ``connection_saturation`` — Postgres client connections against
+  ``max_connections``, with a per-client-address breakdown so a leak names
+  its client. Yellow at 60 %, red at 85 %; postgres refusing the gate's own
+  connection ("too many clients already") is red. On 2026-11-01 a leak held
+  max_connections for ~10 h and no gate counted connections.
+- ``idle_in_transaction`` — sessions idle in a transaction for more than
+  ``NOVA_GATE_DB_IDLE_TX_SECONDS`` (default 300; red past
+  ``NOVA_GATE_DB_IDLE_TX_RED_SECONDS``, default 1800): the usual shape of
+  a leak, holding a connection, locks and a vacuum-blocking snapshot.
 
 Output is a JSON document written atomically to ``~/.nova/gates/runs.json``
 in the same envelope every other gate uses, so the console renders it with
@@ -59,6 +68,10 @@ NOVA_GATE_LATENCY_P95_SECONDS      p95 completion-latency threshold (3600)
 NOVA_GATE_ORPHAN_WINDOW_SECONDS    how recent a reaped run must be to turn
                                    ``orphaned_runs`` yellow (default 3600)
 NOVA_GATE_LIVE_PROVIDER_INSTANCES  explicit live AioSandboxProvider count
+NOVA_GATE_DB_CONN_WARN_PCT / NOVA_GATE_DB_CONN_RED_PCT
+                                   connection-saturation bands (60 / 85)
+NOVA_GATE_DB_IDLE_TX_SECONDS / NOVA_GATE_DB_IDLE_TX_RED_SECONDS
+                                   idle-in-transaction ages (300 / 1800)
 NOVA_GATE_GATEWAY_LOG              path to the gateway log (default
                                    <repo>/logs/gateway.log)
 NOVA_PG_CONTAINER / NOVA_PG_USER / NOVA_PG_DB   postgres connection
@@ -259,16 +272,25 @@ _FIELD_SEP = "\x1f"
 #: Per-query wall clock. The gates daemon kills a producer after 60 s and
 #: the gate issues at most ``MAX_QUERIES`` queries, so the worst case must
 #: stay under that with room for docker exec's own startup.
-PSQL_TIMEOUT_S = 8
-MAX_QUERIES = 6
+PSQL_TIMEOUT_S = 7
+MAX_QUERIES = 8
 #: Server-side bounds, inside the wall clock: connect, then execute.
-PG_CONNECT_TIMEOUT_S = 3
-PG_STATEMENT_TIMEOUT_MS = 5000
+PG_CONNECT_TIMEOUT_S = 2
+PG_STATEMENT_TIMEOUT_MS = 4000
 
 #: Why postgres could not answer, once it could not. Set on the first
 #: timeout so the remaining queries fail fast instead of each waiting out
 #: their own timeout, and quoted in every check's yellow detail.
 _PG_UNAVAILABLE: str | None = None
+
+#: What Postgres says when it has no slot left for a new connection: the
+#: plain refusal, and what a non-superuser sees once only the
+#: superuser_reserved_connections remain.
+SATURATION_ERRORS = ("too many clients already", "remaining connection slots are reserved")
+
+#: Set when postgres refused the gate's own connection for lack of slots --
+#: the saturation itself, which ``connection_saturation`` reports RED.
+_PG_SATURATED: str | None = None
 
 
 
@@ -332,15 +354,23 @@ def _psql(query: str, timeout_s: float = PSQL_TIMEOUT_S) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     if out.returncode != 0:
-        if "statement timeout" in (out.stderr or ""):
+        global _PG_SATURATED
+        stderr = out.stderr or ""
+        if "statement timeout" in stderr:
             _PG_UNAVAILABLE = f"statement timed out after {PG_STATEMENT_TIMEOUT_MS} ms"
+        elif any(marker in stderr for marker in SATURATION_ERRORS):
+            _PG_SATURATED = stderr.strip().splitlines()[-1][:200]
         return None
     return out.stdout
 
 
 def _unavailable(dialect: Dialect) -> str:
     """The yellow detail for a check whose query could not run."""
-    reason = f" — unavailable: {_PG_UNAVAILABLE}" if dialect.name == "postgres" and _PG_UNAVAILABLE else ""
+    reason = ""
+    if dialect.name == "postgres" and _PG_UNAVAILABLE:
+        reason = f" — unavailable: {_PG_UNAVAILABLE}"
+    elif dialect.name == "postgres" and _PG_SATURATED:
+        reason = f" — unavailable: postgres has no connection slot left ({_PG_SATURATED})"
     return f"could not query the runs table ({dialect.name}){reason}"
 
 
@@ -704,12 +734,157 @@ def check_orphaned_runs(dialect: Dialect) -> dict:
     return check("orphaned_runs", YELLOW if recent else GREEN, detail, window_sec=window, recent=recent, day=day)
 
 
+# ---------------------------------------------------------------------------
+# postgres connections
+# ---------------------------------------------------------------------------
+#
+# On 2026-11-01 a connection leak held Postgres at max_connections (100) for
+# about ten hours. Every new connection was refused with "too many clients
+# already", runs failed one after another -- and no gate counted connections.
+
+DEFAULT_CONN_WARN_PCT = 60.0
+DEFAULT_CONN_RED_PCT = 85.0
+DEFAULT_IDLE_TX_SECONDS = 300.0
+DEFAULT_IDLE_TX_RED_SECONDS = 1800.0
+
+#: Client backends only: autovacuum, the WAL writer and friends are not
+#: counted against max_connections.
+_CLIENT_BACKENDS = "a.backend_type = 'client backend'"
+
+#: One query for the limit and the per-client breakdown, to stay inside
+#: MAX_QUERIES. The LEFT JOIN keeps the settings row even with no clients.
+CONNECTIONS_QUERY = (
+    "SELECT current_setting('max_connections'), current_setting('superuser_reserved_connections'), "
+    "COALESCE(host(a.client_addr), 'local'), COALESCE(NULLIF(a.application_name, ''), '-'), COALESCE(a.state, '-'), count(a.pid) "
+    f"FROM (SELECT 1) AS one LEFT JOIN pg_stat_activity a ON {_CLIENT_BACKENDS} GROUP BY 3, 4, 5 ORDER BY 6 DESC"
+)
+
+
+def idle_in_transaction_query(min_age: float) -> str:
+    return (
+        "SELECT a.pid, COALESCE(host(a.client_addr), 'local'), COALESCE(NULLIF(a.application_name, ''), '-'), "
+        "EXTRACT(EPOCH FROM (now() - a.state_change))::bigint, "
+        "regexp_replace(left(COALESCE(a.query, ''), 100), '[[:space:]]+', ' ', 'g') "
+        f"FROM pg_stat_activity a WHERE {_CLIENT_BACKENDS} AND a.state IN ('idle in transaction', 'idle in transaction (aborted)') "
+        f"AND a.state_change < now() - interval '{int(min_age)} seconds' ORDER BY a.state_change ASC LIMIT {DETAIL_LIMIT}"
+    )
+
+
+def summarise_clients(rows: list[list[str]]) -> list[dict]:
+    """Per client address: total connections and the state/application split,
+    busiest first -- so the leaking client is the first one named."""
+    by_addr: dict[str, dict] = {}
+    for row in rows:
+        try:
+            addr, app, state, count = row[2], row[3], row[4], int(row[5])
+        except (IndexError, ValueError):
+            continue
+        if count == 0:
+            continue
+        entry = by_addr.setdefault(addr, {"client_addr": addr, "connections": 0, "applications": {}, "states": {}})
+        entry["connections"] += count
+        entry["applications"][app] = entry["applications"].get(app, 0) + count
+        entry["states"][state] = entry["states"].get(state, 0) + count
+    return sorted(by_addr.values(), key=lambda e: (-e["connections"], e["client_addr"]))
+
+
+def check_connection_saturation(dialect: Dialect) -> dict:
+    """Client connections / max_connections, with a per-client breakdown.
+
+    YELLOW at ``NOVA_GATE_DB_CONN_WARN_PCT`` (60), RED at
+    ``NOVA_GATE_DB_CONN_RED_PCT`` (85). Postgres refusing the gate's own
+    connection for lack of slots is the saturation itself: RED, never
+    "could not query". The gate's own session is one of the counted.
+    """
+    warn = _env_float("NOVA_GATE_DB_CONN_WARN_PCT", DEFAULT_CONN_WARN_PCT)
+    fail = _env_float("NOVA_GATE_DB_CONN_RED_PCT", DEFAULT_CONN_RED_PCT)
+    if dialect.name != "postgres":
+        return check("connection_saturation", GREEN, f"not applicable ({dialect.name} backend)", warn_pct=warn, red_pct=fail)
+    rows = _query_rows(dialect, CONNECTIONS_QUERY)
+    if rows is None and _PG_SATURATED:
+        return check(
+            "connection_saturation",
+            RED,
+            f"postgres refused a new connection for lack of slots — max_connections is exhausted ({_PG_SATURATED})",
+            warn_pct=warn,
+            red_pct=fail,
+            refused=True,
+        )
+    if not rows:
+        return check("connection_saturation", YELLOW, _unavailable(dialect), warn_pct=warn, red_pct=fail)
+    try:
+        max_conn, reserved = int(rows[0][0]), int(rows[0][1])
+    except (IndexError, ValueError):
+        return check("connection_saturation", YELLOW, f"unparseable pg_stat_activity row: {rows[0]!r}", warn_pct=warn, red_pct=fail)
+    clients = summarise_clients(rows)
+    current = sum(c["connections"] for c in clients)
+    pct = current / max_conn * 100 if max_conn else 0.0
+    status = _band(pct, warn, fail)
+    top = ", ".join(f"{c['client_addr']}={c['connections']} (" + ", ".join(f"{s} {n}" for s, n in sorted(c["states"].items(), key=lambda kv: -kv[1])) + ")" for c in clients[:4])
+    detail = f"{current}/{max_conn} client connections ({pct:.0f}%, {reserved} reserved for superuser)"
+    if top:
+        detail += f"; by client: {top}"
+    if status != GREEN:
+        detail += f" — over the {fail if status == RED else warn:.0f}% threshold"
+    return check(
+        "connection_saturation",
+        status,
+        detail,
+        current=current,
+        max_connections=max_conn,
+        superuser_reserved=reserved,
+        percent_used=round(pct, 1),
+        warn_pct=warn,
+        red_pct=fail,
+        clients=clients[:DETAIL_LIMIT],
+    )
+
+
+def check_idle_in_transaction(dialect: Dialect) -> dict:
+    """Sessions sitting ``idle in transaction`` past N minutes.
+
+    Such a session holds its connection, its locks and its snapshot (which
+    blocks vacuum) -- the usual shape of a leak: a transaction opened and
+    never committed or closed. YELLOW past ``NOVA_GATE_DB_IDLE_TX_SECONDS``
+    (300), RED past ``NOVA_GATE_DB_IDLE_TX_RED_SECONDS`` (1800).
+    """
+    warn_age = _env_float("NOVA_GATE_DB_IDLE_TX_SECONDS", DEFAULT_IDLE_TX_SECONDS)
+    red_age = max(_env_float("NOVA_GATE_DB_IDLE_TX_RED_SECONDS", DEFAULT_IDLE_TX_RED_SECONDS), warn_age)
+    if dialect.name != "postgres":
+        return check("idle_in_transaction", GREEN, f"not applicable ({dialect.name} backend)", threshold_sec=warn_age, red_sec=red_age)
+    rows = _query_rows(dialect, idle_in_transaction_query(warn_age))
+    if rows is None:
+        return check("idle_in_transaction", YELLOW, _unavailable(dialect), threshold_sec=warn_age, red_sec=red_age)
+    sessions = []
+    for row in rows:
+        try:
+            sessions.append({"pid": int(row[0]), "client_addr": row[1], "application": row[2], "idle_sec": int(row[3]), "query": row[4] if len(row) > 4 else ""})
+        except (IndexError, ValueError):
+            continue
+    if not sessions:
+        return check("idle_in_transaction", GREEN, f"no session idle in transaction for more than {warn_age / 60:.0f} min", threshold_sec=warn_age, red_sec=red_age, count=0)
+    oldest = max(s["idle_sec"] for s in sessions)
+    named = ", ".join(f"pid {s['pid']} {s['client_addr']}/{s['application']} {s['idle_sec'] // 60} min" for s in sessions[:5])
+    return check(
+        "idle_in_transaction",
+        RED if oldest >= red_age else YELLOW,
+        f"{len(sessions)} session(s) idle in transaction for more than {warn_age / 60:.0f} min (oldest {oldest // 60} min): {named}",
+        threshold_sec=warn_age,
+        red_sec=red_age,
+        count=len(sessions),
+        oldest_sec=oldest,
+        sessions=sessions,
+    )
+
+
 CHECKS = (
     check_stuck_runs,
     check_journal_persistence,
     check_multi_instance_providers,
     check_run_completion_latency,
     check_orphaned_runs,
+    check_connection_saturation,
+    check_idle_in_transaction,
 )
 
 

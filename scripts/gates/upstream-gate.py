@@ -32,10 +32,18 @@ Subcommands
     port SHA        apply one upstream commit to the index as a patch and write
                     a commit message with provenance trailers (never commits)
     skip SHA        record a decision not to port, so `mine` stops listing it
+    verify-provenance
+                    every Upstream-Ref in a range is well-formed, names a real
+                    upstream commit after the fork base, and is claimed once
     install-hooks   commit-msg / pre-merge-commit / pre-push / pre-rebase hooks running `check`
+
+Local hooks are a convenience (`--no-verify` skips them). The enforcing layer
+is CI (.github/workflows/upstream-isolation.yml) made a required status check
+on a protected main (scripts/gates/protect-main.sh).
 
 Usage:
     scripts/gates/upstream-gate.py check [--json]
+    scripts/gates/upstream-gate.py verify-provenance [--range A..B | --all] [--json]
     scripts/gates/upstream-gate.py mine [--security] [--type fix] [--apply clean] [--limit 50] [--json | --markdown FILE]
     scripts/gates/upstream-gate.py port <sha> [--include-docs]
     scripts/gates/upstream-gate.py skip <sha> --reason "..."
@@ -405,13 +413,28 @@ def _message(repo: Path, sha: str) -> str:
     return "\n\n".join(parts) + "\n"
 
 
+def _upstream_commit(repo: Path, sha: str, ref: str) -> str | None:
+    """The full SHA if *sha* is an upstream commit after the fork base, else None.
+
+    Ancestry needs only the commit graph, so this works on a `--filter=tree:0`
+    fetch -- which is what CI does.
+    """
+    proc = _git(repo, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}", check=False)
+    full = proc.stdout.strip()
+    if proc.returncode != 0 or full == FORK_BASE:
+        return None
+    if _git(repo, "merge-base", "--is-ancestor", FORK_BASE, full, check=False).returncode != 0:
+        return None
+    if _git(repo, "merge-base", "--is-ancestor", full, ref, check=False).returncode != 0:
+        return None
+    return full
+
+
 def port(repo: Path, sha: str, *, ref: str = "upstream/main", include_docs: bool = False) -> dict:
     """Stage one upstream commit as a patch. The operator tests and commits."""
     _require_ref(repo, ref)
-    proc = _git(repo, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}", check=False)
-    full = proc.stdout.strip()
-    is_upstream = proc.returncode == 0 and full != FORK_BASE and _git(repo, "merge-base", "--is-ancestor", FORK_BASE, full, check=False).returncode == 0 and _git(repo, "merge-base", "--is-ancestor", full, ref, check=False).returncode == 0
-    if not is_upstream:
+    full = _upstream_commit(repo, sha, ref)
+    if full is None:
         raise GateError(f"{sha} is not an upstream commit after the fork base ({FORK_BASE[:9]}..{ref})")
     if full in ported_shas(repo):
         raise GateError(f"{full[:12]} is already ported (an Upstream-Ref trailer names it)")
@@ -438,15 +461,116 @@ def port(repo: Path, sha: str, *, ref: str = "upstream/main", include_docs: bool
     }
 
 
+# --- provenance ----------------------------------------------------------
+#
+# A port is code from outside, so the claim it carries is checked like any
+# other input: well-formed, true (it names a real upstream commit), and made
+# once. A forged or recycled Upstream-Ref would make `mine` hide work that was
+# never done.
+
+REF_VALUE_RE = re.compile(rf"^{re.escape(UPSTREAM_REPO)}@(?P<sha>[0-9a-f]{{40}})$")
+
+
+def _claims(repo: Path, rev: str) -> list[tuple[str, str]]:
+    """(commit, Upstream-Ref value) for every claim reachable from *rev*."""
+    log = _out(repo, "log", "--format=%H%x1f%(trailers:key=Upstream-Ref,valueonly,separator=%x1d)%x1e", rev, "--")
+    out = []
+    for record in log.split("\x1e"):
+        record = record.strip()
+        if not record:
+            continue
+        commit, _, values = record.partition("\x1f")
+        out.extend((commit, v.strip()) for v in values.split("\x1d") if v.strip())
+    return out
+
+
+def _default_range(repo: Path) -> str:
+    has_main = _git(repo, "rev-parse", "--verify", "--quiet", "origin/main^{commit}", check=False).returncode == 0
+    return "origin/main..HEAD" if has_main else "HEAD"
+
+
+def verify_provenance(repo: Path, rev_range: str | None = None, *, ref: str = "upstream/main") -> dict:
+    """Check every Upstream-Ref claim made by the commits in *rev_range*."""
+    rev_range = rev_range or _default_range(repo)
+    claims = _claims(repo, rev_range)
+    checks = []
+
+    malformed = [(c, v) for c, v in claims if not REF_VALUE_RE.match(v)]
+    if malformed:
+        listed = "; ".join(f"{c[:12]}: {v!r}" for c, v in malformed[:5])
+        checks.append(_check("provenance_format", RED, f"Upstream-Ref must read `{UPSTREAM_REPO}@<40-hex sha>` -- {listed}"))
+    else:
+        checks.append(_check("provenance_format", GREEN, f"{len(claims)} claim(s) well-formed"))
+
+    shas = [(c, REF_VALUE_RE.match(v).group("sha")) for c, v in claims if REF_VALUE_RE.match(v)]
+    has_ref = _git(repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False).returncode == 0
+    if not shas:
+        checks.append(_check("provenance_upstream", GREEN, "no claims to verify"))
+    elif not has_ref:
+        checks.append(_check("provenance_upstream", YELLOW, f"{ref} is not fetched, so {len(shas)} claim(s) are unverified: git fetch --filter=tree:0 upstream main:refs/remotes/{ref}"))
+    else:
+        false = [(c, s) for c, s in shas if _upstream_commit(repo, s, ref) is None]
+        if false:
+            listed = "; ".join(f"{c[:12]} claims {s[:12]}" for c, s in false[:5])
+            checks.append(_check("provenance_upstream", RED, f"claimed commit(s) are not upstream commits after the fork base -- {listed}"))
+        else:
+            checks.append(_check("provenance_upstream", GREEN, f"{len(shas)} claim(s) name real upstream commits"))
+
+    # Uniqueness is judged against all of HEAD, not just the range: a PR that
+    # re-ports something main already carries must fail even though the first
+    # claim is outside the PR.
+    owners: dict[str, set[str]] = {}
+    for c, v in _claims(repo, "HEAD"):
+        m = REF_VALUE_RE.match(v)
+        if m:
+            owners.setdefault(m.group("sha"), set()).add(c)
+    dupes = sorted({s for _, s in shas if len(owners.get(s, ())) > 1})
+    if dupes:
+        listed = "; ".join(f"{s[:12]} by {', '.join(sorted(o[:12] for o in owners[s]))}" for s in dupes[:5])
+        checks.append(_check("provenance_unique", RED, f"upstream commit(s) claimed by more than one Nova commit -- {listed}"))
+    else:
+        checks.append(_check("provenance_unique", GREEN, "every claim is made once"))
+
+    return {
+        "gate": "upstream-provenance",
+        "generated_at": _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
+        "range": rev_range,
+        "ported": len({c for c, _ in claims}),
+        "status": _worst(checks),
+        "checks": checks,
+    }
+
+
 # --- hooks ---------------------------------------------------------------
 
 
-def _hook_body(name: str) -> str:
-    script = Path(__file__).resolve()
-    return f'#!/bin/sh\n# {HOOK_MARKER}: installed by scripts/gates/upstream-gate.py install-hooks\nexec python3 "{script}" check --hook {name} "$@"\n'
+def _hook_body(name: str, script: Path) -> str:
+    # Hooks live in the common git dir, so this one file serves every worktree
+    # and every branch. Prefer the gate the current checkout carries (it
+    # matches the code being committed); fall back to the copy the hook was
+    # installed from, which still guards branches that predate the gate.
+    #
+    # With neither present, pre-push fails closed: it is the last local point
+    # before history leaves the machine. The local hooks warn and allow --
+    # pre-push and CI still check what they would have, and blocking every
+    # commit on an old branch only teaches people `--no-verify`.
+    missing_exit = 1 if name == "pre-push" else 0
+    return (
+        "#!/bin/sh\n"
+        f"# {HOOK_MARKER}: installed by scripts/gates/upstream-gate.py install-hooks\n"
+        'gate="$(git rev-parse --show-toplevel 2>/dev/null)/scripts/gates/upstream-gate.py"\n'
+        f'[ -f "$gate" ] || gate="{script}"\n'
+        'if [ ! -f "$gate" ]; then\n'
+        f'  echo "upstream gate: cannot find the upstream gate (not in this checkout, not at {script}); reinstall with scripts/gates/upstream-gate.py install-hooks" >&2\n'
+        f"  exit {missing_exit}\n"
+        "fi\n"
+        f'exec python3 "$gate" check --hook {name} "$@"\n'
+    )
 
 
-def install_hooks(repo: Path) -> dict:
+def install_hooks(repo: Path, *, script: Path | None = None) -> dict:
+    """Install the gate's hooks. ``script`` is the fallback gate path; tests point it at a missing file."""
+    script = script or Path(__file__).resolve()
     hooks_dir = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-path", "hooks"))
     hooks_dir.mkdir(parents=True, exist_ok=True)
     installed, skipped = [], []
@@ -455,7 +579,7 @@ def install_hooks(repo: Path) -> dict:
         if path.exists() and HOOK_MARKER not in path.read_text(errors="replace"):
             skipped.append(name)
             continue
-        path.write_text(_hook_body(name))
+        path.write_text(_hook_body(name, script))
         path.chmod(0o755)
         installed.append(name)
     return {"hooks_dir": str(hooks_dir), "installed": sorted(installed), "skipped": sorted(skipped)}
@@ -560,6 +684,13 @@ def main(argv: list[str] | None = None) -> int:
     p_skip.add_argument("sha")
     p_skip.add_argument("--reason", required=True)
 
+    p_prov = sub.add_parser("verify-provenance", help="check the Upstream-Ref claims in a commit range")
+    rng = p_prov.add_mutually_exclusive_group()
+    rng.add_argument("--range", dest="rev_range", help="revision range (default: origin/main..HEAD, or HEAD without origin/main)")
+    rng.add_argument("--all", action="store_true", help="every commit reachable from HEAD")
+    p_prov.add_argument("--ref", default="upstream/main")
+    p_prov.add_argument("--json", action="store_true")
+
     sub.add_parser("install-hooks", help="install commit-msg / pre-merge-commit / pre-push / pre-rebase hooks")
 
     args = parser.parse_args(argv)
@@ -609,6 +740,16 @@ def main(argv: list[str] | None = None) -> int:
             entry = record_skip(repo, args.sha, args.reason)
             print(f"recorded skip in {LEDGER_PATH}: {entry['subject']}")
             return 0
+
+        if args.cmd == "verify-provenance":
+            report = verify_provenance(repo, "HEAD" if args.all else args.rev_range, ref=args.ref)
+            if args.json:
+                print(json.dumps(report, indent=2))
+            else:
+                print(f"upstream provenance ({report['range']}, {report['ported']} ported commit(s)): {report['status'].upper()}")
+                for c in report["checks"]:
+                    print(f"  [{c['status']:>6}] {c['name']}: {c['detail']}")
+            return 1 if report["status"] == RED else 0
 
         if args.cmd == "install-hooks":
             result = install_hooks(repo)

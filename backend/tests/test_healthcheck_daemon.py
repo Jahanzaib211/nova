@@ -282,6 +282,7 @@ class TestDisabledProbes:
             "probe_litellm",
             "probe_drift",
             "probe_runs",
+            "probe_disk",
         ]:
             monkeypatch.setattr(healthcheck, name, fake_green)
 
@@ -356,6 +357,7 @@ class TestRunCycleSmoke:
             "probe_tunnel",
             "probe_drift",
             "probe_runs",
+            "probe_disk",
             "probe_searxng",
             "probe_host_bridge",
         ]:
@@ -396,6 +398,7 @@ class TestRunCycleSmoke:
             "probe_tunnel",
             "probe_drift",
             "probe_runs",
+            "probe_disk",
             "probe_searxng",
             "probe_host_bridge",
         ]:
