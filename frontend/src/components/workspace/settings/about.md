@@ -25,7 +25,7 @@ Explore Nova on GitHub: [github.com/Jahanzaib211/nova](https://github.com/Jahanz
 
 ## 📧 Support
 
-Questions or help: visit [alilabsx.com](https://www.alilabsx.com), email [alilabsx@gmail.com](mailto:alilabsx@gmail.com), reach out on [LinkedIn](https://www.linkedin.com/in/jahanzaib-ali-6383b3399), or [open an issue](https://github.com/Jahanzaib211/nova/issues).
+Questions or help: visit [alilabsx.com](https://www.alilabsx.com), email [jahanzaib@alilabs.com](mailto:jahanzaib@alilabs.com) or [alilabsx@gmail.com](mailto:alilabsx@gmail.com), reach out on [LinkedIn](https://www.linkedin.com/in/jahanzaib-ali-6383b3399), or [open an issue](https://github.com/Jahanzaib211/nova/issues).
 
 ---
 

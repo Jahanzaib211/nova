@@ -65,7 +65,7 @@ The following Nova-specific additions are **NOT licensed under MIT**. They are p
 | **Watchdog/Receipts/Self-improvement loop** | 12-probe self-healing watchdog (P1–P12), PM2-owned Docker lifecycle, reboot persistence, tunnel auto-recovery, structured post-run receipts, autonomous improvement loop | `scripts/healthcheck-daemon.py`, `scripts/pm2-monitoring.sh`, `backend/packages/harness/nova/runtime/` |
 | **Nova branding** | "Nova — The Agent's Computer", "Made by Ali Technologies", logos, visual identity | `NOTICE.md`, `README.md` hero, UI strings |
 
-**Commercial license terms** are negotiated separately. Contact `alilabsx@gmail.com` for evaluation access or licensing.
+**Commercial license terms** are negotiated separately. Contact `jahanzaib@alilabs.com` or `alilabsx@gmail.com` for evaluation access or licensing.
 
 ---
 
@@ -94,7 +94,7 @@ A: Yes. The core agent harness (DeerFlow + Nova MIT additions) is fully function
 A: Absolutely. The MIT core exposes a complete REST + SSE API (`/api/*`, `/api/langgraph/*`). The embedded `NovaClient` provides in-process access. Many teams use just the backend as an agent runtime with custom frontends.
 
 **Q: What if I want the proprietary features?**
-A: Contact `alilabsx@gmail.com` for an evaluation license or commercial terms.
+A: Contact `jahanzaib@alilabs.com` or `alilabsx@gmail.com` for an evaluation license or commercial terms.
 
 **Q: Does the MIT core depend on the proprietary code?**
 A: No. The dependency direction is strictly: proprietary → MIT. The MIT core has zero imports or runtime dependencies on proprietary components.
