@@ -110,17 +110,14 @@ def test_create_chat_result_maps_message_reasoning_content():
 
 
 def test_create_chat_result_reads_reasoning_content_from_message_attribute():
+    from openai.types.chat import ChatCompletion
+
     model = _make_model()
 
-    class FakeMessage:
-        reasoning_content = "Reasoning stored on the SDK message object."
-
-    class FakeChoice:
-        message = FakeMessage()
-
-    class FakeResponse:
-        choices = [FakeChoice()]
-
+    # A real SDK object (langchain-openai >= 1.7 rejects anything that is not a
+    # dict or openai.BaseModel) whose dump omits the reasoning, so only the
+    # attribute on the typed message can supply it.
+    class FakeResponse(ChatCompletion):
         def model_dump(self, **kwargs):
             return {
                 "choices": [
@@ -135,7 +132,27 @@ def test_create_chat_result_reads_reasoning_content_from_message_attribute():
                 "model": "mimo-v2.5-pro",
             }
 
-    result = model._create_chat_result(FakeResponse())
+    response = FakeResponse.model_validate(
+        {
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "mimo-v2.5-pro",
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {
+                        "role": "assistant",
+                        "content": "Answer.",
+                        "reasoning_content": "Reasoning stored on the SDK message object.",
+                    },
+                }
+            ],
+        }
+    )
+
+    result = model._create_chat_result(response)
 
     assert result.generations[0].message.additional_kwargs["reasoning_content"] == "Reasoning stored on the SDK message object."
 

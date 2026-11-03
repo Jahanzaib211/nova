@@ -1122,8 +1122,7 @@ i.e. it would fail exactly where the diagnostic matters most.
 
 ## Dependency security
 
-`uv.lock` is kept clear of known-vulnerable packages for everything **except**
-the LangChain family, which is a deliberate, standing exception.
+`uv.lock` is kept clear of known-vulnerable packages.
 
 Audit with:
 
@@ -1148,9 +1147,21 @@ it safe to take:
   a replay *miss* would have caught any change in message serialization or
   prompt assembly under `langchain-core` 1.5.
 
-Re-audit any time with the command above. When a langchain release drops the
-`websockets<16` constraint, lift the ceiling in
-`packages/harness/pyproject.toml`.
+**Who holds `websockets<16` now (2026-11).** `langchain` 1.4.x dropped the
+constraint; `lark-oapi` 1.7.x (the Feishu channel SDK) still requires
+`websockets<16`. Lifting the ceiling resolves only by pulling `lark-oapi` back
+to 1.5.5, so the ceiling stays. When a `lark-oapi` release drops it, lift the
+ceiling in `packages/harness/pyproject.toml` (and re-verify the two WebSocket
+bridges against the new major).
+
+**The root distribution is `nova-backend`, not `nova`.** The import package is
+still `nova` (`packages/harness/nova`, distribution `nova-harness`); only the
+unpublished root project in `backend/pyproject.toml` was renamed. As `nova`, the
+lockfile's root package matched OpenStack Nova advisories and produced dozens of
+false-positive Dependabot alerts. Nothing installs it by name (`uv sync
+--all-packages` and the Dockerfiles never say `--package nova`).
+
+Re-audit any time with the command above.
 
 ## Code Style
 
