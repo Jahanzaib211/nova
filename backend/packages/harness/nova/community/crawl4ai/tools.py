@@ -33,8 +33,10 @@ from typing import Any
 from langchain.tools import tool
 
 from nova.community._tool_config import tool_config_extras as _get_tool_config
+from nova.tools.types import Runtime
 
 from .crawl4ai_client import DEFAULT_BASE_URL, Crawl4aiClient
+from .routing import crawl_routed, fetch_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -70,16 +72,18 @@ def _record(url: str, *, pages: int, success: bool, duration_ms: float, error: s
 
 
 @tool("web_fetch_many", parse_docstring=True)
-async def web_fetch_many_tool(urls: list[str], max_pages: int = 10) -> str:
+async def web_fetch_many_tool(urls: list[str], max_pages: int = 10, runtime: Runtime = None, use_profile: bool = True) -> str:
     """Fetch several web pages in one call and return them as markdown.
 
     Use this after web_search, when you want to read most of the results: it
     fetches them in parallel instead of one web_fetch call per URL. For a single
     page, use web_fetch. This does not follow links -- pass the URLs you want.
+    Sites the user saved a browser profile for are fetched logged in.
 
     Args:
         urls: The page URLs to fetch. Each must include the scheme (https://example.com). Capped at 25.
         max_pages: Maximum number of pages to return. Capped at 25.
+        use_profile: Send the user's saved login cookies to matching sites (default true).
     """
     wanted = [u for u in (urls or []) if isinstance(u, str) and u.strip()][:_MAX_PAGES_CEILING]
     if not wanted:
@@ -88,7 +92,7 @@ async def web_fetch_many_tool(urls: list[str], max_pages: int = 10) -> str:
     start = time.monotonic()
 
     try:
-        results = await _get_client().crawl(wanted, max_pages=pages)
+        results = await crawl_routed(_get_client(), wanted, max_pages=pages, user_id=fetch_user_id(runtime), use_profile=use_profile)
         elapsed_ms = (time.monotonic() - start) * 1000
 
         if not results:

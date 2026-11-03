@@ -35,8 +35,10 @@ import httpx
 from langchain.tools import tool
 
 from nova.community._tool_config import tool_config_extras as _get_tool_config
+from nova.tools.types import Runtime
 
 from .crawl4ai_client import DEFAULT_BASE_URL, Crawl4aiClient
+from .routing import crawl_routed, fetch_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +277,8 @@ async def crawl_site(
     max_depth: int = 2,
     same_domain: bool = True,
     deadline_s: float = _DEADLINE_S,
+    user_id: str | None = None,
+    use_profile: bool = True,
 ) -> dict[str, Any]:
     """Breadth-first crawl. Returns pages, the link graph, and why it stopped.
 
@@ -319,7 +323,9 @@ async def crawl_site(
 
         round_started = time.monotonic()
         try:
-            results = await client.crawl(allowed, max_pages=len(allowed))
+            # Pages a saved browser profile covers go via Browserless with its
+            # cookies (Crawl4AI refuses cookies); see routing.py.
+            results = await crawl_routed(client, allowed, max_pages=len(allowed), user_id=user_id, use_profile=use_profile)
         except Exception as exc:  # noqa: BLE001 - a failed round ends the crawl, not the process
             logger.error("web_crawl round at depth %d failed: %s", depth, exc)
             _record(allowed[0], success=False, duration_ms=(time.monotonic() - round_started) * 1000, error=str(exc)[:200])
@@ -364,6 +370,8 @@ async def web_crawl_tool(
     max_pages: int = 15,
     max_depth: int = 2,
     same_domain: bool = True,
+    runtime: Runtime = None,
+    use_profile: bool = True,
 ) -> str:
     """Crawl a site by following links from a starting page.
 
@@ -379,6 +387,7 @@ async def web_crawl_tool(
         max_pages: Total pages to fetch across all depths. Capped at 50.
         max_depth: How many link hops from the start page. 0 is the start page alone. Capped at 3.
         same_domain: Stay on the starting page's host. Turning this off can reach the whole web.
+        use_profile: Send the user's saved login cookies to matching sites (default true).
     """
     start_url = (start_url or "").strip()
     if not start_url:
@@ -391,6 +400,8 @@ async def web_crawl_tool(
         max_pages=max_pages,
         max_depth=max_depth,
         same_domain=same_domain,
+        user_id=fetch_user_id(runtime),
+        use_profile=use_profile,
     )
 
     pages = result["pages"]

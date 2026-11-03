@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 from typing import Any
@@ -19,6 +20,11 @@ class BrowserlessClient:
         # every web_fetch would begin failing with no config change to point at.
         self.token = token or os.environ.get("BROWSERLESS_TOKEN", "")
         self.timeout_s = timeout_s
+        # Metadata of the last /content call, for the web_fetch escalation
+        # ladder: the *target* page's status and headers (Browserless itself
+        # answers 200 and reports the page's own code in X-Response-Code).
+        self.last_target_status: int | None = None
+        self.last_headers: dict[str, str] = {}
 
     async def fetch_html(
         self,
@@ -29,6 +35,8 @@ class BrowserlessClient:
         wait_for_selector_timeout_ms: int = 5000,
         reject_resource_types: list[str] | None = None,
         reject_request_pattern: list[str] | None = None,
+        query: dict[str, str] | None = None,
+        extra_body: dict[str, Any] | None = None,
     ) -> str:
         """Fetch the rendered HTML of a page using Browserless.
 
@@ -43,6 +51,9 @@ class BrowserlessClient:
             wait_for_selector_timeout_ms: Timeout for selector wait.
             reject_resource_types: Resource types to block (e.g. ["image"]).
             reject_request_pattern: URL patterns to block.
+            query: Extra query parameters (``launch`` …) from the browser layer.
+            extra_body: Extra body fields (``cookies``, ``userAgent`` …) from the
+                browser layer. Never logged: it can carry session cookies.
 
         Returns:
             Rendered HTML content.
@@ -66,6 +77,13 @@ class BrowserlessClient:
             payload["rejectResourceTypes"] = reject_resource_types
         if reject_request_pattern:
             payload["rejectRequestPattern"] = reject_request_pattern
+        for key, value in (extra_body or {}).items():
+            if key == "rejectRequestPattern" and payload.get(key):
+                payload[key] = list(payload[key]) + list(value)
+            else:
+                payload[key] = value
+        self.last_target_status = None
+        self.last_headers = {}
 
         logger.debug(f"Fetching URL via Browserless: {url}")
         try:
@@ -73,6 +91,7 @@ class BrowserlessClient:
                 resp = await client.post(
                     f"{self.base_url}/content",
                     json=payload,
+                    params=dict(query) if query else None,
                     headers={
                         "Content-Type": "application/json",
                         "Cache-Control": "no-cache",
@@ -84,6 +103,12 @@ class BrowserlessClient:
                 target_status = resp.headers.get("X-Response-Status", "")
 
                 logger.debug(f"Browserless response: code={code}, target_code={target_code}, target_status={target_status}")
+                try:
+                    self.last_target_status = int(target_code) if target_code else None
+                except (TypeError, ValueError):
+                    self.last_target_status = None
+                with contextlib.suppress(Exception):
+                    self.last_headers = {str(k).lower(): str(v) for k, v in resp.headers.items()}
 
                 if code != 200:
                     return f"Error: Browserless HTTP {code}: {resp.text[:200]}"

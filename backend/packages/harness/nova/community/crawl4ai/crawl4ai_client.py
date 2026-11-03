@@ -52,7 +52,7 @@ class Crawl4aiClient:
                 continue
         return False
 
-    async def crawl(self, urls: list[str], *, max_pages: int = 10) -> list[dict[str, Any]]:
+    async def crawl(self, urls: list[str], *, max_pages: int = 10, extra: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Retrieve several pages in one request, as LLM-ready markdown.
 
         Deliberately does NOT send `deep_crawl_strategy`. Crawl4AI's REST API
@@ -67,8 +67,12 @@ class Crawl4aiClient:
         running Crawl4AI as a library inside the gateway (a trusted context),
         which brings its own Playwright browser download into an image that
         already delegates browsing to the Browserless container.
+
+        ``extra`` carries the `browser:` settings as ``browser_config`` /
+        ``crawler_config`` (built by ``nova.browser.engines.crawl4ai_configs``,
+        which emits only fields the untrusted boundary accepts).
         """
-        payload: dict[str, Any] = {"urls": urls[:max_pages]}
+        payload: dict[str, Any] = {"urls": urls[:max_pages], **(extra or {})}
 
         async with httpx.AsyncClient(timeout=self._timeout_s) as client:
             resp = await client.post(f"{self._base_url}/crawl", headers=self._headers(), json=payload)

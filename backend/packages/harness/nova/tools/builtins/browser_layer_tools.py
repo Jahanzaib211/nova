@@ -8,6 +8,7 @@ typed errors), so they inherit its failure semantics.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import re
 import time
@@ -248,6 +249,60 @@ def browser_await_human_tool(runtime: Runtime, description: str, timeout_s: int 
     thread_state.clear_attention(thread_dir)
     hint = "Offer to save this login with browser_profile_save so it is reused next time." if get_browser_config().profiles.enabled else ""
     return json.dumps({"status": "continue", "how": how, "url": page_url, "next": "Continue the task in the sandbox browser.", "after": hint})
+
+
+def sandbox_fetcher(runtime: Runtime | None):
+    """Last rung of the web_fetch ladder: an async ``url -> {html, block} | None``.
+
+    Only offered when the thread *already* has a sandbox — a page fetch must
+    never be what spins up a container. Opens the URL in a fresh tab of the
+    sandbox Chromium with the user's matching profile applied; the tab is
+    closed afterwards unless it shows a captcha, in which case it is left open
+    in the live view and the Browser tab is asked to prompt the user.
+    """
+    if runtime is None or not ((getattr(runtime, "state", None) or {}).get("sandbox") or {}).get("sandbox_id"):
+        return None
+
+    def _run(url: str) -> dict:
+        from nova.browser.challenge import probe_page
+        from nova.browser.session import apply_profile
+
+        client, tid, err = _aio_client_and_thread(runtime)
+        if err:
+            return {"error": err}
+        layer = _browser_layer(runtime, "web_fetch", {"url": url})
+        cfg = layer.cfg
+
+        def _op(page):
+            if layer.user_id and cfg.profiles.enabled:
+                prof = ProfileStore(layer.user_id, config=cfg.profiles).match_url(url)
+                if prof is not None:
+                    apply_profile(page.context, page, layer.user_id, prof.name, cfg)
+            keep_open = False
+            try:
+                page.goto(url, wait_until="load", timeout=30000)
+                with contextlib.suppress(Exception):
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                block = probe_page(page) if cfg.captcha_detection else None
+                if block is not None and block.needs_human:
+                    keep_open = True
+                    with contextlib.suppress(Exception):
+                        page.bring_to_front()
+                    thread_state.raise_attention(layer.thread_dir, kind=block.kind, url=page.url, title=page.title(), reason=block.reason)
+                return {"html": page.content(), "block": block}
+            finally:
+                if not keep_open:
+                    with contextlib.suppress(Exception):
+                        page.close()
+
+        return _cdp_browser_op(client, _op, thread_id=tid, layer=layer, fresh_page=True)
+
+    async def fetch(url: str) -> dict:
+        import asyncio
+
+        return await asyncio.to_thread(_run, url)
+
+    return fetch
 
 
 BROWSER_LAYER_TOOLS = [
