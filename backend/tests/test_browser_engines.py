@@ -111,3 +111,13 @@ class TestRecordingRedaction:
     def test_sanitize_action(self):
         a = sanitize_action("browser_input", {"selector": "#pw", "text": "hunter2", "press_enter": True})
         assert a == {"tool": "browser_input", "selector": "#pw", "text_chars": 7, "press_enter": True}
+
+
+def test_config_example_block_documents_the_defaults():
+    """config.example.yaml's `browser:` block must not silently turn anything on."""
+    from pathlib import Path
+
+    import yaml
+
+    example = yaml.safe_load((Path(__file__).resolve().parents[2] / "config.example.yaml").read_text(encoding="utf-8"))
+    assert BrowserConfig.model_validate(example["browser"]) == BrowserConfig()

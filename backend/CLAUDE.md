@@ -389,6 +389,48 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 
 Page selection goes through `_active_page(ctx)`, which probes `document.visibilityState` to find the genuinely visible tab rather than taking `ctx.pages[0]` (the *first* tab, which is only the active one by coincidence). It returns `(page, created)`; callers close the page only when they created it. `screenshot` previously called `ctx.new_page()` and so captured a blank `about:blank` rather than the page under test. Selector operations run through `_selector_action`, which retries in child frames when the main frame misses (iframe piercing) and raises a failure naming the selector, frame count, and the page's real URL/title. The page-op timeout is 30s, overridable via `DEERFLOW_BROWSER_OP_TIMEOUT_MS`.
 
+### Browser layer (`packages/harness/nova/browser/`)
+
+One layer over the three engines Nova browses with, driven by one config section (`browser:` → `nova/config/browser_config.py`, read per call; every behaviour-changing knob defaults off):
+
+```
+agent tool call
+ ├─ browser_navigate/click/input/eval, browser_profile_*, browser_pdf, browser_await_human
+ │     └─ workspace_tools._cdp_browser_op(layer=LayerContext) ─► sandbox Chromium (connect_over_cdp)
+ │           session.prepared(): first-attach profile (cookies + localStorage seed)
+ │                               · CDP Emulation (UA/locale/timezone/viewport) + stealth init script
+ │                               · Network.setBlockedURLs (ads/trackers) · Browser.setDownloadBehavior
+ │                               · screencast recorder · captcha probe → NEEDS_HUMAN + attention.json
+ ├─ web_fetch (browserless/tools.py) ─► escalation.fetch_with_ladder
+ │     1 Browserless /content (+ matching profile cookies, settings)
+ │     2 Browserless + launch.stealth        ┐ only on an explicit block signal
+ │     3 sandbox Chromium + user's profile   ┘ (challenge.detect_block), bounded by deadline_s
+ └─ web_fetch_many / web_crawl (crawl4ai) ─► routing.crawl_routed
+       profile-matched URLs → Browserless with cookies; the rest → Crawl4AI with allowlisted settings
+```
+
+| setting | sandbox Chromium (CDP) | Browserless v2.56 `/content` | Crawl4AI 0.9 `/crawl` (untrusted REST) |
+|---|---|---|---|
+| stealth | init script (`navigator.webdriver`, plugins, languages) + clean UA | `launch.stealth=true` | `enable_stealth` |
+| UA / locale | `Emulation.setUserAgentOverride` (+Accept-Language), `setLocaleOverride` | `userAgent`, `--lang`, `setExtraHTTPHeaders` | `user_agent`, `locale` |
+| timezone | `Emulation.setTimezoneOverride` | not exposed by `/content` | `timezone_id` |
+| viewport | `Emulation.setDeviceMetricsOverride` | `viewport` | `viewport_width/height` |
+| blocking | `Network.setBlockedURLs` (bundled list + `extra_hosts`) | `rejectRequestPattern` | `avoid_ads` |
+| proxy | **not applied** — needs a Chromium launch flag on the sandbox image | `launch.args --proxy-server` + `authenticate` | **forbidden per request** (set it on the service) |
+| cookies | `context.add_cookies` | `cookies` | **forbidden** → URL routed to Browserless |
+
+Things that bit or would bite:
+
+- **Crawl4AI 400s a request carrying `proxy`, `cookies`, `headers`, `storage_state` or `init_scripts`** on `BrowserConfig` (its `UNTRUSTED_FORBIDDEN_FIELDS`). `engines.crawl4ai_configs` emits allowlisted fields only and asserts it; `tests/test_browser_engines.py` pins it. That is why logged-in batch fetches go through Browserless.
+- **Playwright's download handling does not work over `connect_over_cdp` here**: it points Chromium at a temp dir on the *gateway*, which does not exist in the sandbox. `downloads.DownloadWatcher` re-issues `Browser.setDownloadBehavior` with `/mnt/user-data/outputs/downloads` and follows `Browser.downloadWillBegin/Progress`; `browser_click` returns the saved path.
+- **`Page.addScriptToEvaluateOnNewDocument` only runs with `Page.enable`** on that session — without it the stealth script silently never ran (caught by the live-Chromium test).
+- **CDP overrides are session-scoped.** They hold for the whole tool call (navigation included) and lapse when Nova detaches, so the user's own interaction in the live view is never altered. Cookies/localStorage written by a profile persist in the browser. Because the SDK's REST page routes cannot carry any of this, a browser tool goes CDP-first whenever the layer has work to do (`LayerContext.wants_cdp()`); with defaults and no profile it keeps the SDK-first path.
+- **Profiles** (`profiles.py`): `{base}/users/{uid}/browser_profiles/{name}.meta.json` (secret-free, what listing reads) + `{name}.state.enc` (Fernet via `ChannelCredentialCipher.from_key`). Key: `NOVA_BROWSER_PROFILE_SECRET`, else a generated `{base}/.browser_profile_secret` (0600). A rotated key surfaces as `corrupt` in the list, never as a crash. Saving is scoped to `domains` (default: the current page's site); a profile only ever injects into hosts under those domains. Cookie values never reach logs, metadata, manifests or API responses.
+- **Per-thread state** lives in `{thread_dir}/browser/` (beside `user-data/`, invisible to the sandbox, Files tab and zip): `settings.json` (recording toggle, chosen profile) and `attention.json` (captcha hand-off). **Recordings** live in `outputs/.recordings/<session>/` (dot-dir: skipped by the Files tab and zip; share links expose messages only). Manifests replace typed text and eval scripts with their length and redact credential-looking query values (`recording.redact_url`).
+- **Captcha**: detection only (reCAPTCHA / hCaptcha / Turnstile widgets, Cloudflare / Akamai / PerimeterX / DataDome fingerprints). A tool returns `NEEDS_HUMAN {json}`, the Browser tab shows a prompt with *Open live view* / *Done*, and `browser_await_human` returns when the user presses Done or the challenge disappears. No third-party solver is integrated.
+- **API** (`app/gateway/routers/browser_layer.py`): `GET/DELETE /api/browser/profiles[/{name}]`, `POST /api/browser/profiles/{name}/default`, `DELETE /api/browser/profiles-default` (caller-scoped); owner-checked `GET /api/threads/{id}/browser/state`, `PUT …/recording`, `POST …/attention/resolve`, `GET/DELETE …/recordings[/{sid}]`, `GET …/recordings/{sid}/frames/{f}`.
+- Tests: `test_browser_profiles.py`, `test_browser_engines.py`, `test_browser_fetch_layer.py`, `test_browser_layer_router.py`, and `test_browser_layer_live_chromium.py`, which starts a real Chromium *outside* Playwright and attaches over CDP exactly as production does (profiles, stealth/timezone, downloads, PDF, captcha hand-off, recording).
+
 ### Computer panel live socket (WS-G)
 
 One thread-scoped WebSocket per surface, replacing poll-driven liveness:

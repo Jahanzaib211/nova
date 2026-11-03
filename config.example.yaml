@@ -768,6 +768,53 @@ tools:
     use: nova.community.market_data.tools:backtest_signals_tool
 
 # ============================================================================
+# Browser Layer
+# ============================================================================
+# One section for every engine Nova browses with: the sandbox's own Chromium
+# (browser_* tools, over CDP), Browserless (web_fetch) and Crawl4AI
+# (web_fetch_many / web_crawl). Each engine applies what its API can express —
+# see backend/CLAUDE.md "Browser layer" for the mapping table. Everything that
+# changes behaviour defaults OFF. Read per call, so edits hot-reload.
+browser:
+  stealth:
+    enabled: false          # hide automation tells; keep UA/locale/timezone consistent
+    user_agent: ""          # empty = engine UA (minus "HeadlessChrome" when stealth is on)
+    locale: ""              # e.g. en-US — also drives Accept-Language
+  timezone: ""              # IANA id, e.g. Europe/Berlin (sandbox Chromium + Crawl4AI)
+  viewport: { width: 0, height: 0 }   # 0 = engine default
+  proxy:
+    server: ""              # e.g. http://proxy.internal:3128 — Browserless only (see docs)
+    username: ""
+    password_env: ""        # NAME of the env var holding the password, never the password
+    bypass: ""
+  blocking:
+    enabled: false          # abort ad/tracker requests
+    use_bundled_list: true
+    extra_hosts: []
+  profiles:
+    enabled: true           # browser_profile_save/load; encrypted (NOVA_BROWSER_PROFILE_SECRET)
+    auto_load_default: true # load the user's default profile on a thread's first browser attach
+    inject_into_fetch: true # send matching profile cookies with web_fetch / web_fetch_many / web_crawl
+    max_profiles: 20
+    max_bytes: 1000000
+  downloads:
+    enabled: true           # clicks that download save into /mnt/user-data/outputs/downloads
+    wait_s: 20
+  recording:
+    enabled: false          # per-thread toggle in the Activity tab overrides this
+    fps: 2                  # ~30-80 KB per frame: a busy minute is a few MB
+    quality: 55
+    max_width: 1024
+    max_frames: 600
+    max_bytes: 40000000
+    keep_sessions: 10
+  escalation:
+    enabled: true           # web_fetch: browserless -> +stealth -> sandbox Chromium, on block signals only
+    use_sandbox_browser: true
+    deadline_s: 75
+  captcha_detection: true   # NEEDS_HUMAN + Browser-tab prompt; no third-party solvers
+
+# ============================================================================
 # Tool Search Configuration (Deferred Tool Loading)
 # ============================================================================
 # When enabled, MCP tools are not loaded into the agent's context directly.
