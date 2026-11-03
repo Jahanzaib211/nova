@@ -7,10 +7,10 @@ nodePort: 30026
 images:
   gateway: nova-gateway:staging
   frontend: nova-frontend:staging
-  nginx: nginx:alpine
+  nginx: nginx:alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606   # digest-pinned, same image as docker/ compose
   provisioner: nova-provisioner:staging
   sandbox: nova-sandbox-android:latest
-  redis: redis:7-alpine
+  redis: redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
 
 # Absolute host path to the repo's custom-skills directory — mounted
 # read-write as a hostPath volume into the gateway pod, same content the

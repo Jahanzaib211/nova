@@ -16,8 +16,19 @@
 # Self-hosted external probe: Uptime Kuma at :3001 (probes public endpoints
 # from its own network location, not localhost — closes the "CF edge died" gap).
 
+# Log rotation for every service. The Docker daemon on this host sets no
+# default log-opts (daemon.json carries only the nvidia runtime), so json-file
+# logs grew without bound and a chatty container could fill the disk. 5 x 20 MB
+# per container; `docker logs` keeps working.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   prometheus:
+    logging: *default-logging
     image: prom/prometheus:v3.4.1
     container_name: nova-prometheus
     network_mode: host
@@ -39,6 +50,7 @@ services:
       retries: 3
 
   loki:
+    logging: *default-logging
     image: grafana/loki:3.6.12
     container_name: nova-loki
     network_mode: host
@@ -56,6 +68,7 @@ services:
       start_period: 30s
 
   alloy:
+    logging: *default-logging
     image: grafana/alloy:v1.9.1
     container_name: nova-alloy
     network_mode: host
@@ -80,6 +93,7 @@ services:
       - loki
 
   node_exporter:
+    logging: *default-logging
     image: prom/node-exporter:v1.9.1
     container_name: nova-node-exporter
     network_mode: host
@@ -102,6 +116,7 @@ services:
   # Uptime Kuma (:3003) probes public endpoints from its own network.
   # Blackbox (:9115) probes internal TCP/HTTP from the host.
   blackbox_exporter:
+    logging: *default-logging
     image: prom/blackbox-exporter:v0.25.0
     container_name: nova-blackbox
     network_mode: host
@@ -124,7 +139,8 @@ services:
   # Probes nova.alilabsx.com/health from Uptime Kuma's cloud location (not localhost).
   # Fills the "Cloudflare edge died" gap that localhost probes can't catch.
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    logging: *default-logging
+    image: louislam/uptime-kuma:1.23.16   # was the floating major tag `:1`
     container_name: nova-uptime-kuma
     network_mode: host
     ports:
@@ -145,6 +161,7 @@ services:
       start_period: 20s
 
   cadvisor:
+    logging: *default-logging
     image: gcr.io/cadvisor/cadvisor:v0.52.1
     container_name: nova-cadvisor
     network_mode: host
@@ -167,6 +184,7 @@ services:
     restart: unless-stopped
 
   grafana:
+    logging: *default-logging
     image: grafana/grafana-oss:12.0.1
     container_name: nova-grafana
     network_mode: host

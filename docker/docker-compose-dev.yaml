@@ -21,12 +21,23 @@
 # the cutover never starts an empty database.
 name: ${NOVA_COMPOSE_PROJECT:-nova}
 
+# Log rotation for every service. The Docker daemon on this host sets no
+# default log-opts (daemon.json carries only the nvidia runtime), so json-file
+# logs grew without bound and a chatty container could fill the disk. 5 x 20 MB
+# per container; `docker logs` keeps working.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # ── Sandbox Provisioner ────────────────────────────────────────────────
   # Manages per-sandbox Pod + Service lifecycle in the host Kubernetes
   # cluster via the K8s API.
   # Backend accesses sandboxes directly via host.docker.internal:{NodePort}.
   provisioner:
+    logging: *default-logging
     build:
       context: ./provisioner
       dockerfile: Dockerfile
@@ -67,11 +78,16 @@ services:
       timeout: 5s
       retries: 6
       start_period: 15s
+    # Bounded like every other service (a small FastAPI app talking to the K8s API).
+    mem_limit: 512m
 
   # ── Reverse Proxy ──────────────────────────────────────────────────────
   # Routes API traffic to gateway and (optionally) provisioner.
   nginx:
-    image: nginx:alpine
+    logging: *default-logging
+    # Digest-pinned (the image the live stack already runs, 2026-11): a floating
+    # tag means two `up -d` runs a week apart can differ with no repo change.
+    image: nginx:alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-nginx
     ports:
       - "127.0.0.1:2026:2026"
@@ -130,6 +146,7 @@ services:
 
   # Frontend - Next.js Development Server
   frontend:
+    logging: *default-logging
     build:
       context: ../
       dockerfile: frontend/Dockerfile
@@ -244,6 +261,7 @@ services:
 
   # Backend - Gateway API
   gateway:
+    logging: *default-logging
     build:
       context: ../
       dockerfile: backend/Dockerfile
@@ -468,7 +486,10 @@ services:
   # removes that failure class outright; the retention job stays because
   # unbounded growth is still unbounded growth.
   postgres:
-    image: pgvector/pgvector:pg16
+    logging: *default-logging
+    # Digest-pinned like the rest. Never let a pull move the database engine;
+    # bump the digest deliberately (and pg_upgrade for a major).
+    image: pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-postgres
     environment:
       - POSTGRES_DB=${NOVA_PG_DB:-nova}
@@ -520,6 +541,7 @@ services:
   # HTML with readabilipy -- so keep that path healthy (dev-entrypoint.sh
   # repairs it at boot) or this returns whole pages instead of articles.
   browserless:
+    logging: *default-logging
     # Digest-pinned; see the crawl4ai service below for the reasoning.
     image: ghcr.io/browserless/chromium@sha256:c0886239e4eaa102e214acbbde5345f5b2a55a7ccbb52456048afd374defbabb
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-browserless
@@ -567,6 +589,7 @@ services:
   # own Playwright browser download, which would put a second headless-Chrome
   # stack inside the gateway image next to the one browserless already is.
   crawl4ai:
+    logging: *default-logging
     # Pinned by digest, not :latest. A floating tag means two `up -d` runs
     # a week apart can differ with no change in this repo — the same
     # reproducibility hole Dockerfile.base closed for the sandbox.
@@ -611,6 +634,7 @@ services:
       - "no-new-privileges:true"
 
   searxng:
+    logging: *default-logging
     # Digest-pinned; see the crawl4ai service above for the reasoning.
     image: searxng/searxng@sha256:f4c8e59de166ed71f6380c0847c312ca51f0d41996e31d0559163b6b09ecde52
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-searxng
@@ -676,6 +700,7 @@ services:
   # for a *healthy* gateway because that is what runs the schema step.
   # Scale to zero with NOVA_JOBS_SCALE=0 (scripts/pm2-nova.sh).
   jobs:
+    logging: *default-logging
     # The image the gateway service builds (compose names it
     # <project>-gateway); scripts/pm2-nova.sh exports NOVA_GATEWAY_IMAGE for
     # whichever project it runs.
@@ -731,10 +756,13 @@ services:
     restart: unless-stopped
 
   autoheal:
+    logging: *default-logging
     # Digest-pinned; see the crawl4ai service above for the reasoning.
     image: willfarrell/autoheal@sha256:2ae2ff2c4047be936db416005262978b0d20d98d8f8dbfd2bc8bb97bbfc1a7b5
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-autoheal
     restart: unless-stopped
+    # A shell loop and curl; bounded like every other service on the host.
+    mem_limit: 128m
     environment:
       - AUTOHEAL_CONTAINER_LABEL=autoheal
       - AUTOHEAL_INTERVAL=15

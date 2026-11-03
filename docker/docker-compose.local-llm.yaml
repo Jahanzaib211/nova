@@ -16,8 +16,19 @@
 # gateway) can reach it; pinned image; models in a named volume; one GPU
 # reservation; one request at a time (a single-user voice agent, and the
 # predictable latency matters more than throughput).
+# Log rotation for every service. The Docker daemon on this host sets no
+# default log-opts (daemon.json carries only the nvidia runtime), so json-file
+# logs grew without bound and a chatty container could fill the disk. 5 x 20 MB
+# per container; `docker logs` keeps working.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   ollama:
+    logging: *default-logging
     image: ollama/ollama:0.40.5
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-ollama
     restart: unless-stopped
@@ -48,6 +59,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    # The model lives in VRAM; host RAM holds the runtime plus whatever spills
+    # during a load. Bounded so a runaway load cannot take the host down.
+    mem_limit: 12g
     deploy:
       resources:
         reservations:

@@ -7,10 +7,10 @@ namespace: nova-staging
 images:
   gateway: nova-gateway:staging
   frontend: nova-frontend:staging
-  nginx: nginx:alpine
+  nginx: nginx:alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606   # digest-pinned, same image as docker/ compose
   provisioner: nova-provisioner:staging      # the provisioner service's own image (docker/provisioner/Dockerfile)
   sandbox: nova-sandbox-android:latest       # SANDBOX_IMAGE — the image used for the sandbox PODS the provisioner creates
-  redis: redis:7-alpine                      # public image, pulled directly — no local build/import step needed
+  redis: redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f                      # public image, pulled directly — no local build/import step needed
   # Digest-pinned, matching docker-compose-dev.yaml — an unpinned search
   # backend is a supply-chain surface that reads every page the agent fetches.
   searxng: searxng/searxng@sha256:f4c8e59de166ed71f6380c0847c312ca51f0d41996e31d0559163b6b09ecde52

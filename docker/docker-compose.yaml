@@ -24,10 +24,23 @@
 #
 # Access: http://localhost:${PORT:-2026}
 
+# Log rotation for every service. The Docker daemon on this host sets no
+# default log-opts (daemon.json carries only the nvidia runtime), so json-file
+# logs grew without bound and a chatty container could fill the disk. 5 x 20 MB
+# per container; `docker logs` keeps working.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   # ── Reverse Proxy ──────────────────────────────────────────────────────────
   nginx:
-    image: nginx:alpine
+    logging: *default-logging
+    # Digest-pinned (the image the live stack already runs, 2026-11): a floating
+    # tag means two `up -d` runs a week apart can differ with no repo change.
+    image: nginx:alpine@sha256:785835ea65db4bba6f021acc0f3be91b0fef76a53fe41f8588c6698d2aed0606
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-nginx
     ports:
       - "${PORT:-2026}:2026"
@@ -84,6 +97,7 @@ services:
 
   # ── Frontend: Next.js Production ───────────────────────────────────────────
   frontend:
+    logging: *default-logging
     build:
       context: ../
       dockerfile: frontend/Dockerfile
@@ -91,17 +105,23 @@ services:
       args:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
-        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: http://192.168.200.3:8001
+        NOVA_INTERNAL_GATEWAY_BASE_URL: http://gateway:8001
+        DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: http://gateway:8001
     container_name: ${NOVA_CONTAINER_PREFIX:-nova}-frontend
     environment:
       - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-      - NOVA_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
-      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://192.168.200.3:8001
+      # This stack's own gateway, by service name. It used to point at
+      # 192.168.200.3 — the DEV stack's pinned gateway — through an extra
+      # attachment to the dev network `deer-flow-dev_deer-flow-dev`, which
+      # this file never declares; after the rename `compose config` rejected
+      # the whole file ("refers to undefined network"), so `make up` could
+      # not start at all.
+      - NOVA_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
+      - DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=http://gateway:8001
     env_file:
       - ../frontend/.env
     networks:
       - nova
-      - deer-flow-dev_deer-flow-dev
     restart: unless-stopped
     # v7.2 Batch 2A: USER nextjs added in Dockerfile; harden the runtime.
     security_opt:
@@ -135,6 +155,7 @@ services:
 
   # ── Gateway API ────────────────────────────────────────────────────────────
   gateway:
+    logging: *default-logging
     build:
       context: ../
       dockerfile: backend/Dockerfile
@@ -218,6 +239,8 @@ services:
     tmpfs:
       - /tmp:size=128m
     pids_limit: 512
+    # Bounded like the dev/prod stacks' gateway (6g there).
+    mem_limit: 6g
     # 2026-09 hardening parity with the dev/prod stacks: detect a hung
     # gateway and let the autoheal sidecar restart it. Without the
     # healthcheck+label pair, this base compose file (used by `make up`
@@ -237,6 +260,7 @@ services:
 
   # ── Sandbox Provisioner (optional, Kubernetes mode) ────────────────────────
   provisioner:
+    logging: *default-logging
     build:
       context: ./provisioner
       dockerfile: Dockerfile
@@ -271,6 +295,7 @@ services:
     cap_drop:
       - ALL
     pids_limit: 256
+    mem_limit: 512m
 networks:
   nova:
     driver: bridge

@@ -44,9 +44,17 @@ cd ~/Desktop/nova
 docker compose -f docker/docker-compose.nova-prod.yaml -p nova build
 
 # b) Smoke the gateway image without touching the stack (no network, no socket).
-docker run --rm --network none --user 1000:1000 -e HOME=/tmp \
+#    Importing the app parses config.yaml, which needs every $VAR it names;
+#    config.example.yaml needs none. PYTEST_CURRENT_TEST keeps the sandbox
+#    provider from adopting live sandboxes (backend/CLAUDE.md).
+docker run --rm --network none --user 1000:1000 -e HOME=/tmp --tmpfs /tmp \
+  -e PYTEST_CURRENT_TEST=1 -e DATABASE_URL=postgresql://u:p@nowhere:5432/d \
+  -e NOVA_CONFIG_PATH=/app/backend/config.yaml \
+  -v "$PWD/config.example.yaml:/app/backend/config.yaml:ro" \
+  -v "$PWD/extensions_config.json:/app/backend/extensions_config.json:ro" \
   nova-gateway-prod:latest \
-  sh -c 'cd backend && PYTHONPATH=. uv run --no-sync python -c "import app.gateway.app, nova; print(\"ok\")"'
+  sh -c 'cd backend && PYTHONPATH=. uv run --no-sync python -c "import app.gateway.app, app.jobs.worker, asyncpg"' \
+  && echo smoke ok
 
 # c) A stable JWT secret. The launcher REFUSES the prod stack without one.
 #    Reuse the persisted value so nobody is signed out by the switch:

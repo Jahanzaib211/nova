@@ -87,7 +87,9 @@ ENV PYTHONIOENCODING=utf-8
 FROM builder AS dev
 
 # Install Docker CLI (for DooD: allows starting sandbox containers via host Docker socket)
-COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+# Digest-pinned: `docker:cli` floats across Docker major versions, so two
+# builds a week apart could ship different clients with no repo change.
+COPY --from=docker:cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/local/bin/docker
 
 EXPOSE 8001
 
@@ -117,7 +119,9 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/bin/npx
 
 # Install Docker CLI (for DooD: allows starting sandbox containers via host Docker socket)
-COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+# Digest-pinned: `docker:cli` floats across Docker major versions, so two
+# builds a week apart could ship different clients with no repo change.
+COPY --from=docker:cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb /usr/local/bin/docker /usr/local/bin/docker
 
 # Install uv (source image overridable via UV_IMAGE build arg)
 COPY --from=uv-source /uv /uvx /usr/local/bin/
