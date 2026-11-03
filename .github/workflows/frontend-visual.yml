@@ -40,8 +40,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Enable Corepack
-        run: corepack enable && corepack prepare pnpm@10.26.2 --activate
+      # npm, not corepack: the Playwright 1.64 image's Node ships without
+      # corepack, so `corepack enable` exits 127 there.
+      - name: Install pnpm
+        run: npm install -g pnpm@10.26.2
 
       - name: Install frontend dependencies
         working-directory: frontend
