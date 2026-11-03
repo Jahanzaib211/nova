@@ -443,12 +443,12 @@ test("simulating auto-continue across empty runs skips empty contributions and l
     { run_id: "R1" },
   ] as unknown as Run[];
   const runIdToMessages: Record<string, Message[]> = {
-    R6: [{ id: "R6", type: "human", content: "F" } as Message],
-    R5: [{ id: "R5", type: "human", content: "E" } as Message],
+    R6: [{ id: "R6", type: "human", content: "F" }],
+    R5: [{ id: "R5", type: "human", content: "E" }],
     R4: [],
     R3: [],
     R2: [],
-    R1: [{ id: "R1", type: "human", content: "A" } as Message],
+    R1: [{ id: "R1", type: "human", content: "A" }],
   };
 
   const loaded = new Set<string>();

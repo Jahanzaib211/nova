@@ -6,7 +6,7 @@ import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 export function getActiveFilePath(messages: Message[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
-    if (!msg || msg.type !== "ai") continue;
+    if (msg?.type !== "ai") continue;
     const calls = (msg as AIMessage).tool_calls ?? [];
     for (let j = calls.length - 1; j >= 0; j--) {
       const call = calls[j];
@@ -39,7 +39,7 @@ export type ActiveEdit =
 export function getActiveEdit(messages: Message[]): ActiveEdit | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
-    if (!msg || msg.type !== "ai") continue;
+    if (msg?.type !== "ai") continue;
     const calls = (msg as AIMessage).tool_calls ?? [];
     for (let j = calls.length - 1; j >= 0; j--) {
       const call = calls[j];

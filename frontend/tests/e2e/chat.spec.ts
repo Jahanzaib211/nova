@@ -155,8 +155,7 @@ test.describe("Chat workspace", () => {
     let uploadCalled = false;
     let submittedText: string | undefined;
     let submittedFiles:
-      | Array<{ filename?: string; path?: string; status?: string }>
-      | undefined;
+      Array<{ filename?: string; path?: string; status?: string }> | undefined;
 
     await page.route("**/api/threads/*/uploads", async (route) => {
       uploadCalled = true;

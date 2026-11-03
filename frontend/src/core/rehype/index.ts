@@ -32,7 +32,7 @@ export function rehypeSplitWordsIntoSpans() {
                 type: "element",
                 tagName: "span",
                 properties: {
-                  className: "animate-fade-in",
+                  className: ["animate-fade-in"],
                 },
                 children: [{ type: "text", value: word }],
               });

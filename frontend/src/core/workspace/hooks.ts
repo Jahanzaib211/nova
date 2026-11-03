@@ -170,10 +170,7 @@ export function useFileImpact(
 // frames, so each type needs its own addEventListener.
 
 export type WorkspaceEventType =
-  | "WorkspaceScanned"
-  | "PlanBuilt"
-  | "CacheHit"
-  | "CacheMiss";
+  "WorkspaceScanned" | "PlanBuilt" | "CacheHit" | "CacheMiss";
 
 export interface WorkspaceScannedPayload {
   root_path: string;
@@ -261,7 +258,7 @@ export function useWorkspaceEvents(
         try {
           const data = JSON.parse(event.data);
           setEvents((prev) => {
-            const next = [...prev, { type, data } as WorkspaceLiveEvent];
+            const next = [...prev, { type, data }];
             return next.length > MAX_WORKSPACE_EVENTS
               ? next.slice(next.length - MAX_WORKSPACE_EVENTS)
               : next;

@@ -27,11 +27,7 @@ import { useSandboxThreadId } from "./live";
 export type SecureShipVerdict = "pass" | "warn" | "block" | "error";
 
 export type SecureShipSeverity =
-  | "critical"
-  | "high"
-  | "medium"
-  | "low"
-  | "info";
+  "critical" | "high" | "medium" | "low" | "info";
 
 export type SecureShipScannerStatus = "pass" | "fail" | "skipped" | "error";
 
@@ -104,9 +100,7 @@ export type SecureShipScanInput = {
  * rather than an eternal "no report yet".
  */
 export type SecureShipOpName =
-  | "secure_ship.scan"
-  | "secure_ship.report"
-  | "secure_ship.toolkit";
+  "secure_ship.scan" | "secure_ship.report" | "secure_ship.toolkit";
 
 /**
  * `invoke` is generic over the generated op contract, and the generated

@@ -29,7 +29,7 @@ function parseLlmErrorEvent(event: unknown): ParsedLlmError | null {
     typeof event !== "object" ||
     event === null ||
     !("type" in event) ||
-    (event as { type: unknown }).type !== "llm_error"
+    event.type !== "llm_error"
   ) {
     return null;
   }
