@@ -12,7 +12,7 @@ English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](.
 
 **Nova** is a full-stack **computer agent** that researches, codes, creates, and defends. It orchestrates **sub-agents**, **memory**, and **per-thread sandboxes** — powered by **extensible skills**, a live streaming view of the agent's own computer, and a built-in **security toolkit of 40 verified tools** (blue team + red team).
 
-Built by **[Ali Technologies](https://www.alilabsx.com)** on top of [DeerFlow](https://github.com/bytedance/deer-flow) (MIT). Upstream license and all copyright notices preserved — see [License](#license) and [NOTICE.md](./NOTICE.md).
+Built by **[AliLabsX](https://alilabsx.com)** on top of [DeerFlow](https://github.com/bytedance/deer-flow) (MIT). Upstream license and all copyright notices preserved — see [License](#license) and [NOTICE.md](./NOTICE.md).
 
 ![Nova workspace — the agent builds a tip calculator and previews it live in the Agent's Computer Browser tab](./docs/images/nova-workspace.png)
 
@@ -400,3 +400,11 @@ Built on [DeerFlow](https://github.com/bytedance/deer-flow) by ByteDance. Powere
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Jahanzaib211/nova&type=Date)](https://star-history.com/#Jahanzaib211/nova&Date)
+
+---
+
+## Work with me
+
+Built by Jahanzaib Ali, Founder & Systems Engineer at [AliLabsX](https://alilabsx.com). I don't rent, I build: I run my own hardware and keep my own data.
+
+[Jahanzaib@alilabsx.com](mailto:Jahanzaib@alilabsx.com) · [alilabsx.com](https://alilabsx.com) · [LinkedIn](https://www.linkedin.com/in/jahanzaib-ali-labsx)

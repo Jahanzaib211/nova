@@ -8,7 +8,7 @@
 
 **Nova** — это полностековый **компьютерный агент**, который исследует, программирует и создаёт. Он оркестрирует **субагентов**, **память** и **песочницы по потокам** для выполнения практически любых задач — на базе **расширяемых навыков** и живого потокового просмотра собственного компьютера агента: терминал, редактор, предпросмотр браузера и прогресс задач, всё в реальном времени.
 
-Nova построен **[Ali Technologies](https://www.alilabsx.com)** на базе open-source фреймворка [DeerFlow](https://github.com/bytedance/deer-flow). Лицензия MIT upstream и все оригинальные уведомления об авторских правах сохранены — см. [Лицензию](#лицензия) и [NOTICE.md](./NOTICE.md).
+Nova построен **[AliLabsX](https://alilabsx.com)** на базе open-source фреймворка [DeerFlow](https://github.com/bytedance/deer-flow). Лицензия MIT upstream и все оригинальные уведомления об авторских правах сохранены — см. [Лицензию](#лицензия) и [NOTICE.md](./NOTICE.md).
 
 > Скажите привет: *"Я — Nova, компьютерный агент."*
 
@@ -361,7 +361,7 @@ Nova обладает высокоприлегированными возмож�
 
 Фундаментальный проект DeerFlow распространяется под [MIT Лицензией](./LICENSE). Оригинальный текст лицензии и все уведомления об авторских правах upstream сохранены без изменений.
 
-Специфические добавления Nova от Ali Technologies (интерфейс Agent's Computer, изоляция контейнеров по потокам, watchdog'и, квитанции и инструменты) являются **собственностью Ali Technologies** — см. [NOTICE.md](./NOTICE.md).
+Специфические добавления Nova от AliLabsX (интерфейс Agent's Computer, изоляция контейнеров по потокам, watchdog'и, квитанции и инструменты) являются **собственностью AliLabsX** — см. [NOTICE.md](./NOTICE.md).
 
 ## Благодарности
 
@@ -370,3 +370,11 @@ Nova построен на [DeerFlow](https://github.com/bytedance/deer-flow) о
 - **[DeerFlow](https://github.com/bytedance/deer-flow)**: Фреймворк супер-агента, на котором построен Nova.
 - **[LangChain](https://github.com/langchain-ai/langchain)**: Движет наши LLM-взаимодействия и цепочки.
 - **[LangGraph](https://github.com/langchain-ai/langgraph)**: Включает сложную оркестрацию мультиагентов.
+
+---
+
+## Work with me
+
+Built by Jahanzaib Ali, Founder & Systems Engineer at [AliLabsX](https://alilabsx.com). I don't rent, I build: I run my own hardware and keep my own data.
+
+[Jahanzaib@alilabsx.com](mailto:Jahanzaib@alilabsx.com) · [alilabsx.com](https://alilabsx.com) · [LinkedIn](https://www.linkedin.com/in/jahanzaib-ali-labsx)

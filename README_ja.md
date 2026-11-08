@@ -8,7 +8,7 @@
 
 **Nova** は、リサーチ、コーディング、クリエイティブを行えるフルスタックの**コンピュータエージェント**です。**サブエージェント**、**メモリ**、**スレッドごとのサンドボックス**をオーケストレーションし、**拡張可能なスキル**とエージェント自身のコンピュータのライブストリーミングビューで、ほぼあらゆるタスクを実行できます——ターミナル、エディタ、ブラウザプレビュー、タスク進捗をリアルタイムで表示。
 
-Nova は **[Ali Technologies](https://www.alilabsx.com)** がオープンソースの [DeerFlow](https://github.com/bytedance/deer-flow) スーパーエージェントハーネスの上に構築しました。上流 MIT ライセンスとすべての元の著作権表示は保持されています——[ライセンス](#ライセンス) と [NOTICE.md](./NOTICE.md) を参照。
+Nova は **[AliLabsX](https://alilabsx.com)** がオープンソースの [DeerFlow](https://github.com/bytedance/deer-flow) スーパーエージェントハーネスの上に構築しました。上流 MIT ライセンスとすべての元の著作権表示は保持されています——[ライセンス](#ライセンス) と [NOTICE.md](./NOTICE.md) を参照。
 
 > 挨拶しましょう：*"私はNova、コンピュータエージェントです。"*
 
@@ -357,7 +357,7 @@ Nova は**システムコマンド実行、リソース操作、ビジネスロ�
 
 DeerFlow ファウンデーションプロジェクトは [MITライセンス](./LICENSE) の下でオープンソース。元のライセンステキストとすべての上流著作権通知は完全に保持。
 
-Nova固有の追加（Agent's Computer UI、スレッドごとのコンテナ分離、ウォッチドッグ、レシートおよび関連ツール）は **Ali Technologiesの专有** — [NOTICE.md](./NOTICE.md) を参照。
+Nova固有の追加（Agent's Computer UI、スレッドごとのコンテナ分離、ウォッチドッグ、レシートおよび関連ツール）は **AliLabsXの专有** — [NOTICE.md](./NOTICE.md) を参照。
 
 ## 致謝
 
@@ -366,3 +366,11 @@ Nova は ByteDance の [DeerFlow](https://github.com/bytedance/deer-flow) とそ
 - **[DeerFlow](https://github.com/bytedance/deer-flow)**: Nova が構築されているスーパーエージェントハーネス。
 - **[LangChain](https://github.com/langchain-ai/langchain)**: LLM インタラクションとチェーンを駆動。
 - **[LangGraph](https://github.com/langchain-ai/langgraph)**: 複雑なマルチエージェントオーケストレーションを実現。
+
+---
+
+## Work with me
+
+Built by Jahanzaib Ali, Founder & Systems Engineer at [AliLabsX](https://alilabsx.com). I don't rent, I build: I run my own hardware and keep my own data.
+
+[Jahanzaib@alilabsx.com](mailto:Jahanzaib@alilabsx.com) · [alilabsx.com](https://alilabsx.com) · [LinkedIn](https://www.linkedin.com/in/jahanzaib-ali-labsx)
