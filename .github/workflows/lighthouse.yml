@@ -72,7 +72,7 @@ jobs:
       # run takes ~3.5 min on a hosted runner (software-rendered WebGL), so
       # 3 runs x 2 URLs needs ~22 min. A retry would only double that.
       - name: Run Lighthouse CI
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 24
           max_attempts: 1
