@@ -391,7 +391,7 @@ make self-audit  # full self-probe
 
 DeerFlow foundation: [MIT License](./LICENSE). All upstream copyright notices preserved.
 
-Nova-specific additions (Agent's Computer UI, sandbox image, watchdogs, **security arsenal**, branding): **proprietary** — see [NOTICE.md](./NOTICE.md). Commercial license terms: `alilabsx@gmail.com`.
+Nova-specific additions (Agent's Computer UI, sandbox image, watchdogs, **security arsenal**, branding): **proprietary** — see [NOTICE.md](./NOTICE.md). Commercial license terms: `jahanzaib@alilabs.com` or `alilabsx@gmail.com`.
 
 ## Acknowledgments
 

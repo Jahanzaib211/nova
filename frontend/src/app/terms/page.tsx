@@ -176,6 +176,13 @@ export default function TermsPage() {
             <p>
               Questions about these Terms? Contact{" "}
               <a
+                href="mailto:jahanzaib@alilabs.com"
+                className="text-blue-500 hover:underline"
+              >
+                jahanzaib@alilabs.com
+              </a>{" "}
+              or{" "}
+              <a
                 href="mailto:alilabsx@gmail.com"
                 className="text-blue-500 hover:underline"
               >

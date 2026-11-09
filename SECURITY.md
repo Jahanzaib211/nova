@@ -7,7 +7,7 @@ Check the [releases page](https://github.com/Jahanzaib211/nova/releases) for the
 
 ## Reporting a Vulnerability
 
-Please email security concerns to `alilabsx@gmail.com` or open a private security advisory at
+Please email security concerns to `jahanzaib@alilabs.com` or `alilabsx@gmail.com` or open a private security advisory at
 <https://github.com/Jahanzaib211/nova/security/advisories/new>.
 
 Please do **not** file public issues for security vulnerabilities.

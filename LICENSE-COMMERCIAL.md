@@ -56,4 +56,4 @@ termination you must stop using and delete the Proprietary Components.
 
 ## Commercial licensing
 
-Ali Technologies — Lake City, Lahore, Pakistan · <alilabsx@gmail.com> · <https://www.alilabsx.com>
+Ali Technologies — Lake City, Lahore, Pakistan · <jahanzaib@alilabs.com> · <alilabsx@gmail.com> · <https://www.alilabsx.com>

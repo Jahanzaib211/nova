@@ -387,7 +387,7 @@ removes, or modifies database columns requires a migration file.
 
 ## Need Help?
 
-- Open an [Issue](https://github.com/Jahanzaib211/nova/issues) or email `alilabsx@gmail.com`
+- Open an [Issue](https://github.com/Jahanzaib211/nova/issues) or email `jahanzaib@alilabs.com` or `alilabsx@gmail.com`
 - Read the [Documentation](backend/docs/)
 - Discussions: enabled (see [Nova discussions](https://github.com/Jahanzaib211/nova/discussions))
 

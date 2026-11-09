@@ -52,7 +52,7 @@ export function CommunitySection({ className }: { className?: string }) {
           variant="outline"
           className="h-11 rounded-lg border-white/15 bg-transparent px-6 text-sm font-semibold text-white hover:border-white/30 hover:bg-white/5 hover:text-white"
         >
-          <a href="mailto:alilabsx@gmail.com">
+          <a href="mailto:jahanzaib@alilabs.com,alilabsx@gmail.com">
             <MailIcon className="size-4" aria-hidden="true" />
             Talk to us
           </a>
