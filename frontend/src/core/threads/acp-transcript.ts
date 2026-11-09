@@ -94,6 +94,25 @@ export function isActionStatus(line: string): boolean {
   return !line.startsWith("thinking:") && !line.startsWith("runtime");
 }
 
+/**
+ * How a status line should look. `thinking` is the agent's coalesced
+ * reasoning (prose, not a mono row); `denied` is a policy decision whose
+ * reason must stay readable; `note` is the gateway narrating the runtime.
+ */
+export type StatusTone = "thinking" | "denied" | "note" | "action";
+
+export function statusTone(line: string): StatusTone {
+  if (line.startsWith("thinking:")) return "thinking";
+  if (line.startsWith("permission denied")) return "denied";
+  if (line.startsWith("runtime")) return "note";
+  return "action";
+}
+
+/** The reasoning itself, without the `thinking:` label. */
+export function thoughtText(line: string): string {
+  return line.slice("thinking:".length).trim();
+}
+
 /** Minimal message shape needed to find an `invoke_acp_agent` tool call. */
 export interface AcpMessageLike {
   type?: string;

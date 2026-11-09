@@ -3,8 +3,51 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
-import type { AcpTranscript } from "@/core/threads/acp-transcript";
+import {
+  statusTone,
+  thoughtText,
+  type AcpTranscript,
+} from "@/core/threads/acp-transcript";
 import { cn } from "@/lib/utils";
+
+/**
+ * One status row. A thought reads as italic prose (the backend now sends a
+ * whole paragraph, not a token); a denial always wraps, because its reason —
+ * "policy: kind 'edit' is not allowed under Standard" — is the whole point.
+ */
+function StatusLine({ line, compact }: { line: string; compact: boolean }) {
+  const tone = statusTone(line);
+  if (tone === "thinking") {
+    return (
+      <div
+        data-tone="thinking"
+        className={cn(
+          "text-muted-foreground font-sans text-[11px] italic",
+          compact && "line-clamp-2",
+        )}
+        title={thoughtText(line)}
+      >
+        {thoughtText(line)}
+      </div>
+    );
+  }
+  return (
+    <div
+      data-tone={tone}
+      className={cn(
+        "font-mono text-[11px]",
+        tone === "denied"
+          ? "text-warning break-words whitespace-normal"
+          : "text-muted-foreground",
+        compact && tone !== "denied" && "truncate",
+        line.includes("unavailable") && "text-warning",
+      )}
+      title={line}
+    >
+      · {line}
+    </div>
+  );
+}
 
 /**
  * What an ACP agent is doing right now, under its `invoke_acp_agent` step.
@@ -43,17 +86,7 @@ export function AcpTranscriptView({
       className="border-panel-border bg-panel mt-2 max-h-64 overflow-y-auto rounded-md border p-2 text-xs"
     >
       {transcript?.statuses.map((line, i) => (
-        <div
-          key={`${i}-${line}`}
-          className={cn(
-            "font-mono text-[11px]",
-            line.startsWith("permission denied")
-              ? "text-warning"
-              : "text-muted-foreground",
-          )}
-        >
-          · {line}
-        </div>
+        <StatusLine key={`${i}-${line}`} line={line} compact={false} />
       ))}
       {text && (
         <pre className="mt-1 font-sans break-words whitespace-pre-wrap">
@@ -86,9 +119,8 @@ export function RuntimeTranscriptCard({
   const statuses = transcript.statuses;
   const shown = expanded ? statuses : statuses.slice(-4);
   const latest = statuses[statuses.length - 1];
-  const thinking = latest?.startsWith("thinking:")
-    ? latest.slice("thinking:".length).trim()
-    : null;
+  const thinking =
+    latest && statusTone(latest) === "thinking" ? thoughtText(latest) : null;
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "nearest" });
   }, [transcript.text, statuses.length]);
@@ -120,19 +152,7 @@ export function RuntimeTranscriptCard({
       {shown.length > 0 && (
         <div className="mt-2 max-h-40 overflow-y-auto">
           {shown.map((line, i) => (
-            <div
-              key={`${i}-${line}`}
-              className={cn(
-                "truncate font-mono text-[11px]",
-                line.startsWith("permission denied") ||
-                  line.includes("unavailable")
-                  ? "text-warning"
-                  : "text-muted-foreground",
-              )}
-              title={line}
-            >
-              · {line}
-            </div>
+            <StatusLine key={`${i}-${line}`} line={line} compact />
           ))}
         </div>
       )}

@@ -108,6 +108,7 @@ class AioSandbox(Sandbox):
         base_url: str,
         home_dir: str | None = None,
         busy_tracker: "Callable[[str, int], None] | None" = None,
+        command_timeout: float | None = None,
     ):
         """Initialize the AIO sandbox.
 
@@ -123,6 +124,9 @@ class AioSandbox(Sandbox):
                 blocks inside ``execute_command`` and refreshes nothing, so a
                 build outlasting ``idle_timeout`` gets its own sandbox destroyed
                 mid-run unless someone happens to have the panel open.
+            command_timeout: Wall-clock limit in seconds on one blocking
+                command (``sandbox.command_timeout``). None means
+                :attr:`DEFAULT_COMMAND_TIMEOUT`; 0 disables the limit.
         """
         super().__init__(id)
         self._base_url = base_url
@@ -131,6 +135,7 @@ class AioSandbox(Sandbox):
         self._lock = threading.Lock()
         self._closed = False
         self._busy_tracker = busy_tracker
+        self._command_timeout = float(self.DEFAULT_COMMAND_TIMEOUT if command_timeout is None else max(0.0, command_timeout))
         # Set by the provider so a destroyed/unreachable sandbox can be dropped
         # from tracking (and its thread mapping cleared) instead of being retried
         # forever. Never fatal if unset.
@@ -225,7 +230,24 @@ class AioSandbox(Sandbox):
     # default.
     _DEFAULT_NO_CHANGE_TIMEOUT = 600
 
-    def execute_command(self, command: str) -> str:
+    #: Wall-clock limit on one blocking command when the config names none.
+    #: Well under the 2 h run deadline: a hung exec used to hold its tool
+    #: call -- and the run -- until that deadline (R3-3).
+    DEFAULT_COMMAND_TIMEOUT = 1800
+
+    #: How often the waiting thread checks the stop signal and the deadline.
+    #: Cheap: an attribute read, no HTTP.
+    _CANCEL_POLL_INTERVAL = 0.5
+
+    #: Extra time the client waits past ``hard_timeout`` before giving up on
+    #: the server. The server is asked to stop the command itself at the
+    #: limit; this only covers a server that ignores the request or hangs.
+    _CLIENT_DEADLINE_GRACE = 60.0
+
+    #: This backend honours ``cancel_event`` on the blocking path too.
+    supports_blocking_cancel = True
+
+    def execute_command(self, command: str, cancel_event: "Any | None" = None) -> str:
         """Execute a shell command in the sandbox.
 
         Uses a lock to serialize concurrent requests. The AIO sandbox
@@ -235,8 +257,15 @@ class AioSandbox(Sandbox):
         detected despite the lock (e.g. multiple processes sharing a
         sandbox), the command is retried on a fresh session.
 
+        The command is bounded by ``command_timeout`` and ends early when
+        ``cancel_event`` (the run's stop signal) is set; either way the
+        in-sandbox process is killed and an explicit ``Error:`` string is
+        returned, never partial output that reads as a finished command.
+
         Args:
             command: The command to execute.
+            cancel_event: Optional stop signal (``asyncio.Event``,
+                ``threading.Event`` or callable).
 
         Returns:
             The output of the command.
@@ -246,7 +275,7 @@ class AioSandbox(Sandbox):
         # elapsed time, not intent.
         self._mark_busy(1)
         try:
-            return self._execute_command_locked(command)
+            return self._execute_command_locked(command, cancel_event=cancel_event)
         finally:
             self._mark_busy(-1)
 
@@ -259,45 +288,148 @@ class AioSandbox(Sandbox):
         except Exception:  # noqa: BLE001 - bookkeeping must not break execution
             logger.debug("busy tracker failed for sandbox %s", self.id, exc_info=True)
 
-    def _execute_command_locked(self, command: str) -> str:
+    def _execute_command_locked(self, command: str, cancel_event: "Any | None" = None) -> str:
         try:
-            return self._execute_command_raising(command)
+            return self._execute_command_raising(command, cancel_event=cancel_event)
         except Exception as e:
             logger.error(f"Failed to execute command in sandbox: {e}")
             return f"Error: {e}"
 
-    def _execute_command_raising(self, command: str) -> str:
+    def _execute_command_raising(self, command: str, cancel_event: "Any | None" = None) -> str:
         """The blocking exec, letting exceptions escape.
 
         :meth:`_execute_command_locked` folds every failure into an
         ``"Error: ..."`` string, which leaves a caller only the message text
         to tell a dead sandbox from a failing command. The streaming fallback
         needs the exception itself to make that call by type.
+
+        A timeout or cancellation is not an exception: it returns the
+        explicit error string from :meth:`_interrupted_message`.
         """
         with self._lock:
             wire = _single_line(command)
-            result = self._require_client().shell.exec_command(command=wire, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
-            output = result.data.output if result.data else ""
+            started = time.monotonic()
+            output, interrupted = self._exec_bounded(wire, cancel_event, started)
 
-            if output and _ERROR_OBSERVATION_SIGNATURE in output:
+            if interrupted is None and output and _ERROR_OBSERVATION_SIGNATURE in output:
                 logger.warning("ErrorObservation detected in sandbox output, retrying on a fresh session")
-                # exec_command only auto-creates a session when called with
-                # no id, so the recovery session must be created explicitly
-                # before we target it on retry.
-                fresh_id = str(uuid.uuid4())
-                self._require_client().shell.create_session(id=fresh_id)
-                try:
-                    result = self._require_client().shell.exec_command(command=wire, id=fresh_id, no_change_timeout=self._DEFAULT_NO_CHANGE_TIMEOUT)
-                    output = result.data.output if result.data else ""
-                finally:
-                    # Release the one-shot recovery session, best-effort, so
-                    # repeated corruption can't accumulate sessions.
-                    try:
-                        self._require_client().shell.cleanup_session(fresh_id)
-                    except Exception as cleanup_error:
-                        logger.warning(f"Failed to release recovery session {fresh_id}: {cleanup_error}")
+                output, interrupted = self._exec_bounded(wire, cancel_event, started)
 
+            if interrupted is not None:
+                return self._interrupted_message(interrupted, output)
             return output if output else "(no output)"
+
+    def _interrupted_message(self, reason: str, output: str) -> str:
+        """The tool result for a command that did not run to completion.
+
+        Starts with ``Error:`` and says outright that the command did not
+        finish, so the model cannot mistake partial output for success.
+        """
+        if reason == "cancelled":
+            head = "Error: command cancelled by the run's stop signal; it did NOT finish."
+        else:
+            head = f"Error: command timed out after {int(self._command_timeout)}s (sandbox.command_timeout) and was stopped; it did NOT finish. Use a shorter command, run it in the background, or raise the limit."
+        tail = (output or "").strip()
+        return f"{head}\nOutput before it stopped:\n{tail}" if tail else head
+
+    def _exec_bounded(self, wire: str, cancel_event: "Any | None", started: float) -> "tuple[str, str | None]":
+        """One blocking exec on its own session, bounded in time and cancellable.
+
+        Returns ``(output, interrupted)`` where ``interrupted`` is None,
+        ``"timeout"`` or ``"cancelled"``. Raises whatever the SDK raised.
+
+        Why a dedicated session: ``exec_command`` without an id auto-creates
+        an anonymous session whose id the caller only learns from the
+        response -- so a hung command could be neither identified nor killed.
+        Creating the session first gives a handle ``shell.kill_process`` can
+        target (the same call the streaming path uses on cancel), and the
+        session is released afterwards instead of accumulating server-side.
+
+        Why a worker thread: the SDK call blocks until the command exits, and
+        the run's stop signal must be observable meanwhile. The calling thread
+        keeps ``self._lock`` and polls the signal and the deadline; the
+        worker owns only the HTTP request. On interrupt the process is
+        killed, the session released and the worker abandoned -- it targets
+        its own session, so it cannot corrupt the next command's.
+        """
+        client = self._require_client()
+        session_id: str | None = str(uuid.uuid4())
+        try:
+            client.shell.create_session(id=session_id)
+        except Exception as e:  # noqa: BLE001
+            # Degrade to the anonymous session rather than fail the command:
+            # still bounded by the server-side hard_timeout and the client
+            # deadline, but a cancel can then only abandon the request, not
+            # kill the process. A dead sandbox surfaces from exec_command
+            # below as the transport error the callers classify by type.
+            logger.warning("could not create an exec session in sandbox %s (%s); running on an anonymous session", self.id, e)
+            session_id = None
+
+        kwargs: dict[str, Any] = {"command": wire, "no_change_timeout": self._DEFAULT_NO_CHANGE_TIMEOUT}
+        if session_id is not None:
+            kwargs["id"] = session_id
+        deadline: float | None = None
+        if self._command_timeout > 0:
+            remaining = max(1.0, self._command_timeout - (time.monotonic() - started))
+            # Ask the server to stop the command at the limit itself; the
+            # client deadline below is only the backstop for a server that
+            # does not.
+            kwargs["hard_timeout"] = remaining
+            deadline = time.monotonic() + remaining + self._CLIENT_DEADLINE_GRACE
+
+        box: dict[str, Any] = {}
+        done = threading.Event()
+
+        def _run() -> None:
+            try:
+                box["result"] = client.shell.exec_command(**kwargs)
+            except BaseException as exc:  # noqa: BLE001 - re-raised on the calling thread
+                box["error"] = exc
+            finally:
+                done.set()
+
+        worker = threading.Thread(target=_run, name=f"aio-exec-{self.id}", daemon=True)
+        worker.start()
+
+        interrupted: str | None = None
+        while not done.wait(self._CANCEL_POLL_INTERVAL):
+            if cancel_event is not None and _is_set(cancel_event):
+                interrupted = "cancelled"
+                logger.info("blocking command in sandbox %s cancelled by the run's stop signal", self.id)
+                break
+            if deadline is not None and time.monotonic() >= deadline:
+                interrupted = "timeout"
+                logger.warning("blocking command in sandbox %s exceeded %.0fs; killing it", self.id, self._command_timeout)
+                break
+
+        if interrupted is not None:
+            if session_id is not None:
+                self._kill_stream_process(session_id)
+                self._release_exec_session(session_id)
+            else:
+                logger.warning("interrupted command in sandbox %s ran on an anonymous session and could not be killed", self.id)
+            return "", interrupted
+
+        if session_id is not None:
+            self._release_exec_session(session_id)
+        if "error" in box:
+            raise box["error"]
+        data = getattr(box.get("result"), "data", None)
+        output = (getattr(data, "output", None) or "") if data else ""
+        if getattr(data, "status", None) == "hard_timeout":
+            return output, "timeout"
+        return output, None
+
+    def _release_exec_session(self, session_id: str) -> None:
+        """Release a one-shot exec session, best-effort.
+
+        A failure here must not lose the command's output: a leaked session
+        costs the sandbox a little memory, a lost result costs the run.
+        """
+        try:
+            self._require_client().shell.cleanup_session(session_id)
+        except Exception as cleanup_error:  # noqa: BLE001
+            logger.warning(f"Failed to release exec session {session_id}: {cleanup_error}")
 
     # This backend can report output while a command is still running, so the
     # Terminal fills line by line instead of showing one block at exit.
@@ -424,8 +556,8 @@ class AioSandbox(Sandbox):
 
         # Lock released.
         if fallback == "start":
-            return self._blocking_fallback(command)
-        return self._execute_command_locked(command)
+            return self._blocking_fallback(command, cancel_event=cancel_event)
+        return self._execute_command_locked(command, cancel_event=cancel_event)
 
     def _stream_until_done(
         self,
@@ -496,7 +628,7 @@ class AioSandbox(Sandbox):
             logger.warning("failed to kill cancelled streaming command in session %s: %s", session_id, e)
             return False
 
-    def _blocking_fallback(self, command: str) -> str:
+    def _blocking_fallback(self, command: str, cancel_event: "Any | None" = None) -> str:
         """Run ``command`` on the blocking path after a failed streaming start.
 
         Must be called WITHOUT holding ``self._lock``. Runs the command exactly
@@ -506,7 +638,7 @@ class AioSandbox(Sandbox):
         mentions a refused connection.
         """
         try:
-            return self._execute_command_raising(command)
+            return self._execute_command_raising(command, cancel_event=cancel_event)
         except Exception as e:  # noqa: BLE001
             if not _is_transport_error(e):
                 logger.error(f"Failed to execute command in sandbox: {e}")

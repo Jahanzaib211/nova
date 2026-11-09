@@ -943,6 +943,11 @@ sandbox:
   # not subscribe ignores by spec. Leave false unless the frontend serving this
   # deployment is built from source that understands it.
   stream_terminal_output: false
+  # Wall-clock limit (seconds) on one blocking AIO sandbox command. On expiry
+  # the in-sandbox process is killed and the tool returns an explicit timeout
+  # error. Keep it well under the run deadline (2 h). 0 disables the limit;
+  # the run's Stop still ends a running command either way.
+  # command_timeout: 1800
   use: nova.sandbox.local:LocalSandboxProvider
   # Host bash execution is disabled by default because LocalSandboxProvider is
   # not a secure isolation boundary for shell access. Enable only for fully
@@ -1552,6 +1557,29 @@ run_events:
   max_trace_content: 10240
   track_token_usage: true
   retention_days: 0
+
+# ============================================================================
+# Checkpoint Retention
+# ============================================================================
+# LangGraph writes a checkpoint per graph step and never deletes one; with
+# Postgres each step that changes `messages` stores a full copy of the message
+# list in checkpoint_blobs (7.8 GB on the reference deployment). This job keeps
+# the newest `keep_per_thread` checkpoints per thread, leaves threads active in
+# the last `keep_active_days` (and any thread with a pending/running run) alone,
+# and deletes the rest -- checkpoints, their writes and unreferenced blobs --
+# in `batch_size` transactions. Run it from the jobs worker (admin schedule of
+# type `maintenance.checkpoints.prune`) or by hand:
+#   cd backend && uv run python -m app.jobs.checkpoint_retention        # estimate
+#   cd backend && uv run python -m app.jobs.checkpoint_retention --apply
+# Off and dry-run by default. Deleted rows free space for Postgres/SQLite to
+# reuse; shrinking the files needs VACUUM FULL / pg_repack in a maintenance window.
+# checkpoint_retention:
+#   enabled: false
+#   dry_run: true
+#   keep_per_thread: 20
+#   keep_active_days: 7
+#   batch_size: 500
+#   max_batches: 50
 
 # ============================================================================
 # User-Owned IM Channel Connections

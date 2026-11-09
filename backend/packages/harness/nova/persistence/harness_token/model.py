@@ -29,3 +29,7 @@ class HarnessTokenRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Hard expiry. Set for per-turn runtime/delegate tokens so a session whose
+    #: revoke failed cannot leave a live bearer token behind; NULL = no expiry
+    #: (human-minted tokens, and rows that predate the column).
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

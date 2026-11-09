@@ -358,11 +358,22 @@ class AioSandboxProvider(SandboxProvider):
             "cpu_limit": getattr(sandbox_config, "cpu_limit", None),
             "cpu_shares": getattr(sandbox_config, "cpu_shares", None),
             "max_lifetime": getattr(sandbox_config, "max_lifetime", None),
+            "command_timeout": getattr(sandbox_config, "command_timeout", None),
             "environment": environment,
             "preview_ports": list(preview_ports) if preview_ports else list(DEFAULT_PREVIEW_PORTS),
             # provisioner URL for dynamic pod management (e.g. http://provisioner:8002)
             "provisioner_url": getattr(sandbox_config, "provisioner_url", None) or "",
         }
+
+    def _command_timeout(self) -> float | None:
+        """Configured wall-clock limit for one blocking command, or None for the default.
+
+        Read defensively: tests and partially-built providers may not carry a
+        full ``_config``; ``AioSandbox`` then falls back to its own default.
+        """
+        config = getattr(self, "_config", None) or {}
+        value = config.get("command_timeout") if isinstance(config, dict) else None
+        return float(value) if value is not None else None
 
     @staticmethod
     def _resolve_env_vars(env_config: dict[str, str]) -> dict[str, str]:
@@ -828,7 +839,7 @@ class AioSandboxProvider(SandboxProvider):
             if warm_item is None:
                 return None
             info, _ = warm_item
-            sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
+            sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy, command_timeout=self._command_timeout())
             sandbox._on_unreachable = self._on_sandbox_unreachable
             self._sandboxes[sandbox_id] = sandbox
             self._sandbox_infos[sandbox_id] = info
@@ -883,7 +894,7 @@ class AioSandboxProvider(SandboxProvider):
 
     def _register_discovered_sandbox(self, thread_id: str, info: SandboxInfo) -> str:
         """Track a sandbox discovered through the backend."""
-        sandbox = AioSandbox(id=info.sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
+        sandbox = AioSandbox(id=info.sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy, command_timeout=self._command_timeout())
         sandbox._on_unreachable = self._on_sandbox_unreachable
         with self._lock:
             self._sandboxes[info.sandbox_id] = sandbox
@@ -898,7 +909,7 @@ class AioSandboxProvider(SandboxProvider):
 
     def _register_created_sandbox(self, thread_id: str | None, sandbox_id: str, info: SandboxInfo) -> str:
         """Track a newly-created sandbox in the active maps."""
-        sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy)
+        sandbox = AioSandbox(id=sandbox_id, base_url=info.sandbox_url, busy_tracker=self._track_busy, command_timeout=self._command_timeout())
         sandbox._on_unreachable = self._on_sandbox_unreachable
         with self._lock:
             self._sandboxes[sandbox_id] = sandbox
