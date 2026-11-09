@@ -19,6 +19,7 @@ const { buttons, agentsState, router } = vi.hoisted(() => ({
     agents: [] as unknown[],
     isLoading: false,
     isFetching: false,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- widens the hoisted literal so tests can assign an Error
     error: null as unknown,
     isDisabled: false,
     refetch: vi.fn(),

@@ -26,7 +26,7 @@ function parseVerifyResultEvent(event: unknown): ParsedVerifyResult | null {
     typeof event !== "object" ||
     event === null ||
     !("type" in event) ||
-    (event as { type: unknown }).type !== "verify_result"
+    event.type !== "verify_result"
   ) {
     return null;
   }
@@ -71,7 +71,7 @@ describe("parseVerifyResultEvent", () => {
       thread_id: "abc-123",
       ok: true,
       verdict: "passed",
-      routes: expect.any(Array) as unknown as ParsedVerifyResult["routes"],
+      routes: expect.any(Array),
       console_errors_count: 0,
       screenshot: null,
     });

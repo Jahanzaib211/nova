@@ -39,7 +39,7 @@ function runningEvent(
     output: "",
     status: "running",
     ...over,
-  } as AgentActivityEvent;
+  };
 }
 
 describe("React identity", () => {

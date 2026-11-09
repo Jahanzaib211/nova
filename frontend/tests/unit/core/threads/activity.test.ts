@@ -148,7 +148,7 @@ describe("messagesToActivityEvents", () => {
 
   test("ignores non-ai / non-tool messages", () => {
     const events = messagesToActivityEvents([
-      { id: "h1", type: "human", content: "build me a site" } as Message,
+      { id: "h1", type: "human", content: "build me a site" },
       ai([{ id: "t1", name: "bash", args: { command: "ls" } }]),
     ]);
     expect(events).toHaveLength(1);

@@ -208,7 +208,7 @@ beforeEach(() => {
   // arrow function cannot be used with `new`.
   vi.stubGlobal("AudioContext", function AudioContextStub(this: unknown) {
     return ctx;
-  } as unknown as typeof AudioContext);
+  });
 });
 
 function pcm(samples: number): ArrayBuffer {
